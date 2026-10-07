@@ -202,6 +202,7 @@ const run = async () =>
         });
 
         ok('anybody but the Hâkem is refused the trump call', blocked.status >= 400, `${ blocked.status }`);
+        ok('and is told only the Hâkem names it', blocked.body?.error?.code === 'not-the-hakem', `${ blocked.body?.error?.code }`);
 
         // ------------------------------------------------------------ play it out
         let turns = 0;

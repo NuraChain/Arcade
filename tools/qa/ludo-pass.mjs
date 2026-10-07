@@ -181,6 +181,7 @@ const run = async () =>
         {
             const refused = await wrongTurn.post(`/matches/${ matchId }/play`, { key: `bad-${ Date.now() }`, play: ROLL });
             ok('a player out of turn is refused', refused.status === 403, `${ refused.status }`);
+            ok('and is told it is not their turn', refused.body?.error?.code === 'not-your-turn', `${ refused.body?.error?.code }`);
         }
 
         while (state.finishedAt === undefined && turns < 4000)

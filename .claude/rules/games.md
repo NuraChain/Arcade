@@ -424,12 +424,42 @@ and the same die always give the same result.
 service maps reasons onto statuses in one place and the timeout sweep can fold actions over a state.
 A pure function that throws for ordinary control flow is one nothing can fold.
 
-**Every refusal has words, and the compiler checks it.** `REFUSALS` in `match/service.ts` maps each
-reason an engine can give to a status and a sentence. It is a literal map rather than a
-`Record<string, ...>` so `engine-contract.spec.ts` can require every engine's refusal union to be a
-subset of its keys - the reasons are type unions and nothing about them exists at runtime to iterate.
-An unlisted reason still answers, as "That move is not allowed.", but hokm's were unlisted for a whole
-release and every one of them told a card player their TOKEN could not move there.
+**Every refusal has words, and the compiler checks it.** `REFUSALS` in `match/refusals.ts` maps each
+reason an engine can give to a status, and `SAYS` in `match/service.ts` gives each one its English
+sentence. `REFUSALS` is a literal map rather than a `Record<string, ...>` so `engine-contract.spec.ts`
+can require every engine's refusal union to be a subset of its keys - the reasons are type unions and
+nothing about them exists at runtime to iterate. An unlisted reason still answers, as `illegal-move`
+and "That move is not allowed.", but hokm's were unlisted for a whole release and every one of them
+told a card player their TOKEN could not move there.
+
+**The word is the code, and the browser says it in the reader's language.** `refuse` used to throw a
+bare 403 or 409, so the framework filled in `forbidden` or `conflict`, the gateway forwarded a status
+and an English sentence, and the browser said the same "That did not go through" in an error toast
+whichever rule had been broken: a hokm player who threw off suit was never told to follow suit, and a
+raise below the minimum was never told why. The word is the answer's `code` now, on both paths - the
+HTTP envelope, and the socket's `refused` frame, which carries `code` beside `status` and `message`
+because the gateway's `refusalOf` forwards whatever an error meant to be read holds. A play the gateway
+cannot read is `validation-failed`, the code the route's own 422 carries, and an error not meant to be
+read is `internal` and says nothing more.
+
+`match/refusals.ts` imports nothing, so the browser reads the same list. `lib/refusal.ts` takes the
+word off an `ApiError` and `act` in the match store toasts `match.refused.<word>` as a `warning` - the
+game said no and nothing broke, which is what every table refusal already is. Everything else keeps
+`match.actionFailed` as an `error`: the framework's own `conflict` and `not-found`, a word a newer
+server has and this client does not, a request that never arrived. The key is a template literal over
+`RefusalWord` with no cast, so a word with no English or Persian sentence fails `check`, and
+`refusals.spec.ts` holds the rest on each side: on the server every word's status and code, and no
+word shared with a code the framework answers on its own; in the browser a sentence for every word and
+none for a word the server does not have. The bare `match.refused` had copy and no caller, and is gone.
+`SAYS` stays as the envelope's `message`, for logs and the API passes, and is never shown on a page.
+
+Both sides ask `isRefusal`, which is `Object.hasOwn`. `refuse` asked `in`, so a reason named `toString`
+counted as listed and was answered with a function for a sentence - unreachable while the engines'
+unions hold, and exactly the prototype defect `realtime/frames.ts` records. The browser's half is
+reachable: the code arrives off the wire, and `constructor` must not become a catalogue key. And a word
+is not an oracle: `act` answers anybody with no seat in the match 404 before it can refuse - a finished
+game included, so `game-over` never tells a stranger that an id is real - and `match.db.spec.ts` holds
+that.
 
 **The engine never sees a uuid.** It is handed a seat number and answers with one. `match_players` is
 the only join between a seat and a person, which turns "you cannot move somebody else's token" into
@@ -677,7 +707,8 @@ doorbell; for a game it is the delivery, and the cost that forced it is measured
 reached the other seat after a 500 ms hub window, a 250 ms client window and two re-reads, which was
 about 800 ms on loopback and 1.6 s on 3G before anybody saw anything. So a `play` frame carries the same
 body `POST /matches/:id/play` takes and is answered by an `ack` or a `refused` under the same
-idempotency key, and after every committed action each seat is PUSHED a `game` frame, composed for that
+idempotency key - a `refused` with the status, the code and the sentence the route would have answered
+with - and after every committed action each seat is PUSHED a `game` frame, composed for that
 seat by the same `asMatch` and `Engine.view`/`Engine.log` the routes use and passed through `matchView`
 so nothing undeclared can reach a wire. The redaction story is therefore unchanged: one composition per
 reader, never one payload filtered. Nothing waits for a window: a push leaves the moment the

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Draws, Engine, ForfeitReason } from '../src/domains/match/engine.ts';
 import { ENGINES, FOLD_MAX, sameTurn } from '../src/domains/match/service.ts';
-import type { REFUSALS } from '../src/domains/match/service.ts';
+import type { RefusalWord } from '../src/domains/match/refusals.ts';
 import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
 import type { PokerRefusal } from '../src/domains/match/poker/state.ts';
@@ -106,7 +106,7 @@ function foldFrom(engine: Engine, state: unknown, draws: Draws)
  * of them told a card player their TOKEN could not move there. Checked by the compiler, because the
  * reasons are type unions and nothing about them exists at runtime to iterate.
  */
-type Unworded = Exclude<RefusalReason | HokmRefusal | BackgammonRefusal | PokerRefusal, keyof typeof REFUSALS>;
+type Unworded = Exclude<RefusalReason | HokmRefusal | BackgammonRefusal | PokerRefusal, RefusalWord>;
 
 describe('the refusals', () =>
 {

@@ -6,7 +6,7 @@ import { connect as tcpConnect, type Socket } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { ConflictError } from '@azerothjs/http';
+import { ForbiddenError } from '@azerothjs/http';
 import { FrameParser, OPCODE, serializeFrame } from '@azerothjs/ws';
 
 import { attachRealtime } from '../src/realtime/gateway.ts';
@@ -122,7 +122,7 @@ beforeAll(async () =>
 
                 if (matchId === 'refused')
                 {
-                    throw new ConflictError('It is not your turn.');
+                    throw new ForbiddenError('It is not your turn.', { code: 'not-your-turn' });
                 }
 
                 await settle(input.key === 'slow' ? 120 : 1);
@@ -372,8 +372,8 @@ describe('a bound socket', () =>
         talker.send({ v: 1, t: 'play', match: 'm1', key: 'k2', play: { kind: 'ludo', verb: 'roll', die: 6 } });
         await settle(300);
 
-        const refusals = talker.frames.flatMap((frame) => frame.t === 'refused' ? [[frame.key, frame.status]] : []);
-        expect(refusals).toEqual([['k1', 409], ['k2', 422]]);
+        const refusals = talker.frames.flatMap((frame) => frame.t === 'refused' ? [[frame.key, frame.status, frame.code]] : []);
+        expect(refusals).toEqual([['k1', 403, 'not-your-turn'], ['k2', 422, 'validation-failed']]);
         expect(noted).not.toContain('played k2');
         talker.end();
     });

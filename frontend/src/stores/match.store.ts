@@ -11,6 +11,7 @@ export interface EventBatch
 }
 import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
+import { refusalOf } from '../lib/refusal.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useLocale } from './locale.store.ts';
 import { useRealtime, type ReplyFrame } from './realtime.store.ts';
@@ -228,7 +229,7 @@ export const useBoard = createStore((): BoardApi =>
                     return;
                 }
 
-                reject(new ApiError(reply.status, 'refused', reply.message, undefined));
+                reject(new ApiError(reply.status, reply.code, reply.message, undefined));
             });
         });
 
@@ -279,11 +280,17 @@ export const useBoard = createStore((): BoardApi =>
 
             return answer.applied;
         }
-        catch
+        catch (error)
         {
             await revalidate().catch(() => undefined);
 
-            useToasts().show({ kind: 'error', text: useLocale().t('match.actionFailed'), dedupe: 'match-action' });
+            const word = refusalOf(error);
+
+            useToasts().show({
+                kind: word === null ? 'error' : 'warning',
+                text: useLocale().t(word === null ? 'match.actionFailed' : `match.refused.${ word }`),
+                dedupe: 'match-action'
+            });
 
             return 'failed';
         }

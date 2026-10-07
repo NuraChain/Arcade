@@ -125,9 +125,11 @@ the automatic roll and the `cannot-double` refusal all read this one function.
 
 `apply` never throws. A refusal is one of `game-over`, `not-playing`, `not-your-turn`,
 `must-roll-first`, `already-rolled`, `cannot-double`, `no-double`, `double-pending` and
-`illegal-move`. Every one has a status and a sentence in `REFUSALS`/`SAYS` in `service.ts` - acting
-out of turn or from outside the match is 403, everything else 409 - and `engine-contract.spec.ts`
-fails to compile if a reason in `BackgammonRefusal` has no words.
+`illegal-move`. Every one has a status in `REFUSALS` in `match/refusals.ts` - acting out of turn or
+from outside the match is 403, everything else 409 - and an English sentence in `SAYS` in
+`service.ts`, and `engine-contract.spec.ts` fails to compile if a reason in `BackgammonRefusal` has
+no words. The word is the `code` of the answer, over HTTP and on the socket's `refused` frame, and
+the browser says it through `match.refused.<word>` in English and Persian.
 
 ### Walkouts, and what counts as a win
 

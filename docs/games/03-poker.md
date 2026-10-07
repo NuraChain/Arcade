@@ -174,7 +174,9 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 
 `game-over`, `not-playing` and `not-your-turn` are shared with the other games; poker adds
 `cannot-check`, `nothing-to-call`, `cannot-raise`, `raise-too-small`, `raise-too-large` and
-`unplayable`, each a 409 with its own sentence in `SAYS`.
+`unplayable`, each a 409 in `REFUSALS` (`match/refusals.ts`) with its own English sentence in `SAYS`
+(`service.ts`). The word is the `code` of the answer, over HTTP and on the socket's `refused` frame,
+and the browser says it through `match.refused.<word>` in English and Persian.
 
 ## What a game leaves behind
 

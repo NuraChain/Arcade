@@ -170,6 +170,7 @@ const play = async (target, cube) =>
     const early = await idle.post(`/matches/${ matchId }/play`, { key: `early-${ matchId }`, play: { kind: 'backgammon', verb: 'roll' } });
 
     ok('the player not on turn is refused', early.status === 403, `${ early.status }`);
+    ok('and is told it is not their turn', early.body?.error?.code === 'not-your-turn', `${ early.body?.error?.code }`);
 
     const mover = bySeat.get(opening.view.turn);
     const wrong = await mover.post(`/matches/${ matchId }/play`, {
@@ -178,6 +179,7 @@ const play = async (target, cube) =>
     });
 
     ok('a move the dice do not allow is refused', wrong.status === 409, `${ wrong.status } ${ wrong.text.slice(0, 120) }`);
+    ok('and is told the move is not allowed', wrong.body?.error?.code === 'illegal-move', `${ wrong.body?.error?.code }`);
 
     let actions = 0;
     let broken = 0;

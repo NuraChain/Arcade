@@ -64,10 +64,10 @@ const whole = (raw: unknown, parsed: unknown): boolean =>
     return Object.keys(raw).every((key) => Object.hasOwn(kept, key) && whole((raw as Record<string, unknown>)[key], kept[key]));
 };
 
-const refusalOf = (error: unknown): { status: number; message: string } =>
+export const refusalOf = (error: unknown): { status: number; code: string; message: string } =>
     error instanceof HttpError && error.expose
-        ? { status: error.status, message: error.message }
-        : { status: 500, message: 'Something went wrong.' };
+        ? { status: error.status, code: error.code, message: error.message }
+        : { status: 500, code: 'internal', message: 'Something went wrong.' };
 
 const queue = (line: Line, work: () => Promise<void>) =>
 {
@@ -81,7 +81,11 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
 
     if (!input.ok || !whole(raw, input.value))
     {
-        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, 422, 'That is not a move in this game.'));
+        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, {
+            status: 422,
+            code: 'validation-failed',
+            message: 'That is not a move in this game.'
+        }));
         return;
     }
 
@@ -99,7 +103,7 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
             deps.log.error('realtime play failed', { connection: connection.id, error });
         }
 
-        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, refusal.status, refusal.message));
+        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, refusal));
     }
 }
 

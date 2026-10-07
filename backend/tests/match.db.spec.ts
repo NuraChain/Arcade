@@ -441,7 +441,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
             await expect(matches.act(players[1 - turn], load.match.id, { play: ROLL, key: 'nope' }))
-                .rejects.toThrow(/not your turn/i);
+                .rejects.toMatchObject({ status: 403, code: 'not-your-turn', message: expect.stringMatching(/not your turn/i) });
         });
 
         it('refuses a move before a roll', async () =>
@@ -451,7 +451,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
             await expect(matches.act(players[turn], load.match.id, { play: moveOf(0), key: 'early' }))
-                .rejects.toThrow(/roll/i);
+                .rejects.toMatchObject({ status: 409, code: 'must-roll-first', message: expect.stringMatching(/roll/i) });
         });
 
         it('answers a stranger exactly as a game that does not exist', async () =>
@@ -462,6 +462,23 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(await matches.view(stranger, load.match.id)).toBeNull();
             await expect(matches.act(stranger, load.match.id, { play: ROLL, key: 'x' })).rejects.toThrow(/no game/i);
+        });
+
+        it('says a game is over to somebody who played it, and to a stranger only that there is no game', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const stranger = await makeUser();
+            const missing = { status: 404, code: 'not-found', message: 'No game there.' };
+
+            await expect(matches.act(stranger, load.match.id, { play: ROLL, key: 'live' })).rejects.toMatchObject(missing);
+
+            await matches.act(players[0], load.match.id, { play: null, key: 'resign' });
+
+            await expect(matches.act(players[1], load.match.id, { play: ROLL, key: 'late' }))
+                .rejects.toMatchObject({ status: 409, code: 'game-over' });
+            await expect(matches.act(stranger, load.match.id, { play: ROLL, key: 'over' })).rejects.toMatchObject(missing);
+            await expect(matches.act(stranger, '00000000-0000-4000-8000-000000000000', { play: ROLL, key: 'never' })).rejects.toMatchObject(missing);
         });
 
         it('records the die it rolled, in order, with no gaps', async () =>

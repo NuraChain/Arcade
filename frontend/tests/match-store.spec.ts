@@ -3,11 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { en } from '../src/locales/en.ts';
+import { fa } from '../src/locales/fa.ts';
+import { useLocale } from '../src/stores/locale.store.ts';
 import { ACK_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
 import { PROBE_GRACE_MS, PROBE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import type { ClientFrame, MatchView } from '../src/api.ts';
-import { client } from './fake-api.ts';
+import type { ClientFrame, MatchView, ServerFrame } from '../src/api.ts';
+import { ApiError, client } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Ludo = Extract<MatchView['view'], { kind: 'ludo' }>;
@@ -52,6 +55,9 @@ const settle = async () =>
 const plays = (): Extract<ClientFrame, { t: 'play' }>[] =>
     socket.sent.filter((frame): frame is Extract<ClientFrame, { t: 'play' }> => frame.t === 'play');
 
+const refusedWith = (key: string, status: number, code: string): ServerFrame =>
+    ({ v: 1, t: 'refused', n: 3, key, match: 'match-1', status, code, message: 'The server said no.' });
+
 let clock: ManualClock;
 let stops: (() => void)[] = [];
 let http: ReturnType<typeof vi.fn>;
@@ -82,6 +88,8 @@ afterEach(() =>
     }
     useBoard().reset();
     useRealtime().reset();
+    useToasts().reset();
+    useLocale().setLocale('en');
     delete matches.view;
     delete matches.play;
     delete matches.since;
@@ -120,18 +128,73 @@ describe('playing over the socket', () =>
         expect(useBoard().match()?.rev).toBe(2);
     });
 
-    it('says so when the server refuses the play, and does not quietly send it again', async () =>
+    it('says why the server refused the play, and does not quietly send it again', async () =>
     {
         const toast = vi.spyOn(useToasts(), 'show');
         const rolling = useBoard().roll();
         await settle();
         const [sent] = plays();
 
-        socket.deliver({ v: 1, t: 'refused', n: 3, key: sent.key, match: 'match-1', status: 409, message: 'It is not your turn.' });
+        socket.deliver(refusedWith(sent.key, 403, 'not-your-turn'));
+
+        expect(await rolling).toBe('failed');
+        expect(http).not.toHaveBeenCalled();
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'warning', text: en['match.refused.not-your-turn'] }));
+    });
+
+    it('says it in the language the reader is reading', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const toast = vi.spyOn(useToasts(), 'show');
+        const rolling = useBoard().roll();
+        await settle();
+
+        socket.deliver(refusedWith(plays()[0].key, 409, 'must-roll-first'));
         await rolling;
 
-        expect(http).not.toHaveBeenCalled();
-        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'error' }));
+        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'warning', text: fa['match.refused.must-roll-first'] }));
+    });
+
+    it('says why when the refusal comes back over HTTP, because the socket was down', async () =>
+    {
+        const toast = vi.spyOn(useToasts(), 'show');
+
+        socket.drop();
+        http.mockRejectedValueOnce(new ApiError(409, 'raise-too-small', 'That raise is below the minimum.', undefined));
+
+        expect(await useBoard().play({ kind: 'poker', verb: 'raise', amount: 40 })).toBe('failed');
+        expect(plays()).toEqual([]);
+        expect(http).toHaveBeenCalledTimes(1);
+        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'warning', text: en['match.refused.raise-too-small'] }));
+    });
+
+    it('keeps the plain failure for a code that is not a word', async () =>
+    {
+        const toast = vi.spyOn(useToasts(), 'show');
+
+        for (const code of ['conflict', 'validation-failed', 'not-found', 'internal', 'constructor'])
+        {
+            const rolling = useBoard().roll();
+            await settle();
+
+            socket.deliver(refusedWith(plays().at(-1)!.key, 409, code));
+
+            expect(await rolling, code).toBe('failed');
+            expect(toast, code).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'error', text: en['match.actionFailed'] }));
+        }
+    });
+
+    it('keeps the plain failure when the request never arrived', async () =>
+    {
+        const toast = vi.spyOn(useToasts(), 'show');
+
+        socket.drop();
+        http.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+        expect(await useBoard().roll()).toBe('failed');
+        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ kind: 'error', text: en['match.actionFailed'] }));
     });
 
     it('takes a board somebody else moved from the push, and never plays the same events twice', async () =>

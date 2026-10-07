@@ -221,7 +221,8 @@ token: `piece` is the mover's token, `victim` the captured token's seat, `victim
 `home { seat, piece }`, `pass { seat, why: 'no-move' | 'three-sixes' }`, `forfeit { seat, reason }`,
 `finish { winner }`.
 
-**Refusals** (`RefusalReason`, each with words in `REFUSALS`): `not-your-turn`, `already-rolled`,
+**Refusals** (`RefusalReason`, each with a status in `REFUSALS` in `match/refusals.ts` and a sentence
+in `SAYS`; the word is the `code` of the answer): `not-your-turn`, `already-rolled`,
 `must-roll-first`, `illegal-move`, `not-playing`, `game-over`.
 
 ---

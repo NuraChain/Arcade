@@ -35,7 +35,7 @@ export type ServerFrame =
     | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string }
     | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
     | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
-    | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; message: string }
+    | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; code: string; message: string }
     | { v: 1; t: 'pong'; n: number; at: number };
 
 export type Applied = 'now' | 'already' | 'stale';
@@ -101,8 +101,8 @@ export const game = (n: number, at: number, match: MatchView, events: MatchEvent
 export const ack = (n: number, key: string, match: MatchView, applied: Applied, events: MatchEvent[]): ServerFrame =>
     ({ v: 1, t: 'ack', n, key, match, applied, events });
 
-export const refused = (n: number, key: string, match: string, status: number, message: string): ServerFrame =>
-    ({ v: 1, t: 'refused', n, key, match, status, message });
+export const refused = (n: number, key: string, match: string, why: { status: number; code: string; message: string }): ServerFrame =>
+    ({ v: 1, t: 'refused', n, key, match, status: why.status, code: why.code, message: why.message });
 
 export const pong = (n: number, at: number): ServerFrame => ({ v: 1, t: 'pong', n, at });
 

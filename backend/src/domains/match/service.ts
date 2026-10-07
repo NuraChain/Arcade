@@ -15,6 +15,7 @@ import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
+import { REFUSALS, isRefusal, type RefusalWord } from './refusals.ts';
 import { nextMissForfeits, turnMs } from './turns.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
@@ -120,33 +121,7 @@ export interface ActionLog
     log: MatchLog;
 }
 
-export const REFUSALS = {
-    'not-your-turn': 'forbidden',
-    'not-playing': 'forbidden',
-    'not-the-hakem': 'forbidden',
-    'already-rolled': 'conflict',
-    'must-roll-first': 'conflict',
-    'illegal-move': 'conflict',
-    'game-over': 'conflict',
-    'trump-already-set': 'conflict',
-    'tricks-not-started': 'conflict',
-    'not-discarding': 'conflict',
-    'discard-count': 'conflict',
-    'not-drawing': 'conflict',
-    'must-follow-suit': 'conflict',
-    'no-such-card': 'conflict',
-    'cannot-double': 'conflict',
-    'no-double': 'conflict',
-    'double-pending': 'conflict',
-    'cannot-check': 'conflict',
-    'nothing-to-call': 'conflict',
-    'cannot-raise': 'conflict',
-    'raise-too-small': 'conflict',
-    'raise-too-large': 'conflict',
-    'unplayable': 'conflict'
-} as const satisfies Record<string, 'forbidden' | 'conflict'>;
-
-const SAYS: Record<keyof typeof REFUSALS, string> = {
+const SAYS: Record<RefusalWord, string> = {
     'not-your-turn': 'It is not your turn.',
     'not-playing': 'You are not in this game.',
     'not-the-hakem': 'Only the Hakem names trump.',
@@ -172,16 +147,13 @@ const SAYS: Record<keyof typeof REFUSALS, string> = {
     'unplayable': 'This game cannot go on from where it stands.'
 };
 
-function refuse(reason: string): never
+export function refuse(reason: string): never
 {
-    if (!(reason in REFUSALS))
-    {
-        throw new ConflictError(SAYS['illegal-move']);
-    }
+    const word = isRefusal(reason) ? reason : 'illegal-move';
 
-    const known = reason as keyof typeof REFUSALS;
-
-    throw REFUSALS[known] === 'forbidden' ? new ForbiddenError(SAYS[known]) : new ConflictError(SAYS[known]);
+    throw REFUSALS[word] === 'forbidden'
+        ? new ForbiddenError(SAYS[word], { code: word })
+        : new ConflictError(SAYS[word], { code: word });
 }
 
 /**
