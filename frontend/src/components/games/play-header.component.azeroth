@@ -35,6 +35,10 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
     derived listed = props.compact === true ? waitingOn : [...waitingOn, ...props.others.filter((table) => table.yourTurn !== true)];
 
+    derived listing = listed.length > 0;
+
+    derived voiced = props.table.voice !== 'off';
+
     const connection = useConnection();
 
     derived link = connection.state();
@@ -63,7 +67,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                     <span class="shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
                                     <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
                                     <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
-                                    <Show when={ props.table.voice !== 'off' }>
+                                    <Show when={ voiced }>
                                         { () =>
                                             <span class="flex shrink-0 items-center gap-1 text-accent">
                                                 <Icon name="voice" size={ 12 } />
@@ -93,7 +97,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                 { () => <div class="order-2 shrink-0 @2xl:order-3">{ props.tools }</div> }
             </Show>
 
-            <Show when={ listed.length > 0 }>
+            <Show when={ listing }>
                 { () =>
                     <nav
                         class={ () => [

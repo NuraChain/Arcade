@@ -1052,6 +1052,114 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('a table that is read again', () =>
+    {
+        const lobbyOf = (container: HTMLElement) => container.querySelector<HTMLElement>(`section[aria-label="${ useLocale().t('play.title.lobby') }"]`);
+
+        const opened = async (viewer = 'alex') =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 4, privacy: 'public' }, []);
+
+            server.me = viewer;
+
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return { id, container, lobby, held: server.tables.find((one) => one.id === id)! };
+        };
+
+        afterEach(() =>
+        {
+            server.me = 'alex';
+        });
+
+        it('keeps what it has drawn: the same heading, the same lobby and the same chat panel', async () =>
+        {
+            const { container, lobby } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+            await vi.waitFor(() => expect(container.querySelector('.table-card, .table-sheet')).not.toBeNull(), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+            const seats = lobbyOf(container);
+            const panel = container.querySelector('.table-card, .table-sheet');
+            const views = server.calls.filter((one) => one === 'tables.view').length;
+
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls.filter((one) => one === 'tables.view').length).toBeGreaterThan(views);
+            expect(container.querySelector('h1')).toBe(heading);
+            expect(lobbyOf(container)).toBe(seats);
+            expect(container.querySelector('.table-card, .table-sheet')).toBe(panel);
+        });
+
+        it('still shows what changed, without drawing the page again: a chair that filled, a call that was switched on', async () =>
+        {
+            const { container, lobby, held } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const seats = lobbyOf(container)!;
+            const said = useLocale().t('voice.tableHas');
+
+            expect(seats.textContent).toContain(useLocale().plural('play.lobby.emptySeats', 3));
+            expect(container.querySelector('header')?.textContent).not.toContain(said);
+
+            held.chairs[1] = { seat: 1, who: 'sara.k', ready: false, host: false };
+            held.voice = 'table';
+            await lobby.refresh();
+            await settle();
+
+            expect(lobbyOf(container)).toBe(seats);
+            expect(seats.textContent).toContain(useLocale().plural('play.lobby.emptySeats', 2));
+            expect(container.querySelector('header')?.textContent).toContain(said);
+        });
+
+        it('gives a visitor the board in place of the invitation to sit when a game starts, and keeps the header it had', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+            const sit = useLocale().t('play.table.sitDown');
+
+            await vi.waitFor(() => expect(container.textContent).toContain(sit), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+
+            held.matchId = 'match-9';
+            await lobby.refresh();
+            await settle();
+
+            expect(container.textContent).not.toContain(sit);
+            expect(container.querySelector('h1')).toBe(heading);
+
+            delete held.matchId;
+            await lobby.refresh();
+            await settle();
+
+            expect(container.textContent).toContain(sit);
+            expect(container.querySelector('h1')).toBe(heading);
+        });
+
+        it('says the table has closed when it does, and draws nothing of it', async () =>
+        {
+            const { container, lobby, held } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            held.status = 'closed';
+            await lobby.refresh();
+            await settle();
+
+            expect(lobbyOf(container)).toBeNull();
+            expect(container.textContent).toContain(useLocale().t('play.closed'));
+        });
+    });
+
     describe('joining the call without being asked', () =>
     {
         const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;

@@ -482,6 +482,30 @@ languages, and presses the control rather than reading its href: with `exact: tr
 Playwright matches an accessible name by SUBSTRING and the Persian brand mark `بازی‌های نورا`
 contains `بازی`, so the brand link answered for the CTA and the check passed against an href of `/`.
 
+**A `<Show>` with a thunk child is rebuilt by anything its `when` READS, not only by a change of
+answer.** The swap effect reads `when` directly, and for the thunk form re-running IS rebuilding. So
+`when={ table !== null && table.status !== 'closed' }` is as true after a re-read as before it and
+still destroys the branch, because `table` is a fresh row object out of a resource every time. The
+table page's outermost branch was exactly that: every table doorbell - somebody sitting down, a
+Ready, the host's voice switch, the re-read every reconnect makes - tore down and rebuilt the lobby,
+the board and the chat panel, whose open tab fell back to the first and whose half-typed line is
+component state. It is the framework's A-121 and is in its register; until the pin carries the fix
+the rule here is:
+
+- a branch that holds anything worth keeping reads a `derived` BOOLEAN (`when={ lobbyOpen }`), which
+  compares with `Object.is` and so tells the effect nothing when the answer has not changed;
+- a branch that needs the object uses `let=` (`<Show when={ opened } let={ shown }>`): the swap is
+  driven by truthiness, the value arrives through an accessor, and during teardown the accessor still
+  answers with the last real value - which is also what makes `shown.code` safe where `table!.code`
+  was a crash waiting for the tick in which the table goes null.
+
+Two things ride on the rebuild without saying so, and both have to be put right in the same change:
+a `fallback` that opens with a ternary (chosen once, so it was only ever refreshed by being
+rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), and a child
+that copies a prop into a local. A screenshot cannot see any of this: the rebuild finishes inside a
+frame. Mark the nodes and ask `document.contains` afterwards, which is what `play.spec.ts` does
+(*a table that is read again*) and what the browser pass did across a whole game.
+
 **An error that reaches a person has already failed; throwing it away makes it fail twice.** The
 boundary in `App.azeroth` named its first argument `_error` and dropped it, so a crash anywhere
 under `<Routes>` produced that screen and nothing else - no console line, no stack, no clue which
@@ -939,3 +963,6 @@ Each once shipped with every gate green; they are still house style:
 - a `to`/`href` naming a path `routes.ts` never declares
 - a ternary choosing between two ELEMENTS inside a control-flow branch (built once, untracked - see
   *The product shell* above)
+- a `<Show>` with a thunk child whose `when` is an expression over an object - a resource row, a
+  store getter that answers with an object or an array - rather than a `derived` boolean or `let=`
+- a resource's `error()` compared with `undefined`: no error is `null`

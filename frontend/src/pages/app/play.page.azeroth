@@ -255,6 +255,22 @@ export default component PlayPage()
 
     derived room = table?.conversationId ?? '';
 
+    derived opened = table !== null && table.status !== 'closed' ? table : null;
+
+    derived missing = !loading && !failed && table === null;
+
+    derived closed = table?.status === 'closed';
+
+    derived lobbyOpen = !showing && seated;
+
+    derived standing = !seated && !showing && table !== null && table.matchId === undefined;
+
+    derived watching = !seated && table?.matchId !== undefined;
+
+    derived callAt = talkable ? table?.id : undefined;
+
+    derived hostVoice = amHost && table !== null && table.status !== 'closed' ? table.voice !== 'off' : undefined;
+
     derived railOpen = settings.settings().railOpen;
 
     derived cardOpen = floating && hasChat && railOpen;
@@ -670,7 +686,7 @@ export default component PlayPage()
             { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void lobby.refresh() } class="py-12" /> }
         </Show>
 
-        <Show when={ !loading && !failed && table === null }>
+        <Show when={ missing }>
             { () =>
                 <EmptyState
                     icon="seat"
@@ -683,7 +699,7 @@ export default component PlayPage()
             }
         </Show>
 
-        <Show when={ table?.status === 'closed' }>
+        <Show when={ closed }>
             { () =>
                 <EmptyState
                     icon="clock"
@@ -696,206 +712,205 @@ export default component PlayPage()
             }
         </Show>
 
-        <Show when={ table !== null && table.status !== 'closed' }>
-            { () =>
-                <div class="flex min-h-0 flex-1 gap-4" style={ rowStyle === '' ? undefined : rowStyle }>
-                    <div
-                        ref={ (element) => arena = element }
-                        data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
-                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
-                    >
-                        <PlayHeader
-                            table={ table! }
-                            others={ lobby.seated().filter((one) => one.id !== table?.id) }
-                            compact={ halfSheet || besideSheet || folded }
-                            bare={ besideSheet }
-                            class={ besideSheet ? (chatWide ? 'pe-[min(30rem,85vw)]' : 'pe-[min(23rem,60vw)]') : undefined }
-                            tools={
-                                <span class="flex items-center gap-2">
-                                    <TableDock
-                                        code={ table!.code }
-                                        target={ arena }
-                                        upright={ playing === 'ludo' }
-                                        onChat={ floating ? undefined : openChat }
-                                        onResign={ resigning ? () => void resign() : undefined }
-                                        onLeave={ seated && showing ? () => void leave(board.match()) : undefined }
-                                        voice={ talkable ? table!.id : undefined }
-                                        hostVoice={ amHost && table!.status !== 'closed' ? table!.voice !== 'off' : undefined }
-                                        onHostVoice={ switchVoice }
-                                    />
-                                    <Show when={ floating && hasChat && !cardOpen }>
-                                        { () =>
-                                            <button
-                                                type="button"
-                                                class="table-pill flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2.5 rounded-full border border-line-strong bg-lifted py-1 ps-1 pe-4 text-start"
-                                                aria-label={ locale.t('play.table.chatShow') }
-                                                onClick={ () => openChat?.() }
-                                            >
-                                                <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
-                                                    <Icon name="chats" size={ 18 } />
-                                                    <Show when={ unread > 0 }>
-                                                        { () => <Badge count={ unread } tone="danger" class="absolute -end-1 -top-1" /> }
-                                                    </Show>
-                                                </span>
-                                                <span class="flex min-w-0 flex-col">
-                                                    <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
-                                                    <Show when={ preview !== '' }>
-                                                        { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
-                                                    </Show>
-                                                </span>
-                                            </button>
-                                        }
-                                    </Show>
-                                </span>
-                            }
-                        />
-
-                        <Show when={ playing !== '' && drawn === playing }>
-                            { () => <Dynamic component={ Board! } props={ boardProps } /> }
-                        </Show>
-
-                        <Show when={ playing !== '' && drawn !== playing && boardFailed }>
-                            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
-                        </Show>
-
-                        <Show when={ playing !== '' && !drawable(playing) }>
-                            { () =>
-                                <EmptyState
-                                    icon="dice"
-                                    title={ locale.t('match.cannotDraw') }
-                                    lead={ locale.t('match.cannotDrawLead') }
-                                    action={ locale.t('match.cannotDrawAction') }
-                                    onAction={ () => draw(playing) }
-                                    class="py-12"
+        <Show when={ opened } let={ shown }>
+            <div class="flex min-h-0 flex-1 gap-4" style={ rowStyle === '' ? undefined : rowStyle }>
+                <div
+                    ref={ (element) => arena = element }
+                    data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
+                    class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                >
+                    <PlayHeader
+                        table={ shown }
+                        others={ lobby.seated().filter((one) => one.id !== shown.id) }
+                        compact={ halfSheet || besideSheet || folded }
+                        bare={ besideSheet }
+                        class={ besideSheet ? (chatWide ? 'pe-[min(30rem,85vw)]' : 'pe-[min(23rem,60vw)]') : undefined }
+                        tools={
+                            <span class="flex items-center gap-2">
+                                <TableDock
+                                    code={ shown.code }
+                                    target={ arena }
+                                    upright={ playing === 'ludo' }
+                                    onChat={ floating ? undefined : openChat }
+                                    onResign={ resigning ? () => void resign() : undefined }
+                                    onLeave={ seated && showing ? () => void leave(board.match()) : undefined }
+                                    voice={ callAt }
+                                    hostVoice={ hostVoice }
+                                    onHostVoice={ switchVoice }
                                 />
-                            }
-                        </Show>
-
-                        <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
-                            { () =>
-                                <div class="flex flex-col gap-3" aria-busy="true">
-                                    <Skeleton class="aspect-[16/10] w-full rounded-hero" />
-                                    <Skeleton class="h-24 w-full rounded-panel" />
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ !showing && ready && seated }>
-                            { () =>
-                                <Panel pad="md" stack="sm" class="items-center text-center">
-                                    <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
-                                    <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
-                                        { locale.t('match.start') }
-                                    </Button>
-                                </Panel>
-                            }
-                        </Show>
-
-                        <Show when={ !seated && table?.matchId !== undefined }>
-                            { () =>
-                                <div class="flex min-h-0 flex-1 flex-col gap-3">
-                                    <Show when={ watch.view() !== null }>
-                                        { () => <WatchBoard watch={ watch.view()! } /> }
-                                    </Show>
-                                    <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
-                                        { () =>
-                                            <Panel pad="lg" class="items-center text-center">
-                                                <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
-                                            </Panel>
-                                        }
-                                    </Show>
-                                    <Show when={ watch.failed() }>
-                                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => watch.retry() } class="py-12" /> }
-                                    </Show>
-                                </div>
-                            }
-                        </Show>
-
-                        <Show
-                            when={ !showing && seated }
-                            fallback={ table === null || showing || table.matchId !== undefined ? null :
-                                <Panel pad="lg" stack="md" class="items-center text-center">
-                                    <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
-                                    <p class="max-w-[44ch] text-ui-base text-muted">
-                                        { locale.plural('play.lobby.emptySeats', table.seats - table.taken) }
-                                    </p>
-                                    <Button
-                                        variant="primary"
-                                        size="lg"
-                                        leading="seat"
-                                        disabled={ table.taken >= table.seats }
-                                        onClick={ () => void sitDown() }
-                                    >
-                                        { locale.t('play.table.sitDown') }
-                                    </Button>
-                                </Panel>
-                            }
-                        >
-                            { () =>
-                                <LobbyPanel
-                                    table={ table! }
-                                    onInvite={ () => overlay.open(InviteSheet, { tableId: table!.id }, { label: locale.t('play.lobby.invite') }) }
-                                    onCopyLink={ () => void copyLink() }
-                                    onLeave={ () => void leave(null) }
-                                />
-                            }
-                        </Show>
-
-                        <Show when={ amHost && !showing }>
-                            { () =>
-                                <div class="flex">
-                                    <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
-                                        { locale.t('play.close.confirm') }
-                                    </Button>
-                                </div>
-                            }
-                        </Show>
-
-                    </div>
-
-                    <Show when={ hasChat }>
-                        { () =>
-                            <div
-                                ref={ (element) => sheetBox = element }
-                                class={ () => [
-                                    'flex flex-col overflow-hidden bg-field',
-                                    floating
-                                        ? [
-                                            'table-card fixed bottom-5 end-5 z-30 rounded-panel border border-line-strong',
-                                            chatWide ? 'w-[min(30rem,calc(100vw-2.5rem))] h-[calc(100dvh-6.5rem)]' : 'w-[min(23rem,calc(100vw-2.5rem))] h-[min(34rem,calc(100dvh-6.5rem))]'
-                                        ].join(' ')
-                                        : (sideways
-                                            ? [
-                                                'table-sheet fixed inset-y-0 end-0 z-30 border-s border-line-strong',
-                                                chatWide ? 'w-[min(30rem,85vw)]' : 'w-[min(23rem,60vw)]'
-                                            ]
-                                            : [
-                                                'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
-                                                chatWide ? 'top-[calc(var(--head,0.5rem)+0.25rem)]' : 'h-[var(--sheet-h,48dvh)]'
-                                            ]).join(' '),
-                                    chatShown ? '' : 'hidden'
-                                ].filter(Boolean).join(' ') }
-                            >
-                                <Show when={ chatReady }>
+                                <Show when={ floating && hasChat && !cardOpen }>
                                     { () =>
-                                        <Dynamic
-                                            component={ Chat! }
-                                            props={ () => ({
-                                                conversationId: room,
-                                                class: 'min-h-0 flex-1',
-                                                closeIcon: 'close' as const,
-                                                wide: chatWide,
-                                                onResize: () => chatWide = !chatWide,
-                                                onClose: closeChat
-                                            }) }
-                                        />
+                                        <button
+                                            type="button"
+                                            class="table-pill flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2.5 rounded-full border border-line-strong bg-lifted py-1 ps-1 pe-4 text-start"
+                                            aria-label={ locale.t('play.table.chatShow') }
+                                            onClick={ () => openChat?.() }
+                                        >
+                                            <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
+                                                <Icon name="chats" size={ 18 } />
+                                                <Show when={ unread > 0 }>
+                                                    { () => <Badge count={ unread } tone="danger" class="absolute -end-1 -top-1" /> }
+                                                </Show>
+                                            </span>
+                                            <span class="flex min-w-0 flex-col">
+                                                <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
+                                                <Show when={ preview !== '' }>
+                                                    { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
+                                                </Show>
+                                            </span>
+                                        </button>
                                     }
+                                </Show>
+                            </span>
+                        }
+                    />
+
+                    <Show when={ playing !== '' && drawn === playing }>
+                        { () => <Dynamic component={ Board! } props={ boardProps } /> }
+                    </Show>
+
+                    <Show when={ playing !== '' && drawn !== playing && boardFailed }>
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
+                    </Show>
+
+                    <Show when={ playing !== '' && !drawable(playing) }>
+                        { () =>
+                            <EmptyState
+                                icon="dice"
+                                title={ locale.t('match.cannotDraw') }
+                                lead={ locale.t('match.cannotDrawLead') }
+                                action={ locale.t('match.cannotDrawAction') }
+                                onAction={ () => draw(playing) }
+                                class="py-12"
+                            />
+                        }
+                    </Show>
+
+                    <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
+                        { () =>
+                            <div class="flex flex-col gap-3" aria-busy="true">
+                                <Skeleton class="aspect-[16/10] w-full rounded-hero" />
+                                <Skeleton class="h-24 w-full rounded-panel" />
+                            </div>
+                        }
+                    </Show>
+
+                    <Show when={ !showing && ready && seated }>
+                        { () =>
+                            <Panel pad="md" stack="sm" class="items-center text-center">
+                                <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
+                                <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
+                                    { locale.t('match.start') }
+                                </Button>
+                            </Panel>
+                        }
+                    </Show>
+
+                    <Show when={ watching }>
+                        { () =>
+                            <div class="flex min-h-0 flex-1 flex-col gap-3">
+                                <Show when={ watch.view() !== null }>
+                                    { () => <WatchBoard watch={ watch.view()! } /> }
+                                </Show>
+                                <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
+                                    { () =>
+                                        <Panel pad="lg" class="items-center text-center">
+                                            <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
+                                        </Panel>
+                                    }
+                                </Show>
+                                <Show when={ watch.failed() }>
+                                    { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => watch.retry() } class="py-12" /> }
                                 </Show>
                             </div>
                         }
                     </Show>
+
+                    <Show when={ lobbyOpen }>
+                        { () =>
+                            <LobbyPanel
+                                table={ shown }
+                                onInvite={ () => overlay.open(InviteSheet, { tableId: shown.id }, { label: locale.t('play.lobby.invite') }) }
+                                onCopyLink={ () => void copyLink() }
+                                onLeave={ () => void leave(null) }
+                            />
+                        }
+                    </Show>
+
+                    <Show when={ standing }>
+                        { () =>
+                            <Panel pad="lg" stack="md" class="items-center text-center">
+                                <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
+                                <p class="max-w-[44ch] text-ui-base text-muted">
+                                    { locale.plural('play.lobby.emptySeats', shown.seats - shown.taken) }
+                                </p>
+                                <Button
+                                    variant="primary"
+                                    size="lg"
+                                    leading="seat"
+                                    disabled={ shown.taken >= shown.seats }
+                                    onClick={ () => void sitDown() }
+                                >
+                                    { locale.t('play.table.sitDown') }
+                                </Button>
+                            </Panel>
+                        }
+                    </Show>
+
+                    <Show when={ amHost && !showing }>
+                        { () =>
+                            <div class="flex">
+                                <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
+                                    { locale.t('play.close.confirm') }
+                                </Button>
+                            </div>
+                        }
+                    </Show>
+
                 </div>
-            }
+
+                <Show when={ hasChat }>
+                    { () =>
+                        <div
+                            ref={ (element) => sheetBox = element }
+                            class={ () => [
+                                'flex flex-col overflow-hidden bg-field',
+                                floating
+                                    ? [
+                                        'table-card fixed bottom-5 end-5 z-30 rounded-panel border border-line-strong',
+                                        chatWide ? 'w-[min(30rem,calc(100vw-2.5rem))] h-[calc(100dvh-6.5rem)]' : 'w-[min(23rem,calc(100vw-2.5rem))] h-[min(34rem,calc(100dvh-6.5rem))]'
+                                    ].join(' ')
+                                    : (sideways
+                                        ? [
+                                            'table-sheet fixed inset-y-0 end-0 z-30 border-s border-line-strong',
+                                            chatWide ? 'w-[min(30rem,85vw)]' : 'w-[min(23rem,60vw)]'
+                                        ]
+                                        : [
+                                            'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
+                                            chatWide ? 'top-[calc(var(--head,0.5rem)+0.25rem)]' : 'h-[var(--sheet-h,48dvh)]'
+                                        ]).join(' '),
+                                chatShown ? '' : 'hidden'
+                            ].filter(Boolean).join(' ') }
+                        >
+                            <Show when={ chatReady }>
+                                { () =>
+                                    <Dynamic
+                                        component={ Chat! }
+                                        props={ () => ({
+                                            conversationId: room,
+                                            class: 'min-h-0 flex-1',
+                                            closeIcon: 'close' as const,
+                                            wide: chatWide,
+                                            onResize: () => chatWide = !chatWide,
+                                            onClose: closeChat
+                                        }) }
+                                    />
+                                }
+                            </Show>
+                        </div>
+                    }
+                </Show>
+            </div>
         </Show>
     </Page>
 }
