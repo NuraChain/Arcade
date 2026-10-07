@@ -57,6 +57,20 @@ cases in `chain-profile.spec.ts`, `nfts.spec.ts` and `identity.spec.ts` must fin
 so a regression to 8 fails them. Failing fast does not change what failing means: the profile still
 throws, and the page still has to render that failure.
 
+**A fake chain never listens where `fetch` will not go.** Those specs stand a local server up on a
+port the system picks, and viem reaches it with `fetch`, which refuses eighty-two ports outright
+before it opens a socket (the Fetch Standard's port blocking: 6000, 6665 to 6669, 10080 and the rest;
+the error is `fetch failed` with the cause `bad port`). On most machines the system never picks one.
+On a machine whose dynamic range starts low (a Windows box set to 1024 upwards) it hands them out
+like any other, so every few runs a fake landed on one: the read "could not be made" in two
+milliseconds without reaching the fake, the reader answered nameless, and a case that expected a name
+failed. It read as a race for an evening, because the failures came two or three in a row and then
+stopped - the IRC ports are five in a row, and the next test gets the next port. `listen` in
+`tests/fake-chain.ts` binds again until it holds a port `fetch` calls; `chain-rpc.spec.ts` holds
+that, and that every port the helper names is one this runtime really refuses. The swallowed error
+is what hid it: a spec that sees an answer it did not expect from a chain read should print the
+cause before anything else.
+
 **The @handle and the on-chain username are two namespaces and stay that way.** A handle is 2..32 in
 any script — Persian handles are a feature this file describes and `naming.db.spec.ts` pins — and a
 registry username is 3..32 of `[a-z0-9_]`, lower-cased, never starting with `0x`. They cannot be one
