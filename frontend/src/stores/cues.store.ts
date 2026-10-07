@@ -247,15 +247,50 @@ export const useCues = createStore((): CuesApi =>
             noticeCount = unread;
         }, { name: 'cues.notices' });
 
-        const trackTitle = () => createEffect(() =>
-        {
-            const total = chat.totalUnread() + notifications.unread() + social.incoming().length + lobby.waiting().length;
+        let untitle: (() => void) | null = null;
 
-            if (typeof document !== 'undefined')
+        const trackTitle = () =>
+        {
+            if (typeof document === 'undefined' || typeof MutationObserver === 'undefined')
             {
-                document.title = total > 0 ? `${ total } · ${ locale.t('app.title') }` : locale.t('app.title');
+                return;
             }
-        }, { name: 'cues.title' });
+
+            let page = document.title;
+            let written = page;
+
+            const count = () => chat.totalUnread() + notifications.unread() + social.incoming().length + lobby.waiting().length;
+
+            const write = (total: number) =>
+            {
+                const own = page === '' ? locale.t('app.title') : page;
+
+                written = total > 0 ? `${ locale.n(total) } · ${ own }` : own;
+
+                if (document.title !== written)
+                {
+                    document.title = written;
+                }
+            };
+
+            const watcher = new MutationObserver(() =>
+            {
+                if (document.title !== written)
+                {
+                    page = document.title;
+                    write(untrack(count));
+                }
+            });
+
+            watcher.observe(document.head, { childList: true, subtree: true, characterData: true });
+            createEffect(() => write(count()), { name: 'cues.title' });
+
+            untitle = () =>
+            {
+                watcher.disconnect();
+                write(0);
+            };
+        };
 
         const offGame = live.onGame((frame) =>
         {
@@ -305,11 +340,7 @@ export const useCues = createStore((): CuesApi =>
             end();
             offGame();
             sound?.dispose();
-
-            if (typeof document !== 'undefined')
-            {
-                document.title = locale.t('app.title');
-            }
+            untitle?.();
         };
     };
 

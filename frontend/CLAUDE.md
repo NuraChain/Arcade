@@ -776,6 +776,19 @@ button that cannot be pressed at all. `shell.spec.ts` (*Button*) holds the focus
 and a form to one send, and the specs that asked a busy button for `.disabled` ask for
 `aria-disabled`. A spec or a pass that wants to know a button is busy asks `aria-busy`.
 
+**The tab's title has one writer, and the unread count stands in front of whatever it wrote.** Two
+things wrote `document.title`: each page's own `useHead` title, and the cues store's count, which
+REPLACED the title with "4 · Nura Games". Whichever wrote last won, so a profile read "name · Nura
+Games" until a count changed and "4 · Nura Games" after, and the count vanished on the next
+navigation. The count cannot be composed through `useHead`: the shell's `titleTemplate` is a string
+fixed when the shell mounts, and a page's title wins over its layout's. So the head manager stays
+the writer and the cues store, which is lazy and already owns the count, only prefixes: it watches
+`<head>` with a `MutationObserver`, takes any title it did not write itself as the page's own, and
+writes "4 · " in front of that. It compares with the exact string it last wrote, so it never has to
+parse a title to find its own number in it. Stopping it puts the page's title back and lets go of
+the observer. `cues.spec.ts` writes a page title under a running count, changes it, reads
+everything, and stops the store.
+
 **The wallet address has to be readable and copyable, because the whole peer story rests on it.**
 *Whose device is that?* asks a person to compare an address out of band "the way a safety number
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can

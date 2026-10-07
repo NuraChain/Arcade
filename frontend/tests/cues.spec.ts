@@ -81,6 +81,7 @@ beforeEach(async () =>
     useToasts().reset();
     useLobby().reset();
     useCues().reset();
+    document.title = '';
     await settle();
 
     useRealtime().start();
@@ -534,6 +535,61 @@ describe('the cues store', () =>
         await settle();
 
         expect(document.title).toBe('Nura Games');
+    });
+
+    it('counts in front of the page\'s own title, and goes on counting when the page changes it', async () =>
+    {
+        server.incoming = [];
+        document.title = 'Friends · Nura Games';
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        const counted = document.title;
+
+        expect(counted, 'the count took the place of the page\'s own title').toMatch(/^\d+ · Friends · Nura Games$/);
+
+        document.title = 'Chats · Nura Games';
+        await settle();
+
+        expect(document.title, 'the page changed its title and the count went with the old one').toBe(counted.replace('Friends', 'Chats'));
+
+        const chat = useChat();
+
+        for (const conversation of [...chat.conversations()])
+        {
+            await chat.markRead(conversation.id);
+        }
+
+        await settle();
+
+        expect(document.title).toBe('Chats · Nura Games');
+    });
+
+    it('leaves the title as the page wrote it when it stops', async () =>
+    {
+        server.incoming = [];
+        document.title = 'Friends · Nura Games';
+
+        const stop = useCues().start();
+
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        expect(document.title).not.toBe('Friends · Nura Games');
+
+        stop();
+
+        expect(document.title).toBe('Friends · Nura Games');
+
+        document.title = 'Home · Nura Games';
+        await settle();
+
+        expect(document.title, 'a stopped store went on writing the title').toBe('Home · Nura Games');
     });
 
     it('owns the effects it makes, so arming it outside a component warns about nothing', () =>
