@@ -13,12 +13,14 @@ vi.mock('../src/stores/enrolment.store.ts', async () =>
 {
     const { createSignal } = await import('azerothjs');
     const [gap, setGap] = createSignal<Gap>('absent');
+    const [reads, setReads] = createSignal(0);
 
     return {
         setGap,
+        readAgain: () => setReads(reads() + 1),
         useEnrolment: () => ({
             gap,
-            asking: () => gap() !== null,
+            asking: () => reads() >= 0 && gap() !== null,
             dismiss: () => undefined,
             give: async () => undefined
         })
@@ -28,6 +30,8 @@ vi.mock('../src/stores/enrolment.store.ts', async () =>
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 const setGap = (enrolment as unknown as { setGap: (value: Gap) => void }).setGap;
+
+const readAgain = (enrolment as unknown as { readAgain: () => void }).readAgain;
 
 const settle = async () =>
 {
@@ -58,5 +62,22 @@ describe('the keys banner', () =>
         await settle();
 
         expect(container.querySelector('[role="status"]')).toBeNull();
+    });
+
+    it('keeps its button, and whoever is on it, when the devices behind the question are read again', async () =>
+    {
+        useLocale().setLocale('en');
+        const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => KeysBanner({}) }) as HTMLElement);
+        await settle();
+
+        const button = container.querySelector<HTMLButtonElement>('[role="status"] button')!;
+
+        button.focus();
+        readAgain();
+        await settle();
+
+        expect(container.querySelector('[role="status"] button'), 'the banner was drawn again for the same answer').toBe(button);
+        expect(document.activeElement).toBe(button);
     });
 });

@@ -28,6 +28,10 @@ export default component SocialPanel()
 
     derived recent = notifications.latest().slice(0, 5);
 
+    derived busy = recent.length > 0;
+
+    derived around = friends.length > 0;
+
     const personOf = (item: Notification) => item.actor === undefined ? null : people.byHandle(item.actor);
 
     const whoOf = (item: Notification) =>
@@ -50,7 +54,7 @@ export default component SocialPanel()
         <section aria-labelledby="panel-activity">
             <SectionHeading id="panel-activity" title={ locale.t('shell.activity') } more={ locale.t('common.seeAll') } to="/app/notifications" class="mb-1" />
             <Show
-                when={ recent.length > 0 }
+                when={ busy }
                 fallback={ <p class="py-2 text-ui-sm text-muted">{ locale.t('shell.activity.empty') }</p> }
             >
                 { () =>
@@ -75,7 +79,7 @@ export default component SocialPanel()
         <section aria-labelledby="panel-friends">
             <SectionHeading id="panel-friends" title={ locale.t('home.friends.title') } more={ locale.t('common.seeAll') } to="/app/friends" class="mb-1" />
             <Show
-                when={ friends.length > 0 }
+                when={ around }
                 fallback={ <p class="py-2 text-ui-sm text-muted">{ locale.t('shell.friends.empty') }</p> }
             >
                 { () =>

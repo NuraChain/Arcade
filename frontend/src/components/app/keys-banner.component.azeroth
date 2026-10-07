@@ -21,7 +21,9 @@ export default component KeysBanner()
     const enrolment = useEnrolment();
     const locale = useLocale();
 
-    <Show when={ enrolment.asking() }>
+    derived asking = enrolment.asking();
+
+    <Show when={ asking }>
         { () =>
             <div
                 class="z-banner flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-gold/15 px-4 py-2 text-ui-sm text-gold"

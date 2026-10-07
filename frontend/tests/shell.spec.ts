@@ -26,6 +26,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
+import { useSocial } from '../src/stores/social.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
 import { server } from './fake-api.ts';
 
@@ -688,6 +689,43 @@ describe('the right panel', () =>
         const rows = container.querySelectorAll('section[aria-labelledby="panel-activity"] li button');
         expect(rows.length).toBe(1);
         expect(rows[0].textContent).toContain('ago');
+    });
+
+    it('keeps both of its empty lines when the lists behind them are read again', async () =>
+    {
+        server.friends = [];
+        await useAccount().signIn('Alex');
+        const container = await mount();
+        const lines = () => [...container.querySelectorAll('section > p')];
+        const drawn = lines();
+
+        expect(drawn).toHaveLength(2);
+
+        await useNotifications().refresh();
+        await useSocial().refresh();
+        await settle();
+
+        expect(lines()[0], 'the line about what lands here was drawn again').toBe(drawn[0]);
+        expect(lines()[1], 'the line about who is online was drawn again').toBe(drawn[1]);
+    });
+
+    it('keeps a notification it has listed when another one arrives', async () =>
+    {
+        await useAccount().signIn('Alex');
+        server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
+        useNotifications().reset();
+        const container = await mount();
+        const rows = () => [...container.querySelectorAll('section[aria-labelledby="panel-activity"] li button')];
+        const first = rows()[0];
+
+        expect(first).not.toBeUndefined();
+
+        server.notify({ kind: 'friend-request', actor: 'omid.k', dedupeKey: 'friend:omid.k' });
+        await useNotifications().refresh();
+        await settle();
+
+        expect(rows()).toHaveLength(2);
+        expect(rows(), 'the row already listed was drawn again').toContain(first);
     });
 });
 
