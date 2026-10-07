@@ -706,13 +706,6 @@ export function buildApi(ports: Ports)
                 return found;
             }),
 
-            /**
-             * Watching, which is deliberately its own route rather than `view` with a flag.
-             *
-             * `view` answers a PLAYER: it resolves their chair, computes their legal moves and
-             * refuses anybody who has none. This answers a stranger, and the board it returns is
-             * two minutes old. One route serving both would be one place to get the delay wrong.
-             */
             watch: routes.get('/:id/watch', { output: matchWatch }, async (context) =>
             {
                 const found = await ports.match.watch(context.principal.userId, context.params.id);

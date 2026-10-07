@@ -863,6 +863,66 @@ second per process, against the two a second a fixed batch of thirty-two every f
 log.** `matches.state` is the authority and nothing replays those rows to reconstruct a board. A
 fixed rule would change the fold, and a finished game would stop being a fact.
 
+**A watcher is shown one revision, and the seats beside the board are that revision's too.** The
+delay exists to stop coaching, and it only works because the SERVER holds the board back: a client
+handed the live position and told to wait is not delayed, it is asking nicely, and the request is
+right there in the network tab. So `watch.ts` never sends the current state of a live game. It picks
+R - the newest `match_actions` row older than `WATCH_DELAY_MS`, or the `open` row every ledger begins
+with, so a game younger than the delay is shown its opening rather than nothing - in one query on
+Postgres `now()`, and `behind` is the age of that row on the same clock. It was the Node clock
+against the match's start for a young game. The delay matters in ludo though ludo hides nothing: a
+spectator with a live board can say which token to move, and coaching is cheating in a rated game
+whether or not the board is secret. A finished game has no delay, because nothing is left to leak,
+and that is also what makes watching a game back possible.
+
+The board was always R's and the seats were not (LUDO-14). `match_players` was read as it stands NOW,
+and two of its columns move while a game goes on. `result` becomes `abandoned` the moment a forfeit
+commits, though ludo plays on at three and four seats and poker at three or more, so for thirty
+seconds a watcher read "Left the game" on a plate whose tokens were still on the ring. The sweep bumps
+`timeouts` the moment it plays a turn, so "missed a turn" told a coach that somebody had gone quiet
+thirty seconds before the board showed the turn played. And a finish could commit between the read of
+the match and the read of its seats, which put the final results and the rating swing beside a board
+still called live.
+
+For a live game, then, nothing is read off `match_players` but who sits where. A seat is `abandoned`
+only if the ledger holds a forfeit for it at or before R - the ledger is append-only, so that answer
+is the same however the reads interleave - a rating is never sent, and neither is `timeouts`:
+`matchPlayer.timeouts` is optional and absent for a watcher of a live game, the rule `remainingMs`
+already follows, because a count of misses is what the live clock did rather than what the board
+shows. The match copy that carries R's state carries no deadline, winner or outcome, so `asMatch` has
+nothing to send and the port stopped deleting a field on the way out. `plateTag` and `YardBadge` read
+a missing count as none; the ludo badge compared it with zero, so every plate of a watched game would
+have worn "Waiting" or "Their go" as its tag. A finished game is sent whole, counts included.
+
+`/matches/:id/watch` is its own route rather than `view` with a flag: `view` answers a player and
+refuses anybody without a seat, and one route serving both would be one place to get the delay wrong.
+A match that is not there, an id that is no id at all and a table the reader may not watch are one
+answer, 404, in the same words: the port answers each with nothing, and the route has one sentence
+for nothing. `delayed` asks whether the id is a uuid before it asks Postgres, as `read`, `start` and
+`act` do; it was the one match read a route parameter reaches that did not, so a mistyped link was a
+22P02 and a 500. `match.db.spec.ts` (*watching*) holds this through the port a watcher is answered
+by: a three-seat resignation that shows nothing until its row is thirty-one seconds old, a swept turn
+whose count never arrives while the game is live and is there once it is over, a finish forged onto
+`match_players` under a live match, a young game shown its opening and told it is as far behind as
+that row is old, no clock, winner or outcome while live, and nothing to watch at an id nobody holds,
+at one that is no uuid, or at a table that stopped being public under its game - live and finished
+alike, while somebody in a chair there is still shown it. `envelope.spec.ts` holds the missing count
+with no Postgres, and `table-plate.spec.ts` and `ludo-table.spec.ts` hold the plates.
+
+Two things still reach somebody early, and neither is this route's. The play page closes the watch
+the moment the table drops its `matchId`, which is the LIVE finish, so a watcher learns a game ended
+thirty seconds before their board would have shown it and never sees the last board. And a seat that
+quit a game still being played keeps its `match_players` row, so it is still pushed the live board.
+
+The play page also still says a thing this route no longer means. A refused watch is drawn as
+`watch.waiting`, "The game has just started. There is nothing old enough to show yet.", the sentence
+for a game too young to have a board to show - and a young game is shown its opening, so the only
+404 left is not there, or not for this reader. Somebody on either side of a block with the host
+reads it for as long as they stay: `byId` still shows them the table, because `visibleTo` has no
+block clause, and `watchableTable` refuses the game on it. The watch store's `waiting` and `missing`
+are that state with no reader, and `fit-pass.mjs` still waits forty-five seconds for a watch that is
+ready at once.
+
 **`tools/qa/ludo-pass.mjs` plays complete games over the real api**, at two, three and four players,
 through the routes a browser uses. It is API-level on purpose: it proves the rules, the persistence,
 the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
@@ -1517,7 +1577,8 @@ the moment anything a player needs is below the fold.
   `YardBadge`). The COMPARISON is shared, not just the number - three copies of `>=` over one constant
   would leave the warning a miss early the day the sweep's own comparison moved - and
   `table-plate.spec.ts` and `ludo-table.spec.ts` move the rule under both tags and require them to
-  follow. A watcher is sent no `remainingMs`, so a watcher sees no ring.
+  follow. A watcher is sent no `remainingMs`, so a watcher sees no ring, and no `timeouts` while the
+  game is live, so no plate of theirs says a turn was missed.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
   only worth their height when one row would squeeze each card below a readable strip.
 - `MatchResult` overlays the stage rather than pushing it down.

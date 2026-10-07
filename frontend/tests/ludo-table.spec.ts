@@ -153,6 +153,25 @@ describe('the ludo table', () =>
         expect(await tag(4)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
     });
 
+    it('writes no tag on the plates of a game being watched, whose seats come without a count of missed turns', async () =>
+    {
+        const locale = useLocale();
+        const match = matchView.parse(ludo({
+            mine: undefined,
+            players: [
+                { seat: 0, who: 'alex' },
+                { seat: 1, who: 'sara.k' }
+            ]
+        }));
+
+        expect(match.players.map((player) => Object.keys(player))).toEqual([['seat', 'who'], ['seat', 'who']]);
+
+        const badges = [...(await show(match)).querySelectorAll<HTMLElement>('.yard-badge')];
+
+        expect(badges.map((badge) => badge.querySelector('.table-plate-tag'))).toEqual([null, null]);
+        expect(badges.map((badge) => badge.querySelector('.sr-only')?.textContent)).toEqual([locale.t('card.turn'), locale.t('card.waiting')]);
+    });
+
     it('says No contest on a seat the finished game never judged, and Left on the seat that walked', async () =>
     {
         const container = await show(ludo({

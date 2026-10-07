@@ -488,13 +488,6 @@ export interface MatchPort
     /** `after` is the last rank already shown, so a page continues the numbering rather than restarting. */
     leaderboard(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>;
 
-    /**
-     * A game as a spectator may see it, which is a game as it stood two minutes ago.
-     *
-     * Null for a match that does not exist, one at a table a stranger may not watch, and one too
-     * young to have a board old enough to show - three states the route tells apart, because "not
-     * yet" and "not for you" are different answers.
-     */
     watch(me: string, matchId: string): Promise<MatchWatch | null>;
 
     /** Public tables with a game running on them, for somebody looking for one to watch. */

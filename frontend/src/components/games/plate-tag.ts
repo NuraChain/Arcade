@@ -37,11 +37,13 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
         return { text: locale.t('card.void'), tone: 'neutral' };
     }
 
-    if (player.timeouts > 0 && !finished)
+    const missed = player.timeouts ?? 0;
+
+    if (missed > 0 && !finished)
     {
-        return nextMissForfeits(player.timeouts)
+        return nextMissForfeits(missed)
             ? { text: locale.t('card.lastChance'), tone: 'danger' }
-            : { text: locale.plural('match.missed', player.timeouts), tone: 'gold' };
+            : { text: locale.plural('match.missed', missed), tone: 'gold' };
     }
 
     return null;

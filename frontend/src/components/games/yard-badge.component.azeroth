@@ -35,9 +35,11 @@ export default component YardBadge(props: {
         ? locale.t('match.you')
         : (person === null ? props.player.who : locale.text(person.displayName));
 
-    derived warned = nextMissForfeits(props.player.timeouts) && !props.finished;
+    derived missed = props.player.timeouts ?? 0;
 
-    derived routine = props.player.result === undefined && !props.seat.out && props.player.timeouts === 0;
+    derived warned = nextMissForfeits(missed) && !props.finished;
+
+    derived routine = props.player.result === undefined && !props.seat.out && missed === 0;
 
     derived says = (() =>
     {
@@ -61,11 +63,11 @@ export default component YardBadge(props: {
             return locale.t('card.void');
         }
 
-        if (props.player.timeouts > 0)
+        if (missed > 0)
         {
             return warned
                 ? locale.t('card.lastChance')
-                : locale.plural('match.missed', props.player.timeouts);
+                : locale.plural('match.missed', missed);
         }
 
         if (!turn)
@@ -88,7 +90,7 @@ export default component YardBadge(props: {
             return 'live';
         }
 
-        return props.player.timeouts > 0 && !props.finished ? 'gold' : 'neutral';
+        return missed > 0 && !props.finished ? 'gold' : 'neutral';
     })();
 
     <div class="yard-badge flex min-inline-0 data-[corner=top-left]:[grid-area:tl] data-[corner=top-right]:[grid-area:tr] data-[corner=bottom-left]:[grid-area:bl] data-[corner=bottom-right]:[grid-area:br] data-[corner$=left]:justify-start data-[corner$=right]:justify-end fit-wide:data-[corner^=top]:[align-self:start] fit-wide:data-[corner^=bottom]:[align-self:end]" data-corner={ props.corner } style={ `--ink: var(--ludo-${ props.seat.colour })` }>

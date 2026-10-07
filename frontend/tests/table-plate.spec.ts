@@ -72,6 +72,15 @@ describe('the seat plate every table draws', () =>
         expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), true)).toBeNull();
     });
 
+    it('writes nothing about missed turns for a seat that came without a count, as every seat of a game being watched does', () =>
+    {
+        const locale = useLocale();
+        const watched: MatchPlayer = { seat: 1, who: 'sara.k' };
+
+        expect(plateTag(locale, watched, false)).toBeNull();
+        expect(plateTag(locale, { ...watched, result: 'abandoned' }, false)).toEqual({ text: locale.t('card.out'), tone: 'neutral' });
+    });
+
     it('warns on the miss the server’s own rule calls the last, so a different limit moves the warning with it', () =>
     {
         vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 5);

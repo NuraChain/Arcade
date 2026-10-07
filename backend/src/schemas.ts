@@ -1192,7 +1192,7 @@ export const matchPlayer = object({
      * happened silently: nobody knew somebody had gone quiet, nobody knew a seat was one miss from
      * ending, and the first anyone saw was a player vanishing from a game they were in.
      */
-    timeouts: number(),
+    timeouts: number().optional(),
 
     result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
 

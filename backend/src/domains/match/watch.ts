@@ -1,28 +1,9 @@
-import type { DataSource } from 'typeorm';
+import { Brackets, LessThanOrEqual, type DataSource } from 'typeorm';
 
 import { Match, MatchAction } from '../../entities/index.ts';
 import type { MatchLoad, MatchSeatRow } from './service.ts';
 
-/**
- * A game as a spectator is allowed to see it, which is a game as it stood two minutes ago.
- *
- * **The delay exists to stop coaching, and it only works because the SERVER holds the board back.**
- * A client that is handed the live position and told to wait is not delayed, it is asking nicely -
- * the request is right there in the network tab. So a watcher is never sent the current state at
- * all: they are sent the state a recorded action produced, chosen by its timestamp.
- *
- * It matters in ludo even though ludo hides nothing. A spectator with a live board can tell a
- * player which token to move, and coaching is cheating in a rated game whether or not the board is
- * secret. It matters more for every other game this platform lists, and the mechanism belongs here
- * before the game that needs it most rather than after.
- *
- * **A finished game has no delay.** There is nothing left to leak, so the current state is served
- * whole the moment `finished_at` is set - which is also what makes watching a game back possible.
- *
- * **A game with nothing old enough shows nothing.** The first two minutes of a match are not
- * rendered as an empty board, which would be a lie about the position; the watcher is told the game
- * has started and they are waiting, which is true.
- */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * How far behind a watcher is.
@@ -52,14 +33,13 @@ export interface WatchLoad
 export function createWatchService(db: DataSource, seatsOf: (matchId: string) => Promise<MatchSeatRow[]>)
 {
     return {
-        /**
-         * The board a watcher may see, or null when there is nothing to show them yet.
-         *
-         * Null covers two states that are both "not now" and are told apart by the caller: no such
-         * match, and a match young enough that no action is old enough to serve.
-         */
         async delayed(matchId: string): Promise<WatchLoad | null>
         {
+            if (!UUID.test(matchId))
+            {
+                return null;
+            }
+
             const match = await db.getRepository(Match).findOne({ where: { id: matchId } });
 
             if (match === null)
@@ -94,32 +74,23 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
                 .addSelect('a.rev', 'rev')
                 .addSelect('extract(epoch from (now() - a.created_at))', 'behind')
                 .where('a.match_id = :matchId', { matchId })
-                .andWhere(`a.created_at <= now() - (:delay || ' milliseconds')::interval`, { delay: WATCH_DELAY_MS })
+                .andWhere(new Brackets((shown) => shown
+                    .where(`a.created_at <= now() - (:delay || ' milliseconds')::interval`, { delay: WATCH_DELAY_MS })
+                    .orWhere(`a.kind = 'open'`)))
                 .orderBy('a.rev', 'DESC')
                 .limit(1)
                 .getRawOne<{ state: unknown; rev: number; behind: string }>();
 
             if (row === undefined)
             {
-                const moved = await db.getRepository(MatchAction).existsBy({ matchId });
-                const opening = moved ? match.opening : match.state;
-
-                if (opening === null || opening === undefined)
-                {
-                    return null;
-                }
-
-                return {
-                    load: {
-                        match: { ...match, state: opening, rev: (opening as { rev: number }).rev } as Match,
-                        state: opening,
-                        players,
-                        mine: -1
-                    },
-                    behind: Math.max(0, Math.round((Date.now() - match.startedAt.getTime()) / 1000)),
-                    live: true
-                };
+                return null;
             }
+
+            const forfeits = await db.getRepository(MatchAction).find({
+                select: { seat: true },
+                where: { matchId, kind: 'forfeit', rev: LessThanOrEqual(row.rev) }
+            });
+            const gone = new Set(forfeits.map((forfeit) => forfeit.seat));
 
             /**
              * The MATCH row is handed over with the delayed state written onto it, so everything
@@ -129,9 +100,15 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
              */
             return {
                 load: {
-                    match: { ...match, state: row.state, rev: row.rev } as Match,
+                    match: { ...match, state: row.state, rev: row.rev, deadlineAt: null, winnerSeat: null, outcome: null },
                     state: row.state,
-                    players,
+                    players: players.map((player) => ({
+                        ...player,
+                        timeouts: null,
+                        result: gone.has(player.seat) ? 'abandoned' : null,
+                        rating_before: null,
+                        rating_after: null
+                    })),
                     mine: -1
                 },
                 behind: Math.max(0, Math.round(Number(row.behind))),

@@ -11,7 +11,7 @@ export function envelopeOf(engine: Pick<Engine, 'standings' | 'sideOf'> | null, 
     return rows.map((row) => ({
         seat: row.seat,
         who: row.who,
-        timeouts: row.timeouts,
+        ...(row.timeouts === null ? {} : { timeouts: row.timeouts }),
         ...(row.result == null ? {} : { result: row.result }),
         ...(row.rating_before == null || row.rating_after == null
             ? {}

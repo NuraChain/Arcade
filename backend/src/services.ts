@@ -2069,15 +2069,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             leaderboard: (game, window, after) => achieve.leaderboardOf(game, window, after),
 
-            /**
-             * Two refusals that are deliberately the same answer.
-             *
-             * A table a stranger may not watch and a match that does not exist both come back null,
-             * which the route turns into 404 - the chat domain's rule, because a 403 confirms the
-             * table is there and the point is that a stranger cannot tell a closed door from a typo.
-             * A match too YOUNG to have a board old enough is the third null and reads the same from
-             * here; the client says "the game has just started" from `live` and an absent board.
-             */
             async watch(me, matchId)
             {
                 const found = await watch.delayed(matchId);
@@ -2101,11 +2092,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                const shown = asMatch(found.load);
-
-                delete shown.remainingMs;
-
-                return { match: shown, behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
+                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
             },
 
             async watchable(me, game)

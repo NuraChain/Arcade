@@ -4,7 +4,7 @@ import { envelopeOf } from '../src/domains/match/envelope.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
 import type { PokerAction, PokerState } from '../src/domains/match/poker/state.ts';
-import { matchView } from '../src/schemas.ts';
+import { matchPlayer, matchView } from '../src/schemas.ts';
 import { seeded } from './poker-table.ts';
 
 const draws = (seed: number) => ({ die: seeded(seed) });
@@ -84,5 +84,15 @@ describe('the envelope of a finished match', () =>
         const players = envelopeOf(pokerEngine, state, rowsOf([0, 1, 2, 3, 4, 5]), false);
 
         expect(players.every((player) => player.place === undefined && player.side === undefined)).toBe(true);
+    });
+
+    it('leaves a count of missed turns out for a seat that came without one, and sends the count a seat has', () =>
+    {
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table).state;
+        const rows = rowsOf([0, 1]).map((row) => ({ ...row, timeouts: row.seat === 0 ? null : 2 }));
+        const players = envelopeOf(pokerEngine, state, rows, false);
+
+        expect(players.map((player) => Object.keys(player).includes('timeouts'))).toEqual([false, true]);
+        expect(players.map((player) => matchPlayer.parse(player).timeouts)).toEqual([undefined, 2]);
     });
 });

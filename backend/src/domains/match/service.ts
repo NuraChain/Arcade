@@ -86,7 +86,7 @@ export interface MatchSeatRow
     user_id: string;
 
     colour: number;
-    timeouts: number;
+    timeouts: number | null;
     result: MatchResult | null;
     rating_before: number | null;
     rating_after: number | null;
