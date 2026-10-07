@@ -1294,6 +1294,7 @@ describe('PlayPage', () =>
 
             server.tables.find((one) => one.id === id)!.chairs[0].ready = ready;
             server.me = viewer;
+            await useLobby().refresh();
 
             const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
             const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
@@ -1305,8 +1306,11 @@ describe('PlayPage', () =>
             return server.tables.find((one) => one.id === id)!;
         };
 
-        beforeEach(() =>
+        beforeEach(async () =>
         {
+            server.reset();
+            useLobby().reset();
+            await settle();
             visibility = 'visible';
             Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
         });
@@ -1355,12 +1359,57 @@ describe('PlayPage', () =>
             expect(socket.closed).toHaveLength(1);
         });
 
-        it('is let go once they have left the page', async () =>
+        it('is kept after they have left the page, for as long as they still sit ready at that table', async () =>
         {
             await opened({});
 
             cleanup();
             await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed, 'somebody looking for a game lost their socket by looking at another page').toEqual([]);
+        });
+
+        it('is kept by a search from wherever it was made, with no table page ever opened, and let go once the chair is given back', async () =>
+        {
+            const id = await useLobby().quick('ludo');
+
+            await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed).toEqual([]);
+
+            await useLobby().leave(id, false);
+            await settle();
+            clock.advance(IDLE_MS + 1000);
+
+            expect(socket.closed, 'a chair that was given back still held the socket').toHaveLength(1);
+        });
+
+        it('is kept while a live game of theirs is on, whatever page they are on', async () =>
+        {
+            const held = await opened({}, 'alex', false);
+
+            cleanup();
+            held.matchId = 'match-on';
+            await useLobby().refresh();
+            await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed).toEqual([]);
+
+            delete held.matchId;
+            await useLobby().refresh();
+            await settle();
+            clock.advance(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go at a table that plays a move a day, ready or not', async () =>
+        {
+            await opened({ mode: 'turns' });
+
             hidden(IDLE_MS + 1000);
 
             expect(socket.closed).toHaveLength(1);

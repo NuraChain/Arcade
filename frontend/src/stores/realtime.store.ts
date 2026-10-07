@@ -192,6 +192,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     /** Cancels the pending "the tab has been hidden long enough" timer, if one is armed. */
     let cancelSleep: (() => void) | null = null;
     let holds = 0;
+    let era = 0;
     let arm: (() => void) | null = null;
     let wanted = false;
     let watching: (() => void) | null = null;
@@ -647,6 +648,8 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         hold()
         {
+            const born = era;
+
             holds += 1;
             let held = true;
 
@@ -658,7 +661,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             return () =>
             {
-                if (!held)
+                if (!held || born !== era)
                 {
                     return;
                 }
@@ -740,6 +743,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             setRtt(null);
             setStalled(false);
             holds = 0;
+            era += 1;
             attempt = 0;
             suppressUntil = 0;
             connectedAt = 0;

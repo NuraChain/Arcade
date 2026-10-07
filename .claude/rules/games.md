@@ -596,8 +596,12 @@ ever does. A press in between is handed the table it was already given and asks 
 
 **Somebody waiting at a live table keeps their socket.** A hidden tab lets its socket go after a
 minute, and a seat whose socket is gone is not here: the table is passed over by every search until
-they come back. The play page holds the socket for as long as the reader sits READY at a live table
-that has not closed, not only while a game is on the board. Ready is the whole of the difference. A
+they come back. The lobby store holds the socket for as long as the reader sits READY at a live table
+that has not closed, or has a live game on at one, WHATEVER PAGE THEY ARE ON: every read of the
+reader's own tables decides it again, and only the newest read is believed. The play page held it
+first, and only while it was open - so a search made from a game's page and left for Home lost its
+socket to a hidden tab, was passed over by every search and was stood up without a word, where the
+table's own page would have kept the chair. Ready is the whole of the difference. A
 chair quick play took is ready, and so is one that pressed Play again; a chair a finished game left
 un-ready is waiting for nothing, and held, its hidden tab would be here for as long as it lived. The
 first chair freed there would then make it the fullest table with everybody here, and the next

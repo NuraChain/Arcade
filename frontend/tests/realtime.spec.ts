@@ -237,6 +237,27 @@ describe('the realtime store', () =>
         expect(socket.closed.length).toBe(1);
     });
 
+    it('does not let a release from before a reset undo a hold taken since', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        const stale = live.hold();
+
+        live.reset();
+        socket.reset();
+        live.start();
+        socket.accept();
+
+        live.hold();
+        stale();
+        hide();
+        clock.advance(IDLE_MS * 3);
+
+        expect(socket.closed.length, 'a hold was let go by a release that belonged to the connection before it').toBe(0);
+    });
+
     it('reconnects a held socket that drops while the tab is hidden, rather than waiting to be looked at', () =>
     {
         const live = useRealtime();

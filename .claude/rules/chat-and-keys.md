@@ -1109,9 +1109,11 @@ second forever. 4400, 4401 and 4429 are terminal and never retried.
 **The seed is random per browser.** It was the constant 1, so every client on the deployment drew the
 same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.
 
-**A table holds the socket, and a held socket is probed.** The play page holds it while a live match is
-on screen, and while the reader sits ready at a live table waiting for one (*Somebody waiting at a live
-table keeps their socket* in `games.md`), which keeps it through a hidden tab. Ten seconds without a
+**A table holds the socket, and a held socket is probed.** The lobby store holds it while the reader
+has a live match on, and while they sit ready at a live table waiting for one, on whatever page
+(*Somebody waiting at a live table keeps their socket* in `games.md`), which keeps it through a
+hidden tab. A release that belongs to a connection that has been reset since is let fall, so it
+cannot take a newer hold with it. Ten seconds without a
 frame sends a `ping`; four more without an answer hang it up and reopen it at once, because a socket
 whose far end has gone quiet without a FIN is otherwise trusted until TCP gives up minutes later. The
 pongs also give the round trip and the server clock's offset, from the fastest of the last eight. The

@@ -96,7 +96,33 @@ export const useLobby = createStore((): LobbyApi =>
         setFinding((current) => current.filter((one) => one !== game));
     };
 
-    const seated = createResource(who, () => client.tables.mine(), { name: 'tables.mine' });
+    let unhold: (() => void) | null = null;
+    let asked = 0;
+
+    const wired = (table: TableSummary) => table.mode === 'live'
+        && table.status !== 'closed'
+        && (table.matchId !== undefined || table.chairs.some((chair) => chair.seat === table.mine && chair.ready));
+
+    const rehold = (tables: readonly TableSummary[]) =>
+    {
+        const next = tables.some(wired) ? useRealtime().hold() : null;
+
+        unhold?.();
+        unhold = next;
+    };
+
+    const seated = createResource(who, async () =>
+    {
+        const turn = asked += 1;
+        const answer = await client.tables.mine();
+
+        if (turn === asked)
+        {
+            rehold(answer.tables);
+        }
+
+        return answer;
+    }, { name: 'tables.mine' });
 
     const left = new Set<string>();
 
@@ -371,6 +397,8 @@ export const useLobby = createStore((): LobbyApi =>
         reset()
         {
             left.clear();
+            asked += 1;
+            rehold([]);
             setOpenId('');
             inFlight = Promise.resolve();
 
