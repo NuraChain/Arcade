@@ -109,3 +109,38 @@ a page load pulls forty static assets, a file served from disk with an ETag cost
 and one budget cannot be right for both. Metering the cheap thing at the rate the expensive thing
 needs is how a normal visitor ends up taking 429s on their own JavaScript — which is exactly what
 the first run of this matrix showed, as 808 console errors and 377 pages that never booted.
+
+## The garbage pass
+
+`tools/qa/garbage-pass.mjs` sends every route things that are not what it asks for and fails on any
+answer that is a 5xx: twenty kinds of text that is no id (a word, a uuid with a letter too many, an
+injection's opening, a NUL, three hundred letters), nine cursors that are no cursor, and three
+bodies that are not JSON objects. About 2,900 requests over the api alone, as two throwaway
+wallets, in under a minute. Run it by hand against the built server, limiter raised, with every
+change to a route, a wire shape or a query that takes something off the wire:
+`QA_BASE=http://localhost:5300 node tools/qa/garbage-pass.mjs`.
+
+**The routes are the server's own.** It reads `/api/_manifest`, so a route added later is sent a
+garbage address without anybody listing it. What it cannot derive is a body, so `BODIES` gives one
+per route and the pass fails, naming the route, when a POST is neither there nor in `SPARED` - the
+routes whose body is a switch or nothing at all, and the two that would end the session it is
+using. It fails the other way too, on an entry for a route the server no longer has. Two routes
+are sent only the text they must refuse (`WOULD_ACT`): a guest sign-in would make an account for
+every word, and a new handle would rename the account the pass is counting on.
+
+**It anchors.** A garbage id in an address is answered by the first thing that reads it, which
+proves little about what stands behind. So the pass opens a table, starts a game on it and makes a
+group, and sends each body again at the REAL table, thread, game, group and device: the address
+is right and only the body is wrong. That is how it reached a revision too large for its column,
+which no garbage address would have.
+
+It then asks six things in words: a NUL in an address is a 400 and in a body a 422; a body that
+is not a JSON object is refused, not thrown; a friend request named by something that is no id is
+answered in the bytes of one that is not there, and the request that was really sent is still
+waiting; a cursor that is no cursor reads each of the four paged lists from the top; whoever sent
+all of it is still signed in under the handle they came with; and the server still answers. What the rules are and where each lives is in
+`backend/CLAUDE.md`, *A request that is not well formed*.
+
+It leaves every table and group it made, but not the two accounts, the garbage it muted or the
+names it gave its own device: run it where the other passes run, against a database that is
+disposable.

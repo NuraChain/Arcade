@@ -1,7 +1,11 @@
-import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
+import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
+
+const NUL_FREE = new RegExp(`^[^${ String.fromCharCode(0) }]*$`);
+
+const string = (options: StringOptions = {}) => text({ pattern: NUL_FREE, ...options });
 
 /**
  * The wire shape, declared once.

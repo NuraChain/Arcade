@@ -504,6 +504,11 @@ export function createSocialService(db: DataSource)
 
         async answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined')
         {
+            if (!UUID.test(requestId))
+            {
+                throw new NotFoundError('That request is no longer open.');
+            }
+
             await db.transaction(async (tx) =>
             {
                 const rows = await tx.query(

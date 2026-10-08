@@ -236,17 +236,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const encodeCursor = (at: Date, id: string) =>
         Buffer.from(`${ at.toISOString() }|${ id }`, 'utf8').toString('base64url');
 
-    const decodeCursor = (cursor: string | undefined): { at: Date; id: string } | null =>
-    {
-        if (cursor === undefined || cursor === '')
-        {
-            return null;
-        }
-        const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-        const when = new Date(at ?? '');
-        return id === undefined || Number.isNaN(when.getTime()) ? null : { at: when, id };
-    };
-
     const LIST_CURSOR = /^([0-9T:.\-Z]*)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
     const listCursorOf = (row: { last_at: Date | null; id: string }) =>
@@ -264,6 +253,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         const at = found[1] === '' ? null : new Date(found[1]);
 
         return at !== null && Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
+    };
+
+    const decodeCursor = (cursor: string | undefined) =>
+    {
+        const found = listAfter(cursor);
+
+        return found === null || found.at === null ? null : { at: found.at, id: found.id };
     };
 
     const asMessage = (row: MessageRow) =>

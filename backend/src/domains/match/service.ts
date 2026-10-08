@@ -43,6 +43,16 @@ const UNIQUE_VIOLATION = '23505';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const HISTORY_CURSOR = /^([0-9T:.\-Z]+)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+const historyAfter = (cursor: string | null) =>
+{
+    const found = cursor === null ? null : HISTORY_CURSOR.exec(cursor);
+    const at = found === null ? null : new Date(found[1]);
+
+    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
+};
+
 export type Applied = 'now' | 'already' | 'stale';
 
 export type Expired =
@@ -371,10 +381,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         async history(me: string, cursor: string | null): Promise<MatchHistory>
         {
-            const at = cursor === null ? null : cursor.slice(0, cursor.lastIndexOf('|'));
-            const after = cursor === null ? null : cursor.slice(cursor.lastIndexOf('|') + 1);
-
-            const rows = await db.query(HISTORY_SQL, [me, at, after, HISTORY_PAGE + 1]) as HistoryRow[];
+            const after = historyAfter(cursor);
+            const rows = await db.query(HISTORY_SQL, [me, after?.at ?? null, after?.id ?? null, HISTORY_PAGE + 1]) as HistoryRow[];
             const page = rows.slice(0, HISTORY_PAGE);
             const last = page[page.length - 1];
 
@@ -438,10 +446,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             }
 
             const load = await shownTo(dealt);
+            const from = Math.min(Math.max(rev, 0), load.match.rev);
 
             const rows = await db.getRepository(MatchAction).find({
                 select: { rev: true, seat: true, createdAt: true, events: true },
-                where: { matchId, rev: Between(rev + 1, load.match.rev) },
+                where: { matchId, rev: Between(from + 1, load.match.rev) },
                 order: { rev: 'ASC' }
             });
 

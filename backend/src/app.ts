@@ -6,6 +6,7 @@ import type { DataSource } from 'typeorm';
 
 import { buildApi } from './api.ts';
 import { avatarFile } from './domains/identity/avatar.ts';
+import { wellFormed } from './http/well-formed.ts';
 import type { Ports } from './ports.ts';
 import type { ServerConfig } from './env.ts';
 import { buildPorts } from './services.ts';
@@ -82,7 +83,7 @@ function watchErrors(log: Logger): ErrorObserver
 
 export function buildApp(deps: AppDeps)
 {
-    const app = new App({ observe: deps.observe, onError: watchErrors(deps.log) });
+    const app = new App({ observe: deps.observe, onError: watchErrors(deps.log) }).use(wellFormed);
 
     // Declared by hand rather than through `api`, because a health check that needs the typed
     // client to boot is not a health check. It answers before anything else is mounted.

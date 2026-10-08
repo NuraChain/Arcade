@@ -115,6 +115,46 @@ Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In developm
 are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
 production one process answers everything, so there is no CORS between halves in either mode.
 
+## A request that is not well formed
+
+**It is answered, never thrown.** Postgres refuses four things a caller can put in a request, and
+each of them used to come back as a 500 any signed-in caller could produce: text with a NUL in it
+(22021), a uuid that is not one (22P02), a timestamp that is not one, and a number too large for
+its column (22003). `tools/qa/garbage-pass.mjs` sends every route such things, and on the day it
+was written half of them answered one that way: forty-nine of its ninety-eight checks.
+
+- **Text on the wire is declared through one function.** `schemas.ts` imports the library's
+  `string` as `text` and calls it once, in a `string` of its own that adds a pattern no NUL passes.
+  So every field of every body and query refuses one as `validation-failed`, a 422, before a port
+  is asked, and nobody declaring a new field has to remember to. `well-formed.spec.ts` reads the
+  file and fails on a second call of the library's own. The pattern is built with
+  `String.fromCharCode`, as every control character in this server is, so the source holds none.
+- **An address is not a schema's.** A name in a path goes to whatever looks it up, a slug and a
+  handle as text. `http/well-formed.ts` is the first thing `buildApp` puts on the app: any URL
+  carrying `%00` is `bad-request`, a 400, before the session is read. A percent sign somebody typed
+  arrives as `%25` and is let through.
+- **An id that reaches a uuid column is asked for its shape first, and a no is the answer a missing
+  thing gets.** Every read did this (`membership()`, `one()`, `read()`); `answerRequest` was a
+  WRITE whose port-level read checked and whose own UPDATE did not, so a handle sent where a
+  request's id belongs was a 500. It answers in the bytes of a request that is not there.
+- **A cursor that does not parse is no cursor**: the first page, as the leaderboard's always was.
+  `decodeCursor` took the id half on trust, so base64url of a date and anything at all reached
+  Postgres as a uuid; it reads through `listAfter`'s shape now. The match history took both halves
+  on trust and sent them as text; `historyAfter` parses them and hands Postgres a `Date`. A day the
+  calendar does not have is whatever JavaScript makes of it, which is a day.
+- **`since` clamps the revision it is asked from** to what the game has reached. A number past the
+  column's range reads as nothing new and one before the beginning as the whole game.
+
+`well-formed.spec.ts` holds the first two with no Postgres: every route in the manifest that takes
+a name from its address, refused with nobody asked. `well-formed.db.spec.ts` holds the other three
+through the ports. The pass holds all of it over the real server, and takes its routes from the
+server's own manifest, so a route added later is sent the same things; one that takes a body has
+to be given garbage there or named as spared, or the pass fails saying which.
+
+One thing it does not hold: the realtime gateway reads its own frames by hand. A `play` goes
+through `matchPlayInput`, so its text is this text; a table or a match is named by an id every
+reader of it checks; nothing else a frame carries is stored.
+
 ## The schema, and reference data
 
 Two things that look alike and are not.
