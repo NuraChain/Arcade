@@ -27,6 +27,7 @@ import { playWith } from '../../lib/play-with.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
 import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
+import { addFriend } from '../../lib/add-friend.ts';
 
 const LIST_PAGE = 12;
 const SUGGEST_PAGE = 8;
@@ -156,7 +157,12 @@ export default component FriendsPage()
         <PageHeader
             title={ locale.t('app.nav.friends') }
             lead={ locale.t('friends.lead') }
-            actions={ <Button variant="outline" size="sm" leading="discover" to="/app/discover">{ locale.t('friends.discover') }</Button> }
+            actions={
+                <>
+                    <Button variant="primary" size="sm" leading="friend-add" onClick={ addFriend }>{ locale.t('person.add') }</Button>
+                    <Button variant="outline" size="sm" leading="discover" to="/app/discover">{ locale.t('friends.discover') }</Button>
+                </>
+            }
         />
 
         <Tabs

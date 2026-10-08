@@ -665,6 +665,21 @@ than walking its tabs. **The rule for the next list: a tab that a link has to re
 address, and a "See all" names it.** `see-all.spec.ts` presses each one and wants the tab chosen
 and the list on it.
 
+**A friend is added by their handle, from the Friends page.** The owner asked for "a button or
+something that users can add their friends easily by handle". There was no such place: a handle
+had to be typed into Search with an `@`, the person opened, and Add friend pressed on their
+profile. "Add friend", beside "Find people", opens a sheet with one field. Two letters of a handle
+or of a name are enough; it asks `GET /social/search` a moment after the typing stops
+(`SEARCH_PAUSE_MS`, the search page's own pause, which moved to `search.service.ts` so the two
+share one number) and lists who the server found, an exact handle first, each with what the reader
+can do: Add friend, Accept for somebody who had already asked, and the plain words Friends or
+Request sent. **Enter adds whoever has EXACTLY the handle typed and nobody otherwise**, so a slip
+does not ask a stranger. It says "Looking for people…" and never "nobody" while the server is still
+being asked, says the look failed with a Try again where it would have said nobody, and drops an
+answer for words the reader has since changed. Nothing on the server changed: a person's id on the
+wire IS their handle, so the request is the one Suggestions sends. The sheet is a chunk of its own
+behind `lib/add-friend.ts`; `add-friend.spec.ts` holds it.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table

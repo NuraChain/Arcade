@@ -52,6 +52,8 @@ export function rank(fields: readonly string[], needle: string)
 
 export const SEARCH_FROM = 8;
 
+export const SEARCH_PAUSE_MS = 300;
+
 export function narrowed<T>(items: readonly T[], needle: string, fields: (item: T) => readonly string[]): T[]
 {
     return needle.trim() === '' ? [...items] : ranked(items, needle, fields);

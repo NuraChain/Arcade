@@ -1,0 +1,201 @@
+import { untrack } from 'azerothjs';
+
+import { SEARCH_FROM, searchNeedle } from '../../../../backend/src/domains/social/names.ts';
+import { client } from '../../api.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { SEARCH_PAUSE_MS } from '../../services/search.service.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+
+export default component AddFriend(props: OverlayProps)
+{
+    const locale = useLocale();
+    const social = useSocial();
+    const people = usePeople();
+    const presence = usePresence();
+
+    state query = '';
+
+    state found: string[] = [];
+
+    state answered = '';
+
+    state looking = false;
+
+    state failed = false;
+
+    let pause: (() => void) | null = null;
+
+    let turn = 0;
+
+    derived needle = searchNeedle(query.replace(/^\s*@/, ''));
+
+    derived enough = [...needle].length >= SEARCH_FROM;
+
+    derived listed = enough && !failed && found.length > 0;
+
+    derived waiting = enough && !failed && found.length === 0 && looking;
+
+    derived nobody = enough && !failed && found.length === 0 && !looking && answered === needle;
+
+    const look = (words: string) =>
+    {
+        turn += 1;
+
+        const mine = turn;
+
+        looking = true;
+        failed = false;
+
+        void client.social.search({ query: { q: words } }).then((answer) =>
+        {
+            if (mine !== turn)
+            {
+                return;
+            }
+
+            people.remember(answer.people);
+            found = answer.people.map((person) => person.handle);
+            answered = words;
+            looking = false;
+        }).catch(() =>
+        {
+            if (mine === turn)
+            {
+                failed = true;
+                looking = false;
+            }
+        });
+    };
+
+    effect
+    {
+        const words = needle;
+        const ready = enough;
+
+        pause?.();
+        pause = null;
+        turn += 1;
+        failed = false;
+
+        if (!ready)
+        {
+            found = [];
+            answered = '';
+            looking = false;
+            return;
+        }
+
+        looking = true;
+        pause = runtime().clock.after(SEARCH_PAUSE_MS, () => look(words));
+    }
+
+    mount
+    {
+        return () =>
+        {
+            pause?.();
+            turn += 1;
+        };
+    }
+
+    const add = (handle: string) => void attempt(social.add(handle), locale.t('person.added'));
+
+    const accept = (handle: string) =>
+    {
+        const request = untrack(social.incoming).find((one) => one.from === handle);
+
+        if (request !== undefined)
+        {
+            void attempt(social.accept(request.id));
+        }
+    };
+
+    const enter = () =>
+    {
+        if (answered === needle && found.includes(needle) && social.relation(needle) === 'none')
+        {
+            add(needle);
+        }
+    };
+
+    <div class="flex max-h-[inherit] min-h-0 flex-col">
+        <header class="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
+            <h2 class="title text-ui-xl text-text">{ locale.t('friends.add.title') }</h2>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+        <div class="px-5 pb-3">
+            <SearchInput
+                value={ query }
+                onInput={ (value) => query = value }
+                placeholder={ locale.t('friends.add.placeholder') }
+                label={ locale.t('friends.add.placeholder') }
+                autofocus
+                onEnter={ enter }
+            />
+        </div>
+        <div class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 px-3 pb-4" aria-live="polite">
+            <Show when={ !enough }>
+                <p class="px-2 pb-2 text-ui-sm text-muted">{ locale.t('friends.add.hint') }</p>
+            </Show>
+            <Show when={ enough && failed }>
+                { () =>
+                    <div class="flex flex-col items-start gap-3 px-2 pb-2">
+                        <p class="text-ui-sm text-muted" role="alert">{ locale.t('search.peopleFailed') }</p>
+                        <Button variant="secondary" size="sm" leading="refresh" onClick={ () => look(needle) }>{ locale.t('common.retry') }</Button>
+                    </div>
+                }
+            </Show>
+            <Show when={ waiting }>
+                { () =>
+                    <p class="flex items-center gap-2 px-2 pb-2 text-ui-sm text-muted">
+                        <Spinner size={ 14 } />
+                        { locale.t('search.searching') }
+                    </p>
+                }
+            </Show>
+            <Show when={ nobody }>
+                { () => <p class="px-2 pb-2 text-ui-sm text-muted">{ locale.t('friends.add.nobody', { query: query.trim() }) }</p> }
+            </Show>
+            <Show when={ listed }>
+                <ul data-found class="flex flex-col gap-0.5" aria-label={ locale.t('friends.add.found') }>
+                    <For each={ found } key={ (handle) => handle } let={ handle }>
+                        <li class="flex min-h-14 items-center gap-3 rounded-tile px-2 py-2">
+                            <Avatar person={ people.byHandle(handle) } size="md" presence={ presence.dot(handle) } />
+                            <span class="flex min-w-0 flex-1 flex-col">
+                                <span class="truncate text-ui-base font-semibold text-text" dir="auto">{ people.byHandle(handle)?.displayName ?? handle }</span>
+                                <span class="truncate text-ui-xs text-muted" dir="ltr">@{ handle }</span>
+                            </span>
+                            <Show when={ social.relation(handle) === 'none' }>
+                                <Button variant="primary" size="sm" leading="friend-add" class="shrink-0 whitespace-nowrap" loading={ social.working(handle) } onClick={ () => add(handle) }>
+                                    { locale.t('person.add') }
+                                </Button>
+                            </Show>
+                            <Show when={ social.relation(handle) === 'incoming' }>
+                                <Button variant="primary" size="sm" class="shrink-0 whitespace-nowrap" onClick={ () => accept(handle) }>
+                                    { locale.t('person.accept') }
+                                </Button>
+                            </Show>
+                            <Show when={ social.relation(handle) === 'friend' || social.relation(handle) === 'outgoing' }>
+                                <span class="flex shrink-0 items-center gap-1.5 text-ui-sm font-semibold text-muted">
+                                    <Icon name={ social.relation(handle) === 'friend' ? 'friend-check' : 'clock' } size={ 15 } />
+                                    { locale.t(social.relation(handle) === 'friend' ? 'person.friends' : 'person.added') }
+                                </span>
+                            </Show>
+                        </li>
+                    </For>
+                </ul>
+            </Show>
+        </div>
+    </div>
+}

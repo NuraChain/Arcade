@@ -8,7 +8,7 @@ import { client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
 import { RECENTS_MAX, recallSearchTerms, rememberSearchTerms } from '../lib/search-terms.ts';
 import { pickText } from '../lib/text.ts';
-import { fold, ranked } from '../services/search.service.ts';
+import { SEARCH_PAUSE_MS, fold, ranked } from '../services/search.service.ts';
 import { useAccount } from './account.store.ts';
 import { useChat } from './chat.store.ts';
 import { useGroups } from './groups.store.ts';
@@ -23,7 +23,7 @@ export const SEARCH_SCOPES: SearchScope[] = ['all', 'people', 'games', 'groups',
 
 export { RECENTS_KEY, RECENTS_MAX } from '../lib/search-terms.ts';
 
-export const SEARCH_PAUSE_MS = 300;
+export { SEARCH_PAUSE_MS };
 
 export interface SearchResults
 {

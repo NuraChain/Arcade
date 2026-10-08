@@ -1,6 +1,11 @@
 export const social = {
     'friends.lead': 'The people you actually play with.',
     'friends.discover': 'Find people',
+    'friends.add.title': 'Add a friend',
+    'friends.add.placeholder': '@handle or name',
+    'friends.add.hint': 'Type somebody’s handle, like @dana.w, or their name. Two letters are enough to start.',
+    'friends.add.nobody': 'Nobody has a handle or a name like “{query}”.',
+    'friends.add.found': 'People found',
     'friends.tab.all': 'All',
     'friends.tab.online': 'Online',
     'friends.tab.requests': 'Requests',
