@@ -781,6 +781,90 @@ describe('the cues store', () =>
             expect(useToasts().items()).toEqual([]);
         });
 
+        it('is not one the reader read or took away that came back because the server said no', async () =>
+        {
+            const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = { read: routes.read, readAll: routes.readAll, dismiss: routes.dismiss };
+            const refused = async () =>
+            {
+                throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+            };
+
+            server.notify(invite);
+            await armed();
+
+            const [row] = useNotifications().latest();
+
+            routes.read = refused;
+            routes.readAll = refused;
+            routes.dismiss = refused;
+
+            try
+            {
+                await expect(useNotifications().markRead(row.id)).rejects.toBeInstanceOf(ApiError);
+                await settle();
+                await expect(useNotifications().markAllRead()).rejects.toBeInstanceOf(ApiError);
+                await settle();
+                await expect(useNotifications().dismiss(row.id)).rejects.toBeInstanceOf(ApiError);
+                await settle();
+            }
+            finally
+            {
+                Object.assign(routes, real);
+            }
+
+            expect(useNotifications().latest()[0]).toMatchObject({ id: row.id, read: false });
+            expect(useNotifications().unread()).toBe(1);
+            expect(useToasts().items()).toEqual([]);
+        });
+
+        it('is still announced when it came while everything was being marked read, once the server says it is unread', async () =>
+        {
+            const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = routes.readAll;
+            let answer: () => void = () => undefined;
+
+            server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+            await armed();
+
+            routes.readAll = async (input) =>
+            {
+                const done = await real(input);
+
+                await new Promise<void>((resolve) =>
+                {
+                    answer = resolve;
+                });
+
+                return done;
+            };
+
+            try
+            {
+                const read = useNotifications().markAllRead();
+
+                await settle();
+                server.notify(invite);
+                await useNotifications().refresh();
+                await settle();
+
+                expect(useNotifications().latest()[0]).toMatchObject({ kind: 'table-invite', read: true });
+                expect(said()).toEqual([]);
+
+                answer();
+                await read;
+                await settle();
+            }
+            finally
+            {
+                routes.readAll = real;
+            }
+
+            expect(useNotifications().latest()[0]).toMatchObject({ kind: 'table-invite', read: false });
+            expect(said()).toHaveLength(1);
+            expect(said()[0]).toContain('saved you a seat');
+        });
+
         it('is not said while the socket is down, then or once it is back', async () =>
         {
             await armed();

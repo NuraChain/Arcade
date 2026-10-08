@@ -2,8 +2,30 @@ import { createStore, createMemo, createResource, createSignal, untrack, type Ge
 
 import { client, type Notification } from '../api.ts';
 import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
+import { createGuesses } from '../lib/guess.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime } from './realtime.store.ts';
+
+interface Held
+{
+    items: Notification[];
+    latest: Notification[];
+    unread: number;
+}
+
+type Change = (rows: Notification[]) => Notification[];
+
+const reading = (id: string) => (rows: Notification[]) => rows.map((row) => (row.id === id ? { ...row, read: true } : row));
+
+const readingAll = (rows: Notification[]) => rows.map((row) => ({ ...row, read: true }));
+
+const without = (id: string) => (rows: Notification[]) => rows.filter((row) => row.id !== id);
+
+const oneFewer = (id: string) => (held: Held) =>
+    Math.max(0, held.unread - ([...held.items, ...held.latest].some((row) => row.id === id && !row.read) ? 1 : 0));
+
+const shownAs = (change: Change, count: (held: Held) => number) =>
+    (held: Held) => ({ items: change(held.items), latest: change(held.latest), unread: count(held) });
 
 export interface NotificationsApi
 {
@@ -86,6 +108,34 @@ export const useNotifications = createStore((): NotificationsApi =>
         return inFlight;
     };
 
+    const known = (): Held =>
+    {
+        const head = first.data()?.items ?? [];
+        const seen = new Set(head.map((row) => row.id));
+
+        return {
+            items: [...head, ...older().filter((row) => !seen.has(row.id))],
+            latest: (notice() === null ? first.data()?.items : everything.data()?.items) ?? [],
+            unread: first.data()?.unread ?? 0
+        };
+    };
+
+    const guessed = createGuesses<Held>();
+
+    const shown = createMemo(() => guessed.over(known()));
+
+    const unreadable = () => untrack(first.error) ?? untrack(everything.error);
+
+    const reread = async () =>
+    {
+        await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
+
+        if (unreadable() === null)
+        {
+            guessed.landed();
+        }
+    };
+
     /**
      * Refetching drops the older pages.
      *
@@ -97,24 +147,34 @@ export const useNotifications = createStore((): NotificationsApi =>
     {
         setOlder([]);
         setTailCursor(undefined);
-        await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
+        await reread();
     });
 
-    const keep = (change: (rows: Notification[]) => Notification[]) => queue(async () =>
+    const keep = (change: Change) => queue(async () =>
     {
         setOlder(change(untrack(older)));
-        await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
+        await reread();
     });
 
-    return {
-        items: () =>
+    const truth = async (change: Change) =>
+    {
+        await keep(change);
+
+        const unread = unreadable();
+
+        if (unread !== null)
         {
-            const head = first.data()?.items ?? [];
-            const seen = new Set(head.map((row) => row.id));
-            return [...head, ...older().filter((row) => !seen.has(row.id))];
-        },
-        latest: () => (notice() === null ? first.data()?.items : everything.data()?.items) ?? [],
-        unread: () => first.data()?.unread ?? 0,
+            throw unread;
+        }
+    };
+
+    const done = (change: Change, count: (held: Held) => number, send: () => Promise<unknown>) =>
+        guessed.during(shownAs(change, count), send, () => truth(change)).then(() => undefined);
+
+    return {
+        items: () => shown().items,
+        latest: () => shown().latest,
+        unread: () => shown().unread,
         loading: () => first.loading(),
         failed: () => first.error(),
 
@@ -132,23 +192,11 @@ export const useNotifications = createStore((): NotificationsApi =>
             setTailCursor(page.hasMore ? page.cursor : undefined);
         }),
 
-        async markRead(id)
-        {
-            await client.notifications.read({ params: { id } });
-            await keep((rows) => rows.map((row) => (row.id === id ? { ...row, read: true } : row)));
-        },
+        markRead: (id) => done(reading(id), oneFewer(id), () => client.notifications.read({ params: { id } })),
 
-        async markAllRead()
-        {
-            await client.notifications.readAll();
-            await keep((rows) => rows.map((row) => ({ ...row, read: true })));
-        },
+        markAllRead: () => done(readingAll, () => 0, () => client.notifications.readAll()),
 
-        async dismiss(id)
-        {
-            await client.notifications.dismiss({ params: { id } });
-            await keep((rows) => rows.filter((row) => row.id !== id));
-        },
+        dismiss: (id) => done(without(id), oneFewer(id), () => client.notifications.dismiss({ params: { id } })),
 
         refresh: revalidate,
 
@@ -191,6 +239,7 @@ export const useNotifications = createStore((): NotificationsApi =>
             setTailCursor(undefined);
             setNotice(null);
             inFlight = Promise.resolve();
+            guessed.clear();
             void first.refetch();
         }
     };

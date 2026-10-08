@@ -42,7 +42,7 @@ export default component SocialPanel()
 
     const open = (item: Notification) =>
     {
-        void notifications.markRead(item.id);
+        void notifications.markRead(item.id).catch(() => undefined);
         const target = targetOf(item);
         if (target !== null)
         {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import { manualClock } from '../src/lib/clock.ts';
@@ -10,7 +10,9 @@ import { useNotifications } from '../src/stores/notifications.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { server } from './fake-api.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
+import { ApiError, client, server } from './fake-api.ts';
+import { lostDuring } from './rejections.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -173,5 +175,198 @@ describe('the notifications page', () =>
 
         expect(container.textContent).toContain(locale.t('notifications.empty'));
         expect(chipOf(container, locale.t('notifications.kind.messages'))).toBeNull();
+    });
+
+    describe('when something on it is pressed', () =>
+    {
+        const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+        const said = () => useToasts().items().map((toast) => [toast.kind, toast.text]);
+
+        const crossOf = (row: HTMLElement) => row.querySelector<HTMLElement>(`button[aria-label="${ useLocale().t('notifications.dismiss') }"]`)!;
+
+        const markAll = (container: HTMLElement) => chipOf(container, useLocale().t('notifications.markAll'));
+
+        const same = (now: HTMLElement[], then: HTMLElement[]) => now.length === then.length && now.every((row, index) => row === then[index]);
+
+        const held = async (verb: string, refuse: boolean, run: (answer: () => void, asked: () => number) => Promise<void>) =>
+        {
+            const real = routes[verb];
+            const waiting: (() => void)[] = [];
+            let asked = 0;
+
+            routes[verb] = async (input) =>
+            {
+                asked += 1;
+
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                if (refuse)
+                {
+                    throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+                }
+
+                return await real(input);
+            };
+
+            try
+            {
+                await run(() => waiting.shift()?.(), () => asked);
+            }
+            finally
+            {
+                routes[verb] = real;
+            }
+        };
+
+        const drawn = async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            return await opened();
+        };
+
+        beforeEach(() =>
+        {
+            useToasts().reset();
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        });
+
+        afterEach(() =>
+        {
+            vi.restoreAllMocks();
+            useToasts().reset();
+        });
+
+        it('draws every row read and takes Mark all read away in the turn it is pressed', async () =>
+        {
+            const container = await drawn();
+            const rows = rowsOf(container);
+
+            expect(rows.map(unreadIn)).toEqual([true, true, true]);
+
+            await held('readAll', false, async (answer, asked) =>
+            {
+                fire(markAll(container)!, 'click');
+                await settle();
+
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+                expect(markAll(container)).toBeNull();
+                expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+                expect(server.notifications.some((one) => !one.read)).toBe(true);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+                await vi.waitFor(() => expect(server.notifications.some((one) => !one.read)).toBe(false), { timeout: 4000 });
+                await settle();
+
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+                expect(said()).toEqual([]);
+            });
+        });
+
+        it('puts the rows and the button back, with a sentence, when reading them all is refused', async () =>
+        {
+            const container = await drawn();
+            const rows = rowsOf(container);
+
+            await held('readAll', true, async (answer, asked) =>
+            {
+                fire(markAll(container)!, 'click');
+                await settle();
+
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(rowsOf(container).map(unreadIn)).toEqual([true, true, true]), { timeout: 4000 });
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(markAll(container)).not.toBeNull();
+                expect(said()).toEqual([['warning', 'That did not go through. Try again.']]);
+            });
+        });
+
+        it('takes a row away in the turn its cross is pressed, and the rows that stay are the rows they were', async () =>
+        {
+            const container = await drawn();
+            const [first, second, third] = rowsOf(container);
+
+            await held('dismiss', false, async (answer, asked) =>
+            {
+                fire(crossOf(second), 'click');
+                await settle();
+
+                expect(same(rowsOf(container), [first, third])).toBe(true);
+                expect(server.notifications).toHaveLength(3);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+                await vi.waitFor(() => expect(server.notifications).toHaveLength(2), { timeout: 4000 });
+                await settle();
+
+                expect(same(rowsOf(container), [first, third])).toBe(true);
+                expect(said()).toEqual([]);
+            });
+        });
+
+        it('puts a row back where it was, with a sentence, when taking it away is refused', async () =>
+        {
+            const container = await drawn();
+            const [first, second, third] = rowsOf(container);
+            const sentence = second.textContent;
+
+            await held('dismiss', true, async (answer, asked) =>
+            {
+                fire(crossOf(second), 'click');
+                await settle();
+
+                expect(rowsOf(container)).toHaveLength(2);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+
+                const back = rowsOf(container);
+
+                expect(back[0]).toBe(first);
+                expect(back[1].textContent).toBe(sentence);
+                expect(back[2]).toBe(third);
+                expect(said()).toEqual([['warning', 'That did not go through. Try again.']]);
+            });
+        });
+
+        it('reads a notification in the turn it is opened, and says nothing when the server will not have it', async () =>
+        {
+            server.notify({ kind: 'turn', dedupeKey: 'turn:nowhere' });
+            await useNotifications().refresh();
+
+            const container = await opened();
+            const [row] = rowsOf(container);
+
+            const lost = await lostDuring(() => held('read', true, async (answer, asked) =>
+            {
+                fire(row.querySelector('button')!, 'click');
+                await settle();
+
+                expect(unreadIn(row)).toBe(false);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(unreadIn(rowsOf(container)[0])).toBe(true), { timeout: 4000 });
+            }));
+
+            expect(rowsOf(container)[0]).toBe(row);
+            expect(said()).toEqual([]);
+            expect(lost).toEqual([]);
+        });
     });
 });

@@ -942,6 +942,31 @@ anything twice.
 holds the store with each request held, refused and sent out of turn, and `friends-page.spec.ts`
 the Requests tab.
 
+**A notification read, all of them read, or one taken away is shown the same way**, over the three
+things that store hands out: the page's list, the list beside the page (`latest`) and the count.
+
+- **The count goes down by one only for a row that was unread where the reader pressed it**,
+  wherever that row is drawn - the page's list, the panel's, a page read earlier - and never below
+  nothing: an earlier page can still call unread what was read on another device.
+- **The read that follows is the store's own `keep`**, which changes the earlier pages as the reader
+  changed them and reads the head again. A guess is let go only when BOTH lists were read: under a
+  filter the list beside the page is a second request, and one that failed keeps the guess over it.
+- **Mark all read and the cross on a row say when the server refuses** (`attempt`). They were
+  called with `void` and nothing behind them, so a refusal was an unhandled rejection and a row
+  that stayed where it was with no word.
+- **Opening a notification marks it read, and says nothing if that is refused.** The reader asked
+  for the thing it leads to; the mark is a courtesy to that, and a toast about it on the page they
+  have just opened would be about nothing they did. The row goes back to unread by itself.
+- **A press the server refuses is not news.** Refused, a row is unread again or back in the list,
+  and the tracker that announces arrivals goes by the time of the newest row it has been shown,
+  not by the count going up. The other way round, a row that comes while everything is being marked
+  read is drawn as read for that moment; so once the tracker is armed only an UNREAD row moves its
+  mark, and that row is announced when the server's word arrives that it is unread.
+
+`notifications.spec.ts` (*what the reader did to a notification, shown before the server has said
+so*), `notifications-page.spec.ts` (*when something on it is pressed*), the right panel's test in
+`shell.spec.ts` and the last tests of *a notification that arrives* in `cues.spec.ts` hold it.
+
 **Play again says which game it follows, because the table on screen may still be the one from
 before the finish.** The result arrives with the last move, pushed; the table is read again a
 doorbell later, which is half a second on a good line and far longer on a bad one. In between the

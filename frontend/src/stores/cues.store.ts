@@ -226,7 +226,7 @@ export const useCues = createStore((): CuesApi =>
             const fresh = rows.filter((row) => !row.read && Date.parse(row.at) > noticedAt);
             const item = fresh.find((row) => !SAID_ELSEWHERE.has(row.kind));
 
-            noticedAt = Math.max(noticedAt, ...rows.map((row) => Date.parse(row.at)));
+            noticedAt = Math.max(noticedAt, ...(noticeSeeded ? fresh : rows).map((row) => Date.parse(row.at)));
 
             if (noticeSeeded && item !== undefined && live.status() === 'connected')
             {

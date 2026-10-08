@@ -28,7 +28,8 @@ import { useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
+import { lostDuring } from './rejections.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -773,6 +774,49 @@ describe('the right panel', () =>
         const rows = container.querySelectorAll('section[aria-labelledby="panel-activity"] li button');
         expect(rows.length).toBe(1);
         expect(rows[0].textContent).toContain('ago');
+    });
+
+    it('reads a notification in the turn its row is pressed, and loses no refusal', async () =>
+    {
+        const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+        const real = routes.read;
+
+        await useAccount().signIn('Alex');
+        server.notify({ kind: 'turn', dedupeKey: 'turn:nowhere' });
+        useNotifications().reset();
+
+        const container = await mount();
+        const row = container.querySelector<HTMLElement>('section[aria-labelledby="panel-activity"] li button')!;
+        let refuse: () => void = () => undefined;
+
+        routes.read = () => new Promise((_resolve, reject) =>
+        {
+            refuse = () => reject(new ApiError(500, 'internal', 'Something went wrong.', undefined));
+        });
+
+        const lost = await lostDuring(async () =>
+        {
+            try
+            {
+                expect(useNotifications().latest()[0].read).toBe(false);
+
+                fire(row, 'click');
+
+                expect(useNotifications().latest()[0].read).toBe(true);
+                expect(useNotifications().unread()).toBe(0);
+
+                refuse();
+                await settle();
+            }
+            finally
+            {
+                routes.read = real;
+            }
+        });
+
+        expect(useNotifications().latest()[0].read).toBe(false);
+        expect(useNotifications().unread()).toBe(1);
+        expect(lost).toEqual([]);
     });
 
     it('keeps both of its empty lines when the lists behind them are read again', async () =>
