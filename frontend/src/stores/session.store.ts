@@ -1,14 +1,20 @@
 import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { rememberBeenHere } from '../lib/been-here.ts';
-import { client, type Account } from '../api.ts';
+import { ApiError, client, type Account } from '../api.ts';
 import { keyStore } from '../lib/device-keys.ts';
 import { forgetEpochKeys } from '../lib/epoch-keys.ts';
+import { setHeldUp } from '../lib/held-up.ts';
+import { runtime } from '../lib/runtime.ts';
 import { forgetSigners } from '../lib/sealing.ts';
 import { forgetArchive } from '../services/chat.source.ts';
 import { forgetWallets } from '../lib/wallet.ts';
 import { forgetSearchTerms } from '../lib/search-terms.ts';
 import { useRealtime } from './realtime.store.ts';
+
+export const ASK_AGAIN_MS = 1000;
+
+export const ASK_AGAIN_MAX_MS = 8000;
 
 export interface SessionApi
 {
@@ -22,7 +28,6 @@ export interface SessionApi
     signOut(): Promise<void>;
     signOutEverywhere(): Promise<number>;
 
-    refresh(): Promise<void>;
     start(): () => void;
     reset(): void;
 }
@@ -64,23 +69,35 @@ export const useSession = createStore((): SessionApi =>
 
     let settled: Promise<void> | null = null;
 
+    const refused = (error: unknown) => error instanceof ApiError && error.status < 500 && error.status !== 429;
+
     const load = async () =>
     {
-        try
+        for (let wait = ASK_AGAIN_MS; ; wait = Math.min(wait * 2, ASK_AGAIN_MAX_MS))
         {
-            const state = await client.auth.me();
+            try
+            {
+                const state = await client.auth.me();
 
-            setAccount(state.account ?? null);
-            rememberBeenHere(state.account != null);
-        }
-        catch
-        {
-            /*
-             * A FAILED request is not a signed-out answer, so the note is left alone. Clearing it
-             * here would mean a dropped connection on the landing page demoted somebody to
-             * "Connect wallet" for the rest of the visit.
-             */
-            setAccount(null);
+                setAccount(state.account ?? null);
+                rememberBeenHere(state.account != null);
+                setHeldUp(false);
+
+                return;
+            }
+            catch (error)
+            {
+                if (refused(error))
+                {
+                    setAccount(null);
+                    setHeldUp(false);
+
+                    return;
+                }
+
+                setHeldUp(wait > ASK_AGAIN_MS);
+                await new Promise<void>((resolve) => runtime().clock.after(wait, resolve));
+            }
         }
     };
 
@@ -131,12 +148,6 @@ export const useSession = createStore((): SessionApi =>
             return result.ended;
         },
 
-        async refresh()
-        {
-            settled = load();
-            await settled;
-        },
-
         start()
         {
             return useRealtime().onNudge((scope, id) =>
@@ -169,6 +180,7 @@ export const useSession = createStore((): SessionApi =>
         reset()
         {
             setAccount(null);
+            setHeldUp(false);
             settled = null;
         }
     };

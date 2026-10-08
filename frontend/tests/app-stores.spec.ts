@@ -1,19 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cleanup, renderTest } from '@azerothjs/testing';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { requireAdmin, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
+import { heldUp } from '../src/lib/held-up.ts';
+import NotFoundPage from '../src/pages/not-found.page.azeroth';
+import { useLocale } from '../src/stores/locale.store.ts';
 import { LIFELINE_MS, RESTORED_MS, UNREACHED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
-import { useSession } from '../src/stores/session.store.ts';
+import { ASK_AGAIN_MAX_MS, ASK_AGAIN_MS, useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -124,6 +128,36 @@ describe('device posture', () =>
     });
 });
 
+const DARYA = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, kind: 'guest' as const, isMinor: false };
+
+const auth = client.auth as unknown as Record<string, () => Promise<unknown>>;
+
+const whoAmI = auth.me;
+
+const flush = async () =>
+{
+    for (let turn = 0; turn < 12; turn += 1)
+    {
+        await Promise.resolve();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+};
+
+const unreachable = () =>
+{
+    const line = { asks: 0, answer: (): Promise<unknown> => Promise.reject(new TypeError('Failed to fetch')) };
+
+    auth.me = async () =>
+    {
+        line.asks += 1;
+
+        return await line.answer();
+    };
+
+    return line;
+};
+
 describe('session', () =>
 {
     it('asks the server for the account and adopts the one it issues', async () =>
@@ -181,6 +215,168 @@ describe('session', () =>
         expect(session.signedIn()).toBe(true);
         expect(useAccount().user()?.id).toBe('darya');
     });
+
+    describe('when the server cannot be asked who is signed in', () =>
+    {
+        afterEach(() =>
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        });
+
+        it('asks again, more slowly each time, and takes the answer when it comes', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+            let done = false;
+
+            server.account = DARYA;
+            void session.ready().then(() => done = true);
+            await flush();
+
+            expect(line.asks).toBe(1);
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(false);
+            expect(session.signedIn()).toBe(false);
+
+            clock.advance(ASK_AGAIN_MS - 1);
+            await flush();
+
+            expect(line.asks).toBe(1);
+
+            clock.advance(1);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(heldUp()).toBe(true);
+
+            clock.advance(ASK_AGAIN_MS * 2 - 1);
+            await flush();
+
+            expect(line.asks).toBe(2);
+
+            line.answer = whoAmI;
+            clock.advance(1);
+            await flush();
+
+            expect(line.asks).toBe(3);
+            expect(done).toBe(true);
+            expect(heldUp()).toBe(false);
+            expect(session.signedIn()).toBe(true);
+        });
+
+        it('never leaves more than eight seconds between two asks', async () =>
+        {
+            const line = unreachable();
+
+            void useSession().ready();
+            await flush();
+
+            for (const wait of [ASK_AGAIN_MS, ASK_AGAIN_MS * 2, ASK_AGAIN_MS * 4, ASK_AGAIN_MAX_MS, ASK_AGAIN_MAX_MS, ASK_AGAIN_MAX_MS])
+            {
+                const before = line.asks;
+
+                clock.advance(wait - 1);
+                await flush();
+
+                expect(line.asks).toBe(before);
+
+                clock.advance(1);
+                await flush();
+
+                expect(line.asks).toBe(before + 1);
+            }
+
+            expect(ASK_AGAIN_MAX_MS).toBe(8000);
+        });
+
+        it('asks again when the server says it is down, and when it says to slow down', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+            let done = false;
+
+            line.answer = () => Promise.reject(new ApiError(503, 'unavailable', 'Try again shortly.', undefined));
+            void session.ready().then(() => done = true);
+            await flush();
+
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(false);
+
+            line.answer = () => Promise.reject(new ApiError(429, 'rate-limited', 'Slow down.', undefined));
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(true);
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(done).toBe(true);
+            expect(heldUp()).toBe(false);
+        });
+
+        it('takes a refusal for the answer it is: nobody is signed in', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+
+            line.answer = () => Promise.reject(new ApiError(401, 'unauthorized', 'Sign in first.', undefined));
+            await session.ready();
+
+            expect(line.asks).toBe(1);
+            expect(session.signedIn()).toBe(false);
+            expect(heldUp()).toBe(false);
+
+            clock.advance(ASK_AGAIN_MAX_MS * 4);
+            await flush();
+
+            expect(line.asks).toBe(1);
+        });
+
+        it('says so on the page that is holding for it once a second ask has failed too, in the reader\'s language, and draws nothing while a page simply holds', async () =>
+        {
+            const { container } = renderTest(() => NotFoundPage({ holding: true }) as HTMLElement);
+
+            expect(container.textContent).toBe('');
+
+            unreachable();
+            void useSession().ready();
+            await flush();
+
+            expect(container.textContent).toBe('');
+
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(container.querySelector('[role="status"]')?.textContent).toContain(useLocale().t('held.title'));
+            expect(container.textContent).toContain(useLocale().t('held.lead'));
+            expect(container.textContent).not.toContain(useLocale().t('notFound.title'));
+
+            const nowhere = renderTest(() => NotFoundPage({}) as HTMLElement).container;
+
+            expect(nowhere.textContent).toContain(useLocale().t('notFound.title'));
+            expect(nowhere.textContent).not.toContain(useLocale().t('held.title'));
+            expect(nowhere.querySelector('[role="status"]')).toBeNull();
+
+            useLocale().setLocale('fa');
+
+            expect(container.textContent).toContain(useLocale().t('held.title'));
+            expect(useLocale().t('held.title')).not.toBe('The server is not answering.');
+
+            useLocale().setLocale('en');
+            auth.me = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(container.textContent).toBe('');
+
+            cleanup();
+        });
+    });
 });
 
 describe('guards', () =>
@@ -211,6 +407,63 @@ describe('guards', () =>
         await useAccount().signIn('Alex');
         expect(await requireSession(context('/app'))).toBe(true);
         expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
+    });
+
+    it('holds somebody at the door while the server cannot be asked, and sends nobody to sign-in for that', async () =>
+    {
+        const line = unreachable();
+        let verdict: unknown = 'held';
+
+        try
+        {
+            server.account = DARYA;
+            void requireSession(context('/app/friends')).then((answer) => verdict = answer);
+            await flush();
+
+            expect(verdict).toBe('held');
+
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(verdict).toBe('held');
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(verdict).toBe(true);
+        }
+        finally
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        }
+    });
+
+    it('holds the sign-in page the same way, and opens it for a stranger once the server says so', async () =>
+    {
+        const line = unreachable();
+        let verdict: unknown = 'held';
+
+        try
+        {
+            void requireAnonymous(context('/sign-in')).then((answer) => verdict = answer);
+            await flush();
+
+            expect(verdict).toBe('held');
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(verdict).toBe(true);
+        }
+        finally
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        }
     });
 
     it('opens /admin only for the account the server calls the admin', async () =>

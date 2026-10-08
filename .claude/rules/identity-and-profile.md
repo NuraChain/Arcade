@@ -238,6 +238,24 @@ lands on `/sign-in` instead of on a page of empty states. The enforcement is `re
 after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
 the store through a **dynamic import** — see Performance for why that import must stay dynamic.
 
+**A who-am-I that could not be asked is not a signed-out answer.** The store used to take ANY failure
+of that first request for "nobody": a dropped connection, a 502 while the server restarted, a 429,
+and `requireSession` then sent a signed-in person to `/sign-in`, where they stayed. (The same
+catch already said a failed request is not a signed-out answer, and left the landing page's note
+alone for that reason; the guard read the answer it had made up anyway.) Only an ANSWER signs
+somebody out: a 200 with no account, or a refusal the server itself wrote, any status under 500
+but 429. Anything else is asked again, after one second, then two, four and eight, and every eight
+after that (`ASK_AGAIN_MS`, `ASK_AGAIN_MAX_MS`), on the runtime's clock so a spec can drive it.
+`ready()` does not resolve until there is an answer, so both guards HOLD the navigation instead of
+deciding it. A guard cannot draw anything and a guard that throws is a 403 in this router, which
+draws "No table here"; so the store says it is held up through `lib/held-up.ts`, one signal that
+imports nothing but the framework, and the page `<Routes>` falls back to while a navigation is
+pending (`not-found.page` with `holding`) draws "The server is not answering" with a spinner
+where it drew nothing. It says so from the SECOND failure on: one dropped request is asked again
+a second later and is not worth a sentence, so the page holds as it always did for that second.
+It needs no button: the page is already asking, and it opens by itself.
+`session.refresh()` went with this; nothing had ever called it.
+
 **The landing page's way in is a wallet chooser, and it is a dynamic import.**
 `stores/connect.store.ts` is one boolean shared by the site header and the two landing CTAs;
 `components/layout/connect-dialog.component.azeroth` is fetched the first time somebody asks for

@@ -74,5 +74,7 @@ export const landing = {
     'notFound.cta': 'Back to the home page',
     'error.title': 'The lights went out.',
     'error.lead': 'Something failed on our side. The page can try again from here.',
-    'error.cta': 'Try again'
+    'error.cta': 'Try again',
+    'held.title': 'The server is not answering.',
+    'held.lead': 'This page keeps asking, and opens by itself as soon as it gets an answer.'
 };

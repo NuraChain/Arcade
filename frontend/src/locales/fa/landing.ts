@@ -77,5 +77,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'notFound.cta': 'بازگشت به صفحهٔ اصلی',
     'error.title': 'چراغ‌ها خاموش شد.',
     'error.lead': 'چیزی از سمت ما خطا داد. صفحه می‌تواند از همین‌جا دوباره تلاش کند.',
-    'error.cta': 'دوباره تلاش کن'
+    'error.cta': 'دوباره تلاش کن',
+    'held.title': 'سرور جواب نمی‌دهد.',
+    'held.lead': 'این صفحه خودش دوباره می‌پرسد و همین که جواب بگیرد باز می‌شود.'
 };
