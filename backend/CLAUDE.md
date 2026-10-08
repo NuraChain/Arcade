@@ -302,6 +302,16 @@ friendship rows inside the same transaction, so afterwards there is nothing left
 about; getting back to friends means asking again. Worth knowing before writing a test that
 blocks the same person twice and wonders why the second one measures nothing.
 
+**A friendship is ended by either of the two, and that is not a block.** `POST
+/social/friends/remove` deletes both rows and rings both people; nothing is written to anybody's
+notifications. For a long time the store had `remove`, the server had the route, and no control
+called either, so the only way to stop being somebody's friend was to block them: a verb with a
+test and no caller, the shape *Something declared needs a caller* is about. The person's menu
+(`PersonActions`) offers "Remove {name} from friends" to a friend and to nobody else, behind a
+question that says what it does: the two leave each other's list, nobody is sent a message about
+it, and either can ask again. `person-actions.spec.ts` holds it, and is the first spec to mount
+that menu at all.
+
 **Three of the reads are LAZY, and pages ask for them.** `graph` and `privacy` are fetched on
 boot because the shell reads both on every route. The directory, the suggestions and my reports
 are not - that would be three more requests on every navigation for three lists that two pages

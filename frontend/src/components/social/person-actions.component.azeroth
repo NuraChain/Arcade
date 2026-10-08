@@ -50,6 +50,8 @@ export default component PersonActions(props: OverlayProps & {
 
     derived blocked = social.isBlocked(props.personId);
 
+    derived friends = social.relation(props.personId) === 'friend';
+
     const confirmBlock = async () =>
     {
         const yes = await overlay.open(
@@ -60,6 +62,19 @@ export default component PersonActions(props: OverlayProps & {
         if (yes === true)
         {
             void attempt(social.block(props.personId), { kind: 'warning', text: locale.t('actions.blocked', { name }) });
+        }
+    };
+
+    const confirmUnfriend = async () =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            { title: locale.t('actions.unfriendConfirm', { name }), lead: locale.t('actions.unfriendLead'), confirm: locale.t('actions.unfriend', { name }), destructive: true },
+            { label: locale.t('actions.unfriendConfirm', { name }) }
+        ).closed;
+        if (yes === true)
+        {
+            void attempt(social.remove(props.personId), { kind: 'info', text: locale.t('actions.unfriended', { name }) });
         }
     };
 
@@ -123,6 +138,17 @@ export default component PersonActions(props: OverlayProps & {
                 }
             }
         ];
+
+        if (friends)
+        {
+            list.push({
+                id: 'unfriend',
+                icon: 'friend-remove',
+                label: locale.t('actions.unfriend', { name }),
+                danger: true,
+                run: () => void confirmUnfriend()
+            });
+        }
 
         list.push(blocked
             ? {
