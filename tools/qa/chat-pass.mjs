@@ -489,10 +489,64 @@ try
 
     record('and a swipe across it still starts a reply', swiped && replying);
 
-    // ---------------------------------------------------------------- 4. the console
-    console.log('\n[4] the console, in both browsers');
+    // ---------------------------------------------------------------- 4. a handle in a message
+    console.log('\n[4] a handle typed in a message is a way to that person');
+
+    await watcher.page.keyboard.press('Escape');
+    await watcher.page.waitForTimeout(500);
+
+    if (await composer.isVisible().catch(() => false))
+    {
+        await composer.fill('ask @Dana.W or @nobody.here.9, not dana@example.com');
+        await composer.press('Enter');
+    }
+
+    await watcher.page.waitForTimeout(SETTLE_MS * 2);
+
+    const thread = new URL(watcher.page.url()).pathname;
+    const named = watcher.page.locator('main a[href="/app/people/dana.w"]').last();
+    const nobody = watcher.page.locator('main a[href="/app/people/nobody.here.9"]').last();
+    let loads = 0;
+    const counted = () =>
+    {
+        loads += 1;
+    };
+
+    record('the handle in the line is a link to that person, saying what was typed', await named.count() > 0 && (await named.innerText()).trim() === '@Dana.W',
+        await named.count() > 0 ? (await named.innerText()).trim() : 'no link');
+    record('an address of mail in the same line is not a link, to a person or to anywhere',
+        await watcher.page.locator('main a[href*="example"]').count() === 0 && await watcher.page.locator('main a[href^="/app/people/"]').filter({ hasText: 'example' }).count() === 0);
+
+    watcher.page.on('load', counted);
+    await named.click();
+    await watcher.page.waitForURL('**/app/people/dana.w', { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('pressing it opens their profile without loading the page', new URL(watcher.page.url()).pathname === '/app/people/dana.w' && loads === 0,
+        `${ new URL(watcher.page.url()).pathname }, ${ loads } loads`);
+    record('and the profile is theirs', (await watcher.page.locator('main').innerText()).includes('dana.w'));
+
+    await watcher.page.goBack();
+    await watcher.page.waitForURL(`**${ thread }`, { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('going back is the thread, with the line still in it', new URL(watcher.page.url()).pathname === thread && await nobody.count() > 0);
+
+    // ---------------------------------------------------------------- 5. the console
+    console.log('\n[5] the console, in both browsers');
     record('nothing was logged', sender.errors.length === 0 && watcher.errors.length === 0,
         [...sender.errors, ...watcher.errors].slice(0, 2).join(' | '));
+
+    // ---------------------------------------------------------------- 6. a handle nobody has
+    console.log('\n[6] a handle nobody has');
+
+    await nobody.click();
+    await watcher.page.waitForURL('**/app/people/nobody.here.9', { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('opens the page that says there is no such person, without loading the page', /No such person/.test(await watcher.page.locator('main').innerText()) && loads === 0);
+
+    watcher.page.off('load', counted);
 }
 finally
 {

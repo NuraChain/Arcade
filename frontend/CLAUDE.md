@@ -680,6 +680,23 @@ answer for words the reader has since changed. Nothing on the server changed: a 
 wire IS their handle, so the request is the one Suggestions sends. The sheet is a chunk of its own
 behind `lib/add-friend.ts`; `add-friend.spec.ts` holds it.
 
+**A handle typed in a message is a way to that person.** The owner: "such as telegram when you type
+@someoneusername you can click on it and see his profile". `lib/markdown.ts` reads a `mention`
+where it reads a link: an `@` that no letter, digit or underscore stands before - which is what
+keeps `dana@example.com` an address - followed by a handle in the SERVER's own shape
+(`identity/handle.ts`: two to thirty-two letters or digits of any script, with dots, underscores
+and hyphens inside, ending in a letter or a digit). So "thanks @dana.w." leaves the full stop out,
+`@سارا` is a mention, thirty-three letters are not the first thirty-two, and nothing is read
+inside code, inside a link or behind a backslash. The node keeps what was typed (`v`) and the
+handle as the server folds it (`normalizeName`), so "@Dana.W" says that and leads to `dana.w`.
+`markdown-dom.ts` draws it as a real `<a href="/app/people/…">`, left to right as every handle
+is, and `RichText` hands the painter the router's `navigate`: an ordinary press is followed
+without loading the page, and one with Ctrl, Cmd, Shift, Alt or the middle button is left to the
+browser, which is what a real link is for. **Nothing is looked up to draw it.** A handle nobody has
+opens the profile page's own "No such person", so a message cannot be used to ask who exists.
+Previews (`plainOf`) keep the words. `markdown.spec.ts` holds the reading, `mentions.spec.ts` the
+link and the navigation, and `chat-pass` sends one between two real wallets.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table

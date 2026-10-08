@@ -1,7 +1,10 @@
+import { normalizeName } from '../../../backend/src/lib/naming.ts';
+
 export type Inline =
     | { t: 'text'; v: string }
     | { t: 'code'; v: string }
     | { t: 'link'; href: string }
+    | { t: 'mention'; handle: string; v: string }
     | { t: 'b' | 'i' | 'u' | 's' | 'spoiler'; c: Inline[] };
 
 export type Block =
@@ -29,6 +32,8 @@ const ESCAPE = /\\([^\p{L}\p{N}\s])/uy;
 const CODE = /(`+)([\s\S]*?[^`])\1(?!`)/y;
 
 const URL_AT = /https?:\/\/[^\s<]+[^\s<.,:;"'!?\]]/y;
+
+const MENTION = /@([\p{L}\p{N}][\p{L}\p{N}._-]{0,30}[\p{L}\p{N}])(?![\p{L}\p{N}])/uy;
 
 const WORD = /[\p{L}\p{N}_]/u;
 
@@ -123,6 +128,15 @@ export function parseInline(source: string, depth = 0): Inline[]
                 flush();
                 out.push({ t: 'link', href });
                 at += balanced(found[0]).length;
+                continue;
+            }
+
+            const named = matchAt(MENTION, source, at);
+            if (named !== null)
+            {
+                flush();
+                out.push({ t: 'mention', handle: normalizeName(named[1]), v: named[0] });
+                at += named[0].length;
                 continue;
             }
         }
@@ -288,7 +302,7 @@ export function plainOf(source: string, spoiler: string)
 {
     const walk = (nodes: readonly Inline[]): string => nodes.map((node) =>
     {
-        if (node.t === 'text' || node.t === 'code')
+        if (node.t === 'text' || node.t === 'code' || node.t === 'mention')
         {
             return node.v;
         }

@@ -78,6 +78,70 @@ describe('inline formatting, the way Discord reads it', () =>
     });
 });
 
+describe('somebody named by their handle', () =>
+{
+    const mention = (v: string, handle: string) => ({ t: 'mention', handle, v });
+
+    it('is a mention of that handle, wherever in the sentence it stands', () =>
+    {
+        expect(parseInline('ask @dana.w about it')).toEqual([
+            { t: 'text', v: 'ask ' },
+            mention('@dana.w', 'dana.w'),
+            { t: 'text', v: ' about it' }
+        ]);
+        expect(parseInline('@mina')).toEqual([mention('@mina', 'mina')]);
+        expect(parseInline('@sara_k @omid-j')).toEqual([mention('@sara_k', 'sara_k'), { t: 'text', v: ' ' }, mention('@omid-j', 'omid-j')]);
+    });
+
+    it('leaves the sentence\'s own punctuation outside the handle', () =>
+    {
+        expect(parseInline('thanks @dana.w.')).toEqual([{ t: 'text', v: 'thanks ' }, mention('@dana.w', 'dana.w'), { t: 'text', v: '.' }]);
+        expect(parseInline('(@yas)')).toEqual([{ t: 'text', v: '(' }, mention('@yas', 'yas'), { t: 'text', v: ')' }]);
+        expect(parseInline('@mina, @yas!')).toEqual([mention('@mina', 'mina'), { t: 'text', v: ', ' }, mention('@yas', 'yas'), { t: 'text', v: '!' }]);
+        expect(parseInline('is it @omid.j?')).toEqual([{ t: 'text', v: 'is it ' }, mention('@omid.j', 'omid.j'), { t: 'text', v: '?' }]);
+        expect(parseInline('@sara-')).toEqual([mention('@sara', 'sara'), { t: 'text', v: '-' }]);
+    });
+
+    it('is not read out of an address of mail, or out of a word', () =>
+    {
+        expect(parseInline('write to dana@example.com')).toEqual([{ t: 'text', v: 'write to dana@example.com' }]);
+        expect(parseInline('snake_case@host')).toEqual([{ t: 'text', v: 'snake_case@host' }]);
+    });
+
+    it('takes a handle in any script, folded the way the server folds one', () =>
+    {
+        expect(parseInline('سلام @سارا')).toEqual([{ t: 'text', v: 'سلام ' }, mention('@سارا', 'سارا')]);
+        expect(parseInline('@Dana.W')).toEqual([mention('@Dana.W', 'dana.w')]);
+    });
+
+    it('wants a whole handle: two characters at least and thirty-two at most', () =>
+    {
+        expect(parseInline('@')).toEqual([{ t: 'text', v: '@' }]);
+        expect(parseInline('@a')).toEqual([{ t: 'text', v: '@a' }]);
+        expect(parseInline('@ dana')).toEqual([{ t: 'text', v: '@ dana' }]);
+        expect(parseInline(`@${ 'a'.repeat(32) }`)).toEqual([mention(`@${ 'a'.repeat(32) }`, 'a'.repeat(32))]);
+        expect(parseInline(`@${ 'a'.repeat(33) }`)).toEqual([{ t: 'text', v: `@${ 'a'.repeat(33) }` }]);
+    });
+
+    it('is not read inside code, inside a link, or behind a backslash', () =>
+    {
+        expect(parseInline('`@dana.w`')).toEqual([{ t: 'code', v: '@dana.w' }]);
+        expect(parseInline('https://nura.games/@dana.w')).toEqual([{ t: 'link', href: 'https://nura.games/@dana.w' }]);
+        expect(parseInline('\\@dana.w')).toEqual([{ t: 'text', v: '@dana.w' }]);
+    });
+
+    it('is read inside bold and inside a spoiler', () =>
+    {
+        expect(parseInline('**@dana.w**')).toEqual([{ t: 'b', c: [mention('@dana.w', 'dana.w')] }]);
+        expect(parseInline('||it was @mina||')).toEqual([{ t: 'spoiler', c: [{ t: 'text', v: 'it was ' }, mention('@mina', 'mina')] }]);
+    });
+
+    it('flattens to the words that were typed', () =>
+    {
+        expect(plainOf('hi @Dana.W, see ||@mina||', 'hidden')).toBe('hi @Dana.W, see hidden');
+    });
+});
+
 describe('blocks', () =>
 {
     it('reads headings, quotes, lists and fenced code', () =>
