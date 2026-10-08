@@ -39,7 +39,8 @@ import type {
     TableSummary,
     MatchPlay,
     MatchView,
-    NftPage
+    NftPage,
+    PartyState
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
@@ -256,6 +257,15 @@ export interface TablePort
     remove(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;
     setVoice(me: string, tableId: string, voice: VoiceScope): Promise<TableSummary>;
+}
+
+export interface PartyPort
+{
+    state(me: string): Promise<PartyState>;
+    invite(me: string, handle: string, game: string): Promise<PartyState>;
+    accept(me: string, partyId: string): Promise<PartyState>;
+    decline(me: string, partyId: string): Promise<void>;
+    leave(me: string, partyId: string): Promise<void>;
 }
 
 /**
@@ -531,6 +541,7 @@ export interface Ports
     social: SocialPort;
     group: GroupPort;
     table: TablePort;
+    party: PartyPort;
     match: MatchPort;
     notify: NotifyPort;
     device: DevicePort;

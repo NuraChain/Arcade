@@ -19,6 +19,12 @@ paths:
   - "frontend/src/stores/record.store.ts"
   - "frontend/src/stores/cues.store.ts"
   - "frontend/src/services/voice.rtc.ts"
+  - "backend/src/domains/party/**"
+  - "frontend/src/stores/party.store.ts"
+  - "frontend/src/stores/party-loader.ts"
+  - "frontend/src/components/social/party*"
+  - "frontend/src/components/social/play-with-sheet.component.azeroth"
+  - "frontend/src/lib/play-with.ts"
   - "tools/art/**"
   - "tools/qa/*pass*.mjs"
 ---
@@ -984,6 +990,183 @@ nothing. `chat.page` guards `closeThread` by its own conversation the same way, 
 the thread it last opened; `play.spec.ts` drives play-to-play and chat-to-chat with a transition
 playing. The table still opens from an effect over the pathname rather than in `mount`, and the
 leaving page's copy of that effect opening the NEW id is harmless.
+
+## Parties
+
+Two friends who want to play on one side form a **party** first. This is the forming and nothing
+more: one asks, the other says yes or not now, and both are told. Taking two partner chairs in one
+search is built on it and is not here yet, so a party that is ready has nothing to press but Leave.
+
+**A party is memory in one process, as presence and the sweep's strikes are.** The registry lives
+inside `buildPorts`: every party, every invitation somebody holds, every clock and every cooldown is
+a map, no row is written, and a restart forgets all of it. Everything in it is minutes old at most -
+an invitation lasts ninety seconds (`INVITE_MS`), a team that is ready and does nothing five minutes
+(`IDLE_MS`), the reason one ended thirty seconds (`ENDED_MS`) - so a table of rows would be a sweep
+to write and nothing a restart is sorry to lose. The browser says "This team-up ended" once when a
+team it held is gone and no reason came with it, which is what a restart looks like from outside.
+With a second process the two would not know each other's parties; that is the limit presence
+already states.
+
+**The domain is four files, split the way the social graph's is.** `party/rules.ts` imports nothing:
+the clocks, the stages (`inviting`, `ready`), the endings (`declined`, `expired`, `left`, `ended`)
+and the refusals with their statuses. `registry.ts` is the state machine and imports only that. It is
+HANDED its clock, its ids and its doorbell (`now`, `after`, `id`, `ring`), so
+`party-registry.spec.ts` walks every transition on a clock it owns, and reads both files as text for
+a `Date`, a timer or `crypto`. `parties.ts` is the policy - who may ask whom, which games, what a
+reader is shown - and answers with values, `{ ok: false, why }`, never a throw; it has type imports
+only, so the specs' server in the browser runs this same file over its own people. `refusal.ts`
+turns a word into what the route sends, and `services.ts` hands the policy the real graph, the
+catalogue and the hub, on timers that are `unref`'d.
+
+**One person is in one party, and holds up to five invitations.** Asking while in a party, and
+saying yes while in one, are `in-party` (409). Asking the same person for the same game again before
+they answer is the SAME party, so a second press is one invitation. A sixth invitation to one person
+runs the oldest out (`INVITES_HELD`). Whoever asked may leave at any time, which takes an unanswered
+invitation back; the other one only after saying yes.
+
+**Asking somebody who has already asked is saying yes.** Two friends who each asked the other for
+one game made two parties: each led one and held the other's card, and Team up on either card
+answered `in-party` until one of them worked out to leave first. `registry.invite` looks for the
+other one's unanswered invitation for that game before it makes anything, and takes it up: one team,
+led by whoever asked first, as a friend request to somebody who has already asked is an acceptance.
+It is looked for after `in-party`, because the one-party rule is about whoever is acting, and before
+the wait a refusal starts, because a yes is not asking again. Another game is an invitation of the
+asker's own, and the two stand side by side until one is taken back. So Team up in the sheet of
+somebody whose card is on screen is the card's own yes, with no second request to make.
+
+**Only a game played two against two can be teamed up for.** `teamGame` asks the catalogue - open,
+four seats, and `teamsOf(partners, 4, true)` - and anything else is `not-team-game` (422). It is
+asked AFTER who may be reached, so that answer says nothing about an account.
+
+**Somebody who cannot be asked is answered in the table invitation's own bytes.** A name nobody
+holds, the asker's own, a block either way, strangers turned off, a minor's safety rule and a
+suspended account are all 404 `no-invitee`, "No one by that name can be invited.": it is
+`noInvitee()` from the table service, so the two cannot drift, and the question is `mayMessage`
+asked both ways. A party named by something that is no uuid, by an id nobody holds, by somebody
+else's and by one that is over are all `party-missing` (404), in the same bytes.
+`party-policy.spec.ts` compares the bodies. What the 404 cannot hide is what a profile already says
+(`refusal` on a person's page), which is why the sheet offers no team-up to somebody whose page
+carries one.
+
+**A mute is an invitation nobody sees.** If the invitee muted the asker, the game or invitations as
+a kind - `social.hasMuted`, one `exists` over the three subjects - the party is made and the asker
+is rung, and the invitee is neither rung nor shown it, and cannot accept it by its id. Whoever asked
+cannot tell a mute from somebody who looked away, and that is held to everything they can read, not
+only to the ninety seconds it runs out after:
+
+- **It takes one of the five places.** It is pushed out by a sixth like any other, and pushes the
+  oldest out when it is the sixth itself. It was left out of the count at first, and asking as five
+  more accounts then told the two apart in seconds: an invitation that had been seen ran out at
+  once, and one that had not stood for its ninety seconds. What it costs is the invitee's to pay: an
+  invitation they can see may run out with fewer than five on their screen.
+- **Asking back takes it up.** The invitee asking for that same team is a yes to an invitation they
+  were never shown, and from then on both are told of everything. Passed over, it would have left a
+  second party beside the first, which is a thing that could only happen to somebody muted.
+
+`party-policy.spec.ts` asks as somebody who was seen and again as somebody muted, a mute of each
+kind, through five later invitations and through being asked back, and compares what the route
+would send byte for byte.
+
+**A reason is kept for thirty seconds, and it names only who acted.** A party that ends leaves a
+tombstone on the next reads of its people, `ended: { id, reason, by? }`: `declined` and `left` name
+who did it, `expired` nobody, and `ended` is what two people who can no longer reach each other get,
+with no word about why. Whoever asked always gets one; the other one only if they had said yes,
+because an invitation they never answered is not their news.
+
+**A no and a silence are waited out; a change of mind is not.** An invitation that was refused, ran
+out or was pushed out starts thirty seconds in which that asker cannot ask that person again
+(`party-cooldown`, 429), or Not now would be answered by asking again. One the asker took back
+starts none, and neither does one the graph ended: leaving and asking again is how the game is
+changed, and for a while it answered "Try again in a moment.", as did asking again after a Leave
+pressed by mistake. It leaves one thing open, stated: nothing but the limiter every route sits
+behind stops somebody asking, taking it back and asking again, and each time is a card on the other
+one's screen. Whoever is tired of that mutes them, and is shown nothing from then on.
+
+**A party follows the graph.** After a block, an unblock, an unfriend, a change of privacy and an
+answered friend request, `party.revalidate` runs through `courtesy()` and ends, as `ended`, every
+party of the caller whose two people no longer pass `mayMessage` both ways. Saying yes asks the same
+question again, and a no there ends the invitation and answers `party-missing`.
+
+**The doorbell is `me` with `party`, and nothing else is written**: no notification, no push, no
+frame from a browser (*Who hears what* in `chat-and-keys.md`).
+
+`party-registry.spec.ts` and `party-policy.spec.ts` hold the two pure halves with no Postgres;
+`party.db.spec.ts` asks the real ports - the graph's hooks, a mute of each kind, a suspended asker,
+a bell that fails, and that neither another process nor the database holds a party; `app.spec.ts`
+(*teaming up*) holds the five routes, their words and statuses; `well-formed.spec.ts` the body.
+`tools/qa/garbage-pass.mjs` sends the invitation's route garbage and names the three that take no
+body.
+
+**In the browser all of it is a chunk the shell does not carry.** `stores/party-loader.ts` is the
+shell's whole share, the cues loader's shape with one difference: its stop is handed over at once,
+so a chunk that arrives after the shell has gone starts nothing. `components/social/party.ts`
+starts the store and draws the invitations into an element of its own on `document.body` - outside
+`#app-shell`, which an open sheet makes inert. `party-invite.spec.ts` reads the source for a static
+import of any of it from outside itself.
+
+**The store keeps what it last read, and counts on the product's clock.** `party.store.ts` reads
+`GET /parties` for the account, on `me`/`party` and when everything is rung. A read that fails
+keeps the team on screen and says the read failed; it is never taken for no team. Every clock is
+counted from the moment its answer ARRIVED (`remaining`), never from the device's own time. When the
+nearest one runs out the store reads again by itself, a quarter of a second late on purpose
+(`EXPIRY_SLACK_MS`), so an invitation leaves the screen with no doorbell. It holds the socket while
+a party or an invitation stands. An ending is said once, as a `warning` toast, and never to whoever
+caused it. Every verb goes through `attempt` with `whyParty`: one request a party however often it
+is pressed, and a refusal in its own sentence.
+
+**A yes is said to whoever asked, unless the team is already on screen.** Somebody who asks and
+then closes the sheet would otherwise never learn that the other one is in. When the store sees its
+own invitation become a team it says "{name} is in. Ready when you are." with their picture and a
+View that opens the sheet - once, and not while that sheet is open (`playingWith`), because the
+panel there has just said it. It is a toast of its own (`party-in`): under the endings' key an
+ending would inherit its button, the fault a removal's toast avoids the same way. And it is taken
+back the moment the team is gone, so nothing offers the way to a team that is over.
+
+**An invitation is a card nobody has to answer, and it takes the focus from nobody.** `PartyInvite`
+is a labelled region, `aria-live="polite"`, and never in the overlay stack. Each invitation is a
+`role="status"` card: who, which game, Team up and Not now at 44px under a finger, and a bar for
+what is left of the ninety seconds, built once with the card so a re-read never starts it again.
+It is drawn where the toasts are: the foot of the page above the island (`--nav-room`), the corner
+from rail width. At a table, and wherever the toasts have been sent to the top - a page holding
+them there, a sheet open on a phone - it is one row at the head of the page, because the foot is
+the hand, the dice and the chat. One row however many are waiting: the oldest, with a count of the
+others beside the name ("+2", and a sentence for a screen reader after the one that says what is
+asked), and the next takes its place when that one is answered or runs out. Every invitation was a
+row there at first, so a second reached below the play header and five would have covered the top
+of the board and taken its taps. The cards that are not drawn are not hidden ones: `shown` is the
+list the keyed `<For>` is given, so the one that stays is the node it was and the rest are built
+when they are owed. An invitation for a game this browser cannot draw is not drawn.
+
+**The card keeps its place and the toasts move.** Both want the same edge, and a card that stepped
+aside for every toast would take Team up from under a finger. So the card watches its own height
+and, while the two share an edge, writes a `translate` on the toasts' region that clears it; it
+takes that away when they part, when the last invitation goes and when it is unmounted. This is the
+one place the chunk reaches into the shell's markup, and it restates the rule for where toasts are
+(`sheeted`). `party-invite.spec.ts` mounts the real `ToastHost` beside the card to hold both: the
+region is where the card looks for it, and the two agree about the edge in every case. The bar on a
+card and the one in the panel are one line of arithmetic, `lib/countdown.ts`.
+
+**"Play" on a profile and on a friend's row asks which game.** Both opened a private table of the
+day's featured game without a word. `lib/play-with.ts` opens `PlayWithSheet`, a chunk of its own
+under one overlay id: every playable game with Private table, which is what the button did, for the
+game the reader picked; and Team up beside it at a game played in pairs, unless the person's page
+carries a `refusal`. Saying yes on a card opens the same sheet on the new partner.
+
+**The team is shown in that sheet, whoever's it is.** While the reader is in a party the sheet
+draws the `PartyPanel`: "Your team", the two of them, the game, "Waiting for {name}…" with the
+invitation's bar, then "{name} is in. Ready when you are." to whoever asked and "{name} will start
+the search." to whoever said yes, and Leave team. It is drawn in the sheet of anybody, so the way
+out of a team is wherever the reader looks; beside a team with somebody else the games stay on
+offer, and asking for a second team says "You are already in a team. Leave it first."
+
+`party-store.spec.ts`, `party-invite.spec.ts` and `play-with-sheet.spec.ts` hold the browser's
+half; `data.spec.ts` holds every refusal and ending to a sentence and every sentence to something
+that says it; `profile-page.spec.ts` and `friends-page.spec.ts` press Play.
+
+Three things it costs, stated. At a table the row lies over the page's own header until it is
+answered or runs out: a place inside that header is the header's to give. While a sheet is open a
+keyboard cannot reach the card, because the sheet holds the focus; a pointer can. And an invitation
+is only ever seen by somebody with the product open: nothing wakes a closed tab for one.
 
 ## Voice at the table
 

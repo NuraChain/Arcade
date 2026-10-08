@@ -17,15 +17,13 @@ import Tabs from '../../components/ui/tabs.component.azeroth';
 import type { Person } from '../../data/person.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { openTable } from '../../lib/open-table.ts';
+import { playWith } from '../../lib/play-with.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
 import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
@@ -43,8 +41,6 @@ export default component FriendsPage()
     const groups = useGroups();
     const device = useDevice();
     const chat = useChat();
-    const lobby = useLobby();
-    const catalogue = useCatalogue();
     const overlay = useOverlay();
     const people = usePeople();
     const { navigate, replace } = useNavigate();
@@ -126,11 +122,7 @@ export default component FriendsPage()
 
     derived discoverable = groups.elsewhere().length > 0;
 
-    const playWith = (person: Person) =>
-    {
-        const game = catalogue.featured();
-        openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
-    };
+    const play = (person: Person) => playWith(person.id, true);
 
     const message = (person: Person) =>
     {
@@ -221,10 +213,10 @@ export default component FriendsPage()
                                             <>
                                                 <Show
                                                     when={ roomy }
-                                                    fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => playWith(person) } /> }
+                                                    fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => play(person) } /> }
                                                 >
                                                     { () =>
-                                                        <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => playWith(person) }>
+                                                        <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => play(person) }>
                                                             { locale.t('person.play') }
                                                         </Button>
                                                     }

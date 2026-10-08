@@ -332,5 +332,27 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'locked.noEpochKey': 'قفل است. کلید این بخش از گفتگو به این مرورگر داده نشده بود.',
     'locked.tampered': 'قفل است. بدون آن بخش‌هایی رسیده که برای بررسی‌اش لازم است.',
 
-    'notify.push.unavailable': 'روی این سرور هنوز اعلان تنظیم نشده.'
+    'notify.push.unavailable': 'روی این سرور هنوز اعلان تنظیم نشده.',
+
+    'party.teamUp': 'هم‌تیمی شو',
+    'party.private': 'میز خصوصی',
+    'party.sheet.title': 'بازی با {name}',
+    'party.sheet.lead': 'هم‌تیمی شو تا دو به دو در یک طرف بازی کنید. میز خصوصی برای کسانی است که خودت دعوت می‌کنی.',
+    'party.invite.region': 'دعوت‌های هم‌تیمی',
+    'party.invite.asks': 'می‌خواهد در {game} با تو هم‌تیمی شود',
+    'party.invite.more': { one: '{count} دعوت دیگر منتظر است', other: '{count} دعوت دیگر منتظر است' },
+    'party.invite.decline': 'الان نه',
+    'party.waiting': 'منتظر {name}…',
+    'party.ready.leader': '{name} آماده است. هر وقت خواستی شروع کن.',
+    'party.ready.member': '{name} جست‌وجو را شروع می‌کند.',
+    'party.leave': 'ترک تیم',
+    'party.loadFailed': 'الان نشد تیمت را بخوانیم.',
+    'party.ended.declined': '{name} الان نمی‌تواند بازی کند',
+    'party.ended.expired': 'مهلت هم‌تیمی تمام شد',
+    'party.ended.left': '{name} تیم را ترک کرد',
+    'party.ended.ended': 'این هم‌تیمی تمام شد',
+    'party.refused.party-missing': 'این هم‌تیمی دیگر وجود ندارد.',
+    'party.refused.in-party': 'الان در یک تیم هستی. اول از آن بیرون بیا.',
+    'party.refused.not-team-game': 'این بازی تیمی نیست.',
+    'party.refused.party-cooldown': 'کمی بعد دوباره امتحان کن.'
 };

@@ -336,5 +336,27 @@ export const social = {
     'locked.noEpochKey': 'Locked. This browser was not given the key for this part of the conversation.',
     'locked.tampered': 'Locked. This arrived without the parts needed to check it.',
 
-    'notify.push.unavailable': 'Push is not set up on this server yet.'
+    'notify.push.unavailable': 'Push is not set up on this server yet.',
+
+    'party.teamUp': 'Team up',
+    'party.private': 'Private table',
+    'party.sheet.title': 'Play with {name}',
+    'party.sheet.lead': 'Team up to play on one side, two against two. A private table is for the people you invite.',
+    'party.invite.region': 'Invitations to team up',
+    'party.invite.asks': 'wants to team up for {game}',
+    'party.invite.more': { one: '{count} more invitation is waiting', other: '{count} more invitations are waiting' },
+    'party.invite.decline': 'Not now',
+    'party.waiting': 'Waiting for {name}…',
+    'party.ready.leader': '{name} is in. Ready when you are.',
+    'party.ready.member': '{name} will start the search.',
+    'party.leave': 'Leave team',
+    'party.loadFailed': 'Your team could not be read just now.',
+    'party.ended.declined': '{name} can’t play right now',
+    'party.ended.expired': 'The team-up ran out of time',
+    'party.ended.left': '{name} left the team',
+    'party.ended.ended': 'This team-up ended',
+    'party.refused.party-missing': 'That team-up is no longer there.',
+    'party.refused.in-party': 'You are already in a team. Leave it first.',
+    'party.refused.not-team-game': 'That game is not played in teams.',
+    'party.refused.party-cooldown': 'Try again in a moment.'
 };

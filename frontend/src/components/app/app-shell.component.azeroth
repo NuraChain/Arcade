@@ -1,6 +1,7 @@
 import { Outlet, untrack, useHead, useMatch, useNavigate, useRoute, type MountNode } from 'azerothjs';
 
 import { startCues, type CuesHand } from '../../stores/cues-loader.ts';
+import { startParty } from '../../stores/party-loader.ts';
 
 import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
@@ -118,6 +119,7 @@ export default component AppShell(props: { children?: MountNode })
 
         startCues(cues, navigate, stops);
         loadStrips(strips, () => stripped = true, stops);
+        startParty(stops);
 
         return () =>
         {

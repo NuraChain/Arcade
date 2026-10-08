@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, RouterProvider, Routes, type Route }
 import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import ProfileHeader from '../src/components/social/profile-header.component.azeroth';
 import AchievementTile from '../src/components/social/achievement-tile.component.azeroth';
+import PlayWithSheet from '../src/components/social/play-with-sheet.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
 import PersonPage from '../src/pages/app/person.page.azeroth';
 import '../src/locales/app-catalogue.ts';
@@ -454,6 +455,44 @@ describe('somebody else\'s profile page', () =>
 
         expect(container.textContent).toContain(useLocale().t('actions.unblock', { name: 'mina' }));
         expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
+    });
+
+    const pressPlay = async (handle: string) =>
+    {
+        useOverlay().reset();
+
+        const container = visit(handle);
+
+        await vi.waitFor(() => expect(server.calls).toContain('social.person'), { timeout: 4000 });
+        await settle();
+        server.calls = [];
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('person.play'))!.click();
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        const [sheet] = useOverlay().items();
+
+        useOverlay().reset();
+
+        return sheet;
+    };
+
+    it('opens the sheet to play with them on Play, and opens no table by itself', async () =>
+    {
+        const sheet = await pressPlay('mina');
+
+        expect(sheet.component).toBe(PlayWithSheet);
+        expect(sheet).toMatchObject({ id: 'play-with', props: { personId: 'mina', teamable: true } });
+        expect(server.calls, 'the button chose a game and opened a table for it').not.toContain('tables.create');
+        expect(server.calls).not.toContain('parties.invite');
+    });
+
+    it('offers no team-up with somebody whose page says they cannot be reached', async () =>
+    {
+        server.refusals.mina = 'strangers-off';
+
+        expect((await pressPlay('mina')).props).toMatchObject({ personId: 'mina', teamable: false });
     });
 });
 

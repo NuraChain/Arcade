@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
@@ -15,15 +15,19 @@ import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
-import { isNotice, NOTICE_OF } from './domains/notify/notices.ts';
+import { isNotice, NOTICE_OF, type Notice } from './domains/notify/notices.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS } from './domains/match/turns.ts';
 import { createWatchService } from './domains/match/watch.ts';
+import { createParties, type PartyWhy } from './domains/party/parties.ts';
+import { partyRefused } from './domains/party/refusal.ts';
+import { createRegistry } from './domains/party/registry.ts';
 import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
 import { strikes } from './domains/table/sweep.ts';
+import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -70,7 +74,7 @@ export interface WriteListener
     chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
-    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
+    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party'): void;
     gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
     gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
@@ -771,6 +775,71 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             process.stderr.write(`${ what } failed: ${ error instanceof Error ? error.message : String(error) }\n`);
         });
+
+    const party = createParties({
+        registry: createRegistry({
+            now: () => Date.now(),
+
+            after(ms, run)
+            {
+                const timer = setTimeout(run, ms);
+
+                timer.unref();
+
+                return () => clearTimeout(timer);
+            },
+
+            ring: (userIds) => void courtesy('party ring', async () =>
+            {
+                for (const userId of userIds)
+                {
+                    live?.selfChanged(userId, 'party');
+                }
+            }),
+
+            id: randomUUID
+        }),
+
+        person: async (handle) => (await social.personByHandle(handle))?.id ?? null,
+
+        handles: (userIds) => social.handlesOf(userIds),
+
+        async reaches(a, b)
+        {
+            try
+            {
+                const [there, back] = await Promise.all([social.mayMessage(a, b), social.mayMessage(b, a)]);
+
+                return there === null && back === null;
+            }
+            catch (error)
+            {
+                if (error instanceof NotFoundError)
+                {
+                    return false;
+                }
+
+                throw error;
+            }
+        },
+
+        muted: (userId, by, game) => social.hasMuted(userId, [
+            { kind: 'person', id: by },
+            { kind: 'notice', id: 'invites' satisfies Notice },
+            { kind: 'game', id: game }
+        ]),
+
+        teamGame: async (game) => (await catalogue.games()).games.some((row) =>
+            row.id === game && row.status === 'available' && row.rules.seats.includes(4) && teamsOf(row.rules.partners, 4, true))
+    });
+
+    const teamed = (answer: { ok: true } | { ok: false; why: PartyWhy }) =>
+    {
+        if (!answer.ok)
+        {
+            throw partyRefused(answer.why);
+        }
+    };
 
     const startPushed = async (me: string, tableId: string) =>
     {
@@ -1579,6 +1648,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const asker = await social.requesterOf(me, requestId);
                 await social.answerRequest(me, requestId, outcome);
+                await courtesy('party revalidate', () => party.revalidate(me));
 
                 // Only an acceptance is worth telling somebody about. A decline that announced
                 // itself would be a product that makes saying no cost something.
@@ -1623,6 +1693,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.removeFriend(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me, other);
             },
 
@@ -1630,6 +1701,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.block(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 await retract(other, 'friend-request', `friend:${ me }`);
                 await retract(me, 'friend-request', `friend:${ other }`);
                 live?.edgesChanged(me, other);
@@ -1640,6 +1712,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.unblock(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me, other);
                 await ringShared(me, other);
             },
@@ -1765,6 +1838,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async setPrivacy(me, wanted)
             {
                 const row = await social.setPrivacy(me, wanted);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me);
                 return {
                     allowStrangerMessages: row.allow_stranger_messages,
@@ -2180,6 +2254,34 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const after = await mustTable(me, tableId);
                 await ringTable(after);
                 return asTable(after);
+            }
+        },
+
+        party: {
+            state: (me) => party.state(me),
+
+            async invite(me, handle, game)
+            {
+                teamed(await party.invite(me, handle, game));
+
+                return party.state(me);
+            },
+
+            async accept(me, partyId)
+            {
+                teamed(await party.accept(me, partyId));
+
+                return party.state(me);
+            },
+
+            async decline(me, partyId)
+            {
+                teamed(party.decline(me, partyId));
+            },
+
+            async leave(me, partyId)
+            {
+                teamed(party.leave(me, partyId));
             }
         },
 

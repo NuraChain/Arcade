@@ -4,6 +4,9 @@ import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { PEOPLE_FOUND_MAX, SEARCH_FROM, searchNeedle } from '../../backend/src/domains/social/names.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
+import { createParties, type Parties, type PartyWhy } from '../../backend/src/domains/party/parties.ts';
+import { createRegistry } from '../../backend/src/domains/party/registry.ts';
+import { PARTY_REFUSALS } from '../../backend/src/domains/party/rules.ts';
 import { chairFor, quickOf, type QuickAsk } from '../../backend/src/domains/table/quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
 import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
@@ -30,6 +33,7 @@ import {
 } from './fixtures.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
+import { runtime } from '../src/lib/runtime.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
 
@@ -184,6 +188,34 @@ function mustSee(id: string)
 const tableRefusal = (word: TableRefusal, message: string) => new ApiError(TABLE_REFUSALS[word], word, message, undefined);
 
 const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
+
+const formParties = (): Parties => createParties({
+    registry: createRegistry({
+        now: () => runtime().clock.now(),
+        after: (ms, run) => runtime().clock.after(ms, run),
+        ring: (userIds) => server.partyRung.push(...userIds),
+        id: () => crypto.randomUUID()
+    }),
+    person: async (handle) => (PEOPLE_FIXTURES.some((one) => one.handle === handle) ? handle : null),
+    handles: async (userIds) => new Map(userIds.map((id) => [id, id])),
+    reaches: async (a, b) => [a, b].every((who) => who === server.me || (!server.blocks.includes(who) && server.refusals[who] === undefined)),
+    muted: async (userId, by, game) => userId === server.me && server.mutes.some((entry) =>
+        (entry.kind === 'person' && entry.id === by) || (entry.kind === 'notice' && entry.id === 'invites') || (entry.kind === 'game' && entry.id === game)),
+    teamGame: async (game) =>
+    {
+        const rules = TABLE_RULES[game as keyof typeof TABLE_RULES];
+
+        return rules !== undefined && rules.seats.includes(4) && teamsOf(rules.partners, 4, true);
+    }
+});
+
+function teamed(answer: { ok: true } | { ok: false; why: PartyWhy })
+{
+    if (!answer.ok)
+    {
+        throw answer.why === 'no-invitee' ? noInvitee() : new ApiError(PARTY_REFUSALS[answer.why], answer.why, 'That team-up was refused.', undefined);
+    }
+}
 
 interface OpeningWire
 {
@@ -405,6 +437,11 @@ export const server =
     pushKey: null as string | null,
     pushSubscriptions: [] as { endpoint: string; p256dh: string; auth: string }[],
 
+    restartParties()
+    {
+        server.parties = formParties();
+    },
+
     /**
      * Something happened to me, with the server's dedupe rule applied.
      *
@@ -443,6 +480,11 @@ export const server =
 
     outOfGame: {} as Record<string, string[]>,
     keptOut: {} as Record<string, string[]>,
+
+    parties: formParties(),
+    partyRung: [] as string[],
+    refusals: {} as Record<string, 'blocked' | 'strangers-off' | 'minor-safety'>,
+
     asked: [] as { game: string; seats: number; teams: boolean }[],
     sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
 
@@ -489,6 +531,9 @@ export const server =
         server.tables = [];
         server.outOfGame = {};
         server.keptOut = {};
+        server.parties = formParties();
+        server.partyRung = [];
+        server.refusals = {};
         server.asked = [];
         server.sought = [];
         server.searched = [];
@@ -1764,6 +1809,48 @@ export const client =
         }
     },
 
+    parties:
+    {
+        async state()
+        {
+            server.calls.push('parties.state');
+
+            return await server.parties.state(server.me);
+        },
+
+        async invite({ input }: { input: { id: string; game: string } })
+        {
+            server.calls.push('parties.invite');
+            teamed(await server.parties.invite(server.me, input.id, input.game));
+
+            return await server.parties.state(server.me);
+        },
+
+        async accept({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.accept');
+            teamed(await server.parties.accept(server.me, params.id));
+
+            return await server.parties.state(server.me);
+        },
+
+        async decline({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.decline');
+            teamed(server.parties.decline(server.me, params.id));
+
+            return { ok: true };
+        },
+
+        async leave({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.leave');
+            teamed(server.parties.leave(server.me, params.id));
+
+            return { ok: true };
+        }
+    },
+
     /**
      * Games that have finished: none, unless a spec puts some in `server.history`.
      *
@@ -1852,7 +1939,9 @@ export const client =
             }
             const relation = server.blocks.includes(params.handle) ? 'blocked' as const
                 : server.friends.includes(params.handle) ? 'friend' as const : 'none' as const;
-            return { person: personWire(params.handle), relation, mutual: 0 };
+            const refusal = server.refusals[params.handle];
+
+            return { person: personWire(params.handle), relation, mutual: 0, ...(refusal === undefined ? {} : { refusal }) };
         },
 
         async names({ query }: { query: { handles: string } })

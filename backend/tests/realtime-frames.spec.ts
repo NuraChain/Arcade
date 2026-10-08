@@ -302,6 +302,19 @@ describe('client frames', () =>
         expect(parseClientFrame('{"v":1,"t":"resume"}')).toBeNull();
     });
 
+    it('has no frame for a team: forming one is asked over HTTP and rung, never sent on the socket', () =>
+    {
+        for (const kind of ['party', 'parties', 'party-invite', 'party-accept', 'party-decline', 'party-leave', 'invite', 'team'])
+        {
+            expect(parseClientFrame(JSON.stringify({ v: 1, t: kind })), kind).toBeNull();
+            expect(parseClientFrame(JSON.stringify({ v: 1, t: kind, id: 'mina', game: 'hokm' })), kind).toBeNull();
+            expect(parseClientFrame(JSON.stringify({ v: 1, t: kind, party: '3f0e3c2a-1111-4222-8333-444455556666' })), kind).toBeNull();
+        }
+
+        expect(parseClientFrame(JSON.stringify({ v: 1, t: 'sync', party: 'x' }))).toBeNull();
+        expect(nudge(7, 'me', 5, 'party')).toEqual({ v: 1, t: 'nudge', n: 7, scope: 'me', id: 'party', at: 5 });
+    });
+
     it('never throws, whatever arrives', () =>
     {
         for (const rubbish of ['', 'null', '[]', '"a string"', '{', '{"v":1}', '42', 'undefined'])

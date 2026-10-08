@@ -103,7 +103,7 @@ export const SEEN_MS = 20_000;
 
 export const VIEWED_MAX = 4;
 
-export type SelfTopic = 'notifications' | 'devices' | 'profile';
+export type SelfTopic = 'notifications' | 'devices' | 'profile' | 'party';
 
 export interface Hub
 {

@@ -1,0 +1,155 @@
+import { useNavigate } from 'azerothjs';
+
+import type { Game, GameId } from '../../data/games.ts';
+import { formatsOf } from '../../data/tables.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { openTable } from '../../lib/open-table.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useParty } from '../../stores/party.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
+import PartyPanel from './party-panel.component.azeroth';
+
+export default component PlayWithSheet(props: OverlayProps & { personId: string; teamable: boolean })
+{
+    const party = useParty();
+    const people = usePeople();
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const locale = useLocale();
+    const { navigate } = useNavigate();
+
+    state asking = '';
+    state opening = '';
+
+    derived name = people.byHandle(props.personId)?.displayName ?? props.personId;
+
+    derived mine = party.party();
+
+    derived teamed = mine !== null;
+
+    derived together = mine !== null && (mine.leader === props.personId || mine.member === props.personId);
+
+    derived unread = !party.known() && party.failed() !== null;
+
+    const paired = (game: Game) => props.teamable && formatsOf(catalogue.rules(game.id)).some((format) => format.teams);
+
+    derived playable = catalogue.games.filter((game) => catalogue.playable(game.id));
+
+    derived pairs = playable.filter(paired);
+
+    derived solos = playable.filter((game) => !paired(game));
+
+    derived offered = !together && playable.length > 0;
+
+    derived lead = offered && pairs.length > 0 ? locale.t('party.sheet.lead') : undefined;
+
+    const team = (game: GameId) =>
+    {
+        if (party.working('invite'))
+        {
+            return;
+        }
+
+        asking = game;
+        void party.invite(props.personId, game);
+    };
+
+    const host = (game: GameId) =>
+    {
+        if (opening !== '')
+        {
+            return;
+        }
+
+        opening = game;
+        openTable(
+            lobby.host(game, catalogue.defaults(game), [props.personId]),
+            (to) =>
+            {
+                props.close(true);
+                navigate(to);
+            },
+            () => opening = ''
+        );
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <SheetHeader title={ locale.t('party.sheet.title', { name }) } lead={ lead } onClose={ () => props.close(false) } />
+
+        <Show when={ unread }>
+            <Panel tone="danger" class="flex flex-col gap-3">
+                <p class="flex items-start gap-2 text-ui-sm text-text" role="alert">
+                    <Icon name="alert" size={ 16 } class="mt-0.5 shrink-0 text-danger" />
+                    <span>{ locale.t('party.loadFailed') }</span>
+                </p>
+                <Button variant="secondary" size="sm" leading="refresh" class="self-start" onClick={ () => void party.refresh().catch(() => undefined) }>
+                    { locale.t('common.retry') }
+                </Button>
+            </Panel>
+        </Show>
+
+        <Show when={ teamed }>
+            <PartyPanel />
+        </Show>
+
+        <Show when={ offered }>
+            <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-3" aria-label={ locale.t('app.nav.games') }>
+                <For each={ pairs } key={ (game) => game.id } let={ game }>
+                    <li>
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 py-3" role="group" aria-label={ locale.t(game.nameKey) }>
+                            <GameIcon game={ game.id } class="h-9 w-9 shrink-0" />
+                            <span class="min-w-0 flex-1 truncate text-ui-base font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                            <div class="flex basis-full gap-2">
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    leading="versus"
+                                    class="flex-1 whitespace-nowrap"
+                                    loading={ asking === game.id && party.working('invite') }
+                                    onClick={ () => team(game.id) }
+                                >
+                                    { locale.t('party.teamUp') }
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    leading="lock"
+                                    class="flex-1 whitespace-nowrap"
+                                    loading={ opening === game.id }
+                                    onClick={ () => host(game.id) }
+                                >
+                                    { locale.t('party.private') }
+                                </Button>
+                            </div>
+                        </div>
+                    </li>
+                </For>
+                <For each={ solos } key={ (game) => game.id } let={ game }>
+                    <li>
+                        <div class="flex items-center gap-3 py-3" role="group" aria-label={ locale.t(game.nameKey) }>
+                            <GameIcon game={ game.id } class="h-9 w-9 shrink-0" />
+                            <span class="min-w-0 flex-1 truncate text-ui-base font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                leading="lock"
+                                class="shrink-0 whitespace-nowrap"
+                                loading={ opening === game.id }
+                                onClick={ () => host(game.id) }
+                            >
+                                { locale.t('party.private') }
+                            </Button>
+                        </div>
+                    </li>
+                </For>
+            </ul>
+        </Show>
+    </div>
+}

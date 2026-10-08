@@ -1,5 +1,6 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
+import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
@@ -1186,6 +1187,51 @@ export const openQuery = object({ game: string().optional(), mode: tableMode.opt
 export const seatResult = object({
     table: tableSummary,
     seat: number().optional()
+});
+
+export const partyStage = enumOf(PARTY_STAGES);
+
+export const partyEnd = enumOf(PARTY_ENDS);
+
+export const partyView = object({
+    id: string(),
+    game: string(),
+    leader: string(),
+    member: string(),
+    stage: partyStage,
+    remainingMs: number({ int: true, min: 0 })
+});
+
+export type PartyView = Infer<typeof partyView>;
+
+export const partyInvite = object({
+    id: string(),
+    game: string(),
+    from: string(),
+    remainingMs: number({ int: true, min: 0 })
+});
+
+export type PartyInvite = Infer<typeof partyInvite>;
+
+export const partyEnded = object({
+    id: string(),
+    reason: partyEnd,
+    by: string().optional()
+});
+
+export type PartyEnded = Infer<typeof partyEnded>;
+
+export const partyState = object({
+    party: partyView.optional(),
+    invites: array(partyInvite),
+    ended: partyEnded.optional()
+});
+
+export type PartyState = Infer<typeof partyState>;
+
+export const partyInput = object({
+    id: string({ max: 32 }),
+    game: string({ max: 32 })
 });
 
 /* ----------------------------------------------------------------- matches */

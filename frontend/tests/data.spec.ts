@@ -4,6 +4,7 @@ import { GAMES, gameBySlug } from '../src/data/games.ts';
 import { en, type Dictionary } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
 import { messageText } from '../src/locales/format.ts';
+import { PARTY_ENDS, PARTY_REFUSALS } from '../../backend/src/domains/party/rules.ts';
 
 describe('games catalogue', () =>
 {
@@ -99,5 +100,32 @@ describe('message catalogues', () =>
 
         expect(compose(en)).toBe(en['brand.name']);
         expect(compose(fa)).toBe(messageText(fa['brand.name']));
+    });
+});
+
+describe('the words for a team-up', () =>
+{
+    const keys = (Object.keys(en) as string[]).filter((key) => key.startsWith('party.'));
+
+    const said = (stem: string) => keys.filter((key) => key.startsWith(stem)).map((key) => key.slice(stem.length)).sort();
+
+    it('have a sentence for every refusal and every ending, and none for a word the server does not have', () =>
+    {
+        expect(said('party.refused.')).toEqual(Object.keys(PARTY_REFUSALS).sort());
+        expect(said('party.ended.')).toEqual([...PARTY_ENDS].sort());
+    });
+
+    it('are each said somewhere in the product', () =>
+    {
+        const source = Object.values(import.meta.glob(
+            ['../src/**/*.{ts,azeroth}', '!../src/main.azeroth', '!../src/locales/**'],
+            { query: '?raw', import: 'default', eager: true }
+        ) as Record<string, string>).join('\n');
+        const composed = ['party.refused.', 'party.ended.'].filter((stem) => source.includes(['`', stem, '$', '{'].join('')));
+        const unsaid = keys.filter((key) => !source.includes(`'${ key }'`) && !composed.some((stem) => key.startsWith(stem)));
+
+        expect(keys.length, 'the team-up has no words at all').toBeGreaterThan(10);
+        expect(composed, 'nothing composes a refusal’s or an ending’s key any more').toHaveLength(2);
+        expect(unsaid, 'a sentence with nothing that says it').toEqual([]);
     });
 });

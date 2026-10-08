@@ -103,7 +103,9 @@ import {
     matchActionInput,
     matchPlayInput,
     historyQuery,
-    sinceQuery
+    sinceQuery,
+    partyInput,
+    partyState
 } from './schemas.ts';
 import { NAMES_MAX, PEOPLE_FOUND_MAX } from './domains/social/names.ts';
 
@@ -668,6 +670,28 @@ export function buildApi(ports: Ports)
              */
             start: routes.post('/:id/start', { output: matchView },
                 (context) => ports.match.start(context.principal.userId, context.params.id))
+        })),
+
+        parties: feature('/parties', [session], (routes) => ({
+            state: routes.get('/', { output: partyState }, (context) => ports.party.state(context.principal.userId)),
+
+            invite: routes.post('/', { input: partyInput, output: partyState },
+                (context) => ports.party.invite(context.principal.userId, context.input.id, context.input.game)),
+
+            accept: routes.post('/:id/accept', { output: partyState },
+                (context) => ports.party.accept(context.principal.userId, context.params.id)),
+
+            decline: routes.post('/:id/decline', { output: ack }, async (context) =>
+            {
+                await ports.party.decline(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            leave: routes.post('/:id/leave', { output: ack }, async (context) =>
+            {
+                await ports.party.leave(context.principal.userId, context.params.id);
+                return { ok: true };
+            })
         })),
 
         /**

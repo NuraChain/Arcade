@@ -13,7 +13,7 @@ import type { ServerConfig } from '../src/env.ts';
 import type { Ports } from '../src/ports.ts';
 import {
     answerInput, conversationRef, groupCreateInput, matchPlayInput, muteInput, namesQuery, peopleQuery, personRef,
-    pushEndpoint, reportInput, sendInput, tableCreateInput, tableQuickInput
+    partyInput, pushEndpoint, reportInput, sendInput, tableCreateInput, tableQuickInput
 } from '../src/schemas.ts';
 
 const NUL = String.fromCharCode(0);
@@ -128,6 +128,8 @@ describe('text the wire takes', () =>
         ['a game to open a table for', tableCreateInput, { ...table, game: NUL }],
         ['somebody invited to a table', tableCreateInput, { ...table, invitees: ['sara', NUL] }],
         ['a game to look for', tableQuickInput, { game: NUL, voice: 'off' }],
+        ['somebody to team up with', partyInput, { id: `mi${ NUL }na`, game: 'hokm' }],
+        ['a game to team up for', partyInput, { id: 'mina', game: NUL }],
         ['a play\'s key', matchPlayInput, { key: `k${ NUL }`, rev: 0, play: { kind: 'ludo', verb: 'roll' } }],
         ['a message\'s id', sendInput, { ...message, id: NUL }],
         ['a message\'s device', sendInput, { ...message, senderDeviceId: NUL }],

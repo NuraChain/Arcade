@@ -615,6 +615,13 @@ export function createSocialService(db: DataSource)
             await db.getRepository(Mute).delete({ userId: me, subjectKind: kind, subjectId });
         },
 
+        async hasMuted(me: string, subjects: readonly { kind: MuteSubject; id: string }[])
+        {
+            return subjects.length > 0 && await db.getRepository(Mute).exists({
+                where: subjects.map((subject) => ({ userId: me, subjectKind: subject.kind, subjectId: subject.id }))
+            });
+        },
+
         /**
          * Files a report, with or without a message attached.
          *

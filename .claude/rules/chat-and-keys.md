@@ -1179,7 +1179,16 @@ every store after it.
 
 Five scopes, and each is one question somebody can be asked: `chat` (this conversation moved),
 `social` (your graph moved), `game` (this board moved), `table` (this table moved) and `me` (a thing
-of your own moved - `notifications`, `devices` or `profile`, carried as the id).
+of your own moved - `notifications`, `devices`, `profile` or `party`, carried as the id).
+
+**A team-up rings `me` with `party`, and that is all it does.** An invitation, a yes, a not now, a
+leave and an ending each ring the `me` scope of the people it is about (`selfChanged(userId,
+'party')`), and the party store reads `GET /parties` again. Nothing else is written: no notification
+row, which would outlive the ninety seconds an invitation lasts; no push, which could not say what
+it is for; and no frame a browser can send, because every verb is a route that asks who may reach
+whom. An invitation the invitee muted rings whoever asked and nobody else. `realtime-hub.spec.ts`
+holds the ring to its people and `realtime-frames.spec.ts` refuses a `party` frame from a client.
+The rules are in `games.md`, *Parties*.
 
 **A social doorbell and an edge change are two different calls, and conflating them was the bug.**
 `socialChanged` used to drop the person's cached friends-and-blocks AND send a fresh presence

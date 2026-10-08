@@ -587,6 +587,26 @@ describe('a change of one\'s own', () =>
         expect(scopesOf(second.wire)).toEqual(['me:notifications']);
         expect(scopesOf(other.wire)).toEqual([]);
     });
+
+    it('rings a team that moved as one of them, once however many times it moved inside a tick, and beside the others', async () =>
+    {
+        const first = await connect('alex');
+        const second = await connect('alex');
+        const partner = await connect('sara.k');
+        const stranger = await connect('omid.k');
+
+        world.hub.selfChanged('alex', 'party');
+        world.hub.selfChanged('alex', 'party');
+        world.hub.selfChanged('sara.k', 'party');
+        world.hub.selfChanged('alex', 'notifications');
+        await settle();
+
+        expect(scopesOf(first.wire).sort()).toEqual(['me:notifications', 'me:party']);
+        expect(scopesOf(second.wire).sort()).toEqual(['me:notifications', 'me:party']);
+        expect(scopesOf(partner.wire)).toEqual(['me:party']);
+        expect(scopesOf(stranger.wire)).toEqual([]);
+        expect(first.wire.framesOf('nudge').every((frame) => Object.keys(frame).sort().join() === 'at,id,n,scope,t,v'), 'a doorbell carried something about the team').toBe(true);
+    });
 });
 
 describe('a chat change that reaches past the room', () =>

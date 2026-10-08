@@ -2,11 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
+import PlayWithSheet from '../src/components/social/play-with-sheet.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import FriendsPage from '../src/pages/app/friends.page.azeroth';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
@@ -283,5 +285,27 @@ describe('the friends page', () =>
 
         expect(rowOf(container, 'reza.t')).toBeNull();
         expect(rowOf(container, 'sara.k')).toBe(sara);
+    });
+
+    it('opens the sheet to play with a friend from their row, with a team-up on offer, and opens no table by itself', async () =>
+    {
+        useOverlay().reset();
+
+        const container = await opened();
+        const says = useLocale().t('person.play');
+        const play = [...rowOf(container, 'sara.k')!.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === says || one.textContent?.trim() === says);
+
+        server.calls = [];
+        play!.click();
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        const [sheet] = useOverlay().items();
+
+        useOverlay().reset();
+
+        expect(sheet.component).toBe(PlayWithSheet);
+        expect(sheet).toMatchObject({ id: 'play-with', label: 'Play with Sara Kamali', props: { personId: 'sara.k', teamable: true } });
+        expect(server.calls, 'the button chose a game and opened a table for it').not.toContain('tables.create');
     });
 });

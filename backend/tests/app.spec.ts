@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 import type { DataSource } from 'typeorm';
 
 import { NotFoundError } from '@azerothjs/http';
 
 import { buildApp } from '../src/app.ts';
+import { partyRefusal, partyRefused } from '../src/domains/party/refusal.ts';
+import { PARTY_REFUSALS, type PartyRefusal } from '../src/domains/party/rules.ts';
 import { tableRefusal } from '../src/domains/table/service.ts';
 import type { ServerConfig } from '../src/env.ts';
 import type { Ports } from '../src/ports.ts';
@@ -325,6 +330,180 @@ describe('taking somebody out of a chair', () =>
 
         expect(response.status).toBe(409);
         expect(await response.json()).toEqual({ error: { code: 'kept-out', message: 'The host took you out of that table.' } });
+    });
+});
+
+describe('teaming up', () =>
+{
+    const PARTY = '3f0e3c2a-1111-4222-8333-444455556666';
+
+    const state = {
+        party: { id: PARTY, game: 'hokm', leader: 'somebody', member: 'mina', stage: 'inviting', remainingMs: 90_000 },
+        invites: [{ id: 'another', game: 'ludo', from: 'omid.k', remainingMs: 12 }],
+        ended: { id: 'an-older-one', reason: 'declined', by: 'sara.k' }
+    };
+
+    const teamedAs = (told: unknown[][], answer: () => Promise<unknown> = () => Promise.resolve(state), who: unknown = { userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' }) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: { principal: () => Promise.resolve(who) },
+            party: Object.fromEntries(['state', 'invite', 'accept', 'decline', 'leave'].map((verb) => [verb, (...said: unknown[]) =>
+            {
+                told.push([verb, ...said]);
+
+                return answer();
+            }]))
+        } as unknown as Ports
+    });
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body?: string) =>
+        app.handle(new Request(`http://local/api${ path }`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            ...(body === undefined ? {} : { body })
+        }));
+
+    it('reads the reader their own team, the invitations they hold and why the last one ended', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await call(teamedAs(told), '/api/parties');
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(state);
+        expect(told).toEqual([['state', 'somebody']]);
+    });
+
+    it('tells the registry who asked, the name they gave and the game, and answers with the team as it stands', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await post(teamedAs(told), '/parties', JSON.stringify({ id: 'mina', game: 'hokm' }));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(state);
+        expect(told).toEqual([['invite', 'somebody', 'mina', 'hokm']]);
+    });
+
+    it('is not passed on until it names somebody and a game', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = teamedAs(told);
+
+        for (const body of ['{}', '{"id":"mina"}', '{"game":"hokm"}', '{"id":7,"game":"hokm"}', '{"id":"mina","game":null}', '{"handle":"mina","game":"hokm"}'])
+        {
+            const response = await post(app, '/parties', body);
+
+            expect(response.status, body).toBe(422);
+            expect(await response.json(), body).toMatchObject({ error: { code: 'validation-failed' } });
+        }
+
+        expect((await post(app, '/parties')).status).toBe(400);
+        expect(told).toEqual([]);
+    });
+
+    it('hands a yes, a not now and a leave the id out of the address, as it came', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = teamedAs(told);
+        const yes = await post(app, `/parties/${ PARTY }/accept`);
+        const no = await post(app, '/parties/not-a-uuid/decline');
+        const gone = await post(app, `/parties/${ PARTY }/leave`);
+
+        expect(yes.status).toBe(200);
+        expect(await yes.json()).toEqual(state);
+        expect(await no.json()).toEqual({ ok: true });
+        expect(await gone.json()).toEqual({ ok: true });
+        expect(told).toEqual([['accept', 'somebody', PARTY], ['decline', 'somebody', 'not-a-uuid'], ['leave', 'somebody', PARTY]]);
+    });
+
+    it('sends nothing about a team that the wire does not declare', async () =>
+    {
+        const loose = {
+            party: { ...state.party, until: 1_700_000_000_000, silent: true, leaderId: 'a-uuid' },
+            invites: [{ ...state.invites[0], member: 'somebody', silent: false }],
+            ended: { ...state.ended, at: 5 },
+            cooldown: 30_000
+        };
+
+        for (const response of [await call(teamedAs([], () => Promise.resolve(loose)), '/api/parties'), await post(teamedAs([], () => Promise.resolve(loose)), '/parties', JSON.stringify({ id: 'mina', game: 'hokm' }))])
+        {
+            expect(await response.json()).toEqual(state);
+        }
+    });
+
+    it('sends each refusal as its word, at its status, in the sentence it was refused with', async () =>
+    {
+        for (const word of Object.keys(PARTY_REFUSALS) as PartyRefusal[])
+        {
+            const refusal = partyRefusal(word);
+            const response = await post(teamedAs([], () => Promise.reject(refusal)), '/parties', JSON.stringify({ id: 'mina', game: 'hokm' }));
+
+            expect(response.status, word).toBe(PARTY_REFUSALS[word]);
+            expect(await response.json(), word).toEqual({ error: { code: word, message: refusal.message } });
+        }
+    });
+
+    it('answers somebody who cannot be asked in the very bytes a table’s invitation is refused with', async () =>
+    {
+        const refused = await post(teamedAs([], () => Promise.reject(partyRefused('no-invitee'))), '/parties', JSON.stringify({ id: 'mina', game: 'hokm' }));
+
+        expect(refused.status).toBe(404);
+        expect(await refused.text()).toBe(JSON.stringify({ error: { code: 'no-invitee', message: 'No one by that name can be invited.' } }));
+    });
+
+    it('answers an id that is no id in the very bytes of a team that is not there, whatever was asked of it', async () =>
+    {
+        const app = teamedAs([], () => Promise.reject(partyRefusal('party-missing')));
+        const answers = await Promise.all([`/parties/${ PARTY }/accept`, '/parties/not-a-uuid/accept', '/parties/not-a-uuid/decline', '/parties/x/leave'].map(async (path) =>
+        {
+            const response = await post(app, path);
+
+            return `${ response.status } ${ await response.text() }`;
+        }));
+
+        expect(new Set(answers).size).toBe(1);
+        expect(answers[0]).toMatch(/^404 /);
+    });
+
+    it('is nobody’s to ask without a session', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = teamedAs(told, () => Promise.resolve(state), null);
+
+        expect((await call(app, '/api/parties')).status).toBe(401);
+        expect((await post(app, '/parties', JSON.stringify({ id: 'mina', game: 'hokm' }))).status).toBe(401);
+        expect((await post(app, `/parties/${ PARTY }/accept`)).status).toBe(401);
+        expect((await post(app, `/parties/${ PARTY }/decline`)).status).toBe(401);
+        expect((await post(app, `/parties/${ PARTY }/leave`)).status).toBe(401);
+        expect(told).toEqual([]);
+    });
+
+    it('is five routes and no more: nothing here searches for a table yet', async () =>
+    {
+        const manifest = await (await call(teamedAs([]), '/api/_manifest')).json() as Record<string, Record<string, { method: string; path: string }>>;
+
+        expect(Object.entries(manifest.parties).map(([name, route]) => `${ name } ${ route.method } ${ route.path }`).sort()).toEqual([
+            'accept POST /parties/:id/accept',
+            'decline POST /parties/:id/decline',
+            'invite POST /parties',
+            'leave POST /parties/:id/leave',
+            'state GET /parties'
+        ]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+
+        expect(bodies).toMatch(/'\/parties': \(bad\) => \[/);
+
+        for (const path of ['/parties/:id/accept', '/parties/:id/decline', '/parties/:id/leave'])
+        {
+            expect(spared, path).toContain(`'${ path }'`);
+        }
     });
 });
 
