@@ -7,7 +7,7 @@ import { en } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { ACK_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
-import { PROBE_GRACE_MS, PROBE_MS, useRealtime } from '../src/stores/realtime.store.ts';
+import { NUDGE_WINDOW_MS, PROBE_GRACE_MS, PROBE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { ClientFrame, MatchView, ServerFrame } from '../src/api.ts';
 import { ApiError, client } from './fake-api.ts';
@@ -216,6 +216,199 @@ describe('playing over the socket', () =>
         socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: { ...board(9), id: 'match-2' }, events: [] });
 
         expect(useBoard().match()?.rev).toBe(1);
+    });
+});
+
+describe('a game that could not be fetched', () =>
+{
+    const failing = () =>
+    {
+        const fails = async (): Promise<MatchView> =>
+        {
+            throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+        };
+        let asks = 0;
+        let answer = fails;
+
+        matches.view = async () =>
+        {
+            asks += 1;
+
+            return await answer();
+        };
+
+        return {
+            asks: () => asks,
+            answers: (next: () => Promise<MatchView>) =>
+            {
+                answer = next;
+            },
+            fails: () =>
+            {
+                answer = fails;
+            }
+        };
+    };
+
+    const opened = async (id: string) =>
+    {
+        useBoard().open(id);
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        await settle();
+    };
+
+    beforeEach(async () =>
+    {
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+    });
+
+    it('is said to be lost, until it is fetched, and the board in hand meanwhile is still the last one that was', async () =>
+    {
+        const store = useBoard();
+        const view = failing();
+
+        expect(store.lost()).toBe(false);
+
+        await opened('match-2');
+
+        expect(view.asks()).toBe(1);
+        expect(store.match()?.id).toBe('match-1');
+        expect(store.lost()).toBe(true);
+
+        view.answers(async () => board(4, { id: 'match-2' }));
+        await store.refresh();
+        await settle();
+
+        expect(store.lost()).toBe(false);
+        expect(store.match()?.rev).toBe(4);
+    });
+
+    it('goes on being said through a doorbell\'s own ask, is taken back for the length of an ask made by hand, and for good once the game arrives', async () =>
+    {
+        const store = useBoard();
+        const view = failing();
+
+        await opened('match-2');
+
+        let fail = (): void => undefined;
+
+        view.answers(async () =>
+        {
+            await new Promise<void>((resolve) => fail = resolve);
+
+            throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+        });
+
+        const since = vi.fn(async () => ({ match: board(1), events: [] }));
+
+        matches.since = since;
+        socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'game', id: 'match-2', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(view.asks()).toBe(2), { timeout: 2000 });
+
+        expect(since).not.toHaveBeenCalled();
+        expect(store.lost()).toBe(true);
+
+        fail();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(store.lost()).toBe(true);
+
+        const again = store.refresh().catch(() => undefined);
+
+        await vi.waitFor(() => expect(view.asks()).toBe(3), { timeout: 2000 });
+
+        expect(store.lost()).toBe(false);
+
+        fail();
+        await again;
+        await settle();
+
+        expect(store.lost()).toBe(true);
+
+        view.answers(async () => board(4, { id: 'match-2' }));
+        socket.deliver({ v: 1, t: 'nudge', n: 4, scope: 'game', id: 'match-2', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(store.match()?.rev).toBe(4), { timeout: 2000 });
+
+        expect(store.lost()).toBe(false);
+    });
+
+    it('is not said of a game that is not there, which is an answer', async () =>
+    {
+        const store = useBoard();
+
+        matches.view = async () =>
+        {
+            throw new ApiError(404, 'not-found', 'No game there.', undefined);
+        };
+
+        await opened('match-2');
+
+        expect(store.match()).toBeNull();
+        expect(store.lost()).toBe(false);
+    });
+
+    it('is forgotten when another game is opened, when this one is closed and when the store is emptied', async () =>
+    {
+        const store = useBoard();
+        const view = failing();
+
+        await opened('match-2');
+
+        expect(store.lost()).toBe(true);
+
+        view.answers(async () => await new Promise<MatchView>(() => undefined));
+        store.open('match-3');
+
+        expect(store.lost()).toBe(false);
+
+        view.fails();
+        await opened('match-4');
+
+        expect(store.lost()).toBe(true);
+
+        store.close();
+
+        expect(store.lost()).toBe(false);
+
+        await opened('match-5');
+
+        expect(store.lost()).toBe(true);
+
+        store.reset();
+
+        expect(store.lost()).toBe(false);
+    });
+
+    it('says nothing of the open game when an ask for one opened before it fails late', async () =>
+    {
+        const store = useBoard();
+        const view = failing();
+        let fail = (): void => undefined;
+
+        view.answers(async () =>
+        {
+            await new Promise<void>((resolve) => fail = resolve);
+
+            throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+        });
+        store.open('match-2');
+        await vi.waitFor(() => expect(view.asks()).toBe(1), { timeout: 2000 });
+
+        view.answers(async () => board(7, { id: 'match-3' }));
+        store.open('match-3');
+        await vi.waitFor(() => expect(store.match()?.id).toBe('match-3'), { timeout: 2000 });
+
+        fail();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(store.lost()).toBe(false);
+        expect(store.match()?.id).toBe('match-3');
     });
 });
 

@@ -29,6 +29,7 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useBoard } from '../src/stores/match.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
@@ -636,6 +637,163 @@ describe('PlayPage', () =>
         {
             delete matches.view;
         }
+    });
+
+    describe('a game that is still being fetched', () =>
+    {
+        const lobbyOf = (container: HTMLElement) => container.querySelector<HTMLElement>(`section[aria-label="${ useLocale().t('play.title.lobby') }"]`);
+
+        const closing = (container: HTMLElement) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('play.close.confirm'));
+
+        const game = (tableId: string) => ({
+            id: 'match-21',
+            tableId,
+            game: 'chess',
+            rev: 1,
+            seats: 2,
+            players: [],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: { kind: 'ludo' }
+        });
+
+        const arriving = async (view: () => Promise<unknown>) =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+
+            server.tables.find((one) => one.id === id)!.matchId = 'match-21';
+            (client.matches as unknown as Record<string, unknown>).view = view;
+
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return { id, container };
+        };
+
+        afterEach(() =>
+        {
+            delete (client.matches as unknown as Record<string, unknown>).view;
+            useBoard().reset();
+        });
+
+        it('is not drawn as a waiting room: no chairs, no closing the table, a placeholder where the board will be', async () =>
+        {
+            let hand = (_match: unknown): void => undefined;
+            let asks = 0;
+            const { id, container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                return await new Promise((resolve) => hand = resolve);
+            });
+
+            expect(asks).toBe(1);
+            expect(lobbyOf(container)).toBeNull();
+            expect(closing(container)).toBeUndefined();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+
+            hand(game(id));
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(lobbyOf(container)).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+        });
+
+        it('says the game could not be fetched, and goes on saying so while the page asks again by itself', async () =>
+        {
+            let asks = 0;
+            let held: Promise<void> | null = null;
+            const { container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                if (held !== null)
+                {
+                    await held;
+                }
+
+                throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+            });
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            const alert = container.querySelector('[role="alert"]');
+            const before = asks;
+            let fail = (): void => undefined;
+
+            expect(lobbyOf(container)).toBeNull();
+            expect(closing(container)).toBeUndefined();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            held = new Promise((resolve) => fail = resolve);
+
+            const stop = useBoard().start();
+
+            try
+            {
+                socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'game', id: 'match-21', at: 0 });
+                clock.advance(NUDGE_WINDOW_MS);
+
+                await vi.waitFor(() => expect(asks).toBe(before + 1), { timeout: 4000 });
+
+                expect(container.querySelector('[role="alert"]')).toBe(alert);
+                expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+                fail();
+                await settle();
+
+                expect(container.querySelector('[role="alert"]')).toBe(alert);
+                expect(reloads).toBe(0);
+            }
+            finally
+            {
+                stop();
+            }
+        });
+
+        it('asks again when it is told to, draws the placeholder while it does, and the game when it comes', async () =>
+        {
+            let asks = 0;
+            let hand = (_match: unknown): void => undefined;
+            const { id, container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                if (asks === 1)
+                {
+                    throw new TypeError('Failed to fetch');
+                }
+
+                return await new Promise((resolve) => hand = resolve);
+            });
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            answering = true;
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(asks).toBe(2), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+            expect(reloads).toBe(0);
+
+            hand(game(id));
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(reloads).toBe(0);
+        });
     });
 
     describe('a chair while a game is being played', () =>
@@ -1655,6 +1813,7 @@ describe('PlayPage', () =>
 
             expect(server.calls).toContain('matches.watch');
             expect(container.textContent).not.toContain(useLocale().t('play.table.sitDown'));
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
         });
 
         it('draws no board for a game the server will not show, and keeps the page', async () =>
@@ -2451,6 +2610,53 @@ describe('PlayPage', () =>
             expect(ready).toBeGreaterThanOrEqual(0);
             expect(ready).toBeLessThan(server.calls.indexOf('tables.start'));
             expect(held.chairs[0].ready).toBe(true);
+        });
+
+        it('keeps the finished game on the table while the next one is fetched, and says so in its place when the next one cannot be', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+            const matches = client.matches as unknown as Record<string, unknown>;
+            let asks = 0;
+            let fail = (): void => undefined;
+            let next: () => Promise<unknown> = async () =>
+            {
+                await new Promise<void>((resolve) => fail = resolve);
+
+                throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+            };
+
+            matches.view = async () =>
+            {
+                asks += 1;
+
+                return await next();
+            };
+            held.matchId = `next-${ held.id }`;
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(asks).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('.bg-board')).not.toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+
+            fail();
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(container.querySelector('.bg-board')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            next = async () => ({ ...over(held.id), id: `next-${ held.id }`, rev: 1, winner: undefined, outcome: undefined, finishedAt: undefined, players: [{ seat: 0, who: 'alex', timeouts: 0 }, { seat: 1, who: 'sara.k', timeouts: 0 }] });
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(container.querySelector('.bg-board')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            expect(asks).toBe(2);
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(pressable(container, 'Play again')).toBeUndefined();
         });
 
         it('says a chair is free once the other player has left', async () =>

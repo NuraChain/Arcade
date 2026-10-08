@@ -312,6 +312,50 @@ describe('the waiting room of a table, fetched when it is wanted', () =>
         expect(container.querySelector('[role="alert"]')).toBeNull();
     });
 
+    it('is never asked for at a table with a game on, before the game has been fetched or after', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', defaultTable('ludo'), []);
+        const matches = client.matches as unknown as Record<string, unknown>;
+        let hand = (_match: unknown): void => undefined;
+
+        server.tables.find((one) => one.id === id)!.matchId = 'match-7';
+        await lobby.refresh();
+        matches.view = async () => await new Promise((resolve) => hand = resolve);
+
+        try
+        {
+            const before = asked.lobby;
+            const container = page(id);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            expect(asked.lobby).toBe(before);
+
+            hand({
+                id: 'match-7',
+                tableId: id,
+                game: 'chess',
+                rev: 1,
+                seats: 2,
+                players: [],
+                turn: 0,
+                mine: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo' }
+            });
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(asked.lobby).toBe(before);
+        }
+        finally
+        {
+            delete matches.view;
+        }
+    });
+
     it('takes the complaint back once a game is on the board, where no waiting room is wanted', async () =>
     {
         const lobby = useLobby();

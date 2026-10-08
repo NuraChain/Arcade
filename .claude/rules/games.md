@@ -2919,6 +2919,30 @@ the app that would not load*), and its complaint is drawn under the table's head
 game takes the page. `play-chunks.spec.ts` mounts the page with a waiting room and a watcher's board
 that never arrive - a module mock that throws - and counts the asks.
 
+**A game that is being fetched is not a waiting table.** The page drew the waiting room whenever it
+had no board in hand, so somebody arriving at a game in progress was shown the chairs, a Ready button
+and, as the host, "Close the table" until the game's own request answered - for 2.7 seconds on the
+production build with that request held back - and for good when the request failed, with nothing
+said. The page asks now whether it is BEHIND: seated at a table that says a game is on which is not
+the game in hand. Behind with nothing in hand (`dealing`) it draws the board's placeholder, the same
+one the board's chunk draws next, and the waiting room is neither drawn nor fetched. Behind with the
+LAST game still in hand it goes on showing that, which is what "Play again" has always looked like:
+the board store hands out the last game it fetched while the next is on its way (a resource keeps
+its value while another key loads), so the finished board stays until the next one takes its place.
+And behind with the store saying the game could not be fetched (`unfetched`), the complaint takes
+the board's place, with a Try again that asks for the game.
+
+**`board.lost()` is a latch, not the resource's error,** because the store asks again by itself - at
+every `game` doorbell, and every three seconds while the socket is down - and a resource clears its
+error while a request is in flight: read directly, the complaint was taken away and drawn again each
+time, a `role="alert"` announced every three seconds. A failed answer for the OPEN game sets it; an
+answer, an open, a close and `refresh()` clear it, and `refresh()` is the reader's own Try again.
+Those asks of the store's own went to the wrong game as well: `catchUp` asked `since` about
+whatever board was in hand, and with the last game still in hand that was the game that had ended,
+so a next game whose first fetch failed was never asked for again until a whole frame of it
+arrived. It asks for the open game whenever the board in hand is not that game. `loading`, `failed`
+and `refresh` had been declared on the store with no caller anywhere; the first two are gone.
+
 **`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
 shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise
 at a real table, clockwise on a screen looking down at one - so the next seat is drawn to the reader's

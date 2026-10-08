@@ -295,7 +295,11 @@ export default component PlayPage()
             .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed')), dedupe: 'table-voice' }));
     };
 
-    derived showing = board.match() !== null && board.match()!.tableId === table?.id;
+    derived behind = seated && table?.matchId !== undefined && board.match()?.id !== table?.matchId;
+
+    derived unfetched = behind && board.lost();
+
+    derived showing = !unfetched && board.match() !== null && board.match()!.tableId === table?.id;
 
     derived awake = showing && board.match()!.finishedAt === undefined;
 
@@ -331,7 +335,9 @@ export default component PlayPage()
 
     derived closed = table?.status === 'closed';
 
-    derived lobbyOpen = !showing && seated;
+    derived dealing = behind && !showing && !unfetched;
+
+    derived lobbyOpen = seated && !showing && !behind;
 
     derived standing = !seated && !showing && table !== null && table.matchId === undefined;
 
@@ -580,6 +586,17 @@ export default component PlayPage()
     };
 
     const reload = () => void reloadPage();
+
+    const retry = () =>
+    {
+        if (unfetched)
+        {
+            void board.refresh().catch(() => undefined);
+            return;
+        }
+
+        reload();
+    };
 
     effect
     {
@@ -932,8 +949,8 @@ export default component PlayPage()
                         { () => <Dynamic component={ Board! } props={ boardProps } /> }
                     </Show>
 
-                    <Show when={ playing !== '' && drawn !== playing && boardFailed }>
-                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
+                    <Show when={ unfetched || (playing !== '' && drawn !== playing && boardFailed) }>
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ retry } class="py-12" /> }
                     </Show>
 
                     <Show when={ playing !== '' && !drawable(playing) }>
@@ -949,7 +966,7 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
+                    <Show when={ dealing || (playing !== '' && drawable(playing) && drawn !== playing && !boardFailed) }>
                         { () =>
                             <div class="flex flex-col gap-3" aria-busy="true">
                                 <Skeleton class="aspect-[16/10] w-full rounded-hero" />
@@ -1031,7 +1048,7 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ amHost && !showing }>
+                    <Show when={ amHost && lobbyOpen }>
                         { () =>
                             <div class="flex">
                                 <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>

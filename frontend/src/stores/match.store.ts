@@ -43,8 +43,7 @@ export type Outcome = 'now' | 'already' | 'stale' | 'failed';
 export interface BoardApi
 {
     match: Getter<MatchView | null>;
-    loading: Getter<boolean>;
-    failed: Getter<unknown>;
+    lost: Getter<boolean>;
 
     open(matchId: string): void;
     close(): void;
@@ -124,17 +123,35 @@ export const useBoard = createStore((): BoardApi =>
     const [latest, setLatest] = createSignal<MatchView | null>(null);
     const [events, setEvents] = createSignal<EventBatch>({ seq: 0, events: [] });
 
+    const [lost, setLost] = createSignal(false);
+
+    const answered = (id: string, failed: boolean) =>
+    {
+        if (untrack(openId) === id)
+        {
+            setLost(failed);
+        }
+    };
+
     const viewing = createResource(
         () => (openId() === '' ? null : { id: openId(), who: who() }),
         async (current) =>
         {
             try
             {
-                return await client.matches.view({ params: { id: current.id } });
+                const match = await client.matches.view({ params: { id: current.id } });
+
+                answered(current.id, false);
+
+                return match;
             }
             catch (error)
             {
-                if (error instanceof ApiError && error.status === 404)
+                const missing = error instanceof ApiError && error.status === 404;
+
+                answered(current.id, !missing);
+
+                if (missing)
                 {
                     return null;
                 }
@@ -237,7 +254,7 @@ export const useBoard = createStore((): BoardApi =>
     {
         const current = untrack(board);
 
-        if (current === null)
+        if (current === null || current.id !== untrack(openId))
         {
             await revalidate();
             return;
@@ -302,18 +319,19 @@ export const useBoard = createStore((): BoardApi =>
 
     return {
         match: board,
-        loading: () => viewing.loading(),
-        failed: () => viewing.error(),
+        lost,
 
         openId,
 
         open(matchId)
         {
+            setLost(false);
             setOpenId(matchId);
         },
 
         close()
         {
+            setLost(false);
             setOpenId('');
         },
 
@@ -355,7 +373,12 @@ export const useBoard = createStore((): BoardApi =>
 
         resign: async () => await act(null),
 
-        refresh: revalidate,
+        refresh()
+        {
+            setLost(false);
+
+            return revalidate();
+        },
 
         /**
          * The doorbell for this board.
@@ -420,6 +443,7 @@ export const useBoard = createStore((): BoardApi =>
         reset()
         {
             setOpenId('');
+            setLost(false);
             setBusy(false);
             setLatest(null);
             setEvents({ seq: 0, events: [] });
