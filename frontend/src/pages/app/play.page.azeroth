@@ -32,6 +32,7 @@ import type { MatchView, MatchWatch } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
+import { chunk, reloadPage } from '../../lib/chunks.ts';
 import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
@@ -571,10 +572,7 @@ export default component PlayPage()
         });
     };
 
-    const redraw = () =>
-    {
-        draw(playing);
-    };
+    const reload = () => void reloadPage();
 
     effect
     {
@@ -624,15 +622,13 @@ export default component PlayPage()
     const drawWatch = () =>
     {
         watchAsked = true;
-        watchLost = false;
 
-        void import('../../components/games/watch-board.component.azeroth').then((module) =>
+        void chunk(() => import('../../components/games/watch-board.component.azeroth'))().then((module) =>
         {
             Watched = module.default;
             watchReady = true;
         }).catch(() =>
         {
-            watchAsked = false;
             watchLost = true;
         });
     };
@@ -641,7 +637,7 @@ export default component PlayPage()
     {
         if (Watched === null)
         {
-            drawWatch();
+            reload();
         }
         else
         {
@@ -908,7 +904,7 @@ export default component PlayPage()
                     </Show>
 
                     <Show when={ playing !== '' && drawn !== playing && boardFailed }>
-                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
                     </Show>
 
                     <Show when={ playing !== '' && !drawable(playing) }>
@@ -918,7 +914,7 @@ export default component PlayPage()
                                 title={ locale.t('match.cannotDraw') }
                                 lead={ locale.t('match.cannotDrawLead') }
                                 action={ locale.t('match.cannotDrawAction') }
-                                onAction={ () => draw(playing) }
+                                onAction={ reload }
                                 class="py-12"
                             />
                         }

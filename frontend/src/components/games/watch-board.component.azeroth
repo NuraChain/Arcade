@@ -1,8 +1,10 @@
 import { Dynamic, untrack } from 'azerothjs';
 
 import EmptyState from '../ui/empty-state.component.azeroth';
+import ErrorState from '../ui/error-state.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { reloadPage } from '../../lib/chunks.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { BOARDS, drawable, type BoardComponent } from './boards.ts';
@@ -27,20 +29,21 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     state drawn = '';
 
-    state attempt = 0;
+    state lost = false;
 
     derived game = props.watch.match.game;
 
     effect
     {
         const want = game;
-        void attempt;
         const load = BOARDS[want];
 
         if (load === undefined || want === untrack(() => drawn))
         {
             return;
         }
+
+        lost = false;
 
         void load().then((module) =>
         {
@@ -51,14 +54,13 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
             Board = module.default;
             drawn = want;
-        }).catch(() => undefined);
+        }).catch(() =>
+        {
+            lost = true;
+        });
     }
 
-    const retry = () =>
-    {
-        drawn = '';
-        attempt += 1;
-    };
+    const reload = () => void reloadPage();
 
     const MINUTE = 60;
 
@@ -94,14 +96,18 @@ export default component WatchBoard(props: { watch: MatchWatch })
                     title={ locale.t('match.cannotDraw') }
                     lead={ locale.t('match.cannotDrawLead') }
                     action={ locale.t('match.cannotDrawAction') }
-                    onAction={ retry }
+                    onAction={ reload }
                     class="py-12"
                 />
             }
         </Show>
 
-        <Show when={ drawable(game) && drawn !== game }>
+        <Show when={ drawable(game) && drawn !== game && !lost }>
             { () => <Skeleton class="aspect-[16/10] w-full rounded-hero" /> }
+        </Show>
+
+        <Show when={ drawable(game) && drawn !== game && lost }>
+            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
         </Show>
     </div>
 }

@@ -19,6 +19,7 @@ import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
 import { defaultTable } from '../src/data/tables.ts';
+import { resetChunks } from '../src/lib/chunks.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -86,12 +87,34 @@ vi.mock('../src/components/games/match-board.component.azeroth', () =>
 
 let clock: ManualClock;
 
+let reloads = 0;
+
+let answering = false;
+
+const reloaded = () =>
+{
+    reloads += 1;
+};
+
 beforeEach(() =>
 {
     cleanup();
     resetRuntime();
     clock = manualClock(400_000);
-    setRuntime({ clock, seed: 11 });
+    reloads = 0;
+    answering = false;
+    setRuntime({ clock, seed: 11, reload: reloaded });
+    sessionStorage.clear();
+    resetChunks();
+    vi.stubGlobal('fetch', async () =>
+    {
+        if (!answering)
+        {
+            throw new TypeError('Failed to fetch');
+        }
+
+        return { status: 200 };
+    });
     useLocale().setLocale('en');
     useSession().reset();
     useSession().establish({
@@ -125,6 +148,7 @@ afterEach(() =>
 {
     cleanup();
     useRealtime().reset();
+    vi.unstubAllGlobals();
 });
 
 describe('game artwork', () =>
@@ -476,7 +500,7 @@ describe('PlayPage', () =>
         expect(container.querySelector('a[href="/app/games"]')).not.toBeNull();
     });
 
-    it('says the board could not load, and offers to try again, when its chunk will not come', async () =>
+    it('says the board could not load when its chunk will not come and the server is not answering, and loads the page again once it is asked to and the server is back', async () =>
     {
         const lobby = useLobby();
         const id = await lobby.host('ludo', defaultTable('ludo'), []);
@@ -509,14 +533,60 @@ describe('PlayPage', () =>
             const alert = container.querySelector('[role="alert"]');
             expect(alert?.textContent).toContain(useLocale().t('state.errorTitle'));
             expect(chunk.asked).toBe(asked + 1);
+            expect(reloads).toBe(0);
 
             fire(alert!.querySelector('button')!, 'click');
+            await settle();
 
-            await vi.waitFor(() => expect(chunk.asked).toBe(asked + 2), { timeout: 4000 });
-            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+            expect(reloads).toBe(0);
+            expect(chunk.asked).toBe(asked + 1);
+            expect(container.querySelector('[role="alert"]')).toBe(alert);
 
-            expect(chunk.asked).toBe(asked + 2);
-            expect(container.querySelector('[role="alert"]')).not.toBeNull();
+            answering = true;
+            fire(alert!.querySelector('button')!, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+
+            expect(chunk.asked).toBe(asked + 1);
+        }
+        finally
+        {
+            delete matches.view;
+        }
+    });
+
+    it('loads the page again by itself when the board will not come and the server answers, and draws no complaint on the way', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', defaultTable('ludo'), []);
+        server.tables.find((one) => one.id === id)!.matchId = 'match-1';
+        const matches = client.matches as unknown as Record<string, unknown>;
+        matches.view = async () => ({
+            id: 'match-1',
+            tableId: id,
+            game: 'ludo',
+            rev: 1,
+            seats: 4,
+            players: [],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: { kind: 'ludo' }
+        });
+        answering = true;
+
+        try
+        {
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(reloads).toBe(1);
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
         }
         finally
         {
@@ -554,6 +624,13 @@ describe('PlayPage', () =>
 
             expect(chunk.asked).toBe(asked);
             expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
+
+            answering = true;
+            fire(reload, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
         }
         finally
         {
@@ -2373,6 +2450,80 @@ describe('PlayPage', () =>
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
         expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo', 'poker']);
+    });
+
+    describe('a watched game whose page cannot draw it', () =>
+    {
+        const watching = (game: string) => ({
+            match: {
+                id: 'watched',
+                tableId: 'somewhere',
+                game,
+                rev: 3,
+                seats: 2,
+                players: [],
+                turn: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
+            },
+            behind: 30,
+            delay: 30,
+            live: true
+        } as MatchWatch);
+
+        const settle = async () =>
+        {
+            for (let i = 0; i < 12; i += 1)
+            {
+                await Promise.resolve();
+            }
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        };
+
+        it('loads the page again from its Reload, which is what fetches a copy that can', async () =>
+        {
+            const { container } = renderTest(() => WatchBoard({ watch: watching('chess') }) as Rendered);
+            const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
+
+            fire(reload, 'click');
+            await settle();
+
+            expect(reloads).toBe(0);
+
+            answering = true;
+            fire(reload, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+        });
+
+        it('says the board could not load when its chunk will not come, where it drew a placeholder for ever, and loads the page again when asked', async () =>
+        {
+            const asked = chunk.asked;
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo') }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(chunk.asked).toBe(asked + 1);
+            expect(container.querySelector('.animate-pulse')).toBeNull();
+            expect(reloads).toBe(0);
+
+            answering = true;
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+        });
+
+        it('loads the page again by itself when that board will not come and the server answers', async () =>
+        {
+            answering = true;
+
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo') }) as Rendered);
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+        });
     });
 
     it('is the same for a conversation replaced by another one while it leaves', async () =>

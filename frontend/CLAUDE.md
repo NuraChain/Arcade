@@ -882,6 +882,57 @@ else does not.
 **Touch is not an afterthought.** Anything a finger hits clears 44px — use the `coarse:` variant
 rather than growing the control for everyone. `npm run qa` fails the build if it does not.
 
+## A part of the app that would not load
+
+**Chromium keeps a failed `import()` for as long as the document lives.** Ask again for the same
+module and it rejects at once, with no request sent. Measured on the production build in Chrome 154,
+a chunk's request aborted once and then let through: the second `import()` of the same address
+failed in the same tick and the network stayed quiet. Firefox and Safari ask again. So every "Try
+again" drawn over a chunk that had not come - a board's, a watcher's board's - did nothing in the
+browser most people use; the full-screen error page's button drew the same error again; and a tab
+left open across a deploy, whose chunks are gone from the server, lost every page and sheet it had
+not already fetched, one press at a time. No spec saw it: a module mock that throws is run again on
+every import.
+
+**The one way back is loading the page, and `lib/chunks.ts` is the one place that decides to.**
+
+- *By itself, once.* The build's preload helper raises `vite:preloadError` on `window` for every
+  dynamic import that fails, and `watchChunks()` in `main.azeroth` hears it - started before the
+  first lazy load there is, the Persian catalogue. The page is loaded again when the SERVER ANSWERS
+  (`GET /api/auth/me`, any status under 500, five seconds to say so) and the page has not loaded
+  itself again in the last minute (`RELOAD_GAP_MS`, noted in `sessionStorage`). A dead origin
+  answered with a reload is the browser's own error page in place of an app that would have
+  recovered, which is why the server is asked; and where the note cannot be read or written nothing
+  is automatic, because a reload that cannot remember itself is a loop. Several parts lost in the
+  same moment ask the server once.
+- *When it is asked to.* `reloadPage()` is every Try again over a lost chunk, the "Reload" of a
+  game this copy cannot draw (which called a function that returned at once), and the error page's
+  button, which falls back to the boundary's `reset` when the server is not answering. It ignores
+  the minute and still asks the server first; a press that reloads nothing leaves the complaint
+  where it was.
+- *Without a flash.* `chunk(load)` wraps a dynamic import whose failure would otherwise be DRAWN
+  for the moment a reload takes: it waits for the decision and, when the page is going, never
+  settles, so a route stays pending on the page it was leaving and a board stays its placeholder.
+  Every `lazy:` in `routes.ts` goes through it (`chunks.spec.ts` reads the file), and so do the
+  board loaders in `boards.ts` and the chunks the table page fetches for itself.
+
+A sheet opened by a press (the finder, the invite sheet, a message's actions) is not wrapped: it
+toasts "That did not go through" for the moment the reload takes, or for good while the server is
+silent. `runtime().reload` is the seam the specs count, and the typed `api` client is not what asks
+the server, because `lib/chunks.ts` is in the landing's initial chunk and the client must not be.
+
+**Nothing asks for a lost chunk twice.** The watcher's board on the table page used to be asked for
+again by every re-read of the table; in Chromium each of those failed without a request and drew
+the complaint again. And a watcher whose GAME's board would not come was shown a placeholder for
+ever; it says so now, with the same Try again.
+
+**Measured on the production build**, a chunk's request aborted in Chromium: a lost lobby, a lost
+board, a lost page and a lost sheet each load the page again once; the error page is never drawn on
+the way to a page whose chunk was lost (polled every 40 ms); a second loss inside the minute stays
+and says so; Try again loads the page whatever the minute says, and the part is there once its
+request goes through; and with `/api/auth/me` aborted as well nothing reloads, no note is written,
+and the page goes on saying so.
+
 ## Performance
 
 **`npm run build` fails on these now.** `tools/budgets.mjs` runs after the build steps, gzips the

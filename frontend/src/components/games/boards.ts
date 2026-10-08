@@ -1,6 +1,7 @@
 import type { MountNode } from 'azerothjs';
 
 import type { MatchView, TableSummary } from '../../api.ts';
+import { chunk } from '../../lib/chunks.ts';
 
 export interface Rematch
 {
@@ -36,10 +37,10 @@ export interface BoardProps
 export type BoardComponent = (props: BoardProps) => MountNode;
 
 export const BOARDS: Readonly<Record<string, () => Promise<{ default: BoardComponent }>>> = {
-    ludo: () => import('./match-board.component.azeroth'),
-    hokm: () => import('./hokm-board.component.azeroth'),
-    backgammon: () => import('./backgammon-board.component.azeroth'),
-    poker: () => import('./poker-board.component.azeroth')
+    ludo: chunk(() => import('./match-board.component.azeroth')),
+    hokm: chunk(() => import('./hokm-board.component.azeroth')),
+    backgammon: chunk(() => import('./backgammon-board.component.azeroth')),
+    poker: chunk(() => import('./poker-board.component.azeroth'))
 };
 
 export const drawable = (game: string) => Object.hasOwn(BOARDS, game);

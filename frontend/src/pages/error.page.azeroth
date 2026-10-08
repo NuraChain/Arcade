@@ -2,6 +2,7 @@ import BrandLogo from '../components/layout/brand-logo.component.azeroth';
 import BrandMark from '../components/layout/brand-mark.component.azeroth';
 import Button from '../components/ui/button.component.azeroth';
 import Icon from '../icons/icon.component.azeroth';
+import { reloadPage } from '../lib/chunks.ts';
 import { useLocale } from '../stores/locale.store.ts';
 
 export default component ErrorPage(props: { reset: () => void; error?: unknown })
@@ -17,6 +18,14 @@ export default component ErrorPage(props: { reset: () => void; error?: unknown }
         }
         return error instanceof Error ? `${ error.name }: ${ error.message }` : String(error);
     })();
+
+    const again = async () =>
+    {
+        if (!await reloadPage())
+        {
+            props.reset();
+        }
+    };
 
     mount
     {
@@ -45,7 +54,7 @@ export default component ErrorPage(props: { reset: () => void; error?: unknown }
             </Show>
 
             <div class="mt-7 flex justify-center">
-                <Button variant="primary" size="lg" leading="refresh" onClick={ () => props.reset() }>{ locale.t('error.cta') }</Button>
+                <Button variant="primary" size="lg" leading="refresh" onClick={ () => void again() }>{ locale.t('error.cta') }</Button>
             </div>
         </section>
     </main>
