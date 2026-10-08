@@ -45,13 +45,15 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
     derived linked = link === 'online' || link === 'restored';
 
-    <header class={ () => [ '@container min-w-0', props.class ?? '' ].filter(Boolean).join(' ') }>
+    <header class={ () => [ '@container/head min-w-0', props.class ?? '' ].filter(Boolean).join(' ') }>
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-            <div class="flex min-w-0 flex-1 items-center gap-3">
+            <div class="@container/title flex min-w-0 flex-1 items-center gap-3">
                 <IconButton icon="back" label={ locale.t('app.nav.back') } onClick={ goBack } flip class="shrink-0" />
-                <GameIcon game={ props.table.game as GameId } class="h-10 w-10 shrink-0" />
+                <span class="hidden shrink-0 @min-[14rem]/title:block">
+                    <GameIcon game={ props.table.game as GameId } class="h-10 w-10" />
+                </span>
                 <div class="min-w-0 flex-1">
-                    <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>
+                    <h1 class="truncate text-ui-lg font-bold text-text @min-[14rem]/title:text-ui-xl">{ nameOf(props.table.game) }</h1>
                     <p class="flex min-w-0 items-center gap-2 text-ui-xs text-muted">
                         <Show
                             when={ linked }
@@ -71,18 +73,18 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                         { () =>
                                             <span class="flex shrink-0 items-center gap-1 text-accent">
                                                 <Icon name="voice" size={ 12 } />
-                                                <span class="hidden @md:inline">{ locale.t('voice.tableHas') }</span>
-                                                <span class="sr-only @md:hidden">{ locale.t('voice.tableHas') }</span>
+                                                <span class="hidden @md/head:inline">{ locale.t('voice.tableHas') }</span>
+                                                <span class="sr-only @md/head:hidden">{ locale.t('voice.tableHas') }</span>
                                             </span>
                                         }
                                     </Show>
                                 </>
                             }
                         </Show>
-                        <span class="hidden h-1 w-1 shrink-0 rounded-full bg-faint @2xl:block" aria-hidden="true"></span>
+                        <span class="hidden h-1 w-1 shrink-0 rounded-full bg-faint @2xl/head:block" aria-hidden="true"></span>
                         <button
                             type="button"
-                            class="tally -my-3 hidden min-h-11 shrink-0 @2xl:flex cursor-pointer items-center gap-1 rounded-control px-1 font-semibold uppercase tracking-wide text-muted transition-colors hover:text-text"
+                            class="tally -my-3 hidden min-h-11 shrink-0 @2xl/head:flex cursor-pointer items-center gap-1 rounded-control px-1 font-semibold uppercase tracking-wide text-muted transition-colors hover:text-text"
                             aria-label={ locale.t('play.dock.copy', { code: props.table.code.toUpperCase() }) }
                             onClick={ () => copyCode() }
                         >

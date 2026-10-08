@@ -527,6 +527,39 @@ record('somebody who reloads is out of the call, and the others are three', awai
 await mina.page.getByRole('button', { name: 'Join voice' }).first().click();
 record('and is back in it with all three once they join again', await together(four), await toldOf(four));
 
+const named = (page) => page.evaluate(() =>
+{
+    const title = document.querySelector('main header h1');
+
+    return title === null
+        ? { width: 0, cut: true }
+        : { width: Math.round(title.getBoundingClientRect().width), cut: title.scrollWidth > title.clientWidth + 1 };
+});
+
+const NAME_FLOOR = 48;
+const phones = {};
+
+for (const width of [390, 360])
+{
+    await dana.page.setViewportSize({ width, height: 780 });
+    await wait(500);
+    phones[`${ width } in the call`] = await named(dana.page);
+}
+
+await dana.page.getByRole('button', { name: 'Leave voice' }).first().click();
+await until(async () => (await dana.page.getByRole('button', { name: 'Join voice' }).count()) > 0);
+
+for (const width of [390, 360])
+{
+    await dana.page.setViewportSize({ width, height: 780 });
+    await wait(500);
+    phones[`${ width } offered the call`] = await named(dana.page);
+}
+
+record('on a phone the table keeps its name in the header beside the call, whole',
+    Object.values(phones).every((seen) => seen.width >= NAME_FLOOR && !seen.cut), JSON.stringify(phones));
+await dana.page.setViewportSize({ width: 1280, height: 900 });
+
 for (const one of four)
 {
     await one.context.request.post(`${ BASE }/api/tables/${ round.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);

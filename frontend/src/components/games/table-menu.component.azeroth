@@ -21,6 +21,8 @@ export default component TableMenu(props: OverlayProps & {
     full: boolean;
     voice?: boolean;
     onVoice?: () => void;
+    deaf?: boolean;
+    onDeafen?: () => void;
     onFullscreen?: () => void;
     onResign?: () => void;
     onLeave?: () => void;
@@ -74,6 +76,16 @@ export default component TableMenu(props: OverlayProps & {
                 icon: props.voice ? 'voice-off' : 'voice',
                 label: locale.t(props.voice ? 'voice.hostOff' : 'voice.hostOn'),
                 run: () => props.onVoice?.()
+            });
+        }
+
+        if (props.deaf !== undefined && props.onDeafen !== undefined)
+        {
+            list.push({
+                id: 'deafen',
+                icon: props.deaf ? 'deafen' : 'listen',
+                label: locale.t(props.deaf ? 'voice.undeafen' : 'voice.deafen'),
+                run: () => props.onDeafen?.()
             });
         }
 

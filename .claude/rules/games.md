@@ -2932,6 +2932,23 @@ poker reader's at 236x295, under both floors, so `watchFold` folds it whenever t
 its floor with the sheet closed, and unfolds it only when the screen's height changes - folding grows
 the board, so a fold re-judged on every layout would fold and unfold forever.
 
+**The title row keeps the game's name on a phone, whatever else is in it.** A table with voice puts
+the call in that row, and the row gave way in the wrong order: every control is `shrink-0` and the
+name was the one thing that could shrink. At 390 the "Join voice" button was 118 px of the row and
+the name had 36; in the call the four controls left it 6, and at 360 none - a header that read
+"… '" where the game's name should be, seen in a Persian screenshot with four people talking. Now
+the name is the last to go. On a narrow header the Join button is its icon (the words stay in the
+button for a screen reader, `sr-only @md:not-sr-only`); the call shows the microphone and the
+hang-up, and "Stop hearing everybody" and the count of others come back at `@md`; the game's icon
+is drawn only while the block it shares with the name is at least 14rem, and the name drops one
+size with it. That block is a container of its own (`@container/title`), which is why the header's
+is named (`/head`) and the queries inside the block say so: a container between them would
+otherwise answer for the header. On a phone "Stop hearing everybody" is in the table's sheet, for
+somebody in the call (`TableDock` hands it to `TableMenu`). Measured on a production build before
+joining and in the call, in both languages: at 360 the name has 138 px and 88, at 390 168 and 118,
+at 430 156 and 158; the one name still cut is "Backgammon" in a call at 360. `voice-pass` measures
+it at 390 and 360 with four people in the call.
+
 The rule is about which way the SPARE ROOM runs, not about width. It used to float the card at
 every width above a phone and make room only at sidebar width, so a phone turned sideways (844x390,
 which is rail posture) opened a 23rem card straight over the board, and an upright tablet did the

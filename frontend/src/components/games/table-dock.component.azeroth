@@ -4,6 +4,7 @@ import IconButton from '../ui/icon-button.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 
 const canFullscreen = () =>
     typeof document !== 'undefined' && document.fullscreenEnabled === true;
@@ -30,6 +31,7 @@ export default component TableDock(props: {
     const locale = useLocale();
     const settings = useSettings();
     const overlay = useOverlay();
+    const voice = useVoice();
 
     state full = false;
 
@@ -72,6 +74,7 @@ export default component TableDock(props: {
                 code: props.code ?? '',
                 full,
                 ...(props.hostVoice === undefined || props.onHostVoice === undefined ? {} : { voice: props.hostVoice, onVoice: props.onHostVoice }),
+                ...(props.voice !== undefined && voice.table() === props.voice ? { deaf: voice.deaf(), onDeafen: () => voice.toggleDeafen() } : {}),
                 ...(canFullscreen() ? { onFullscreen: toggleFull } : {}),
                 ...(props.onResign === undefined ? {} : { onResign: props.onResign }),
                 ...(props.onLeave === undefined ? {} : { onLeave: props.onLeave })

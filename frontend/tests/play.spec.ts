@@ -1840,6 +1840,64 @@ describe('PlayPage', () =>
 
             expect(offers(), 'a Join button for the call of a table the reader has left').toHaveLength(0);
         });
+
+        it('lets somebody in the call stop hearing everybody from the table\'s sheet, where a phone\'s bar has no room for it', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+            await useVoice().join(id);
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const menu = () => [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!;
+
+            fire(menu(), 'click');
+
+            const first = useOverlay().top()!;
+
+            expect(first.props.deaf).toBe(false);
+            (first.props.onDeafen as () => void)();
+            useOverlay().close(first.id, undefined);
+
+            expect(useVoice().deaf()).toBe(true);
+
+            fire(menu(), 'click');
+
+            expect(useOverlay().top()!.props.deaf).toBe(true);
+
+            useOverlay().reset();
+        });
+
+        it('offers no such thing from the sheet to somebody who is not in the call', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            expect(useOverlay().top()!.props.onDeafen).toBeUndefined();
+            expect(useOverlay().top()!.props.deaf).toBeUndefined();
+
+            useOverlay().reset();
+        });
+
+        it('keeps the name on the button that joins the call when the button is only its icon', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const join = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Join voice')!;
+            const word = [...join.querySelectorAll('span')].find((one) => one.textContent?.trim() === 'Join voice')!;
+
+            expect(word.className).toContain('sr-only');
+            expect(word.className).toContain('@md:not-sr-only');
+        });
     });
 
     describe('where a toast is drawn at a table', () =>
@@ -2669,6 +2727,32 @@ describe('the table’s chat and its controls', () =>
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;
 
         expect(container.textContent).not.toContain('Give up');
+    });
+
+    it.each([
+        [false, 'Stop hearing everybody'],
+        [true, 'Hear everybody again']
+    ] as const)('offers the hearing of a call in the sheet to somebody in one (deaf: %s)', (deaf, label) =>
+    {
+        const close = vi.fn();
+        const deafen = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, deaf, onDeafen: deafen }) as Rendered).container;
+        const entry = [...container.querySelectorAll('ul button')].find((one) => one.textContent?.trim() === label);
+
+        expect(entry, [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim()).join(' | ')).toBeDefined();
+
+        fire(entry as HTMLElement, 'click');
+
+        expect(deafen).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers nothing about hearing in the sheet to somebody who is not in a call', () =>
+    {
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;
+
+        expect(container.textContent).not.toContain('hearing everybody');
+        expect(container.textContent).not.toContain('Hear everybody');
     });
 
     it('offers leaving the table from the sheet once a game is on the board, last of all', () =>
