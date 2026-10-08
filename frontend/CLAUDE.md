@@ -651,6 +651,20 @@ they are on the game's page and in Home's hero, where the choice can be made. `G
 `GameGrid` take no handler at all now, so a card cannot be given one by accident;
 `play.spec.ts` presses the card and wants a navigation and no request.
 
+**"See all" opens the whole of what the section showed the first few of.** The owner pressed it
+beside Discover's "People you may know" and was shown their own friends: the link named the Friends
+page and the page opened on its first tab. Read across the app, four were off the same way and one
+was missing. Discover's people go to `/app/friends?tab=suggestions`, where every suggestion is
+listed and paged; its groups, which showed twelve and had no way to the rest, go to
+`?tab=groups`; "Friends online" on Home and in the right panel goes to `?tab=online`, where it
+opened everybody; and Home's "Recent games" goes to `/app/me?tab=games`, where it opened the
+reader's medals. That last one needed the profile's tab in the address, as the Friends page's has
+been since a toast first had to name one: `me.page` reads `?tab=`, falls back to Achievements for
+a name it does not have, and writes a pressed tab with `replace`, so Back leaves the page rather
+than walking its tabs. **The rule for the next list: a tab that a link has to reach lives in the
+address, and a "See all" names it.** `see-all.spec.ts` presses each one and wants the tab chosen
+and the list on it.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table

@@ -1,4 +1,4 @@
-import { createResource, useHead } from 'azerothjs';
+import { createResource, useHead, useNavigate, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
@@ -24,6 +24,8 @@ import { useRecord } from '../../stores/record.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 
+const TABS = ['achievements', 'games'];
+
 export default component MePage()
 {
     const locale = useLocale();
@@ -33,7 +35,12 @@ export default component MePage()
     const record = useRecord();
     const session = useSession();
 
-    state tab = 'achievements';
+    const { replace } = useNavigate();
+    const address = useQuery();
+
+    derived tab = TABS.find((one) => one === address().tab) ?? 'achievements';
+
+    const show = (id: string) => replace(id === 'achievements' ? '/app/me' : `/app/me?tab=${ id }`);
 
     const PARTS: Record<string, RecordPart[]> = {
         achievements: ['achievements'],
@@ -185,7 +192,7 @@ export default component MePage()
                         <Tabs
                             label={ locale.t('me.tabs') }
                             value={ tab }
-                            onChange={ (id) => tab = id }
+                            onChange={ show }
                             items={ [
                                 { id: 'achievements', label: locale.t('me.tab.achievements') },
                                 { id: 'games', label: locale.t('me.tab.games') }

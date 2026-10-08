@@ -52,7 +52,7 @@ export default component DiscoverPage()
 
         <div class="flex flex-col gap-8">
             <section>
-                <SectionHeading title={ locale.t('discover.people') } more={ locale.t('common.seeAll') } to="/app/friends" />
+                <SectionHeading title={ locale.t('discover.people') } more={ locale.t('common.seeAll') } to="/app/friends?tab=suggestions" />
                 <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5 @7xl:grid-cols-6" aria-label={ locale.t('discover.people') }>
                     <For each={ suggestions } key={ (person) => person.id } let={ person }>
                         <li class="flex min-w-0">
@@ -68,7 +68,7 @@ export default component DiscoverPage()
             </section>
 
             <section>
-                <SectionHeading title={ locale.t('discover.rooms') } />
+                <SectionHeading title={ locale.t('discover.rooms') } more={ locale.t('common.seeAll') } to="/app/friends?tab=groups" />
                 <Show
                     when={ joinable }
                     fallback={ <EmptyState icon="people" title={ locale.t('discover.roomsEmpty') } lead={ locale.t('discover.roomsEmptyLead') } class="rounded-panel border border-dashed border-line py-8" /> }

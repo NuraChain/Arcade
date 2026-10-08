@@ -77,7 +77,7 @@ export default component SocialPanel()
         </section>
 
         <section aria-labelledby="panel-friends">
-            <SectionHeading id="panel-friends" title={ locale.t('home.friends.title') } more={ locale.t('common.seeAll') } to="/app/friends" class="mb-1" />
+            <SectionHeading id="panel-friends" title={ locale.t('home.friends.title') } more={ locale.t('common.seeAll') } to="/app/friends?tab=online" class="mb-1" />
             <Show
                 when={ around }
                 fallback={ <p class="py-2 text-ui-sm text-muted">{ locale.t('shell.friends.empty') }</p> }

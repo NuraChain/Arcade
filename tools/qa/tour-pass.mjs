@@ -675,6 +675,18 @@ try
 
         record('Discover suggests somebody to add', await soon(async () => await add.count() > 0, 8000));
 
+        const seeAll = (title) => page.locator('main section').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).getByRole('link', { name: 'See all', exact: true });
+        const whole = page.getByRole('list', { name: 'Suggestions', exact: true });
+
+        record('Discover\'s See all beside the people it suggests names the Suggestions tab', await seeAll('People you may know').getAttribute('href').catch(() => null) === '/app/friends?tab=suggestions');
+        await seeAll('People you may know').click();
+        record('following it opens Friends on Suggestions, with everybody suggested', await soon(async () => path(page) === '/app/friends'
+            && await page.getByRole('tab', { name: 'Suggestions', selected: true }).count() > 0
+            && await whole.getByRole('button', { name: 'Add friend', exact: true }).count() > 0, 8000), path(page));
+        await go(page, '/app/discover');
+        record('Discover\'s See all beside the groups it shows names the Groups tab', await seeAll('Groups worth joining').getAttribute('href').catch(() => null) === '/app/friends?tab=groups');
+        await soon(async () => await add.count() > 0, 8000);
+
         await page.route('**/api/social/requests', async (route) =>
         {
             if (route.request().method() === 'POST')

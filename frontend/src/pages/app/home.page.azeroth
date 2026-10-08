@@ -174,7 +174,7 @@ export default component HomePage()
                 </Show>
 
                 <section class={ () => sitting ? '' : '@3xl:col-span-2' } aria-labelledby="home-recent">
-                    <SectionHeading id="home-recent" title={ locale.t('home.recent.title') } more={ locale.t('common.seeAll') } to="/app/me" />
+                    <SectionHeading id="home-recent" title={ locale.t('home.recent.title') } more={ locale.t('common.seeAll') } to="/app/me?tab=games" />
                     <Show
                         when={ played }
                         fallback={
@@ -217,7 +217,7 @@ export default component HomePage()
 
             <Show when={ !panelShown }>
                 <section aria-labelledby="home-friends">
-                    <SectionHeading id="home-friends" title={ locale.t('home.friends.title') } more={ locale.t('common.seeAll') } to="/app/friends" />
+                    <SectionHeading id="home-friends" title={ locale.t('home.friends.title') } more={ locale.t('common.seeAll') } to="/app/friends?tab=online" />
                     <Show
                         when={ friends.length > 0 }
                         fallback={ <p class="rounded-panel border border-dashed border-line px-4 py-5 text-ui-sm text-muted">{ locale.t('shell.friends.empty') }</p> }
