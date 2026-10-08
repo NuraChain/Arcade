@@ -117,6 +117,10 @@ export default component FriendsPage()
 
     derived asked = incoming.length > 0 || outgoing.length > 0;
 
+    derived received = incoming.length > 0;
+
+    derived pending = outgoing.length > 0;
+
     derived suggested = allSuggestions.length > 0;
 
     derived grouped = groups.mine().length > 0;
@@ -263,7 +267,7 @@ export default component FriendsPage()
                 >
                     { () =>
                         <div class="flex flex-col gap-6">
-                            <Show when={ incoming.length > 0 }>
+                            <Show when={ received }>
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.incoming') }>
                                     <For each={ incoming } key={ (request) => request.id } let={ request }>
                                         <li>
@@ -288,7 +292,7 @@ export default component FriendsPage()
                                 </ul>
                             </Show>
 
-                            <Show when={ outgoing.length > 0 }>
+                            <Show when={ pending }>
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.outgoing') }>
                                     <For each={ outgoing } key={ (request) => request.id } let={ request }>
                                         <li>

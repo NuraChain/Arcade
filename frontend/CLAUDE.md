@@ -572,6 +572,12 @@ again. An array is as fresh as a row: a condition that counts one is a derived b
 the rows are the keyed list's to keep. `friends-page.spec.ts` holds the field, the reader in it and
 the rows through a re-read and through typing.
 
+It had it a third time, on the Requests tab, and a test written for something else found it. The
+two lists there sat under `when={ incoming.length > 0 }` and `when={ outgoing.length > 0 }`
+with their markup straight inside, so answering one request drew every other one again, the row
+somebody was about to press included. They read `received` and `pending` now, and the spec
+answers one request and sends another and wants the rows that stay to be the nodes they were.
+
 The notifications page shows what a rebuild costs when the reader is not at the top. Its list and
 its filter were branches over the notifications array, so opening, dismissing or receiving one built
 every row again: dismissing the last of a long list left the reader a third of a screen above where

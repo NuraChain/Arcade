@@ -308,6 +308,35 @@ describe('the friends page', () =>
         expect(rowOf(container, 'sara.k')).toBe(sara);
     });
 
+    it('keeps the requests that stay when one of them is answered or taken back', async () =>
+    {
+        const container = await mounted();
+        const social = useSocial();
+
+        await choose(container, useLocale().t('friends.tab.requests'));
+
+        const stays = rowOf(container, 'hamed.z');
+        const sent = rowOf(container, 'maya.c');
+        const lists = [...container.querySelectorAll('ul')];
+
+        expect(stays).not.toBeNull();
+        expect(sent).not.toBeNull();
+
+        await social.accept(social.incoming().find((request) => request.from === 'mahsa')!.id);
+        await settle();
+
+        expect(rowOf(container, 'mahsa')).toBeNull();
+        expect(rowOf(container, 'hamed.z')).toBe(stays);
+        expect(rowOf(container, 'maya.c')).toBe(sent);
+        expect([...container.querySelectorAll('ul')]).toEqual(lists);
+
+        await social.add('sina.g');
+        await settle();
+
+        expect(rowOf(container, 'maya.c')).toBe(sent);
+        expect(rowOf(container, 'hamed.z')).toBe(stays);
+    });
+
     it('opens the sheet to play with a friend from their row, with a team-up on offer, and opens no table by itself', async () =>
     {
         useOverlay().reset();
