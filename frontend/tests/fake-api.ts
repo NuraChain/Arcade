@@ -1994,6 +1994,17 @@ export const client =
         async request({ input }: { input: { id: string } })
         {
             server.calls.push('social.request');
+
+            const theirs = server.incoming.find((one) => one.from === input.id);
+
+            if (theirs !== undefined)
+            {
+                server.incoming = server.incoming.filter((one) => one !== theirs);
+                server.friends.push(input.id);
+
+                return { outcome: 'accepted' as const };
+            }
+
             counter += 1;
             server.outgoing.push({
                 id: `req-out-${ counter }`,

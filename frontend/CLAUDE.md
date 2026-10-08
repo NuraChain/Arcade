@@ -764,7 +764,10 @@ one order the server never sends. The tracker keeps the ids it has been shown (`
 for the first one it has not, the specs' server orders requests as the server does, and a test adds
 a request with `knock`, which makes it the newest and says nothing about where it goes in the list.
 Ids shown while the socket is down are kept like any others, so a request read in during a
-reconnect is still recovery and not news.
+reconnect is still recovery and not news. It is also what lets the social store take a guess back:
+a request the reader pressed away, and the server refused, returns to the list under an id the
+tracker has already been shown. Counted, it was an arrival, with a toast and a chime, naming
+somebody else - found in the real browser with a decline held and then refused, not by a spec.
 
 **A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
 server starts the game when the last chair fills, which can be minutes later and on another page, and
@@ -894,11 +897,38 @@ decides and nothing chance decides (*Every board answers the press before the se
 start. Nothing that takes the reader off the page is: leaving a table, closing one, giving up. And a
 message is already drawn as it is sent.
 
-So far: the lobby's Ready and the result panel's Play again. `guess.spec.ts` holds the layer;
+The first two were the lobby's Ready and the result panel's Play again. `guess.spec.ts` holds the layer;
 `tables.spec.ts` (*what the reader did at a table, shown before the server has said so*) the store,
 with the request held, refused, sent twice and answered by a table that then cannot be read;
 `lobby-panel.spec.ts` (*the button that says ready*) the button, which is the same node
 throughout, and the sentence in both languages; `play.spec.ts` Play again on the page.
+
+**Everything the reader does about another person is shown the same way**: a friend request
+sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
+store lays its guesses over ONE shape made from the graph (`Known`: who is a friend, who is
+blocked, the requests each way), so `relation(id)` and the four lists cannot disagree for the
+length of a request. Each guess is written to change nothing once the truth holds what it guessed:
+a request already out is not added a second time, and somebody already a friend is not listed
+twice, which is what keeps the moment between the answer and the layer going from showing
+anything twice.
+
+- **Asking somebody who has already asked is drawn as what the server makes of it**, a friendship
+  and not a second request. The specs' server sent a request whatever was waiting; it accepts now,
+  as the real one always has.
+- **One thing pressed twice is one request, and two different things are two.** The store kept
+  what was in flight by PERSON, which was harmless while "Cancel request" could only be pressed
+  once the request had been answered. Shown at the press, it can be pressed while the request is
+  still on its way, and would have been handed the request's own promise and never sent. It is
+  kept by verb and person now, and the two leave in the order they were pressed.
+- **Nothing is busy.** `social.working` and every `loading` and `disabled` that read it are
+  gone: a row that changes the moment it is pressed has nothing to spin for, and a button that
+  spun was the wait this is about.
+- **A privacy switch turns under the finger** and ends on what the server STORED, which for a
+  minor is not always what was asked; refused, it turns back and Settings says so.
+
+`social.spec.ts` (*what the reader did about somebody, shown before the server has said so*)
+holds the store with each request held, refused and sent out of turn, and `friends-page.spec.ts`
+the Requests tab.
 
 **Play again says which game it follows, because the table on screen may still be the one from
 before the finish.** The result arrives with the last move, pushed; the table is read again a

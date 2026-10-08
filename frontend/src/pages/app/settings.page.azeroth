@@ -378,7 +378,7 @@ export default component SettingsPage()
                                                             person={ person }
                                                             subtitle={ `@${ person.handle }` }
                                                             actions={
-                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(person.id) } onClick={ () => void attempt(social.unblock(person.id), locale.t('actions.unblocked', { name: person.displayName.split(' ')[0] })) }>
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void attempt(social.unblock(person.id), locale.t('actions.unblocked', { name: person.displayName.split(' ')[0] })) }>
                                                                     { locale.t('actions.unblock', { name: person.displayName.split(' ')[0] }) }
                                                                 </Button>
                                                             }

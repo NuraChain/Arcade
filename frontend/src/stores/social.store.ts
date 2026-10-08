@@ -1,6 +1,8 @@
-import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+import { createMemo, createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { client, type MuteSubject, type Privacy } from '../api.ts';
+import { createGuesses, type Guess } from '../lib/guess.ts';
+import { runtime } from '../lib/runtime.ts';
 
 import type { Person } from '../data/person.ts';
 import type { FriendRequest, Report, ReportCategory } from '../data/chat.ts';
@@ -34,7 +36,6 @@ export interface SocialApi
     visible(ids: readonly string[]): string[];
     people(): Person[];
 
-    working(key: string): boolean;
     add(id: string): Promise<void>;
     accept(requestId: string): Promise<void>;
     decline(requestId: string): Promise<void>;
@@ -164,10 +165,6 @@ export const useSocial = createStore((): SocialApi =>
     const heldFriends = stable();
     const heldBlocked = stable();
 
-    const friends = () => heldFriends((graph.data()?.friends ?? []).map((person) => person.id));
-
-    const blocked = () => heldBlocked((graph.data()?.blocked ?? []).map((person) => person.id));
-
     const asRequest = (wire: { id: string; from: string; to: string; at: string }): FriendRequest => ({
         id: wire.id,
         from: wire.from,
@@ -175,9 +172,37 @@ export const useSocial = createStore((): SocialApi =>
         at: Date.parse(wire.at)
     });
 
-    const incoming = (): FriendRequest[] => (graph.data()?.incoming ?? []).map(asRequest);
+    interface Known
+    {
+        friends: string[];
+        blocked: string[];
+        incoming: FriendRequest[];
+        outgoing: FriendRequest[];
+    }
 
-    const outgoing = (): FriendRequest[] => (graph.data()?.outgoing ?? []).map(asRequest);
+    const known = createMemo((): Known =>
+    {
+        const read = graph.data();
+
+        return {
+            friends: (read?.friends ?? []).map((person) => person.id),
+            blocked: (read?.blocked ?? []).map((person) => person.id),
+            incoming: (read?.incoming ?? []).map(asRequest),
+            outgoing: (read?.outgoing ?? []).map(asRequest)
+        };
+    });
+
+    const guessed = createGuesses<Known>();
+
+    const shown = createMemo(() => guessed.over(known()));
+
+    const friends = () => heldFriends(shown().friends);
+
+    const blocked = () => heldBlocked(shown().blocked);
+
+    const incoming = () => shown().incoming;
+
+    const outgoing = () => shown().outgoing;
 
     /**
      * The mutual-friend count the "why this person" line needs.
@@ -190,6 +215,14 @@ export const useSocial = createStore((): SocialApi =>
         new Map((suggested.data()?.suggestions ?? []).map((entry) => [entry.person.id, entry.mutual]));
 
     let inFlight: Promise<void> = Promise.resolve();
+
+    const landed = () =>
+    {
+        if (untrack(graph.error) === null)
+        {
+            guessed.landed();
+        }
+    };
 
     /**
      * Re-reads the graph always, and the lazily-asked lists only when they were asked for.
@@ -210,8 +243,21 @@ export const useSocial = createStore((): SocialApi =>
                     ...(asks.people === true ? [directory.refetch()] : []),
                     ...(asks.suggestions === true ? [suggested.refetch()] : [])
                 ]);
+                landed();
             });
         return inFlight;
+    };
+
+    const truth = async () =>
+    {
+        await revalidate();
+
+        const unread = untrack(graph.error);
+
+        if (unread !== null)
+        {
+            throw unread;
+        }
     };
 
     const relation = (id: string): Relation =>
@@ -239,33 +285,76 @@ export const useSocial = createStore((): SocialApi =>
         return 'none';
     };
 
-    const write = async (call: () => Promise<unknown>) =>
+    let sending: Promise<unknown> = Promise.resolve();
+
+    const inTurn = <R>(send: () => Promise<R>) =>
     {
-        await call();
-        await revalidate();
+        const sent = sending.catch(() => undefined).then(send);
+
+        sending = sent;
+
+        return sent;
     };
 
-    const [busy, setBusy] = createSignal<Readonly<Record<string, Promise<void>>>>({});
+    const out = new Map<string, Promise<void>>();
 
-    const once = (key: string, call: () => Promise<unknown>) =>
+    const once = (key: string, guess: Guess<Known>, call: () => Promise<unknown>) =>
     {
-        const running = untrack(busy)[key];
+        const running = out.get(key);
 
         if (running !== undefined)
         {
             return running;
         }
 
-        const started = write(call).finally(() =>
-        {
-            const next = { ...untrack(busy) };
-            delete next[key];
-            setBusy(next);
-        });
+        const started = guessed.during(guess, () => inTurn(call), truth).then(() => undefined).finally(() => out.delete(key));
 
-        setBusy({ ...untrack(busy), [key]: started });
+        out.set(key, started);
+
         return started;
     };
+
+    const without = <T>(list: T[], gone: (one: T) => boolean) => (list.some(gone) ? list.filter((one) => !gone(one)) : list);
+
+    const befriended = (id: string): Guess<Known> => (held) => ({
+        ...held,
+        incoming: without(held.incoming, (request) => request.from === id),
+        outgoing: without(held.outgoing, (request) => request.to === id),
+        friends: held.friends.includes(id) ? held.friends : [...held.friends, id]
+    });
+
+    const asking = (id: string): Guess<Known> =>
+    {
+        const mine: FriendRequest = { id: `asked:${ id }`, from: untrack(meId), to: id, at: runtime().clock.now() };
+
+        return (held) =>
+        {
+            if (held.incoming.some((request) => request.from === id))
+            {
+                return befriended(id)(held);
+            }
+
+            return held.friends.includes(id) || held.blocked.includes(id) || held.outgoing.some((request) => request.to === id)
+                ? held
+                : { ...held, outgoing: [...held.outgoing, mine] };
+        };
+    };
+
+    const answered = (requestId: string, yes: boolean): Guess<Known> =>
+    {
+        const from = untrack(incoming).find((request) => request.id === requestId)?.from;
+
+        return (held) => (yes && from !== undefined
+            ? befriended(from)(held)
+            : { ...held, incoming: without(held.incoming, (request) => request.id === requestId) });
+    };
+
+    const shut = (id: string): Guess<Known> => (held) => ({
+        friends: without(held.friends, (one) => one === id),
+        incoming: without(held.incoming, (request) => request.from === id),
+        outgoing: without(held.outgoing, (request) => request.to === id),
+        blocked: held.blocked.includes(id) ? held.blocked : [...held.blocked, id]
+    });
 
     return {
         friends,
@@ -309,14 +398,24 @@ export const useSocial = createStore((): SocialApi =>
 
         async setPrivacy(patch)
         {
-            const current = privacy();
-            const stored = await client.social.setPrivacy({
-                input: {
-                    allowStrangerMessages: patch.allowStrangerMessages ?? current.allowStrangerMessages,
-                    showOnline: patch.showOnline ?? current.showOnline
-                }
-            });
-            setHeld(stored);
+            const before = untrack(held);
+            const current = untrack(privacy);
+            const wanted = {
+                allowStrangerMessages: patch.allowStrangerMessages ?? current.allowStrangerMessages,
+                showOnline: patch.showOnline ?? current.showOnline
+            };
+
+            setHeld({ ...current, ...wanted });
+
+            try
+            {
+                setHeld(await inTurn(() => client.social.setPrivacy({ input: wanted })));
+            }
+            catch (error)
+            {
+                setHeld(before);
+                throw error;
+            }
         },
 
         relation,
@@ -332,15 +431,25 @@ export const useSocial = createStore((): SocialApi =>
 
         people: () => directory.data()?.people ?? [],
 
-        working: (key) => busy()[key] !== undefined,
-
-        add: (id) => once(id, () => client.social.request({ input: { id } })),
-        accept: (requestId) => once(requestId, () => client.social.answer({ input: { id: requestId, outcome: 'accepted' } })),
-        decline: (requestId) => once(requestId, () => client.social.answer({ input: { id: requestId, outcome: 'declined' } })),
-        withdraw: (id) => once(id, () => client.social.withdraw({ input: { id } })),
-        remove: (id) => once(id, () => client.social.unfriend({ input: { id } })),
-        block: (id) => once(id, () => client.social.block({ input: { id } })),
-        unblock: (id) => once(id, () => client.social.unblock({ input: { id } })),
+        add: (id) => once(`add:${ id }`, asking(id), () => client.social.request({ input: { id } })),
+        accept: (requestId) => once(`answer:${ requestId }`, answered(requestId, true), () => client.social.answer({ input: { id: requestId, outcome: 'accepted' } })),
+        decline: (requestId) => once(`answer:${ requestId }`, answered(requestId, false), () => client.social.answer({ input: { id: requestId, outcome: 'declined' } })),
+        withdraw: (id) => once(
+            `withdraw:${ id }`,
+            (held) => ({ ...held, outgoing: without(held.outgoing, (request) => request.to === id) }),
+            () => client.social.withdraw({ input: { id } })
+        ),
+        remove: (id) => once(
+            `remove:${ id }`,
+            (held) => ({ ...held, friends: without(held.friends, (one) => one === id) }),
+            () => client.social.unfriend({ input: { id } })
+        ),
+        block: (id) => once(`block:${ id }`, shut(id), () => client.social.block({ input: { id } })),
+        unblock: (id) => once(
+            `unblock:${ id }`,
+            (held) => ({ ...held, blocked: without(held.blocked, (one) => one === id) }),
+            () => client.social.unblock({ input: { id } })
+        ),
 
         /**
          * Files a report, optionally showing ONE message.
@@ -394,7 +503,7 @@ export const useSocial = createStore((): SocialApi =>
             {
                 if (scope === 'social')
                 {
-                    void graph.refetch().catch(() => undefined);
+                    void graph.refetch().then(landed, () => undefined);
                 }
             });
         },
@@ -406,6 +515,9 @@ export const useSocial = createStore((): SocialApi =>
             setPendingMutes({});
             setHeld(null);
             inFlight = Promise.resolve();
+            sending = Promise.resolve();
+            out.clear();
+            guessed.clear();
             setWanted({});
             void graph.refetch();
             void privacyRead.refetch();

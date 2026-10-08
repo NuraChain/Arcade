@@ -177,7 +177,7 @@ export default component AddFriend(props: OverlayProps)
                                 <span class="truncate text-ui-xs text-muted" dir="ltr">@{ handle }</span>
                             </span>
                             <Show when={ social.relation(handle) === 'none' }>
-                                <Button variant="primary" size="sm" leading="friend-add" class="shrink-0 whitespace-nowrap" loading={ social.working(handle) } onClick={ () => add(handle) }>
+                                <Button variant="primary" size="sm" leading="friend-add" class="shrink-0 whitespace-nowrap" onClick={ () => add(handle) }>
                                     { locale.t('person.add') }
                                 </Button>
                             </Show>

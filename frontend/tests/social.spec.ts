@@ -8,7 +8,7 @@ import { mutualCount } from '../src/services/social.service.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { THREAD_PAGE } from '../../backend/src/domains/chat/pages.ts';
 import { createApiSource, type ChatSource } from '../src/services/chat.source.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
@@ -156,11 +156,9 @@ describe('social store', () =>
         const before = server.calls.filter((call) => call === 'social.request').length;
 
         const first = social.add('sina.g');
-        expect(social.working('sina.g')).toBe(true);
         expect(social.add('sina.g')).toBe(first);
 
         await first;
-        expect(social.working('sina.g')).toBe(false);
         expect(server.calls.filter((call) => call === 'social.request').length).toBe(before + 1);
     });
 
@@ -789,5 +787,475 @@ describe('what a revalidation must not disturb', () =>
         await social.block('mina');
         expect(social.blocked()).not.toBe(first);
         expect(social.blocked()).toBe(social.blocked());
+    });
+});
+
+describe('what the reader did about somebody, shown before the server has said so', () =>
+{
+    const routes = client.social as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+    const holding = async (verb: string, run: (out: { asked: unknown[]; answer: () => void }) => Promise<void>) =>
+    {
+        const real = routes[verb];
+        const asked: unknown[] = [];
+        const waiting: (() => void)[] = [];
+        let owed = 0;
+
+        const answer = () =>
+        {
+            const next = waiting.shift();
+
+            if (next === undefined)
+            {
+                owed += 1;
+            }
+            else
+            {
+                next();
+            }
+        };
+
+        routes[verb] = async (input) =>
+        {
+            asked.push(input);
+
+            if (owed > 0)
+            {
+                owed -= 1;
+            }
+            else
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+            }
+
+            return await real(input);
+        };
+
+        try
+        {
+            await run({ asked, answer });
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const answering = async (verb: string, answer: (input: unknown) => Promise<unknown>, run: () => Promise<void>) =>
+    {
+        const real = routes[verb];
+
+        routes[verb] = answer;
+
+        try
+        {
+            await run();
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const settle = async () =>
+    {
+        for (let turn = 0; turn < 12; turn += 1)
+        {
+            await Promise.resolve();
+        }
+    };
+
+    const known = async () =>
+    {
+        const social = useSocial();
+
+        await social.refresh();
+        await settle();
+
+        return social;
+    };
+
+    it('says a request is sent in the same turn as the press, and nothing is busy meanwhile', async () =>
+    {
+        const social = await known();
+
+        await holding('request', async ({ asked, answer }) =>
+        {
+            const sent = social.add('sina.g');
+
+            expect(social.relation('sina.g')).toBe('outgoing');
+            expect(social.outgoing().map((request) => request.to)).toContain('sina.g');
+
+            await settle();
+            expect(asked).toEqual([{ input: { id: 'sina.g' } }]);
+            expect(server.outgoing.some((request) => request.to === 'sina.g')).toBe(false);
+
+            answer();
+            await sent;
+
+            expect(server.outgoing.some((request) => request.to === 'sina.g')).toBe(true);
+            expect(social.relation('sina.g')).toBe('outgoing');
+            expect(social.outgoing().filter((request) => request.to === 'sina.g')).toHaveLength(1);
+        });
+    });
+
+    it('takes a request back in the same turn', async () =>
+    {
+        const social = await known();
+
+        await social.add('sina.g');
+
+        await holding('withdraw', async ({ answer }) =>
+        {
+            const taken = social.withdraw('sina.g');
+
+            expect(social.relation('sina.g')).toBe('none');
+
+            answer();
+            await taken;
+            expect(social.relation('sina.g')).toBe('none');
+        });
+    });
+
+    it('makes a friend of somebody who had asked, by accepting or by asking them back', async () =>
+    {
+        const social = await known();
+        const [first] = social.incoming();
+
+        await holding('answer', async ({ answer }) =>
+        {
+            const accepted = social.accept(first.id);
+
+            expect(social.relation(first.from)).toBe('friend');
+            expect(social.incoming().some((request) => request.id === first.id)).toBe(false);
+            expect(social.friends()).toContain(first.from);
+
+            answer();
+            await accepted;
+            expect(social.relation(first.from)).toBe('friend');
+            expect(social.friends().filter((id) => id === first.from)).toHaveLength(1);
+        });
+
+        const [second] = social.incoming();
+
+        await holding('request', async ({ answer }) =>
+        {
+            const asked = social.add(second.from);
+
+            expect(social.relation(second.from)).toBe('friend');
+            expect(social.outgoing().some((request) => request.to === second.from)).toBe(false);
+
+            answer();
+            await asked;
+            expect(server.friends).toContain(second.from);
+            expect(social.relation(second.from)).toBe('friend');
+        });
+    });
+
+    it('drops a request that was declined in the same turn, and leaves the person a stranger', async () =>
+    {
+        const social = await known();
+        const [first] = social.incoming();
+
+        await holding('answer', async ({ answer }) =>
+        {
+            const declined = social.decline(first.id);
+
+            expect(social.incoming().some((request) => request.id === first.id)).toBe(false);
+            expect(social.relation(first.from)).toBe('none');
+
+            answer();
+            await declined;
+            expect(social.relation(first.from)).toBe('none');
+        });
+    });
+
+    it('ends a friendship in the same turn', async () =>
+    {
+        const social = await known();
+
+        await holding('unfriend', async ({ answer }) =>
+        {
+            const ended = social.remove('sara.k');
+
+            expect(social.relation('sara.k')).toBe('none');
+            expect(social.friends()).not.toContain('sara.k');
+
+            answer();
+            await ended;
+            expect(social.relation('sara.k')).toBe('none');
+        });
+    });
+
+    it('blocks in the same turn, out of the friends and out of both lists of requests, and unblocks the same way', async () =>
+    {
+        const social = await known();
+        const [asker] = social.incoming();
+
+        await social.add('sina.g');
+
+        await holding('block', async ({ answer }) =>
+        {
+            const friend = social.block('sara.k');
+            const asked = social.block(asker.from);
+            const pending = social.block('sina.g');
+
+            expect(['sara.k', asker.from, 'sina.g'].map((id) => social.relation(id))).toEqual(['blocked', 'blocked', 'blocked']);
+            expect(social.friends()).not.toContain('sara.k');
+            expect(social.incoming().some((request) => request.from === asker.from)).toBe(false);
+            expect(social.outgoing().some((request) => request.to === 'sina.g')).toBe(false);
+
+            answer();
+            answer();
+            answer();
+            await Promise.all([friend, asked, pending]);
+            expect(social.blocked()).toEqual(expect.arrayContaining(['sara.k', asker.from, 'sina.g']));
+        });
+
+        await holding('unblock', async ({ answer }) =>
+        {
+            const freed = social.unblock('sara.k');
+
+            expect(social.relation('sara.k')).toBe('none');
+            expect(social.isBlocked('sara.k')).toBe(false);
+
+            answer();
+            await freed;
+            expect(social.relation('sara.k')).toBe('none');
+        });
+    });
+
+    it('shows nothing twice when the graph is read again after the server has done it and before it has answered', async () =>
+    {
+        const social = await known();
+        const [first] = social.incoming();
+        const late = async (verb: string, run: (answer: () => void) => Promise<void>) =>
+        {
+            const real = routes[verb];
+            let answer: () => void = () => undefined;
+
+            await answering(verb, async (input) =>
+            {
+                const done = await real(input);
+
+                await new Promise<void>((resolve) =>
+                {
+                    answer = resolve;
+                });
+
+                return done;
+            }, async () =>
+            {
+                await run(() => answer());
+            });
+        };
+
+        await late('request', async (answer) =>
+        {
+            const sent = social.add('sina.g');
+
+            await settle();
+            await social.refresh();
+            await settle();
+
+            expect(server.outgoing.some((request) => request.to === 'sina.g')).toBe(true);
+            expect(social.outgoing().filter((request) => request.to === 'sina.g')).toHaveLength(1);
+
+            answer();
+            await sent;
+        });
+
+        await late('answer', async (answer) =>
+        {
+            const accepted = social.accept(first.id);
+
+            await settle();
+            await social.refresh();
+            await settle();
+
+            expect(server.friends).toContain(first.from);
+            expect(social.friends().filter((id) => id === first.from)).toHaveLength(1);
+
+            answer();
+            await accepted;
+        });
+    });
+
+    it('forgets what was pressed when the store is reset', async () =>
+    {
+        const social = await known();
+
+        await holding('request', async ({ answer }) =>
+        {
+            const sent = social.add('sina.g');
+
+            expect(social.relation('sina.g')).toBe('outgoing');
+
+            social.reset();
+            await social.refresh();
+            await settle();
+            expect(social.relation('sina.g')).toBe('none');
+
+            answer();
+            await sent.catch(() => undefined);
+        });
+    });
+
+    it('goes back to what the server holds when it refuses, and hands the refusal on', async () =>
+    {
+        const social = await known();
+        const refusal = new ApiError(403, 'forbidden', 'They are not taking requests.', undefined);
+
+        await answering('request', async () =>
+        {
+            throw refusal;
+        }, async () =>
+        {
+            const sent = social.add('sina.g');
+
+            expect(social.relation('sina.g')).toBe('outgoing');
+            await expect(sent).rejects.toBe(refusal);
+            expect(social.relation('sina.g')).toBe('none');
+        });
+
+        await answering('unfriend', async () =>
+        {
+            throw refusal;
+        }, async () =>
+        {
+            const ended = social.remove('sara.k');
+
+            expect(social.relation('sara.k')).toBe('none');
+            await expect(ended).rejects.toBe(refusal);
+            expect(social.relation('sara.k')).toBe('friend');
+        });
+    });
+
+    it('sends a second thing about one person after the first, never instead of it', async () =>
+    {
+        const social = await known();
+        const calls: string[] = [];
+
+        await holding('request', async ({ answer }) =>
+        {
+            await answering('withdraw', async (input) =>
+            {
+                calls.push('withdraw');
+                server.outgoing = server.outgoing.filter((one) => one.to !== (input as { input: { id: string } }).input.id);
+
+                return { ok: true };
+            }, async () =>
+            {
+                const sent = social.add('sina.g');
+                const taken = social.withdraw('sina.g');
+
+                await settle();
+                expect(social.relation('sina.g')).toBe('none');
+                expect(calls).toEqual([]);
+
+                answer();
+                await sent;
+                await taken;
+
+                expect(calls).toEqual(['withdraw']);
+                expect(server.outgoing.some((request) => request.to === 'sina.g')).toBe(false);
+                expect(social.relation('sina.g')).toBe('none');
+            });
+        });
+    });
+
+    it('is one request however often one thing is pressed', async () =>
+    {
+        const social = await known();
+
+        await holding('request', async ({ asked, answer }) =>
+        {
+            const first = social.add('sina.g');
+            const second = social.add('sina.g');
+
+            expect(second).toBe(first);
+            await settle();
+            expect(asked).toHaveLength(1);
+
+            answer();
+            await first;
+            expect(social.outgoing().filter((request) => request.to === 'sina.g')).toHaveLength(1);
+        });
+    });
+
+    it('keeps what was pressed when the request went through and the graph could not be read again, until it can', async () =>
+    {
+        const social = await known();
+
+        await answering('graph', async () =>
+        {
+            throw new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+        }, async () =>
+        {
+            await social.remove('sara.k');
+            expect(social.relation('sara.k')).toBe('none');
+
+            await social.refresh();
+            await settle();
+            expect(social.relation('sara.k')).toBe('none');
+        });
+
+        expect(server.friends).not.toContain('sara.k');
+        expect(social.relation('sara.k')).toBe('none');
+
+        server.friends.push('sara.k');
+        await social.refresh();
+        await settle();
+        expect(social.relation('sara.k')).toBe('friend');
+    });
+
+    it('turns a privacy switch in the same turn, and ends on what the server stored', async () =>
+    {
+        const social = await known();
+
+        await holding('setPrivacy', async ({ answer }) =>
+        {
+            const saved = social.setPrivacy({ allowStrangerMessages: false });
+
+            expect(social.privacy().allowStrangerMessages).toBe(false);
+
+            answer();
+            await saved;
+            expect(social.privacy().allowStrangerMessages).toBe(false);
+        });
+
+        server.minor = true;
+
+        await holding('setPrivacy', async ({ answer }) =>
+        {
+            const saved = social.setPrivacy({ allowStrangerMessages: true });
+
+            expect(social.privacy().allowStrangerMessages).toBe(true);
+
+            answer();
+            await saved;
+            expect(social.privacy().allowStrangerMessages).toBe(false);
+        });
+    });
+
+    it('turns a privacy switch back when the server refuses', async () =>
+    {
+        const social = await known();
+        const refusal = new ApiError(500, 'internal', 'Something went wrong.', undefined);
+
+        await answering('setPrivacy', async () =>
+        {
+            throw refusal;
+        }, async () =>
+        {
+            const saved = social.setPrivacy({ showOnline: false });
+
+            expect(social.privacy().showOnline).toBe(false);
+            await expect(saved).rejects.toBe(refusal);
+            expect(social.privacy().showOnline).toBe(true);
+        });
     });
 });

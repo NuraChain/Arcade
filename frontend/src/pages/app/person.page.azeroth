@@ -198,17 +198,16 @@ export default component PersonPage()
                                             variant="outline"
                                             leading="friend-add"
                                             block
-                                            loading={ social.working(them.id) }
                                             onClick={ () => void attempt(social.add(them.id), locale.t('person.added')) }
                                         >
                                             { locale.t('person.add') }
                                         </Button>
                                     </Show>
                                     <Show when={ relation === 'outgoing' }>
-                                        <Button variant="outline" leading="clock" block loading={ social.working(them.id) } onClick={ () => void attempt(social.withdraw(them.id)) }>{ locale.t('person.withdraw') }</Button>
+                                        <Button variant="outline" leading="clock" block onClick={ () => void attempt(social.withdraw(them.id)) }>{ locale.t('person.withdraw') }</Button>
                                     </Show>
                                     <Show when={ relation === 'incoming' }>
-                                        <Button variant="outline" leading="friend-check" block loading={ social.working(asked) } onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
+                                        <Button variant="outline" leading="friend-check" block onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
                                     </Show>
                                     <Show when={ relation === 'friend' }>
                                         <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
@@ -233,7 +232,6 @@ export default component PersonPage()
                                 variant="outline"
                                 size="sm"
                                 class="mt-3"
-                                loading={ social.working(them.id) }
                                 onClick={ () => void attempt(social.unblock(them.id), locale.t('actions.unblocked', { name: name.split(' ')[0] })) }
                             >
                                 { locale.t('actions.unblock', { name: name.split(' ')[0] }) }

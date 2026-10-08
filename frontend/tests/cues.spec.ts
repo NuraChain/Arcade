@@ -13,7 +13,7 @@ import { BACKOFF_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import type { MatchView } from '../src/api.ts';
+import { ApiError, client, type MatchView } from '../src/api.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -234,6 +234,44 @@ describe('the cues store', () =>
         await settle();
 
         expect(said()).toEqual(['Peyman Salehi wants to be your friend']);
+    });
+
+    it('does not take a request that was pressed away and came back for one that has just arrived', async () =>
+    {
+        const routes = client.social as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+        const real = routes.answer;
+
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        const [first, second] = useSocial().incoming();
+
+        routes.answer = async () =>
+        {
+            throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+        };
+
+        try
+        {
+            const declined = useSocial().decline(first.id);
+
+            expect(useSocial().incoming().map((request) => request.id)).toEqual([second.id]);
+            await expect(declined).rejects.toBeInstanceOf(ApiError);
+
+            const accepted = useSocial().accept(second.id);
+
+            expect(useSocial().incoming().map((request) => request.id)).toEqual([first.id]);
+            await expect(accepted).rejects.toBeInstanceOf(ApiError);
+            await settle();
+        }
+        finally
+        {
+            routes.answer = real;
+        }
+
+        expect(useSocial().incoming().map((request) => request.id)).toEqual([first.id, second.id]);
+        expect(useToasts().items()).toEqual([]);
     });
 
     it('says nothing when a request is answered and the ones still waiting are read again', async () =>
