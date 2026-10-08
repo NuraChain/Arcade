@@ -82,6 +82,10 @@ const SAMPLE = [
     'const dropLookup = (id: string): Row | undefined => rows.get(id);',
     'const dropVoidCall = (): void => nothing();',
     'const dropCast = (id: string): Row => ({ id, name: id }) as Row;',
+    'const dropTable = (): Row => table.first;',
+    'const table = { first: load("a") };',
+    'const dropTyped = (): Row => typed.row;',
+    'const typed: { row: Row } = { row: dropTyped() };',
     'class Entity {',
     '    public name = "";',
     '    public dropMethod(): string { return this.name; }',
@@ -103,6 +107,12 @@ const SAMPLE = [
     'function keepRecursive(depth: number): number { return depth < 1 ? 0 : depth + keepRecursive(depth - 1); }',
     'const keepMutualA = (depth: number): number => depth < 1 ? 0 : keepMutualB(depth);',
     'const keepMutualB = (depth: number): number => keepMutualA(depth - 1);',
+    'const keepHeld = (): Row => held.row;',
+    'const held = { row: keepHeld() };',
+    'const keepNested = (): Row => load(nest.rows.map((one) => one.id).join(""));',
+    'const nest = { rows: [keepNested()] };',
+    'const keepLazy = (): Row => lazy.make();',
+    'const lazy = { make: () => keepLazy() };',
     'function keepPredicate(value: unknown): value is string { return typeof value === "string"; }',
     'function keepOverload(value: string): string;',
     'function keepOverload(value: number): string;',
@@ -110,7 +120,8 @@ const SAMPLE = [
     'function* keepGenerator(): Generator<number, string> { yield 1; return "done"; }',
     'export { dropCall, dropTemplate, dropCompare, dropLiteral, dropBooleans, dropAbsorbed, dropAsync, dropLookup, dropVoidCall, dropCast, Entity };',
     'export { keepObject, keepArray, keepSet, keepGeneric, keepArrow, keepChoice, keepNarrow, keepWider, keepConstant, keepAny, keepVoidOperator, keepVoidBlock };',
-    'export { keepRecursive, keepMutualA, keepMutualB, keepPredicate, keepOverload, keepGenerator };'
+    'export { keepRecursive, keepMutualA, keepMutualB, keepPredicate, keepOverload, keepGenerator };',
+    'export { dropTable, dropTyped, keepHeld, keepNested, keepLazy };'
 ].join('\n');
 
 const returnTypes = (program: ts.Program) =>
@@ -200,5 +211,17 @@ describe('a function that returns a value', () =>
 
         expect(ts.getPreEmitDiagnostics(after)).toEqual([]);
         expect(returnTypes(after)).toEqual(returnTypes(program));
+    });
+
+    it('keeps the one a constant leads back to, because without it the compiler can say neither type', () =>
+    {
+        for (const name of ['keepHeld', 'keepNested', 'keepLazy'])
+        {
+            const bare = SAMPLE.replace(`const ${ name } = (): Row =>`, `const ${ name } = () =>`);
+            const said = ts.getPreEmitDiagnostics(compile(bare)).map((one) => ts.flattenDiagnosticMessageText(one.messageText, ' '));
+
+            expect(bare).not.toBe(SAMPLE);
+            expect(said.filter((one) => one.includes(`'${ name }' implicitly has return type 'any'`))).toHaveLength(1);
+        }
     });
 });
