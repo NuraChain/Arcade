@@ -3,7 +3,7 @@ import { createEffect, createRoot } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { fold, rank, ranked } from '../src/services/search.service.ts';
+import { fold, namesOf, narrowed, rank, ranked } from '../src/services/search.service.ts';
 import { mutualCount } from '../src/services/social.service.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { THREAD_PAGE } from '../../backend/src/domains/chat/pages.ts';
@@ -96,6 +96,44 @@ describe('search folding', () =>
     {
         const items = ['backgammon board', 'backgammon', 'the backgammon set'];
         expect(ranked(items, 'backgammon', (item) => [item])[0]).toBe('backgammon');
+    });
+
+    it('reads what was typed the way it reads what is searched: capitals, letterforms, digits and spaces', () =>
+    {
+        const people = ['Sara Kamali', 'علی رضایی', 'Table 12', 'Zoë Baker'];
+        const named = (one: string) => [one];
+
+        expect(narrowed(people, 'Sara', named)).toEqual(['Sara Kamali']);
+        expect(narrowed(people, '  SARA   kamali ', named)).toEqual(['Sara Kamali']);
+        expect(narrowed(people, 'علي', named)).toEqual(['علی رضایی']);
+        expect(narrowed(people, '۱۲', named)).toEqual(['Table 12']);
+        expect(narrowed(people, 'ZOE', named)).toEqual(['Zoë Baker']);
+        expect(ranked(people, 'Kamali', named)).toEqual(['Sara Kamali']);
+        expect(rank(['Sara Kamali'], 'SARA')).toBe(rank(['Sara Kamali'], 'sara'));
+        expect(rank(['Sara Kamali'], 'SARA')).toBeGreaterThan(0);
+    });
+
+    it('finds a person by their handle as every row shows it, with its @', () =>
+    {
+        const people = [
+            { displayName: 'Sara Kamali', handle: 'sara.k' },
+            { displayName: 'Reza Tehrani', handle: 'reza.t' }
+        ];
+
+        expect(narrowed(people, '@sara.k', namesOf)).toEqual([people[0]]);
+        expect(narrowed(people, '@Reza', namesOf)).toEqual([people[1]]);
+        expect(narrowed(people, 'sara.k', namesOf)).toEqual([people[0]]);
+        expect(narrowed(people, 'tehrani', namesOf)).toEqual([people[1]]);
+        expect(narrowed(people, '@nobody', namesOf)).toEqual([]);
+    });
+
+    it('takes nothing but spaces and marks nobody sees for nothing typed, and lists everybody', () =>
+    {
+        const unseen = String.fromCharCode(0x200C, 0x20, 0x200B);
+
+        expect(narrowed(['sara', 'reza'], unseen, (one) => [one])).toEqual(['sara', 'reza']);
+        expect(narrowed(['sara', 'reza'], '   ', (one) => [one])).toEqual(['sara', 'reza']);
+        expect(ranked(['sara', 'reza'], unseen, (one) => [one])).toEqual([]);
     });
 });
 

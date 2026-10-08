@@ -192,6 +192,27 @@ describe('the friends page', () =>
         expect(rowOf(container, 'reza.t')).toBeNull();
     });
 
+    it('finds a friend however their name was typed: with a capital, as a phone types it, or in capitals', async () =>
+    {
+        const container = await opened();
+        const sara = rowOf(container, 'sara.k');
+
+        await type(fieldOf(container), 'Sara');
+
+        expect(rowOf(container, 'sara.k')).toBe(sara);
+        expect(rowOf(container, 'reza.t')).toBeNull();
+
+        await type(fieldOf(container), 'SARA.K');
+
+        expect(rowOf(container, 'sara.k')).toBe(sara);
+        expect(container.textContent).not.toContain(useLocale().t('search.empty', { query: 'SARA.K' }));
+
+        await type(fieldOf(container), '@sara.k');
+
+        expect(rowOf(container, 'sara.k')).toBe(sara);
+        expect(rowOf(container, 'reza.t')).toBeNull();
+    });
+
     it('says nobody matched, and brings the list back when the search is cleared', async () =>
     {
         const container = await opened();

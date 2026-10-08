@@ -20,7 +20,7 @@ export function fold(value: string)
         .trim();
 }
 
-export function rank(fields: readonly string[], needle: string)
+function scored(fields: readonly string[], needle: string)
 {
     if (needle === '')
     {
@@ -54,21 +54,29 @@ export const SEARCH_FROM = 8;
 
 export const SEARCH_PAUSE_MS = 300;
 
+export function rank(fields: readonly string[], needle: string)
+{
+    return scored(fields, fold(needle));
+}
+
+export const namesOf = (person: { displayName: string; handle: string }) => [person.displayName, person.handle, `@${ person.handle }`];
+
 export function narrowed<T>(items: readonly T[], needle: string, fields: (item: T) => readonly string[]): T[]
 {
-    return needle.trim() === '' ? [...items] : ranked(items, needle, fields);
+    return fold(needle) === '' ? [...items] : ranked(items, needle, fields);
 }
 
 export function ranked<T>(items: readonly T[], needle: string, fields: (item: T) => readonly string[]): T[]
 {
-    const scored: Array<{ item: T; score: number }> = [];
+    const wanted = fold(needle);
+    const found: Array<{ item: T; score: number }> = [];
     for (const item of items)
     {
-        const score = rank(fields(item), needle);
+        const score = scored(fields(item), wanted);
         if (score > 0)
         {
-            scored.push({ item, score });
+            found.push({ item, score });
         }
     }
-    return scored.sort((a, b) => b.score - a.score).map((entry) => entry.item);
+    return found.sort((a, b) => b.score - a.score).map((entry) => entry.item);
 }

@@ -776,7 +776,19 @@ thread was a page with no way out.
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
 Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans
 for one name (friends, group members, the group-add picker) grows a search box once it holds more than
-`SEARCH_FROM`, folding letterforms with the same `narrowed`/`ranked` global search uses. Notifications
+`SEARCH_FROM`, folding letterforms with the same `narrowed`/`ranked` global search uses. **What was typed is
+folded where it is compared, not by whoever asks.** `rank` folded every name it looked through
+and compared it with the needle as it was handed over, and the four lists handed over the reader's
+own keystrokes: "Sara" found nobody where "sara" found her - and a phone's keyboard capitalises the
+first letter of anything - and neither did a name typed with the Arabic letterforms of the Persian
+ones it was stored in, or with Persian digits, which is the whole of what `fold` is for. Global
+search folded its words before it asked, so it worked and nothing looked wrong. `ranked` and
+`rank` fold the needle themselves now (folding is the same twice), and `narrowed` takes words
+that are nothing but spaces and marks nobody sees for nothing typed. A person is looked for by
+`namesOf`: the name, the handle, and the handle as every row shows it, with its @, which found
+nobody either. It was found by a live check whose script typed a helper's name with its capital
+into "Search friends"; every spec had typed lowercase. `social.spec.ts` (*search folding*) and
+`friends-page.spec.ts` hold it. Notifications
 filter by the account-mute categories on the SERVER (`?notice=`), because filtering a keyset-paged list
 in the browser only filters the pages already fetched; the right panel reads `latest()`, the unfiltered
 head, so choosing Messages on the page does not empty the panel beside it.

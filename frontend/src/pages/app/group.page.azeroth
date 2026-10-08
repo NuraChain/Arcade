@@ -32,7 +32,7 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
-import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
+import { namesOf, narrowed, SEARCH_FROM } from '../../services/search.service.ts';
 import { useDevice } from '../../stores/device.store.ts';
 
 const MEMBER_PAGE = 12;
@@ -96,7 +96,7 @@ export default component GroupPage()
 
     derived paging = pagingFor(device.posture() === 'phone');
 
-    derived found = narrowed(members, query, (person) => [person.displayName, person.handle]);
+    derived found = narrowed(members, query, namesOf);
 
     derived shown = visible(found, MEMBER_PAGE, memberPage, paging);
 

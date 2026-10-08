@@ -11,7 +11,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
-import { narrowed } from '../../services/search.service.ts';
+import { namesOf, narrowed } from '../../services/search.service.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { whyRefused } from '../../lib/open-table.ts';
 
@@ -39,7 +39,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
         return narrowed(
             handles.map((handle) => ({ handle, person: people.byHandle(handle) })),
             query,
-            (invitee) => [invitee.person?.displayName ?? '', invitee.handle]
+            (invitee) => namesOf({ displayName: invitee.person?.displayName ?? '', handle: invitee.handle })
         );
     })();
 
@@ -55,7 +55,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
             .filter((handle): handle is string => handle !== undefined));
         const found = narrowed(social.friends()
             .map((handle) => people.byHandle(handle))
-            .filter((person): person is Person => person !== null && !taken.has(person.id)), query, (person) => [person.displayName, person.handle]);
+            .filter((person): person is Person => person !== null && !taken.has(person.id)), query, namesOf);
         const rank = (person: Person): number => (presence.isOnline(person.id) ? 0 : 1);
         return found.sort((a, b) => rank(a) - rank(b)).map((person) => ({ handle: person.handle, person }));
     })();
