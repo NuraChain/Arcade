@@ -14,7 +14,7 @@ import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { TableSummary } from '../src/api.ts';
-import { client, server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 
 type Rendered = HTMLElement;
 
@@ -391,7 +391,7 @@ describe('the lobby of a table two sides will play at', () =>
 
     it('keeps every chair it has drawn when the table is read again, and shows who sat down in one', () =>
     {
-        const chairs = (taken: number): TableSummary['chairs'] =>
+        const chairs = (taken: number) =>
             WHO.map((who, seat) => (seat < taken ? { seat, who, ready: false, ...(seat === 0 ? { host: true } : {}) } : { seat })) as TableSummary['chairs'];
         const [held, setHeld] = createSignal(table({ chairs: chairs(2), taken: 2 }));
         const { container } = renderTest(() => LobbyPanel({
@@ -436,7 +436,7 @@ describe('the lobby of a table two sides will play at', () =>
 
     it('keeps what a chair holds when the table is read again, and turns its tag where it is', () =>
     {
-        const chairs = (ready: boolean): TableSummary['chairs'] =>
+        const chairs = (ready: boolean) =>
             WHO.map((who, seat) => ({ seat, who, ready: ready && seat === 0, ...(seat === 0 ? { host: true } : {}) })) as TableSummary['chairs'];
         const [held, setHeld] = createSignal(table({ chairs: chairs(false) }));
         const { container } = renderTest(() => LobbyPanel({
@@ -472,5 +472,161 @@ describe('the lobby of a table two sides will play at', () =>
         expect(found).toHaveLength(1);
         expect(found[0].says).toBe(useLocale().t('create.seats'));
         expect(found[0].seats).toHaveLength(4);
+    });
+});
+
+describe('the button that says ready', () =>
+{
+    const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+    const said = () => useToasts().items().map((toast) => [toast.kind, toast.text]);
+
+    const seated = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, privacy: 'invite' }, []);
+        const held = server.tables.find((one) => one.id === id)!;
+
+        held.chairs[1].who = 'sara.k';
+        lobby.open(id);
+        await vi.waitFor(() => expect(lobby.table()?.taken).toBe(2));
+        useToasts().reset();
+
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return lobby.table()!;
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+
+        return { container, lobby, id, held };
+    };
+
+    const button = (container: HTMLElement) =>
+    {
+        const words = [useLocale().t('play.lobby.ready'), useLocale().t('play.lobby.readyTag')];
+
+        return [...container.querySelectorAll<HTMLButtonElement>('section > div:last-child button')].find((one) => words.includes(one.textContent?.trim() ?? ''))!;
+    };
+
+    const chair = (container: HTMLElement) => container.querySelector('ul > li')?.textContent ?? '';
+
+    const answering = async (answer: (input: unknown, real: (input: unknown) => Promise<unknown>) => Promise<unknown>, run: () => Promise<void>) =>
+    {
+        const real = routes.ready;
+
+        routes.ready = (input) => answer(input, real);
+
+        try
+        {
+            await run();
+        }
+        finally
+        {
+            routes.ready = real;
+        }
+    };
+
+    beforeEach(() =>
+    {
+        usePeople().reset();
+        useLobby().reset();
+        useToasts().reset();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() =>
+    {
+        cleanup();
+        vi.restoreAllMocks();
+        useToasts().reset();
+        useLobby().reset();
+        usePeople().reset();
+    });
+
+    it('says so on itself and on the chair before the server has answered, and is the button it was', async () =>
+    {
+        const { container, held } = await seated();
+        const pressed = button(container);
+        let answer: () => void = () => undefined;
+
+        expect(pressed.textContent?.trim()).toBe('I’m ready');
+        expect(chair(container)).toContain('Not ready');
+
+        await answering(async (input, real) =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                answer = resolve;
+            });
+
+            return await real(input);
+        }, async () =>
+        {
+            fire(pressed, 'click');
+            await settle();
+
+            expect(held.chairs[0].ready).toBe(false);
+            expect(button(container)).toBe(pressed);
+            expect(pressed.textContent?.trim()).toBe('Ready');
+            expect(pressed.getAttribute('aria-busy')).not.toBe('true');
+            expect(chair(container)).toContain('Ready');
+            expect(chair(container)).not.toContain('Not ready');
+
+            answer();
+            await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true));
+            await settle();
+
+            expect(button(container)).toBe(pressed);
+            expect(pressed.textContent?.trim()).toBe('Ready');
+            expect(said()).toEqual([]);
+        });
+    });
+
+    it('goes back and says why when the server refuses, in the reader\'s own language', async () =>
+    {
+        for (const [language, ready, why] of [['en', 'I’m ready', 'That table has closed.'], ['fa', 'آماده‌ام', 'آن میز بسته شده.']] as const)
+        {
+            cleanup();
+            useLobby().reset();
+            useToasts().reset();
+            server.reset();
+            useLocale().setLocale(language);
+
+            const { container } = await seated();
+            const pressed = button(container);
+
+            await answering(async () =>
+            {
+                throw new ApiError(409, 'table-closed', 'That table has closed.', undefined);
+            }, async () =>
+            {
+                fire(pressed, 'click');
+                await vi.waitFor(() => expect(said()).toEqual([['warning', why]]));
+
+                expect(button(container)).toBe(pressed);
+                expect(pressed.textContent?.trim()).toBe(ready);
+            });
+        }
+    });
+
+    it('says the generic sentence for a request that never arrived', async () =>
+    {
+        const { container } = await seated();
+        const pressed = button(container);
+
+        await answering(async () =>
+        {
+            throw new TypeError('Failed to fetch');
+        }, async () =>
+        {
+            fire(pressed, 'click');
+            await vi.waitFor(() => expect(said()).toEqual([['warning', 'That did not go through. Try again.']]));
+
+            expect(pressed.textContent?.trim()).toBe('I’m ready');
+        });
     });
 });

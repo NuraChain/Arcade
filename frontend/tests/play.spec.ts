@@ -2589,12 +2589,111 @@ describe('PlayPage', () =>
             fire(pressable(container, 'Play again')!, 'click');
 
             await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+            await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
 
             expect(server.calls).toContain('tables.ready');
             expect(server.calls).not.toContain('tables.start');
-            expect(held.chairs[0].ready).toBe(true);
             expect(pressable(container, 'Play again')).toBeUndefined();
             expect(pressable(container, 'Start the game')).toBeUndefined();
+        });
+
+        it('says who is waited for before the server has answered, and takes it back with a sentence when the server says no', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+            const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = routes.ready;
+            const waiting: (() => void)[] = [];
+
+            routes.ready = async () =>
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                throw new ApiError(409, 'table-closed', 'That table has closed.', undefined);
+            };
+
+            try
+            {
+                fire(pressable(container, 'Play again')!, 'click');
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+
+                expect(held.chairs[0].ready).toBe(false);
+                expect(pressable(container, 'Play again')).toBeUndefined();
+
+                await vi.waitFor(() => expect(waiting).toHaveLength(1), { timeout: 4000 });
+                expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+                waiting[0]();
+
+                await vi.waitFor(() => expect(pressable(container, 'Play again')).toBeDefined(), { timeout: 4000 });
+
+                expect(container.textContent).not.toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+                expect(useToasts().items().map((toast) => [toast.kind, toast.text])).toContainEqual(['warning', 'That table has closed.']);
+                expect(held.chairs[0].ready).toBe(false);
+            }
+            finally
+            {
+                routes.ready = real;
+            }
+        });
+
+        it('says who is waited for at once though the table it holds still names the game that ended', async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            held.chairs[0].ready = true;
+            held.chairs[1].ready = true;
+            held.matchId = `over-${ id }`;
+            usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+            (client.matches as unknown as Record<string, unknown>).view = async () => over(id);
+
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(pressable(container, 'Play again')).toBeDefined(), { timeout: 4000 });
+            expect(lobby.table()).toMatchObject({ matchId: `over-${ id }` });
+
+            const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = routes.ready;
+            const waiting: (() => void)[] = [];
+
+            routes.ready = async (input) =>
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                delete held.matchId;
+                held.chairs[1].ready = false;
+
+                return await real(input);
+            };
+
+            try
+            {
+                fire(pressable(container, 'Play again')!, 'click');
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+                expect(pressable(container, 'Play again')).toBeUndefined();
+
+                await vi.waitFor(() => expect(waiting).toHaveLength(1), { timeout: 4000 });
+                waiting[0]();
+
+                await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
+                await settle();
+                expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+            }
+            finally
+            {
+                routes.ready = real;
+            }
         });
 
         it('starts the next game when the last player at the table presses Play again', async () =>

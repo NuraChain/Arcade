@@ -831,6 +831,62 @@ words back in the toast to be copied by hand - except a `secret`, the recovery p
 into a toast a screen reader would announce. The wallet dialog is the one copy that stays inline, because
 the public pages have no toast host.
 
+**What a press does is on screen in the same turn, and only a refusal is ever seen.** The owner:
+"when it click on ready button it should immidetly on client set it to active such as instagram
+like so that user never feel that app has delay". Ready sent its request, waited for the answer,
+read the table again and only then turned green, which on a phone on a train is a second of
+nothing. A store that holds something the reader can change keeps `createGuesses()`
+(`lib/guess.ts`) beside its resource and hands out `guesses.over(read)`: what the server last
+said with every press still in flight laid over it, and the read itself, the SAME object, while
+nothing is in flight, so nothing is drawn again for having the layer there. A verb is
+`guesses.during(guess, send, read)`:
+
+- the guess is made in the turn of the press, before anything is awaited;
+- it stands through the request AND through the read that follows the answer, so the screen never
+  shows the old answer in between;
+- a refusal takes it back at once and is the caller's to say, through `attempt` and the sentence
+  that refusal has (`whyRefused`). The thing goes back and a toast says why; there is no spinner
+  and no disabled button on the way;
+- when the request went through and the truth could not be read again, the guess is KEPT until a
+  read lands (`landed()`): the server said yes, and going back to "Not ready" because a second
+  request failed would be the screen contradicting it. A read that failed is not a read
+  (`viewing.error()`; a resource's `refetch` resolves either way, which is why the store asks).
+
+A guess is a function over the whole thing held, and each one says which table and which chair it
+is about (`atMine`), so a doorbell that reads the table again under a press changes nothing it
+should not, and a press at one table is never drawn at another. A store's requests leave one after
+another (`inTurn`): two quick presses are two requests in the order they were made, the second
+waiting for the first's ANSWER and not for its success, and the screen says what the last press
+said throughout.
+
+**Not everything is guessed.** A move in a game is predicted by its own board, with what the press
+decides and nothing chance decides (*Every board answers the press before the server does*, in
+`games.md`). Nothing the browser cannot know is guessed: which table quick play finds, a deal, a
+start. Nothing that takes the reader off the page is: leaving a table, closing one, giving up. And a
+message is already drawn as it is sent.
+
+So far: the lobby's Ready and the result panel's Play again. `guess.spec.ts` holds the layer;
+`tables.spec.ts` (*what the reader did at a table, shown before the server has said so*) the store,
+with the request held, refused, sent twice and answered by a table that then cannot be read;
+`lobby-panel.spec.ts` (*the button that says ready*) the button, which is the same node
+throughout, and the sentence in both languages; `play.spec.ts` Play again on the page.
+
+**Play again says which game it follows, because the table on screen may still be the one from
+before the finish.** The result arrives with the last move, pushed; the table is read again a
+doorbell later, which is half a second on a good line and far longer on a bad one. In between the
+page holds a table with a game on and every chair ready from the last START, and `rematchOf`
+rightly trusts none of that readiness, so the first live check of this pressed Play again there and
+saw nothing change until the table had been read again. `lobby.again(tableId, over)` is handed the
+game the result panel is showing, and where the table still names that game the guess is the table
+as the finish leaves it - no game on, nobody ready, full or with a chair free - with the reader's
+own chair ready. "Waiting for Sara to play again." is then on screen at the press in that moment
+too. A table that names another game is taken as it stands.
+
+**A spec that waits for what a press shows is answered before the request has left.** With a guess
+`vi.waitFor(the words)` returns in the turn of the press. A test that then "answers" or "refuses"
+the request it believes is out resolves nothing, and hangs: the first version of the Play again
+test did exactly that. Wait for the request to have been asked, then answer it.
+
 **A toast's countdown stops for a pointer AND for focus, and starts again however the touch ended.**
 Pausing takes the time spent so far out of `remaining` and deliberately leaves `startedAt` where it
 is, because that is what the subtraction was measured from — so `progress` has to read a `paused`

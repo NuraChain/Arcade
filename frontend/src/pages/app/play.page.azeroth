@@ -742,7 +742,7 @@ export default component PlayPage()
 
     const begin = starter((tableId) => lobby.begin(tableId));
 
-    const again = starter((tableId) => lobby.again(tableId));
+    const again = starter((tableId) => lobby.again(tableId, board.match()?.id));
 
     const copyLink = async () =>
     {

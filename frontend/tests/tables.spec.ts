@@ -18,6 +18,7 @@ import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import type { TableSummary } from '../src/api.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -1342,5 +1343,401 @@ describe('the lobby store', () =>
 
         expect(server.calls).toContain('tables.mine');
         stop();
+    });
+});
+
+describe('what the reader did at a table, shown before the server has said so', () =>
+{
+    const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+    const holding = async (verb: string, run: (out: { asked: unknown[]; answer: () => void }) => Promise<void>) =>
+    {
+        const real = routes[verb];
+        const asked: unknown[] = [];
+        const waiting: (() => void)[] = [];
+        let owed = 0;
+
+        const answer = () =>
+        {
+            const next = waiting.shift();
+
+            if (next === undefined)
+            {
+                owed += 1;
+            }
+            else
+            {
+                next();
+            }
+        };
+
+        routes[verb] = async (input) =>
+        {
+            asked.push(input);
+
+            if (owed > 0)
+            {
+                owed -= 1;
+            }
+            else
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+            }
+
+            return await real(input);
+        };
+
+        try
+        {
+            await run({ asked, answer });
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const answering = async (verb: string, answer: (input: unknown) => Promise<unknown>, run: () => Promise<void>) =>
+    {
+        const real = routes[verb];
+
+        routes[verb] = answer;
+
+        try
+        {
+            await run();
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const view = routes.view;
+
+    const seated = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, privacy: 'public' }, []);
+        const row = server.tables.find((table) => table.id === id)!;
+
+        row.chairs[1].who = 'sara.k';
+        lobby.open(id);
+        await lobby.refresh();
+        await settle();
+
+        return { lobby, id, row };
+    };
+
+    const mine = (lobby: ReturnType<typeof useLobby>) => lobby.table()!.chairs[0].ready;
+
+    it('says ready in the same turn as the press, while the request is still out', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            expect(mine(lobby)).toBe(true);
+            expect(lobby.table()!.chairs[1].ready).toBe(false);
+
+            await settle();
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }]);
+            expect(row.chairs[0].ready).toBe(false);
+            expect(mine(lobby)).toBe(true);
+
+            answer();
+            await said;
+
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('goes on saying it through a read of the table that lands while the request is out', async () =>
+    {
+        const { lobby, id } = await seated();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            await lobby.refresh();
+            await settle();
+            expect(mine(lobby)).toBe(true);
+
+            answer();
+            await said;
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('goes back to what the server holds, and hands the refusal on, when the server says no', async () =>
+    {
+        const { lobby, id } = await seated();
+        const refusal = new ApiError(409, 'table-closed', 'That table has closed.', undefined);
+
+        await answering('ready', async () =>
+        {
+            throw refusal;
+        }, async () =>
+        {
+            const said = lobby.ready(id, true);
+
+            expect(mine(lobby)).toBe(true);
+            await expect(said).rejects.toBe(refusal);
+            expect(mine(lobby)).toBe(false);
+        });
+    });
+
+    it('sends two presses one after the other, in the order they were made, and ends on the last', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const on = lobby.ready(id, true);
+            const off = lobby.ready(id, false);
+
+            await settle();
+            expect(mine(lobby)).toBe(false);
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }]);
+
+            answer();
+            await on;
+            await settle();
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }, { params: { id }, input: { ready: false } }]);
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(false);
+
+            answer();
+            await off;
+            expect(row.chairs[0].ready).toBe(false);
+            expect(mine(lobby)).toBe(false);
+        });
+    });
+
+    it('sends the second press though the first was refused', async () =>
+    {
+        const { lobby, id, row } = await seated();
+        let turn = 0;
+        const real = routes.ready;
+
+        await answering('ready', async (input) =>
+        {
+            turn += 1;
+
+            if (turn === 1)
+            {
+                throw new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+            }
+
+            return await real(input);
+        }, async () =>
+        {
+            const first = lobby.ready(id, true);
+            const second = lobby.ready(id, true);
+
+            await expect(first).rejects.toThrow('No answer.');
+            await second;
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('touches the chair of the table that was pressed and no other', async () =>
+    {
+        const { lobby, id } = await seated();
+        const other = await lobby.host('hokm', defaultTable('hokm'), []);
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.ready(other, true);
+
+            expect(lobby.table()!.id).toBe(id);
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([false, false]);
+
+            answer();
+            await said;
+        });
+    });
+
+    it('is the table itself while nothing is out, so nothing is drawn again for it', async () =>
+    {
+        const { lobby, id } = await seated();
+        const before = lobby.table();
+
+        expect(lobby.table()).toBe(before);
+
+        await lobby.ready(id, true);
+        await settle();
+
+        const after = lobby.table();
+
+        expect(lobby.table()).toBe(after);
+        expect(after!.chairs[0].ready).toBe(true);
+    });
+
+    it('plays again by saying ready at once', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id);
+
+            expect(mine(lobby)).toBe(true);
+            await settle();
+            expect(row.chairs[0].ready).toBe(false);
+
+            answer();
+            await said;
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('says who is waited for when the table it holds is still the one from before the game ended', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'the-game-that-ended';
+        row.yourTurn = true;
+        row.chairs[0].ready = true;
+        row.chairs[1].ready = true;
+
+        await answering('view', async (input) =>
+        {
+            const read = await view(input) as TableSummary;
+
+            return read.matchId === undefined ? read : { ...read, status: 'playing' };
+        }, async () =>
+        {
+            await lobby.refresh();
+            await settle();
+            expect(lobby.table()).toMatchObject({ matchId: 'the-game-that-ended', status: 'playing', yourTurn: true });
+
+            await holding('ready', async ({ answer }) =>
+            {
+                const said = lobby.again(id, 'the-game-that-ended');
+                const shown = lobby.table()!;
+
+                expect(shown.matchId).toBeUndefined();
+                expect(shown.yourTurn).toBeUndefined();
+                expect(shown.status).toBe('ready');
+                expect(shown.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+                expect(shown.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k']);
+
+                delete row.matchId;
+                delete row.yourTurn;
+                row.chairs[0].ready = false;
+                row.chairs[1].ready = false;
+                answer();
+                await said;
+
+                expect(lobby.table()!.matchId).toBeUndefined();
+                expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+            });
+        });
+    });
+
+    it('says a chair is free where somebody left the table the game ended at', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'the-game-that-ended';
+        row.chairs[0].ready = true;
+        delete row.chairs[1].who;
+        await lobby.refresh();
+        await settle();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id, 'the-game-that-ended');
+
+            expect(lobby.table()).toMatchObject({ status: 'open', taken: 1 });
+            expect(lobby.table()!.matchId).toBeUndefined();
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+
+            delete row.matchId;
+            answer();
+            await said;
+        });
+    });
+
+    it('takes a table that names another game as it stands, and only says the reader is ready', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'a-game-still-on';
+        row.chairs[1].ready = true;
+        await lobby.refresh();
+        await settle();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id, 'the-game-that-ended');
+
+            expect(lobby.table()).toMatchObject({ matchId: 'a-game-still-on' });
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, true]);
+
+            answer();
+            await said.catch(() => undefined);
+        });
+    });
+
+    it('keeps what was pressed when the request went through and the table could not be read again, until it can', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await answering('view', async () =>
+        {
+            throw new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+        }, async () =>
+        {
+            await lobby.ready(id, true);
+            expect(mine(lobby)).toBe(true);
+
+            await lobby.refresh();
+            await settle();
+        });
+
+        expect(row.chairs[0].ready).toBe(true);
+        expect(mine(lobby)).toBe(true);
+
+        row.chairs[0].ready = false;
+        await lobby.refresh();
+        await settle();
+        expect(mine(lobby)).toBe(false);
+    });
+
+    it('forgets what was pressed when the store is reset', async () =>
+    {
+        const { lobby, id } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            await settle();
+            lobby.reset();
+            lobby.open(id);
+            await vi.waitFor(() => expect(lobby.table()?.id).toBe(id));
+            expect(mine(lobby)).toBe(false);
+
+            const after = lobby.ready(id, true);
+
+            await settle();
+            expect(asked).toHaveLength(2);
+
+            answer();
+            answer();
+            await said.catch(() => undefined);
+            await after;
+        });
     });
 });

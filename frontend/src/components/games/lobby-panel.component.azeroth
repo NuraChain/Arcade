@@ -120,6 +120,11 @@ export default component LobbyPanel(props: {
         }
     };
 
+    const sayReady = () =>
+    {
+        void attempt(lobby.ready(props.table.id, mine?.ready !== true), undefined, (error) => whyRefused(error, 'common.actionFailed'));
+    };
+
     <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -160,7 +165,7 @@ export default component LobbyPanel(props: {
                 block
                 leading={ mine?.ready === true ? 'check-circle' : 'zap' }
                 disabled={ mine === null }
-                onClick={ () => void lobby.ready(props.table.id, !(mine?.ready === true)) }
+                onClick={ sayReady }
             >
                 { mine?.ready === true ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.ready') }
             </Button>

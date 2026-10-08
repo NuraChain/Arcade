@@ -4,6 +4,7 @@ import { ApiError, client, type TableSummary } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
 import type { QuickAsk } from '../lib/quick-asks.ts';
+import { createGuesses } from '../lib/guess.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
@@ -55,7 +56,7 @@ export interface LobbyApi
     /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
     begin(tableId: string): Promise<void>;
 
-    again(tableId: string): Promise<void>;
+    again(tableId: string, over?: string): Promise<void>;
 
     refresh(): Promise<void>;
     start(): () => void;
@@ -157,35 +158,91 @@ export const useLobby = createStore((): LobbyApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
+    const guessed = createGuesses<TableSummary>();
+
+    let sending: Promise<unknown> = Promise.resolve();
+
+    const inTurn = <R>(send: () => Promise<R>) =>
+    {
+        const sent = sending.catch(() => undefined).then(send);
+
+        sending = sent;
+
+        return sent;
+    };
+
+    const atMine = (tableId: string, change: (chair: TableSummary['chairs'][number]) => TableSummary['chairs'][number]) =>
+        (table: TableSummary): TableSummary => (table.id !== tableId || table.mine === undefined
+            ? table
+            : { ...table, chairs: table.chairs.map((chair) => (chair.seat === table.mine ? change(chair) : chair)) });
+
+    const afterGame = (tableId: string, over: string | undefined) => (table: TableSummary): TableSummary =>
+    {
+        if (over === undefined || table.matchId !== over)
+        {
+            return atMine(tableId, (chair) => ({ ...chair, ready: true }))(table);
+        }
+
+        const { matchId: _over, yourTurn: _turn, ...settled } = table;
+
+        return {
+            ...settled,
+            status: table.taken >= table.seats ? 'ready' : 'open',
+            chairs: table.chairs.map((chair) => ({ ...chair, ready: chair.seat === table.mine }))
+        };
+    };
+
     const goesWithTheChair = (table: TableSummary) =>
         table.privacy === 'invite' || (table.privacy === 'friends' && table.host === untrack(who));
+
+    const reread = async () =>
+    {
+        const open = untrack(openId);
+        const held = untrack(viewing.data) ?? null;
+
+        if (open !== '' && held !== null && held.id === open && held.mine !== undefined && goesWithTheChair(held))
+        {
+            await seated.refetch();
+
+            if (!(untrack(seated.data)?.tables ?? []).some((table) => table.id === open))
+            {
+                left.add(open);
+            }
+
+            await viewing.refetch();
+            return;
+        }
+
+        await Promise.all([
+            seated.refetch(),
+            open === '' ? Promise.resolve() : viewing.refetch()
+        ]);
+    };
 
     const revalidate = () =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
-            const open = untrack(openId);
-            const held = untrack(viewing.data) ?? null;
+            await reread();
 
-            if (open !== '' && held !== null && held.id === open && held.mine !== undefined && goesWithTheChair(held))
+            if (untrack(viewing.error) === null)
             {
-                await seated.refetch();
-
-                if (!(untrack(seated.data)?.tables ?? []).some((table) => table.id === open))
-                {
-                    left.add(open);
-                }
-
-                await viewing.refetch();
-                return;
+                guessed.landed();
             }
-
-            await Promise.all([
-                seated.refetch(),
-                open === '' ? Promise.resolve() : viewing.refetch()
-            ]);
         });
         return inFlight;
+    };
+
+    const truth = async () =>
+    {
+        await revalidate();
+
+        const unread = untrack(viewing.error);
+
+        if (unread !== null)
+        {
+            throw unread;
+        }
     };
 
     interface TableInput
@@ -238,7 +295,12 @@ export const useLobby = createStore((): LobbyApi =>
     };
 
     return {
-        table: () => viewing.data() ?? null,
+        table: () =>
+        {
+            const held = viewing.data() ?? null;
+
+            return held === null ? null : guessed.over(held);
+        },
         loading: () => viewing.loading(),
         failed: () => viewing.error(),
 
@@ -328,8 +390,11 @@ export const useLobby = createStore((): LobbyApi =>
 
         async ready(tableId, ready)
         {
-            await client.tables.ready({ params: { id: tableId }, input: { ready } });
-            await revalidate();
+            await guessed.during(
+                atMine(tableId, (chair) => ({ ...chair, ready })),
+                () => inTurn(() => client.tables.ready({ params: { id: tableId }, input: { ready } })),
+                truth
+            );
         },
 
         async invite(tableId, handle)
@@ -366,10 +431,9 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
-        async again(tableId)
+        async again(tableId, over)
         {
-            await settle(tableId);
-            await revalidate();
+            await guessed.during(afterGame(tableId, over), () => inTurn(() => settle(tableId)), truth);
         },
 
         refresh: revalidate,
@@ -418,6 +482,8 @@ export const useLobby = createStore((): LobbyApi =>
             rehold([]);
             setOpenId('');
             inFlight = Promise.resolve();
+            sending = Promise.resolve();
+            guessed.clear();
 
             for (const arrived of [...arriving.values()])
             {
