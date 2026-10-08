@@ -755,6 +755,17 @@ into a room - a result, an invitation, a group made or joined - is not somebody 
 and the ones that matter have a notification that says what they are. And nobody is told about a
 message they wrote themselves in another tab.
 
+**A friend request is announced for the request that came, not for a count that went up.** The
+tracker remembered how many requests were waiting and, when there were more, named the sender of
+the LAST one in the list. The server lists requests newest first, so with one request already
+waiting the toast for the next named whoever had been waiting longest. No spec could see it: the
+specs' server listed requests in the order a test handed them over, the new one last, which is the
+one order the server never sends. The tracker keeps the ids it has been shown (`asked`) and speaks
+for the first one it has not, the specs' server orders requests as the server does, and a test adds
+a request with `knock`, which makes it the newest and says nothing about where it goes in the list.
+Ids shown while the socket is down are kept like any others, so a request read in during a
+reconnect is still recovery and not news.
+
 **A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
 server starts the game when the last chair fills, which can be minutes later and on another page, and
 a live turn is thirty seconds: the sweep was playing the first turns of people who never knew they

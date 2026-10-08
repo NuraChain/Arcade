@@ -59,7 +59,7 @@ export const useCues = createStore((): CuesApi =>
     let chatSeeded = false;
     let chatSeenBusy = false;
 
-    let requestCount = 0;
+    const asked = new Set<string>();
     let requestSeeded = false;
     let requestSeenBusy = false;
 
@@ -181,30 +181,30 @@ export const useCues = createStore((): CuesApi =>
                 return;
             }
 
-            if (!requestSeeded)
+            if (!requestSeeded && !requestSeenBusy)
             {
-                if (!requestSeenBusy)
-                {
-                    return;
-                }
-
-                requestCount = requests.length;
-                requestSeeded = true;
                 return;
             }
 
-            if (requests.length > requestCount && live.status() === 'connected')
+            const arrived = requests.find((request) => !asked.has(request.id));
+
+            for (const request of requests)
+            {
+                asked.add(request.id);
+            }
+
+            if (requestSeeded && arrived !== undefined && live.status() === 'connected')
             {
                 toasts.show({
                     kind: 'live',
                     icon: 'friend-add',
-                    text: locale.t('cue.requestBody', { who: nameOf(requests[requests.length - 1].from) }),
+                    text: locale.t('cue.requestBody', { who: nameOf(arrived.from) }),
                     action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
                     dedupe: 'cue.request'
                 });
                 chime();
             }
-            requestCount = requests.length;
+            requestSeeded = true;
         }, { name: 'cues.requests' });
 
         const trackNotices = () => createEffect(() =>
@@ -371,7 +371,7 @@ export const useCues = createStore((): CuesApi =>
             newest = 0;
             chatSeeded = false;
             chatSeenBusy = false;
-            requestCount = 0;
+            asked.clear();
             requestSeeded = false;
             requestSeenBusy = false;
             noticeCount = 0;

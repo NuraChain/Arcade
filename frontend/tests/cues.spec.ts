@@ -9,7 +9,7 @@ import { useCues } from '../src/stores/cues.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
-import { useRealtime } from '../src/stores/realtime.store.ts';
+import { BACKOFF_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
@@ -47,6 +47,13 @@ const laterMessageIn = (id: string, from?: string) =>
     const row = server.conversations.find((one) => one.id === id)!;
     const after = Date.parse(row.last!.clientAt ?? row.last!.at) + 60_000;
     row.last = { ...row.last!, ...(from === undefined ? {} : { from }), at: new Date(after).toISOString(), clientAt: new Date(after).toISOString() };
+};
+
+const knock = (from: string) =>
+{
+    const newest = Math.max(1_700_000_000_000, ...server.incoming.map((one) => Date.parse(one.at)));
+
+    server.incoming = [...server.incoming, { id: `req-${ from }`, from, to: 'alex', at: new Date(newest + 60_000).toISOString() }];
 };
 
 const newestMessage = () =>
@@ -111,7 +118,7 @@ describe('the cues store', () =>
 
         expect(useToasts().items()).toHaveLength(0);
 
-        server.incoming = [...server.incoming, { id: 'req-new', from: 'maya.c', to: 'alex', at: new Date(clock.now()).toISOString() }];
+        knock('maya.c');
         await useSocial().refresh();
         await settle();
 
@@ -129,7 +136,7 @@ describe('the cues store', () =>
         await useSocial().refresh();
         await settle();
 
-        server.incoming = [...server.incoming, { id: 'req-new', from: 'maya.c', to: 'alex', at: new Date(clock.now()).toISOString() }];
+        knock('maya.c');
         await useSocial().refresh();
         await settle();
 
@@ -139,6 +146,139 @@ describe('the cues store', () =>
         shown.action?.run();
 
         expect(went, 'the button named Requests led somewhere the request is not').toEqual(['/app/friends?tab=requests']);
+    });
+
+    it('names the one who has just asked, whoever else was already waiting for an answer', async () =>
+    {
+        const said = () => useToasts().items().filter((toast) => toast.dedupe === 'cue.request').map((toast) => toast.text);
+
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        expect(useSocial().incoming().map((request) => request.from)).toEqual(['mahsa', 'hamed.z']);
+
+        knock('peyman');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useSocial().incoming().map((request) => request.from), 'the server lists the newest request first').toEqual(['peyman', 'mahsa', 'hamed.z']);
+        expect(said()).toEqual(['Peyman Salehi wants to be your friend']);
+
+        knock('arash');
+        await useSocial().refresh();
+        await settle();
+
+        expect(said()).toEqual(['Arash Moradi wants to be your friend']);
+    });
+
+    it('names the newest when two have come since it last looked', async () =>
+    {
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        knock('peyman');
+        knock('arash');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.request').map((toast) => toast.text)).toEqual(['Arash Moradi wants to be your friend']);
+    });
+
+    it('says nothing about the requests already waiting for somebody who signs in after it armed', async () =>
+    {
+        useSession().reset();
+        useSocial().reset();
+        await settle();
+
+        expect(useSocial().incoming()).toEqual([]);
+
+        useCues().start();
+        await settle();
+
+        establish();
+        await settle();
+        await useSocial().refresh();
+        await settle();
+
+        expect(useSocial().incoming().map((request) => request.from)).toEqual(['mahsa', 'hamed.z']);
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.request')).toEqual([]);
+    });
+
+    it('forgets whose requests it had been shown when it is reset', async () =>
+    {
+        const said = () => useToasts().items().filter((toast) => toast.dedupe === 'cue.request').map((toast) => toast.text);
+
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        knock('peyman');
+        await useSocial().refresh();
+        await settle();
+
+        expect(said()).toEqual(['Peyman Salehi wants to be your friend']);
+
+        useCues().reset();
+        useToasts().reset();
+        server.incoming = server.incoming.filter((request) => request.from !== 'peyman');
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        expect(said()).toEqual([]);
+
+        knock('peyman');
+        await useSocial().refresh();
+        await settle();
+
+        expect(said()).toEqual(['Peyman Salehi wants to be your friend']);
+    });
+
+    it('says nothing when a request is answered and the ones still waiting are read again', async () =>
+    {
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        server.incoming = server.incoming.filter((request) => request.from !== 'mahsa');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useSocial().incoming().map((request) => request.from)).toEqual(['hamed.z']);
+        expect(useToasts().items()).toEqual([]);
+    });
+
+    it('says nothing about a request that came while the socket was down, then or once it is back', async () =>
+    {
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        socket.drop();
+        await settle();
+
+        knock('peyman');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useToasts().items()).toEqual([]);
+
+        clock.advance(BACKOFF_MS[0] * 1.11);
+        socket.accept();
+        await settle();
+        await useSocial().refresh();
+        await settle();
+
+        expect(useRealtime().status()).toBe('connected');
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.request')).toEqual([]);
+
+        knock('arash');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.request').map((toast) => toast.text)).toEqual(['Arash Moradi wants to be your friend']);
     });
 
     it('takes whoever presses a notice’s button to the thing it is about, and says where that is', async () =>
@@ -323,7 +463,7 @@ describe('the cues store', () =>
 
         expect(useToasts().items()).toHaveLength(0);
 
-        server.incoming = [...server.incoming, { id: 'req-new', from: 'maya.c', to: 'alex', at: new Date(clock.now()).toISOString() }];
+        knock('maya.c');
         server.notify({ kind: 'friend-request', actor: 'maya.c', dedupeKey: 'friend:maya.c' });
         await useNotifications().refresh();
         await useSocial().refresh();

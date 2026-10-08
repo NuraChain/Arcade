@@ -1894,8 +1894,10 @@ export const client =
                 // browser renders the row out of `people.store`, so a request whose sender it has
                 // never been told about renders as nothing at all.
                 incoming: server.incoming.filter((request) => reachable(request.from))
+                    .sort((a, b) => b.at.localeCompare(a.at))
                     .map((request) => ({ ...request, person: personWire(request.from) })),
                 outgoing: server.outgoing.filter((request) => reachable(request.to))
+                    .sort((a, b) => b.at.localeCompare(a.at))
                     .map((request) => ({ ...request, person: personWire(request.to) })),
                 blocked: server.blocks.map(personWire),
                 mutes: [...server.mutes]
