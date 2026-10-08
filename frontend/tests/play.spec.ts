@@ -31,12 +31,13 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
-import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
+import { IDLE_MS, NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { useWatch } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -1465,6 +1466,84 @@ describe('PlayPage', () =>
 
             expect(container.textContent).not.toContain(useLocale().t('watch.title'));
             expect(container.querySelector('h1')).toBe(heading);
+        });
+
+        it.each([
+            ['en', 'There is nothing here for you to watch.'],
+            ['fa', 'این‌جا چیزی برای تماشای تو نیست.']
+        ] as const)('says there is nothing to watch when the server will not show a game, not that the game is too young, in %s', async (language, words) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container, lobby, held } = await opened('omid.k');
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(container.querySelector('[data-unwatchable]')!.textContent).toContain(words);
+            expect(container.textContent).not.toContain('nothing old enough');
+            expect(container.textContent).not.toContain('به اندازهٔ کافی قدیمی');
+
+            useLocale().setLocale('en');
+        });
+
+        it('does not say so while the first answer is still on its way', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+            let answer: () => void = () => undefined;
+
+            vi.spyOn(client.matches, 'watch').mockImplementationOnce(() => new Promise((_resolve, reject) =>
+            {
+                answer = () => reject(new ApiError(404, 'not-found', 'Nothing to watch there.', undefined));
+            }));
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+            await settle();
+
+            expect(container.querySelector('[data-unwatchable]'), 'said before the server had answered').toBeNull();
+
+            answer();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            vi.restoreAllMocks();
+        });
+
+        it('goes on saying so while it asks again, and does not draw the sentence a second time', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            const said = container.querySelector('[data-unwatchable]');
+            const stop = useWatch().start();
+            let answer: () => void = () => undefined;
+
+            const asked = vi.spyOn(client.matches, 'watch').mockImplementationOnce(() => new Promise((_resolve, reject) =>
+            {
+                answer = () => reject(new ApiError(404, 'not-found', 'Nothing to watch there.', undefined));
+            }));
+
+            socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'game', id: 'match-nobody-kept', at: 0 });
+            clock.advance(NUDGE_WINDOW_MS);
+            await settle();
+
+            expect(asked).toHaveBeenCalledTimes(1);
+            expect(container.querySelector('[data-unwatchable]'), 'taken away while the page asked again').toBe(said);
+
+            answer();
+            await settle();
+
+            expect(container.querySelector('[data-unwatchable]')).toBe(said);
+
+            stop();
+            vi.restoreAllMocks();
         });
 
         it('opens the sheet that invites a friend when the host presses an empty chair', async () =>

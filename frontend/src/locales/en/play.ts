@@ -190,7 +190,7 @@ export const play = {
         other: 'Nothing has happened at this table for {count} minutes.'
     },
     'watch.why': 'Everyone watching is behind by the same amount, so nobody can be coached from the sidelines.',
-    'watch.waiting': 'The game has just started. There is nothing old enough to show yet.',
+    'watch.refused': 'There is nothing here for you to watch. The game may have just ended, or it is not open to you.',
     'watch.none': 'No games are being played right now.',
     'watch.live': 'Games in progress',
     'watch.join': 'Watch',

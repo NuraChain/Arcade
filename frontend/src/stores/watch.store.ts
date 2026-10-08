@@ -13,7 +13,7 @@ export interface WatchApi
 
     loading: Getter<boolean>;
 
-    waiting: Getter<boolean>;
+    refused: Getter<boolean>;
 
     failed: Getter<boolean>;
 
@@ -61,7 +61,7 @@ export const useWatch = createStore((): WatchApi =>
     return {
         view: () => watched.data() ?? null,
         loading: () => watched.loading(),
-        waiting: () => missing() && matchId() !== null,
+        refused: () => missing() && matchId() !== null,
         failed: () => watched.error() !== null && watched.data() == null && matchId() !== null,
 
         open(id)

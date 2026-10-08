@@ -1999,14 +1999,20 @@ the server keeps. `match-quit.db.spec.ts` holds each of the five answers at a th
 table, a walkout as well as a resignation, the end told to everybody, and a game of two
 unchanged; `play.spec.ts` the sentence in both languages and the button that is gone.
 
-The play page also still says a thing this route no longer means. A refused watch is drawn as
-`watch.waiting`, "The game has just started. There is nothing old enough to show yet.", the sentence
-for a game too young to have a board to show - and a young game is shown its opening, so the only
-404 left is not there, or not for this reader. Somebody on either side of a block with the host
-reads it for as long as they stay: `byId` still shows them the table, because `visibleTo` has no
-block clause, and `watchableTable` refuses the game on it. The watch store's `waiting` and `missing`
-are that state with no reader, and `fit-pass.mjs` still waits forty-five seconds for a watch that is
-ready at once.
+**A refused watch says what it is.** The play page drew it as `watch.waiting`, "The game has just
+started. There is nothing old enough to show yet.", the sentence for a game too young to have a
+board to show - and a young game is shown its opening, so the only 404 left is not there, or not
+for this reader. Somebody on either side of a block with the host read that sentence for as long
+as they stayed: `byId` still shows them the table, because `visibleTo` has no block clause, and
+`watchableTable` refuses the game on it. It says "There is nothing here for you to watch. The game
+may have just ended, or it is not open to you." now (`watch.refused`), which is all a 404 lets
+anybody say and names nobody. The page asks the store whether the watch was REFUSED
+(`watch.refused()`, the store's `missing` flag that had no reader) where it used to work it out
+as "no board, not loading, not failed" - and "not loading" goes false every time the page asks
+again, so the sentence was taken away and drawn again at each doorbell and each half-minute poll.
+`play.spec.ts` holds the sentence in both languages, its absence while the first answer is on
+its way, and that it is the same node while a later answer is. `fit-pass.mjs` no longer waits
+forty-five seconds for a watch that is ready at once.
 
 **`tools/qa/ludo-pass.mjs` plays complete games over the real api**, at two, three and four players,
 through the routes a browser uses. It is API-level on purpose: it proves the rules, the persistence,

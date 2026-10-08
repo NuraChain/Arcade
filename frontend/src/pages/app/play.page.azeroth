@@ -944,10 +944,10 @@ export default component PlayPage()
                                 <Show when={ watchReady && watch.view() !== null }>
                                     { () => <Dynamic component={ Watched! } props={ () => ({ watch: watch.view()! }) } /> }
                                 </Show>
-                                <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
+                                <Show when={ watch.refused() }>
                                     { () =>
                                         <Panel pad="lg" class="items-center text-center">
-                                            <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
+                                            <p data-unwatchable class="max-w-[44ch] text-ui-base text-muted">{ locale.t('watch.refused') }</p>
                                         </Panel>
                                     }
                                 </Show>

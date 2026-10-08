@@ -924,7 +924,7 @@ try
         await refresh(spec, table);
 
         const stranger = await walletSeat(browser, `Fit watcher ${ Math.floor(Math.random() * 100000) }`);
-        const watchable = await waitFor(async () => (await stranger.api('GET', `/matches/${ table.matchId }/watch`)).ok, 45000);
+        const watchable = (await stranger.api('GET', `/matches/${ table.matchId }/watch`)).ok;
 
         record(`${ spec.id } can be watched by a stranger`, watchable);
 
