@@ -33,6 +33,8 @@ export interface CuesApi
 
 const SAID_ELSEWHERE: ReadonlySet<NotificationKind> = new Set(['friend-request', 'message']);
 
+const LEADS_NOWHERE: ReadonlySet<NotificationKind> = new Set(['table-removed']);
+
 /**
  * What arrival looks like when nobody is looking at the page it changes.
  *
@@ -234,13 +236,10 @@ export const useCues = createStore((): CuesApi =>
 
                 if (item !== undefined && !SAID_ELSEWHERE.has(item.kind))
                 {
-                    toasts.show({
-                        kind: 'live',
-                        icon: NOTIFICATION_ICON[item.kind],
-                        text: sayOf(item, nameOf(item.actor ?? ''), locale),
-                        action: { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') },
-                        dedupe: 'cue.notice'
-                    });
+                    const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, nameOf(item.actor ?? ''), locale) };
+                    const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
+
+                    toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
                     chime();
                 }
             }

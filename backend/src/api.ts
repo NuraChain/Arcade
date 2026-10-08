@@ -645,6 +645,9 @@ export function buildApi(ports: Ports)
             invite: routes.post('/:id/invite', { input: personRef, output: tableSummary },
                 (context) => ports.table.invite(context.principal.userId, context.params.id, context.input.id)),
 
+            remove: routes.post('/:id/remove', { input: personRef, output: tableSummary },
+                (context) => ports.table.remove(context.principal.userId, context.params.id, context.input.id)),
+
             close: routes.post('/:id/close', { output: ack }, async (context) =>
             {
                 await ports.table.close(context.principal.userId, context.params.id);

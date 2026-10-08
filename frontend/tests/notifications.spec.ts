@@ -83,6 +83,12 @@ describe('where a notice leads', () =>
         expect(targetOf(notice('group-added', { actor: 'maya.c', ref: { groupId: 'g-1' } }))).toBe('/app/groups/g-1');
         expect(targetOf(notice('message', { actor: 'maya.c', ref: { conversationId: 'c-1' } }))).toBe('/app/chats/c-1');
     });
+
+    it('sends somebody a host took out of a table to the games, not back to a table with no chair for them', () =>
+    {
+        expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1', game: 'ludo' } }))).toBe('/app/games');
+        expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1' } }))).toBe('/app/games');
+    });
 });
 
 describe('the notifications store', () =>
@@ -279,6 +285,51 @@ describe('what a notification says', () =>
         const many = render({ ...base, kind: 'message' as const, actor: 'sara.k', count: 12 });
         expect(many).toContain('12');
         expect(many).toContain('new messages');
+    });
+
+    it('says who took the reader out of a table, and of which game, in the language it is read in', () =>
+    {
+        const item = { ...base, kind: 'table-removed' as const, actor: 'sara.k', ref: { tableId: 't-1', game: 'ludo' } };
+
+        const told = (text: string, game: 'games.ludo.name' | 'games.backgammon.name') =>
+            ['sara.k', 'Sara'].some((who) => text.includes(useLocale().t('notify.tableRemoved', { who, game: useLocale().t(game) })));
+
+        useLocale().setLocale('en');
+
+        const english = render(item);
+
+        expect(english).toContain('took you out of a Ludo table');
+        expect(told(english, 'games.ludo.name')).toBe(true);
+
+        cleanup();
+        expect(render({ ...item, ref: { tableId: 't-2', game: 'backgammon' } })).toContain('took you out of a Backgammon table');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = render(item);
+
+        expect(told(persian, 'games.ludo.name')).toBe(true);
+        expect(persian).toContain('منچ');
+        expect(persian).not.toContain('took you out');
+    });
+
+    it('files it with the table invitations somebody can switch off, as the server does', async () =>
+    {
+        const notifications = useNotifications();
+
+        server.notify({ kind: 'table-removed', actor: 'sara.k', ref: { tableId: 't-1', game: 'ludo' }, dedupeKey: 'removed:t-1' });
+        server.notify({ kind: 'message', actor: 'reza.t', ref: {}, dedupeKey: 'chat:c-1' });
+        await notifications.refresh();
+
+        notifications.only('invites');
+        await settle();
+
+        expect(notifications.items().map((one) => one.kind)).toEqual(['table-removed']);
+        expect(notifications.items()[0].ref).toEqual({ tableId: 't-1', game: 'ludo' });
+
+        notifications.only(null);
+        await settle();
     });
 });
 

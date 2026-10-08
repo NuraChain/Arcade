@@ -736,7 +736,6 @@ describe('the lobby store', () =>
         ]);
     });
 
-
     it('remembers where this account is sitting, across a reload', async () =>
     {
         const lobby = useLobby();
@@ -1153,6 +1152,146 @@ describe('the lobby store', () =>
 
         expect(lobby.table()).toBeNull();
         expect(lobby.failed() ?? null).toBeNull();
+    });
+
+    describe('a host taking somebody out of a chair', () =>
+    {
+        const hosting = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            lobby.open(id);
+            await settle();
+            server.calls = [];
+
+            return { lobby, id, held };
+        };
+
+        it('is one request naming them, after which the table is read again and their chair is empty', async () =>
+        {
+            const { lobby, id } = await hosting();
+
+            expect(lobby.table()!.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k', undefined, undefined]);
+
+            await lobby.remove(id, 'sara.k');
+            await settle();
+
+            expect(written()).toEqual(['tables.remove']);
+            expect(server.calls).toContain('tables.view');
+            expect(lobby.table()!.chairs.map((chair) => chair.who)).toEqual(['alex', undefined, undefined, undefined]);
+            expect(lobby.table()!.taken).toBe(1);
+            expect(server.keptOut[id]).toEqual(['sara.k']);
+        });
+
+        it('hands a refusal on to whoever asked, and leaves the chair as it was', async () =>
+        {
+            const { lobby, id, held } = await hosting();
+
+            held.matchId = 'live-1';
+
+            await expect(lobby.remove(id, 'sara.k')).rejects.toMatchObject({ status: 409, code: 'playing' });
+            await expect(lobby.remove(id, 'nobody-sitting-here')).rejects.toMatchObject({ status: 409, code: 'playing' });
+
+            delete held.matchId;
+
+            await expect(lobby.remove(id, 'nobody-sitting-here')).rejects.toMatchObject({ status: 404, code: 'not-found' });
+            expect(held.chairs[1].who).toBe('sara.k');
+            expect(server.keptOut[id]).toBeUndefined();
+        });
+    });
+
+    describe('somebody a host took out of a chair', () =>
+    {
+        const guestAt = async (privacy: 'public' | 'friends' | 'room' | 'invite') =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy }, []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.host = 'sara.k';
+            held.chairs[0].who = 'sara.k';
+            held.chairs[1].who = 'alex';
+            await lobby.refresh();
+            lobby.open(id);
+            await settle();
+
+            expect(lobby.table()?.mine).toBe(1);
+
+            delete held.chairs[1].who;
+            server.keptOut[id] = ['alex'];
+            server.calls = [];
+
+            return { lobby, id, held };
+        };
+
+        it.each(['public', 'friends', 'room'] as const)('reads a %s table again when it is rung, and is told there that the host took them out', async (privacy) =>
+        {
+            const { lobby, id } = await guestAt(privacy);
+
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).toContain('tables.view');
+            expect(lobby.table()?.id).toBe(id);
+            expect(lobby.table()?.removed).toBe(true);
+            expect(lobby.table()?.mine).toBeUndefined();
+            expect(lobby.seated()).toEqual([]);
+        });
+
+        it('asks nothing more about a table by invitation, which they can no longer see', async () =>
+        {
+            const { lobby } = await guestAt('invite');
+
+            await lobby.refresh();
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).not.toContain('tables.view');
+            expect(lobby.table()).toBeNull();
+            expect(lobby.failed() ?? null).toBeNull();
+        });
+
+        it('asks about it again once the page is opened again, as an invitation leads them to do', async () =>
+        {
+            const { lobby, id, held } = await guestAt('invite');
+
+            await lobby.refresh();
+            await settle();
+
+            expect(lobby.table()).toBeNull();
+
+            server.keptOut[id] = [];
+            held.chairs[1].invited = 'alex';
+            lobby.open(id);
+
+            await vi.waitFor(() => expect(lobby.table()?.id).toBe(id));
+
+            expect(lobby.table()?.removed).toBeUndefined();
+            expect(lobby.table()?.chairs[1].invited).toBe('alex');
+        });
+
+        it('still asks nothing more about a table for their friends that its own host lost the chair at', async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy: 'friends' }, []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            lobby.open(id);
+            await settle();
+
+            delete held.chairs[0].who;
+            server.calls = [];
+
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).not.toContain('tables.view');
+            expect(lobby.table()).toBeNull();
+        });
     });
 
     it('re-reads itself when the table doorbell rings', async () =>

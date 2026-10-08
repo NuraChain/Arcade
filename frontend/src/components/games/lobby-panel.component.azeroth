@@ -2,11 +2,15 @@ import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
 import type { GameId } from '../../data/games.ts';
 import type { TableSummary } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
 import { looking } from '../../lib/looking.ts';
+import { whyRefused } from '../../lib/open-table.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import SeatCard from './seat-card.component.azeroth';
 
@@ -29,6 +33,7 @@ export default component LobbyPanel(props: {
     const lobby = useLobby();
     const catalogue = useCatalogue();
     const people = usePeople();
+    const overlay = useOverlay();
 
     derived me = lobby.me();
 
@@ -89,6 +94,32 @@ export default component LobbyPanel(props: {
         }))
         : [{ key: 'all', says: locale.t('create.seats'), chairs: props.table.chairs }];
 
+    const takeOut = async (handle: string | undefined) =>
+    {
+        if (handle === undefined)
+        {
+            return;
+        }
+
+        const tableId = props.table.id;
+        const title = locale.t('play.remove.title', { name: people.byHandle(handle)?.displayName ?? handle });
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title,
+                lead: locale.t('play.remove.lead'),
+                confirm: locale.t('play.remove.confirm'),
+                destructive: true
+            },
+            { label: title }
+        ).closed;
+
+        if (yes === true && !await attempt(lobby.remove(tableId, handle), undefined, (error) => whyRefused(error, 'common.actionFailed', 'play.remove.started')))
+        {
+            void lobby.refresh();
+        }
+    };
+
     <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -113,7 +144,7 @@ export default component LobbyPanel(props: {
                         <ul class={ () => sided ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3 sm:grid-cols-4' } aria-label={ group.says }>
                             <For each={ group.chairs } key={ (chair) => chair.seat } let={ chair }>
                                 <li class="flex min-w-0">
-                                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
+                                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } canRemove={ amHost } onInvite={ () => props.onInvite() } onRemove={ () => void takeOut(chair.who) } />
                                 </li>
                             </For>
                         </ul>

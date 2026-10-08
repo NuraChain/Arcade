@@ -823,6 +823,170 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('somebody the host took out of a chair', () =>
+    {
+        const sitDown = (container: HTMLElement) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('play.table.sitDown'));
+
+        const lobbyOf = (container: HTMLElement) => container.querySelector<HTMLElement>(`section[aria-label="${ useLocale().t('play.title.lobby') }"]`);
+
+        const saying = (container: HTMLElement, key: MessageKey) =>
+            [...container.querySelectorAll<HTMLElement>('p')].find((one) => one.textContent?.trim() === useLocale().t(key));
+
+        const said = () => useToasts().items().map((one) => [one.kind, one.text]);
+
+        const guestAt = async (privacy: 'public' | 'invite') =>
+        {
+            const id = await useLobby().host('ludo', { ...defaultTable('ludo'), privacy }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.host = 'sara.k';
+            held.chairs[0].who = 'sara.k';
+            held.chairs[1].who = 'alex';
+            await useLobby().refresh();
+
+            return held;
+        };
+
+        const takenOut = (held: { id: string; chairs: { who?: string; ready: boolean }[] }) =>
+        {
+            delete held.chairs[1].who;
+            held.chairs[1].ready = false;
+            server.keptOut[held.id] = ['alex'];
+        };
+
+        const opened = (id: string) =>
+        {
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            return { container, router };
+        };
+
+        afterEach(() =>
+        {
+            useOverlay().reset();
+            useToasts().reset();
+            useLocale().setLocale('en');
+        });
+
+        it.each(['en', 'fa'] as const)('is told so on the table’s page without a reload, in %s, and is offered no seat there', async (language) =>
+        {
+            useLocale().setLocale(language);
+
+            const held = await guestAt('public');
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+
+            takenOut(held);
+            await useLobby().refresh();
+            await settle();
+
+            expect(saying(container, 'play.table.removed'), 'the page does not say the host took the reader out').toBeDefined();
+            expect(saying(container, 'play.table.watching')).toBeUndefined();
+            expect(sitDown(container), 'a seat is offered to somebody who would be refused it').toBeUndefined();
+            expect(lobbyOf(container)).toBeNull();
+            expect(container.querySelector('h1')).toBe(heading);
+            expect(useLocale().t('play.table.removed')).not.toBe(useLocale().t('play.table.watching'));
+        });
+
+        it('is offered the seat again in the same panel once the host has invited them, and can take it', async () =>
+        {
+            const held = await guestAt('public');
+
+            takenOut(held);
+
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(saying(container, 'play.table.removed')).toBeDefined(), { timeout: 4000 });
+
+            const sentence = saying(container, 'play.table.removed')!;
+
+            expect(sitDown(container)).toBeUndefined();
+
+            server.keptOut[held.id] = [];
+            held.chairs[1].invited = 'alex';
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.contains(sentence), 'the panel was drawn again to change what it says').toBe(true);
+            expect(sentence.textContent?.trim()).toBe(useLocale().t('play.table.watching'));
+            expect(sitDown(container)).toBeDefined();
+
+            fire(sitDown(container)!, 'click');
+
+            await vi.waitFor(() => expect(held.chairs[1].who).toBe('alex'), { timeout: 4000 });
+        });
+
+        it('is told why in words when a chair is refused on a page that still offered one, and is offered none after that', async () =>
+        {
+            const held = await guestAt('public');
+
+            delete held.chairs[1].who;
+            await useLobby().refresh();
+
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(sitDown(container)).toBeDefined(), { timeout: 4000 });
+
+            useToasts().reset();
+            server.keptOut[held.id] = ['alex'];
+            fire(sitDown(container)!, 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.kept-out')]]), { timeout: 4000 });
+            await vi.waitFor(() => expect(sitDown(container)).toBeUndefined(), { timeout: 4000 });
+
+            expect(saying(container, 'play.table.removed')).toBeDefined();
+            expect(held.chairs.some((chair) => chair.who === 'alex')).toBe(false);
+            expect(useLocale().t('tables.refused.kept-out')).not.toBe(useLocale().t('common.actionFailed'));
+        });
+
+        it('is shown no table where it was one by invitation, and asks nothing more about it', async () =>
+        {
+            const held = await guestAt('invite');
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            takenOut(held);
+            server.calls = [];
+            await useLobby().refresh();
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.textContent).toContain(useLocale().t('play.notFound'));
+            expect(saying(container, 'play.table.removed')).toBeUndefined();
+            expect(server.calls).not.toContain('tables.view');
+        });
+
+        it('sees that table again, from the page that said there was none, by following the host’s invitation to it', async () =>
+        {
+            const held = await guestAt('invite');
+            const { container, router } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            takenOut(held);
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.textContent).toContain(useLocale().t('play.notFound'));
+
+            server.keptOut[held.id] = [];
+            held.chairs[1].invited = 'alex';
+            router.navigate(`/app/play/${ held.id }`);
+
+            await vi.waitFor(() => expect(sitDown(container)).toBeDefined(), { timeout: 4000 });
+
+            expect(container.textContent).not.toContain(useLocale().t('play.notFound'));
+            expect(saying(container, 'play.table.watching')).toBeDefined();
+        });
+    });
+
     describe('what leaving says', () =>
     {
         const at = (finishedAt: string | undefined, result: string | undefined) =>

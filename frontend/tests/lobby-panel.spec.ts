@@ -1,17 +1,30 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import LobbyPanel from '../src/components/games/lobby-panel.component.azeroth';
+import { defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
 import type { TableSummary } from '../src/api.ts';
-import { server } from './fake-api.ts';
+import { client, server } from './fake-api.ts';
 
 type Rendered = HTMLElement;
+
+const settle = async () =>
+{
+    for (let turn = 0; turn < 12; turn += 1)
+    {
+        await Promise.resolve();
+    }
+};
 
 const WHO = ['alex', 'sara.k', 'reza.t', 'parisa'];
 
@@ -92,6 +105,249 @@ describe('the lobby of a table that is still looking for players', () =>
         expect(said).toBe(useLocale().t('play.lobby.looking', { here: useLocale().n(2), seats: useLocale().n(4) }));
         expect(said).toContain('۴');
         expect(said).not.toContain('Looking');
+    });
+});
+
+describe('a chair the host can take somebody out of', () =>
+{
+    const labelFor = (name: string) => useLocale().t('play.lobby.remove', { name });
+
+    const controls = (container: HTMLElement) =>
+        [...container.querySelectorAll<HTMLButtonElement>('ul > li button')].filter((one) => one.querySelector('svg') !== null && one.textContent?.trim() === '');
+
+    const named = (container: HTMLElement) => controls(container).map((one) => one.getAttribute('aria-label'));
+
+    const mixed = (extra: Partial<TableSummary> = {}) => table({
+        game: 'ludo',
+        teams: false,
+        chairs: [{ seat: 0, who: 'alex', ready: true, host: true }, { seat: 1, who: 'sara.k', ready: false }, { seat: 2, invited: 'reza.t', ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'],
+        taken: 2,
+        ...extra
+    });
+
+    const said = () => useToasts().items().map((toast) => [toast.kind, toast.text]);
+
+    const hosted = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy: 'public' }, []);
+        const held = server.tables.find((one) => one.id === id)!;
+
+        held.chairs[1].who = 'sara.k';
+        lobby.open(id);
+        usePeople().want(['sara.k']);
+        await vi.waitFor(() => expect(lobby.table()?.taken).toBe(2));
+        await vi.waitFor(() => expect(usePeople().byHandle('sara.k')?.displayName).toBe('Sara Kamali'));
+        useToasts().reset();
+        server.calls = [];
+
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return lobby.table()!;
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+
+        return { container, lobby, id, held };
+    };
+
+    const answered = async (yes: boolean) =>
+    {
+        await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull());
+
+        const sheet = useOverlay().top()!;
+
+        useOverlay().close(sheet.id, yes);
+
+        return sheet;
+    };
+
+    beforeEach(() =>
+    {
+        usePeople().reset();
+        useLobby().reset();
+        useToasts().reset();
+        useOverlay().reset();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() =>
+    {
+        cleanup();
+        vi.restoreAllMocks();
+        useOverlay().reset();
+        useToasts().reset();
+        useLobby().reset();
+        usePeople().reset();
+    });
+
+    it('is offered to a host who is sitting, on every other chair somebody is in and on no other', () =>
+    {
+        expect(named(shown(mixed()))).toEqual([labelFor('sara.k')]);
+        expect(labelFor('sara.k')).toBe('Take sara.k out of the table');
+
+        cleanup();
+
+        expect(named(shown(table()))).toEqual(['reza.t', 'sara.k', 'parisa'].map(labelFor));
+    });
+
+    it('is offered to nobody else: a player who is not the host, a host with no chair, somebody only looking', () =>
+    {
+        const others = [{ seat: 0, who: 'sara.k', ready: true, host: true }, { seat: 1, who: 'reza.t', ready: false }, { seat: 2, ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'];
+        const guest = mixed({ host: 'sara.k', chairs: [others[0], others[1], { seat: 2, who: 'alex', ready: false }, others[3]] as TableSummary['chairs'], mine: 2, taken: 3 });
+        const { mine: _mine, ...looking } = mixed({ host: 'sara.k', chairs: others });
+        const { mine: _own, ...stoodUp } = mixed({ host: 'alex', chairs: [{ seat: 0, ready: false }, { seat: 1, who: 'sara.k', ready: false }, { seat: 2, ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'], taken: 1 });
+
+        expect(named(shown(guest))).toEqual([]);
+
+        cleanup();
+
+        expect(named(shown(looking as TableSummary))).toEqual([]);
+
+        cleanup();
+
+        expect(named(shown(stoodUp as TableSummary))).toEqual([]);
+    });
+
+    it('names them in Persian on the same control', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const labels = named(shown(mixed()));
+
+        expect(labels).toEqual([labelFor('sara.k')]);
+        expect(labels[0]).toContain('sara.k');
+        expect(labels[0]).not.toContain('Take');
+    });
+
+    it('asks first, in words that say what it costs, and sends nothing until the answer is yes', async () =>
+    {
+        const { container, held } = await hosted();
+
+        fire(controls(container)[0], 'click');
+
+        const sheet = await answered(false);
+
+        expect(sheet.label).toBe(useLocale().t('play.remove.title', { name: 'Sara Kamali' }));
+        expect(sheet.props).toMatchObject({
+            title: 'Take Sara Kamali out of the table?',
+            lead: useLocale().t('play.remove.lead'),
+            confirm: useLocale().t('play.remove.confirm'),
+            destructive: true
+        });
+
+        await settle();
+
+        expect(server.calls).not.toContain('tables.remove');
+        expect(held.chairs[1].who).toBe('sara.k');
+        expect(said()).toEqual([]);
+    });
+
+    it('sends one request naming them once the answer is yes, and shows the chair empty with no control on it', async () =>
+    {
+        const { container, held, id } = await hosted();
+
+        fire(controls(container)[0], 'click');
+        await answered(true);
+
+        await vi.waitFor(() => expect(controls(container)).toEqual([]), { timeout: 4000 });
+
+        expect(server.calls.filter((call) => call === 'tables.remove')).toHaveLength(1);
+        expect(held.chairs[1].who).toBeUndefined();
+        expect(server.keptOut[id]).toEqual(['sara.k']);
+        expect(container.querySelectorAll('ul > li')[1].textContent).toContain(useLocale().t('play.lobby.open'));
+        expect(said()).toEqual([]);
+    });
+
+    it.each(['en', 'fa'] as const)('says a game has just started when that is why it was refused, in %s, and reads the table again', async (language) =>
+    {
+        useLocale().setLocale(language);
+
+        const { container, held } = await hosted();
+
+        held.matchId = 'live-1';
+        fire(controls(container)[0], 'click');
+        await answered(true);
+
+        await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('play.remove.started')]]), { timeout: 4000 });
+        await vi.waitFor(() => expect(server.calls.filter((call) => call === 'tables.view').length).toBeGreaterThan(0), { timeout: 4000 });
+
+        expect(held.chairs[1].who).toBe('sara.k');
+        expect(useLocale().t('play.remove.started')).not.toBe(useLocale().t('common.actionFailed'));
+    });
+
+    it('says only that it did not go through when they had already gone, or the request never arrived, and reads the table again', async () =>
+    {
+        const { container, held } = await hosted();
+        const tables = client.tables as unknown as Record<string, unknown>;
+        const real = tables.remove;
+
+        delete held.chairs[1].who;
+        fire(controls(container)[0], 'click');
+        await answered(true);
+
+        await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('common.actionFailed')]]), { timeout: 4000 });
+        await vi.waitFor(() => expect(controls(container)).toEqual([]), { timeout: 4000 });
+
+        held.chairs[1].who = 'sara.k';
+        await useLobby().refresh();
+        await vi.waitFor(() => expect(controls(container)).toHaveLength(1), { timeout: 4000 });
+        useToasts().reset();
+
+        tables.remove = async () =>
+        {
+            throw new TypeError('Failed to fetch');
+        };
+
+        try
+        {
+            fire(controls(container)[0], 'click');
+            await answered(true);
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('common.actionFailed')]]), { timeout: 4000 });
+        }
+        finally
+        {
+            tables.remove = real;
+        }
+
+        expect(held.chairs[1].who).toBe('sara.k');
+    });
+
+    it('keeps the control it drew when the table is read again, and names whoever sits there now', () =>
+    {
+        const [held, setHeld] = createSignal(mixed());
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+        const [control] = controls(container);
+        const chair = container.querySelectorAll<HTMLElement>('ul > li')[1];
+        const inside = [...chair.querySelectorAll<HTMLElement>('*')];
+
+        expect(control).toBeDefined();
+
+        setHeld(mixed());
+
+        expect(controls(container), 'the control was drawn again for the answer it already had').toEqual([control]);
+        expect(inside.filter((one) => !chair.contains(one)).map((one) => `<${ one.tagName.toLowerCase() }>`), 'the chair was drawn again').toEqual([]);
+
+        setHeld(mixed({ chairs: [{ seat: 0, who: 'alex', ready: true, host: true }, { seat: 1, who: 'parisa', ready: true }, { seat: 2, invited: 'reza.t', ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'] }));
+
+        expect(controls(container), 'the control was drawn again to change whom it names').toEqual([control]);
+        expect(control.getAttribute('aria-label')).toBe(labelFor('parisa'));
+
+        setHeld(mixed({ chairs: [{ seat: 0, who: 'alex', ready: true, host: true }, { seat: 1, ready: false }, { seat: 2, invited: 'reza.t', ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'], taken: 1 }));
+
+        expect(controls(container)).toEqual([]);
     });
 });
 

@@ -48,6 +48,7 @@ export interface LobbyApi
     leave(tableId: string, forfeit: boolean): Promise<void>;
     ready(tableId: string, ready: boolean): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
+    remove(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
     setVoice(tableId: string, voice: TableConfig['voice']): Promise<void>;
 
@@ -156,6 +157,9 @@ export const useLobby = createStore((): LobbyApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
+    const goesWithTheChair = (table: TableSummary) =>
+        table.privacy === 'invite' || (table.privacy === 'friends' && table.host === untrack(who));
+
     const revalidate = () =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
@@ -163,7 +167,7 @@ export const useLobby = createStore((): LobbyApi =>
             const open = untrack(openId);
             const held = untrack(viewing.data) ?? null;
 
-            if (open !== '' && held !== null && held.id === open && held.mine !== undefined && held.privacy !== 'public')
+            if (open !== '' && held !== null && held.id === open && held.mine !== undefined && goesWithTheChair(held))
             {
                 await seated.refetch();
 
@@ -244,9 +248,15 @@ export const useLobby = createStore((): LobbyApi =>
 
         open(tableId)
         {
-            left.delete(tableId);
+            const back = left.delete(tableId) && untrack(openId) === tableId;
+
             setOpenId(tableId);
             arriving.get(tableId)?.();
+
+            if (back)
+            {
+                void revalidate().catch(() => undefined);
+            }
         },
         close: () => setOpenId(''),
         openId,
@@ -325,6 +335,12 @@ export const useLobby = createStore((): LobbyApi =>
         async invite(tableId, handle)
         {
             await client.tables.invite({ params: { id: tableId }, input: { id: handle } });
+            await revalidate();
+        },
+
+        async remove(tableId, handle)
+        {
+            await client.tables.remove({ params: { id: tableId }, input: { id: handle } });
             await revalidate();
         },
 

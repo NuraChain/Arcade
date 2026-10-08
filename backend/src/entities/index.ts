@@ -18,6 +18,7 @@ import { MatchAction } from './match-action.entity.ts';
 import { MatchPlayer } from './match-player.entity.ts';
 import { Match } from './match.entity.ts';
 import { Message } from './message.entity.ts';
+import { TableRemoval } from './table-removal.entity.ts';
 import { TableSeat } from './table-seat.entity.ts';
 import { Table } from './table.entity.ts';
 import { Mute } from './mute.entity.ts';
@@ -37,7 +38,7 @@ export {
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
     Notification, PlayerStats, PushSubscription,
-    RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableSeat, User, UserAchievement,
+    RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableRemoval, TableSeat, User, UserAchievement,
     Wallet
 };
 
@@ -58,7 +59,7 @@ export const entities: Function[] = [
     Conversation, ConversationMember, Message, ConversationEpoch, EpochKey, EpochArchive,
     RecoveryVault, RecoveryNonce,
     Group, GroupMember,
-    Table, TableSeat,
+    Table, TableSeat, TableRemoval,
     Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
     Notification, PushSubscription
 ];

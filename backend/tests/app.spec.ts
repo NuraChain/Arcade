@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { DataSource } from 'typeorm';
 
+import { NotFoundError } from '@azerothjs/http';
+
 import { buildApp } from '../src/app.ts';
+import { tableRefusal } from '../src/domains/table/service.ts';
 import type { ServerConfig } from '../src/env.ts';
 import type { Ports } from '../src/ports.ts';
 
@@ -215,6 +218,113 @@ describe('quick play', () =>
         expect(Object.keys(manifest.tables)).not.toContain('open');
         expect(Object.values(manifest.tables).filter((route) => route.method === 'GET' && /\/tables\/?$/.test(route.path))).toEqual([]);
         expect((await call(app, '/api/tables')).status).toBeGreaterThanOrEqual(400);
+    });
+});
+
+describe('taking somebody out of a chair', () =>
+{
+    const table = {
+        id: 'a-table',
+        code: 'abc234',
+        game: 'ludo',
+        seats: 4,
+        mode: 'live',
+        privacy: 'public',
+        target: 0,
+        cube: false,
+        blinds: 'low',
+        chat: true,
+        voice: 'off',
+        teams: false,
+        status: 'open',
+        chairs: [{ seat: 0, who: 'somebody', ready: false, host: true }],
+        taken: 1,
+        mine: 0,
+        createdAt: '2026-10-08T00:00:00.000Z'
+    };
+
+    const hostedBy = (told: unknown[][], answer: () => Promise<unknown>) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                remove: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return answer();
+                },
+                claim: () => Promise.reject(tableRefusal('kept-out', 'The host took you out of that table.')),
+                view: () => Promise.resolve(null)
+            }
+        } as unknown as Ports
+    });
+
+    const remove = (app: ReturnType<typeof buildApp>, body: string | undefined) =>
+        app.handle(new Request('http://local/api/tables/a-table/remove', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body
+        }));
+
+    it('tells the table who asked and the name they gave, and answers with the table as it stands', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await remove(hostedBy(told, () => Promise.resolve(table)), JSON.stringify({ id: 'sara.k' }));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(table);
+        expect(told).toEqual([['somebody', 'a-table', 'sara.k']]);
+    });
+
+    it('sends the host the names of whoever is kept out of the table, on that same answer', async () =>
+    {
+        const kept = { ...table, keptOut: ['sara.k', 'mina'] };
+        const response = await remove(hostedBy([], () => Promise.resolve(kept)), JSON.stringify({ id: 'sara.k' }));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(kept);
+    });
+
+    it('is not passed on until it names somebody', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = hostedBy(told, () => Promise.resolve(table));
+
+        for (const body of ['{}', '{"id":7}', '{"id":null}', '{"handle":"sara.k"}'])
+        {
+            const response = await remove(app, body);
+
+            expect(response.status, body).toBe(422);
+            expect(await response.json(), body).toMatchObject({ error: { code: 'validation-failed' } });
+        }
+
+        expect((await remove(app, undefined)).status).toBe(400);
+        expect(told).toEqual([]);
+    });
+
+    it('sends a refusal in the very bytes a table that is not there is answered with', async () =>
+    {
+        const app = hostedBy([], () => Promise.reject(new NotFoundError('No table there.')));
+        const refused = await remove(app, JSON.stringify({ id: 'sara.k' }));
+        const missing = await call(app, '/api/tables/a-table');
+
+        expect(missing.status).toBe(404);
+        expect(refused.status).toBe(404);
+        expect(await refused.text()).toBe(await missing.text());
+    });
+
+    it('tells whoever was taken out why a chair there is refused, in a word of its own', async () =>
+    {
+        const app = hostedBy([], () => Promise.resolve(table));
+        const response = await app.handle(new Request('http://local/api/tables/a-table/seat', { method: 'POST' }));
+
+        expect(response.status).toBe(409);
+        expect(await response.json()).toEqual({ error: { code: 'kept-out', message: 'The host took you out of that table.' } });
     });
 });
 

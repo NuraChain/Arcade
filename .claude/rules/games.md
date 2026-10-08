@@ -221,8 +221,8 @@ eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The
 any more* in `frontend/CLAUDE.md`.
 
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
-each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty` and `not-ready` at 409,
-`no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
+each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready` and
+`kept-out` at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
 `table/service.ts` is the only way the
 table service, the start, the walkout and the invite port throw one: the word is checked where it is
 thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals
@@ -278,7 +278,8 @@ it. A close had the same window from the other side and left a game running on a
 raw, because no repository can say it - and it is the first statement of the transaction in `start`,
 in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
 tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*), and so
-does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*).
+does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*),
+and so do a host's removal and an invitation (*The host can take somebody out of a chair*).
 It is the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person
 never meets it. Under it the start reads the table and the chairs again and asks every question of THAT
 read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -
@@ -289,8 +290,9 @@ the id as it arrived.
 Being seated is still asked BEFORE the transaction, so somebody with no chair is answered 404 without
 holding the table or waiting for it; and it is asked again under the lock, so somebody whose own leave
 got there first is answered that 404 rather than `chairs-empty`, a word meant for people in chairs. A
-claim and an invitation only FILL an empty chair, which cannot hurt a start that has read every chair
-taken, so they take no table lock. Nor does `setReady`, which is why the insert keeps its WHERE clause:
+claim only FILLS an empty chair, which cannot hurt a start that has read every chair taken, so it
+takes no table lock. An invitation only holds one, and took none either until a removal could run
+beside it. Nor does `setReady`, which is why the insert keeps its WHERE clause:
 somebody can still stop being ready between the read and the deal, and that is the race the paragraph
 above loses. The count and `matches_one_live` stay as belts. Two starts no longer both reach the
 insert - the second finds the first one's game in its own read - and a 23505 there is still read as
@@ -367,6 +369,129 @@ invite sheet and the create form say `tables.refused.no-invitee`; the sheet stil
 what the profile already says: `GET /social/people/:handle` answers 404 for a missing handle and
 carries `refusal` for one that exists, on purpose, so a closed compose box can say why. This route
 discloses nothing more than that, and claims nothing more.
+
+**The host can take somebody out of a chair.** `POST /tables/:id/remove { id: handle }`, and
+`table.remove` is its one transaction. Only at a table with no game on: during a game the way out is
+the forfeit a player takes themselves, and a host who could remove an opponent mid-hand could remove
+a loss, so a live match answers `playing`. Only the host, and only one who is sitting there. Anybody
+else who asks - a stranger, a seated player, a host who has left the chair - and any name that is
+not another player in a chair at that table, the host's own and one nobody holds included, is
+answered in the bytes of a table that is not there: 404, "No table there.", never 403.
+`table-closed` and `playing` are said to the sitting host alone, who can see both. Whoever may not
+ask is answered before the table's lock is asked for, as a start answers somebody with no chair, and
+is asked again under it.
+
+The name is looked for among the people in chairs at that table, under the lock and after those two
+answers, and nowhere else. The port used to resolve it through the social read every other route
+names people by, which leaves out a suspended account: the chair was still drawn with its cross,
+every press answered "No table there.", and at a table no sweep empties - by invitation, in a room,
+turn-based - the chair was held for good by exactly the account a host most needs out. The notice to
+whoever was taken out cannot be written for such an account, and it is a courtesy, so the removal
+stands.
+
+It takes `lockTable` first and asks every one of those questions of what it reads under it, then
+goes through `standUp`, so the chair is freed, the thread is left and the rule about a chair going
+back still exists once. A start racing it sees the full table or the empty chair, never half of
+each. Two things `standUp` does not do are done beside it: a row in `table_removals` (the table, the
+person, when), and the chair that was HELD for them is let go. `invited_id` is the one thing a leave
+keeps, so that somebody can come back; kept here it would be a chair nobody else can take and, at a
+table by invitation, the very thing that still lets them see it.
+
+**Whoever was taken out cannot sit at that table again while it lives**, or at a public table a
+removal would last as long as it takes to press "Take a seat". `claimSeat` refuses them `kept-out`,
+asked inside its transaction after the per-person lock, where a second request of theirs that was
+already waiting cannot slip past; `compatible()` passes the table over for them, so quick play seats
+them somewhere else; and **an invitation from the host is the one way back**: `invite` deletes the
+row in the transaction that holds the chair. From anybody else at the table the same invitation is
+`no-invitee`, the sentence every name that cannot be invited gets, because a chair held for somebody
+the claim would refuse is a chair nothing frees. `invite` takes the table's lock for the same
+reason: unlocked, it could hold a chair for somebody in the moment they were being taken out, and
+the table would be left with a removal row and a chair nobody else may take
+(`table-removal.db.spec.ts`, *against an invitation that reaches the table with it*, ends every
+round that way with the lock line deleted). Two invitations queue behind that lock now; the
+`skip locked` in its statement is still what looks past a chair somebody is taking by hand, because
+a claim takes no table lock.
+
+**The host is told who they took out, because the way back needs a name to press.** The sheet that
+invites offered the host's friends and nobody else, and at a public table whoever was taken out is
+usually a stranger quick play seated: the confirm sheet said "unless you invite them" about somebody
+no control could name. The table's wire carries `keptOut` for the SITTING host alone - the handles
+with a removal row there, the latest first - and the sheet lists them ahead of the friends under
+"People you took out", through the same `lobby.invite`; a friend who was taken out is listed once,
+there. The list leaves out anybody on either side of a block with the host and a suspended account,
+as every list of people does, and tells nobody anything new: the host put each of them there. It is
+absent for everybody else, for a host who has left the chair, and when it would be empty.
+
+**That invitation is still an invitation.** `mustInvite` is asked before the removal row is looked
+at, so a block, strangers turned off and a minor refuse the host as they refuse anybody, with
+`no-invitee` and the row left where it was; the sheet says the sentence. Taking somebody out makes
+the host no less a stranger to them, and an exception here would be the messaging policy's fifth
+copy, the generous one. For somebody who takes no strangers the way back is being friends first; a
+block has none while it stands.
+
+**They are told in words, and nobody else is told anything but the empty chair.** No line is written
+in the table's thread. The table's wire carries `removed: true` for a reader with a removal row who
+may still see the table - public, the host's friends', a room's - and its page says "The host took
+you out of this table." where it said they were only looking, with no seat offered. A table by
+invitation they can no longer see at all, so its page says what it says of any table that is not
+there; that is deliberate, since a removal is not a ticket to go on watching a private table. What
+tells them why is the notification: `table-removed`, the host as its actor, filed with the
+invitations somebody can switch off (`NOTICE_OF`), raised by the cues store as a toast with no
+button, and leading from the bell to the games list. Its `ref` names the game beside the table - the
+sentence says "a Ludo table", and they may not be let read the table to find out - so `game` joined
+the closed set a `ref` may carry. Its dedupe key is `removed:<tableId>`, not the invitation's
+`table:<id>`: under one key the notice would overwrite an unread invitation, the unread count would
+not move, and the cue that speaks when the count rises would say nothing. The rings are a leave's
+with one more name on them (`tableChanged` for everybody there and whoever was taken out,
+`chatChanged` naming them so their chat list drops the thread), each through `courtesy()`. The voice
+hub needed nothing: every table ring re-asks `voiceAllowed`, and somebody with no chair is not
+allowed.
+
+**The control is a cross in the corner of the chair, and it is the lobby's one control without
+words.** A chair is half a phone wide, so `SeatCard` draws an `IconButton` there (44px under a
+finger, clear of the name) labelled "Take Sara out of the table", under a `derived` boolean of its
+own: only for a sitting host, never on their own chair, an empty one or one only held for somebody.
+The lobby asks first (`ConfirmSheet`: "Their chair goes back to the table. They cannot sit here
+again unless you invite them."), says a refusal through `whyRefused` - `playing` is "A game has just
+started at this table." - and reads the table again when it was refused, as a leave does. A chair
+that is refused reads the table again too, so a page that still offered a seat stops.
+
+**The lobby store goes on reading a table the reader may still see after the chair is lost.**
+`revalidate` stopped asking about ANY table but a public one once the reader's chair was gone, so as
+not to ask for a table that answers 404; somebody taken out of a friend's table read "No such table"
+on a page the server would have told the truth on. It stops asking only where the chair was what
+let them see it (`goesWithTheChair`: a table by invitation, or one for their friends that the reader
+hosts). And `lobby.open` reads a table again when it had stopped asking about it: an invitation
+leads to the address the reader is already on, and nothing else would have asked.
+
+`table-removal.db.spec.ts` holds the server against Postgres: every asker and every name that is
+answered as a missing table, compared byte for byte with one, and answered at once while the table
+is held; a live game and a closed table; an account suspended in its chair; the chair, the thread
+and the held chair; `kept-out`; quick play seating them elsewhere at a table it still fills for
+anybody else; the host's invitation, somebody else's, and the host's of somebody who takes no
+strangers; the view, and who is named to the sitting host and to nobody else; the rings and the one
+notice, and a bell that fails; and twenty rounds against a start, parked where the sweep's race is
+parked, each ending as a game with everybody in it or an empty chair with no game. With `lockTable`
+deleted from `remove` a game is dealt to an empty chair in the first round.
+
+Twenty more are against somebody else's invitation of the player being taken out (*against an
+invitation that reaches the table with it*), at the same gate. The removal first: it is parked on
+the player's row in the thread, having written its row and let go of the held chairs, and the
+invitation behind it is answered `no-invitee`. The invitation first: it is parked at its own
+statement by a share lock on `table_seats`, and the removal behind it lets go of the chair it held.
+Either way no chair is left held for somebody who is kept out. With `lockTable` deleted from
+`invite` all twenty end with a removal row and a chair held for the same person, which no claim can
+take and nothing frees.
+`table-refusals.spec.ts` and `app.spec.ts` hold the word and the route with no Postgres, and that
+the route sends `keptOut`: a field the wire does not declare is dropped there, and the ports a
+database spec asks never pass through it. `lobby-panel.spec.ts` holds the control (who is offered
+it, the question, the request, a refusal's words, the same node when the table is read again);
+`invite-list.spec.ts` the people taken out in the sheet (ahead of the friends, under their heading,
+a stranger among them, the one request, the refusal's sentence, the row kept when the table is read
+again); `play.spec.ts` the page; `tables.spec.ts` the store; `notifications.spec.ts` and
+`cues.spec.ts` the notice and its toast; and the specs' server takes somebody out, and names them
+to the host, by the same rules. `realtime-pass.mjs` does it in two browsers, and invites back by
+pressing the name under that heading.
 
 **Every control on the table page is a `Button` with words on it.** Three of them were not, and each
 failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,
@@ -3153,7 +3278,8 @@ Six of them were serious enough to be worth stating as rules.
 could see the table and that the messaging policy allowed the approach, and never asked whether the
 invitee could ever sit down. On a `room` table that wrote a chair nothing could free: `claimSeat`
 skips a chair held for somebody else, the invitee's own claim 404s before it reaches one, and no
-route anywhere clears `invited_id`. One misdirected invitation made a table permanently
+route cleared `invited_id` (a host's removal lets go of the one held for whoever it takes out, and
+of no other). One misdirected invitation made a table permanently
 un-startable, and told a non-member a table existed that every read of it denies. `create` had the
 same hole through its `invitees` list. The rule: on every level but `invite`, the invitee must
 already pass `visibleTo` - and on `invite` there is nothing to check, because the invitation is what

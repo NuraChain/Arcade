@@ -11,7 +11,9 @@ import type { TablePrivacy, TableStatus } from '../../schemas.ts';
 import { keyedQueue } from '../../lib/keyed-queue.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { TableRemoval } from '../../entities/table-removal.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
 import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
@@ -95,6 +97,10 @@ export interface TableRow
 
     /** The game running here, or null when nobody has started one. */
     match_id: string | null;
+
+    removed: boolean;
+
+    kept_out: string[];
 }
 
 /** The alphabet a table code is drawn from: no 0/O, no 1/I/l, so it survives being read aloud. */
@@ -186,6 +192,22 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect(
         `(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`,
         'conversation_id'
+    )
+    .addSelect(
+        `(exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :me))`,
+        'removed'
+    )
+    .addSelect(
+        `(select coalesce(jsonb_agg(u.handle::text order by r.removed_at desc, u.handle::text), '[]'::jsonb)
+            from table_removals r join users u on u.id = r.user_id
+           where r.table_id = t.id
+             and t.host_id = :me
+             and exists (select 1 from table_seats s where s.table_id = t.id and s.user_id = :me)
+             and u.is_suspended = false
+             and not exists (select 1 from blocks b
+                              where (b.user_id = :me and b.blocked_id = u.id)
+                                 or (b.user_id = u.id and b.blocked_id = :me)))`,
+        'kept_out'
     )
     .addSelect(
         `(select coalesce(
@@ -350,6 +372,7 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
     .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
     .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
     .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+    .andWhere('not exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :lead)')
     .andWhere(
         `not exists (select 1 from blocks b
                       where (b.user_id = :lead and (b.blocked_id = t.host_id or b.blocked_id in (${ OCCUPANTS })))
@@ -967,6 +990,11 @@ export function createTableService(db: DataSource, social: SocialService)
                         return existing.seat;
                     }
 
+                    if (await tx.getRepository(TableRemoval).existsBy({ tableId, userId: me }))
+                    {
+                        throw tableRefusal('kept-out', 'The host took you out of that table.');
+                    }
+
                     const claimed = await tx.query(
                         `update table_seats
                             set user_id = $2, joined_at = now()
@@ -1097,20 +1125,6 @@ export function createTableService(db: DataSource, social: SocialService)
             await db.getRepository(TableSeat).update({ tableId, userId: me }, { ready });
         },
 
-        /**
-         * Holds a chair for somebody, and only for somebody who could actually sit in it.
-         *
-         * On an `invite` table the invitation is what GRANTS the visibility - that is the whole
-         * level - so there is nothing to check first. On every other level the table's visibility
-         * comes from somewhere else entirely, and an invitation cannot add to it: a room table is
-         * the room's, a friends table is the host's friends', a public table is everybody's.
-         *
-         * Without that distinction this wrote a chair that nothing could ever free. `claimSeat`
-         * passes over a chair held for somebody else, the invitee's own claim 404s before it gets
-         * near one, and no route anywhere clears `invited_id` - so a four-seat room table with one
-         * outside invitation could never reach `ready` and could never be started, by anybody,
-         * ever. It also told that person a table existed which every read of it denies.
-         */
         async invite(me: string, tableId: string, otherId: string): Promise<boolean>
         {
             const table = await mustSee(me, tableId);
@@ -1126,25 +1140,92 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ForbiddenError('They cannot reach that table.');
             }
 
-            /**
-             * Raw, because the chair is chosen by a `for update skip locked` inside a scalar
-             * sub-query - the same shape as the seat claim and for the same reason. Two hosts
-             * inviting at once lock different chairs rather than one of them holding a chair the
-             * other has already given away.
-             */
-            const held = await db.query(
-                `update table_seats
-                    set invited_id = $2
-                  where table_id = $1
-                    and seat = (select s.seat from table_seats s
-                                 where s.table_id = $1 and s.user_id is null and s.invited_id is null
-                                 order by s.seat limit 1
-                                 for update skip locked)
-                  returning seat`,
-                [tableId, otherId]
-            );
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
 
-            return firstRow<{ seat: number }>(held) !== null;
+                const kept = tx.getRepository(TableRemoval);
+
+                if (table.is_host)
+                {
+                    await kept.delete({ tableId, userId: otherId });
+                }
+                else if (await kept.existsBy({ tableId, userId: otherId }))
+                {
+                    throw noInvitee();
+                }
+
+                /**
+                 * Raw, because the chair is chosen by a `for update skip locked` inside a scalar
+                 * sub-query - the same shape as the seat claim and for the same reason.
+                 */
+                const held = await tx.query(
+                    `update table_seats
+                        set invited_id = $2
+                      where table_id = $1
+                        and seat = (select s.seat from table_seats s
+                                     where s.table_id = $1 and s.user_id is null and s.invited_id is null
+                                     order by s.seat limit 1
+                                     for update skip locked)
+                      returning seat`,
+                    [tableId, otherId]
+                );
+
+                return firstRow<{ seat: number }>(held) !== null;
+            });
+        },
+
+        async remove(me: string, tableId: string, handle: string)
+        {
+            const seen = await mustSee(me, tableId);
+
+            if (!seen.is_host || seen.mine === null)
+            {
+                throw new NotFoundError('No table there.');
+            }
+
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const chairs = tx.getRepository(TableSeat);
+                const table = await tx.getRepository(Table).findOne({ select: { id: true, hostId: true, status: true }, where: { id: tableId } });
+
+                if (table === null || table.hostId !== me || !await chairs.existsBy({ tableId, userId: me }))
+                {
+                    throw new NotFoundError('No table there.');
+                }
+
+                if (table.status === 'closed')
+                {
+                    throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
+                if (await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'A game is being played at that table.');
+                }
+
+                const occupant = await chairs
+                    .createQueryBuilder('s')
+                    .innerJoin(User, 'u', 'u.id = s.user_id')
+                    .select('s.user_id', 'id')
+                    .where('s.table_id = :tableId and u.handle = :handle', { tableId, handle })
+                    .getRawOne<{ id: string }>();
+
+                if (occupant === undefined || occupant.id === me)
+                {
+                    throw new NotFoundError('No table there.');
+                }
+
+                const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId, kind: 'game' } });
+
+                await tx.getRepository(TableRemoval).upsert({ tableId, userId: occupant.id }, ['tableId', 'userId']);
+                await chairs.update({ tableId, invitedId: occupant.id }, { invitedId: null });
+                await standUp(tx, tableId, occupant.id);
+
+                return { userId: occupant.id, conversationId: thread?.id ?? null };
+            });
         },
 
         /** Ends the table. The host's call. */

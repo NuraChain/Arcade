@@ -689,9 +689,12 @@ the one console line the hand-run passes failed on against the development serve
 **An arrival is said once.** A friend request and a message each reach the browser twice, as
 themselves and as the notification the server files for them, and each has a tracker of its own in
 `cues.store`. So the notification tracker keeps quiet about those two kinds (`SAID_ELSEWHERE`) and
-speaks for what only a notification carries: an invitation, an acceptance, a group, a turn. Before
-that every request and every message raised two toasts, and the second one spoke even about the
-room the reader had open. Being the only voice a message has, the chat tracker also has to say the
+speaks for what only a notification carries: an invitation, an acceptance, a group, a turn, and a
+host taking the reader out of a table. That last one has no button (`LEADS_NOWHERE`): there is no
+chair for them at the table it is about, and it is a toast of its own, so it never inherits the
+button of an invitation still on screen. Before that every request and every message raised two
+toasts, and the second one spoke even about the room the reader had open. Being the only voice a
+message has, the chat tracker also has to say the
 one thing the notification used to cover for it: the first message of a conversation that was not
 in the list when it armed. It tells that from an old conversation a later page read in by the
 SERVER'S clock - the message is later than anything the tracker had seen (`newest`) - never by the

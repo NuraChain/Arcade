@@ -59,7 +59,7 @@ interface GroupWire
 interface NotificationWire
 {
     id: string;
-    kind: 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message' | 'turn';
+    kind: 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'table-removed' | 'message' | 'turn';
     actor?: string;
     ref: Record<string, string>;
     count: number;
@@ -101,6 +101,8 @@ interface TableWire
     conversationId?: string;
     matchId?: string;
     yourTurn?: boolean;
+    removed?: boolean;
+    keptOut?: string[];
     createdAt: string;
 }
 
@@ -129,16 +131,53 @@ function restate(table: TableWire)
         table.mine = mine.seat;
         table.conversationId = `conv-${ table.id }`;
     }
+    if (keptOut(table, server.me))
+    {
+        table.removed = true;
+    }
+    else
+    {
+        delete table.removed;
+    }
+
+    const named = table.host === server.me && mine !== undefined
+        ? (server.keptOut[table.id] ?? []).filter((who) => !server.blocks.includes(who)).reverse()
+        : [];
+
+    if (named.length > 0)
+    {
+        table.keptOut = named;
+    }
+    else
+    {
+        delete table.keptOut;
+    }
     return table;
 }
+
+const noTable = () => new ApiError(404, 'not-found', 'No table there.', undefined);
+
+const keptOut = (table: TableWire, who: string) => (server.keptOut[table.id] ?? []).includes(who);
 
 function mustTable(id: string)
 {
     const table = server.tables.find((one) => one.id === id);
     if (table === undefined)
     {
-        throw new ApiError(404, 'not-found', 'No table there.', undefined);
+        throw noTable();
     }
+    return table;
+}
+
+function mustSee(id: string)
+{
+    const table = mustTable(id);
+
+    if (table.privacy === 'invite' && keptOut(table, server.me))
+    {
+        throw noTable();
+    }
+
     return table;
 }
 
@@ -403,6 +442,7 @@ export const server =
     tables: [] as TableWire[],
 
     outOfGame: {} as Record<string, string[]>,
+    keptOut: {} as Record<string, string[]>,
     asked: [] as { game: string; seats: number; teams: boolean }[],
     sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
 
@@ -448,6 +488,7 @@ export const server =
         server.refuseGroup = null;
         server.tables = [];
         server.outOfGame = {};
+        server.keptOut = {};
         server.asked = [];
         server.sought = [];
         server.searched = [];
@@ -1430,7 +1471,7 @@ export const client =
         async view({ params }: { params: { id: string } })
         {
             server.calls.push('tables.view');
-            return structuredClone(restate(mustTable(params.id)));
+            return structuredClone(restate(mustSee(params.id)));
         },
 
         async byCode({ params }: { params: { code: string } })
@@ -1492,6 +1533,7 @@ export const client =
             const fits = (table: TableWire) =>
                 table.status !== 'closed'
                 && table.matchId === undefined
+                && !keptOut(table, server.me)
                 && (table.privacy === 'public' || (table.privacy === 'friends' && table.host !== undefined && server.friends.includes(table.host)))
                 && table.game === input.game
                 && table.mode === filter.mode
@@ -1529,7 +1571,7 @@ export const client =
         async claim({ params }: { params: { id: string } })
         {
             server.calls.push('tables.claim');
-            const table = mustTable(params.id);
+            const table = mustSee(params.id);
             if (table.status === 'closed')
             {
                 throw tableRefusal('table-closed', 'That table has closed.');
@@ -1544,6 +1586,11 @@ export const client =
             if (table.matchId !== undefined)
             {
                 throw tableRefusal('playing', 'A game is being played at that table.');
+            }
+
+            if (keptOut(table, server.me))
+            {
+                throw tableRefusal('kept-out', 'The host took you out of that table.');
             }
 
             const free = table.chairs.find((chair) =>
@@ -1609,12 +1656,68 @@ export const client =
                 throw noInvitee();
             }
 
+            if (keptOut(table, input.id))
+            {
+                if (table.host !== server.me)
+                {
+                    throw noInvitee();
+                }
+
+                server.keptOut[table.id] = server.keptOut[table.id].filter((one) => one !== input.id);
+            }
+
             const free = table.chairs.find((chair) => chair.who === undefined && chair.invited === undefined);
             if (free !== undefined)
             {
                 free.invited = input.id;
             }
             return restate(table);
+        },
+
+        async remove({ params, input }: { params: { id: string }; input: { id: string } })
+        {
+            server.calls.push('tables.remove');
+
+            const table = mustTable(params.id);
+            const sitting = (who: string) => table.chairs.some((chair) => chair.who === who);
+
+            if (table.host !== server.me || !sitting(server.me))
+            {
+                throw noTable();
+            }
+
+            if (table.status === 'closed')
+            {
+                throw tableRefusal('table-closed', 'That table has closed.');
+            }
+
+            if (table.matchId !== undefined)
+            {
+                throw tableRefusal('playing', 'A game is being played at that table.');
+            }
+
+            if (input.id === server.me || !sitting(input.id))
+            {
+                throw noTable();
+            }
+
+            for (const chair of table.chairs)
+            {
+                if (chair.who === input.id)
+                {
+                    delete chair.who;
+                    chair.ready = false;
+                }
+
+                if (chair.invited === input.id)
+                {
+                    delete chair.invited;
+                }
+            }
+
+            server.keptOut[table.id] = [...(server.keptOut[table.id] ?? []), input.id];
+
+            return structuredClone(restate(table));
         },
 
         async start({ params }: { params: { id: string } })

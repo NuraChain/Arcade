@@ -200,6 +200,133 @@ describe('the server a spec talks to', () =>
         expect(await answered(() => client.tables.claim({ params }))).toEqual(word('table-closed'));
     });
 
+    it('takes somebody out of a chair by the real one’s rules, and keeps them out until the host invites them', async () =>
+    {
+        const id = await useLobby().host('ludo', { ...defaultTable('ludo'), privacy: 'public' }, []);
+        const held = server.tables.find((one) => one.id === id)!;
+        const params = { id };
+        const signedInAs = async <Answer>(who: string, work: () => Promise<Answer>) =>
+        {
+            server.me = who;
+
+            try
+            {
+                return await work();
+            }
+            finally
+            {
+                server.me = 'alex';
+            }
+        };
+        const removing = (who: string, from = params) => () => client.tables.remove({ params: from, input: { id: who } });
+        const missing = await answered(removing('sara.k', { id: 'no-such-table' }));
+
+        held.chairs[1].who = 'sara.k';
+        held.chairs[1].invited = 'sara.k';
+        held.chairs[1].ready = true;
+        held.chairs[2].who = 'reza.t';
+
+        expect(missing).toEqual({ status: 404, code: 'not-found' });
+        expect(await answered(removing('alex')), 'the host named themselves').toEqual(missing);
+        expect(await answered(removing('mina')), 'a name with no chair there').toEqual(missing);
+        expect(await signedInAs('reza.t', () => answered(removing('sara.k'))), 'somebody sitting who is not the host').toEqual(missing);
+        expect(await signedInAs('mina', () => answered(removing('sara.k'))), 'a stranger').toEqual(missing);
+
+        delete held.chairs[0].who;
+
+        expect(await answered(removing('sara.k')), 'a host who has left the chair').toEqual(missing);
+
+        held.chairs[0].who = 'alex';
+        held.matchId = 'live-1';
+
+        expect(await answered(removing('sara.k'))).toEqual(word('playing'));
+
+        delete held.matchId;
+        held.status = 'closed';
+
+        expect(await answered(removing('sara.k'))).toEqual(word('table-closed'));
+        expect(held.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k', 'reza.t', undefined]);
+
+        held.status = 'open';
+
+        const after = await client.tables.remove({ params, input: { id: 'sara.k' } });
+
+        expect(after.chairs).toEqual([
+            { seat: 0, who: 'alex', ready: false, host: true },
+            { seat: 1, ready: false, host: false },
+            { seat: 2, who: 'reza.t', ready: false, host: false },
+            { seat: 3, ready: false, host: false }
+        ]);
+        expect(after, 'the table answered is the row the server keeps, not a copy of it').not.toBe(held);
+        expect(Object.hasOwn(after, 'removed')).toBe(false);
+        expect(after.keptOut).toEqual(['sara.k']);
+
+        expect(await signedInAs('sara.k', () => answered(() => client.tables.claim({ params })))).toEqual(word('kept-out'));
+        expect((await signedInAs('sara.k', () => client.tables.view({ params }))).removed).toBe(true);
+        expect(Object.hasOwn(await signedInAs('reza.t', () => client.tables.view({ params })), 'removed')).toBe(false);
+        expect((await signedInAs('sara.k', () => client.tables.quick({ input: { game: 'ludo', voice: 'off' } }))).id).not.toBe(id);
+        expect(await signedInAs('reza.t', () => answered(() => client.tables.invite({ params, input: { id: 'sara.k' } })))).toEqual(word('no-invitee'));
+        expect(held.chairs.some((chair) => chair.invited !== undefined)).toBe(false);
+
+        for (const reader of ['sara.k', 'reza.t', 'mina'])
+        {
+            expect(Object.hasOwn(await signedInAs(reader, () => client.tables.view({ params })), 'keptOut'), reader).toBe(false);
+        }
+
+        held.chairs[3].who = 'mina';
+        await client.tables.remove({ params, input: { id: 'mina' } });
+
+        expect((await client.tables.view({ params })).keptOut, 'the latest first').toEqual(['mina', 'sara.k']);
+
+        server.blocks.push('mina');
+
+        expect((await client.tables.view({ params })).keptOut, 'nobody the host has blocked').toEqual(['sara.k']);
+
+        delete held.chairs[0].who;
+
+        expect(Object.hasOwn(await client.tables.view({ params }), 'keptOut'), 'a host who has left the chair').toBe(false);
+
+        held.chairs[0].who = 'alex';
+
+        expect(Object.hasOwn(await client.tables.invite({ params, input: { id: 'sara.k' } }), 'keptOut')).toBe(false);
+        expect(Object.hasOwn(await signedInAs('sara.k', () => client.tables.view({ params })), 'removed')).toBe(false);
+        expect((await signedInAs('sara.k', () => client.tables.claim({ params }))).seat).toBe(1);
+    });
+
+    it('hides a table by invitation from whoever was taken out of it, as the real one does', async () =>
+    {
+        const id = await useLobby().host('ludo', defaultTable('ludo'), ['sara.k']);
+        const held = server.tables.find((one) => one.id === id)!;
+        const params = { id };
+        const seat = held.chairs.find((chair) => chair.invited === 'sara.k')!;
+
+        seat.who = 'sara.k';
+        await client.tables.remove({ params, input: { id: 'sara.k' } });
+        server.me = 'sara.k';
+
+        try
+        {
+            expect(await answered(() => client.tables.view({ params }))).toEqual({ status: 404, code: 'not-found' });
+            expect(await answered(() => client.tables.claim({ params }))).toEqual({ status: 404, code: 'not-found' });
+        }
+        finally
+        {
+            server.me = 'alex';
+        }
+
+        await client.tables.invite({ params, input: { id: 'sara.k' } });
+        server.me = 'sara.k';
+
+        try
+        {
+            expect((await client.tables.view({ params })).id).toBe(id);
+        }
+        finally
+        {
+            server.me = 'alex';
+        }
+    });
+
     it('lets a seat that is already out of the game leave without agreeing to forfeit, and nobody else', async () =>
     {
         const id = await useLobby().host('ludo', defaultTable('ludo'), []);

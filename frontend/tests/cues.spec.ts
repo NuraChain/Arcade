@@ -261,6 +261,59 @@ describe('the cues store', () =>
         expect(shown).toHaveLength(1);
     });
 
+    it('says once that a host took the reader out of a table, with no button to press, even on that table’s page', async () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+        useLobby().open('table-9');
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+
+        server.notify({ kind: 'table-removed', actor: 'sara.k', ref: { tableId: 'table-9', game: 'ludo' }, dedupeKey: 'removed:table-9' });
+        await useNotifications().refresh();
+        await settle();
+
+        const shown = useToasts().items();
+
+        expect(shown).toHaveLength(1);
+        expect(shown[0].text).toContain('took you out of a Ludo table');
+        expect(shown[0].action, 'a button on it would lead to a table with no chair for the reader').toBeNull();
+        expect(shown[0].kind).toBe('live');
+        expect(went).toEqual([]);
+
+        useToasts().reset();
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items(), 'it was said a second time for nothing new').toEqual([]);
+    });
+
+    it('keeps the button off it when an invitation’s toast, which has one, is still showing', async () =>
+    {
+        useCues().navigateTo(() => undefined);
+        useCues().start();
+        await useNotifications().refresh();
+        await settle();
+
+        server.notify({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 'table-9' }, dedupeKey: 'table:table-9' });
+        await useNotifications().refresh();
+        await settle();
+
+        server.notify({ kind: 'table-removed', actor: 'sara.k', ref: { tableId: 'table-9', game: 'ludo' }, dedupeKey: 'removed:table-9' });
+        await useNotifications().refresh();
+        await settle();
+
+        const removed = useToasts().items().filter((toast) => toast.text.includes('took you out'));
+
+        expect(removed).toHaveLength(1);
+        expect(removed[0].action).toBeNull();
+        expect(useToasts().items().filter((toast) => toast.action !== null).map((toast) => toast.action?.label)).toEqual(['Go to the table']);
+    });
+
     it('says a friend request once, though it arrives as a request and as a notification', async () =>
     {
         useCues().start();

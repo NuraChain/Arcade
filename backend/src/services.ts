@@ -604,6 +604,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.roomId = row.room_id;
         }
+        if (row.removed)
+        {
+            summary.removed = true;
+        }
+        if (row.kept_out.length > 0)
+        {
+            summary.keptOut = row.kept_out;
+        }
         return summary;
     };
 
@@ -2104,6 +2112,31 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 await ringTable(after, other.id);
+                return asTable(after);
+            },
+
+            async remove(me, tableId, handle)
+            {
+                const gone = await table.remove(me, tableId, handle);
+                const after = await mustTable(me, tableId);
+
+                await courtesy('table ring', async () =>
+                {
+                    if (gone.conversationId !== null)
+                    {
+                        live?.chatChanged(gone.conversationId, gone.userId);
+                    }
+                    live?.tableChanged(after.id, [...await table.peopleAt(after.id), gone.userId]);
+                });
+
+                await courtesy('removal notice', () => tell({
+                    userId: gone.userId,
+                    kind: 'table-removed',
+                    actorId: me,
+                    ref: { tableId: after.id, game: after.game },
+                    dedupeKey: `removed:${ after.id }`
+                }));
+
                 return asTable(after);
             },
 

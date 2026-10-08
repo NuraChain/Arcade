@@ -215,6 +215,60 @@ try
     record('neither browser was reloaded for any of it', loads.every(Boolean), loads.join(', '));
     await clearTables(dana, mina);
 
+    const kept = await dana.api('POST', '/tables/', tableBody({
+        game: 'ludo', seats: 2, mode: 'live', privacy: 'public'
+    }));
+    const keptId = kept.body?.id;
+    const seatOffered = async (page) => await page.getByRole('button', { name: 'Take a seat', exact: true }).count() > 0;
+
+    record('a public table opens for the host to take somebody out of', kept.ok, String(kept.status));
+
+    for (const player of players)
+    {
+        await player.page.goto(`${ BASE }/app/play/${ keptId }`);
+        await player.page.waitForSelector('main');
+        await player.page.evaluate(() => { window.__sameLoad = true; });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await press(mina.page, 'Take a seat');
+    record('the other player sits down at it', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').count() > 0));
+
+    await press(dana.page, 'Take Mina Sadeghi out of the table');
+    record('the host is asked before anybody is taken out', await soon(async () => await said(dana.page, 'Take Mina Sadeghi out of the table?')));
+    await press(dana.page, 'Take them out');
+
+    record('the chair is empty again on the host’s page without a reload', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').count() === 0));
+    record('whoever was taken out is told so on their own page without a reload', await soon(async () => await said(mina.page, 'The host took you out of this table.')));
+    record('and is offered no seat there', !await seatOffered(mina.page));
+
+    const refusedSeat = await mina.api('POST', `/tables/${ keptId }/seat`);
+    record('their claim over the API is refused as kept out', refusedSeat.status === 409 && refusedSeat.body?.error?.code === 'kept-out', `${ refusedSeat.status } ${ refusedSeat.body?.error?.code ?? '' }`);
+
+    const noticed = (await mina.api('GET', '/notifications/')).body?.items ?? [];
+    record('they are told in the bell who took them out, and of which game', noticed.some((item) => item.kind === 'table-removed' && item.actor === 'dana.w' && item.ref?.game === 'ludo'));
+
+    const elsewhere = await mina.api('POST', '/tables/quick', { game: 'ludo', seats: 2, voice: 'off' });
+    record('quick play seats them at another table, never that one', elsewhere.ok && elsewhere.body?.id !== keptId && elsewhere.body?.mine !== undefined, `${ elsewhere.status } ${ elsewhere.body?.id === keptId ? 'the same table' : '' }`);
+    await mina.api('POST', `/tables/${ elsewhere.body?.id }/leave`, { forfeit: false });
+
+    const takenOut = dana.page.getByRole('list', { name: 'People you took out', exact: true }).getByRole('button').filter({ hasText: 'Mina Sadeghi' });
+
+    await dana.page.getByRole('button').filter({ hasText: 'Open seat' }).first().click();
+    record('the sheet that invites offers the host whoever they took out, under a heading of their own', await soon(async () => await takenOut.count() === 1));
+    await takenOut.first().click();
+    record('the host invites them back from it', await soon(async () => (await dana.api('GET', `/tables/${ keptId }`)).body?.chairs?.some((chair) => chair.invited === 'mina') === true));
+    record('and is no longer told they are kept out', (await dana.api('GET', `/tables/${ keptId }`)).body?.keptOut === undefined);
+    record('the seat is offered again on their page without a reload', await soon(async () => await seatOffered(mina.page) && !await said(mina.page, 'The host took you out of this table.')));
+
+    await press(mina.page, 'Take a seat');
+    record('and they can sit down again', await soon(async () => (await mina.api('GET', `/tables/${ keptId }`)).body?.mine !== undefined));
+    record('which the host’s page shows without a reload', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').getByText('Not ready', { exact: true }).count() > 0));
+
+    const unmoved = await Promise.all(players.map((player) => player.page.evaluate(() => window.__sameLoad === true)));
+    record('neither browser was reloaded for the removal or the way back', unmoved.every(Boolean), unmoved.join(', '));
+    await clearTables(dana, mina);
+
     const second = await mina.context.newPage();
     await omid.page.goto(`${ BASE }/app/chats`);
     await omid.page.waitForSelector('main');

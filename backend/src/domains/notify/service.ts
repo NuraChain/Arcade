@@ -35,7 +35,7 @@ export const PAGE = 30;
  * stops a producer from putting a sentence in it, which is how a "structured" notification ends up
  * carrying prose that cannot follow a language switch.
  */
-const REF_FIELDS = new Set(['conversationId', 'tableId', 'groupId', 'requestId', 'personId']);
+const REF_FIELDS = new Set(['conversationId', 'tableId', 'groupId', 'requestId', 'personId', 'game']);
 
 /**
  * The shape a uuid has, checked before one is compared against a uuid COLUMN.

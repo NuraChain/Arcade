@@ -6,13 +6,16 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
 import { useVoice } from '../../stores/voice.store.ts';
 
 export default component SeatCard(props: {
     seat: TableSeat;
     me: string;
     canInvite: boolean;
+    canRemove: boolean;
     onInvite?: () => void;
+    onRemove?: () => void;
 })
 {
     const locale = useLocale();
@@ -32,6 +35,8 @@ export default component SeatCard(props: {
     derived hosting = props.seat.host;
 
     derived inviting = props.canInvite;
+
+    derived removable = props.canRemove && filled && !mine;
 
     derived person = mine
         ? account.user()
@@ -95,6 +100,13 @@ export default component SeatCard(props: {
             <div class={ shell }>
                 <Show when={ hosting }>
                     <Badge dot text={ locale.t('play.lobby.host') } tone="accent" class="absolute start-2 top-2" />
+                </Show>
+                <Show when={ removable }>
+                    { () =>
+                        <span class="absolute end-1 top-1 z-10 flex">
+                            <IconButton icon="close" size="sm" label={ locale.t('play.lobby.remove', { name }) } onClick={ () => props.onRemove?.() } />
+                        </span>
+                    }
                 </Show>
                 <span class={ () => [ 'flex rounded-full transition-shadow duration-150', props.seat.who !== undefined && voice.speaking(props.seat.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }>
                     <Avatar

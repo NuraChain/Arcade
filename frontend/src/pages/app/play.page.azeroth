@@ -326,6 +326,10 @@ export default component PlayPage()
 
     derived standing = !seated && !showing && table !== null && table.matchId === undefined;
 
+    derived removed = table?.removed === true;
+
+    derived seatOffered = !removed;
+
     derived watching = !seated && table?.matchId !== undefined;
 
     derived callAt = talkable ? table?.id : undefined;
@@ -710,6 +714,7 @@ export default component PlayPage()
         catch (error)
         {
             toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.table.playing')), dedupe: 'sit-down' });
+            void lobby.refresh();
         }
     };
 
@@ -951,19 +956,23 @@ export default component PlayPage()
                     <Show when={ standing }>
                         { () =>
                             <Panel pad="lg" stack="md" class="items-center text-center">
-                                <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
+                                <p class="text-ui-lg text-text">{ locale.t(removed ? 'play.table.removed' : 'play.table.watching') }</p>
                                 <p class="max-w-[44ch] text-ui-base text-muted">
                                     { locale.plural('play.lobby.emptySeats', shown.seats - shown.taken) }
                                 </p>
-                                <Button
-                                    variant="primary"
-                                    size="lg"
-                                    leading="seat"
-                                    disabled={ shown.taken >= shown.seats }
-                                    onClick={ () => void sitDown() }
-                                >
-                                    { locale.t('play.table.sitDown') }
-                                </Button>
+                                <Show when={ seatOffered }>
+                                    { () =>
+                                        <Button
+                                            variant="primary"
+                                            size="lg"
+                                            leading="seat"
+                                            disabled={ shown.taken >= shown.seats }
+                                            onClick={ () => void sitDown() }
+                                        >
+                                            { locale.t('play.table.sitDown') }
+                                        </Button>
+                                    }
+                                </Show>
                             </Panel>
                         }
                     </Show>

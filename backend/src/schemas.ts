@@ -1118,6 +1118,10 @@ export const tableSummary = object({
      */
     roomId: string().optional(),
 
+    removed: boolean().optional(),
+
+    keptOut: array(string()).optional(),
+
     createdAt: string()
 });
 
@@ -1716,6 +1720,7 @@ export const notificationKind = enumOf([
     'friend-accepted',
     'group-added',
     'table-invite',
+    'table-removed',
     'message',
 
     /**
@@ -1742,7 +1747,8 @@ export const notificationRef = object({
     tableId: string().optional(),
     groupId: string().optional(),
     requestId: string().optional(),
-    personId: string().optional()
+    personId: string().optional(),
+    game: string().optional()
 });
 
 /**

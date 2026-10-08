@@ -957,12 +957,15 @@ is the same defect `nura-e2ee/v1` calls out for chat lines and the same fix.
 `(user_id, dedupe_key)` and the write is an upsert that bumps `count`, moves `created_at` to
 now and clears `read_at`. Twelve messages in one conversation are ONE row saying twelve, not
 twelve rows to swipe away. The producer composes the key — `chat:<conversationId>`,
-`friend:<actorId>`, `group:<groupId>`, `table:<tableId>` — and choosing it is the only
-interesting decision in writing one.
+`friend:<actorId>`, `group:<groupId>`, `table:<tableId>`, `removed:<tableId>` — and choosing it is
+the only interesting decision in writing one.
 
-**Six kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
-`friend-accepted`, `group-added`, `table-invite`, `message`, `turn`. A kind with nothing writing
-it is filler copy standing in for something nobody has built.
+**Seven kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
+`friend-accepted`, `group-added`, `table-invite`, `table-removed`, `message`, `turn`. A kind with
+nothing writing it is filler copy standing in for something nobody has built. `table-removed` is
+written when a host takes somebody out of a chair (*The host can take somebody out of a chair* in
+`games.md`), under a key of its own and not the invitation's: a row that only changes kind does not
+raise the unread count, and the cue that speaks when the count rises would stay silent.
 
 **What somebody wants to be told about is a MUTE, and it belongs to the account.** The settings page
 used to offer five switches kept in `localStorage` that nothing ever read - "Game results" and
@@ -979,8 +982,10 @@ exists and is hidden is still a badge somebody has to clear. Same for a block, a
 actions: nobody is told about something they did.
 
 **`ref` is a closed set** — `conversationId`, `tableId`, `groupId`, `requestId`,
-`personId` — filtered on the way in. The column is `jsonb` and would happily take a sentence;
-that filter is what stops a "structured" notification from carrying prose.
+`personId`, `game` — filtered on the way in. The column is `jsonb` and would happily take a
+sentence; that filter is what stops a "structured" notification from carrying prose. `game` is a
+game's id, there because somebody taken out of a table by invitation is told which game it was and
+can no longer read the table to find out.
 
 **The list pages by keyset**, `(created_at, id)` descending, like chat history. `more()` appends;
 anything that CHANGES the list drops the older pages and refetches the first, because stitching a
@@ -1233,8 +1238,10 @@ teardown.
 watching - and every check is made in the OTHER browser without a reload: a request lights the
 badge and the bell, an accept shows the friend with a live dot while everybody else keeps theirs,
 the bell forgets an answered request, a group thread arrives and leaves, a rename reaches a friend's
-list, an invitation at create rings the bell, a spectator's page turns into the board and back, and
-reading everything in one tab clears the other.
+list, an invitation at create rings the bell, a spectator's page turns into the board and back, a
+host takes a player out of a chair (their page says so and offers no seat, their claim is `kept-out`,
+quick play seats them elsewhere, and the host's invitation offers the seat again), and reading
+everything in one tab clears the other.
 
 ## The audit, and what it found in shipped code
 

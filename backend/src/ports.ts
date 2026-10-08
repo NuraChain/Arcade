@@ -253,6 +253,7 @@ export interface TablePort
     leave(me: string, tableId: string, forfeit: boolean): Promise<void>;
     setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
     invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
+    remove(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;
     setVoice(me: string, tableId: string, voice: VoiceScope): Promise<TableSummary>;
 }
