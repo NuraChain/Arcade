@@ -769,6 +769,18 @@ a request the reader pressed away, and the server refused, returns to the list u
 tracker has already been shown. Counted, it was an arrival, with a toast and a chime, naming
 somebody else - found in the real browser with a decline held and then refused, not by a spec.
 
+**And a notification is announced for the row that came.** That tracker spoke when the unread count
+rose, for the first unread row of the PAGE'S list. So it said nothing when the count did not rise
+(something else was read on another device in the same moment), nothing while the page was
+filtered to another kind (`items()` is the filtered list, and an invitation was looked for among
+the friend requests), and nothing for an invitation that came together with a message: the newest
+unread row was the message, which keeps quiet here. It reads `latest()`, the unfiltered head, keeps
+the time of the newest row it has been shown (`noticedAt`, the server's clock and never the
+browser's), and speaks for the newest unread row later than that which is not said elsewhere. A row
+that comes back with more to say has a new time and is news again; an older unread row that moves
+up the list when the rows above it are dismissed is not, and neither is one that was read somewhere
+else before this page showed it.
+
 **A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
 server starts the game when the last chair fills, which can be minutes later and on another page, and
 a live turn is thirty seconds: the sweep was playing the first turns of people who never knew they

@@ -624,6 +624,210 @@ describe('the cues store', () =>
         expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.notice')).toHaveLength(1);
     });
 
+    describe('a notification that arrives', () =>
+    {
+        const said = () => useToasts().items().filter((toast) => toast.dedupe === 'cue.notice').map((toast) => toast.text);
+
+        const invite = { kind: 'table-invite' as const, actor: 'sara.k', ref: { tableId: 't-1' }, dedupeKey: 'table:t-1' };
+
+        const armed = async () =>
+        {
+            useCues().start();
+            await useNotifications().refresh();
+            await settle();
+        };
+
+        it('is announced when it came together with a message, which has a voice of its own', async () =>
+        {
+            await armed();
+
+            server.notify(invite);
+            server.notify({ kind: 'message', actor: 'reza.t', ref: { conversationId: 'c-reza' }, dedupeKey: 'chat:c-reza' });
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest().map((row) => row.kind)).toEqual(['message', 'table-invite']);
+            expect(said()).toHaveLength(1);
+            expect(said()[0]).toContain('saved you a seat');
+        });
+
+        it('is the newer one when two came between reads', async () =>
+        {
+            await armed();
+
+            server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toHaveLength(1);
+            expect(said()[0]).toContain('saved you a seat');
+        });
+
+        it('is announced while the page shows only another kind', async () =>
+        {
+            server.notify({ kind: 'friend-request', actor: 'reza.t', dedupeKey: 'friend:reza.t' });
+            await armed();
+
+            useNotifications().only('requests');
+            await settle();
+
+            expect(useToasts().items()).toEqual([]);
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().items().map((row) => row.kind)).toEqual(['friend-request']);
+            expect(said()).toHaveLength(1);
+            expect(said()[0]).toContain('saved you a seat');
+        });
+
+        it('is announced though another was read somewhere else in the same moment, so the count never rose', async () =>
+        {
+            server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+            await armed();
+
+            expect(useNotifications().unread()).toBe(1);
+
+            server.notifications[0].read = true;
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().unread()).toBe(1);
+            expect(said()).toHaveLength(1);
+            expect(said()[0]).toContain('saved you a seat');
+        });
+
+        it('is announced again when the same row comes back with more to say', async () =>
+        {
+            await armed();
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toHaveLength(1);
+
+            useToasts().reset();
+            server.notifications[0].read = true;
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toEqual([]);
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest()[0]).toMatchObject({ count: 2, read: false });
+            expect(said()).toHaveLength(1);
+        });
+
+        it('is not one that was read somewhere else before this page ever showed it', async () =>
+        {
+            await armed();
+
+            server.notify(invite);
+            server.notifications[0].read = true;
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest()[0]).toMatchObject({ kind: 'table-invite', read: true });
+            expect(useToasts().items()).toEqual([]);
+        });
+
+        it('is not what was already waiting for somebody who signs in after it armed', async () =>
+        {
+            useSession().reset();
+            useNotifications().reset();
+            await settle();
+
+            server.notify(invite);
+            useCues().start();
+            await settle();
+
+            establish();
+            await settle();
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest().map((row) => [row.kind, row.read])).toEqual([['table-invite', false]]);
+            expect(useToasts().items()).toEqual([]);
+        });
+
+        it('is not an older one that moves up the list when the newer ones above it go', async () =>
+        {
+            server.notify(invite);
+            server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+            server.notify({ kind: 'friend-accepted', actor: 'parisa', dedupeKey: 'accepted:parisa' });
+            server.notify({ kind: 'turn', ref: { tableId: 't-2' }, dedupeKey: 'turn:t-2' });
+
+            for (const row of server.notifications.slice(0, 3))
+            {
+                row.read = true;
+            }
+
+            await armed();
+
+            expect(useNotifications().latest().map((row) => [row.kind, row.read])).toEqual([['turn', true], ['friend-accepted', true], ['group-added', true]]);
+
+            server.notifications = server.notifications.slice(1);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest().map((row) => [row.kind, row.read])).toEqual([['friend-accepted', true], ['group-added', true], ['table-invite', false]]);
+            expect(useToasts().items()).toEqual([]);
+        });
+
+        it('is not said while the socket is down, then or once it is back', async () =>
+        {
+            await armed();
+
+            socket.drop();
+            await settle();
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useToasts().items()).toEqual([]);
+
+            clock.advance(BACKOFF_MS[0] * 1.11);
+            socket.accept();
+            await settle();
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useRealtime().status()).toBe('connected');
+            expect(said()).toEqual([]);
+        });
+
+        it('is forgotten with everything else when the store is reset', async () =>
+        {
+            await armed();
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toHaveLength(1);
+
+            useCues().reset();
+            useToasts().reset();
+            server.notifications = [];
+            server.notifySeq = 0;
+            await armed();
+
+            server.notify(invite);
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toHaveLength(1);
+        });
+    });
+
     describe('a game that starts while the reader is somewhere else', () =>
     {
         const seatedAt = async (mode: 'live' | 'turns' = 'live') =>

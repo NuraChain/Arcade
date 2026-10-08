@@ -63,7 +63,7 @@ export const useCues = createStore((): CuesApi =>
     let requestSeeded = false;
     let requestSeenBusy = false;
 
-    let noticeCount = 0;
+    let noticedAt = 0;
     let noticeSeeded = false;
     let noticeSeenBusy = false;
 
@@ -209,7 +209,7 @@ export const useCues = createStore((): CuesApi =>
 
         const trackNotices = () => createEffect(() =>
         {
-            const unread = notifications.unread();
+            const rows = notifications.latest();
             const busy = notifications.loading();
 
             if (busy)
@@ -218,32 +218,25 @@ export const useCues = createStore((): CuesApi =>
                 return;
             }
 
-            if (!noticeSeeded)
+            if (!noticeSeeded && !noticeSeenBusy)
             {
-                if (!noticeSeenBusy)
-                {
-                    return;
-                }
-
-                noticeCount = unread;
-                noticeSeeded = true;
                 return;
             }
 
-            if (unread > noticeCount && live.status() === 'connected')
+            const fresh = rows.filter((row) => !row.read && Date.parse(row.at) > noticedAt);
+            const item = fresh.find((row) => !SAID_ELSEWHERE.has(row.kind));
+
+            noticedAt = Math.max(noticedAt, ...rows.map((row) => Date.parse(row.at)));
+
+            if (noticeSeeded && item !== undefined && live.status() === 'connected')
             {
-                const item = notifications.items().find((row) => !row.read);
+                const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, nameOf(item.actor ?? ''), locale) };
+                const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
 
-                if (item !== undefined && !SAID_ELSEWHERE.has(item.kind))
-                {
-                    const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, nameOf(item.actor ?? ''), locale) };
-                    const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
-
-                    toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
-                    chime();
-                }
+                toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
+                chime();
             }
-            noticeCount = unread;
+            noticeSeeded = true;
         }, { name: 'cues.notices' });
 
         let untitle: (() => void) | null = null;
@@ -374,7 +367,7 @@ export const useCues = createStore((): CuesApi =>
             asked.clear();
             requestSeeded = false;
             requestSeenBusy = false;
-            noticeCount = 0;
+            noticedAt = 0;
             noticeSeeded = false;
             noticeSeenBusy = false;
             begun.clear();
