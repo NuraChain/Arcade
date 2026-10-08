@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { signInWallet } from './wallets.mjs';
 
 export const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -158,18 +159,18 @@ async function open(browser, viewport, signIn)
     return { handle: signedIn, context, page, errors, api };
 }
 
-export async function guestSeat(browser, name, viewport = { width: 1280, height: 900 })
+export async function walletSeat(browser, name, viewport = { width: 1280, height: 900 })
 {
     return await open(browser, viewport, async (context) =>
     {
-        const answer = await context.request.post(`${ BASE }/api/auth/guest`, { data: { name } });
-
-        if (!answer.ok())
+        const post = async (path, data) =>
         {
-            throw new Error(`could not sign in a guest called ${ name } (${ answer.status() })`);
-        }
+            const answer = await context.request.post(`${ BASE }/api${ path }`, { data });
 
-        return (await answer.json()).account.handle;
+            return { status: answer.status(), body: await answer.json().catch(() => null) };
+        };
+
+        return (await signInWallet(post, name)).handle;
     });
 }
 

@@ -1,5 +1,6 @@
 import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 import { tableBody } from './tables.mjs';
+import { signInWallet } from './wallets.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -64,17 +65,11 @@ const session = () =>
     return { get: (path) => call('GET', path), post: (path, body) => call('POST', path, body), handle: null };
 };
 
-const guest = async (name) =>
+const player = async (name) =>
 {
     const who = session();
-    const answer = await who.post('/auth/guest', { name });
 
-    if (answer.status !== 200)
-    {
-        throw new Error(`guest sign-in for ${ name } failed: ${ answer.status } ${ answer.text.slice(0, 200) }`);
-    }
-
-    who.handle = answer.body.account.handle;
+    who.handle = (await signInWallet(who.post, name)).handle;
 
     return who;
 };
@@ -110,8 +105,8 @@ const play = async (target, cube) =>
     console.log(`[match to ${ target }, cube ${ cube ? 'on' : 'off' }]`);
 
     const players = [
-        await guest(`Nard ${ target }a${ Math.floor(random() * 10000) }`),
-        await guest(`Nard ${ target }b${ Math.floor(random() * 10000) }`)
+        await player(`Nard ${ target }a${ Math.floor(random() * 10000) }`),
+        await player(`Nard ${ target }b${ Math.floor(random() * 10000) }`)
     ];
 
     const made = await players[0].post('/tables/', tableBody({
@@ -146,7 +141,7 @@ const play = async (target, cube) =>
     }
 
     const matchId = started.body.id;
-    const stranger = await guest(`Nosy${ Math.floor(random() * 10000) }`);
+    const stranger = await player(`Nosy${ Math.floor(random() * 10000) }`);
     const peek = await stranger.get(`/matches/${ matchId }`);
 
     ok('somebody not playing is answered as if it does not exist', peek.status === 404, `${ peek.status }`);

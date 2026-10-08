@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { play as englishPlay } from '../../frontend/src/locales/en/play.ts';
 import { play as persianPlay } from '../../frontend/src/locales/fa/play.ts';
-import { BASE, clearTables, guestSeat, launch, recorder, seat, waitFor } from './seats.mjs';
+import { BASE, clearTables, walletSeat, launch, recorder, seat, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
 const OUT = join(import.meta.dirname, 'out', 'fit', new Date().toISOString().replace(/[:.]/g, '-'));
@@ -92,7 +92,7 @@ const browser = await launch();
 
 const dana = await seat(browser, 'dana.w');
 
-const helper = await guestSeat(browser, `Fit helper ${ Math.floor(Math.random() * 100000) }`);
+const helper = await walletSeat(browser, `Fit helper ${ Math.floor(Math.random() * 100000) }`);
 
 const views = new Map();
 
@@ -279,7 +279,7 @@ const openTable = async (spec) =>
 
     for (let index = players.length; index < spec.seats; index += 1)
     {
-        players.push(await guestSeat(browser, spec.guests?.[index] ?? `Fit ${ 'abcdefghi'[index] }${ suffix }`));
+        players.push(await walletSeat(browser, spec.guests?.[index] ?? `Fit ${ 'abcdefghi'[index] }${ suffix }`));
     }
 
     const [host, ...guests] = players;
@@ -923,7 +923,7 @@ try
 
         await refresh(spec, table);
 
-        const stranger = await guestSeat(browser, `Fit watcher ${ Math.floor(Math.random() * 100000) }`);
+        const stranger = await walletSeat(browser, `Fit watcher ${ Math.floor(Math.random() * 100000) }`);
         const watchable = await waitFor(async () => (await stranger.api('GET', `/matches/${ table.matchId }/watch`)).ok, 45000);
 
         record(`${ spec.id } can be watched by a stranger`, watchable);

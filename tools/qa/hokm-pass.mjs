@@ -17,6 +17,7 @@
  *   node tools/qa/hokm-pass.mjs
  */
 import { tableBody } from './tables.mjs';
+import { signInWallet } from './wallets.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -85,17 +86,11 @@ const session = () =>
     return { get: (path) => call('GET', path), post: (path, body) => call('POST', path, body), handle: null };
 };
 
-const guest = async (name) =>
+const player = async (name) =>
 {
     const who = session();
-    const answer = await who.post('/auth/guest', { name });
 
-    if (answer.status !== 200)
-    {
-        throw new Error(`guest sign-in for ${ name } failed: ${ answer.status } ${ answer.text.slice(0, 200) }`);
-    }
-
-    who.handle = answer.body.account.handle;
+    who.handle = (await signInWallet(who.post, name)).handle;
 
     return who;
 };
@@ -112,7 +107,7 @@ const run = async () =>
 
         for (let index = 0; index < seats; index += 1)
         {
-            players.push(await guest(`Hokm ${ seats }${ 'abcd'[index] }${ Math.floor(Math.random() * 10000) }`));
+            players.push(await player(`Hokm ${ seats }${ 'abcd'[index] }${ Math.floor(Math.random() * 10000) }`));
         }
 
         const made = await players[0].post('/tables/', tableBody({
@@ -151,7 +146,7 @@ const run = async () =>
 
         const matchId = started.body.id;
 
-        const stranger = await guest(`Nosy${ Math.floor(Math.random() * 10000) }`);
+        const stranger = await player(`Nosy${ Math.floor(Math.random() * 10000) }`);
         const peek = await stranger.get(`/matches/${ matchId }`);
 
         ok('somebody not playing is answered as if it does not exist', peek.status === 404, `${ peek.status }`);

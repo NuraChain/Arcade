@@ -1,4 +1,5 @@
 import { tableBody } from './tables.mjs';
+import { signInWallet } from './wallets.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -130,14 +131,8 @@ const connect = (who) => new Promise((resolve, reject) =>
 const arrive = async (name) =>
 {
     const who = session();
-    const answer = await who.post('/auth/guest', { name });
 
-    if (answer.status !== 200)
-    {
-        throw new Error(`guest sign-in for ${ name } failed: ${ answer.status } ${ answer.text.slice(0, 200) }`);
-    }
-
-    who.handle = answer.body.account.handle;
+    who.handle = (await signInWallet(who.post, name)).handle;
     await connect(who);
 
     return who;

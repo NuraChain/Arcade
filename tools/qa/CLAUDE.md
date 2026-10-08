@@ -15,6 +15,17 @@ decision rather than a shortcut.** The signatures are real - `viem` signs, this 
 the way it verifies anybody's - so the whole sign-in round trip, the device attestation and the
 sealing are exercised end to end. What is skipped is the extension's own UI.
 
+**Somebody nobody has ever been is a wallet too.** A pass that needs a fresh account - an opponent,
+eight searchers, a table of nine - mints a key, signs the server's own challenge with it and throws
+the key away: `signInWallet(post, name)` in `wallets.mjs`, which is the first sign-in a browser
+makes, device and all, without the browser. `player(name)` in the api-only passes and
+`walletSeat(browser, name)` in `seats.mjs` are both that one routine; it takes a `post` so that it
+loads no Playwright, which the api-only passes must not. The name is put on the account afterwards
+(`POST /auth/profile`), because a first sign-in is named after its address: the handle is the
+address's first six hex digits. These were guests (`POST /auth/guest`) until the passes stopped
+depending on a kind of account that is being removed (D40). A `walletSeat` page holds no keys of
+its own - its device was enrolled from Node - exactly as a `seat('dana.w')` page holds none.
+
 **Real MetaMask under Playwright does not work here, and the reason is worth writing down so
 nobody spends another afternoon on it.** MetaMask 13.x is Manifest V3: its background is a service
 worker that idles out, and under automation the content script's next message reports
