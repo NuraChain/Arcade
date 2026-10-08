@@ -749,16 +749,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 return null;
             }
 
-            if (!mayForfeit)
-            {
-                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
-            }
-
             const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), draws);
 
             if (!outcome.ok)
             {
                 return null;
+            }
+
+            if (!mayForfeit)
+            {
+                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
             }
 
             await commit(tx, match, engine, outcome.state, outcome.events, {

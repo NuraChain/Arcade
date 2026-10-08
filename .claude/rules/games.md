@@ -342,6 +342,21 @@ word reaches only somebody playing in that game, and anybody else is answered as
 `standUp(tx, tableId, userId)` in `table/service.ts` is the one place a chair goes back: it frees the
 chair, takes the person out of the table's thread and closes the table behind the last one out.
 
+**Whether a seat has anything to forfeit is the engine's to say, and it is asked before the
+leaver is.** A poker seat that runs out of chips is out of the game, and no result is written for
+it until the game ends. `walkOut` asked whether the leaver had agreed to forfeit before it asked
+the engine whether that seat had anything left to give up, so a busted seat's honest "no" was
+answered `playing`, and the page said "Your game has just started" to somebody out of chips. It
+asks the engine first: a forfeit the engine refuses is nothing to forfeit, and that seat leaves
+whatever it said, as a seat with a result always did. The page asks one question of its own,
+`inPlay(match)` in `data/match.ts` - the game is on, the reader's seat has no result, and the
+board does not say that seat is out - and both the Give up control and `leaveLead` read it. A
+busted seat was offered Give up, which the engine refuses, and its sheet said "leaving forfeits
+it as a loss"; it is offered Leave alone now, told "The game goes on without you", and sends
+`false`. So is somebody in a chair the game never dealt in, who was offered Give up as well.
+`match.db.spec.ts` (*leaving a live match*) puts a seat out by hand and lets it go both ways with
+nothing written; `play.spec.ts` holds the control and the sheet in both languages.
+
 The play page says "Your game has just started" (`play.leave.started`, through `whyRefused`), stays
 where it is and reads the table again at once: the table's own ring is still on its way through two
 coalescing windows when the refusal lands, and without the read the page says it over a lobby. A leave

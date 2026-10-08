@@ -1,4 +1,5 @@
 import { ApiError, type MatchView } from '../api.ts';
+import { inPlay } from '../data/match.ts';
 import type { MessageKey } from '../locales/en.ts';
 import { useLocale } from '../stores/locale.store.ts';
 import { useToasts } from '../stores/toasts.store.ts';
@@ -47,13 +48,11 @@ export function whyRefused(error: unknown, otherwise: MessageKey, playing: Messa
     return word === 'playing' ? playing : `tables.refused.${ word }`;
 }
 
-export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players'> | null, taken: number)
+export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players' | 'view'> | null, taken: number)
 {
     if (live !== null && live.finishedAt === undefined)
     {
-        const mine = live.players.find((one) => one.seat === live.mine);
-
-        return mine !== undefined && mine.result === undefined ? 'play.leave.forfeit' : 'play.leave.locked';
+        return inPlay(live) ? 'play.leave.forfeit' : 'play.leave.locked';
     }
 
     return taken <= 1 ? 'play.leave.last' : 'play.leave.lead';

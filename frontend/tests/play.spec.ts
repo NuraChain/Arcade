@@ -39,6 +39,7 @@ import { useToasts } from '../src/stores/toasts.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { useWatch } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
+import { inPlay } from '../src/data/match.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -990,8 +991,13 @@ describe('PlayPage', () =>
 
     describe('what leaving says', () =>
     {
-        const at = (finishedAt: string | undefined, result: string | undefined) =>
-            ({ finishedAt, mine: 0, players: [{ seat: 0, result }, { seat: 1 }] }) as unknown as Parameters<typeof leaveLead>[0];
+        const at = (finishedAt: string | undefined, result: string | undefined, out = false) =>
+            ({
+                finishedAt,
+                mine: 0,
+                players: [{ seat: 0, result }, { seat: 1 }],
+                view: { kind: 'poker', seats: [{ seat: 0, out }, { seat: 1, out: false }] }
+            }) as unknown as Parameters<typeof leaveLead>[0];
 
         it('warns a player still in a live game that leaving forfeits it', () =>
         {
@@ -1001,6 +1007,26 @@ describe('PlayPage', () =>
         it('tells a player who already gave up that the chair stays empty until the game ends', () =>
         {
             expect(leaveLead(at(undefined, 'abandoned'), 2)).toBe('play.leave.locked');
+        });
+
+        it('tells a player the game has put out the same, though no result is written for them until it ends', () =>
+        {
+            expect(leaveLead(at(undefined, undefined, true), 2)).toBe('play.leave.locked');
+        });
+
+        it('warns a player at a table where somebody ELSE is out', () =>
+        {
+            const theirs = at(undefined, undefined);
+
+            (theirs as unknown as { view: { seats: { seat: number; out: boolean }[] } }).view.seats[1].out = true;
+
+            expect(leaveLead(theirs, 2)).toBe('play.leave.forfeit');
+        });
+
+        it('counts nobody as still playing a game that is over, whatever their row says', () =>
+        {
+            expect(inPlay(at(undefined, undefined)!)).toBe(true);
+            expect(inPlay(at('2026-10-04T12:00:00Z', undefined)!)).toBe(false);
         });
 
         it('offers the chair back once the game is over, and closes an empty table', () =>
@@ -1258,6 +1284,69 @@ describe('PlayPage', () =>
 
             expect(container.querySelector('[data-gone]')).toBeNull();
             expect(control(container, 'match.resign')).toBeDefined();
+        });
+
+        describe('a seat the game has put out with nothing left to give up', () =>
+        {
+            const outOfChips = (tableId: string) =>
+            {
+                const live = gaveUp(tableId);
+
+                return { ...live, players: live.players.map((player) => ({ seat: player.seat, who: player.who, timeouts: 0 })) } as MatchView;
+            };
+
+            const bustedAt = async () =>
+            {
+                const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                for (const chair of held.chairs)
+                {
+                    chair.who = SEATED[chair.seat];
+                }
+
+                begins(held, outOfChips);
+                server.outOfGame[`live-${ id }`] = ['alex'];
+
+                return await opened(held, true);
+            };
+
+            it('is not offered a way to give up, which the game would refuse', async () =>
+            {
+                const { container } = await bustedAt();
+
+                expect(control(container, 'match.resign')).toBeUndefined();
+                expect(control(container, 'play.lobby.leave')).toBeDefined();
+            });
+
+            it('is not told it is watching from behind, which only somebody who walked away is', async () =>
+            {
+                const { container } = await bustedAt();
+
+                expect(container.querySelector('[data-gone]')).toBeNull();
+            });
+
+            it.each([
+                ['en', 'The game goes on without you'],
+                ['fa', 'بازی بدون تو ادامه پیدا می‌کند']
+            ] as const)('is told the game goes on without it, and leaves without agreeing to a forfeit it does not owe, in %s', async (language, words) =>
+            {
+                useLocale().setLocale(language);
+
+                const { container, held, router } = await bustedAt();
+                const sheet = await asked(container);
+
+                expect(sheet.props.lead).toBe(useLocale().t('play.leave.locked'));
+                expect(sheet.props.lead).toContain(words);
+
+                useOverlay().close(sheet.id, true);
+
+                await vi.waitFor(() => expect(router.location().pathname).toBe('/app/games'), { timeout: 4000 });
+
+                expect(left()).toEqual(['tables.leave']);
+                expect(held.chairs[0].who).toBeUndefined();
+                expect(said()).toEqual([]);
+            });
         });
 
         it('sends nothing when the sheet is turned down', async () =>

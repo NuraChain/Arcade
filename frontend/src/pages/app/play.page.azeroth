@@ -10,6 +10,7 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
+import { inPlay } from '../../data/match.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
@@ -511,7 +512,12 @@ export default component PlayPage()
             && current.players.some((player) => player.seat === current.mine && player.result !== undefined);
     })();
 
-    derived resigning = seated && showing && !gone && board.match()?.finishedAt === undefined;
+    derived resigning = (() =>
+    {
+        const current = board.match();
+
+        return seated && showing && current !== null && inPlay(current);
+    })();
 
     const resign = async () =>
     {

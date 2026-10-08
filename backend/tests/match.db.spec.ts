@@ -1089,6 +1089,28 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await liveAt(players[0], tableId)).toBe(load.match.id);
         });
 
+        it('lets go of a seat the game has already put out, whatever it agreed to, and writes nothing', async () =>
+        {
+            for (const agreed of [false, true])
+            {
+                const { tableId, players } = await seatedTable(6, 'poker');
+                const load = await matches.start(players[0], tableId);
+                const busted = load.players.find((one) => one.seat === 1)!.user_id;
+
+                await db.query(
+                    `update matches
+                        set state = jsonb_set(jsonb_set(jsonb_set(state, '{out,1}', 'true'), '{stacks,1}', '0'), '{folded,1}', 'true')
+                      where id = $1`,
+                    [load.match.id]
+                );
+
+                expect(await leave(busted, tableId, agreed), `agreed to forfeit: ${ agreed }`).toEqual({ left: true, closed: false, walked: null });
+                expect(await heldBy(busted, tableId)).toEqual({ chair: false, thread: false });
+                expect(await forfeitsOf(load.match.id)).toEqual([]);
+                expect(await liveAt(players[0], tableId)).toBe(load.match.id);
+            }
+        });
+
         it('gives the chair back with no game on, before one and after one, whatever was agreed', async () =>
         {
             const waiting = await seatedTable(2);
