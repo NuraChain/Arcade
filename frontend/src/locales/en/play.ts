@@ -174,6 +174,7 @@ export const play = {
 
     'play.table.chat': 'Table chat',
     'watch.title': 'You are watching',
+    'watch.gone': 'You are out of this game.',
     'watch.finished': 'This game is over',
     'watch.over': 'The game ended.',
     'watch.behind': {

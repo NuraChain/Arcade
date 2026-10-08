@@ -1198,6 +1198,67 @@ describe('PlayPage', () =>
             expect(said()).toEqual([]);
         });
 
+        it.each([
+            ['en', 'You are out of this game.', 'The board you see is at least 30 seconds behind the one they are playing on.'],
+            ['fa', 'از این بازی بیرون رفتی.', 'صفحه‌ای که می‌بینی دست‌کم ۳۰ ثانیه عقب‌تر']
+        ] as const)('tells somebody who gave up that they are watching the rest from behind, in %s', async (language, out, behind) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container } = await resignedAt();
+            const told = container.querySelector('[data-gone]');
+
+            expect(told?.textContent).toContain(out);
+            expect(told?.textContent).toContain(behind);
+            expect(told?.getAttribute('role')).toBe('status');
+        });
+
+        it('does not offer to give up a second time to somebody who already has', async () =>
+        {
+            const { container } = await resignedAt();
+
+            expect(control(container, 'match.resign')).toBeUndefined();
+            expect(control(container, 'play.lobby.leave')).toBeDefined();
+        });
+
+        it('says neither to somebody still playing, who is offered the way out', async () =>
+        {
+            const { container } = await seatedAt(true);
+
+            expect(container.querySelector('[data-gone]')).toBeNull();
+            expect(control(container, 'match.resign')).toBeDefined();
+        });
+
+        it('says neither to somebody still playing at a table where somebody else has given up', async () =>
+        {
+            const theirs = (tableId: string) =>
+            {
+                const live = gaveUp(tableId);
+                const view = live.view as { seats: { seat: number; stack: number; folded: boolean; out: boolean }[] };
+
+                return {
+                    ...live,
+                    players: live.players.map((player) => ({ seat: player.seat, who: player.who, timeouts: 0, ...(player.seat === 2 ? { result: 'abandoned' } : {}) })),
+                    view: { ...view, seats: view.seats.map((seat) => ({ ...seat, stack: seat.seat === 2 ? 0 : 1500, folded: seat.seat === 2, out: seat.seat === 2 })) }
+                } as MatchView;
+            };
+
+            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            for (const chair of held.chairs)
+            {
+                chair.who = SEATED[chair.seat];
+            }
+
+            begins(held, theirs);
+
+            const { container } = await opened(held, true);
+
+            expect(container.querySelector('[data-gone]')).toBeNull();
+            expect(control(container, 'match.resign')).toBeDefined();
+        });
+
         it('sends nothing when the sheet is turned down', async () =>
         {
             const { container, held, router } = await seatedAt(true);

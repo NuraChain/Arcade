@@ -20,7 +20,8 @@ import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
-import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
+import { WATCH_DELAY_MS } from './domains/match/turns.ts';
+import { createWatchService } from './domains/match/watch.ts';
 import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
 import { strikes } from './domains/table/sweep.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
@@ -742,13 +743,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             return;
         }
 
-        live.gamePushed(found.load.players.map((row) => ({
+        const playing = found.load.match.finishedAt === null
+            ? found.load.players.filter((row) => row.result === null)
+            : found.load.players;
+
+        live.gamePushed(playing.map((row) => ({
             userId: row.user_id,
             match: shipped(asMatch({ ...found.load, mine: row.seat })),
             events: logged(found.events(row.seat))
         })));
 
-        live.gameWatched(found.load.match.tableId, matchId, WATCH_DELAY_MS + 1000, found.load.players.map((row) => row.user_id));
+        live.gameWatched(found.load.match.tableId, matchId, WATCH_DELAY_MS + 1000, playing.map((row) => row.user_id));
     };
 
     /**
@@ -873,7 +878,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
         const since = want.rev === undefined ? null : await match.since(me, matchId, want.rev);
 
-        return { match: asMatch(answer.load), applied: answer.applied, events: since === null ? [] : logged(since.events) };
+        return { match: asMatch(await match.shownTo(answer.load)), applied: answer.applied, events: since === null ? [] : logged(since.events) };
     };
 
     const TIDY: Record<string, string> = {
@@ -2202,7 +2207,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { match: asMatch(found.load), events: logged(found.events) };
             },
 
-            start: async (me, tableId) => asMatch(await startPushed(me, tableId)),
+            start: async (me, tableId) => asMatch(await match.shownTo(await startPushed(me, tableId))),
 
             play: async (me, matchId, input) =>
                 await played(me, matchId, { play: input.play, key: input.key, rev: input.rev }),

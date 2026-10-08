@@ -177,6 +177,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
 
     'play.table.chat': 'گفت‌وگوی میز',
     'watch.title': 'داری تماشا می‌کنی',
+    'watch.gone': 'از این بازی بیرون رفتی.',
     'watch.finished': 'این بازی تمام شده',
     'watch.over': 'بازی تمام شد.',
     'watch.behind': {

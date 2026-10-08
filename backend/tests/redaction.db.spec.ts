@@ -50,7 +50,7 @@ interface SecretState
     secrets: number[];
 }
 
-const stateFor = (): SecretState => ({ rev: 1, turn: 0, secrets: [...SECRETS] });
+const stateFor = (): SecretState => ({ rev: SECRETS.length, turn: 0, secrets: [...SECRETS] });
 
 /**
  * A game where every seat holds something the others must not read.

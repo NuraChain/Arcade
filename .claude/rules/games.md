@@ -1917,6 +1917,13 @@ spectator with a live board can say which token to move, and coaching is cheatin
 whether or not the board is secret. A finished game has no delay, because nothing is left to leak,
 and that is also what makes watching a game back possible.
 
+The delay is one turn of a live table, thirty seconds (`WATCH_DELAY_MS` in `match/turns.ts`), and
+it is the weaker of the two settings that were considered: at one turn a spectator's board is one
+move stale, so advice from the sidelines is about a position that has just changed rather than
+one that changed three turns ago. It stops somebody reading a board over a shoulder in real time;
+it does not stop a determined pair who accept that what they know is a move old. A small multiple
+of the turn timer is the change to make if that ever matters more than watching feeling live.
+
 The board was always R's and the seats were not (LUDO-14). `match_players` was read as it stands NOW,
 and two of its columns move while a game goes on. `result` becomes `abandoned` the moment a forfeit
 commits, though ludo plays on at three and four seats and poker at three or more, so for thirty
@@ -1951,10 +1958,46 @@ at one that is no uuid, or at a table that stopped being public under its game -
 alike, while somebody in a chair there is still shown it. `envelope.spec.ts` holds the missing count
 with no Postgres, and `table-plate.spec.ts` and `ludo-table.spec.ts` hold the plates.
 
-Two things still reach somebody early, and neither is this route's. The play page closes the watch
+One thing still reaches somebody early, and it is not this route's. The play page closes the watch
 the moment the table drops its `matchId`, which is the LIVE finish, so a watcher learns a game ended
-thirty seconds before their board would have shown it and never sees the last board. And a seat that
-quit a game still being played keeps its `match_players` row, so it is still pushed the live board.
+thirty seconds before their board would have shown it and never sees the last board.
+
+**A seat that quit a game still being played is a watcher from the move it quit on** (D31, the
+owner, 2026-10-05). Ludo plays on at three and four seats and poker at three or more, and whoever
+gave up, walked away or was timed out of one kept its `match_players` row - so it was still pushed
+every board as it was made, and `view` and `since` still answered it live. That is the watcher's
+delay with a door left open beside it, and the door did not even need the page: `since` is a GET.
+Now:
+
+- **Which seats.** One whose `match_players.result` is set while `matches.finished_at` is not. Only
+  a forfeit writes a result before the finish (`commit`), so that is exactly the seats with a
+  forfeit row. A poker seat that is out of chips has none and is untouched; a game of two, a
+  Hokm game and a Ludo team game end on a forfeit, so nothing about them changes.
+- **What it is shown.** `match.shownTo(load)`: the newest row at least `WATCH_DELAY_MS` old, or the
+  opening, OR any row up to its own forfeit - `boardShown(db, match, players, seenUpTo)`, the
+  composition the watch route already used, with one more clause. Without that clause the answer
+  to "Give up" was a board from before the giving up, with the Give up button back on it; the
+  seat watched the game live until the move it left on, and that is where its board starts. It
+  keeps `mine`, so the page still knows which plate is the reader's, and gets a watcher's seats:
+  no clock, no counts of misses, no rating.
+- **Every answer a seat can get** goes through it, and there are five: `view`, `since` (whose
+  events stop at the revision shown), the answer to a play or a resignation, the answer to
+  `start`, and the push. The third matters because a resignation is idempotent: asked again with
+  the same key it answers `already` WITH A BOARD, which was the live one - a quitter could have
+  polled its own resignation. The fourth because `start` at a table with a game on answers that
+  game. `read` itself stays live, because `act` and the turn notice reason from it.
+- **The push.** `pushMatch` sends to the seats still playing and names only those as players to
+  `gameWatched`, so a seat that quit is rung with the watchers, a delay and a second later, if it
+  is looking at the table, and its page reads `since` like any other doorbell. The finishing push
+  goes to everybody.
+- **The page says so.** Above the board: "You are out of this game." and the watcher's own
+  sentence about being thirty seconds behind. And it no longer offers "Give up" to somebody who
+  already has, which it did, to be refused.
+
+`WATCH_DELAY_MS` moved to `match/turns.ts`, which imports nothing, so the page can say the number
+the server keeps. `match-quit.db.spec.ts` holds each of the five answers at a three-seat Ludo
+table, a walkout as well as a resignation, the end told to everybody, and a game of two
+unchanged; `play.spec.ts` the sentence in both languages and the button that is gone.
 
 The play page also still says a thing this route no longer means. A refused watch is drawn as
 `watch.waiting`, "The game has just started. There is nothing old enough to show yet.", the sentence

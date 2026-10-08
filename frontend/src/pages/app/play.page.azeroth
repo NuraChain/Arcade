@@ -34,7 +34,7 @@ import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/shee
 import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
-import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
+import { WATCH_DELAY_MS, turnMs } from '../../../../backend/src/domains/match/turns.ts';
 
 export default component PlayPage()
 {
@@ -503,7 +503,15 @@ export default component PlayPage()
         }
     }
 
-    derived resigning = seated && showing && board.match()?.finishedAt === undefined;
+    derived gone = ((): boolean =>
+    {
+        const current = board.match();
+
+        return showing && current !== null && current.finishedAt === undefined
+            && current.players.some((player) => player.seat === current.mine && player.result !== undefined);
+    })();
+
+    derived resigning = seated && showing && !gone && board.match()?.finishedAt === undefined;
 
     const resign = async () =>
     {
@@ -880,6 +888,14 @@ export default component PlayPage()
                             </span>
                         }
                     />
+
+                    <Show when={ gone }>
+                        <p data-gone role="status" class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">
+                            <Icon name="activity" size={ 14 } class="shrink-0 text-accent" />
+                            <span class="font-semibold text-text">{ locale.t('watch.gone') }</span>
+                            <span>{ locale.plural('watch.behind.seconds', WATCH_DELAY_MS / 1000) }</span>
+                        </p>
+                    </Show>
 
                     <Show when={ playing !== '' && drawn === playing }>
                         { () => <Dynamic component={ Board! } props={ boardProps } /> }

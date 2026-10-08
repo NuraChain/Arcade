@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
+import { Between, IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
 import { MatchPlayer, type MatchResult } from '../../entities/match-player.entity.ts';
@@ -19,6 +19,7 @@ import { pokerEngine } from './engines/poker.ts';
 import { REFUSALS, isRefusal, type RefusalWord } from './refusals.ts';
 import { variantOf } from './sides.ts';
 import { nextMissForfeits, turnMs } from './turns.ts';
+import { boardShown } from './watch.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
@@ -221,6 +222,30 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         return { match, state: stateOf(match), players: await seatsOf(db, matchId), mine: seat.seat };
     };
 
+    const shownTo = async (load: MatchLoad): Promise<MatchLoad> =>
+    {
+        const mine = load.players.find((player) => player.seat === load.mine);
+
+        if (load.match.finishedAt !== null || mine === undefined || mine.result === null)
+        {
+            return load;
+        }
+
+        const left = await db.getRepository(MatchAction).findOne({
+            select: { rev: true },
+            where: { matchId: load.match.id, kind: 'forfeit', seat: load.mine },
+            order: { rev: 'DESC' }
+        });
+        const shown = await boardShown(db, load.match, load.players, left?.rev ?? -1);
+
+        if (shown === null)
+        {
+            throw new NotFoundError('No game there.');
+        }
+
+        return { ...shown.load, mine: load.mine };
+    };
+
     const dealtIn = async (me: string, matchId: string) =>
     {
         const mine = await read(me, matchId);
@@ -328,7 +353,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     `;
 
     return {
-        view: read,
+        async view(me: string, matchId: string)
+        {
+            const load = await read(me, matchId);
+
+            return load === null ? null : await shownTo(load);
+        },
+
+        shownTo,
 
         async history(me: string, cursor: string | null): Promise<MatchHistory>
         {
@@ -384,23 +416,25 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         since: async (me: string, matchId: string, rev: number): Promise<{ load: MatchLoad; events: ActionLog[] } | null> =>
         {
-            const load = await read(me, matchId);
+            const dealt = await read(me, matchId);
 
-            if (load === null)
+            if (dealt === null)
             {
                 return null;
             }
 
-            const engine = engineFor(load.match.game);
+            const engine = engineFor(dealt.match.game);
 
             if (engine === null)
             {
                 return null;
             }
 
+            const load = await shownTo(dealt);
+
             const rows = await db.getRepository(MatchAction).find({
                 select: { rev: true, seat: true, createdAt: true, events: true },
-                where: { matchId, rev: MoreThan(rev) },
+                where: { matchId, rev: Between(rev + 1, load.match.rev) },
                 order: { rev: 'ASC' }
             });
 
