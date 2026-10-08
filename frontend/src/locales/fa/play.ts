@@ -457,6 +457,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'card.won': 'برد',
     'card.void': 'بی‌نتیجه',
     'card.out': 'بازی را ترک کرد',
+    'card.gaveUp': 'تسلیم شد',
+    'card.timedOut': 'وقتش تمام شد',
     'card.partner': 'یار',
     'card.opponent': 'حریف',
     'card.helping': 'کمک به یار',

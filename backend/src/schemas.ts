@@ -1224,6 +1224,8 @@ export const matchPlayer = object({
 
     result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
 
+    exit: enumOf(['resign', 'left', 'timeout']).optional(),
+
     /**
      * What the game did to this seat's rating. Both or neither, and absent for a match that did not
      * move one - a room that emptied is recorded and scores nothing, so a client that renders a

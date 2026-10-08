@@ -22,7 +22,7 @@ import { nextMissForfeits, turnMs } from './turns.ts';
 import { boardShown } from './watch.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
-import type { Draws, Engine, TableConfig } from './engine.ts';
+import type { Draws, Engine, ForfeitReason, TableConfig } from './engine.ts';
 import type { MatchPlay } from '../../schemas.ts';
 
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
@@ -64,6 +64,7 @@ export interface MatchSeatRow
     colour: number;
     timeouts: number | null;
     result: MatchResult | null;
+    exit: ForfeitReason | null;
     rating_before: number | null;
     rating_after: number | null;
 }
@@ -189,6 +190,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             .addSelect('p.user_id', 'user_id')
             .addSelect('p.timeouts', 'timeouts')
             .addSelect('p.result', 'result')
+            .addSelect(
+                `(select a.payload ->> 'verb' from match_actions a
+                   where a.match_id = p.match_id and a.kind = 'forfeit' and a.seat = p.seat
+                   order by a.rev desc limit 1)`,
+                'exit'
+            )
             .addSelect('p.rating_before', 'rating_before')
             .addSelect('p.rating_after', 'rating_after')
             .where('p.match_id = :matchId', { matchId })

@@ -221,6 +221,23 @@ describe('the ludo table', () =>
         expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.out'));
     });
 
+    it.each([
+        ['resign', 'Gave up'],
+        ['timeout', 'Timed out'],
+        ['left', 'Left']
+    ] as const)('says on a yard\'s badge which way its seat went out of the game (%s)', async (exit, words) =>
+    {
+        const container = await show(ludo({
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0 },
+                { seat: 1, who: 'sara.k', timeouts: 0, result: 'abandoned', exit }
+            ] as MatchView['players']
+        }, { seats: [yard(0, 'red'), { ...yard(1, 'yellow'), out: true }] }));
+        const theirs = [...container.querySelectorAll<HTMLElement>('.yard-badge')][1];
+
+        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(words);
+    });
+
     it('marks nobody on turn once the game is over, for either player and for somebody watching', async () =>
     {
         const locale = useLocale();

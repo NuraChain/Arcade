@@ -10,6 +10,15 @@ export interface PlateTag
     tone: PlateTone;
 }
 
+const GONE = { resign: 'card.gaveUp', left: 'card.out', timeout: 'card.timedOut' } as const;
+
+export const goneKey = (exit: MatchPlayer['exit']) => GONE[exit ?? 'left'];
+
+export const resultWord = (locale: ReturnType<typeof useLocale>, result: NonNullable<MatchPlayer['result']>, exit: MatchPlayer['exit']) =>
+    result === 'abandoned' && exit !== undefined && exit !== 'left'
+        ? locale.t(goneKey(exit))
+        : locale.t(`history.result.${ result }`);
+
 export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlayer | undefined, finished: boolean): PlateTag | null
 {
     if (player === undefined)
@@ -24,7 +33,7 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
 
     if (player.result === 'abandoned')
     {
-        return { text: locale.t('card.out'), tone: 'neutral' };
+        return { text: locale.t(goneKey(player.exit)), tone: 'neutral' };
     }
 
     if (player.result === 'lost')

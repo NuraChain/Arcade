@@ -1999,6 +1999,21 @@ the server keeps. `match-quit.db.spec.ts` holds each of the five answers at a th
 table, a walkout as well as a resignation, the end told to everybody, and a game of two
 unchanged; `play.spec.ts` the sentence in both languages and the button that is gone.
 
+**How a seat went is on the wire, because "Left the game" was said of three different things.**
+Somebody who pressed Give up, somebody who walked away from the table and somebody the clock ran
+out on three times all wore the same tag, and the first of them had not left anything: they were
+sitting there. The ledger always knew which - a forfeit row's payload carries `resign`, `left` or
+`timeout` - so `matchPlayer.exit` is that word, read with the seats (`seatsOf`, one sub-query on
+the forfeit row) and sent only with the `abandoned` it explains: a watcher is told how a seat went
+when the board they are shown has it gone, and not thirty seconds before. A plate, a Ludo yard's
+badge and the result panel say "Gave up", "Left" or "Timed out" (`goneKey` in `plate-tag.ts`); a
+seat that comes without the word reads as one that left. The walkout's tag is the one word because
+"Left the game" was a pixel wider than a yard's badge has on a wide screen (92 of 91, measured on
+the production build) and was drawn cut; the tags for a missed turn are longer still and are the
+next thing to put right there. `match-quit.db.spec.ts` holds each of the three through the real
+routes, the sweep's three missed turns included, and `envelope.spec.ts` that the word never
+travels without the result.
+
 **A refused watch says what it is.** The play page drew it as `watch.waiting`, "The game has just
 started. There is nothing old enough to show yet.", the sentence for a game too young to have a
 board to show - and a young game is shown its opening, so the only 404 left is not there, or not

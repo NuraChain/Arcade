@@ -292,4 +292,101 @@ describe.skipIf(!active)('a seat that has quit a game still being played, agains
         expect(gone.match.finishedAt).toBeDefined();
         expect(pushed.map((push) => push.userId).sort()).toEqual([...players].sort());
     });
+
+    describe('how it went is said, to everybody who is shown that it went', () =>
+    {
+        const exitOf = (view: MatchView | null | undefined, seat: number) => view?.players.find((player) => player.seat === seat)?.exit;
+
+        const missed = async (matchId: string, players: readonly string[], seat: number) =>
+        {
+            for (let turn = 0; turn < 60; turn += 1)
+            {
+                const now = await ports.match.view(players[0], matchId);
+
+                if (now?.players.find((player) => player.seat === seat)?.result !== undefined || now?.finishedAt !== undefined)
+                {
+                    return;
+                }
+
+                if (now?.turn === seat)
+                {
+                    await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
+                    await ports.jobs.sweepTurns(2000);
+                }
+                else
+                {
+                    await step(matchId, players);
+                }
+            }
+        };
+
+        it('says a seat gave up, to the others still playing and in the answer it gets itself', async () =>
+        {
+            const { players, match } = await started();
+            const gone = await ports.match.resign(players[2], match.id, { key: 'gives-up' });
+
+            expect(exitOf(gone.match, 2)).toBe('resign');
+            expect(exitOf(await ports.match.view(players[0], match.id), 2)).toBe('resign');
+            expect(exitOf(await ports.match.view(players[0], match.id), 0), 'somebody still playing has not gone any way').toBeUndefined();
+            expect(exitOf(pushed.at(-1)?.match, 2)).toBe('resign');
+        });
+
+        it('says a seat walked away from the table', async () =>
+        {
+            const { players, tableId, match } = await started();
+
+            await ports.table.leave(players[2], tableId, true);
+
+            expect(exitOf(await ports.match.view(players[0], match.id), 2)).toBe('left');
+        });
+
+        it('says a seat ran out of time, once it has missed as many turns as end a game for it', async () =>
+        {
+            const { players, match } = await started();
+
+            await missed(match.id, players, 2);
+
+            const now = await ports.match.view(players[0], match.id);
+
+            expect(now?.players.find((player) => player.seat === 2)?.result).toBe('abandoned');
+            expect(exitOf(now, 2)).toBe('timeout');
+        });
+
+        it('says it to a watcher only once the board the watcher is shown has it', async () =>
+        {
+            const { players, match } = await started();
+            const watcher = await makeUser();
+            const before = (await live(match.id)).rev;
+
+            await ports.match.resign(players[2], match.id, { key: 'gives-up' });
+
+            const young = await ports.match.watch(watcher, match.id);
+
+            expect(young?.match.rev).toBeLessThanOrEqual(before);
+            expect(exitOf(young?.match, 2)).toBeUndefined();
+
+            await aged(match.id, before);
+
+            const shown = await ports.match.watch(watcher, match.id);
+
+            expect(shown?.match.players.find((player) => player.seat === 2)?.result).toBe('abandoned');
+            expect(exitOf(shown?.match, 2)).toBe('resign');
+        });
+
+        it('goes on saying it once the game is over, each seat the way it went itself', async () =>
+        {
+            const { players, tableId, match } = await started();
+
+            await ports.match.resign(players[2], match.id, { key: 'gives-up' });
+            await ports.table.leave(players[1], tableId, true);
+
+            const ended = await ports.match.view(players[0], match.id);
+
+            expect(ended?.finishedAt).toBeDefined();
+            expect(exitOf(ended, 2)).toBe('resign');
+            expect(exitOf(ended, 1)).toBe('left');
+            expect(exitOf(ended, 0), 'whoever is left has a result and went no way').toBeUndefined();
+            expect(ended?.players.find((player) => player.seat === 0)?.result).toBeDefined();
+        });
+    });
 });

@@ -180,6 +180,25 @@ describe('the seat plate every table draws', () =>
         expect(plateTag(locale, { ...watched, result: 'abandoned' }, false)).toEqual({ text: locale.t('card.out'), tone: 'neutral' });
     });
 
+    it.each([
+        ['en', 'Gave up', 'Left', 'Timed out'],
+        ['fa', 'تسلیم شد', 'بازی را ترک کرد', 'وقتش تمام شد']
+    ] as const)('says which way a seat went out of the game: gave up, walked away or ran out of time, in %s', (language, gaveUp, left, timedOut) =>
+    {
+        const locale = useLocale();
+        const gone = (exit?: MatchPlayer['exit']): MatchPlayer => ({ seat: 1, who: 'sara.k', result: 'abandoned', ...(exit === undefined ? {} : { exit }) });
+
+        locale.setLocale(language);
+
+        expect(plateTag(locale, gone('resign'), false)?.text).toBe(gaveUp);
+        expect(plateTag(locale, gone('left'), false)?.text).toBe(left);
+        expect(plateTag(locale, gone('timeout'), false)?.text).toBe(timedOut);
+        expect(plateTag(locale, gone(), true)?.text, 'a seat that came without the way it went').toBe(left);
+        expect(plateTag(locale, gone('resign'), true)?.tone).toBe('neutral');
+
+        locale.setLocale('en');
+    });
+
     it('warns on the miss the server’s own rule calls the last, so a different limit moves the warning with it', () =>
     {
         vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 5);

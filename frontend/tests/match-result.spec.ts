@@ -452,3 +452,80 @@ describe('a seat the match never judged', () =>
         expect(winner.textContent).not.toContain('did not count for you');
     });
 });
+
+describe('how a seat that left the game is said to have gone', () =>
+{
+    const ended = (exit?: 'resign' | 'left' | 'timeout') => ({
+        ...finished,
+        outcome: 'won',
+        players: [
+            { seat: 0, who: 'alex', timeouts: 0, result: 'won' },
+            { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned', ...(exit === undefined ? {} : { exit }) }
+        ]
+    }) as MatchView;
+
+    const theirs = (container: HTMLElement) =>
+        [...container.querySelectorAll('li')].find((one) => one.textContent?.includes('omid.k'))?.textContent ?? '';
+
+    beforeEach(() =>
+    {
+        cleanup();
+        useLocale().setLocale('en');
+    });
+
+    afterEach(() => cleanup());
+
+    it.each([
+        ['resign', 'Gave up'],
+        ['timeout', 'Timed out'],
+        ['left', 'Left']
+    ] as const)('says %s in the result as %s', (exit, words) =>
+    {
+        const container = renderTest(() => MatchResult({ match: ended(exit), mine: 0 }) as Rendered).container;
+
+        expect(theirs(container)).toContain(words);
+    });
+
+    it('says Left for a seat that came without the way it went', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: ended(), mine: 0 }) as Rendered).container;
+
+        expect(theirs(container)).toContain('Left');
+        expect(theirs(container)).not.toContain('Gave up');
+    });
+
+    it('says it in Persian, and a walkout in the one word a row has room for', () =>
+    {
+        useLocale().setLocale('fa');
+
+        expect(theirs(renderTest(() => MatchResult({ match: ended('resign'), mine: 0 }) as Rendered).container)).toContain('تسلیم شد');
+        cleanup();
+        expect(theirs(renderTest(() => MatchResult({ match: ended('timeout'), mine: 0 }) as Rendered).container)).toContain('وقتش تمام شد');
+        cleanup();
+
+        const walked = theirs(renderTest(() => MatchResult({ match: ended('left'), mine: 0 }) as Rendered).container);
+
+        expect(walked).toContain('ترک');
+        expect(walked).not.toContain('بازی را ترک کرد');
+
+        useLocale().setLocale('en');
+    });
+
+    it('never says a seat that won gave up, whatever else its row carries', () =>
+    {
+        const match = {
+            ...finished,
+            outcome: 'won',
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0, result: 'won', exit: 'resign' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost', exit: 'timeout' }
+            ]
+        } as MatchView;
+        const rows = [...renderTest(() => MatchResult({ match, mine: 0 }) as Rendered).container.querySelectorAll('li')].map((one) => one.textContent ?? '');
+
+        expect(rows.some((row) => row.includes('Won'))).toBe(true);
+        expect(rows.some((row) => row.includes('Lost'))).toBe(true);
+        expect(rows.join(' ')).not.toContain('Gave up');
+        expect(rows.join(' ')).not.toContain('Timed out');
+    });
+});

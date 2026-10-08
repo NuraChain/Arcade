@@ -1,6 +1,6 @@
 import DieFace from './die-face.component.azeroth';
 import TablePlate, { type PlateTeam } from './table-plate.component.azeroth';
-import type { PlateTone } from './plate-tag.ts';
+import { goneKey, type PlateTone } from './plate-tag.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -63,7 +63,7 @@ export default component YardBadge(props: {
 
         if (props.seat.out || props.player.result === 'abandoned')
         {
-            return locale.t('card.out');
+            return locale.t(goneKey(props.player.exit));
         }
 
         if (props.player.result === 'lost')
