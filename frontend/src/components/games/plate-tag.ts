@@ -15,9 +15,7 @@ const GONE = { resign: 'card.gaveUp', left: 'card.out', timeout: 'card.timedOut'
 export const goneKey = (exit: MatchPlayer['exit']) => GONE[exit ?? 'left'];
 
 export const resultWord = (locale: ReturnType<typeof useLocale>, result: NonNullable<MatchPlayer['result']>, exit: MatchPlayer['exit']) =>
-    result === 'abandoned' && exit !== undefined && exit !== 'left'
-        ? locale.t(goneKey(exit))
-        : locale.t(`history.result.${ result }`);
+    locale.t(result === 'abandoned' ? goneKey(exit) : `history.result.${ result }`);
 
 export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlayer | undefined, finished: boolean): PlateTag | null
 {
@@ -50,9 +48,7 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
 
     if (missed > 0 && !finished)
     {
-        return nextMissForfeits(missed)
-            ? { text: locale.t('card.lastChance'), tone: 'danger' }
-            : { text: locale.plural('match.missed', missed), tone: 'gold' };
+        return { text: locale.plural('card.missed', missed), tone: nextMissForfeits(missed) ? 'danger' : 'gold' };
     }
 
     return null;

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 
+import { MISSES_ALLOWED } from '../../backend/src/domains/match/turns.ts';
+import type { MatchView } from '../src/api.ts';
 import TableChat from '../src/components/games/table-chat.component.azeroth';
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -10,13 +12,14 @@ import '../src/locales/app-catalogue.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useBoard } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSeal } from '../src/stores/seal.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
-import { server } from './fake-api.ts';
+import { client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -258,6 +261,79 @@ describe('the players beside a table’s chat, while a call is on', () =>
 
         expect(hers().querySelector('button[aria-pressed]')).toBeNull();
         expect(hers().querySelector('[title]')).toBeNull();
+    });
+});
+
+describe('the players beside a table’s chat, while a game is on', () =>
+{
+    const playing = async (missed: number) =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2 }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: true, host: false };
+        held.taken = 2;
+        held.matchId = 'live-missed';
+
+        (client.matches as unknown as Record<string, unknown>).view = async () => ({
+            id: 'live-missed',
+            tableId,
+            game: 'ludo',
+            rev: 6,
+            seats: 2,
+            players: [{ seat: 0, who: 'alex', timeouts: 0, side: 0 }, { seat: 1, who: 'sara.k', timeouts: missed, side: 1 }],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: {
+                kind: 'ludo',
+                moves: [],
+                controls: 0,
+                seats: ['red', 'yellow'].map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+            }
+        }) as MatchView;
+
+        lobby.open(tableId);
+        await lobby.refresh();
+        useBoard().open('live-missed');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+        fire(pressable(container, useLocale().t('play.tab.players')), 'click');
+        await settle();
+
+        return [...container.querySelectorAll<HTMLElement>(`ul[aria-label="${ useLocale().t('play.tab.players') }"] > li`)].map((row) => row.textContent ?? '');
+    };
+
+    afterEach(() =>
+    {
+        useBoard().close();
+        delete (client.matches as unknown as Record<string, unknown>).view;
+        useLocale().setLocale('en');
+    });
+
+    it('says what a seat has missed, and nothing about what comes next while the next miss costs nothing', async () =>
+    {
+        const [mine, hers] = await playing(1);
+
+        expect(hers).toContain('missed a turn');
+        expect(hers).not.toContain('one more ends their game');
+        expect(mine).not.toContain('missed');
+    });
+
+    it.each([
+        ['en', 'missed 2 turns, and one more ends their game'],
+        ['fa', '۲ نوبت را از دست داد و یکی دیگر بازی‌اش را تمام می‌کند']
+    ] as const)('says what the next miss costs once it is the one that ends the game for that seat, in %s', async (language, words) =>
+    {
+        useLocale().setLocale(language);
+
+        const [, hers] = await playing(MISSES_ALLOWED - 1);
+
+        expect(hers).toContain(words);
     });
 });
 

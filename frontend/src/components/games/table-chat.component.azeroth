@@ -33,6 +33,7 @@ import IconButton from '../ui/icon-button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import { CHAT_WELL } from '../ui/variants.ts';
+import { nextMissForfeits } from '../../../../backend/src/domains/match/turns.ts';
 
 const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
 
@@ -507,7 +508,7 @@ export default component TableChat(props: {
                                 />
                             </Show>
                             <Show when={ row.timeouts > 0 }>
-                                { () => <Badge dot text={ locale.plural('match.missed', row.timeouts) } tone="danger" /> }
+                                { () => <Badge dot text={ locale.plural(nextMissForfeits(row.timeouts) ? 'match.missed.last' : 'match.missed', row.timeouts) } tone="danger" /> }
                             </Show>
                             <Show when={ row.home !== undefined }>
                                 { () =>

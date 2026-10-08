@@ -1679,6 +1679,11 @@ html:has(.site-drawer[open])
         padding: 0.2rem;
     }
 
+    .poker-seat .table-plate-tag
+    {
+        padding-inline: 0.15rem;
+    }
+
     .poker-seat .table-plate-avatar,
     .poker-backs
     {

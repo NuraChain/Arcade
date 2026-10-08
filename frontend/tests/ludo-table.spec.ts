@@ -157,7 +157,8 @@ describe('the ludo table', () =>
         const [mine, theirs] = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
 
         expect(mine.querySelector('.sr-only')?.textContent).toBe('Your go');
-        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.lastChance'));
+        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().plural('card.missed', turns.MISSES_ALLOWED - 1));
+        expect(theirs.querySelector('.table-plate-tag')?.getAttribute('data-tone')).toBe('danger');
     });
 
     it('takes the last chance from the server’s own rule, so a different limit moves the warning with it', async () =>
@@ -182,8 +183,8 @@ describe('the ludo table', () =>
             return read;
         };
 
-        expect(await tag(3)).toEqual({ text: locale.plural('match.missed', 3), tone: 'gold' });
-        expect(await tag(4)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
+        expect(await tag(3)).toEqual({ text: locale.plural('card.missed', 3), tone: 'gold' });
+        expect(await tag(4)).toEqual({ text: locale.plural('card.missed', 4), tone: 'danger' });
     });
 
     it('writes no tag on the plates of a game being watched, whose seats come without a count of missed turns', async () =>
@@ -205,7 +206,7 @@ describe('the ludo table', () =>
         expect(badges.map((badge) => badge.querySelector('.sr-only')?.textContent)).toEqual([locale.t('card.turn'), locale.t('card.waiting')]);
     });
 
-    it('says No contest on a seat the finished game never judged, and Left on the seat that walked', async () =>
+    it('says Void on a seat the finished game never judged, and Left on the seat that walked', async () =>
     {
         const container = await show(ludo({
             finishedAt: new Date(500_000).toISOString(),
@@ -217,13 +218,13 @@ describe('the ludo table', () =>
         }, { seats: [yard(0, 'red'), { ...yard(1, 'yellow'), out: true }] }));
         const [mine, theirs] = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
 
-        expect(mine.querySelector('.table-plate-tag')?.textContent).toBe('No contest');
-        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.out'));
+        expect(mine.querySelector('.table-plate-tag')?.textContent).toBe('Void');
+        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe('Left');
     });
 
     it.each([
         ['resign', 'Gave up'],
-        ['timeout', 'Timed out'],
+        ['timeout', 'Timeout'],
         ['left', 'Left']
     ] as const)('says on a yard\'s badge which way its seat went out of the game (%s)', async (exit, words) =>
     {
@@ -387,7 +388,7 @@ describe('the ludo table, two against two', () =>
             players: SEATED.map((who, seat) => ({ seat, who, timeouts: seat === 2 ? 1 : 0, side: seat % 2 }))
         }));
 
-        expect(tagsOf(container)[2]).toBe(locale.plural('match.missed', 1));
+        expect(tagsOf(container)[2]).toBe(locale.plural('card.missed', 1));
         expect(sidesSaid(container)[2]).toBe(locale.t('card.partner'));
     });
 

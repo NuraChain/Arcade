@@ -164,7 +164,7 @@ describe('the seat plate every table draws', () =>
 
         expect(plateTag(locale, player(0), false)).toBeNull();
         expect(plateTag(locale, player(1), false)?.tone).toBe('gold');
-        expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), false)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
+        expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), false)).toEqual({ text: locale.plural('card.missed', turns.MISSES_ALLOWED - 1), tone: 'danger' });
         expect(plateTag(locale, player(0, 'won'), true)).toEqual({ text: locale.t('card.won'), tone: 'live' });
         expect(plateTag(locale, player(0, 'void'), true)).toEqual({ text: locale.t('card.void'), tone: 'neutral' });
         expect(locale.t('card.void')).not.toBe('card.void');
@@ -181,8 +181,8 @@ describe('the seat plate every table draws', () =>
     });
 
     it.each([
-        ['en', 'Gave up', 'Left', 'Timed out'],
-        ['fa', 'تسلیم شد', 'بازی را ترک کرد', 'وقتش تمام شد']
+        ['en', 'Gave up', 'Left', 'Timeout'],
+        ['fa', 'تسلیم شد', 'ترک کرد', 'وقت تمام']
     ] as const)('says which way a seat went out of the game: gave up, walked away or ran out of time, in %s', (language, gaveUp, left, timedOut) =>
     {
         const locale = useLocale();
@@ -207,5 +207,24 @@ describe('the seat plate every table draws', () =>
         const tone = (timeouts: number) => plateTag(locale, { seat: 1, who: 'sara.k', timeouts } as MatchPlayer, false)?.tone;
 
         expect([1, 2, 3, 4].map(tone)).toEqual(['gold', 'gold', 'gold', 'danger']);
+    });
+
+    it.each([
+        ['en', 'Missed 1', 'Missed 2', 'Missed 3', 'Void'],
+        ['fa', 'یک غیبت', '۲ غیبت', '۳ غیبت', 'بی‌نتیجه']
+    ] as const)('says a missed turn as a count a narrow plate has room for, and the last one allowed in the danger tone, in %s', (language, once, twice, thrice, void_) =>
+    {
+        vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 4);
+
+        const locale = useLocale();
+        const said = (timeouts: number) => plateTag(locale, { seat: 1, who: 'sara.k', timeouts } as MatchPlayer, false);
+
+        locale.setLocale(language);
+
+        expect([1, 2, 3].map((timeouts) => said(timeouts)?.text)).toEqual([once, twice, thrice]);
+        expect([1, 2, 3].map((timeouts) => said(timeouts)?.tone)).toEqual(['gold', 'gold', 'danger']);
+        expect(plateTag(locale, { seat: 1, who: 'sara.k', result: 'void' } as MatchPlayer, true)?.text).toBe(void_);
+
+        locale.setLocale('en');
     });
 });

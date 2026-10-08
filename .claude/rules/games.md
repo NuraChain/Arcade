@@ -2189,13 +2189,33 @@ sitting there. The ledger always knew which - a forfeit row's payload carries `r
 `timeout` - so `matchPlayer.exit` is that word, read with the seats (`seatsOf`, one sub-query on
 the forfeit row) and sent only with the `abandoned` it explains: a watcher is told how a seat went
 when the board they are shown has it gone, and not thirty seconds before. A plate, a Ludo yard's
-badge and the result panel say "Gave up", "Left" or "Timed out" (`goneKey` in `plate-tag.ts`); a
+badge and the result panel say "Gave up", "Left" or "Timeout" (`goneKey` in `plate-tag.ts`); a
 seat that comes without the word reads as one that left. The walkout's tag is the one word because
 "Left the game" was a pixel wider than a yard's badge has on a wide screen (92 of 91, measured on
-the production build) and was drawn cut; the tags for a missed turn are longer still and are the
-next thing to put right there. `match-quit.db.spec.ts` holds each of the three through the real
-routes, the sweep's three missed turns included, and `envelope.spec.ts` that the word never
-travels without the result.
+the production build) and was drawn cut. `match-quit.db.spec.ts` holds each of the three through
+the real routes, the sweep's three missed turns included, and `envelope.spec.ts` that the word
+never travels without the result.
+
+**A plate's tag is a word or two, because a plate is narrow.** A tag that does not fit is cut with
+an ellipsis, and the narrowest plate in the product has about 57px for one: a poker plate on a
+phone, four rem wide. A Ludo yard's badge has 79px on a phone held sideways and 91px on a wide
+screen. Measured on the production build, each word put into a real plate of every game at six
+sizes in both languages, these were drawn cut: "missed a turn", "missed 2 turns" and "One more miss
+ends it" at Ludo in both languages, and the last of them is the warning a player most needs to
+read; "No contest" on every poker plate and every four-handed Hokm plate on a phone, by up to 23px;
+"Timed out", «وقتش تمام شد» and «بازی را ترک کرد» on the same plates.
+
+So the tag counts and the sentence explains. A missed turn is "Missed 1", "Missed 2"
+(`card.missed`), gold until the next miss is the one that ends the game for that seat and red
+then; the words about what the next one costs are in the Players list, which has the room
+(`match.missed`, and `match.missed.last`, a key that had copy and no caller). A game that did
+not count is "Void" on a plate and still "No contest" in the result, a seat the clock took is
+"Timeout", and in Persian a walkout is «ترک کرد» and a timeout «وقت تمام». The result panel says
+a seat's way out in the plate's own words, so the three are one set in each language. Poker's
+phone plates give the tag most of its side padding as well (`@container (max-width: 22rem)`),
+the four pixels "Missed 2" was short of there. Nothing is cut now, on any plate of any game at
+any of those sizes. `fit-pass.mjs` fails any cell in which a plate's tag is drawn cut, which is
+how the poker plates were found: the Ludo measurement had not looked at them.
 
 **A refused watch says what it is.** The play page drew it as `watch.waiting`, "The game has just
 started. There is nothing old enough to show yet.", the sentence for a game too young to have a

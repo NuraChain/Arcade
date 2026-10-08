@@ -78,9 +78,7 @@ export default component YardBadge(props: {
 
         if (missed > 0)
         {
-            return warned
-                ? locale.t('card.lastChance')
-                : locale.plural('match.missed', missed);
+            return locale.plural('card.missed', missed);
         }
 
         if (!turn)

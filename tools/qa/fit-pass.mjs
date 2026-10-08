@@ -686,6 +686,14 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         }
     }
 
+    for (const tag of document.querySelectorAll('.table-plate-tag'))
+    {
+        if (shown(tag) && tag.scrollWidth > tag.clientWidth + 0.5)
+        {
+            found.push({ kind: 'cut', what: `tag "${ tag.textContent.trim() }" needs ${ tag.scrollWidth }px and has ${ tag.clientWidth }` });
+        }
+    }
+
     if (surface !== null)
     {
         for (const plate of surface.querySelectorAll('.table-plate'))

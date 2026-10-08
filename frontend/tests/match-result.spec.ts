@@ -477,7 +477,7 @@ describe('how a seat that left the game is said to have gone', () =>
 
     it.each([
         ['resign', 'Gave up'],
-        ['timeout', 'Timed out'],
+        ['timeout', 'Timeout'],
         ['left', 'Left']
     ] as const)('says %s in the result as %s', (exit, words) =>
     {
@@ -494,19 +494,17 @@ describe('how a seat that left the game is said to have gone', () =>
         expect(theirs(container)).not.toContain('Gave up');
     });
 
-    it('says it in Persian, and a walkout in the one word a row has room for', () =>
+    it('says it in Persian, in the words the plates use', () =>
     {
         useLocale().setLocale('fa');
 
         expect(theirs(renderTest(() => MatchResult({ match: ended('resign'), mine: 0 }) as Rendered).container)).toContain('تسلیم شد');
         cleanup();
-        expect(theirs(renderTest(() => MatchResult({ match: ended('timeout'), mine: 0 }) as Rendered).container)).toContain('وقتش تمام شد');
+        expect(theirs(renderTest(() => MatchResult({ match: ended('timeout'), mine: 0 }) as Rendered).container)).toContain('وقت تمام');
         cleanup();
-
-        const walked = theirs(renderTest(() => MatchResult({ match: ended('left'), mine: 0 }) as Rendered).container);
-
-        expect(walked).toContain('ترک');
-        expect(walked).not.toContain('بازی را ترک کرد');
+        expect(theirs(renderTest(() => MatchResult({ match: ended('left'), mine: 0 }) as Rendered).container)).toContain('ترک کرد');
+        cleanup();
+        expect(theirs(renderTest(() => MatchResult({ match: ended(), mine: 0 }) as Rendered).container)).toContain('ترک کرد');
 
         useLocale().setLocale('en');
     });
@@ -526,6 +524,6 @@ describe('how a seat that left the game is said to have gone', () =>
         expect(rows.some((row) => row.includes('Won'))).toBe(true);
         expect(rows.some((row) => row.includes('Lost'))).toBe(true);
         expect(rows.join(' ')).not.toContain('Gave up');
-        expect(rows.join(' ')).not.toContain('Timed out');
+        expect(rows.join(' ')).not.toContain('Timeout');
     });
 });
