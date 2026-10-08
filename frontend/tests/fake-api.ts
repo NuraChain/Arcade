@@ -3,7 +3,7 @@ import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { PEOPLE_FOUND_MAX, SEARCH_FROM, searchNeedle } from '../../backend/src/domains/social/names.ts';
-import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
+import { handleFromAddress } from '../../backend/src/domains/identity/handle.ts';
 import { createParties, type Parties, type PartyWhy } from '../../backend/src/domains/party/parties.ts';
 import { createRegistry } from '../../backend/src/domains/party/registry.ts';
 import { PARTY_REFUSALS } from '../../backend/src/domains/party/rules.ts';
@@ -35,12 +35,7 @@ import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
 import { runtime } from '../src/lib/runtime.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
-
-function hueOf(text: string)
-{
-    return [...text].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
-}
+export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'chain-unreachable';
 
 interface GroupWire
 {
@@ -425,7 +420,7 @@ export const server =
             label: input.label ?? '',
             exchangeKey: input.exchangeKey,
             signingKey: input.signingKey,
-            attested: input.attested ?? 'server',
+            attested: input.attested ?? 'wallet',
             revoked: input.revoked ?? false,
             createdAt: new Date(1_700_000_000_000 + server.devices.length * 1000).toISOString()
         };
@@ -577,13 +572,13 @@ export const server =
 /**
  * Three fixture people a spec can be signed in as.
  *
- * Ordinary guest accounts: the demo kind is gone, and these exist only so a test has somebody with
- * a name, a hue and an age gate to be. The minor is here because the privacy rules turn on it.
+ * They exist only so a test has somebody with a name, a hue and an age gate to be. The minor is
+ * here because the privacy rules turn on it.
  */
 const FIXTURE_ACCOUNTS: Record<string, Account> = {
-    alex: { id: accountIdOf('alex'), handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'wallet', isMinor: false },
-    'sara.k': { id: accountIdOf('sara.k'), handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'wallet', isMinor: false },
-    kian16: { id: accountIdOf('kian16'), handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'wallet', isMinor: true }
+    alex: { id: accountIdOf('alex'), handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, isMinor: false },
+    'sara.k': { id: accountIdOf('sara.k'), handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false },
+    kian16: { id: accountIdOf('kian16'), handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, isMinor: true }
 };
 
 interface FakeEpoch
@@ -732,24 +727,17 @@ export function fixtureAccount(handle: string): Account | undefined
 }
 
 /**
- * A guest account, with the handle CLAIMED rather than assumed.
+ * A fixture account on the server, for a spec that just needs somebody signed in.
  *
- * The real server inserts and lets the unique index arbitrate, walking `candidatesFor` until one
- * sticks. A fake that handed back the first candidate would let a spec sign in as a name somebody
- * already answers to and never notice - which is exactly what it did, and the test that was meant
- * to catch it passed for a different reason entirely.
+ * `auth.wallet` is the only door into an account and it needs a provider, so this sets the account
+ * the server would have minted - which is what the chain and NFT reads are keyed on - and hands it
+ * back for `useSession().establish`.
  */
-export function guestAccount(name: string): Account
+export function establishAccount(handle = 'alex', overrides: Partial<Account> = {})
 {
-    const taken = new Set(PEOPLE_FIXTURES.map((one) => one.handle));
-
-    let handle = handleFromName(name);
-    for (let attempt = 0; taken.has(handle) && attempt < 8; attempt += 1)
-    {
-        handle = candidatesFor(handleFromName(name), attempt + 1, () => 0.5);
-    }
-
-    return { id: `u-${ handle }`, handle, displayName: name.trim(), bio: '', hue: hueOf(name), kind: 'guest', isMinor: false };
+    const account: Account = { ...(FIXTURE_ACCOUNTS[handle] ?? FIXTURE_ACCOUNTS.alex), ...overrides };
+    server.account = account;
+    return account;
 }
 
 export function walletAccount(address: string): Account
@@ -761,7 +749,6 @@ export function walletAccount(address: string): Account
         displayName: `${ lower.slice(0, 6) }…${ lower.slice(-4) }`,
         bio: '',
         hue: Number.parseInt(lower.slice(2, 8), 16) % 360,
-        kind: 'wallet',
         isMinor: false,
         address: lower
     };
@@ -2162,24 +2149,6 @@ export const client =
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
             server.account = walletAccount(input.address);
-            return { account: server.account };
-        },
-
-        async guest({ input }: { input: { name: string } })
-        {
-            server.calls.push('auth.guest');
-            // What this server really refuses. A name that is merely TAKEN is never refused -
-            // `insertUser` claims by INSERT and suffixes on 23505 - so a fake that modelled a
-            // "taken" conflict was rehearsing a state the product cannot reach.
-            if (server.refuse === 'guest-reserved')
-            {
-                throw new ApiError(409, 'conflict', 'That name is reserved. Try another.', undefined);
-            }
-            if (server.refuse === 'guest-unreachable')
-            {
-                throw new ApiError(429, 'too-many-requests', 'Slow down.', undefined);
-            }
-            server.account = guestAccount(input.name);
             return { account: server.account };
         },
 

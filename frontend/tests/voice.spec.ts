@@ -102,7 +102,7 @@ beforeEach(() =>
     useRealtime().reset();
     socket.reset();
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, isMinor: false });
     useVoice().reset();
     useRealtime().start();
     useVoice().start();
@@ -463,14 +463,14 @@ describe('voice at a table', () =>
 
         class Asleep
         {
-            state = 'suspended';
+            public state = 'suspended';
 
-            async resume()
+            public async resume()
             {
                 asked.push('resume');
             }
 
-            async close()
+            public async close()
             {
                 asked.push('close');
             }
@@ -505,14 +505,14 @@ describe('voice at a table', () =>
 
         class Awake
         {
-            state = 'running';
+            public state = 'running';
 
-            async resume()
+            public async resume()
             {
                 asked.push('resume');
             }
 
-            async close()
+            public async close()
             {
                 asked.push('close');
             }

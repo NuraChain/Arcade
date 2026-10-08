@@ -1149,7 +1149,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 member = {
                     accountId: row.account_id,
                     handle: row.handle,
-                    kind: row.kind,
                     ...(row.wallet_address === null ? {} : { address: row.wallet_address }),
                     devices: []
                 };
@@ -1222,7 +1221,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         bio: string;
         avatar: string | null;
         hue: number;
-        kind: 'wallet' | 'guest';
         is_minor: boolean;
         address: string | null;
         created_at: Date;
@@ -1233,7 +1231,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         bio: row.bio,
         ...(row.avatar === null ? {} : { avatar: row.avatar }),
         hue: row.hue,
-        kind: row.kind,
         isMinor: row.is_minor,
         joinedAt: row.created_at.toISOString(),
         address: row.address ?? undefined,
@@ -1340,13 +1337,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 const row = await identity.profileFor(userId);
-                return { token: result.token, account: present(row!) };
-            },
-
-            async signInAsGuest(input)
-            {
-                const result = await identity.signInAsGuest(input);
-                const row = await identity.profileFor(result.principal.userId);
                 return { token: result.token, account: present(row!) };
             },
 

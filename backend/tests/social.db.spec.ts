@@ -34,8 +34,8 @@ async function makeUser(options: { minor?: boolean; strangers?: boolean; online?
 {
     seq += 1;
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages, show_online, last_seen_at)
-         values ($1, $2, $3, 'guest', $4, $5, $6, now())
+        `insert into users (handle, display_name, hue, is_minor, allow_stranger_messages, show_online, last_seen_at)
+         values ($1, $2, $3, $4, $5, $6, now())
          returning id`,
         [
             `t${ seq }x${ Math.floor(Math.random() * 100000) }`,
@@ -178,8 +178,8 @@ describe.skipIf(!active)('the social graph, against a real database', () =>
         const named = async (handle: string, name: string, suspended = false) =>
         {
             const rows = await db.query(
-                `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages, show_online, last_seen_at, is_suspended)
-                 values ($1, $2, 10, 'guest', false, true, true, now(), $3)
+                `insert into users (handle, display_name, hue, is_minor, allow_stranger_messages, show_online, last_seen_at, is_suspended)
+                 values ($1, $2, 10, false, true, true, now(), $3)
                  returning id`,
                 [handle, name, suspended]
             );

@@ -20,7 +20,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.cta.start': 'شروع بازی',
     'landing.cta.back': 'برگرد سر میزهایت',
     'landing.cta.games': 'بازی‌ها را ببین',
-    'landing.cta.guest': 'به‌عنوان مهمان بازی کن',
 
     'landing.games.title': 'چهار بازی، همه فعال',
     'landing.games.lead': 'نوبتی و سر فرصت بازی کن، یا هم‌زمان سر میز. پوکر فقط هم‌زمان بازی می‌شود.',
@@ -66,7 +65,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.compete.levels.body': 'بازی کردن امتیاز تجربه می‌دهد و سطحت آن را نشان می‌دهد. یک افتخار است؛ هیچ چیزی پشتش قفل نیست.',
 
     'landing.finale.title': 'بیا سر میز',
-    'landing.finale.lead': 'با متامسک، تراست والت یا کیف پول نورا وارد شو، یا مهمان بازی کن؛ برای گفت‌وگو کیف پول لازم است. به فارسی یا انگلیسی بازی کن.',
+    'landing.finale.lead': 'با متامسک، تراست والت یا کیف پول نورا وارد شو. به فارسی یا انگلیسی بازی کن.',
 
     'footer.rights': 'همهٔ حقوق محفوظ است.',
     'locale.label': 'زبان',

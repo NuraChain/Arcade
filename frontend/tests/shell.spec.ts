@@ -21,14 +21,13 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
-import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
-import { ApiError, client, server } from './fake-api.ts';
+import { ApiError, client, establishAccount, server } from './fake-api.ts';
 import { lostDuring } from './rejections.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -757,7 +756,7 @@ describe('the right panel', () =>
     it('says what lands there, and who is not online, rather than drawing two empty boxes', async () =>
     {
         server.friends = [];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await mount();
 
         expect(container.textContent).toContain('Friend requests, invitations and messages land here.');
@@ -766,7 +765,7 @@ describe('the right panel', () =>
 
     it('lists the notifications the server holds, as sentences, each one a way in', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const container = await mount();
@@ -781,7 +780,7 @@ describe('the right panel', () =>
         const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
         const real = routes.read;
 
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'turn', dedupeKey: 'turn:nowhere' });
         useNotifications().reset();
 
@@ -822,7 +821,7 @@ describe('the right panel', () =>
     it('keeps both of its empty lines when the lists behind them are read again', async () =>
     {
         server.friends = [];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await mount();
         const lines = () => [...container.querySelectorAll('section > p')];
         const drawn = lines();
@@ -839,7 +838,7 @@ describe('the right panel', () =>
 
     it('keeps a notification it has listed when another one arrives', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const container = await mount();
@@ -861,7 +860,7 @@ describe('the sidebar’s counts', () =>
 {
     it('badges Friends with the requests waiting and Notifications with the unread, like the phone nav', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const Stub = (): HTMLElement => document.createElement('div');
@@ -879,7 +878,7 @@ describe('the sidebar’s account card', () =>
 {
     it('keeps a long name inside the card and lets it run in its own direction', async () =>
     {
-        await useAccount().signIn('Aleksandra Konstantinopolskaya-Wright');
+        useSession().establish(establishAccount('alex', { displayName: 'Aleksandra Konstantinopolskaya-Wright' }));
         const Stub = (): HTMLElement => document.createElement('div');
         const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
         const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
@@ -1007,7 +1006,7 @@ describe('routes', () =>
 
     it('keeps a signed-in person in the app and bounces them off sign-in', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const router = createRouter({ routes, history: createMemoryHistory('/sign-in?next=/app/chats'), scroll: false });
         await settle();
         expect(router.location().pathname).toBe('/app/chats');

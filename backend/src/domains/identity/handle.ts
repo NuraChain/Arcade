@@ -20,28 +20,13 @@ const SHAPE = /^[\p{L}\p{N}][\p{L}\p{N}._-]{0,30}[\p{L}\p{N}]$/u;
 const RESERVED = new Set([
     'admin', 'administrator', 'root', 'system', 'support', 'help', 'staff', 'moderator', 'mod',
     'nura', 'nuragames', 'nurachain', 'official', 'team', 'security', 'abuse', 'billing',
-    'api', 'app', 'www', 'mail', 'ftp', 'me', 'you', 'null', 'undefined', 'anonymous', 'guest',
+    'api', 'app', 'www', 'mail', 'ftp', 'me', 'you', 'null', 'undefined', 'anonymous',
     'settings', 'sign-in', 'signin', 'signout', 'login', 'logout', 'register', 'new', 'edit',
     'games', 'friends', 'chats', 'groups', 'search', 'discover', 'notifications', 'play', 'people'
 ]);
 
 /** Shared with the group slug, which is claimed against its own `citext` index the same way. */
 export const normalizeHandle = normalizeName;
-
-/**
- * Whether a handle is the right SHAPE - length and characters, nothing else.
- *
- * Separate from `checkHandle` on purpose. Shape answers "could this be a handle at all?",
- * which is what folding a typed display name depends on; reservation answers "may you have
- * this one?", which is a different question with a different answer for the product's own
- * names. Folding on the second would quietly turn "sara.k" into "sarak" and create it,
- * instead of telling the person the name is taken.
- */
-function wellShaped(handle: string)
-{
-    const normalized = normalizeHandle(handle);
-    return normalized.length >= 2 && normalized.length <= 32 && SHAPE.test(normalized);
-}
 
 export type HandleRefusal = 'too-short' | 'too-long' | 'bad-shape' | 'reserved';
 
@@ -65,21 +50,6 @@ export function checkHandle(handle: string): HandleRefusal | null
         return 'reserved';
     }
     return null;
-}
-
-/**
- * The handle a typed display name asks for.
- *
- * A display name may be anything printable, so it has to be folded into something the shape
- * allows. A name that ALREADY satisfies the shape keeps its punctuation - "sara.k" signs in as
- * sara.k, not sarak - and only one that does not is stripped back to letters and digits. The
- * result is still only a request: `checkHandle` decides whether it may be used, and the unique
- * index decides whether it is free.
- */
-export function handleFromName(name: string)
-{
-    const cleaned = normalizeHandle(name);
-    return wellShaped(cleaned) ? cleaned : cleaned.replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
 /**

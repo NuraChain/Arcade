@@ -173,78 +173,72 @@ console.log('\n[2] chat cold load — the thread is loading, not missing');
     await context.close();
 }
 
-// ------------------------------------------------------------------ 3. guest sign-in
-console.log('\n[3] guest sign-in — refuses locally, and never gets stuck');
+// ------------------------------------------------------------------ 3. one door
+console.log('\n[3] one way in — the guest door is gone from both ends');
 {
     const { context, page, errors } = await open();
     try
     {
+        /*
+         * Both ends, because a page can quietly keep talking to a route that was deleted: the
+         * browser would show a 404 in the console and the product would look fine. The route is
+         * gone from the server, and the sign-in page must not be the last caller.
+         */
+        const answered = await page.evaluate(async () =>
+        {
+            const response = await fetch('/api/auth/guest', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ name: 'Nobody' })
+            });
+
+            return response.status;
+        });
+        record('the server has no guest route left', answered === 404 || answered === 405, `POST /api/auth/guest answered ${ answered }`);
+
+        const asked = [];
+        page.on('request', (r) => { if (r.url().includes('/auth/guest')) { asked.push(r.url()); } });
+
         await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
-        const box = page.locator('#sign-in-name');
-        const submit = page.locator('form button[type="submit"]').first();
+        await page.waitForTimeout(1500);
 
-        const apiCalls = [];
-        page.on('request', (r) => { if (r.url().includes('/auth/guest')) { apiCalls.push(r.url()); } });
-
-        await box.fill('admin');
-        await submit.click();
-        await page.waitForTimeout(1200);
-        let text = await page.locator('body').innerText();
-        record('a reserved name is refused in the browser',
-            /kept for the product itself/i.test(text) && apiCalls.length === 0,
-            apiCalls.length ? `asked the server ${ apiCalls.length }x` : 'no request made');
-        record('the button is still usable after a refusal', await submit.isEnabled(), '');
-
-        await box.fill('...');
-        await submit.click();
-        await page.waitForTimeout(1000);
-        text = await page.locator('body').innerText();
-        record('a name that folds to nothing is refused',
-            /at least three letters or digits/i.test(text) && apiCalls.length === 0, '');
-
-        await box.fill('Testy Tester');
-        await submit.click();
-        await page.waitForURL(/\/app/, { timeout: 20000 });
-        record('a good name signs in', page.url().includes('/app'), page.url().replace(BASE, ''));
-        record('console clean on guest sign-in', errors.length === 0, errors.slice(0, 3).join(' ; '));
+        const typed = await page.locator('#sign-in-name').count();
+        record('the sign-in page asks for no name at all', typed === 0, typed === 0 ? 'no name box' : 'a name box is still there');
+        record('and never asks the server for a guest seat', asked.length === 0, asked.length === 0 ? 'no request made' : asked[0]);
+        record('console clean on sign-in', errors.length === 0, errors.slice(0, 3).join(' ; '));
     }
     catch (e)
     {
-        record('guest sign-in', false, String(e.message).slice(0, 120));
+        record('one way in', false, String(e.message).slice(0, 120));
     }
     await context.close();
 }
 
-// ------------------------------------------------------------------ 4. guest settings
-console.log('\n[4] the guest seat — no button that signs you out under a wallet label');
+// ------------------------------------------------------------------ 4. the account card
+console.log('\n[4] the account card — one way out, and nothing that pretends otherwise');
 {
     const { context, page, errors } = await open();
     try
     {
-        await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
-        await page.locator('#sign-in-name').fill('Seat Tester');
-        await page.locator('form button[type="submit"]').first().click();
-        await page.waitForURL(/\/app/, { timeout: 20000 });
-
+        await signInWithWallet(page);
         await page.goto(`${ BASE }/app/me/settings`, { waitUntil: 'networkidle' });
         await page.waitForTimeout(1500);
         const text = await page.locator('body').innerText();
         record('settings offers no "Connect a wallet"', !/Connect a wallet/i.test(text), '');
         const card = page.locator('section#settings-account');
-        const signOuts = await card.getByRole('button', { name: /^Sign out$/ }).count();
-        const primaries = await card.locator('button').count();
-        record('the account card has exactly one sign-out', signOuts === 1, `found ${ signOuts } of ${ primaries } buttons`);
+        const outs = await card.getByRole('button', { name: /^Disconnect$/ }).count();
+        const buttons = await card.locator('button').count();
+        record('the account card has exactly one way out', outs === 1, `found ${ outs } of ${ buttons } buttons`);
 
         await page.goto(`${ BASE }/app/me`, { waitUntil: 'networkidle' });
         await page.waitForTimeout(1200);
         const me = await page.locator('body').innerText();
-        record('the profile says the seat is this browser', /This seat is this browser/i.test(me), '');
-        record('it no longer promises the seat follows you', !/follow you to any device/i.test(me), '');
+        record('the profile no longer warns about a seat that cannot come back', !/guest account/i.test(me), '');
         record('console clean on settings', errors.length === 0, errors.slice(0, 3).join(' ; '));
     }
     catch (e)
     {
-        record('guest settings', false, String(e.message).slice(0, 120));
+        record('the account card', false, String(e.message).slice(0, 120));
     }
     await context.close();
 }
@@ -351,30 +345,17 @@ console.log('\n[7] Persian — the new copy exists in both languages');
     const { context, page, errors } = await open({ locale: 'fa', width: 390, height: 700 });
     try
     {
-        await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(1200);
-        const dir = await page.locator('html').getAttribute('dir');
-        record('the page reads right to left', dir === 'rtl', `dir=${ dir }`);
-
-        await page.locator('#sign-in-name').fill('admin');
-        await page.locator('form button[type="submit"]').first().click();
-        await page.waitForTimeout(1200);
-        const refused = await page.locator('body').innerText();
-        record('a reserved name is refused in Persian', refused.includes('برای خودِ محصول نگه داشته شده'), '');
-
-        await page.locator('#sign-in-name').fill('مهمان تستی');
-        await page.locator('form button[type="submit"]').first().click();
-        await page.waitForURL(/\/app/, { timeout: 20000 });
-
-        await page.goto(`${ BASE }/app/me`, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(1500);
-        const me = await page.locator('body').innerText();
-        record('the guest seat copy is Persian too', me.includes('این صندلی، همین مرورگر است'), '');
+        await signInWithWallet(page);
 
         await page.goto(`${ BASE }/app/me/settings`, { waitUntil: 'networkidle' });
         await page.waitForTimeout(1200);
+
+        const dir = await page.locator('html').getAttribute('dir');
+        record('the page reads right to left', dir === 'rtl', `dir=${ dir }`);
+
         const settings = await page.locator('body').innerText();
-        record('settings offers no wallet button in Persian', !settings.includes('اتصال کیف پول'), '');
+        record('the account card names the wallet in Persian', settings.includes('ورود با کیف پول'), '');
+        record('and offers no wallet button to a wallet that is already connected', !settings.includes('اتصال کیف پول'), '');
         record('console clean in Persian', errors.length === 0, errors.slice(0, 3).join(' ; '));
     }
     catch (e)
@@ -421,7 +402,7 @@ console.log('\n[9] the landing offers the way BACK to somebody already signed in
      * The matrix tours `/` six hundred times and never sees this, because every context it builds
      * is signed in and it only ever reads overflow, hit targets, a landmark and the console - and
      * "Connect wallet" in front of somebody who is already connected is none of those. It is the
-     * same blind spot the guest settings check exists for, from the other end.
+     * same blind spot the account card check exists for, from the other end.
      *
      * The structural half matters more than the copy: signed out the control is a BUTTON that
      * opens the chooser, and returning it is a LINK to /app. A check on the words alone would pass

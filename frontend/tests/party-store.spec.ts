@@ -81,7 +81,7 @@ beforeEach(async () =>
     socket.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     usePeople().reset();
     useSocial().reset();
     useOverlay().reset();
@@ -162,7 +162,7 @@ describe('the reader’s team', () =>
         expect(party.invites()).toHaveLength(1);
 
         server.me = 'reza.t';
-        useSession().establish({ id: 'reza.t', handle: 'reza.t', displayName: 'Reza Tehrani', bio: '', hue: 18, kind: 'guest', isMinor: false });
+        useSession().establish({ id: 'reza.t', handle: 'reza.t', displayName: 'Reza Tehrani', bio: '', hue: 18, isMinor: false });
         await settle();
 
         expect(party.invites()).toEqual([]);
@@ -596,7 +596,7 @@ describe('a team that cannot be read', () =>
         await swapped('state', () => Promise.reject(new ApiError(503, 'unavailable', 'The server is not answering.', undefined)), async () =>
         {
             server.me = 'reza.t';
-            useSession().establish({ id: 'reza.t', handle: 'reza.t', displayName: 'Reza Tehrani', bio: '', hue: 18, kind: 'guest', isMinor: false });
+            useSession().establish({ id: 'reza.t', handle: 'reza.t', displayName: 'Reza Tehrani', bio: '', hue: 18, isMinor: false });
             await settle();
             await party.refresh();
 

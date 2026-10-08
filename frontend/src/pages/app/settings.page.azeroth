@@ -286,39 +286,22 @@ export default component SettingsPage()
                         <section id="settings-account" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-account-title">
                             <SectionHeading id="settings-account-title" title={ locale.t('settings.account') } />
                             <Panel stack="sm">
-                                <Show
-                                    when={ account.isWallet() }
-                                    fallback={
-                                        <div class="flex items-start gap-3">
-                                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
-                                                <Icon name="people" size={ 18 } />
-                                            </span>
-                                            <span class="flex min-w-0 flex-1 flex-col">
-                                                <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.demo') }</span>
-                                                <span class="text-ui-sm text-muted">{ locale.t('settings.account.demoLead') }</span>
-                                            </span>
-                                        </div>
-                                    }
-                                >
-                                    { () =>
-                                        <div class="flex items-start gap-3">
-                                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
-                                                <Icon name="key" size={ 18 } />
-                                            </span>
-                                            <span class="flex min-w-0 flex-1 flex-col">
-                                                <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.wallet', { wallet: wallet.name() }) }</span>
-                                                <code class="tally truncate text-ui-sm text-muted">{ shortAddress(account.address() ?? '') }</code>
-                                                <span class="mt-1 text-ui-xs text-faint">{ locale.t('settings.account.network') }: { NURA_CHAIN.name }</span>
-                                            </span>
-                                        </div>
-                                    }
-                                </Show>
+                                <div class="flex items-start gap-3">
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
+                                        <Icon name="key" size={ 18 } />
+                                    </span>
+                                    <span class="flex min-w-0 flex-1 flex-col">
+                                        <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.wallet', { wallet: wallet.name() }) }</span>
+                                        <code class="tally truncate text-ui-sm text-muted">{ shortAddress(account.address() ?? '') }</code>
+                                        <span class="mt-1 text-ui-xs text-faint">{ locale.t('settings.account.network') }: { NURA_CHAIN.name }</span>
+                                    </span>
+                                </div>
                                 <div class="grid gap-2 @xl:grid-cols-2">
                                     <Button variant="outline" block leading="key" to="/app/me/devices">
                                         { locale.t('devices.title') }
                                     </Button>
                                     <Button variant="outline" block leading="sign-out" loading={ leaving } onClick={ () => void leave() }>
-                                        { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
+                                        { locale.t('settings.account.disconnect') }
                                     </Button>
                                 </div>
                             </Panel>

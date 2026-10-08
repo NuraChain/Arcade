@@ -3,7 +3,7 @@ import { decodeFunctionData, hashMessage, parseAbi, serializeErc6492Signature, t
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { signInText, verifySignature } from '../src/domains/identity/signature.ts';
-import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from '../src/domains/identity/handle.ts';
+import { candidatesFor, checkHandle, handleFromAddress, normalizeHandle } from '../src/domains/identity/handle.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMatch } from '../src/lib/crypto.ts';
 import { callOf, closeChains, fakeChain, lookupGateway, offchainLookup, silentChain, type Answer, type Rpc } from './fake-chain.ts';
 
@@ -361,36 +361,6 @@ describe('handles', () =>
     {
         expect(normalizeHandle('  Sara.K  ')).toBe('sara.k');
         expect(normalizeHandle('SARA')).toBe(normalizeHandle('sara'));
-    });
-
-    it('keeps the punctuation of a typed name that is already a legal handle', () =>
-    {
-        expect(handleFromName('roya.m')).toBe('roya.m');
-        expect(handleFromName('reza_1994')).toBe('reza_1994');
-        expect(handleFromName('  Mina  ')).toBe('mina');
-        expect(handleFromName('نیما.ف')).toBe('نیما.ف');
-    });
-
-    it('folds on shape, not on whether the name is free', () =>
-    {
-        // A reserved name keeps its shape and is REFUSED by name, rather than being quietly
-        // folded into a near-miss the person never asked for.
-        expect(handleFromName('settings')).toBe('settings');
-        expect(checkHandle(handleFromName('settings'))).toBe('reserved');
-    });
-
-    it('strips a typed name that is not, rather than refusing it outright', () =>
-    {
-        expect(handleFromName('Sara Kamali')).toBe('sarakamali');
-        expect(handleFromName('.leading')).toBe('leading');
-        expect(handleFromName('who?!')).toBe('who');
-    });
-
-    it('leaves a name with nothing usable in it for checkHandle to refuse', () =>
-    {
-        expect(handleFromName('!!!')).toBe('');
-        expect(checkHandle(handleFromName('!!!'))).toBe('too-short');
-        expect(checkHandle(handleFromName('Admin'))).toBe('reserved');
     });
 
     it('suggests a handle from an address without promising it is free', () =>

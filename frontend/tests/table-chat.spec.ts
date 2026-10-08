@@ -60,7 +60,7 @@ beforeEach(() =>
     server.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useRealtime().reset();
     socket.reset();
     useRealtime().start();
@@ -341,10 +341,10 @@ describe('the notice above a table chat that cannot be sealed', () =>
 {
     it('stays where it is when the room is asked about again', async () =>
     {
-        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
 
         const container = shown('conv-seal');
-        const said = useLocale().t('seal.noWalletMine');
+        const said = useLocale().t('seal.noDeviceMine');
 
         await vi.waitFor(() => expect(container.textContent).toContain(said), { timeout: 4000 });
 
@@ -364,11 +364,11 @@ describe('the notice above a table chat that cannot be sealed', () =>
 
     it('does not ask somebody to say something where nothing can be sent', async () =>
     {
-        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
 
         const container = shown('conv-seal');
 
-        await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('seal.noWalletMine')), { timeout: 4000 });
+        await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('seal.noDeviceMine')), { timeout: 4000 });
 
         expect(container.querySelector('textarea')?.disabled).toBe(true);
         expect(container.textContent).toContain('No messages yet.');

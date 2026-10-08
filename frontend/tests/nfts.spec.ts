@@ -33,7 +33,7 @@ const token = (n: number): NftItem => ({
     image: n === 2 ? '' : `/api/nfts/image/${ COLLECTION }/${ n }`
 });
 
-const signIn = (kind: 'wallet' | 'guest') =>
+const signIn = () =>
 {
     const account: Account = {
         id: 'u-dana',
@@ -41,9 +41,8 @@ const signIn = (kind: 'wallet' | 'guest') =>
         displayName: 'Dana',
         bio: '',
         hue: 12,
-        kind,
         isMinor: false,
-        ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+        address: '0x1111111111111111111111111111111111111111'
     };
     server.account = account;
     useSession().establish(account);
@@ -93,7 +92,7 @@ describe('the NFT page', () =>
 {
     it('shows every token the wallet holds with its name, collection and picture', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: [token(1), token(2), token(4)] };
 
         const container = await page();
@@ -110,7 +109,7 @@ describe('the NFT page', () =>
 
     it('pages through a large wallet without repeating a token', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: Array.from({ length: 30 }, (_, i) => token(i + 10)) };
 
         const container = await page();
@@ -127,7 +126,7 @@ describe('the NFT page', () =>
 
     it('keeps the tokens already shown when more are read, pictures and all', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: Array.from({ length: 30 }, (_, i) => token(i + 10)) };
 
         const container = await page();
@@ -150,7 +149,7 @@ describe('the NFT page', () =>
 
     it('says an empty wallet is empty', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: [] };
 
         expect((await page()).textContent).toContain('No NFTs in this wallet');
@@ -158,20 +157,10 @@ describe('the NFT page', () =>
 
     it('says so when the server reads no chain, rather than calling the wallet empty', async () =>
     {
-        signIn('wallet');
+        signIn();
 
         const text = (await page()).textContent ?? '';
         expect(text).toContain('does not read NFTs');
         expect(text).not.toContain('No NFTs in this wallet');
-    });
-
-    it('asks nothing for a guest, who has no wallet', async () =>
-    {
-        signIn('guest');
-        server.nfts = { configured: true, items: [token(4)] };
-
-        const text = (await page()).textContent ?? '';
-        expect(text).toContain('has no wallet');
-        expect(server.calls).not.toContain('chain.nfts');
     });
 });

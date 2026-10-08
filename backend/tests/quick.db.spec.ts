@@ -65,7 +65,6 @@ const makeUser = async (overrides: Partial<Pick<User, 'isMinor' | 'allowStranger
         handle: `q${ seq }x${ Math.floor(Math.random() * 100000) }`,
         displayName: `Quick ${ seq }`,
         hue: seq % 360,
-        kind: 'guest',
         ...overrides
     });
 

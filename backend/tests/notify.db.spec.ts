@@ -32,8 +32,8 @@ async function makeUser(): Promise<string>
 {
     seq += 1;
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, 'guest')
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3)
          returning id`,
         [`n${ seq }x${ Math.floor(Math.random() * 100000) }`, `Note ${ seq }`, seq % 360]
     );

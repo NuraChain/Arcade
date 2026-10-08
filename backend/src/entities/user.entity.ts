@@ -1,19 +1,7 @@
 import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-/**
- * How an account proved it exists.
- *
- * `wallet` signed a challenge with a key it holds; `guest` is a name typed into a box and proves
- * nothing, which is exactly why the distinction is a column rather than a guess: anything that
- * must not be spoofable - a device attestation, a moderation action - checks this. There was a
- * third, `demo`, and `users_kind_known` names the two that remain rather than leaving the value
- * legal with nothing writing it.
- */
-export type AccountKind = 'wallet' | 'guest';
-
 @Check('users_handle_shape', `length(handle) between 2 and 32 and handle !~ '[[:space:][:cntrl:]]' and handle !~ '^[._-]' and handle !~ '[._-]$' and handle !~ '[/?#@!$&''()*+,;=:%<>"|{}^~]' and strpos(handle, '[') = 0 and strpos(handle, ']') = 0 and strpos(handle, chr(92)) = 0`)
 @Check('users_hue_range', `hue between 0 and 359`)
-@Check('users_kind_known', `kind in ('wallet', 'guest')`)
 @Check('users_minor_no_strangers', `not (is_minor and allow_stranger_messages)`)
 @Entity('users')
 export class User
@@ -43,9 +31,6 @@ export class User
     /** The avatar hue, 0-359. Derived once at creation so a face does not change colour later. */
     @Column({ type: 'smallint' })
     hue!: number;
-
-    @Column({ type: 'varchar', length: 16 })
-    kind!: AccountKind;
 
     /**
      * Teen safety. Enforced by the SERVER - it gates stranger DMs, invites and discovery - and

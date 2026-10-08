@@ -9,10 +9,13 @@ import TrustBadge from '../src/components/app/trust-badge.component.azeroth';
 import { deviceIdFrom, deviceVerifies, isDeviceId, toBase64Url } from '../src/lib/device-id.ts';
 import { resetKeyStore, setKeyStore, type DeviceKeys, type KeyStore } from '../src/lib/device-keys.ts';
 import { deviceState, readinessOf, type DeviceState } from '../src/lib/device-state.ts';
+import type { Eip1193Provider } from '../src/lib/wallet.ts';
 import { useDevices } from '../src/stores/devices.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useWallet } from '../src/stores/wallet.store.ts';
 import { server } from './fake-api.ts';
+import { TEST_ACCOUNTS } from './keys.ts';
 import '../src/locales/app-catalogue.ts';
 
 const settle = async () =>
@@ -42,7 +45,7 @@ async function realDevice(overrides: Partial<Device> = {}): Promise<Device>
         id: await deviceIdFrom(keys.exchangeKey, keys.signingKey),
         label: 'A browser',
         ...keys,
-        attested: 'server',
+        attested: 'wallet',
         revoked: false,
         createdAt: new Date(1_700_000_000_000).toISOString(),
         ...overrides
@@ -88,6 +91,49 @@ function fakeKeyStore(options: { available?: boolean } = {}): KeyStore & { minte
 }
 
 let keys: ReturnType<typeof fakeKeyStore>;
+let stopWallet: (() => void) | null = null;
+
+const ADDRESS = TEST_ACCOUNTS.alex.address.toLowerCase();
+
+/**
+ * A wallet that really signs, because a device can only be attested by one.
+ *
+ * The server refuses an enrolment that arrives without a signature from the account's own wallet,
+ * and the store asks the wallet for it before it sends anything - so a spec of enrolment needs a
+ * wallet to ask. This one signs with a real key and the real EIP-191 message, exactly as the
+ * extension in front of a person would; a canned string would let the whole path pass against a
+ * signature nobody ever made.
+ */
+function walletProvider(): Eip1193Provider
+{
+    return {
+        async request({ method, params })
+        {
+            if (method === 'eth_accounts' || method === 'eth_requestAccounts')
+            {
+                return [ADDRESS];
+            }
+            if (method === 'eth_chainId')
+            {
+                return '0x1';
+            }
+            if (method === 'personal_sign')
+            {
+                const message = Array.isArray(params) ? String(params[0]) : '';
+                return await TEST_ACCOUNTS.alex.signMessage({ message });
+            }
+            return null;
+        },
+        on()
+        {
+            return;
+        },
+        removeListener()
+        {
+            return;
+        }
+    };
+}
 
 beforeEach(async () =>
 {
@@ -101,9 +147,14 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
-        isMinor: false
+        isMinor: false,
+        address: ADDRESS
     });
+
+    const wallet = useWallet();
+    wallet.adopt(walletProvider());
+    stopWallet = wallet.start();
+
     useDevices().reset();
 
     keys = fakeKeyStore();
@@ -114,6 +165,9 @@ beforeEach(async () =>
 afterEach(() =>
 {
     cleanup();
+    stopWallet?.();
+    stopWallet = null;
+    useWallet().reset();
     resetKeyStore();
     useDevices().reset();
 });
@@ -164,7 +218,7 @@ describe('what a device row is', () =>
         label: '',
         exchangeKey: '',
         signingKey: '',
-        attested: 'server' as const,
+        attested: 'wallet' as const,
         revoked: false,
         createdAt: new Date(0).toISOString()
     };
@@ -194,7 +248,7 @@ describe('what this browser can do', () =>
         label: '',
         exchangeKey: '',
         signingKey: '',
-        attested: 'server',
+        attested: 'wallet',
         revoked: false,
         createdAt: new Date(0).toISOString(),
         ...overrides
@@ -311,7 +365,7 @@ describe('the trust badge', () =>
     const render = (component: () => HTMLElement) =>
         renderTest(component).container.textContent ?? '';
 
-    it('says who vouched, and never says wallet for a device this server asserted', () =>
+    it('says which wallet vouched, and never tells the two apart by nothing', () =>
     {
         useLocale().setLocale('en');
 
@@ -319,17 +373,12 @@ describe('the trust badge', () =>
 
         cleanup();
         expect(render(() => TrustBadge({ attested: 'contract' }) as HTMLElement)).toContain('Contract wallet');
-
-        cleanup();
-        const asserted = render(() => TrustBadge({ attested: 'server' }) as HTMLElement);
-        expect(asserted).toContain('This server');
-        expect(asserted).not.toContain('Wallet');
     });
 
     it('follows a language switch, like every other composed sentence', () =>
     {
         useLocale().setLocale('fa');
-        expect(render(() => TrustBadge({ attested: 'server' }) as HTMLElement)).toContain('همین سرور');
+        expect(render(() => TrustBadge({ attested: 'contract' }) as HTMLElement)).toContain('کیف پول قراردادی');
     });
 });
 

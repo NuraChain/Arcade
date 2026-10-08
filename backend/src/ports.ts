@@ -112,8 +112,6 @@ export interface IdentityPort
         device?: { id: string; exchangeKey: string; signingKey: string; label: string } | undefined;
     }): Promise<Established>;
 
-    signInAsGuest(input: { name: string; userAgent: string }): Promise<Established>;
-
     signOut(sessionId: string): Promise<void>;
     signOutEverywhere(userId: string): Promise<number>;
     claimHandle(userId: string, handle: string): Promise<string>;
@@ -302,7 +300,7 @@ export interface DevicePort
 {
     list(me: string, sessionId: string): Promise<DeviceList>;
 
-    /** The bytes a wallet signs to authorise one device. Refused for an account with no wallet. */
+    /** The bytes a wallet signs to authorise one device. */
     challenge(me: string, deviceId: string): Promise<DeviceChallenge>;
 
     enrol(me: string, sessionId: string, input: {

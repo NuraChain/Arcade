@@ -35,6 +35,7 @@ const config = { origin: 'https://nura.games', chainId: '1', rpcUrl: '' };
 
 /** The standard hardhat account zero. It controls nothing; it exists to produce signatures. */
 const signer = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+const other = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
 
 let seq = 0;
 
@@ -51,25 +52,20 @@ async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey:
     return { id: deviceIdFrom(exchangeKey, signingKey), exchangeKey, signingKey };
 }
 
-async function makeUser(): Promise<string>
+/** An account with a wallet on it: the only kind a device can be enrolled for. */
+async function makeUser(address: string = signer.address)
 {
     seq += 1;
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, 'guest') returning id`,
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3) returning id`,
         [`d${ seq }x${ Math.floor(Math.random() * 100000) }`, `Device ${ seq }`, seq % 360]
     );
-    return rowsOf<{ id: string }>(rows)[0].id;
-}
-
-/** An account with a wallet on it, which is what makes enrolment demand a signature. */
-async function makeWalletUser()
-{
-    const userId = await makeUser();
+    const userId = rowsOf<{ id: string }>(rows)[0].id;
     await db.query(
         `insert into wallets (user_id, address, chain_id, attestation, last_used_at)
          values ($1, $2, '1', 'wallet', now())`,
-        [userId, signer.address.toLowerCase()]
+        [userId, address.toLowerCase()]
     );
     return userId;
 }
@@ -84,8 +80,18 @@ async function openSession(userId: string): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
+/** Challenge, sign, send: how a wallet account really enrols a browser. */
+const proofFor = async (userId: string, deviceId: string) =>
+{
+    const { nonce, message } = await device.challenge(userId, deviceId);
+    return { nonce, signature: await signer.signMessage({ message }) };
+};
+
 const enrol = async (userId: string, sessionId: string, label = 'A browser') =>
-    device.enrol(userId, sessionId, { ...await keypair(), label, userAgent: 'vitest' });
+{
+    const keys = await keypair();
+    return device.enrol(userId, sessionId, { ...keys, ...await proofFor(userId, keys.id), label, userAgent: 'vitest' });
+};
 
 describe.skipIf(!active)('devices, against a real database', () =>
 {
@@ -117,7 +123,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
         const first = await enrol(userId, await openSession(userId));
         const second = await enrol(userId, await openSession(userId), 'A phone');
 
-        expect(first.attested).toBe('server');
+        expect(first.attested).toBe('wallet');
         expect((await device.list(userId)).map((row) => [row.id, row.revoked_at])).toEqual([[first.id, null], [second.id, null]]);
     });
 
@@ -141,7 +147,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
         const keys = await keypair();
         const session = await openSession(userId);
 
-        await device.enrol(userId, session, { ...keys, label: '', userAgent: '' });
+        await device.enrol(userId, session, { ...keys, ...await proofFor(userId, keys.id), label: '', userAgent: '' });
         await device.revoke(userId, keys.id);
 
         // The whole point of revocation. Deleting the row instead would let a stolen laptop
@@ -156,7 +162,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
         const [one, two] = [await openSession(userId), await openSession(userId)];
         const keys = await keypair();
 
-        await device.enrol(userId, one, { ...keys, label: '', userAgent: '' });
+        await device.enrol(userId, one, { ...keys, ...await proofFor(userId, keys.id), label: '', userAgent: '' });
 
         // Bound directly, because re-enrolling no longer moves the binding: the existing-device
         // branch is satisfied entirely by PUBLIC data, so letting it rebind let any session on the
@@ -216,7 +222,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
         const first = await openSession(userId);
         const second = await openSession(userId);
 
-        await device.enrol(userId, first, { ...keys, label: 'Laptop', userAgent: '' });
+        await device.enrol(userId, first, { ...keys, ...await proofFor(userId, keys.id), label: 'Laptop', userAgent: '' });
         const again = await device.enrol(userId, second, { ...keys, label: 'ignored', userAgent: 'newer' });
 
         expect(again.label).toBe('Laptop');
@@ -236,9 +242,9 @@ describe.skipIf(!active)('devices, against a real database', () =>
     {
         const keys = await keypair();
         const mine = await makeUser();
-        const theirs = await makeUser();
+        const theirs = await makeUser(other.address);
 
-        await device.enrol(mine, await openSession(mine), { ...keys, label: '', userAgent: '' });
+        await device.enrol(mine, await openSession(mine), { ...keys, ...await proofFor(mine, keys.id), label: '', userAgent: '' });
 
         await expect(device.enrol(theirs, await openSession(theirs), { ...keys, label: '', userAgent: '' }))
             .rejects.toThrow(/already belong/i);
@@ -254,7 +260,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('records the wallet as the authority when the signature checks out', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
             const keys = await keypair();
 
             const row = await device.enrol(userId, await openSession(userId), {
@@ -269,7 +275,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('attests every browser the account wallet signs for, not only the first', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
             const laptop = await keypair();
             await device.enrol(userId, await openSession(userId), { ...laptop, ...await sign(userId, laptop.id), label: 'Laptop', userAgent: '' });
 
@@ -281,17 +287,17 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('will not enrol a device with no signature at all', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
 
             // The downgrade nobody would see: without this, omitting the signature would produce
-            // a server-attested device on an account that can prove its devices properly.
+            // a device attested by nothing on an account that can prove its devices properly.
             await expect(device.enrol(userId, await openSession(userId), { ...await keypair(), label: '', userAgent: '' }))
                 .rejects.toThrow(/signs for its devices/i);
         });
 
         it('will not let a signature collected for one device authorise another', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
             const wanted = await keypair();
             const other = await keypair();
 
@@ -303,7 +309,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('burns the challenge, so one signature enrols one device', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
             const keys = await keypair();
             const proof = await sign(userId, keys.id);
 
@@ -317,7 +323,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('refuses a signature from a different wallet', async () =>
         {
-            const userId = await makeWalletUser();
+            const userId = await makeUser();
             const keys = await keypair();
             const { nonce, message } = await device.challenge(userId, keys.id);
 
@@ -330,7 +336,10 @@ describe.skipIf(!active)('devices, against a real database', () =>
 
         it('has nothing to offer an account with no wallet', async () =>
         {
-            const userId = await makeUser();
+            const rows = await db.query(
+                `insert into users (handle, display_name, hue) values ('nowallet', 'No Wallet', 1) returning id`
+            );
+            const userId = rowsOf<{ id: string }>(rows)[0].id;
             await expect(device.challenge(userId, (await keypair()).id)).rejects.toThrow(/no wallet/i);
         });
     });

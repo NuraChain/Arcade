@@ -19,7 +19,7 @@ import {
 import { personFor, useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useWallet } from '../src/stores/wallet.store.ts';
-import { fixtureAccount, guestAccount, server, walletAccount } from './fake-api.ts';
+import { fixtureAccount, server, walletAccount } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -366,17 +366,13 @@ describe('wallet identity', () =>
         const person = account.adoptWallet(established!);
 
         expect(session.signedIn()).toBe(true);
-        expect(account.isWallet()).toBe(true);
         expect(account.address()).toBe(ADDRESS.toLowerCase());
         expect(person?.handle).toBe('71c765');
         expect(account.user()?.handle).toBe('71c765');
     });
 
-    it('never mistakes a guest for a wallet', () =>
+    it('resolves nothing for a browser that is signed out', () =>
     {
-        const person = personFor(guestAccount('Darya'));
-        expect(person?.handle).toBe('darya');
-        expect(person?.displayName).toBe('Darya');
         expect(personFor(null)).toBeNull();
     });
 

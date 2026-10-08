@@ -46,7 +46,7 @@ const said = (text: string): Message => ({
 });
 
 /** One direct thread, both sides provable, nothing said yet. */
-function arrange(options: { theirKind?: 'wallet' | 'guest' } = {})
+function arrange(options: { theirDevice?: boolean } = {})
 {
     server.reset();
     server.me = 'alex';
@@ -66,13 +66,12 @@ function arrange(options: { theirKind?: 'wallet' | 'guest' } = {})
     server.conversationDevices = {
         [THREAD]: {
             members: [
-                { accountId: 'u-alex', handle: 'alex', kind: 'wallet', address: mine.address, devices: [mine.peer] },
+                { accountId: 'u-alex', handle: 'alex', address: mine.address, devices: [mine.peer] },
                 {
                     accountId: 'u-sara.k',
                     handle: 'sara.k',
-                    kind: options.theirKind ?? 'wallet',
-                    ...(options.theirKind === 'guest' ? {} : { address: theirs.address }),
-                    devices: options.theirKind === 'guest' ? [] : [theirs.peer]
+                    address: theirs.address,
+                    devices: options.theirDevice === false ? [] : [theirs.peer]
                 }
             ]
         }
@@ -125,7 +124,7 @@ describe('sealing a thread for the first time', () =>
 
     it('refuses to seal at all when the other side has no provable device', async () =>
     {
-        arrange({ theirKind: 'guest' });
+        arrange({ theirDevice: false });
 
         const outcome = await currentEpoch(THREAD, 'alex');
 

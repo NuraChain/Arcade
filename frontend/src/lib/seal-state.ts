@@ -18,10 +18,7 @@ export type MemberSealState =
     /** Has at least one device this browser verified for itself. */
     | 'ready'
 
-    /** Signed in without a wallet, so there is no proof to check. */
-    | 'no-wallet'
-
-    /** Has a wallet but no confirmed device: nothing to wrap a key to. */
+    /** No confirmed device: nothing to wrap a key to. */
     | 'no-device'
 
     /** Only contract wallets, which this browser cannot check without a chain call. */
@@ -112,7 +109,7 @@ async function sealOf(member: ConversationDevices['members'][number], me: string
     {
         // The server lists a member with no sealable device as an empty array rather than leaving
         // them out, so this is a real answer and not a half-loaded one.
-        return { ...base, state: member.kind === 'wallet' ? 'no-device' : 'no-wallet', devices: [] };
+        return { ...base, state: 'no-device', devices: [] };
     }
 
     const verifyPeerDevice = await checker();
@@ -152,7 +149,6 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
     const stuck = members.filter((member): member is BlockedMember => member.state !== 'ready');
 
     const blocked = stuck.find((member) => member.state === 'tampered')
-        ?? stuck.find((member) => member.isMe && member.state === 'no-wallet')
         ?? stuck.find((member) => !member.isMe)
         ?? stuck[0]
         ?? null;
@@ -191,15 +187,12 @@ export type SendBlock =
  *
  * `known` is what stops the browser rule firing before anybody has looked: `readiness()` answers
  * `absent` until the keyring has been read, so acting on it unguarded would disable the composer on
- * every cold load and enable it a moment later. `isWallet` is the other guard - a guest's devices
- * are server-attested and are filtered out of every peer list, so enrolling one changes nothing
- * about sealing, and offering it would be a button that lies. A guest's honest answer is `no-wallet`.
+ * every cold load and enable it a moment later.
  */
 export function sendBlockOf(options: {
     sealability: Sealability | null;
     readiness: Readiness;
     known: boolean;
-    isWallet: boolean;
 
     /** True while the room's answer is still in flight. */
     pending?: boolean;
@@ -217,7 +210,7 @@ export function sendBlockOf(options: {
         return { reason: 'pending' };
     }
 
-    if (options.isWallet && options.known && options.readiness !== 'ready')
+    if (options.known && options.readiness !== 'ready')
     {
         return { reason: 'browser', readiness: options.readiness };
     }

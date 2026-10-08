@@ -318,8 +318,6 @@ export const social = {
     'notify.push.on': 'On for this device',
     'notify.push.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
 
-    'seal.noWallet': 'Nobody can write here yet. {who} is signed in without a wallet, and a message is only ever sent sealed, to a wallet on both sides.',
-    'seal.noWalletMine': 'You cannot write here. You are signed in without a wallet, and a message is only ever sent sealed, to a wallet on both sides.',
     'seal.noDevice': 'Nobody can write here yet. {who} has not given any of their browsers keys, so there is nothing to seal a message to.',
     'seal.noDeviceMine': 'You cannot write here yet. None of your browsers has been given keys, so there is nothing to seal a message to.',
 

@@ -11,7 +11,7 @@ export default component SceneFinale(props: { returning: boolean })
                 <h2 id="finale-title" class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t('landing.finale.title') }</h2>
                 <p class="max-w-[46ch] text-ui-md text-muted">{ locale.t('landing.finale.lead') }</p>
                 <div class="mt-2 flex w-full flex-col gap-3 @sm:w-auto @sm:flex-row">
-                    <PlayCta returning={ props.returning } guest />
+                    <PlayCta returning={ props.returning } />
                 </div>
             </div>
         </div>

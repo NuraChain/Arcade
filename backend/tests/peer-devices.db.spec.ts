@@ -58,14 +58,14 @@ async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey:
     return { id: deviceIdFrom(exchangeKey, signingKey), exchangeKey, signingKey };
 }
 
-async function makeUser(kind: 'guest' | 'wallet', wallet?: typeof signer)
+async function makeUser(wallet?: typeof signer)
 {
     seq += 1;
     const handle = `p${ seq }x${ Math.floor(Math.random() * 100000) }`;
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, $4) returning id, handle::text as handle`,
-        [handle, `Peer ${ seq }`, seq % 360, kind]
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3) returning id, handle::text as handle`,
+        [handle, `Peer ${ seq }`, seq % 360]
     );
     const user = rowsOf<{ id: string; handle: string }>(rows)[0];
 
@@ -131,7 +131,7 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
     it('keeps the proof, so somebody other than this server can check it', async () =>
     {
-        const alice = await makeUser('wallet', signer);
+        const alice = await makeUser(signer);
         const id = await enrolWithWallet(alice.id, signer);
 
         const [row] = (await devices.list(alice.id)).filter((one) => one.id === id);
@@ -147,7 +147,7 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
     it('refuses to hold a wallet-attested device with no proof beside it', async () =>
     {
-        const alice = await makeUser('wallet', signer);
+        const alice = await makeUser(signer);
         await enrolWithWallet(alice.id, signer);
 
         // The CHECK is the point: `attested: wallet` can never come to mean "we said so".
@@ -160,37 +160,9 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
         )).rejects.toThrow(/devices_attestation_matches_kind/);
     });
 
-    it('lets a device that had no proof gain one later, without burning its keys', async () =>
-    {
-        // A guest enrols, then connects a wallet. Forcing a revoke-and-re-enrol would throw away
-        // working keys for bookkeeping, and a revoked id can never come back.
-        const person = await makeUser('guest');
-        const keys = await keypair();
-        const session = await openSession(person.id);
-
-        const before = await devices.enrol(person.id, session, { ...keys, label: 'Laptop', userAgent: '' });
-        expect(before.attested).toBe('server');
-        expect(before.attested_address).toBeNull();
-
-        await db.query(
-            `insert into wallets (user_id, address, chain_id, attestation, last_used_at)
-             values ($1, $2, '1', 'wallet', now())`,
-            [person.id, signer.address.toLowerCase()]
-        );
-
-        const { nonce, message } = await devices.challenge(person.id, keys.id);
-        const after = await devices.enrol(person.id, session, {
-            ...keys, nonce, signature: await signer.signMessage({ message }), label: 'Laptop', userAgent: ''
-        });
-
-        expect(after.attested).toBe('wallet');
-        expect(after.attested_address).toBe(signer.address.toLowerCase());
-        expect(after.id).toBe(before.id);
-    });
-
     it('never re-attests a device that already carries a proof', async () =>
     {
-        const alice = await makeUser('wallet', signer);
+        const alice = await makeUser(signer);
         const keys = await keypair();
         const session = await openSession(alice.id);
 
@@ -200,8 +172,8 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
             label: '', userAgent: ''
         });
 
-        // Point the account's most recent wallet at a DIFFERENT address and try again. The upgrade
-        // path must not move one address's claim onto a device another address vouched for.
+        // Point the account's most recent wallet at a DIFFERENT address and try again. A touch must
+        // not move one address's claim onto a device another address vouched for.
         await db.query(
             `insert into wallets (user_id, address, chain_id, attestation, last_used_at)
              values ($1, $2, '1', 'wallet', now())`,
@@ -224,8 +196,8 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
         it('carries the keys and the proof, and nothing about the owner life', async () =>
         {
-            const alice = await makeUser('wallet', signer);
-            const bob = await makeUser('wallet', second);
+            const alice = await makeUser(signer);
+            const bob = await makeUser(second);
             await enrolWithWallet(alice.id, signer, 'Alice laptop');
             await enrolWithWallet(bob.id, second, 'Bob phone');
 
@@ -243,8 +215,8 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
         it('leaves out a device that was signed out', async () =>
         {
-            const alice = await makeUser('wallet', signer);
-            const bob = await makeUser('wallet', second);
+            const alice = await makeUser(signer);
+            const bob = await makeUser(second);
             await enrolWithWallet(alice.id, signer);
             const gone = await enrolWithWallet(bob.id, second);
 
@@ -258,28 +230,10 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
             expect((await peers.forConversation(conversation)).filter((r) => r.device_id === gone)).toHaveLength(0);
         });
 
-        it('leaves out a device only this server vouches for', async () =>
-        {
-            const alice = await makeUser('wallet', signer);
-            const guest = await makeUser('guest');
-
-            await enrolWithWallet(alice.id, signer);
-            await devices.enrol(guest.id, await openSession(guest.id), { ...await keypair(), label: '', userAgent: '' });
-
-            const rows = await peers.forConversation(await conversationOf(alice, guest));
-            const theirs = rows.filter((row) => row.handle === guest.handle);
-
-            // A guest has no wallet, so a guest has no provable device. The member is still listed,
-            // with nothing in it.
-            expect(theirs).toHaveLength(1);
-            expect(theirs[0].device_id).toBeNull();
-            expect(theirs[0].kind).toBe('guest');
-        });
-
         it('lists a member with no devices at all rather than leaving them out', async () =>
         {
-            const alice = await makeUser('wallet', signer);
-            const bob = await makeUser('wallet', second);
+            const alice = await makeUser(signer);
+            const bob = await makeUser(second);
             await enrolWithWallet(alice.id, signer);
 
             const rows = await peers.forConversation(await conversationOf(alice, bob));

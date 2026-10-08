@@ -11,14 +11,12 @@ import Button from '../ui/button.component.azeroth';
 type Blocked = Exclude<MemberSealState, 'ready'>;
 
 const ICON: Record<Blocked, IconName> = {
-    'no-wallet': 'info',
     'no-device': 'info',
     'needs-chain': 'info',
     tampered: 'alert'
 };
 
 const SAYS: Record<Blocked, MessageKey> = {
-    'no-wallet': 'seal.noWallet',
     'no-device': 'seal.noDevice',
     'needs-chain': 'seal.needsChain',
     tampered: 'seal.tampered'
@@ -35,7 +33,6 @@ const BROWSER_ICON: Record<Exclude<Readiness, 'ready'>, IconName> = {
 };
 
 const SAYS_MINE: Record<Blocked, MessageKey> = {
-    'no-wallet': 'seal.noWalletMine',
     'no-device': 'seal.noDeviceMine',
     'needs-chain': 'seal.needsChainMine',
     tampered: 'seal.tamperedMine'

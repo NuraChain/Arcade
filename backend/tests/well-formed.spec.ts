@@ -49,7 +49,7 @@ const listening = (told: string[]) => new Proxy({}, {
             told.push(`${ String(feature) }.${ String(method) }`);
 
             return feature === 'identity' && method === 'principal'
-                ? Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'wallet', isMinor: false, sessionId: 'a-session' })
+                ? Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
                 : Promise.reject(new NotFoundError('Nothing there.'));
         }
     })

@@ -11,9 +11,9 @@ import { useWallet } from './wallet.store.ts';
 /**
  * Where this account stands against the NuraProfile registry.
  *
- * `off` is the ordinary state of a deployment pointed at no registry and of every guest, and it
- * is deliberately not an error: the panel renders nothing rather than explaining an absence. The
- * other three are all true statements about a chain this browser really asked.
+ * `off` is the ordinary state of a deployment pointed at no registry, and it is deliberately not
+ * an error: the panel renders nothing rather than explaining an absence. The other three are all
+ * true statements about a chain this browser really asked.
  */
 export type ChainSync = 'off' | 'absent' | 'synced' | 'drifted';
 
@@ -174,7 +174,7 @@ export const useChain = createStore((): ChainApi =>
         sync()
         {
             const answer = state.data();
-            if (answer === undefined || !answer.configured || !account.isWallet())
+            if (answer === undefined || !answer.configured)
             {
                 return 'off';
             }
@@ -198,7 +198,7 @@ export const useChain = createStore((): ChainApi =>
         {
             const answer = state.data();
 
-            if (answer === undefined || !answer.configured || !account.isWallet())
+            if (answer === undefined || !answer.configured)
             {
                 return 'off';
             }

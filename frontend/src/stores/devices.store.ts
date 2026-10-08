@@ -140,18 +140,12 @@ export const useDevices = createStore((): DevicesApi =>
     /**
      * Sends one enrolment.
      *
-     * A wallet account signs for its devices and the server refuses it any other way, so the
-     * challenge is fetched and the wallet asked before anything is written. The signed message
-     * names this device in its `Resources` line - the signature cannot be carried to another one.
+     * The account signs for its devices and the server refuses it any other way, so the challenge
+     * is fetched and the wallet asked before anything is written. The signed message names this
+     * device in its `Resources` line - the signature cannot be carried to another one.
      */
     const publish = async (keys: DeviceKeys, label: string) =>
     {
-        if (!account.isWallet())
-        {
-            await client.devices.enrol({ input: { ...keys, label } });
-            return;
-        }
-
         const challenge = await client.devices.challenge({ input: { id: keys.id } });
         const signature = await wallet.sign(challenge.message);
 

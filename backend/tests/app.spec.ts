@@ -149,7 +149,7 @@ describe('quick play', () =>
         log: silent,
         ports: {
             identity: {
-                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
             table: {
                 quick: (...said: unknown[]) =>
@@ -254,7 +254,7 @@ describe('taking somebody out of a chair', () =>
         log: silent,
         ports: {
             identity: {
-                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
             table: {
                 remove: (...said: unknown[]) =>
@@ -343,7 +343,7 @@ describe('teaming up', () =>
         ended: { id: 'an-older-one', reason: 'declined', by: 'sara.k' }
     };
 
-    const teamedAs = (told: unknown[][], answer: () => Promise<unknown> = () => Promise.resolve(state), who: unknown = { userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' }) => buildApp({
+    const teamedAs = (told: unknown[][], answer: () => Promise<unknown> = () => Promise.resolve(state), who: unknown = { userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' }) => buildApp({
         db: fakeDb({ initialized: true }),
         config,
         log: silent,
@@ -515,7 +515,7 @@ describe('leaving a table', () =>
         log: silent,
         ports: {
             identity: {
-                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
             table: {
                 leave: (...said: unknown[]) =>

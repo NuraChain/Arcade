@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { BASE, clearTables, launch, recorder, seat } from './seats.mjs';
+import { BASE, clearTables, launch, recorder, seat, walletSeat } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
 const { record, finish } = recorder('tour-pass');
@@ -104,7 +104,7 @@ const stranger = async (browser, viewport) =>
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
 
     const page = await context.newPage();
-    const actor = { handle: 'visitor', context, page, errors: [], api: apiOf(context) };
+    const actor = { handle: 'newcomer', context, page, errors: [], api: apiOf(context) };
 
     listen(page, actor.handle, actor.errors);
     cast.push(actor);
@@ -199,6 +199,7 @@ const part = async (title, run, ignore = []) =>
 const browser = await launch();
 
 let visitor = null;
+let newcomer = null;
 let dana = null;
 let pocket = null;
 let keys = null;
@@ -239,26 +240,33 @@ try
     await clearTables(dana, reza, leila);
     await dana.api('POST', '/notifications/read-all');
 
-    await part('1 guest sign-in', async () =>
+    await part('1 wallet sign-in', async () =>
     {
-        visitor = await stranger(browser, WIDE);
+        // First the page itself, through a browser nobody has signed in on: the wallet is the
+        // only door now, and there is no name box left beside it.
+        newcomer = await stranger(browser, WIDE);
+        await go(newcomer.page, '/sign-in');
 
-        const name = `Tour ${ STAMP }`;
+        const asked = [];
+        newcomer.page.on('request', (r) => { if (r.url().includes('/auth/guest')) { asked.push(r.url()); } });
 
-        await go(visitor.page, '/sign-in');
-        await visitor.page.locator('#sign-in-name').fill(name);
+        const typed = await newcomer.page.locator('#sign-in-name').count();
+        record('the sign-in page asks for no name at all', typed === 0, typed === 0 ? 'no name box' : 'a name box is still there');
+        const connect = await newcomer.page.getByRole('button', { name: /Connect a wallet|Connect/ }).count();
+        record('and offers the wallet as the one way in', connect === 1, `found ${ connect }`);
 
-        const sit = visitor.page.getByRole('button', { name: `Sit down as ${ name }` });
-        record('the sign-in button names the guest as they type', await soon(async () => await sit.count() > 0, 3000));
-
-        await sit.click();
-        await visitor.page.waitForURL((url) => url.pathname === '/app', { timeout: 15000 }).catch(() => undefined);
-        record('typing a name and pressing the button lands on /app', path(visitor.page) === '/app', path(visitor.page));
+        // Then a real sign-in, through the routes a browser uses. `/auth/wallet` mints a NEW
+        // account from the address, so this is somebody nobody has ever been - and the pass needs
+        // an untouched seat for every "you have no friends yet" below.
+        visitor = await walletSeat(browser, `Tour ${ STAMP }`, WIDE);
+        await go(visitor.page, '/app');
+        record('signing in with a wallet lands on /app', path(visitor.page) === '/app', path(visitor.page));
 
         const me = await visitor.api('GET', '/auth/me');
         visitor.handle = me.body?.account?.handle ?? 'visitor';
-        record('the session the page made is a guest account', me.body?.account?.kind === 'guest', `${ me.body?.account?.kind } @${ visitor.handle }`);
-        record('the home page greets the guest with a main landmark', await visitor.page.locator('main').count() > 0);
+        record('the session it made is an account with a wallet on it', typeof me.body?.account?.address === 'string', `${ me.body?.account?.address } @${ visitor.handle }`);
+        record('nothing asked the server for a guest', asked.length === 0, asked.length === 0 ? 'no /auth/guest' : asked[0]);
+        record('the home page greets them with a main landmark', await visitor.page.locator('main').count() > 0);
     });
 
     await part('2 profile', async () =>
@@ -285,7 +293,7 @@ try
         record('after a reload the account holds the new display name and bio', saved.body?.account?.displayName === newName && saved.body?.account?.bio === newBio, `${ saved.body?.account?.displayName } | ${ saved.body?.account?.bio }`);
 
         const title = page.locator('main h1').first();
-        record('a guest has no Nura Profile, so the page is titled by the handle', await soon(async () => (await title.innerText()).trim() === visitor.handle, 5000), (await title.innerText()).trim());
+        record('with nothing published the page is titled by the handle', await soon(async () => (await title.innerText()).trim() === visitor.handle, 5000), (await title.innerText()).trim());
 
         await page.locator('main').getByRole('button', { name: 'Edit profile', exact: true }).click();
         await sheet.waitFor({ state: 'visible', timeout: 5000 });
@@ -464,7 +472,7 @@ try
         }
 
         const seated = await visitor.api('GET', '/tables/mine');
-        record('leaving every table left the guest seated nowhere', (seated.body?.tables ?? []).length === 0, String((seated.body?.tables ?? []).length));
+        record('leaving every table left them seated nowhere', (seated.body?.tables ?? []).length === 0, String((seated.body?.tables ?? []).length));
     }, [/status of 404.*\/api\/(chat|tables)\//, /status of 422.*\/api\/tables$/]);
 
     await part('5 quick play', async () =>
@@ -499,7 +507,7 @@ try
 
         const seated = await visitor.api('GET', '/tables/mine');
         const mine = (seated.body?.tables ?? []).find((one) => path(page).endsWith(one.id));
-        record('the guest is sitting at that table', mine !== undefined);
+        record('the visitor is sitting at that table', mine !== undefined);
         record('which is a table for two, as asked', mine?.seats === 2, `${ mine?.seats } seats`);
         record('and is ready there without pressing anything', mine?.chairs?.find((chair) => chair.seat === mine.mine)?.ready === true);
         record('the lobby says it is looking for players', await soon(async () => (await page.locator('main').innerText()).includes('Looking for players: 1 of 2 here'), 5000));

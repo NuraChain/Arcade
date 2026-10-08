@@ -57,7 +57,6 @@ const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', bo
 const BODIES = {
     '/auth/challenge': (bad) => [{ address: bad, device: bad.slice(0, 22) }],
     '/auth/wallet': (bad) => [{ address: bad, nonce: bad, signature: bad, device: { id: bad, exchangeKey: bad, signingKey: bad, label: 'x' } }],
-    '/auth/guest': (bad) => [{ name: bad.slice(0, 64) }],
     '/auth/handle': (bad) => [{ handle: bad.slice(0, 32) }],
     '/auth/profile': (bad) => [{ displayName: bad.slice(0, 40), bio: bad.slice(0, 240) }],
     '/auth/avatar': (bad) => [{ data: bad }],
@@ -95,7 +94,7 @@ const BODIES = {
     '/chat/:id/messages': (bad) => [message(bad), { ...message(bad), kind: 'reaction', target: bad }]
 };
 
-const WOULD_ACT = new Set(['/auth/guest', '/auth/handle']);
+const WOULD_ACT = new Set(['/auth/handle']);
 
 const SPARED = new Set([
     '/auth/sign-out', '/auth/sign-out-everywhere', '/chain/profile/publish', '/social/privacy', '/groups/:slug/join', '/groups/:slug/leave',
@@ -105,7 +104,7 @@ const SPARED = new Set([
     '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin'
 ]);
 
-const SIGNED_OUT = new Set(['/auth/challenge', '/auth/wallet', '/auth/guest']);
+const SIGNED_OUT = new Set(['/auth/challenge', '/auth/wallet']);
 
 let checks = 0;
 let failures = 0;

@@ -114,8 +114,7 @@ const makeUser = async () =>
     const made = await db.getRepository(User).save({
         handle: `w${ seq }x${ Math.floor(Math.random() * 100000) }`,
         displayName: `Waiting ${ seq }`,
-        hue: seq % 360,
-        kind: 'guest'
+        hue: seq % 360
     });
 
     return made.id;

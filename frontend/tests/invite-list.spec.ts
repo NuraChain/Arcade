@@ -93,7 +93,6 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     usePeople().reset();

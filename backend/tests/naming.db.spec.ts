@@ -67,7 +67,7 @@ describe.skipIf(!active)('what the database will store', () =>
             try
             {
                 await db.query(
-                    `insert into users (handle, display_name, hue, kind) values ($1, $2, 1, 'guest')`,
+                    `insert into users (handle, display_name, hue) values ($1, $2, 1)`,
                     [handle, handle]
                 );
             }
@@ -114,7 +114,7 @@ describe.skipIf(!active)('what the database will store', () =>
             try
             {
                 await db.query(
-                    `insert into users (handle, display_name, hue, kind) values ($1, 'x', 1, 'guest')`,
+                    `insert into users (handle, display_name, hue) values ($1, 'x', 1)`,
                     [bad]
                 );
                 accepted.push(bad);

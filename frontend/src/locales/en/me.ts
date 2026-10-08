@@ -25,7 +25,6 @@ export const me = {
     'nfts.failed': 'Could not read your NFTs',
     'nfts.empty': 'No NFTs in this wallet',
     'nfts.emptyLead': 'Anything this wallet collects on {chain} shows up here.',
-    'nfts.guest': 'A guest account has no wallet, so it holds no NFTs.',
     'nfts.off': 'This server does not read NFTs from the chain.',
     'record.won': 'Won',
     'record.winRate': 'Win rate',
@@ -94,10 +93,6 @@ export const me = {
 
     'me.shared': 'Profile link copied',
     'me.settings': 'Settings',
-    'me.keepSeat.title': 'This seat is this browser.',
-    'me.keepSeat.lead': 'A guest seat has no wallet behind it, so nothing here can be sealed and nothing follows you to another device. There is no way back into a guest account once you sign out — and signing in with a wallet starts a new account rather than moving this one.',
-    'me.signOut.guestTitle': 'Sign out of this guest seat?',
-    'me.signOut.guestLead': 'There is no way back into a guest account. This name, these friends and every result stay behind with it.',
 
     'settings.title': 'Settings',
     'settings.lead': 'Your account, who can reach you, and how this device behaves.',
@@ -108,11 +103,8 @@ export const me = {
     'settings.appearance': 'Appearance',
 
     'settings.account.wallet': 'Signed in with {wallet}',
-    'settings.account.demo': 'Guest seat',
-    'settings.account.demoLead': 'No wallet, so nothing here can be sealed and nothing follows you to another device. Signing out ends this seat for good.',
     'settings.account.network': 'Network',
     'settings.account.disconnect': 'Disconnect',
-    'settings.account.signOut': 'Sign out',
 
     'settings.safety.blocked': 'Blocked',
     'settings.safety.blockedLead': 'Blocked people can’t message you, invite you, join a table you’re at, or find you in search. There is no limit.',
@@ -199,8 +191,6 @@ export const me = {
     'devices.attested.walletHint': 'Proved by a signature from the wallet on this account.',
     'devices.attested.contract': 'Contract wallet',
     'devices.attested.contractHint': 'Proved on-chain by the wallet contract on this account.',
-    'devices.attested.server': 'This server',
-    'devices.attested.serverHint': 'Nobody signed for this one. It is here because it was signed in — a guest account has no wallet to prove it with.',
 
     'chain.published': 'Published. The registry now says what this page does.',
     'chain.rejected': 'Nothing was sent. You declined it in your wallet.',

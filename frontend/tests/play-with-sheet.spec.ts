@@ -113,7 +113,7 @@ beforeEach(async () =>
     socket.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useSettings().reset();
     useCatalogue().reset();
     usePeople().reset();

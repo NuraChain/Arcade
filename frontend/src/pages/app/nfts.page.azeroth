@@ -25,7 +25,7 @@ export default component NftsPage()
     useHead({ title: () => locale.t('nfts.title') });
 
     const first = createResource(
-        () => account.isWallet() ? account.address() : null,
+        () => account.address(),
         () => client.chain.nfts({ query: { limit: String(PAGE) } }),
         { name: 'chain.nfts.page' }
     );
@@ -58,9 +58,7 @@ export default component NftsPage()
 
     derived refused = !first.loading() && failed;
 
-    derived guest = !account.isWallet();
-
-    derived bare = !first.loading() && !failed && !offline && !guest && !holding;
+    derived bare = !first.loading() && !failed && !offline && !holding;
 
     derived further = items.length < total;
 
@@ -101,12 +99,8 @@ export default component NftsPage()
     <Page label={ locale.t('nfts.title') } onRefresh={ () => first.refetch() }>
         <PageHeader
             title={ locale.t('nfts.title') }
-            { ...(account.isWallet() ? { lead: locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) } : {}) }
+            lead={ locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) }
         />
-
-        <Show when={ guest }>
-            { () => <EmptyState icon="wallet" title={ locale.t('nfts.guest') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
-        </Show>
 
         <Show when={ offline }>
             { () => <EmptyState icon="image" title={ locale.t('nfts.off') } action={ locale.t('app.nav.profile') } to="/app/me" /> }

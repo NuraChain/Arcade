@@ -10,8 +10,9 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { server } from './fake-api.ts';
+import { establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -51,46 +52,6 @@ afterEach(() =>
 {
     cleanup();
     resetRuntime();
-});
-
-/**
- * The guest half of these two pages, which no gate had ever rendered.
- *
- * `tools/qa` tours the 640-cell matrix signed in as `dana.w`, a WALLET fixture, and the seal pass
- * signs in with a wallet too - so every control behind `!account.isWallet()` shipped without once
- * being drawn. That is the same structural blind spot recorded for the sealing's `ready` branch,
- * and it is why the wallet fixtures exist at all; this is the same story from the other end.
- *
- * What it hid: a PRIMARY button reading "Connect a wallet", sitting above a "Sign out" button and
- * carrying the identical handler. There is no wallet-link route on this server - `/auth/wallet`
- * mints a NEW user from the address and never reads the session - and a guest handle is claimed by
- * INSERT, so signing out of a guest account is the end of it. The button destroyed the account
- * while promising, in the card that steered people to it, that everything would follow them.
- */
-describe('a guest seat', () =>
-{
-    it('is never offered a wallet button that signs it out instead', async () =>
-    {
-        await useAccount().signIn('Alex');
-        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
-
-        expect(container.textContent).toContain('Guest seat');
-        expect(container.textContent).not.toContain('Connect a wallet');
-
-        const signOut = [...container.querySelectorAll('button')]
-            .filter((button) => button.textContent?.trim() === 'Sign out');
-        expect(signOut.length).toBe(1);
-    });
-
-    it('is told the seat ends at sign-out rather than that it moves', async () =>
-    {
-        await useAccount().signIn('Alex');
-        const container = await show(MePage as unknown as () => HTMLElement, '/app/me');
-
-        expect(container.textContent).toContain('This seat is this browser');
-        expect(container.textContent).toContain('no way back into a guest account');
-        expect(container.textContent).not.toContain('follow you to any device');
-    });
 });
 
 /**
@@ -136,7 +97,7 @@ describe('the profile sheet', () =>
 
     it('writes the name and the bio, and adopts what the server answers with', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
 
         const container = await sheet();
 
@@ -157,7 +118,7 @@ describe('the profile sheet', () =>
 
     it('says a handle is taken, and writes nothing else when it is', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.takenHandles = ['taken'];
 
         const container = await sheet();
@@ -188,7 +149,7 @@ describe('the notification switches', () =>
     it('read the account\'s own mutes and write through the server, so every device agrees', async () =>
     {
         server.mutes = [{ kind: 'notice', id: 'turns' }];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
         const switchFor = (label: string) =>
             [...container.querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.querySelector('span span')?.textContent === label)!;
@@ -210,7 +171,7 @@ describe('the safety lists', () =>
 {
     it('keep the lines that say nobody is blocked, muted or reported when they are read again', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
 
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
         const lineOf = (text: string) => [...container.querySelectorAll('p')].find((one) => one.textContent?.trim() === text) ?? null;

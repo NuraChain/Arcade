@@ -8,10 +8,10 @@ import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { routes } from '../src/routes.ts';
-import { useAccount } from '../src/stores/account.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { server } from './fake-api.ts';
+import { establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -58,7 +58,7 @@ beforeEach(async () =>
     server.reset();
     server.games = [summary('hokm', 'available'), summary('poker', 'coming-soon'), summary('backgammon', 'coming-soon'), summary('ludo', 'available')];
     useCatalogue().reset();
-    await useAccount().signIn('Alex');
+    useSession().establish(establishAccount());
 });
 
 afterEach(() =>

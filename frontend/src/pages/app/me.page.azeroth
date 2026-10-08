@@ -8,7 +8,6 @@ import Badge from '../../components/ui/badge.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
 import { signOut } from '../../components/app/sign-out.ts';
-import Panel from '../../components/ui/panel.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import { COPY_CHIP } from '../../components/ui/variants.ts';
@@ -90,7 +89,7 @@ export default component MePage()
     derived held = record.record();
 
     const nfts = createResource(
-        () => account.isWallet() ? account.address() : null,
+        () => account.address(),
         () => client.chain.nfts({ query: { limit: '0' } }),
         { name: 'chain.nfts' }
     );
@@ -118,7 +117,7 @@ export default component MePage()
         await copyText(link, 'me.shared');
     };
 
-    derived unpublished = account.isWallet() && face.data()?.configured === true && shown === undefined;
+    derived unpublished = face.data()?.configured === true && shown === undefined;
 
     <Page label={ locale.t('app.nav.profile') }>
         <Show
@@ -142,18 +141,16 @@ export default component MePage()
                         onPicture={ editPicture }
                         mine
                         eyebrow={
-                            <Show when={ account.isWallet() }>
-                                <button
-                                    type="button"
-                                    class={ COPY_CHIP }
-                                    aria-label={ locale.t('wallet.address.copy') }
-                                    onClick={ () => void copyAddress() }
-                                >
-                                    <Icon name="key" size={ 12 } class="shrink-0 text-live" />
-                                    <span class="tally">{ shortAddress(account.address() ?? '') }</span>
-                                    <Icon name="copy" size={ 12 } class="shrink-0 text-accent" />
-                                </button>
-                            </Show>
+                            <button
+                                type="button"
+                                class={ COPY_CHIP }
+                                aria-label={ locale.t('wallet.address.copy') }
+                                onClick={ () => void copyAddress() }
+                            >
+                                <Icon name="key" size={ 12 } class="shrink-0 text-live" />
+                                <span class="tally">{ shortAddress(account.address() ?? '') }</span>
+                                <Icon name="copy" size={ 12 } class="shrink-0 text-accent" />
+                            </button>
                         }
                         badges={
                             <span class="contents">
@@ -174,18 +171,6 @@ export default component MePage()
 
                     <Show when={ face.error() !== null }>
                         { () => <ChainFaceFailed onRetry={ retryChain } /> }
-                    </Show>
-
-                    <Show when={ !account.isWallet() }>
-                        { () =>
-                            <Panel section tone="accent">
-                                <h2 class="flex items-center gap-2 title text-ui-lg text-text">
-                                    <Icon name="key" size={ 18 } class="text-accent" />
-                                    { locale.t('me.keepSeat.title') }
-                                </h2>
-                                <p class="mt-1 text-ui-base text-muted">{ locale.t('me.keepSeat.lead') }</p>
-                            </Panel>
-                        }
                     </Show>
 
                     <div class="sticky top-[calc(var(--page-pad)*-1)] z-10 bleed bleed-pad -mb-2 bg-void/85 backdrop-blur-md backdrop-saturate-150">

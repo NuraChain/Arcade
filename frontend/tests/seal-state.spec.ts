@@ -58,7 +58,7 @@ async function device(signer: typeof alice, overrides: Partial<PeerDevice> = {})
 const conversation = (...members: ConversationDevices['members']): ConversationDevices => ({ members });
 
 const me = async (): Promise<ConversationDevices['members'][number]> =>
-    ({ accountId: 'account-alex', handle: 'alex', kind: 'wallet', address: alice.address.toLowerCase(), devices: [await device(alice)] });
+    ({ accountId: 'account-alex', handle: 'alex', address: alice.address.toLowerCase(), devices: [await device(alice)] });
 
 beforeEach(() =>
 {
@@ -74,7 +74,7 @@ describe('whether a conversation can be sealed', () =>
     {
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [await device(mallory)] }
+            { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [await device(mallory)] }
         ), 'alex');
 
         expect(answer.ready).toBe(true);
@@ -87,45 +87,33 @@ describe('whether a conversation can be sealed', () =>
         const theirs = await device(mallory);
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [theirs] }
+            { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [theirs] }
         ), 'alex');
 
         expect(answer.members.find((one) => one.handle === 'sara.k')?.devices).toEqual([theirs]);
     });
 
-    it('is blocked by a guest, and names them', async () =>
+    it('is blocked by somebody with no device, and names them', async () =>
     {
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'guest', devices: [] }
+            { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [] }
         ), 'alex');
 
         expect(answer.ready).toBe(false);
         expect(answer.blocked?.handle).toBe('sara.k');
-        expect(answer.blocked?.state).toBe('no-wallet');
+        expect(answer.blocked?.state).toBe('no-device');
     });
 
-    it('names the reader first when the wallet missing is their own, whoever else has none', async () =>
+    it('names somebody else ahead of the reader when both have nothing to seal to', async () =>
     {
         const answer = await sealabilityOf(conversation(
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'guest', devices: [] },
-            { accountId: 'account-alex', handle: 'alex', kind: 'guest', devices: [] }
+            { accountId: 'account-sara.k', handle: 'sara.k', devices: [] },
+            { accountId: 'account-alex', handle: 'alex', devices: [] }
         ), 'alex');
 
-        expect(answer.blocked?.handle, 'a guest was told it is somebody else who is in the way').toBe('alex');
-        expect(answer.blocked?.isMe).toBe(true);
-        expect(answer.blocked?.state).toBe('no-wallet');
-    });
-
-    it('tells a wallet account with no device apart from a guest', async () =>
-    {
-        const answer = await sealabilityOf(conversation(
-            await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [] }
-        ), 'alex');
-
-        // Different sentences, because they are different situations: one of them is fixed by
-        // enrolling a browser and the other is not fixed at all.
+        expect(answer.blocked?.handle, 'the reader was named instead of the other person').toBe('sara.k');
+        expect(answer.blocked?.isMe).toBe(false);
         expect(answer.blocked?.state).toBe('no-device');
     });
 
@@ -133,7 +121,7 @@ describe('whether a conversation can be sealed', () =>
     {
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [await device(mallory, { attested: 'contract' })] }
+            { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [await device(mallory, { attested: 'contract' })] }
         ), 'alex');
 
         expect(answer.blocked?.state).toBe('needs-chain');
@@ -148,7 +136,7 @@ describe('whether a conversation can be sealed', () =>
 
             const answer = await sealabilityOf(conversation(
                 await me(),
-                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [good, swapped] }
+                { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [good, swapped] }
             ), 'alex');
 
             // Quietly using the good one is exactly how a fabricated device ends up wrapped in
@@ -167,7 +155,6 @@ describe('whether a conversation can be sealed', () =>
                 {
                     accountId: 'account-sara.k',
                     handle: 'sara.k',
-                    kind: 'wallet',
                     address: mallory.address.toLowerCase(),
                     devices: [theirs, { ...forged, address: alice.address.toLowerCase() }]
                 }
@@ -181,9 +168,9 @@ describe('whether a conversation can be sealed', () =>
             const swapped = { ...await device(mallory), signingKey: (await realKeys()).signingKey };
 
             const answer = await sealabilityOf(conversation(
-                { accountId: 'account-guest.one', handle: 'guest.one', kind: 'guest', devices: [] },
+                { accountId: 'account-absent.one', handle: 'absent.one', devices: [] },
                 await me(),
-                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [swapped] }
+                { accountId: 'account-sara.k', handle: 'sara.k', address: mallory.address.toLowerCase(), devices: [swapped] }
             ), 'alex');
 
             // Absent proof is ordinary. A proof that was present and did not check out is not.
@@ -211,7 +198,7 @@ describe('what stands in the way of sending', () =>
 
     it('is this browser, even when every account in the room is ready', () =>
     {
-        const stop = sendBlockOf({ sealability: room(null), readiness: 'absent', known: true, isWallet: true });
+        const stop = sendBlockOf({ sealability: room(null), readiness: 'absent', known: true });
 
         expect(stop).toEqual({ reason: 'browser', readiness: 'absent' });
     });
@@ -222,7 +209,7 @@ describe('what stands in the way of sending', () =>
      */
     it('says nothing about this browser until somebody has looked', () =>
     {
-        expect(sendBlockOf({ sealability: room(null), readiness: 'absent', known: false, isWallet: true })).toBeNull();
+        expect(sendBlockOf({ sealability: room(null), readiness: 'absent', known: false })).toBeNull();
     });
 
     /**
@@ -233,31 +220,20 @@ describe('what stands in the way of sending', () =>
      */
     it('stands the composer down while the room has not answered', () =>
     {
-        expect(sendBlockOf({ sealability: null, readiness: 'ready', known: true, isWallet: true, pending: true }))
+        expect(sendBlockOf({ sealability: null, readiness: 'ready', known: true, pending: true }))
             .toEqual({ reason: 'pending' });
     });
 
     it('lets a tampered device set outrank this browser, because that one is not a thing to work around', () =>
     {
-        const stop = sendBlockOf({ sealability: room(member('tampered')), readiness: 'absent', known: true, isWallet: true });
+        const stop = sendBlockOf({ sealability: room(member('tampered')), readiness: 'absent', known: true });
 
         expect(stop?.reason).toBe('member');
     });
 
-    /**
-     * A guest's devices are attested by this server and are filtered out of every peer list, so
-     * enrolling one changes nothing about sealing. Offering it would be a button that lies.
-     */
-    it('never blames a guest browser for keys that would not help', () =>
-    {
-        const stop = sendBlockOf({ sealability: room(member('no-wallet', true)), readiness: 'absent', known: true, isWallet: false });
-
-        expect(stop).toEqual({ reason: 'member', member: member('no-wallet', true) });
-    });
-
     it('is nothing at all when the room and the browser both answer yes', () =>
     {
-        expect(sendBlockOf({ sealability: room(null), readiness: 'ready', known: true, isWallet: true })).toBeNull();
+        expect(sendBlockOf({ sealability: room(null), readiness: 'ready', known: true })).toBeNull();
     });
 });
 
@@ -270,16 +246,16 @@ describe('what the thread says about it', () =>
 
     it('names the person and says what would fix it', () =>
     {
-        const said = render(seal('no-wallet'));
+        const said = render(seal('no-device'));
 
         expect(said).toContain('sara.k');
         expect(said).toContain('Nobody can write here yet');
-        expect(said).toContain('wallet on both sides');
+        expect(said).toContain('has not given any of their browsers keys');
     });
 
     it('never calls what nobody can send unsealed, in either language', () =>
     {
-        const states: BlockedMember['state'][] = ['no-wallet', 'no-device', 'needs-chain'];
+        const states: BlockedMember['state'][] = ['no-device', 'needs-chain'];
 
         for (const language of ['en', 'fa'] as const)
         {
@@ -302,17 +278,12 @@ describe('what the thread says about it', () =>
         useLocale().setLocale('en');
     });
 
-    it('tells the reader it is they who cannot write when the wallet missing is theirs', () =>
+    it('tells the reader it is they who cannot write when it is their own account', () =>
     {
-        const said = render(seal('no-wallet', true));
+        const said = render(seal('no-device', true));
 
-        expect(said).toContain('You cannot write here');
+        expect(said).toContain('You cannot write here yet');
         expect(said).not.toContain('sara.k');
-    });
-
-    it('says something different for somebody who simply has not enrolled', () =>
-    {
-        expect(render(seal('no-device'))).toContain('has not given any of their browsers keys');
     });
 
     it('reads as an alarm rather than a shrug when a proof did not check out', () =>
@@ -325,7 +296,7 @@ describe('what the thread says about it', () =>
 
     it('is not an alarm for any of the ordinary reasons', () =>
     {
-        for (const state of ['no-wallet', 'no-device', 'needs-chain'] as const)
+        for (const state of ['no-device', 'needs-chain'] as const)
         {
             cleanup();
             const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal(state) } }) as unknown as HTMLElement);
@@ -333,23 +304,6 @@ describe('what the thread says about it', () =>
         }
     });
 
-    it('speaks to the reader about their own account, not about them in the third person', () =>
-    {
-        // The signed-in demo tour hits exactly this: the only member standing in the way is you.
-        const said = render(seal('no-wallet', true));
-
-        expect(said).toContain('You are signed in without a wallet');
-        expect(said).not.toContain('sara.k');
-    });
-
-    /**
-     * The ACCOUNT sentence, which is not the browser sentence.
-     *
-     * This key used to say "This browser has no keys yet" while describing a state about the whole
-     * account - nobody anywhere has enrolled. The browser's own case now has its own key, and
-     * conflating them is what let a browser with no keys, on an account enrolled elsewhere, render
-     * the positive line.
-     */
     it('speaks about the account when it is the account that has nothing', () =>
     {
         expect(render(seal('no-device', true))).toContain('None of your browsers');
@@ -358,7 +312,7 @@ describe('what the thread says about it', () =>
     it('follows a language switch, like every other composed sentence', () =>
     {
         useLocale().setLocale('fa');
-        expect(render(seal('no-wallet'))).toContain('هنوز کسی نمی‌تواند اینجا بنویسد');
+        expect(render(seal('no-device'))).toContain('هنوز کسی نمی‌تواند اینجا بنویسد');
     });
 
     it('tells a keyless browser which of the two it is, and offers only what would help', () =>
@@ -388,7 +342,7 @@ describe('what the thread says about it', () =>
         expect(keyless.querySelector('p button')).toBeNull();
 
         expect(drawn({ reason: 'browser', readiness: 'unsupported' }).querySelector('button')).toBeNull();
-        expect(drawn({ reason: 'member', member: seal('no-wallet', true) }).querySelector('button')).toBeNull();
+        expect(drawn({ reason: 'member', member: seal('no-device', true) }).querySelector('button')).toBeNull();
         expect(drawn({ reason: 'member', member: seal('no-device') }).querySelector('button')).toBeNull();
     });
 

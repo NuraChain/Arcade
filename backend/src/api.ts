@@ -54,7 +54,6 @@ import {
     groupEditInput,
     groupList,
     groupSummary,
-    guestSignIn,
     account,
     avatarInput,
     avatarResult,
@@ -223,23 +222,6 @@ export function buildApi(ports: Ports)
                         providerRdns: context.input.providerRdns,
                         userAgent: context.request.headers.get('user-agent') ?? '',
                         device: context.input.device
-                    });
-
-                    return reply(200, { account: established.account }, {
-                        'set-cookie': sessionCookie(established.token, ports.identity.secureCookies)
-                    });
-                }
-            ),
-
-            /** The guest path: a typed name and no proof. The actual onboarding for most people. */
-            guest: routes.post(
-                '/guest',
-                { input: guestSignIn, output: sessionState },
-                async (context) =>
-                {
-                    const established = await ports.identity.signInAsGuest({
-                        name: context.input.name,
-                        userAgent: context.request.headers.get('user-agent') ?? ''
                     });
 
                     return reply(200, { account: established.account }, {
@@ -830,13 +812,7 @@ export function buildApi(ports: Ports)
             list: routes.get('/', { output: deviceList },
                 (context) => ports.device.list(context.principal.userId, context.principal.sessionId)),
 
-            /**
-             * The bytes a wallet signs to authorise a device.
-             *
-             * Refused for an account with no wallet - a guest's device is attested by this server
-             * and the badge says so. Asking a guest to sign something they cannot sign would be a
-             * dead end with a spinner on it.
-             */
+            /** The bytes a wallet signs to authorise a device. */
             challenge: routes.post('/challenge', { input: deviceRef, output: challenge },
                 (context) => ports.device.challenge(context.principal.userId, context.input.id)),
 

@@ -81,7 +81,7 @@ let stopWallet: (() => void) | null = null;
 
 const signInWith = async (signer: { provider: Eip1193Provider }, owner: string) =>
 {
-    const account: Account = { id: `u-${ owner }`, handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'wallet', isMinor: false, address: owner };
+    const account: Account = { id: `u-${ owner }`, handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, isMinor: false, address: owner };
     server.account = account;
     useSession().establish(account);
 

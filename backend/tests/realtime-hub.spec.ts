@@ -155,7 +155,6 @@ async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ c
     const principal: Principal = {
         userId,
         handle: userId,
-        kind: 'guest',
         isMinor: world.edges.get(userId)?.party.isMinor ?? false,
         sessionId
     };

@@ -91,7 +91,7 @@ describe('the profile header', () =>
 
 describe('my profile page', () =>
 {
-    const signIn = (kind: 'wallet' | 'guest' = 'guest') =>
+    const signIn = () =>
     {
         const account: Account = {
             id: 'u-dana',
@@ -99,9 +99,8 @@ describe('my profile page', () =>
             displayName: 'Server Name',
             bio: 'Server bio',
             hue: 12,
-            kind,
             isMinor: false,
-            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+            address: '0x1111111111111111111111111111111111111111'
         };
         server.account = account;
         useSession().establish(account);
@@ -130,7 +129,7 @@ describe('my profile page', () =>
 
     it('shows the name, bio and picture the Nura Profile holds, never the server copy', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
         const container = await page();
@@ -144,7 +143,7 @@ describe('my profile page', () =>
 
     it('says the Nura Profile could not be read, rather than drawing an empty one, and tries again', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
         server.refuse = 'chain-unreachable';
@@ -166,7 +165,7 @@ describe('my profile page', () =>
 
     it('is empty but for the handle when there is no Nura Profile', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         const container = await page();
 
@@ -187,7 +186,7 @@ describe('my profile page', () =>
 
     it('leads with the wallet address, which copies from the chip', async () =>
     {
-        signIn('wallet');
+        signIn();
         const container = await page();
 
         const chip = container.querySelector('button[aria-label="Copy wallet address"]');
@@ -198,7 +197,7 @@ describe('my profile page', () =>
 
     it('gives each copy chip a 44px row of its own on a coarse pointer, which its touch area fills and never leaves', async () =>
     {
-        signIn('wallet');
+        signIn();
         useSession().establish({ ...useSession().account()!, joinedAt: '2026-03-01T00:00:00.000Z' });
         const container = await page();
         const px = (element: Element, prefix: string) =>
@@ -229,7 +228,7 @@ describe('my profile page', () =>
 
     it('has no Overview and no About section', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         const container = await page();
         const tabs = [...container.querySelectorAll('[role=tab]')].map((one) => one.textContent?.trim());
@@ -241,7 +240,7 @@ describe('my profile page', () =>
 
 describe('signing out from my profile', () =>
 {
-    const signIn = (kind: 'wallet' | 'guest') =>
+    const signIn = () =>
     {
         const account: Account = {
             id: 'u-dana',
@@ -249,9 +248,8 @@ describe('signing out from my profile', () =>
             displayName: 'Dana',
             bio: '',
             hue: 12,
-            kind,
             isMinor: false,
-            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+            address: '0x1111111111111111111111111111111111111111'
         };
         server.account = account;
         useSession().establish(account);
@@ -278,7 +276,7 @@ describe('signing out from my profile', () =>
 
     it('signs a wallet account out at once and loads the sign-in page', async () =>
     {
-        signIn('wallet');
+        signIn();
         const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
 
         await press(container);
@@ -288,41 +286,6 @@ describe('signing out from my profile', () =>
         expect(useSession().signedIn()).toBe(false);
         expect(replace).toHaveBeenCalledWith('/sign-in');
         expect(container.textContent).not.toContain('No such person');
-    });
-
-    it('asks a guest first, because nothing signs back into a guest seat, and Cancel keeps them in', async () =>
-    {
-        signIn('guest');
-        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
-
-        await press(container);
-
-        const asked = useOverlay().items();
-        expect(asked.map((one) => one.label)).toEqual(['Sign out of this guest seat?']);
-        expect(asked[0]!.props.lead).toContain('no way back into a guest account');
-        expect(server.calls).not.toContain('auth.sign-out');
-
-        useOverlay().close(asked[0]!.id, false);
-        await settle();
-
-        expect(server.calls).not.toContain('auth.sign-out');
-        expect(useSession().signedIn()).toBe(true);
-        expect(replace).not.toHaveBeenCalled();
-        expect((container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    it('signs a guest out once they confirm', async () =>
-    {
-        signIn('guest');
-        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
-
-        await press(container);
-        useOverlay().close(useOverlay().items()[0]!.id, true);
-        await settle();
-
-        expect(server.calls).toContain('auth.sign-out');
-        expect(useSession().signedIn()).toBe(false);
-        expect(replace).toHaveBeenCalledWith('/sign-in');
     });
 });
 
@@ -338,7 +301,7 @@ describe('somebody else\'s profile page', () =>
 
     beforeEach(() =>
     {
-        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, isMinor: false };
         server.account = account;
         useSession().establish(account);
         usePeople().reset();
@@ -500,7 +463,7 @@ describe('the edit sheet', () =>
 {
     const sheet = (only?: 'picture'): Promise<HTMLElement> =>
     {
-        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, isMinor: false };
         server.account = account;
         useSession().establish(account);
         return render(() => ProfileSheet({ overlayId: 'sheet', close: () => undefined, ...(only === undefined ? {} : { only }) }) as unknown as HTMLElement, '/app/me');

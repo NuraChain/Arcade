@@ -28,10 +28,10 @@ export interface ChatScope
  * Why a send could not be sealed, carried as data rather than flattened into a sentence.
  *
  * `post` used to throw a string with the failure interpolated into it, and the only toast a page
- * could show was the one generic line - which told somebody whose room holds a guest that the
- * problem was somebody else's unconfirmed browser. The failure and the member it names are both
- * things the screen can speak precisely, so the error carries them and the page decides what to
- * say.
+ * could show was the one generic line - which told somebody whose room holds a member with no
+ * confirmed browser that the problem was somebody else's. The failure and the member it names are
+ * both things the screen can speak precisely, so the error carries them and the page decides what
+ * to say.
  */
 export class SealFailure extends Error
 {

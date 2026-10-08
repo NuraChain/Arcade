@@ -17,7 +17,6 @@ export const landing = {
     'landing.cta.start': 'Start playing',
     'landing.cta.back': 'Back to your tables',
     'landing.cta.games': 'See the games',
-    'landing.cta.guest': 'Play as a guest',
 
     'landing.games.title': 'Four games, all live',
     'landing.games.lead': 'Take turns at your own pace, or play in real time at the table. Poker is real time only.',
@@ -63,7 +62,7 @@ export const landing = {
     'landing.compete.levels.body': 'Playing earns XP and your level shows it. It is a trophy; nothing is locked behind it.',
 
     'landing.finale.title': 'Pull up a chair',
-    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet, or play as a guest; chatting needs a wallet. Play in English or Persian.',
+    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet. Play in English or Persian.',
 
     'footer.rights': 'All rights reserved.',
     'locale.label': 'Language',

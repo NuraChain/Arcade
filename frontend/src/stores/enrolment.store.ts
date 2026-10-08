@@ -1,6 +1,5 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
-import { useAccount } from './account.store.ts';
 import { useDevice } from './device.store.ts';
 import { useDevices } from './devices.store.ts';
 import { useLocale } from './locale.store.ts';
@@ -41,7 +40,6 @@ export interface EnrolmentApi
  */
 export const useEnrolment = createStore((): EnrolmentApi =>
 {
-    const account = useAccount();
     const device = useDevice();
     const devices = useDevices();
     const locale = useLocale();
@@ -61,10 +59,7 @@ export const useEnrolment = createStore((): EnrolmentApi =>
      */
     const gap = (): KeyGap | null =>
     {
-        // A guest has no wallet to sign an attestation with, so their devices are attested by the
-        // server and no peer can verify one. Offering a key here would unblock this browser and
-        // leave them blocked on the other half, which is a button that lies about what it fixes.
-        if (!account.isWallet() || !devices.known())
+        if (!devices.known())
         {
             return null;
         }

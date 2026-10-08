@@ -32,8 +32,8 @@ async function makeUser(options: { strangers?: boolean } = {}): Promise<string>
 {
     seq += 1;
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind, allow_stranger_messages)
-         values ($1, $2, $3, 'guest', $4)
+        `insert into users (handle, display_name, hue, allow_stranger_messages)
+         values ($1, $2, $3, $4)
          returning id`,
         [`c${ seq }x${ Math.floor(Math.random() * 100000) }`, `Chat ${ seq }`, seq % 360, options.strangers ?? true]
     );
@@ -68,8 +68,10 @@ async function say(userId: string, conversationId: string, body: string, reactTo
     {
         device = `dev${ deviceOf.size.toString().padStart(19, '0') }`;
         await db.query(
-            `insert into devices (id, user_id, label, exchange_key, signing_key, attested)
-             values ($1, $2, 'Test', 'exchange', 'signing', 'server')`,
+            `insert into devices (id, user_id, label, exchange_key, signing_key, attested,
+                                  attested_address, attested_message, attested_signature)
+             values ($1, $2, 'Test', 'exchange', 'signing', 'wallet',
+                     '0x0000000000000000000000000000000000000000', 'message', 'signature')`,
             [device, userId]
         );
         deviceOf.set(userId, device);

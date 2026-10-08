@@ -33,7 +33,6 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
-import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -93,7 +92,6 @@ export default component ChatPage()
 
     const seal = useSeal();
     const devices = useDevices();
-    const account = useAccount();
 
     derived all = chat.messages();
 
@@ -103,7 +101,6 @@ export default component ChatPage()
         sealability: seal.sealability(),
         readiness: devices.readiness(),
         known: devices.known(),
-        isWallet: account.isWallet(),
         pending: seal.loading()
     });
 

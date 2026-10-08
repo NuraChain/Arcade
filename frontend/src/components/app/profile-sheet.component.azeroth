@@ -23,9 +23,9 @@ const HANDLE_MAX = 32;
  *
  * The @handle is CLAIMED on this server against a unique index and can come back refused, so it
  * goes first and a refusal leaves everything else unwritten with the value still in the box. The
- * name, the picture and the bio are then stored here and, for a wallet account on a deployment
- * with a registry, written to the person's Nura Profile by their own wallet - and the sheet says
- * which of those happened, because "saved" when the chain said no is the complaint this answers.
+ * name, the picture and the bio are then stored here and, on a deployment with a registry,
+ * written to the person's Nura Profile by their own wallet - and the sheet says which of those
+ * happened, because "saved" when the chain said no is the complaint this answers.
  *
  * What is deliberately NOT here: anything to buy or earn. A profile effect somebody can unlock is
  * a claim about an economy this product does not have - no inventory, no balance, nothing that
@@ -67,7 +67,7 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
         || picked !== ''
         || picture !== (current?.avatar ?? '');
 
-    derived lead = account.isWallet() && chain.configured() ? 'profile.leadChain' : 'profile.lead';
+    derived lead = chain.configured() ? 'profile.leadChain' : 'profile.lead';
 
     derived face = {
         displayName: trimmedName === '' ? (current?.displayName ?? '') : trimmedName,
@@ -142,12 +142,6 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
             refusal = error instanceof ApiError && error.status === 409
                 ? locale.t('profile.handleTaken')
                 : locale.t('profile.failed');
-            return;
-        }
-
-        if (!account.isWallet())
-        {
-            finish('success', locale.t('profile.saved'));
             return;
         }
 

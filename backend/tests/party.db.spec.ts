@@ -67,7 +67,6 @@ const makeUser = async (overrides: Partial<Pick<User, 'isMinor' | 'isSuspended' 
         handle: `p${ seq }y${ Math.floor(Math.random() * 100000) }`,
         displayName: `Party ${ seq }`,
         hue: seq % 360,
-        kind: 'guest',
         ...overrides
     });
 

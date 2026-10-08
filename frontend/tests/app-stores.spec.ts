@@ -128,7 +128,7 @@ describe('device posture', () =>
     });
 });
 
-const DARYA = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, kind: 'guest' as const, isMinor: false };
+const DARYA = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, isMinor: false };
 
 const auth = client.auth as unknown as Record<string, () => Promise<unknown>>;
 
@@ -160,30 +160,15 @@ const unreachable = () =>
 
 describe('session', () =>
 {
-    it('asks the server for the account and adopts the one it issues', async () =>
+    it('adopts the account the server issued and reports it as the person', () =>
     {
         const session = useSession();
         const account = useAccount();
-        const person = await account.signIn('Darya');
-        expect(server.calls).toContain('auth.guest');
+
+        session.establish(DARYA);
+
         expect(session.signedIn()).toBe(true);
-        expect(person?.handle).toBe('darya');
         expect(account.user()?.handle).toBe('darya');
-    });
-
-    it('claims a fresh handle rather than taking one that is spoken for', async () =>
-    {
-        const person = await useAccount().signIn('alex');
-        expect(person?.id).not.toBe('alex');
-        expect(person?.displayName).toBe('alex');
-    });
-
-    it('keeps a name nobody in the dataset has ever answered to', async () =>
-    {
-        const account = useAccount();
-        const person = await account.signIn('Darya');
-        expect(person?.handle).toBe('darya');
-        expect(person?.displayName).toBe('Darya');
         expect(account.user()?.displayName).toBe('Darya');
     });
 
@@ -191,7 +176,7 @@ describe('session', () =>
     {
         const session = useSession();
         const account = useAccount();
-        await account.signIn('Darya');
+        session.establish(DARYA);
         await session.signOut();
         expect(server.calls).toContain('auth.sign-out');
         expect(server.account).toBeNull();
@@ -201,7 +186,7 @@ describe('session', () =>
     it('ends every session at once and reports how many it closed', async () =>
     {
         const session = useSession();
-        await useAccount().signIn('Darya');
+        session.establish(DARYA);
         expect(await session.signOutEverywhere()).toBe(3);
         expect(session.signedIn()).toBe(false);
     });
@@ -209,7 +194,7 @@ describe('session', () =>
     it('takes the answer from the server when nothing has been established', async () =>
     {
         const session = useSession();
-        server.account = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, kind: 'guest', isMinor: false };
+        server.account = DARYA;
         await session.ready();
         expect(server.calls).toContain('auth.me');
         expect(session.signedIn()).toBe(true);
@@ -404,7 +389,7 @@ describe('guards', () =>
 
     it('lets a signed-in person through, and bounces them off the sign-in page', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(DARYA);
         expect(await requireSession(context('/app'))).toBe(true);
         expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
     });
@@ -470,10 +455,10 @@ describe('guards', () =>
     {
         expect(await requireAdmin()).toBe(false);
 
-        await useAccount().signIn('Alex');
+        useSession().establish(DARYA);
         expect(await requireAdmin()).toBe(false);
 
-        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, kind: 'wallet' as const, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
+        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
         useSession().establish(admin);
         expect(await requireAdmin()).toBe(true);
     });
@@ -833,7 +818,6 @@ describe('connection', () =>
         live.stop();
     });
 });
-
 
 describe('shell', () =>
 {

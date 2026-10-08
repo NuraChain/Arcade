@@ -140,7 +140,6 @@ export default component SiteDrawer(props: {
                             <span class="glow-cta rounded-control">
                                 <Button variant="primary" size="lg" leading="wallet" block onClick={ play }>{ locale.t('nav.connect') }</Button>
                             </span>
-                            <Button variant="outline" size="lg" block to="/sign-in">{ locale.t('landing.cta.guest') }</Button>
                         </div>
                     }
                 >

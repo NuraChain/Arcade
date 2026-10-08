@@ -99,8 +99,8 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
         const address = account.address.toLowerCase();
 
         await db.query(
-            `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages, last_seen_at)
-             values ($1, $2, $3, 'wallet', false, true, now())
+            `insert into users (handle, display_name, hue, is_minor, allow_stranger_messages, last_seen_at)
+             values ($1, $2, $3, false, true, now())
              on conflict (handle) do nothing`,
             [fixture.handle, fixture.displayName, fixture.hue]
         );

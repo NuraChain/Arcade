@@ -88,7 +88,7 @@ describe('the seat plate every table draws', () =>
         useRealtime().reset();
         socket.reset();
         useSession().reset();
-        useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, kind: 'guest', isMinor: false });
+        useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, isMinor: false });
         useVoice().reset();
         setVoiceMedia(() => ({ getUserMedia: async () => ({ getTracks: () => [], getAudioTracks: () => [] }) }) as unknown as MediaDevices);
 

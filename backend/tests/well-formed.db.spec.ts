@@ -76,7 +76,7 @@ const makeUser = async (): Promise<Person> =>
     seq += 1;
 
     const handle = `w${ seq }f${ Math.floor(Math.random() * 100000) }`;
-    const made = await db.getRepository(User).save({ handle, displayName: `Formed ${ seq }`, hue: seq % 360, kind: 'guest' });
+    const made = await db.getRepository(User).save({ handle, displayName: `Formed ${ seq }`, hue: seq % 360 });
 
     return { id: made.id, handle };
 };

@@ -42,7 +42,7 @@ describe.skipIf(!active)('housekeeping, against a real database', () =>
         await db.query('delete from users');
 
         const user = rowsOf<{ id: string }>(await db.query(
-            `insert into users (handle, display_name, hue, kind) values ('tidy', 'Tidy', 1, 'guest') returning id`
+            `insert into users (handle, display_name, hue) values ('tidy', 'Tidy', 1) returning id`
         ))[0].id;
 
         await db.query(

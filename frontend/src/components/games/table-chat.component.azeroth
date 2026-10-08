@@ -16,7 +16,6 @@ import { plainOf } from '../../lib/markdown.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { ludoOf } from '../../data/match.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -53,7 +52,6 @@ export default component TableChat(props: {
     const people = usePeople();
     const seal = useSeal();
     const devices = useDevices();
-    const account = useAccount();
     const toasts = useToasts();
     const overlay = useOverlay();
     const voice = useVoice();
@@ -170,7 +168,6 @@ export default component TableChat(props: {
         sealability: seal.sealability(),
         readiness: devices.readiness(),
         known: devices.known(),
-        isWallet: account.isWallet(),
         pending: seal.loading()
     });
 

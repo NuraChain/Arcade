@@ -28,7 +28,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'nfts.failed': 'NFTهایت خوانده نشد',
     'nfts.empty': 'این کیف پول NFT ندارد',
     'nfts.emptyLead': 'هر چیزی که این کیف پول روی {chain} جمع کند اینجا می‌آید.',
-    'nfts.guest': 'حساب مهمان کیف پول ندارد، پس NFT هم ندارد.',
     'nfts.off': 'این سرور NFTها را از زنجیره نمی‌خواند.',
     'record.won': 'بردها',
     'record.winRate': 'نرخ برد',
@@ -97,10 +96,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
 
     'me.shared': 'لینک پروفایل کپی شد',
     'me.settings': 'تنظیمات',
-    'me.keepSeat.title': 'این صندلی، همین مرورگر است.',
-    'me.keepSeat.lead': 'صندلی مهمان کیف پولی پشتش ندارد، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی روی دستگاه دیگری دنبالت می‌آید. بعد از خروج هیچ راهی به حساب مهمان برنمی‌گردد — و ورود با کیف پول یک حساب تازه می‌سازد، نه اینکه این یکی را جابه‌جا کند.',
-    'me.signOut.guestTitle': 'از این صندلی مهمان خارج می‌شوی؟',
-    'me.signOut.guestLead': 'بعد از خروج هیچ راهی به این حساب مهمان برنمی‌گردد. این نام، این دوستان و همهٔ نتیجه‌ها همراه آن همین‌جا می‌مانند.',
 
     'settings.title': 'تنظیمات',
     'settings.lead': 'حسابت، اینکه چه کسی می‌تواند به تو برسد، و رفتار این دستگاه.',
@@ -111,11 +106,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.appearance': 'ظاهر',
 
     'settings.account.wallet': 'ورود با {wallet}',
-    'settings.account.demo': 'صندلی مهمان',
-    'settings.account.demoLead': 'کیف پولی در کار نیست، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی به دستگاه دیگری دنبالت می‌آید. خروج، این صندلی را برای همیشه تمام می‌کند.',
     'settings.account.network': 'شبکه',
     'settings.account.disconnect': 'قطع اتصال',
-    'settings.account.signOut': 'خروج',
 
     'settings.safety.blocked': 'مسدودشده‌ها',
     'settings.safety.blockedLead': 'افراد مسدودشده نمی‌توانند به تو پیام بدهند، دعوتت کنند، سر میزت بنشینند یا تو را در جست‌وجو پیدا کنند. هیچ سقفی هم ندارد.',
@@ -202,8 +194,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'devices.attested.walletHint': 'با امضای کیف پولِ همین حساب ثابت شده.',
     'devices.attested.contract': 'کیف پول قراردادی',
     'devices.attested.contractHint': 'روی زنجیره، با قرارداد کیف پولِ همین حساب ثابت شده.',
-    'devices.attested.server': 'همین سرور',
-    'devices.attested.serverHint': 'کسی برایش امضا نکرده. اینجاست چون وارد شده بود — حساب مهمان کیف پولی ندارد که با آن ثابت شود.',
 
     'chain.published': 'نوشته شد. حالا دفتر همان را می‌گوید که این صفحه می‌گوید.',
     'chain.rejected': 'چیزی فرستاده نشد. در کیف پول ردش کردی.',

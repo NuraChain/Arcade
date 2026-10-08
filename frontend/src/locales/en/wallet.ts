@@ -14,7 +14,7 @@ export const wallet = {
     'wallet.noGas': 'No gas, no transaction',
     'wallet.selfCustody': 'Your keys stay yours',
     'wallet.install': 'Install MetaMask',
-    'wallet.installLead': 'No wallet in this browser yet. Any browser wallet works — MetaMask takes about a minute — or look around as a guest below.',
+    'wallet.installLead': 'No wallet in this browser yet. Any browser wallet works — MetaMask takes about a minute.',
     'wallet.learn': 'What is {chain}?',
     'wallet.error.rejected': 'You turned that down. Nothing happened.',
     'wallet.error.pending': 'Your wallet is already asking. Open it and answer.',
@@ -24,8 +24,6 @@ export const wallet = {
     'wallet.error.unavailable': 'Couldn’t reach the server. Try again in a moment.',
     'wallet.error.unknown': 'That didn’t work. Try again.',
     'wallet.retry': 'Try again',
-    'wallet.guestTitle': 'Just looking around?',
-    'wallet.guestLead': 'Pick a name and sit down. You can connect a wallet whenever you want to keep the seat.',
     'wallet.address': 'Wallet address',
     'wallet.address.copy': 'Copy wallet address',
     'wallet.address.copied': 'Wallet address copied',
@@ -40,7 +38,6 @@ export const wallet = {
     'wallet.qrOf': 'QR code for {url}',
     'wallet.copyLink': 'Copy link',
     'wallet.linkCopied': 'Link copied',
-    'wallet.otherWays': 'Sit down as a guest instead',
     'wallet.thisPhone': 'This phone',
     'wallet.thisBrowser': 'This browser'
 };

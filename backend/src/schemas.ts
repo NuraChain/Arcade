@@ -260,14 +260,10 @@ export interface Pulse
 
 /* -------------------------------------------------------------------------- identity */
 
-export const accountKind = enumOf(['wallet', 'guest']);
-
 /**
  * The signed-in account, as the browser sees it.
  *
- * `kind` is here because the UI must be able to tell the truth about how much an identity
- * proves: a wallet account signed a challenge, a guest typed a name. Anything that renders a
- * verification badge reads this.
+ * Every account signed a challenge with a wallet key, which is the only way an identity exists.
  */
 export const account = object({
     id: string(),
@@ -276,14 +272,12 @@ export const account = object({
     bio: string(),
     avatar: string().optional(),
     hue: number(),
-    kind: accountKind,
     isMinor: boolean(),
     joinedAt: string().optional(),
 
     /**
-     * The wallet this account signs in with, when it has one. Absent for a guest, and absent
-     * for a wallet account only while the link is being written - the UI renders it as
-     * "no wallet linked" rather than assuming.
+     * The wallet this account signs in with. Absent only while the link is being written - the
+     * UI renders it as "no wallet linked" rather than assuming.
      */
     address: string().optional(),
     admin: boolean().optional()
@@ -324,8 +318,6 @@ export const walletSignIn = object({
         label: string({ trim: true, max: 64 })
     }).optional()
 });
-
-export const guestSignIn = object({ name: string({ trim: true, nonempty: true, max: 64 }) });
 
 /** Claiming a different @handle. The unique index arbitrates, exactly as it does at creation. */
 export const handleInput = object({ handle: string({ trim: true, min: 2, max: 32 }) });
@@ -438,12 +430,11 @@ export const langQuery = object({ lang: string({ trim: true, max: 32 }).optional
 /**
  * Who vouched for a device, as a closed set.
  *
- * `server` means NOBODY did: a guest account has no wallet to sign with, so the row says the
- * device is theirs on the strength of the session and nothing else. It is a required field on the
- * wire and a required prop on the badge for the same reason - a device that cannot be proven must
- * not be able to render as a proven one by leaving the question out.
+ * It is a required field on the wire and a required prop on the badge: every device carries a
+ * wallet proof, and a device that cannot be proven must not be able to render as one by leaving
+ * the question out.
  */
-export const attestation = enumOf(['wallet', 'contract', 'server']);
+export const attestation = enumOf(['wallet', 'contract']);
 
 export type Attestation = Infer<typeof attestation>;
 
@@ -486,17 +477,16 @@ export const deviceRef = object({ id: string() });
 /**
  * What enrolment sends.
  *
- * `nonce` and `signature` travel together or not at all: a wallet account must prove the device
- * with the wallet on it, and a guest account has nothing to prove it with. The server decides
- * which case applies from the account, never from what the caller chose to send.
+ * `nonce` and `signature` are required: every account proves a device with the wallet on it, and
+ * the server refuses an enrolment that arrives without one rather than attesting it itself.
  */
 export const enrolInput = object({
     id: string({ max: 22 }),
     exchangeKey: string({ max: 512 }),
     signingKey: string({ max: 512 }),
     label: string({ trim: true, max: 64 }),
-    nonce: string().optional(),
-    signature: string().optional()
+    nonce: string(),
+    signature: string()
 });
 
 export const deviceLabelInput = object({ label: string({ trim: true, max: 64 }) });
@@ -607,8 +597,7 @@ export type PeerDevice = Infer<typeof peerDevice>;
  *
  * `devices` is empty rather than absent when somebody has none, because the client has to tell
  * "nobody on the other side can read this" from "I have not loaded the other side yet", and a
- * missing key cannot say that. `kind` is here so the reason can be specific: a guest has no
- * wallet, so a guest has no sealable device, and the UI says which of those it is looking at.
+ * missing key cannot say that.
  */
 export const conversationMember = object({
     /**
@@ -622,10 +611,9 @@ export const conversationMember = object({
     accountId: string(),
 
     handle: string(),
-    kind: accountKind,
 
     /**
-     * The wallet this account signs in with. Absent for a guest, who has none.
+     * The wallet this account signs in with.
      *
      * It is what anchors a device attestation to a PERSON, and it is shown so it can be compared out
      * of band the way a safety number is. Without it the attestation chain terminates in an address

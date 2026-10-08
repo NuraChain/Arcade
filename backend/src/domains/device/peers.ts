@@ -1,6 +1,5 @@
 import type { DataSource } from 'typeorm';
 
-import type { AccountKind } from '../../entities/user.entity.ts';
 import { rowsOf } from '../../lib/rows.ts';
 
 /**
@@ -16,13 +15,10 @@ import { rowsOf } from '../../lib/rows.ts';
  * So the shape is the minimum sealing needs and nothing else: the two public keys, the id they
  * hash to, and the proof that the wallet on that account authorised them.
  *
- * Two filters, and each one is a rule rather than a tidy-up:
+ * One filter, and it is a rule rather than a tidy-up:
  *
  * - **Revoked devices are absent.** Wrapping a key to a device somebody has signed out is the one
  *   thing revocation exists to prevent.
- * - **Server-attested devices are absent.** There is no proof to travel with them, so a peer
- *   cannot check them at all. A guest has no wallet, so a guest has no sealable device - that is
- *   a product decision, and the empty array is how the client learns it and says so.
  *
  * A member with no sealable device comes back with an EMPTY array rather than being left out. The
  * client has to be able to tell "nobody on the other side can read this" from "I have not loaded
@@ -47,9 +43,8 @@ export interface PeerDeviceRow
 {
     account_id: string;
     handle: string;
-    kind: AccountKind;
 
-    /** The wallet this account signs in with. Null for a guest, who has none. */
+    /** The wallet this account signs in with. */
     wallet_address: string | null;
 
     device_id: string | null;
@@ -105,7 +100,6 @@ export function createPeerDevices(db: DataSource)
             const rows = await db.query(
                 `select u.id           as account_id,
                         u.handle::text as handle,
-                        u.kind::text   as kind,
                         (select w.address::text from wallets w
                           where w.user_id = u.id
                           order by w.created_at

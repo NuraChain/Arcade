@@ -7,13 +7,13 @@ import AchievementLadderSheet from '../src/components/social/achievement-ladder-
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
-import { useAccount } from '../src/stores/account.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
 import type { AchievementFamily, MatchHistoryEntry } from '../src/api.ts';
-import { client, server } from './fake-api.ts';
+import { client, establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -63,7 +63,7 @@ beforeEach(async () =>
     useCatalogue().reset();
     useRecord().reset();
     useOverlay().reset();
-    await useAccount().signIn('Alex');
+    useSession().establish(establishAccount());
     server.achievements = {
         scopes: [
             { earned: 40, total: 1000 },

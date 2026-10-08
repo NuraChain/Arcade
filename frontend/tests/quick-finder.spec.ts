@@ -32,7 +32,17 @@ const opened = (game: GameId) =>
     const closed: unknown[] = [];
     const router = createRouter({
         routes: [
-            { path: '/', component: () => QuickFinder({ overlayId: 'quick-finder', close: (result?: unknown) => { closed.push(result); }, game }) as HTMLElement },
+            {
+                path: '/',
+                component: () => QuickFinder({
+                    overlayId: 'quick-finder',
+                    close: (result?: unknown) =>
+                    {
+                        closed.push(result);
+                    },
+                    game
+                }) as HTMLElement
+            },
             { path: '/app/play/:id', component: () => document.createElement('div') }
         ],
         history: createMemoryHistory('/'),
@@ -101,7 +111,7 @@ beforeEach(async () =>
     socket.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useSettings().reset();
     useToasts().reset();
     useLobby().reset();

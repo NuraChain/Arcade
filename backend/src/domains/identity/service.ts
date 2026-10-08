@@ -5,13 +5,12 @@ import type { DataSource } from 'typeorm';
 
 import type { Principal } from '../../http/auth.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '../../lib/crypto.ts';
-import type { AccountKind } from '../../entities/user.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { Avatar } from '../../entities/avatar.entity.ts';
 import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import { AVATAR_MAX_BYTES, avatarHashOf, avatarUrl, sniffAvatar } from './avatar.ts';
-import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from './handle.ts';
+import { candidatesFor, checkHandle, handleFromAddress, normalizeHandle } from './handle.ts';
 import { signInText, verifySignature } from './signature.ts';
 
 /** Five minutes. A signature older than this is refused however valid it is. */
@@ -37,7 +36,6 @@ interface UserRow
     display_name: string;
     bio: string;
     hue: number;
-    kind: AccountKind;
     is_minor: boolean;
     is_suspended: boolean;
 }
@@ -48,7 +46,7 @@ export interface ProfileRow extends UserRow
 
     created_at: Date;
 
-    /** The most recently used linked wallet, or null. A guest has none. */
+    /** The most recently used linked wallet. */
     address: string | null;
 }
 
@@ -81,7 +79,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
     const insertUser = async (
         wanted: string,
         displayName: string,
-        kind: AccountKind,
         hue: number
     ): Promise<UserRow> =>
     {
@@ -91,10 +88,10 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             try
             {
                 const inserted = await db.query(
-                    `insert into users (handle, display_name, hue, kind)
-                     values ($1, $2, $3, $4)
-                     returning id, handle, display_name, bio, hue, kind, is_minor, is_suspended`,
-                    [candidate, displayName, hue, kind]
+                    `insert into users (handle, display_name, hue)
+                     values ($1, $2, $3)
+                     returning id, handle, display_name, bio, hue, is_minor, is_suspended`,
+                    [candidate, displayName, hue]
                 );
                 return rowsOf<UserRow>(inserted)[0];
             }
@@ -112,7 +109,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
     const principalOf = (row: UserRow, sessionId: string): Principal => ({
         userId: row.id,
         handle: row.handle,
-        kind: row.kind,
         isMinor: row.is_minor,
         sessionId
     });
@@ -142,7 +138,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         {
             const rows = await db.query(
                 `with found as (
-                     select u.id, u.handle, u.display_name, u.bio, u.hue, u.kind, u.is_minor,
+                     select u.id, u.handle, u.display_name, u.bio, u.hue, u.is_minor,
                             u.is_suspended, s.id as session_id
                      from sessions s
                      join users u on u.id = s.user_id
@@ -156,7 +152,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                       where id = (select session_id from found)
                         and (last_used_at is null or last_used_at < now() - interval '1 hour')
                  )
-                 select id, handle, display_name, bio, hue, kind, is_minor, is_suspended, session_id from found`,
+                 select id, handle, display_name, bio, hue, is_minor, is_suspended, session_id from found`,
                 [hashToken(token)]
             );
 
@@ -252,7 +248,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             }
 
             const existing = await db.query(
-                `select u.id, u.handle, u.display_name, u.bio, u.hue, u.kind, u.is_minor, u.is_suspended
+                `select u.id, u.handle, u.display_name, u.bio, u.hue, u.is_minor, u.is_suspended
                  from wallets w join users u on u.id = w.user_id
                  where w.address = $1`,
                 [address]
@@ -262,7 +258,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             if (user === undefined)
             {
                 const hue = Number.parseInt(address.slice(2, 8), 16) % 360;
-                user = await insertUser(handleFromAddress(address), `${ address.slice(0, 6) }…${ address.slice(-4) }`, 'wallet', hue);
+                user = await insertUser(handleFromAddress(address), `${ address.slice(0, 6) }…${ address.slice(-4) }`, hue);
 
                 await db.query(
                     `insert into wallets (user_id, address, chain_id, provider_rdns, attestation, last_used_at)
@@ -281,39 +277,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 principal: principalOf(user, sessionId),
                 proof: { attested: verdict.attestation, address, message: challenge.message, signature: input.signature }
             };
-        },
-
-        /**
-         * The guest path: a typed name, no proof of anything.
-         *
-         * Kept first-class because it is the ACTUAL onboarding - a browser with no wallet is the
-         * normal case - and marked `guest` so nothing that needs real identity mistakes it for
-         * one. The device attestation work in the E2EE PRs reads this column.
-         */
-        async signInAsGuest(input: { name: string; userAgent: string }): Promise<SignedIn>
-        {
-            const name = input.name.trim();
-            if (name.length === 0)
-            {
-                throw new BadRequestError('Pick a name to play under.');
-            }
-
-            const wanted = handleFromName(name);
-            const refusal = checkHandle(wanted);
-            if (refusal === 'reserved')
-            {
-                throw new ConflictError('That name is reserved. Try another.');
-            }
-            if (refusal !== null)
-            {
-                throw new BadRequestError('A name is 2-32 letters or digits, and may contain . _ - inside.');
-            }
-
-            const hue = [...name].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
-            const user = await insertUser(wanted, name.slice(0, 64), 'guest', hue);
-
-            const { token, sessionId } = await openSession(user.id, input.userAgent);
-            return { token, principal: principalOf(user, sessionId) };
         },
 
         /** Every live session id for an account, so the gateway can close each one by code. */
@@ -388,7 +351,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 .addSelect('u.bio', 'bio')
                 .addSelect('u.avatar', 'avatar')
                 .addSelect('u.hue', 'hue')
-                .addSelect('u.kind', 'kind')
                 .addSelect('u.is_minor', 'is_minor')
                 .addSelect('u.is_suspended', 'is_suspended')
                 .addSelect('u.created_at', 'created_at')

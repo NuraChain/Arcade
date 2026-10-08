@@ -100,10 +100,10 @@ export function titleOf(
  *
  * `post` carries the sealing failure and the member it names as data (`SealFailure`), and every
  * one of those states already has its own honest sentence in the locales - the same sentences the
- * `SealNotice` above the composer shows. This maps one to the other, so a room that holds a guest
- * says the guest is why, instead of the one generic line that blamed nobody. Anything the sealing
- * layer did not type - a network fault, a refused envelope - stays on `chat.sealedOnly`, which is
- * the truthful answer for a cause nobody diagnosed.
+ * `SealNotice` above the composer shows. This maps one to the other, so a room that holds somebody
+ * without a device says who is why, instead of the one generic line that blamed nobody. Anything
+ * the sealing layer did not type - a network fault, a refused envelope - stays on
+ * `chat.sealedOnly`, which is the truthful answer for a cause nobody diagnosed.
  */
 export function sealSentenceOf(
     error: unknown,
@@ -139,7 +139,6 @@ export function sealSentenceOf(
 
     switch (who.state)
     {
-        case 'no-wallet': return translate(who.isMe ? 'seal.noWalletMine' : 'seal.noWallet', { who: who.handle });
         case 'no-device': return translate(who.isMe ? 'seal.noDeviceMine' : 'seal.noDevice', { who: who.handle });
         case 'needs-chain': return translate(who.isMe ? 'seal.needsChainMine' : 'seal.needsChain', { who: who.handle });
         case 'tampered': return translate(who.isMe ? 'seal.tamperedMine' : 'seal.tampered', { who: who.handle });
