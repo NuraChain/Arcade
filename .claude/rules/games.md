@@ -2903,6 +2903,22 @@ again. `play.spec.ts` opens the page as somebody watching, which no spec did - t
 no answer for a watch at all, so that page had only ever been drawn failing - and presses an empty
 chair as the host.
 
+**The waiting room is fetched too, and asked for early.** `lobby-panel` and the chair cards under it
+are a chunk of 3.4 KB: somebody who arrives at a game already on the board never needed them, and the
+route chunk was back at 14.7 of its 15 KB with the removal control and the call's header controls in
+it. It is 12.5 now. A chunk asked for only once the table had answered would draw the header and
+then, a round trip later, the chairs, on the one screen every quick player sees first. So the page
+asks for it as soon as ANYTHING says the reader sits at this table with no game on: the table
+itself, or the reader's own list (`lobby.seated()`), which a create, a quick play and a claim have
+each read again before they navigate. Measured on the production build after "Find a game": the list
+answers at 65 ms, the route chunk at 81, the waiting room is asked for at 89 and the table at 90, and
+the waiting room has arrived at 94, four milliseconds before the table it will draw. After a hard
+reload it is asked for the moment the list answers, a millisecond before the table does. It is asked
+for once; one that will not come goes the way of every lost chunk (`frontend/CLAUDE.md`, *A part of
+the app that would not load*), and its complaint is drawn under the table's header and goes when a
+game takes the page. `play-chunks.spec.ts` mounts the page with a waiting room and a watcher's board
+that never arrive - a module mock that throws - and counts the asks.
+
 **`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
 shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise
 at a real table, clockwise on a screen looking down at one - so the next seat is drawn to the reader's

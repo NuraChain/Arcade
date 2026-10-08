@@ -1582,6 +1582,44 @@ describe('PlayPage', () =>
             expect(container.querySelector('h1')).toBe(heading);
         });
 
+        it('gives a player the game in place of the waiting room when it starts, and keeps the header it had', async () =>
+        {
+            const { id, container, lobby, held } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+            const matches = client.matches as unknown as Record<string, unknown>;
+
+            matches.view = async () => ({
+                id: 'match-11',
+                tableId: id,
+                game: 'chess',
+                rev: 1,
+                seats: 4,
+                players: [],
+                turn: 0,
+                mine: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo' }
+            });
+
+            try
+            {
+                held.matchId = 'match-11';
+                await lobby.refresh();
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+                expect(lobbyOf(container)).toBeNull();
+                expect(container.querySelector('h1')).toBe(heading);
+            }
+            finally
+            {
+                delete matches.view;
+            }
+        });
+
         it('draws the board somebody is watching, a while behind, once the page has fetched it', async () =>
         {
             const { container, lobby, held } = await opened('omid.k');

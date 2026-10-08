@@ -2,7 +2,6 @@ import { Dynamic, type MountNode, onCleanup, untrack, useHead, useNavigate, useP
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
-import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import PlayHeader from '../../components/games/play-header.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
@@ -28,7 +27,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { TOAST_ACTION_DURATION, useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
-import type { MatchView, MatchWatch } from '../../api.ts';
+import type { MatchView, MatchWatch, TableSummary } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
@@ -81,6 +80,14 @@ export default component PlayPage()
     state watchReady = false;
 
     state watchLost = false;
+
+    let Lobby: ((props: { table: TableSummary; onInvite: () => void; onCopyLink: () => void; onLeave: () => void }) => MountNode) | null = null;
+
+    let lobbyAsked = false;
+
+    state lobbyReady = false;
+
+    state lobbyLost = false;
 
     let talk: Record<string, string> = {};
 
@@ -664,6 +671,28 @@ export default component PlayPage()
         }
     }
 
+    const drawLobby = () =>
+    {
+        lobbyAsked = true;
+
+        void chunk(() => import('../../components/games/lobby-panel.component.azeroth'))().then((module) =>
+        {
+            Lobby = module.default;
+            lobbyReady = true;
+        }).catch(() =>
+        {
+            lobbyLost = true;
+        });
+    };
+
+    effect
+    {
+        if (!lobbyAsked && (lobbyOpen || lobby.seated().some((one) => one.id === mine && one.matchId === undefined)))
+        {
+            drawLobby();
+        }
+    }
+
     const invite = (tableId: string) =>
     {
         void import('../../components/games/invite-sheet.component.azeroth')
@@ -960,15 +989,22 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ lobbyOpen }>
+                    <Show when={ lobbyOpen && lobbyReady }>
                         { () =>
-                            <LobbyPanel
-                                table={ shown }
-                                onInvite={ () => invite(shown.id) }
-                                onCopyLink={ () => void copyLink() }
-                                onLeave={ () => void leave(null) }
+                            <Dynamic
+                                component={ Lobby! }
+                                props={ () => ({
+                                    table: shown,
+                                    onInvite: () => invite(shown.id),
+                                    onCopyLink: () => void copyLink(),
+                                    onLeave: () => void leave(null)
+                                }) }
                             />
                         }
+                    </Show>
+
+                    <Show when={ lobbyOpen && lobbyLost }>
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
                     </Show>
 
                     <Show when={ standing }>
