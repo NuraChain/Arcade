@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
+import GroupCard from '../src/components/social/group-card.component.azeroth';
 import GroupForm from '../src/components/social/group-form.component.azeroth';
 import { CRESTS, crestOf } from '../src/data/crests.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -389,5 +390,46 @@ describe('the group form', () =>
             .filter((button) => button.getAttribute('aria-label')?.startsWith('Crest') === true);
 
         expect(buttons.length).toBe(CRESTS.length);
+    });
+});
+
+describe('a group\'s card', () =>
+{
+    const drawn = (changes: Partial<(typeof server.groups)[number]> = {}) =>
+    {
+        const group = { ...server.groups[0], ...changes };
+        const routes: Route[] = [{ path: '/app/friends', component: (): HTMLElement => GroupCard({ group }) as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/friends'), scroll: false });
+
+        return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement).container;
+    };
+
+    const online = (who: string) =>
+    {
+        useRealtime().start();
+        socket.accept();
+        socket.deliver({ v: 1, t: 'presence', n: 2, full: true, people: [{ who, state: 'online', since: clock.now() }] });
+    };
+
+    it.each(['en', 'fa'] as const)('sets its facts apart with a drawn dot, never a character a Persian reader takes for a zero, in %s', (language) =>
+    {
+        useLocale().setLocale(language);
+        online(server.groups[0].members[0]);
+
+        const container = drawn({ game: 'hokm' });
+        const facts = container.querySelector('[data-facts]')!;
+
+        expect(facts.textContent).not.toContain('·');
+        expect(facts.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+        expect(facts.textContent).toContain(useLocale().t('games.hokm.name'));
+    });
+
+    it('draws no dot before a fact that is not there', () =>
+    {
+        const container = drawn({ game: undefined });
+        const facts = container.querySelector('[data-facts]')!;
+
+        expect(facts.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+        expect(facts.textContent).not.toContain('·');
     });
 });
