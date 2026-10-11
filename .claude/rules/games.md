@@ -3320,11 +3320,16 @@ hints. The owner had every such thing taken off every game on 2026-10-11 (*Every
 the table, and nowhere else*, under *Backgammon*). What is left, and where:
 
 - **A card is played by the card.** A mouse plays on the first click. A finger lifts the card on
-  the first tap and plays it on the second. The lifted card wears a gold ring and a small chevron
-  that bobs above it (`data-go`), which is all that is left of "Tap a card to lift it, then tap it
-  again to play it." The lift under a pointer is inside `@media (hover: hover)`: on a phone
-  `:hover` stays on the last thing tapped, and its rule outranked the lift of a picked card, so a
-  lifted card rose 0.9rem where it should rise 1.6.
+  the first tap and plays it on the second. The lifted card wears a gold ring that breathes
+  (`data-go`, the `bgt-invite` pulse the stock, the drawn card and backgammon's dice wear while
+  they can be pressed), which is all that is left of "Tap a card to lift it, then tap it again
+  to play it." The lift under a pointer is inside `@media (hover: hover)`: on a phone `:hover`
+  stays on the last thing tapped, and its rule outranked the lift of a picked card, so a lifted
+  card rose 0.9rem where it should rise 1.6. At first the sign was a chevron bobbing above the
+  card, and nothing above a lifted card is clear at every size: at 1024 by 768 a card under the
+  reader's own plate put the chevron on the plate. The ring is the card's own outline and
+  reaches nothing the card does not. `fit-pass.mjs` lifts a card in every cell with a coarse
+  pointer and the chat shut, and fails one that does not breathe or whose ring reaches a plate.
 - **The stock and the drawn card are buttons drawn as the things they are**, like ludo's die. Each
   has a name a screen reader reads ("Put these 3 face down", "Take the next card", "Keep the 9 of
   Hearts") and takes a keyboard, and neither exists for a seat with nothing to press. The cards

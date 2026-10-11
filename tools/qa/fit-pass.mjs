@@ -881,6 +881,58 @@ const measure = async (page, rules) => await page.evaluate((given) =>
     return found;
 }, rules);
 
+const lift = async (page) => await page.evaluate(async () =>
+{
+    const tapped = matchMedia('(pointer: coarse)').matches && document.querySelector('.hokm-stock-due') === null;
+    const thing = tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:enabled') : null;
+    const rev = () => document.querySelector('.table-stage')?.getAttribute('data-rev') ?? null;
+    const before = rev();
+
+    if (thing === null)
+    {
+        return [];
+    }
+
+    thing.click();
+
+    await new Promise((done) => setTimeout(done, 400));
+
+    if (rev() !== before)
+    {
+        return [];
+    }
+
+    const lifted = document.querySelector('.card-hold[data-go]');
+
+    if (lifted === null)
+    {
+        return [{ kind: 'lift', what: 'a first press lifted nothing' }];
+    }
+
+    const found = [];
+    const ring = 3;
+    const glow = getComputedStyle(lifted, '::before');
+
+    if (glow.content === 'none' || glow.animationName !== 'bgt-invite')
+    {
+        found.push({ kind: 'lift', what: 'what was lifted does not show that the next press sends it' });
+    }
+
+    for (const face of lifted.querySelectorAll('.card-face'))
+    {
+        const at = face.getBoundingClientRect();
+        const met = [...document.querySelectorAll('.table-plate')].map((plate) => plate.getBoundingClientRect())
+            .find((box) => box.width > 0 && box.left < at.right + ring && box.right > at.left - ring && box.top < at.bottom + ring && box.bottom > at.top - ring);
+
+        if (met !== undefined)
+        {
+            found.push({ kind: 'lift', what: `a lifted card and its ring reach ${ Math.round(met.bottom - at.top + ring) }px into a plate` });
+        }
+    }
+
+    return found;
+});
+
 const cell = async (label, spec, page, url, size, openChat, language, waits, last = true) =>
 {
     const words = LANGUAGES[language];
@@ -907,6 +959,12 @@ const cell = async (label, spec, page, url, size, openChat, language, waits, las
     }
 
     const found = await measure(page, { least: USABLE[spec.game], openChat, half: size.half === true, waits, sides: spec.teams === true });
+
+    if (!openChat)
+    {
+        found.push(...await lift(page));
+    }
+
     const name = `${ label }-${ size.width }x${ size.height }${ openChat ? '-chat' : '' }${ language === 'en' ? '' : `-${ language }` }`;
     const ended = await page.locator('.table-result').count().catch(() => 0) > 0 || await page.locator('.table-stage').count().catch(() => 0) === 0;
 
