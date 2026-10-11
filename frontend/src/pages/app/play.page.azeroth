@@ -19,7 +19,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useWatch } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -614,8 +614,9 @@ export default component PlayPage()
 
     derived rematch = table !== null && seated ? rematchOf(table) : undefined;
 
-    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
+    const boardProps = (): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
         match: board.match()!,
+        events: board.events(),
         starting,
         onAgain: seated ? () => void again() : undefined,
         rematch,

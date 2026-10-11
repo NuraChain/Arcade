@@ -2,6 +2,7 @@ import type { MountNode } from 'azerothjs';
 
 import type { MatchView, TableSummary } from '../../api.ts';
 import { chunk } from '../../lib/chunks.ts';
+import type { EventBatch } from '../../stores/match.store.ts';
 
 export interface Rematch
 {
@@ -27,6 +28,7 @@ export function rematchOf(table: TableSummary): Rematch
 export interface BoardProps
 {
     match: MatchView;
+    events: EventBatch;
     starting?: boolean;
     onAgain?: () => void;
     rematch?: Rematch;

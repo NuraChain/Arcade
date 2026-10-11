@@ -1,4 +1,4 @@
-import { createSound, type Cue } from '../../game/sound.ts';
+import { createSound, type Cue, type SoundHandle } from '../../game/sound.ts';
 import { haptic, type Haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
 import type { EventBatch, MatchEvent } from '../../stores/match.store.ts';
@@ -20,67 +20,9 @@ export interface Seat
 
 type Moves<K extends MatchEvent['log']['kind']> = Extract<MatchEvent['log'], { kind: K }>['moves'];
 
-const DICE_GAP = 40;
-
-const STEP_GAP = 130;
-
 const CARD_GAP = 90;
 
 const CATCH_UP_ACTIONS = 12;
-
-export function backgammonBeats(moves: Moves<'backgammon'>, seat: Seat)
-{
-    const beats: Beat[] = [];
-    let at = 0;
-
-    for (const move of moves)
-    {
-        const mine = seat.mine !== null && move.seat === seat.mine;
-
-        if (move.e === 'roll' || move.e === 'opening')
-        {
-            beats.push({ at, cue: 'die-land' }, { at: at + DICE_GAP, cue: 'die-land', rate: 1.04 });
-            at += 260;
-        }
-        else if (move.e === 'move')
-        {
-            beats.push({ at, cue: move.to === 0 ? 'token-yard' : 'token-step', rate: 1 + (beats.length % 3) * 0.04 });
-
-            if (move.hit === true)
-            {
-                beats.push({ at: at + 60, cue: 'token-capture', buzz: seat.mine === null ? undefined : (mine ? 'capture' : 'hit') });
-            }
-
-            at += STEP_GAP;
-        }
-        else if (move.e === 'pass')
-        {
-            beats.push({ at, cue: 'pass' });
-        }
-        else if (move.e === 'double')
-        {
-            beats.push({ at, cue: 'trump', buzz: mine || seat.mine === null ? undefined : 'ready' });
-        }
-        else if (move.e === 'take')
-        {
-            beats.push({ at, cue: 'bonus' });
-        }
-        else if (move.e === 'drop')
-        {
-            beats.push({ at, cue: 'pass' });
-        }
-        else if (move.e === 'game' && mine)
-        {
-            beats.push({ at: at + 200, cue: 'hand-won', buzz: 'hand' });
-        }
-        else if (move.e === 'finish' && mine)
-        {
-            beats.push({ at: at + 400, cue: 'win', buzz: 'win' });
-        }
-    }
-
-    return beats;
-}
 
 export function pokerBeats(moves: Moves<'poker'>, seat: Seat)
 {
@@ -166,13 +108,29 @@ export interface TableCues
     dispose(): void;
 }
 
+export function turnChime(sound: () => SoundHandle | null)
+{
+    let before: boolean | null = null;
+
+    return (yours: boolean) =>
+    {
+        if (yours && before === false)
+        {
+            sound()?.play('turn', { urgent: true });
+            haptic('ready');
+        }
+
+        before = yours;
+    };
+}
+
 export function tableCues(options: { enabled: boolean; seq: number; match: { id: string; rev: number }; beats: (events: readonly MatchEvent[]) => Beat[] }): TableCues
 {
     const sound = createSound(options.enabled);
+    const chime = turnChime(() => sound);
     let heard = options.seq;
     let id = options.match.id;
     let rev = options.match.rev;
-    let yoursBefore: boolean | null = null;
     let timers: (() => void)[] = [];
 
     return {
@@ -229,16 +187,7 @@ export function tableCues(options: { enabled: boolean; seq: number; match: { id:
             }
         },
 
-        turn(yours)
-        {
-            if (yours && yoursBefore === false)
-            {
-                sound.play('turn', { urgent: true });
-                haptic('ready');
-            }
-
-            yoursBefore = yours;
-        },
+        turn: chime,
 
         setEnabled: (on) => sound.setEnabled(on),
 

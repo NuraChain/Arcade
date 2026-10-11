@@ -30,6 +30,12 @@ export const MIDDLE = HEIGHT / 2;
 
 export const STACK_SHOWN = 5;
 
+export const SLAB = (HEIGHT - FRAME * 2 - 40) / 30;
+
+export const CUBE = 48;
+
+export const BAR_GAP = CUBE / 2 + 2;
+
 export type Row = 'top' | 'bottom';
 
 export interface Column

@@ -7,7 +7,7 @@ import '../src/locales/app-catalogue.ts';
 import { en } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { ACK_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
+import { ACK_MS, MEND_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
 import { NUDGE_WINDOW_MS, PROBE_GRACE_MS, PROBE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { ClientFrame, MatchView, ServerFrame } from '../src/api.ts';
@@ -113,6 +113,7 @@ describe('playing over the socket', () =>
 
         expect(useBoard().match()?.rev).toBe(2);
         expect(useBoard().events().events.map((event) => event.rev)).toEqual([2]);
+        expect(useBoard().events(), 'the answer to a play is what is happening now').toMatchObject({ id: 'match-1', live: true, jump: false });
         expect(http).not.toHaveBeenCalled();
     });
 
@@ -287,6 +288,212 @@ describe('playing over the socket', () =>
 
         expect(useBoard().match()?.rev).toBe(7);
         expect(useBoard().events().seq).toBe(seq);
+    });
+});
+
+describe('what a board is told of a move', () =>
+{
+    const pushed = (n: number, rev: number, events: MatchEvent[]): ServerFrame =>
+        ({ v: 1, t: 'game', n, at: 400_000, match: board(rev, { turn: 1 }), events });
+
+    const later = () =>
+    {
+        const asked: number[] = [];
+        const answers: (() => void)[] = [];
+        const fails: (() => void)[] = [];
+
+        matches.since = async ({ query }: { query: { rev: string } }) =>
+        {
+            const from = Number(query.rev);
+
+            asked.push(from);
+
+            return await new Promise<{ match: MatchView; events: MatchEvent[] }>((resolve, reject) =>
+            {
+                answers.push(() => resolve({ match: board(from + 2, { turn: 1 }), events: [rolled(from + 1), rolled(from + 2)] }));
+                fails.push(() => reject(new ApiError(500, 'internal', 'Something went wrong.', undefined)));
+            });
+        };
+
+        return { asked, answers, fails };
+    };
+
+    it('names the game it happened in, and says a pushed move is live', () =>
+    {
+        socket.deliver(pushed(3, 2, [rolled(2)]));
+
+        expect(useBoard().events()).toMatchObject({ seq: 1, id: 'match-1', live: true, jump: false });
+    });
+
+    it('says what it read to catch up is not live', async () =>
+    {
+        matches.since = async () => ({ match: board(3, { turn: 1 }), events: [rolled(2), rolled(3)] });
+
+        clock.advance(NUDGE_WINDOW_MS);
+        socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'game', id: 'match-1', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(useBoard().match()?.rev).toBe(3), { timeout: 2000 });
+
+        expect(useBoard().events()).toMatchObject({ id: 'match-1', live: false, jump: false });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([2, 3]);
+    });
+
+    it('keeps back an event for a move the board in hand has not reached', () =>
+    {
+        socket.deliver(pushed(3, 2, [rolled(2), rolled(3)]));
+
+        expect(useBoard().match()?.rev).toBe(2);
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([2]);
+
+        socket.deliver(pushed(4, 3, [rolled(3)]));
+
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([3]);
+    });
+
+    it('holds the board back while it reads the move it missed, and then hands both over together', async () =>
+    {
+        const since = later();
+        const seen: { rev: number; seq: number }[] = [];
+        const stop = createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                seen.push({ rev: useBoard().match()?.rev ?? -1, seq: useBoard().events().seq });
+            });
+
+            return dispose;
+        });
+
+        seen.length = 0;
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+
+        expect(since.asked).toEqual([1]);
+        expect(useBoard().match()?.rev, 'the board moved before anybody knew why').toBe(1);
+        expect(seen).toEqual([]);
+
+        since.answers[0]();
+        await settle();
+        stop();
+
+        expect(seen).toEqual([{ rev: 3, seq: 1 }]);
+        expect(useBoard().events()).toMatchObject({ id: 'match-1', live: false, jump: false });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([2, 3]);
+    });
+
+    it('takes the move it was missing from a push that arrives while it is reading, and nothing twice', async () =>
+    {
+        const since = later();
+
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+        socket.deliver(pushed(4, 2, [rolled(2)]));
+
+        expect(useBoard().match()?.rev).toBe(2);
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([2]);
+
+        since.answers[0]();
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events().seq).toBe(2);
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([3]);
+    });
+
+    it('reads again when another move went missing while it was reading', async () =>
+    {
+        const since = later();
+
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+        socket.deliver(pushed(4, 5, [rolled(5)]));
+        await settle();
+
+        expect(since.asked, 'a second read was sent while the first was out').toEqual([1]);
+
+        since.answers[0]();
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(since.asked).toEqual([1, 3]);
+
+        since.answers[1]();
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(5);
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([4, 5]);
+    });
+
+    it('says the board jumped when the move it missed cannot be read', async () =>
+    {
+        const since = later();
+
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+        since.fails[0]();
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events()).toMatchObject({ seq: 1, id: 'match-1', jump: true, live: false });
+        expect(useBoard().events().events).toEqual([]);
+
+        socket.deliver(pushed(4, 4, [rolled(4)]));
+
+        expect(useBoard().events()).toMatchObject({ seq: 2, jump: false, live: true });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([4]);
+    });
+
+    it('says nothing of a jump when the read fails after a push has already brought every move', async () =>
+    {
+        const since = later();
+
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+        socket.deliver(pushed(4, 3, [rolled(2), rolled(3)]));
+
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events()).toMatchObject({ seq: 1, live: true, jump: false });
+
+        since.fails[0]();
+        await settle();
+
+        expect(useBoard().events(), 'a board that was told every move was told it had jumped').toMatchObject({ seq: 1, live: true, jump: false });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([2, 3]);
+    });
+
+    it('does not wait for ever on the read: the newest board it was sent is shown, as a jump', async () =>
+    {
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        const since = later();
+
+        socket.deliver(pushed(3, 3, [rolled(3)]));
+        await settle();
+        socket.deliver(pushed(4, 6, [rolled(6)]));
+        await settle();
+
+        expect(since.asked).toEqual([1]);
+        expect(useBoard().match()?.rev).toBe(1);
+
+        clock.advance(MEND_MS - 1);
+        await settle();
+
+        expect(useBoard().match()?.rev, 'the board gave up on the read early').toBe(1);
+
+        clock.advance(1);
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(6);
+        expect(useBoard().events()).toMatchObject({ seq: 1, id: 'match-1', jump: true, live: false });
+        expect(since.asked, 'a read was sent for a board that had already been shown').toEqual([1]);
+
+        since.answers[0]();
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(6);
+        expect(useBoard().events().seq, 'the read that was given up on was heard after all').toBe(1);
     });
 });
 

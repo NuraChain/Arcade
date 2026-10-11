@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { backgammonBeats, pokerBeats, tableCues } from '../src/components/games/table-cues.ts';
+import { pokerBeats, tableCues, turnChime } from '../src/components/games/table-cues.ts';
+import type { SoundHandle } from '../src/game/sound.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import type { MatchEvent } from '../src/stores/match.store.ts';
+import { NO_EVENTS, type MatchEvent } from '../src/stores/match.store.ts';
 
 const cues = (beats: { cue?: string }[]): (string | undefined)[] => beats.map((beat) => beat.cue);
 
@@ -18,41 +19,6 @@ beforeEach(() =>
 afterEach(() =>
 {
     resetRuntime();
-});
-
-describe('backgammon sounds like its pieces', () =>
-{
-    it('lands both dice, the second a moment after the first', () =>
-    {
-        const beats = backgammonBeats([{ e: 'roll', seat: 1, dice: [2, 5] }], { mine: 0, seats: 2 });
-
-        expect(cues(beats)).toEqual(['die-land', 'die-land']);
-        expect(beats[1].at).toBeGreaterThan(beats[0].at);
-    });
-
-    it('steps each checker, and a hit thuds and buzzes whoever it concerns', () =>
-    {
-        const moves = [
-            { e: 'move' as const, seat: 0, from: 13, to: 10, die: 3, hit: false },
-            { e: 'move' as const, seat: 0, from: 10, to: 6, die: 4, hit: true }
-        ];
-
-        expect(cues(backgammonBeats(moves, { mine: 0, seats: 2 }))).toEqual(['token-step', 'token-step', 'token-capture']);
-        expect(backgammonBeats(moves, { mine: 0, seats: 2 }).at(-1)?.buzz).toBe('capture');
-        expect(backgammonBeats(moves, { mine: 1, seats: 2 }).at(-1)?.buzz).toBe('hit');
-        expect(backgammonBeats(moves, { mine: null, seats: 2 }).at(-1)?.buzz).toBeUndefined();
-    });
-
-    it('bears off onto the tray with a softer sound', () =>
-    {
-        expect(cues(backgammonBeats([{ e: 'move', seat: 0, from: 3, to: 0, die: 3, hit: false }], { mine: 0, seats: 2 }))).toEqual(['token-yard']);
-    });
-
-    it('celebrates only the reader\'s own win', () =>
-    {
-        expect(cues(backgammonBeats([{ e: 'finish', seat: 0 }], { mine: 0, seats: 2 }))).toEqual(['win']);
-        expect(cues(backgammonBeats([{ e: 'finish', seat: 1 }], { mine: 0, seats: 2 }))).toEqual([]);
-    });
 });
 
 describe('poker sounds like cards and chips', () =>
@@ -90,10 +56,10 @@ describe('a table\'s cues', () =>
         const beats = vi.fn(() => []);
         const table = tableCues({ enabled: false, seq: 3, match: { id: 'm', rev: 5 }, beats });
 
-        table.hear({ seq: 3, events: [event(5)] }, { id: 'm', rev: 5 });
+        table.hear({ ...NO_EVENTS, seq: 3, events: [event(5)] }, { id: 'm', rev: 5 });
         expect(beats).not.toHaveBeenCalled();
 
-        table.hear({ seq: 4, events: [event(6)] }, { id: 'm', rev: 6 });
+        table.hear({ ...NO_EVENTS, seq: 4, events: [event(6)] }, { id: 'm', rev: 6 });
         expect(beats).toHaveBeenCalledTimes(1);
 
         table.dispose();
@@ -104,7 +70,7 @@ describe('a table\'s cues', () =>
         const beats = vi.fn(() => []);
         const table = tableCues({ enabled: false, seq: 0, match: { id: 'm', rev: 5 }, beats });
 
-        table.hear({ seq: 1, events: [event(9)] }, { id: 'm', rev: 9 });
+        table.hear({ ...NO_EVENTS, seq: 1, events: [event(9)] }, { id: 'm', rev: 9 });
 
         expect(beats).not.toHaveBeenCalled();
         table.dispose();
@@ -115,8 +81,8 @@ describe('a table\'s cues', () =>
         const beats = vi.fn(() => []);
         const table = tableCues({ enabled: false, seq: 0, match: { id: 'old', rev: 90 }, beats });
 
-        table.hear({ seq: 1, events: [event(1)] }, { id: 'new', rev: 1 });
-        table.hear({ seq: 2, events: [event(2)] }, { id: 'new', rev: 2 });
+        table.hear({ ...NO_EVENTS, seq: 1, events: [event(1)] }, { id: 'new', rev: 1 });
+        table.hear({ ...NO_EVENTS, seq: 2, events: [event(2)] }, { id: 'new', rev: 2 });
 
         expect(beats).toHaveBeenCalledTimes(1);
         table.dispose();
@@ -127,9 +93,61 @@ describe('a table\'s cues', () =>
         const beats = vi.fn(() => []);
         const table = tableCues({ enabled: false, seq: 0, match: { id: 'm', rev: 0 }, beats });
 
-        table.hear({ seq: 1, events: Array.from({ length: 13 }, (_, index) => event(index + 1)) }, { id: 'm', rev: 13 });
+        table.hear({ ...NO_EVENTS, seq: 1, events: Array.from({ length: 13 }, (_, index) => event(index + 1)) }, { id: 'm', rev: 13 });
 
         expect(beats).not.toHaveBeenCalled();
         table.dispose();
+    });
+});
+
+describe('the chime for a turn', () =>
+{
+    const handle = () =>
+    {
+        const played: string[] = [];
+        const sound: SoundHandle = {
+            play: (cue) =>
+            {
+                played.push(cue);
+            },
+            setEnabled: () => undefined,
+            dispose: () => undefined
+        };
+
+        return { played, sound };
+    };
+
+    it('rings when the turn becomes the reader\'s, and not when it already was', () =>
+    {
+        const { played, sound } = handle();
+        const chime = turnChime(() => sound);
+
+        chime(true);
+        expect(played).toEqual([]);
+
+        chime(false);
+        chime(true);
+        chime(true);
+        expect(played).toEqual(['turn']);
+
+        chime(false);
+        chime(true);
+        expect(played).toEqual(['turn', 'turn']);
+    });
+
+    it('is silent on a board that has no sound yet, and rings on the one it is given later', () =>
+    {
+        const { played, sound } = handle();
+        let held: SoundHandle | null = null;
+        const chime = turnChime(() => held);
+
+        chime(false);
+        chime(true);
+        expect(played).toEqual([]);
+
+        held = sound;
+        chime(false);
+        chime(true);
+        expect(played).toEqual(['turn']);
     });
 });

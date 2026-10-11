@@ -7,7 +7,7 @@ import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard, type EventBatch } from '../src/stores/match.store.ts';
+import { NO_EVENTS, useBoard, type EventBatch } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
@@ -160,7 +160,7 @@ describe('the ludo helpers, and the switch for each', () =>
     it('moves the tip with the position, and explains a third six from the batch that ended the turn', async () =>
     {
         const locale = useLocale();
-        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+        const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
         const [current, setCurrent] = createSignal(ludo(SIX));
         const props = {
             get match()
@@ -194,12 +194,12 @@ describe('the ludo helpers, and the switch for each', () =>
         expect(note()).toContain(locale.t('helpers.ludo.tip.star'));
 
         setCurrent({ ...ludo(position([10, -1, -1, -1], [3, -1, -1, -1], 6)), rev: 2, turn: 1, view: ludoEngine.view({ ...position([10, -1, -1, -1], [3, -1, -1, -1], 6), die: null, turn: 1 }, 0) as MatchView['view'] });
-        setBatch({ seq: 1, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 1, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
         await settle();
 
         expect(note()).toContain(locale.t('helpers.ludo.tip.threeSixes'));
 
-        setBatch({ seq: 2, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 2, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
         await settle();
 
         expect(note()).toBeNull();

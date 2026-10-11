@@ -2446,13 +2446,126 @@ server right up until the position where it mattered. The rules coach asks the s
 found. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
 
-**Every move is a button as well as a tap.** The board is one inline SVG drawn from
-`game/backgammon-layout.ts` and is `aria-hidden`; the hops on offer are listed beneath it as real
-buttons with sentences for names, and a screen reader is given each side's stacks in words. That is
-the canvas rule ludo already follows, for the same two reasons: a keyboard and a screen reader can
-play, and the responsive matrix has something to hit-test. The SVG takes the tap itself and turns the
-pointer into a point with `pointAt`, rather than twenty-four invisible buttons none of which could be
-44px wide on a phone.
+**Every move is a button as well as a tap.** The field - frame, points, bar and tray - is one inline
+SVG drawn from `game/backgammon-layout.ts`, and the checkers, the dice, the cube, the marks on the
+points a picked checker can reach and the count of a double's moves are elements in a layer over it
+(`.bg-layer`), placed in the same 1000 by 820 units through `cqw`. Both are
+`aria-hidden`; the hops on offer are listed beneath the board as real buttons with sentences for
+names, and a screen reader is given each side's stacks in words. That is the canvas rule ludo already
+follows, for the same two reasons: a keyboard and a screen reader can play, and the responsive matrix
+has something to hit-test. The SVG takes the tap itself and turns the pointer into a point with
+`pointAt`, rather than twenty-four invisible buttons none of which could be 44px wide on a phone; the
+layer over it lets every pointer through. The bar's branches read `derived` booleans (`rolling`,
+`answering`, `staging`, `offered`), so staging a hop keeps Undo, "Play the move" and every hop still
+on offer the nodes they were: they sat under conditions that read the board and the plan, both new
+objects after every hop, and were drawn again each time. `backgammon-board.spec.ts` holds the nodes
+through a staged hop and a re-read.
+
+**The checkers are objects, and a move is that checker travelling.** The board was a drawing of
+counts: every action drew thirty circles again where the new position put them, with a sound.
+`game/backgammon-men.ts` gives each checker an identity and a place in its stack, so the one that
+leaves a point is the one that arrives. `game/backgammon-felt.ts` is the rest of what the table
+shows - the two dice and the cube - and the one place the log is read: `beatsOf` turns the events of
+ONE action into what there is to show (a cast, a hop, a pass, the dice picked up, a double offered,
+taken or dropped, a game won, the rack, the finish) and `step` applies one of them. Three things in
+it are rules of the game's log rather than of drawing, and each was wrong or missing while the board
+read counts:
+
+- **The dice leave when their turn is over.** No event says so. A turn that ends with the next
+  player's roll replaces them; one that ends with a player who may still double leaves the felt
+  empty, and so does a game that ends and a match somebody leaves. `beatsOf` knows the end of an
+  action, which is why it is handed one action at a time.
+- **An opening is one die from each side.** `dice[0]` is seat 0's and `dice[1]` seat 1's
+  (`openWith` in the engine), so the cast carries a side for each die.
+- **What comes next is in the same action.** Taking a double is followed at once by the doubler's
+  roll, and the last checker of a game by the next game's opening. Played from two snapshots, the
+  dice were thrown first and the cube travelled after them, and the next game's dice landed on the
+  finished position. The beats are in the log's order: the cube is handed over and turned before a
+  die of that action exists, and every checker is back where a game starts, the cube back in the
+  middle, before the opening is thrown.
+
+`backgammon-felt.spec.ts` plays whole matches through the real engine - to one, three and five
+points, doubles taken and dropped, somebody leaving in the middle - applies every logged action with
+`beatsOf` and `step`, and requires the result to be the board the engine's own `view` describes
+after every revision, from either seat. It also requires that it met every kind of beat while it
+checked, so a kind the games never produced cannot pass by not being there.
+
+**`game/board/backgammon-table.ts` draws it, and is the table the presenter drives** (*The stage*,
+below). What it does with each beat:
+
+- **A roll is thrown.** Two CSS cubes (`stage/die.ts`) follow a plan made by `stage/dice.ts`: a
+  release from the roller's edge of the board, three or four bounces each softer than the last, a
+  roll to rest - and the plan is solved backwards from the face that was rolled, so the die turns
+  freely in the air and still comes to rest on that face. `dice-plan.spec.ts` checks the face, the
+  bounces, that no step between two frames turns further than the eye follows, and that the cube
+  as it is DRAWN has each face where the maths says it is. A `die-land` sounds at each bounce,
+  louder for a harder one. The layer clips, so a die enters over the rim rather than over the page.
+  How far out it is let go is measured for each cast: half the layer's height in the die's own
+  size, and a little over. A die stops growing at 2.75rem while the board goes on growing, so the
+  fixed distance the first renderer used let nine dice in ten go from inside a desktop board,
+  where they appeared in the middle of the field.
+- **A checker walks its points.** One hop for each point on the way, touching each, a little
+  longer on the first and the last (`stage/route.ts`, `walk`); a checker coming in from the bar,
+  and anything that only slides, is one arc. A leg takes as long as it is far, and the whole walk
+  between 320 and 900 ms: every leg had the same time at first, so the one that crosses from one
+  row of points to the other was over before anybody could follow it, which a real browser showed
+  and no spec could. It is drawn above every resting checker for as long as it is in the air: the
+  first renderer wrote the resting layer back in the same call that started the flight, so a
+  checker passed under the stacks it crossed. The renderer's spec caught that; no gate could have.
+- **A hit is contact.** The blot stays on its point until the checker is nearly down, then goes to
+  the bar in an arc of its own, turning; the capture sounds at contact and is felt then (`capture`
+  for whoever hit, `hit` for whoever was hit, nothing for somebody watching), and the blot is heard
+  again when it lands. A blot that is the reader's own is the one checker they may move next, so
+  it wears the ring from the moment it lands on the bar and not before: the first renderer put the
+  ring on it while the hitter was still on its way, took it off in the air and never put it back.
+- **Bearing off** ends as a slab in the tray, with the sound of a checker put down off the field
+  (`token-yard`, which a blot reaching the bar makes too).
+- **The dice dim as they are used.** For the reader they follow the hops staged so far; for
+  anybody else, each `move` event's own `die`. What the board says about a roll outlives the scene
+  that threw it: a hop staged while the dice were still in the air dimmed its die, and the scene
+  then ended on the dice as they had been when it began and lit it again.
+- **A double is four moves on two dice, and the table counts them.** What is spent is one flag
+  for each USE of a roll, two for an ordinary one and four for a double (`spentBy`). Both dice of a
+  double stay lit until the fourth move, and "×3" beside them says how many are left, in the
+  reader's digits. The table draws it in the dice zone, once the dice have landed, so it never
+  says a roll is a double while the dice are in the air, and it counts down as the other player's
+  checkers land. It stands on the middle line beside the pair, and across the bar from it on a
+  board under 23rem, where there is no room beside the dice. The page used to draw it as a chip
+  2rem under the dice, which on a phone is the fifth checker of the stack below.
+- **The dice of one roll rest in one place for everybody.** Where and at what angle is seeded by
+  the match and the revision (`seedOf`), and a board drawn from nothing seeds the dice it finds the
+  same way, because dice on a board were always rolled in that board's own revision. They used to
+  be seeded by an event's index in whatever the reader had been sent, so the two players saw them
+  in different places and a reload moved them.
+- **Where a checker may go is marked in the layer.** A mark is an element at the next free slot
+  of its point, on a rung of its own above the checkers and under the cube. Drawn in the SVG under
+  the layer, a mark on a point that held checkers was hidden by them.
+- **A number on the board is the reader's.** The count on a tall stack and the cube's value go
+  through the formatter the board hands over (`say`) and are written again when the language
+  changes (`relabel`). The layer sits inside the wrapper that keeps the board from mirroring, and
+  drew Latin digits on a Persian page.
+- **The cube never covers a checker on the bar.** The bar's checkers start half a cube and two
+  units from the middle (`BAR_GAP`, worked out from `CUBE` in the layout module), and
+  `backgammon-men.spec.ts` holds the clearance.
+
+`backgammon-table.spec.ts` holds each of those on the real renderer with the clock in hand,
+including the order of the cube and the rack, and that after everything is stopped and drawn again
+the dice, the cube and the count on a tall stack are all still on the page.
+
+**For somebody who asked for less motion nothing travels and nothing is lost.** Every run becomes a
+140 ms fade where the thing ends up, and every sound and the hit are still made, in the same order,
+each when its fade ends. The first renderer returned early in that case, before any of them was
+scheduled: a roll and four hops arrived in one frame in silence, which is the fault this project
+already had in Ludo. The rule lives in the stage now, so a renderer has one path. Two checkers
+still land one after the other, a fade apart. A thrown die fades as a whole: an opacity under one
+on the cube's own body flattens its six faces into one plane, which drew nothing for four of the
+faces and a 1 for a 6 until the fade ended, so the fade is on the die's outer node.
+
+**What 1.2 does not do yet, so nobody reads this as finished.** The controls still read the board
+the server sent, so the words and the hop list tell a roll before the dice have landed; an opening
+is thrown only when it arrives with the end of the game before it, because the first opening of a
+match never reaches a board; and a game that ends has no banner. Each is its own commit in the plan
+(`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat
@@ -2664,6 +2777,26 @@ game's board, which then found a gap in revisions that were never its own, and a
 was still out when the table changed did the same. An answer for a game that is not the open one is
 dropped. `match-store.spec.ts` holds the single run and both late answers.
 
+**A batch names its game, says whether it is live, and never runs ahead of the board.** What the
+store hands a board is `{ seq, id, events, live, jump }`. `id` is the match the events belong to,
+so a board that kept its instance across a rematch, or one mounted under a batch left by the last
+game, can tell. `live` is true for an answer to a play and for a pushed frame and false for anything
+read through `since`: a board plays the first and may go straight to the position for the second.
+The events are cut at the revision of the board they arrive with, because a push reads the match
+and then the ledger, and a commit in between used to hand a board events for a move its own view
+had not reached. And a gap is no longer dropped. A push for a later move can overtake the push for
+an earlier one, since each reads the ledger after its own commit. The store used to take the new
+board and throw the events away, so the pieces of two moves jumped. It holds that answer back now
+and reads `since` once from the last revision it handed on. The board and the whole run of events
+then arrive in one write, or, when that read fails, the board arrives with `jump: true` and no
+events, which is the store saying that it cannot explain the move. One read is out at a time, and a
+gap seen while it is out is read after it. The read is given three seconds (`MEND_MS`), because a
+request can stall on a dead connection for the client's whole fifteen seconds while the socket is healthy
+and the reader's clock is running: past that the newest board the store was sent is shown, as a
+jump. And nothing is called a jump that is not one. A read that fails after a push has already
+brought every move changes nothing and says nothing, where it used to cut the moves that were
+being played. `match-store.spec.ts` (*what a board is told of a move*) holds each of these.
+
 **The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
 glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
 paper is a ring nobody sees - which is true, and which misses that a red ring around a red piece in
@@ -2710,9 +2843,12 @@ switching tables never has to unlock audio again. The spec is
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
 - **Every table sounds like its own pieces, from the server's log.** Hokm has its own queue (below);
-  backgammon and poker go through `components/games/table-cues.ts`, which maps a batch of their
-  events to timed cues and haptics and plays nothing for a batch that was on screen at mount, that
-  has a gap in it, or that arrives in a hidden tab. Poker's chips are two more Kenney recordings,
+  backgammon's sounds are made by the table itself, each at the moment the thing it belongs to
+  lands (*The stage*, below); poker goes through `components/games/table-cues.ts`, which maps a
+  batch of its events to timed cues and haptics and plays nothing for a batch that was on screen at
+  mount, that has a gap in it, or that arrives in a hidden tab. The chime for a turn that becomes
+  the reader's is `turnChime` in the same file, handed whichever sound handle the board holds, so a
+  board has one handle. Poker's chips are two more Kenney recordings,
   `chip-lay` for a bet and `chips-stack` for a pot, which is why the pack is 20 takes of 14 cues.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
@@ -2785,6 +2921,109 @@ position it was given at mount for the rest of the match while the panel beside 
 Nothing throws and nothing logs. `world-canvas` has always had the right shape and this is what it is
 for: read the signal into a local, THEN reach through the handle. Nothing checks it now, and the
 difference exists nowhere else, so it is on the reader.
+
+## The stage
+
+One way for a table to play what happened, shared by every game as each moves onto it. Backgammon is
+the first; Ludo, Hokm and poker still run on what they had. The design, the audit behind it and each
+game's checklist are in `docs/superpowers/specs/2026-10-11-table-presentation-design.md`. Everything
+under `frontend/src/game/stage/` imports nothing from AzerothJS.
+
+```
+the store's batch and the board it arrives with
+        |
+   presenter   what to do with them: play, go straight to the board, or slide quietly
+        |
+   director    scenes in order; a press hastens what is in front of it
+        |
+   stage       runs and timers on the product clock; less motion is decided here
+        |
+   the game's own model  ->  its renderer (transform and opacity only)
+```
+
+**The stage keeps time, and owns nothing on the page.** `stage.animate` starts a Web Animation and
+answers a run whose `done` resolves on `runtime().clock`, never on the animation's own `finished`,
+so a throttled tab cannot strand a queue and a spec drives it with a manual clock. `stage.after` and
+`stage.wait` are the same clock. `stage.pace(rate)` re-rates what is already in flight - live
+animations by `updatePlaybackRate`, timers re-armed for what they had left - so a change of pace
+never fires two cues in one tick. `stage.clear()` cancels every run and timer and removes NOTHING:
+the first kit ended `clear()` with `layer.replaceChildren()` while backgammon handed one element to
+the stage as its layer and to the renderer as its home, so the first hidden tab, gap or rematch took
+the dice, the cube and the stack counts off the page for the rest of the board's life, with every
+gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now;
+the layer for clones that fly between places lands with the first game that flies one.
+
+**Less motion is the stage's decision, so a renderer has one path.** With the reader's setting on,
+`animate` swaps a run's frames for a 140 ms fade where the thing ends up (`quiet: 'out'` fades out
+something that ends in nothing and leaves it gone; `quiet: 'skip'` drops a flourish altogether) and
+keeps its delay. Timers are untouched. A run says how long it really is (`run.length`), and a
+renderer schedules a cue against that, which is what keeps every sound and haptic, in order, when
+nothing moves.
+
+**The director plays scenes one after another.** A scene is a function that awaits runs; the next
+starts when it returns. `fast` plays one at double speed. `urgent` is the reader's own press: it
+marks everything in front as rushed - four times the pace, cues kept apart and in order, nothing
+finished in place - and is itself played at its own pace; pressed on an idle director it starts in
+that turn and leaves no haste behind. The kit it replaces had `hurry()`, which finished whatever was
+in flight where it stood, fired every remaining cue at once, and then played the reader's own piece
+at twelve times the pace; nothing but its own spec ever called it.
+
+- **A hold on the felt is `ctx.linger(ms, least)`.** It lasts `ms`, or ends at `least` once
+  something that may cut it is waiting or arrives (`cuts`), or at once if it is already past its
+  least. At double speed both numbers halve, never under 300 ms. A press takes it to its least.
+- **How far behind the table is** (`backlog`) counts what is queued and what the scene in hand has
+  left, at the pace it is played and with a hold counted at its least.
+- **A scene that never ends is given up on**: three times its estimate and four seconds on, it is
+  reported and the queue stopped, so nothing that waits for the table can wait for ever.
+- **A scene that throws is reported, and the next one plays.**
+
+**The presenter is the one place that decides what a board does with what it is told.** One for
+each board; the board calls `see(batch)` when its match or its batch changes and hands over a way to
+ask for the board as it should stand now (`sight`). In order:
+
+- A match it has not shown - the first, or a rematch on the same board - is drawn from nothing
+  (`table.reset`) and nothing that already happened is played.
+- A batch for another match is ignored and moves nothing.
+- A batch that says `jump`, a gap in what it was told, and anything at all while the tab is hidden:
+  go straight to the board. So does a tab that is hidden while something plays.
+- Otherwise the actions after the last revision it has shown, and no later than the board in hand,
+  are played to that board. `live` ones are always played, at double speed once more than a second
+  and a half stands IN FRONT of the newest action: the queue, plus the earlier actions that arrived
+  with it. Weighing only the queue let a reconnect replay a dozen actions at full pace beside
+  controls that showed the present. Weighing the newest action as well played an ordinary turn of
+  two hops and a hit at double speed, for being exactly as long as it is. What was read to catch up
+  is played only if the queue and all of it fit the game's own limit (four seconds of scene at
+  backgammon), and is otherwise the board.
+- A board that moved with nothing said about it is reached by sliding (`table.settle`): no sound,
+  nothing captured. This is all a watcher's board does until the watch read carries events.
+- A scene that throws is logged, and then the table is drawn again.
+
+A snap is always `director.cancel()` and then `table.reset(sight)`, and **`reset` rebuilds
+everything the renderer owns** - which is what made the stage wiping the page survivable to fix
+rather than something to work around.
+
+**What the reader did before the server said so is one record.** A board that moves something at
+the press tells the presenter (`predict`) which revision it guessed against and how to recognise
+its own action in the answer. The answer to it - the action at the next revision, by the reader's
+seat - is played without the part already on the table. Anything else is the guess given up: the
+table is drawn again. The board it should stand at already includes what the reader has staged, so
+a snap in the middle of staging a turn keeps the turn. And the reader's own piece goes through
+`presenter.act`, which is an urgent scene: it never waits its turn at full length behind somebody
+else's move.
+
+**A table is told it is playing.** `presenter.watch` mirrors the queue into the board, which
+writes `data-presenting` on `.table-stage`; the result panel waits for it, and a browser pass
+waits for it to clear instead of sleeping.
+
+**The layers of a table are one ladder** (`stage/layers.ts`): resting pieces, the count on a tall
+stack, a mark, the cube, a piece that is moving, one in the air, the dice. The renderer sets the
+numbers and
+hands the same ones to the stylesheet as `--layer-*`, so a number is written once. `.table-stage`
+isolates its stacking, and its two tokens are `--stage-flight` and `--stage-result`, named apart
+from the theme's `--z-*`: the result panel is above anything in flight.
+
+`stage-kit.spec.ts` holds the stage, the director, the holds, the feed, the layers and the routes;
+`presenter.spec.ts` every branch above against a table that only records what it was asked.
 
 ## The play pass
 

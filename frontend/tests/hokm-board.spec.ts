@@ -11,7 +11,7 @@ import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
+import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -175,11 +175,11 @@ describe('the table in motion', () =>
 
     const drive = (): ((events: MatchEvent[]) => void) =>
     {
-        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+        const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
 
         vi.spyOn(useBoard(), 'events').mockImplementation(batch);
 
-        return (events) => setBatch((held) => ({ seq: held.seq + 1, events }));
+        return (events) => setBatch((held) => ({ ...NO_EVENTS, seq: held.seq + 1, events }));
     };
 
     it('flies a card in from the seat that played it, and shows the real card only once it lands', () =>
@@ -305,7 +305,7 @@ describe('the table in motion', () =>
 
     it('never replays the batch that was already there when the board mounted', () =>
     {
-        const [batch] = createSignal<EventBatch>({ seq: 7, events: [card(3, 1, 12)] });
+        const [batch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 7, events: [card(3, 1, 12)] });
 
         vi.spyOn(useBoard(), 'events').mockImplementation(batch);
 
@@ -392,11 +392,11 @@ describe('playing ahead of the server', () =>
 
     const drive = (): ((events: MatchEvent[]) => void) =>
     {
-        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+        const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
 
         vi.spyOn(useBoard(), 'events').mockImplementation(batch);
 
-        return (events) => setBatch((held) => ({ seq: held.seq + 1, events }));
+        return (events) => setBatch((held) => ({ ...NO_EVENTS, seq: held.seq + 1, events }));
     };
 
     const press = (container: HTMLElement, card: number) =>

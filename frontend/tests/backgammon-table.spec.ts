@@ -1,0 +1,929 @@
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import type { Haptic } from '../src/lib/haptics.ts';
+import { BAR_GAP, BAR_LEFT, BAR_WIDTH, BOTTOM, MIDDLE, POINT_WIDTH, RADIUS, TOP, WIDTH, columnOf } from '../src/game/backgammon-layout.ts';
+import { seedOf, spentBy, type Felt, type Told } from '../src/game/backgammon-felt.ts';
+import { CUBE_MS, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
+import { TIMING } from '../src/game/motion.ts';
+import { createDirector, type Director } from '../src/game/stage/director.ts';
+import type { Act } from '../src/game/stage/feed.ts';
+import { LAYER } from '../src/game/stage/layers.ts';
+import type { Sight } from '../src/game/stage/presenter.ts';
+import { createStage, type Stage } from '../src/game/stage/stage.ts';
+import type { Cue, SoundHandle } from '../src/game/sound.ts';
+import { START } from '../../backend/src/domains/match/backgammon/board.ts';
+
+interface Drawn
+{
+    el: Element;
+    frames: Keyframe[];
+    options: KeyframeAnimationOptions;
+}
+
+const row = (points: Record<number, number>) => Array.from({ length: 26 }, (_, point) => points[point] ?? 0);
+
+const cq = (units: number) => `${ (units * 100 / WIDTH).toFixed(3) }cqw`;
+
+const placed = (x: number, y: number) => `${ cq(x - RADIUS) } ${ cq(y - RADIUS) }`;
+
+const felt = (over: Partial<Felt> = {}): Felt => ({
+    viewer: 0,
+    near: START,
+    far: START,
+    dice: [],
+    spent: spentBy(over.dice ?? [], []),
+    seed: seedOf('m', 5),
+    cube: { on: true, value: 1, owner: null },
+    ...over
+});
+
+const sight = (view: Felt, rev = 5, seat: number | null = 0): Sight<Felt> => ({ id: 'm', rev, seat, view });
+
+const act = (rev: number, seat: number, moves: Told[]): Act<Told> => ({ rev, seat, moves });
+
+const flush = async () =>
+{
+    for (let turn = 0; turn < 12; turn += 1)
+    {
+        await Promise.resolve();
+    }
+};
+
+let clock: ManualClock;
+let host: HTMLElement;
+let stage: Stage;
+let director: Director;
+let table: BackgammonTable;
+let cues: Cue[];
+let felt_: Haptic[];
+let drawn: Drawn[];
+let still: boolean;
+let broke: unknown[];
+let digits: (value: number) => string = String;
+
+const elapse = async (ms: number) =>
+{
+    for (let left = ms; left > 0; left -= 5)
+    {
+        clock.advance(Math.min(5, left));
+        await flush();
+    }
+
+    await flush();
+};
+
+const play = (acts: Act<Told>[], seen: Sight<Felt>) => director.enqueue((ctx) => table.play(acts, seen, ctx));
+
+const men = (tone?: string) => [...host.querySelectorAll<HTMLElement>(tone === undefined ? '.man' : `.man[data-tone="${ tone }"]`)];
+
+const dice = () => [...host.querySelectorAll<HTMLElement>('.bgt-dice > .die3d')];
+
+const cube = () => host.querySelector<HTMLElement>('.bgt-cube')!;
+
+const of = (el: Element) => drawn.filter((one) => one.el === el);
+
+const thrown = () => drawn.filter((one) => one.el.classList.contains('die3d-body'));
+
+const fromY = (one: Drawn) => Number(/translate3d\([^,]+, ([^,]+)em/.exec(String(one.frames[0].transform))![1]);
+
+beforeEach(() =>
+{
+    const animate = Element.prototype.animate;
+    const sound: SoundHandle = {
+        play: (cue) =>
+        {
+            cues.push(cue);
+        },
+        setEnabled: () => undefined,
+        dispose: () => undefined
+    };
+
+    clock = manualClock(1000);
+    cues = [];
+    felt_ = [];
+    drawn = [];
+    broke = [];
+    still = false;
+    digits = String;
+    host = document.createElement('div');
+    host.className = 'bg-layer';
+    document.body.append(host);
+
+    vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, frames, options)
+    {
+        drawn.push({ el: this, frames: frames as Keyframe[], options: options as KeyframeAnimationOptions });
+
+        return animate.call(this, frames, options);
+    });
+
+    stage = createStage({ clock, quiet: () => still, report: (error) => broke.push(error) });
+    director = createDirector(stage, clock, (error) => broke.push(error));
+    table = createBackgammonTable({ host, stage, sound: () => sound, feel: (kind) => felt_.push(kind), say: (value) => digits(value) });
+});
+
+afterEach(() =>
+{
+    director.cancel();
+    table.dispose();
+    host.remove();
+    vi.restoreAllMocks();
+    expect(broke).toEqual([]);
+});
+
+describe('a backgammon table, drawn from a board', () =>
+{
+    it('lays out thirty checkers, the dice that were rolled and the cube', () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        expect(men()).toHaveLength(30);
+        expect(men('light')).toHaveLength(15);
+        expect(dice().map((die) => die.dataset.face)).toEqual(['6', '1']);
+        expect(cube().isConnected).toBe(true);
+        expect(cube().style.display).toBe('');
+        expect(cube().textContent).toBe('64');
+        expect(table.same(sight(felt({ dice: [6, 1] })))).toBe(true);
+    });
+
+    it('gives seat 0 the light checkers wherever the reader sits', () =>
+    {
+        table.reset(sight(felt({ viewer: 1, near: row({ 6: 15 }), far: row({ 6: 15 }) })));
+
+        const near = men().filter((man) => man.style.translate.endsWith(cq(BOTTOM - RADIUS - RADIUS)));
+
+        expect(near.length).toBeGreaterThan(0);
+        expect(near.every((man) => man.dataset.tone === 'dark')).toBe(true);
+    });
+
+    it('stacks a point to five and writes how many there really are', () =>
+    {
+        table.reset(sight(felt({ near: row({ 6: 8, 5: 7 }) })));
+
+        expect([...host.querySelectorAll('.bgt-count')].map((tag) => tag.textContent).sort()).toEqual(['7', '8']);
+    });
+
+    it('hides a cube the match does not have, and shows the value it stands at', () =>
+    {
+        table.reset(sight(felt({ cube: { on: false, value: 1, owner: null } })));
+        expect(cube().style.display).toBe('none');
+
+        table.reset(sight(felt({ cube: { on: true, value: 4, owner: 'near' } })));
+        expect(cube().style.display).toBe('');
+        expect(cube().textContent).toBe('4');
+    });
+
+    it('puts resting checkers under the count, the count under the cube and everything under what moves', () =>
+    {
+        table.reset(sight(felt()));
+
+        for (const man of men())
+        {
+            const layer = Number(man.style.zIndex);
+
+            expect(layer).toBeGreaterThanOrEqual(LAYER.piece);
+            expect(layer).toBeLessThan(LAYER.count);
+        }
+
+        expect(host.style.getPropertyValue('--layer-dice')).toBe(String(LAYER.dice));
+    });
+
+    it('keeps the dice, the cube and the counts on the page when everything is stopped and drawn again', async () =>
+    {
+        const before = sight(felt({ near: row({ 6: 8, 5: 7 }), dice: [3, 3] }));
+        const after = sight(felt({ near: row({ 6: 8, 5: 7 }), dice: [5, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(before);
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], after);
+        await elapse(300);
+
+        director.cancel();
+        table.reset(after);
+
+        expect(host.querySelector('.bgt-dice')?.isConnected).toBe(true);
+        expect(dice().map((die) => die.dataset.face)).toEqual(['5', '2']);
+        expect(cube().isConnected).toBe(true);
+        expect(host.querySelectorAll('.bgt-count')).toHaveLength(2);
+        expect(men()).toHaveLength(30);
+        expect(clock.pending()).toBe(0);
+    });
+
+    it('leaves no die behind when it is stopped in the middle of picking them up', async () =>
+    {
+        const after = sight(felt({ near: row({ 6: 5, 8: 3, 13: 4, 7: 1, 24: 2 }) }), 6);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false }])], after);
+        await elapse(WALK_MOST + 100);
+
+        director.cancel();
+        table.reset(after);
+
+        expect(dice()).toHaveLength(0);
+        expect(host.querySelectorAll('.die3d')).toHaveLength(0);
+    });
+
+    it('draws a rematch from the other chair in the other colours', () =>
+    {
+        table.reset(sight(felt()));
+
+        const first = men().filter((man) => man.style.translate === placed(columnOf(6).x + POINT_WIDTH / 2, BOTTOM - RADIUS))[0];
+
+        expect(first.dataset.tone).toBe('light');
+
+        table.reset({ id: 'next', rev: 1, seat: 1, view: felt({ viewer: 1 }) });
+
+        const second = men().filter((man) => man.style.translate === placed(columnOf(6).x + POINT_WIDTH / 2, BOTTOM - RADIUS))[0];
+
+        expect(second.dataset.tone).toBe('dark');
+        expect(men()).toHaveLength(30);
+    });
+});
+
+describe('what happened, played on the table', () =>
+{
+    it('throws the dice of a roll, and they come to rest on the faces that were rolled', async () =>
+    {
+        const after = sight(felt({ dice: [5, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt()));
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], after);
+        await elapse(0);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['5', '2']);
+        expect(cues).toEqual([]);
+
+        expect(thrown()).toHaveLength(2);
+        expect(String(thrown()[0].frames[0].transform)).toContain('translate3d(');
+        expect(thrown()[0].frames.length).toBeGreaterThan(30);
+
+        await elapse(1400);
+
+        const landings = cues.filter((cue) => cue === 'die-land').length;
+
+        expect(landings).toBeGreaterThanOrEqual(6);
+        expect(landings).toBeLessThanOrEqual(8);
+        expect(table.same(after)).toBe(true);
+        expect(director.busy()).toBe(false);
+    });
+
+    it('throws a roll from the side of whoever rolled it', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], sight(felt({ dice: [5, 2] }), 6));
+        await elapse(0);
+
+        expect(thrown().map((one) => fromY(one) < -5)).toEqual([true, true]);
+
+        director.cancel();
+        drawn.length = 0;
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [5, 2] }])], sight(felt({ dice: [5, 2] }), 6));
+        await elapse(0);
+
+        expect(thrown().map((one) => fromY(one) > 5)).toEqual([true, true]);
+    });
+
+    it('opens a game with one die thrown from each side', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(1, -1, [{ e: 'opening', seat: 0, dice: [6, 2] }])], sight(felt({ dice: [6, 2] }), 6));
+        await elapse(0);
+
+        expect(thrown().map((one) => fromY(one) > 5)).toEqual([true, false]);
+        expect(fromY(thrown()[1])).toBeLessThan(-5);
+    });
+
+    it('lets the dice go from beyond the edge of the board, however big the board is', async () =>
+    {
+        const zone = host.querySelector<HTMLElement>('.bgt-dice')!;
+
+        Object.defineProperty(host, 'clientHeight', { configurable: true, value: 880 });
+        zone.style.fontSize = '44px';
+
+        table.reset(sight(felt()));
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], sight(felt({ dice: [5, 2] }), 6));
+        await elapse(0);
+
+        expect(thrown().map((one) => fromY(one) < -(880 / 2 / 44 + 1))).toEqual([true, true]);
+    });
+
+    it('walks a checker over every point on its way, touching each, and puts it down once', async () =>
+    {
+        const after = sight(felt({ near: row({ 6: 5, 7: 1, 8: 3, 13: 4, 24: 2 }), dice: [6, 1] }), 6);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        const mover = men('light').filter((man) => man.style.translate.startsWith(cq(columnOf(13).x + POINT_WIDTH / 2 - RADIUS))).at(-1)!;
+
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false }, { e: 'roll', seat: 1, dice: [6, 1] }])], after);
+
+        const walk = of(mover)[0];
+        const touched = walk.frames.filter((frame) => frame.scale === '1.000').map((frame) => frame.translate);
+
+        for (const point of [12, 11, 10, 9, 8, 7])
+        {
+            expect(touched, `point ${ point }`).toContain(placed(columnOf(point).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+        }
+
+        expect(touched).toHaveLength(7);
+        expect(Number(mover.style.zIndex)).toBe(LAYER.moving);
+        expect(mover.style.translate).toBe(placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+
+        await elapse(Number(walk.options.duration));
+
+        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(1);
+        expect(Number(mover.style.zIndex)).toBeLessThan(LAYER.count);
+    });
+
+    it('takes longer over a long way than a short one, so a checker never crosses the board in a blink', () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        const mover = men('light').filter((man) => man.style.translate.startsWith(cq(columnOf(13).x + POINT_WIDTH / 2 - RADIUS))).at(-1)!;
+
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false }])], sight(felt({ near: row({ 6: 5, 7: 1, 8: 3, 13: 4, 24: 2 }) }), 6));
+
+        const walk = of(mover)[0];
+        const length = Number(walk.options.duration);
+        const lands = walk.frames.filter((frame) => frame.scale === '1.000').map((frame) => Number(frame.offset) * length);
+        const across = lands[1] - lands[0];
+        const along = lands[3] - lands[2];
+        const units = (frame: Keyframe) => String(frame.translate).split(' ').map((one) => Number.parseFloat(one) * WIDTH / 100);
+        let fastest = 0;
+
+        for (let index = 1; index < walk.frames.length; index += 1)
+        {
+            const [x, y] = units(walk.frames[index]);
+            const [wasX, wasY] = units(walk.frames[index - 1]);
+            const took = (Number(walk.frames[index].offset) - Number(walk.frames[index - 1].offset)) * length;
+
+            fastest = Math.max(fastest, Math.hypot(x - wasX, y - wasY) / took);
+        }
+
+        expect(across).toBeGreaterThan(along * 2.5);
+        expect(along).toBeGreaterThan(60);
+        expect(fastest).toBeLessThan(4);
+        expect(length).toBeLessThanOrEqual(WALK_MOST);
+    });
+
+    it('knocks a blot to the bar when the checker reaches it, and the hit is heard and felt in that order', async () =>
+    {
+        const before = felt({ near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3] });
+        const after = sight(felt({ near: row({ 8: 1, 6: 14 }), far: row({ 25: 1, 12: 14 }) }), 6);
+
+        table.reset(sight(before));
+
+        const blot = men('dark').filter((man) => man.style.translate === placed(columnOf(8).x + POINT_WIDTH / 2, BOTTOM - RADIUS))[0];
+
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 8, die: 5, hit: true }])], after);
+
+        const knock = of(blot)[0];
+
+        expect(Number(knock.options.delay)).toBeGreaterThan(300);
+        expect(knock.options.fill).toBe('backwards');
+        expect(knock.frames[0].translate).toBe(placed(columnOf(8).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+        expect(knock.frames.at(-1)!.translate).toBe(placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE - BAR_GAP - RADIUS));
+        expect(Number(blot.style.zIndex)).toBe(LAYER.airborne);
+
+        await elapse(Number(knock.options.delay) - 10);
+        expect(cues).toEqual([]);
+
+        await elapse(WALK_MOST + KNOCK_MS);
+
+        expect(cues.slice(0, 3)).toEqual(['token-capture', 'token-step', 'token-yard']);
+        expect(felt_).toEqual(['capture']);
+    });
+
+    it('tells the reader who was hit that they were', async () =>
+    {
+        const before = felt({ near: row({ 17: 1, 12: 14 }), far: row({ 13: 1, 6: 14 }), dice: [5, 3] });
+        const after = sight(felt({ near: row({ 25: 1, 12: 14 }), far: row({ 8: 1, 6: 14 }) }), 6);
+
+        table.reset(sight(before));
+        play([act(6, 1, [{ e: 'move', seat: 1, from: 13, to: 8, die: 5, hit: true }])], after);
+        await elapse(WALK_MOST + KNOCK_MS + PICK_MS + 200);
+
+        expect(felt_).toEqual(['hit']);
+        expect(table.same(after)).toBe(true);
+    });
+
+    it('lights the reader\'s checker on the bar when it has landed there, and not on its way', async () =>
+    {
+        const before = felt({ near: row({ 17: 1, 12: 14 }), far: row({ 20: 1, 13: 1, 6: 13 }), dice: [5, 3] });
+        const after = sight(felt({ near: row({ 25: 1, 12: 14 }), far: row({ 17: 1, 8: 1, 6: 13 }), dice: [4, 1], seed: seedOf('m', 6) }), 6);
+        const lit = () => [...host.querySelectorAll<HTMLElement>('.man[data-lit]')];
+
+        table.reset(sight(before));
+        table.lit(new Set([25]));
+
+        expect(lit()).toEqual([]);
+
+        play([act(6, 1, [
+            { e: 'move', seat: 1, from: 20, to: 17, die: 3, hit: false },
+            { e: 'move', seat: 1, from: 13, to: 8, die: 5, hit: true },
+            { e: 'roll', seat: 0, dice: [4, 1] }
+        ])], after);
+
+        for (let passed = 0; passed < WALK_MOST * 2; passed += 40)
+        {
+            await elapse(40);
+
+            const flying = lit().filter((man) => Number(man.style.zIndex) >= LAYER.moving);
+
+            expect(flying, `a checker in the air wore the ring ${ passed } ms in`).toEqual([]);
+        }
+
+        await elapse(KNOCK_MS + PICK_MS + 1400);
+
+        expect(director.busy()).toBe(false);
+        expect(lit()).toHaveLength(1);
+        expect(lit()[0].dataset.tone).toBe('light');
+        expect(lit()[0].style.translate).toBe(placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE + BAR_GAP + RADIUS));
+    });
+
+    it('brings a checker in from the bar in one lift, not by way of the far corner', () =>
+    {
+        const before = felt({ near: row({ 25: 1, 6: 14 }), far: row({ 12: 15 }), dice: [6, 3] });
+
+        table.reset(sight(before));
+
+        const barred = men('light').filter((man) => man.style.translate.startsWith(cq(BAR_LEFT + BAR_WIDTH / 2 - RADIUS)))[0];
+
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 25, to: 19, die: 6, hit: false }])], sight(felt({ near: row({ 19: 1, 6: 14 }), far: row({ 12: 15 }) }), 6));
+
+        const lift = of(barred)[0];
+        const grounded = lift.frames.filter((frame) => frame.scale === '1.000');
+
+        expect(grounded).toHaveLength(2);
+        expect(lift.frames.at(-1)!.translate).toBe(placed(columnOf(19).x + POINT_WIDTH / 2, TOP + RADIUS));
+    });
+
+    it('bears a checker off into the tray, where it lies as a slab', async () =>
+    {
+        const before = felt({ near: row({ 3: 2, 0: 13 }), far: row({ 12: 15 }), dice: [3, 1] });
+        const after = sight(felt({ near: row({ 3: 1, 0: 14 }), far: row({ 12: 15 }), dice: [3, 1] }), 6);
+
+        table.reset(sight(before));
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 3, to: 0, die: 3, hit: false }, { e: 'roll', seat: 1, dice: [3, 1] }])], after);
+        await elapse(WALK_MOST);
+
+        expect(cues).toContain('token-yard');
+        expect(host.querySelectorAll('.man[data-off]')).toHaveLength(14);
+    });
+
+    it('hands the cube to whoever took it before a die of the same action is on the table', async () =>
+    {
+        const before = felt({ cube: { on: true, value: 1, owner: null } });
+        const after = sight(felt({ cube: { on: true, value: 2, owner: 'far' }, dice: [5, 3], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(before));
+        play([act(6, 1, [{ e: 'take', seat: 1, cube: 2 }, { e: 'roll', seat: 0, dice: [5, 3] }])], after);
+
+        expect(cube().textContent).toBe('2');
+        expect(of(cube())).toHaveLength(1);
+        expect(Number(cube().style.zIndex)).toBe(LAYER.airborne);
+        expect(dice()).toHaveLength(0);
+
+        await elapse(CUBE_MS - 5);
+        expect(dice()).toHaveLength(0);
+
+        await elapse(10);
+        expect(dice()).toHaveLength(2);
+        expect(cube().style.zIndex).toBe('');
+
+        await elapse(1400);
+        expect(table.same(after)).toBe(true);
+    });
+
+    it('racks every checker and returns the cube before the next game opens', async () =>
+    {
+        const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
+        const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(before));
+        play([act(6, 0, [
+            { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
+            { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 },
+            { e: 'opening', seat: 1, dice: [2, 5] }
+        ])], after);
+
+        await elapse(400 + PICK_MS + 60);
+
+        expect(dice()).toHaveLength(0);
+        expect(cues).toContain('hand-won');
+        expect(felt_).toContain('hand');
+        expect(cube().textContent).toBe('64');
+        expect(drawn.filter((one) => one.el.classList.contains('man')).length).toBeGreaterThan(20);
+        expect(drawn.some((one) => one.el.classList.contains('die3d-body'))).toBe(false);
+
+        await elapse(3200);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['2', '5']);
+        expect(table.same(after)).toBe(true);
+        expect(host.querySelectorAll('.man[data-off]')).toHaveLength(0);
+        expect(director.busy()).toBe(false);
+    });
+
+    it('dims the dice of a roll nobody could play, holds them a moment and picks them up', async () =>
+    {
+        const after = sight(felt(), 6);
+
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], after);
+        await elapse(1300);
+
+        expect(dice()).toHaveLength(2);
+        expect(dice().every((die) => die.hasAttribute('data-spent'))).toBe(true);
+        expect(cues).toContain('pass');
+
+        await elapse(PASS_MS + PICK_MS + 100);
+
+        expect(dice()).toHaveLength(0);
+        expect(director.busy()).toBe(false);
+    });
+
+    it('cuts that hold to its least when the next thing is already waiting', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], sight(felt(), 6));
+        director.enqueue(() => undefined, { cuts: true });
+
+        await elapse(1300 + PASS_LEAST + PICK_MS + 100);
+
+        expect(director.busy()).toBe(false);
+    });
+
+    it('dims the die each of somebody else\'s checkers used', async () =>
+    {
+        const after = sight(felt({ far: row({ 6: 5, 7: 1, 8: 3, 13: 4, 24: 2 }), dice: [6, 1] }), 6);
+
+        table.reset(sight(felt({ dice: [6, 1], seed: seedOf('m', 5) })));
+        table.spend([false, false], seedOf('m', 6));
+        play([act(6, 1, [{ e: 'move', seat: 1, from: 13, to: 7, die: 6, hit: false }, { e: 'roll', seat: 0, dice: [6, 1] }])], after);
+        await elapse(WALK_MOST + 20);
+
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([true, false]);
+    });
+
+    it('plays the table\'s own sounds to somebody watching, and none of the reader\'s', async () =>
+    {
+        const after = sight(felt(), 6, null);
+
+        table.reset(sight(felt(), 5, null));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], after);
+        await elapse(1300 + PASS_MS + PICK_MS + 100);
+
+        expect(cues).toContain('die-land');
+        expect(cues).not.toContain('pass');
+    });
+
+    it('ends on the board it was sent with, whatever it was told', async () =>
+    {
+        const after = sight(felt({ near: row({ 6: 5, 8: 3, 13: 4, 9: 1, 24: 2 }), dice: [4, 4], seed: seedOf('m', 6), cube: { on: true, value: 2, owner: 'near' } }), 6);
+
+        table.reset(sight(felt()));
+        play([], after);
+        await elapse(1200);
+
+        expect(table.same(after)).toBe(true);
+        expect(dice().map((die) => die.dataset.face)).toEqual(['4', '4']);
+        expect(cube().textContent).toBe('2');
+        expect(cues).toEqual([]);
+    });
+
+    it('knows about how long a batch will take, a hit and a throw more than a hop', () =>
+    {
+        table.reset(sight(felt()));
+
+        const hop = table.estimate([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false }])]);
+        const hit = table.estimate([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: true }])]);
+        const turn = table.estimate([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false }, { e: 'roll', seat: 1, dice: [2, 1] }])]);
+
+        expect(hit).toBe(hop + KNOCK_MS);
+        expect(turn).toBeGreaterThan(hop + 900);
+        expect(turn).toBeLessThan(HISTORY);
+    });
+});
+
+describe('the table, for somebody who asked for less motion', () =>
+{
+    const hitting = () =>
+    {
+        const before = felt({ near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3] });
+        const after = sight(felt({ near: row({ 8: 1, 6: 14 }), far: row({ 25: 1, 12: 14 }), dice: [2, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(before));
+        play([act(6, 0, [{ e: 'move', seat: 0, from: 13, to: 8, die: 5, hit: true }, { e: 'roll', seat: 1, dice: [2, 2] }])], after);
+
+        return after;
+    };
+
+    it('plays every sound of a hit and a roll, and the hit is still felt', async () =>
+    {
+        hitting();
+        await elapse(3000);
+
+        const moving = [...cues];
+        const felt = [...felt_];
+
+        director.cancel();
+        cues.length = 0;
+        felt_.length = 0;
+        still = true;
+
+        const after = hitting();
+
+        await elapse(3000);
+
+        expect(cues.filter((cue) => cue !== 'die-land')).toEqual(moving.filter((cue) => cue !== 'die-land'));
+        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(2);
+        expect(felt_).toEqual(felt);
+        expect(table.same(after)).toBe(true);
+    });
+
+    it('moves nothing: every run is a fade', async () =>
+    {
+        still = true;
+        drawn.length = 0;
+        hitting();
+        await elapse(3000);
+
+        expect(drawn.length).toBeGreaterThan(3);
+
+        for (const one of drawn)
+        {
+            expect(one.frames.flatMap((frame) => Object.keys(frame)).filter((key) => key !== 'opacity' && key !== 'offset')).toEqual([]);
+            expect(one.options.duration).toBe(TIMING.FADE);
+        }
+    });
+
+    it('fades a thrown die as a whole, so that it is a cube all the way through', async () =>
+    {
+        still = true;
+        table.reset(sight(felt()));
+        drawn.length = 0;
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], sight(felt({ dice: [5, 2], seed: seedOf('m', 6) }), 6));
+        await elapse(0);
+
+        expect(drawn.filter((one) => one.el.classList.contains('die3d'))).toHaveLength(2);
+        expect(drawn.filter((one) => one.el.classList.contains('die3d-body')), 'a face of the cube was faded on its own').toEqual([]);
+        expect(drawn.filter((one) => one.el.classList.contains('die3d-shadow'))).toEqual([]);
+
+        await elapse(TIMING.FADE + 20);
+
+        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(2);
+        expect(dice().map((die) => die.dataset.face)).toEqual(['5', '2']);
+    });
+
+    it('still lands one checker after another, a fade apart', async () =>
+    {
+        still = true;
+        table.reset(sight(felt({ dice: [3, 1] })));
+        play([act(6, 0, [
+            { e: 'move', seat: 0, from: 8, to: 5, die: 3, hit: false },
+            { e: 'move', seat: 0, from: 6, to: 5, die: 1, hit: false }
+        ])], sight(felt({ near: row({ 5: 2, 6: 4, 8: 2, 13: 5, 24: 2 }) }), 6));
+
+        await elapse(TIMING.FADE);
+        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(1);
+
+        await elapse(TIMING.FADE);
+        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(2);
+    });
+});
+
+describe('what the reader does on the table', () =>
+{
+    it('moves the checker the reader moved, and takes it back', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+        await elapse(WALK_MOST + 100);
+
+        expect(table.same(sight(felt({ near: row({ 6: 5, 7: 1, 8: 3, 13: 4, 24: 2 }), dice: [6, 1] })))).toBe(true);
+
+        void table.unhop({ side: 'near', from: 13, to: 7, hit: false });
+        await elapse(WALK_MOST + 100);
+
+        expect(table.same(sight(felt({ dice: [6, 1] })))).toBe(true);
+    });
+
+    it('says so when there is no checker to move, and moves nothing', async () =>
+    {
+        table.reset(sight(felt()));
+        drawn.length = 0;
+
+        expect(await table.hop({ side: 'near', from: 20, to: 18, hit: false })).toBe(false);
+        expect(await table.unhop({ side: 'near', from: 20, to: 18, hit: false })).toBe(false);
+        expect(drawn).toEqual([]);
+    });
+
+    it('lights the top checker of each point it is told, and not one that is in the air', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.lit(new Set([13, 8]));
+
+        expect(host.querySelectorAll('.man[data-lit]')).toHaveLength(2);
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+        table.lit(new Set([7]));
+
+        expect(host.querySelectorAll('.man[data-lit]')).toHaveLength(0);
+
+        await elapse(WALK_MOST + 100);
+
+        expect(host.querySelectorAll('.man[data-lit]')).toHaveLength(1);
+    });
+
+    it('dims the dice the reader has used, and only while they are the dice on the table', () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1], seed: seedOf('m', 5) })));
+
+        table.spend([true, false], seedOf('m', 5));
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([true, false]);
+
+        table.spend([false, false], seedOf('m', 6));
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([true, false]);
+    });
+
+    it('keeps a die the reader used while its roll was still being thrown dim when the throw is over', async () =>
+    {
+        const after = sight(felt({ dice: [3, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [3, 2] }])], after);
+        await elapse(300);
+
+        table.spend([true, false], seedOf('m', 6));
+
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([true, false]);
+
+        await elapse(1400);
+
+        expect(director.busy()).toBe(false);
+        expect(dice().map((die) => die.hasAttribute('data-spent')), 'the scene ended on the dice as they were when it began').toEqual([true, false]);
+    });
+
+    it('counts the moves a double has left beside its dice, and keeps both dice lit until the last', () =>
+    {
+        const left = () => host.querySelector('.bgt-dice > .bgt-left')?.textContent ?? null;
+        const seed = seedOf('m', 5);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        expect(left()).toBeNull();
+
+        table.reset(sight(felt({ dice: [3, 3] })));
+        expect(left()).toBe('×4');
+
+        table.spend([true, false, false, false], seed);
+        expect(left()).toBe('×3');
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([false, false]);
+
+        table.spend([true, true, true, false], seed);
+        expect(left()).toBe('×1');
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([false, false]);
+
+        table.spend([true, true, true, true], seed);
+        expect(left()).toBeNull();
+        expect(dice().map((die) => die.hasAttribute('data-spent'))).toEqual([true, true]);
+
+        table.reset(sight(felt()));
+        expect(left()).toBeNull();
+    });
+
+    it('does not say a roll is a double before its dice have landed, and counts it down as somebody else plays it', async () =>
+    {
+        const left = () => host.querySelector('.bgt-dice > .bgt-left')?.textContent ?? null;
+        const rolled = sight(felt({ dice: [4, 4], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt()));
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [4, 4] }])], rolled);
+        await elapse(600);
+
+        expect(dice()).toHaveLength(2);
+        expect(left(), 'the count gave the double away while the dice were in the air').toBeNull();
+
+        await elapse(900);
+
+        expect(director.busy()).toBe(false);
+        expect(left()).toBe('×4');
+
+        table.spend([false, false], seedOf('m', 7));
+        play([act(7, 1, [
+            { e: 'move', seat: 1, from: 13, to: 9, die: 4, hit: false },
+            { e: 'move', seat: 1, from: 13, to: 9, die: 4, hit: false },
+            { e: 'move', seat: 1, from: 24, to: 20, die: 4, hit: false },
+            { e: 'move', seat: 1, from: 24, to: 20, die: 4, hit: false },
+            { e: 'roll', seat: 0, dice: [6, 1] }
+        ])], sight(felt({ far: row({ 6: 5, 8: 3, 9: 2, 13: 3, 20: 2 }), dice: [6, 1], seed: seedOf('m', 7) }), 7));
+
+        await elapse(WALK_MOST + 20);
+        expect(left()).toBe('×3');
+
+        await elapse(WALK_MOST * 3 + 60);
+        expect(left()).toBeNull();
+    });
+
+    it('marks where a picked checker can go, on top of whatever stands there, and takes the marks away', () =>
+    {
+        const marks = () => [...host.querySelectorAll<HTMLElement>('.bgt-mark')].map((mark) => mark.style.translate);
+
+        table.reset(sight(felt({ near: row({ 13: 2, 6: 13 }), far: row({ 17: 1, 12: 14 }), dice: [5, 2] })));
+        table.aim(new Set([8, 11, 6]));
+
+        expect(marks()).toHaveLength(3);
+        expect(marks()).toContain(placed(columnOf(8).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+        expect(marks()).toContain(placed(columnOf(11).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+        expect(marks()).toContain(placed(columnOf(6).x + POINT_WIDTH / 2, BOTTOM - RADIUS - 8 * RADIUS));
+        expect(host.style.getPropertyValue('--layer-mark')).toBe(String(LAYER.mark));
+        expect(LAYER.mark).toBeGreaterThan(LAYER.piece + 9);
+
+        table.aim(new Set([11]));
+        expect(marks()).toEqual([placed(columnOf(11).x + POINT_WIDTH / 2, BOTTOM - RADIUS)]);
+
+        table.aim(new Set());
+        expect(marks()).toEqual([]);
+    });
+
+    it('keeps a mark on the next free place of a point as checkers arrive there, and loses none when it is drawn again', async () =>
+    {
+        const marks = () => [...host.querySelectorAll<HTMLElement>('.bgt-mark')].map((mark) => mark.style.translate);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.aim(new Set([7]));
+
+        expect(marks()).toEqual([placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS)]);
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+        await elapse(WALK_MOST + 100);
+
+        expect(marks()).toEqual([placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS - 2 * RADIUS)]);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        expect(marks()).toEqual([placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS)]);
+    });
+
+    it('writes its numbers the way the page writes numbers, and again when that changes', () =>
+    {
+        digits = (value) => `<${ value }>`;
+        table.reset(sight(felt({ near: row({ 6: 8, 5: 7 }), dice: [2, 2], cube: { on: true, value: 4, owner: 'near' } })));
+
+        expect([...host.querySelectorAll('.bgt-count')].map((tag) => tag.textContent).sort()).toEqual(['<7>', '<8>']);
+        expect(cube().textContent).toBe('<4>');
+        expect(host.querySelector('.bgt-left')?.textContent).toBe('×<4>');
+
+        digits = (value) => `[${ value }]`;
+        table.relabel();
+
+        expect([...host.querySelectorAll('.bgt-count')].map((tag) => tag.textContent).sort()).toEqual(['[7]', '[8]']);
+        expect(cube().textContent).toBe('[4]');
+        expect(host.querySelector('.bgt-left')?.textContent).toBe('×[4]');
+    });
+});
+
+describe('a board that moved with nothing said about it', () =>
+{
+    it('is reached by sliding the fewest checkers, without a sound', async () =>
+    {
+        const after = sight(felt({ near: row({ 6: 5, 7: 1, 8: 3, 13: 4, 24: 2 }) }), 6);
+
+        table.reset(sight(felt()));
+        drawn.length = 0;
+        director.enqueue((ctx) => table.settle(after, ctx));
+        await elapse(600);
+
+        expect(drawn.filter((one) => one.el.classList.contains('man'))).toHaveLength(1);
+        expect(cues).toEqual([]);
+        expect(felt_).toEqual([]);
+        expect(table.same(after)).toBe(true);
+    });
+
+    it('is drawn at once when too much of it changed to slide', async () =>
+    {
+        const after = sight(felt({ near: row({ 0: 15 }), far: row({ 1: 15 }) }), 6);
+
+        table.reset(sight(felt()));
+        drawn.length = 0;
+        director.enqueue((ctx) => table.settle(after, ctx));
+        await elapse(0);
+
+        expect(drawn).toEqual([]);
+        expect(table.same(after)).toBe(true);
+    });
+
+    it('swaps the dice without throwing them', async () =>
+    {
+        const after = sight(felt({ dice: [4, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt({ dice: [6, 6] })));
+        director.enqueue((ctx) => table.settle(after, ctx));
+        await elapse(PICK_MS + 300);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['4', '2']);
+        expect(cues).toEqual([]);
+        expect(drawn.some((one) => one.el.classList.contains('die3d-body'))).toBe(false);
+    });
+});

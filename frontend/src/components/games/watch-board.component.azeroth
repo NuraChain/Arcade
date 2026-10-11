@@ -7,6 +7,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import { reloadPage } from '../../lib/chunks.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
+import { NO_EVENTS, type EventBatch } from '../../stores/match.store.ts';
 import { BOARDS, drawable, type BoardComponent } from './boards.ts';
 import type { MatchView, MatchWatch } from '../../api.ts';
 
@@ -74,7 +75,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     derived quiet = props.watch.live && props.watch.behind > props.watch.delay * 2;
 
-    const boardProps = (): { match: MatchView } => ({ match: props.watch.match });
+    const boardProps = (): { match: MatchView; events: EventBatch } => ({ match: props.watch.match, events: NO_EVENTS });
 
     <div class="flex min-h-0 flex-1 flex-col gap-2">
         <p class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">

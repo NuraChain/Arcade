@@ -3,7 +3,6 @@ import { untrack } from 'azerothjs';
 import Rail from '../ui/rail.component.azeroth';
 import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
-import DieFace from './die-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
 import { plateTag } from './plate-tag.ts';
@@ -11,15 +10,23 @@ import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
-import { backgammonBeats, tableCues } from './table-cues.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { diceOf, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
 import type { Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
 import { coachOf, hits, outcomeOf } from '../../game/helpers/backgammon.ts';
+import { createBackgammonTable, HOP_MS, type BackgammonTable } from '../../game/board/backgammon-table.ts';
+import { feltOf, seedOf, type Felt, type Told } from '../../game/backgammon-felt.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import { createPresenter, type Presenter, type Sight } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
 import {
     BAR_LEFT,
     BAR_WIDTH,
@@ -31,38 +38,17 @@ import {
     MIDDLE,
     POINT_HEIGHT,
     POINT_WIDTH,
-    RADIUS,
-    STACK_SHOWN,
     TOP,
     TRAY,
     TRAY_LEFT,
     WIDTH,
     columnOf,
-    pointAt,
-    stackAt,
-    type Row
+    pointAt
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
 
 type Tone = 'light' | 'dark';
-
-interface Piece
-{
-    key: string;
-    x: number;
-    y: number;
-    tone: Tone;
-    label: string;
-    lit: boolean;
-}
-
-interface Slab
-{
-    key: string;
-    y: number;
-    tone: Tone;
-}
 
 interface Spike
 {
@@ -71,12 +57,19 @@ interface Spike
     shade: 'a' | 'b';
 }
 
-interface Mark
+interface Staged
 {
-    key: string;
-    x: number;
-    y: number;
+    at: string;
+    hops: readonly Hop[];
 }
+
+interface Picked
+{
+    at: string;
+    spot: number;
+}
+
+const NONE: readonly Hop[] = [];
 
 const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
 
@@ -93,37 +86,29 @@ const SPIKES: readonly Spike[] = POINTS.map((point) =>
     };
 });
 
-const SLAB = (BOTTOM - TOP - 40) / 30;
+const covered = (moves: readonly Told[], mine: readonly Hop[]) =>
+    (mine.every((hop, index) => moves[index]?.e === 'move' && moves[index].from === hop.from && moves[index].to === hop.to) ? mine.length : null);
 
-const GAP = 10;
-
-const centreOf = (point: number) => columnOf(point).x + POINT_WIDTH / 2;
-
-export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+export default component BackgammonBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
-    state staged: Hop[] = [];
+    state staged: Staged = { at: '', hops: NONE };
 
-    state picked: number | null = null;
+    state picked: Picked | null = null;
+
+    state presenting = false;
 
     derived game = props.match;
 
-    let stagedFor = untrack(() => `${ props.match.id }:${ props.match.rev }`);
+    derived at = `${ game.id }:${ game.rev }`;
 
-    effect
-    {
-        const at = `${ game.id }:${ game.rev }`;
+    derived hops = staged.at === at ? staged.hops : NONE;
 
-        if (at !== stagedFor)
-        {
-            stagedFor = at;
-            staged = [];
-            picked = null;
-        }
-    }
+    derived chosen = picked !== null && picked.at === at ? picked.spot : null;
 
     derived view = backgammonOf(game);
 
@@ -161,148 +146,62 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived told = settings.settings().hintOutcome;
 
-    const cues = tableCues({
-        enabled: untrack(() => settings.settings().sound),
-        seq: untrack(() => board.events().seq),
-        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
-        beats: (events) => backgammonBeats(events.flatMap((one) => (one.log.kind === 'backgammon' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
-    });
+    let layer: HTMLElement | null = null;
+    let men: BackgammonTable | null = null;
+    let presenter: Presenter<Told> | null = null;
+    let sound: SoundHandle | null = null;
 
-    effect
-    {
-        const batch = board.events();
-
-        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
-    }
+    const chime = turnChime(() => sound);
 
     effect
     {
         const yours = myTurn;
 
-        untrack(() => cues.turn(yours && props.match.mine !== undefined));
-    }
-
-    effect
-    {
-        const on = settings.settings().sound;
-
-        untrack(() => cues.setEnabled(on));
-    }
-
-    mount
-    {
-        return () => cues.dispose();
+        untrack(() => chime(yours && props.match.mine !== undefined));
     }
 
     derived plan = myTurn && view!.phase === 'move' && view!.dice.length === 2
-        ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, staged)
+        ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops)
         : null;
 
     derived near = plan?.at.me ?? rowOf(viewer);
 
     derived far = plan?.at.them ?? rowOf(1 - viewer);
 
-    derived sources = new Set(picked === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
+    derived sources = new Set(chosen === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
 
-    derived targets = picked === null || !hints ? [] : (plan?.next ?? []).filter((hop) => hop.from === picked).map((hop) => hop.to);
+    derived targets = chosen === null || !hints ? [] : (plan?.next ?? []).filter((hop) => hop.from === chosen).map((hop) => hop.to);
 
-    const stack = (key: string, count: number, x: number, row: Row, base: number | undefined, tone: Tone, lit: boolean): Piece[] =>
-        Array.from({ length: Math.min(count, STACK_SHOWN) }, (_, index) => ({
-            key: `${ key }-${ index }`,
-            x,
-            y: stackAt(row, index, base),
-            tone,
-            label: index === STACK_SHOWN - 1 && count > STACK_SHOWN ? String(count) : '',
-            lit: lit && index === Math.min(count, STACK_SHOWN) - 1
-        }));
+    derived lights = new Set<number>(chosen === null ? [...sources] : [...sources, chosen]);
 
-    derived pieces = ((): Piece[] =>
-    {
-        if (view === null)
-        {
-            return [];
-        }
-
-        const mineTone = toneOf(viewer);
-        const theirTone = toneOf(1 - viewer);
-        const out: Piece[] = [];
-
-        for (const point of POINTS)
-        {
-            const column = columnOf(point);
-            const own = near[point] ?? 0;
-            const theirs = far[25 - point] ?? 0;
-
-            if (own > 0)
-            {
-                out.push(...stack(`n${ point }`, own, centreOf(point), column.row, undefined, mineTone, sources.has(point) || picked === point));
-            }
-
-            if (theirs > 0)
-            {
-                out.push(...stack(`f${ point }`, theirs, centreOf(point), column.row, undefined, theirTone, false));
-            }
-        }
-
-        const barX = BAR_LEFT + BAR_WIDTH / 2;
-
-        out.push(...stack('nbar', near[25] ?? 0, barX, 'top', MIDDLE + GAP, mineTone, sources.has(25) || picked === 25));
-        out.push(...stack('fbar', far[25] ?? 0, barX, 'bottom', MIDDLE - GAP, theirTone, false));
-
-        return out;
-    })();
-
-    derived slabs = (() =>
-    {
-        const out: Slab[] = [];
-
-        for (let index = 0; index < (near[0] ?? 0); index += 1)
-        {
-            out.push({ key: `n${ index }`, y: BOTTOM - 12 - (index + 1) * SLAB, tone: toneOf(viewer) });
-        }
-
-        for (let index = 0; index < (far[0] ?? 0); index += 1)
-        {
-            out.push({ key: `f${ index }`, y: TOP + 12 + index * SLAB, tone: toneOf(1 - viewer) });
-        }
-
-        return out;
-    })();
-
-    derived marks = targets.filter((to) => to !== 0).map((to): Mark =>
-    {
-        const column = columnOf(to);
-        const own = near[to] ?? 0;
-
-        return { key: `m${ to }`, x: centreOf(to), y: stackAt(column.row, Math.min(own, STACK_SHOWN - 1)) };
-    });
+    derived aimed = new Set(targets.filter((to) => to !== 0));
 
     derived trayLit = targets.includes(0);
 
-    derived dice = view === null ? [] : diceOf(view.dice);
+    derived dice = view === null || view.dice.length < 2 ? [] : diceOf(view.dice);
 
     derived spent = (() =>
     {
         const left = [...dice];
         const used = dice.map(() => false);
 
-        for (const hop of staged)
+        for (const hop of hops)
         {
             const distance = hop.from - hop.to;
-            let at = left.indexOf(distance);
+            let found = left.indexOf(distance);
 
-            if (at < 0 && hop.to === 0)
+            if (found < 0 && hop.to === 0)
             {
                 const bigger = left.filter((face) => face > distance).sort((a, b) => a - b)[0];
 
-                at = bigger === undefined ? -1 : left.indexOf(bigger);
+                found = bigger === undefined ? -1 : left.indexOf(bigger);
             }
 
-            if (at >= 0)
+            if (found >= 0)
             {
-                const face = left[at];
+                const face = left[found];
 
-                left.splice(at, 1);
+                left.splice(found, 1);
 
                 const slot = dice.findIndex((one, index) => one === face && !used[index]);
 
@@ -316,17 +215,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return used;
     })();
 
-    derived faces = dice.map((face, index) => ({ face, index, spent: spent[index] === true }));
-
-    derived cubeY = (() =>
-    {
-        if (view === null || view.owner === undefined)
-        {
-            return MIDDLE;
-        }
-
-        return view.owner === viewer ? BOTTOM - 44 : TOP + 44;
-    })();
+    derived diceSaid = view === null || over || view.dice.length === 0
+        ? ''
+        : locale.t('backgammon.dice', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
 
     const spotSays = (spot: number) =>
     {
@@ -348,7 +239,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
     };
 
     derived tip = myTurn
-        ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged, doubling: view!.doubling, cube: view!.cube })
+        ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged: hops, doubling: view!.doubling, cube: view!.cube })
         : null;
 
     derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
@@ -384,7 +275,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             return locale.t('backgammon.turn.roll');
         }
 
-        if (plan?.done === true && staged.length > 0)
+        if (plan?.done === true && hops.length > 0)
         {
             return locale.t('backgammon.turn.confirm');
         }
@@ -414,17 +305,200 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return `${ nameOf(seat) }: ${ locale.list(parts) }`;
     };
 
+    derived ready = view !== null;
+
+    derived result = over && !presenting;
+
+    derived barOpen = view !== null && !over;
+
+    derived rolling = myTurn && view!.phase === 'roll';
+
+    derived mayDouble = rolling && view!.doubling;
+
+    derived answering = myTurn && view!.phase === 'double';
+
+    derived staging = plan !== null;
+
+    derived offered = options.length > 0;
+
+    derived whole = plan?.done === true && hops.length > 0;
+
+    derived cubed = view?.cubed === true;
+
+    derived crawford = view?.crawford === true;
+
+    derived diceTold = diceSaid !== '';
+
+    const sightNow = (): Sight<Felt> | null =>
+    {
+        if (view === null)
+        {
+            return null;
+        }
+
+        return {
+            id: game.id,
+            rev: game.rev,
+            seat: mine ?? null,
+            view: { ...feltOf(view, viewer, over, seedOf(game.id, game.rev)), near, far, spent }
+        };
+    };
+
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() => presenter?.see(batch));
+    }
+
+    effect
+    {
+        const spots = lights;
+
+        untrack(() => men?.lit(spots));
+    }
+
+    effect
+    {
+        const spots = aimed;
+
+        untrack(() => men?.aim(spots));
+    }
+
+    effect
+    {
+        void locale.locale();
+
+        untrack(() => men?.relabel());
+    }
+
+    effect
+    {
+        const used = spent;
+        const seed = seedOf(game.id, game.rev);
+
+        untrack(() => men?.spend(used, seed));
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => sound?.setEnabled(on));
+    }
+
+    mount
+    {
+        let unwatch: () => void = () => undefined;
+
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        if (layer !== null)
+        {
+            const clock = runtime().clock;
+            const report = (error: unknown) => console.error(error);
+            const rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
+
+            men = createBackgammonTable({
+                host: layer,
+                stage: rig,
+                sound: () => sound,
+                feel: (kind) =>
+                {
+                    if (mine !== undefined)
+                    {
+                        haptic(kind);
+                    }
+                },
+                say: (value) => locale.n(value)
+            });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report });
+            unwatch = presenter.watch((busy) =>
+            {
+                presenting = busy;
+            });
+
+            untrack(() =>
+            {
+                presenter!.see(props.events);
+                men!.lit(lights);
+                men!.aim(aimed);
+            });
+        }
+
+        return () =>
+        {
+            unwatch();
+            presenter?.dispose();
+            men?.dispose();
+            presenter = null;
+            men = null;
+            sound?.dispose();
+            sound = null;
+        };
+    }
+
+    const mend = async (ctx: Ctx) =>
+    {
+        const sight = untrack(sightNow);
+
+        if (men !== null && sight !== null)
+        {
+            await men.settle(sight, ctx);
+        }
+    };
+
+    const guess = (next: readonly Hop[]) =>
+    {
+        const rev = game.rev;
+
+        presenter?.predict(next.length === 0 ? null : { rev, covers: (moves) => covered(moves, next) });
+    };
+
     const add = (hop: Hop) =>
     {
-        staged = [...staged, hop];
+        const hit = plan === null ? false : hits(outcomeOf(plan.at, hop));
+        const next = [...hops, hop];
+
+        staged = { at, hops: next };
         picked = null;
         haptic('tick');
+        guess(next);
+        presenter?.act(async (ctx) =>
+        {
+            if (men !== null && !(await men.hop({ side: 'near', from: hop.from, to: hop.to, hit })))
+            {
+                await mend(ctx);
+            }
+        }, HOP_MS);
     };
 
     const undo = () =>
     {
-        staged = staged.slice(0, -1);
+        const last = hops[hops.length - 1];
+
+        if (last === undefined)
+        {
+            return;
+        }
+
+        const next = hops.slice(0, -1);
+        const earlier = view === null ? null : stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view.dice, next);
+        const hit = earlier === null ? false : hits(outcomeOf(earlier.at, last));
+
+        staged = { at, hops: next };
         picked = null;
+        guess(next);
+        presenter?.act(async (ctx) =>
+        {
+            if (men !== null && !(await men.unhop({ side: 'near', from: last.from, to: last.to, hit })))
+            {
+                await mend(ctx);
+            }
+        }, HOP_MS);
     };
 
     const tap = (event: PointerEvent) =>
@@ -447,9 +521,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
         const spot = found === 'bar' ? 25 : (found === 'tray' ? 0 : found);
 
-        if (picked !== null)
+        if (chosen !== null)
         {
-            const hop = held.next.find((one) => one.from === picked && one.to === spot);
+            const hop = held.next.find((one) => one.from === chosen && one.to === spot);
 
             if (hop !== undefined)
             {
@@ -472,24 +546,30 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             return;
         }
 
-        picked = spot;
+        picked = { at, spot };
     };
 
     const play = async (verb: 'roll' | 'double' | 'take' | 'drop') =>
     {
         haptic('select');
+
+        if (verb === 'roll')
+        {
+            sound?.play('die-shake', { gain: 0.8 });
+        }
+
         await board.play({ kind: 'backgammon', verb });
     };
 
     const submit = async () =>
     {
-        if (plan?.done !== true || staged.length === 0)
+        if (!whole)
         {
             return;
         }
 
         haptic('select');
-        await board.play({ kind: 'backgammon', verb: 'move', hops: [...staged] });
+        await board.play({ kind: 'backgammon', verb: 'move', hops: [...hops] });
     };
 
     derived plates = [1 - viewer, viewer].map((seat) => ({
@@ -498,9 +578,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         row: view?.seats.find((one) => one.seat === seat)
     }));
 
-    <div data-rev={ props.match.rev } class="table-stage bg-stage">
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage bg-stage">
         <div class="table-grid bg-grid">
-            <Show when={ view !== null }>
+            <Show when={ ready }>
                 { () =>
                     <span class="contents">
                         <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
@@ -532,7 +612,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                 <div class="relative h-full [direction:ltr]">
                                     <svg
                                         viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
-                                        class={ () => [ 'block h-full w-full select-none touch-manipulation rounded-panel', plan !== null ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
+                                        class={ () => [ 'block h-full w-full select-none touch-manipulation rounded-panel', staging ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
                                         aria-hidden="true"
                                         onPointerUp={ tap }
                                     >
@@ -557,105 +637,17 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                             </g>
                                         </For>
 
-                                        <For each={ slabs } key={ (slab) => slab.key } let={ slab }>
-                                            <g>
-                                                <rect
-                                                    x={ TRAY_LEFT + 9 }
-                                                    y={ slab.y }
-                                                    width={ TRAY - 18 }
-                                                    height={ SLAB - 2 }
-                                                    rx="3"
-                                                    fill={ slab.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                                    stroke={ slab.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                                    stroke-width="2"
-                                                />
-                                            </g>
-                                        </For>
-
-                                        <For each={ pieces } key={ (piece) => piece.key } let={ piece }>
-                                            <g>
-                                                <circle
-                                                    cx={ piece.x }
-                                                    cy={ piece.y }
-                                                    r={ RADIUS - 1 }
-                                                    fill={ piece.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                                    stroke={ piece.lit ? 'var(--accent)' : (piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)') }
-                                                    stroke-width={ piece.lit ? 7 : 3 }
-                                                />
-                                                <circle
-                                                    cx={ piece.x }
-                                                    cy={ piece.y }
-                                                    r={ RADIUS * 0.6 }
-                                                    fill="none"
-                                                    stroke={ piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                                    stroke-width="2"
-                                                    opacity="0.6"
-                                                />
-                                                <Show when={ piece.label !== '' }>
-                                                    { () =>
-                                                        <text
-                                                            x={ piece.x }
-                                                            y={ piece.y + 9 }
-                                                            text-anchor="middle"
-                                                            font-size="26"
-                                                            font-weight="700"
-                                                            fill={ piece.tone === 'light' ? 'var(--nard-dark)' : 'var(--nard-light)' }
-                                                        >{ piece.label }</text>
-                                                    }
-                                                </Show>
-                                            </g>
-                                        </For>
-
-                                        <For each={ marks } key={ (mark) => mark.key } let={ mark }>
-                                            <g>
-                                                <circle cx={ mark.x } cy={ mark.y } r={ RADIUS - 4 } fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent)" stroke-width="4" stroke-dasharray="10 7" />
-                                            </g>
-                                        </For>
-
-                                        <Show when={ view!.cubed }>
-                                            { () =>
-                                                <g>
-                                                    <rect
-                                                        x={ BAR_LEFT + BAR_WIDTH / 2 - 24 }
-                                                        y={ cubeY - 24 }
-                                                        width="48"
-                                                        height="48"
-                                                        rx="8"
-                                                        fill="var(--nard-light)"
-                                                        stroke="var(--nard-dark)"
-                                                        stroke-width="3"
-                                                    />
-                                                    <text
-                                                        x={ BAR_LEFT + BAR_WIDTH / 2 }
-                                                        y={ cubeY + 9 }
-                                                        text-anchor="middle"
-                                                        font-size="26"
-                                                        font-weight="800"
-                                                        fill="var(--nard-dark)"
-                                                    >{ String(view!.cube === 1 ? 64 : view!.cube) }</text>
-                                                </g>
-                                            }
-                                        </Show>
-
                                         <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
                                     </svg>
 
-                                    <Show when={ faces.length > 0 && !over }>
+                                    <div class="bg-layer" aria-hidden="true" ref={ (element) => layer = element }></div>
+
+                                    <Show when={ diceTold }>
                                         { () =>
-                                            <div
-                                                class="pointer-events-none absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
-                                                style={ `left: ${ ((BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3) / WIDTH * 100).toFixed(3) }%` }
-                                                role="img"
-                                                aria-label={ locale.t('backgammon.dice', { dice: locale.list(view!.dice.map((face) => locale.n(face))) }) }
-                                            >
-                                                <For each={ faces } key={ (die) => die.index } let={ die }>
-                                                    <span class={ () => [ 'flex transition-opacity duration-200', die.spent ? 'opacity-35' : '' ].filter(Boolean).join(' ') } aria-hidden="true">
-                                                        <DieFace value={ die.face } size="sm" label="" />
-                                                    </span>
-                                                </For>
-                                            </div>
+                                            <span class="sr-only" role="img" aria-label={ diceSaid }></span>
                                         }
                                     </Show>
+
                                 </div>
 
                                 <div class="sr-only">
@@ -676,7 +668,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                         tone={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.tone }
                                         bubble={ props.speech?.[whoAt(plate.seat)] }
                                         below={ plate.seat !== viewer }
-                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
+                                        anchor={ plate.seat === viewer ? 'end' : 'start' }
                                         marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
                                         facts={
                                             <span class="contents">
@@ -692,7 +684,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                 }
             </Show>
 
-            <Show when={ view !== null && !over }>
+            <Show when={ barOpen }>
                 { () =>
                     <section class="table-bar bg-bar">
                         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -702,7 +694,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
                         <p class="bg-info flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-ui-2xs text-muted">
                             <span>{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(view!.round) }) }</span>
-                            <Show when={ view!.cubed }>
+                            <Show when={ cubed }>
                                 { () =>
                                     <span class="flex items-center gap-1">
                                         <Icon name="dice" size={ 12 } />
@@ -712,14 +704,14 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                     </span>
                                 }
                             </Show>
-                            <Show when={ view!.crawford }>
+                            <Show when={ crawford }>
                                 { () => <span class="font-semibold text-gold">{ locale.t('backgammon.crawford') }</span> }
                             </Show>
                         </p>
 
                         <CoachLine tip={ tip } />
 
-                        <Show when={ myTurn && view!.phase === 'roll' }>
+                        <Show when={ rolling }>
                             { () =>
                                 <div class="flex flex-wrap gap-2">
                                     <span class="glow-cta flex rounded-control">
@@ -727,7 +719,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                             { locale.t('backgammon.roll') }
                                         </Button>
                                     </span>
-                                    <Show when={ view!.doubling }>
+                                    <Show when={ mayDouble }>
                                         { () =>
                                             <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void play('double') }>
                                                 { locale.t('backgammon.double', { cube: locale.n(view!.cube * 2) }) }
@@ -738,7 +730,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                             }
                         </Show>
 
-                        <Show when={ myTurn && view!.phase === 'double' }>
+                        <Show when={ answering }>
                             { () =>
                                 <div class="flex flex-wrap gap-2">
                                     <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void play('take') }>
@@ -751,18 +743,18 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                             }
                         </Show>
 
-                        <Show when={ plan !== null }>
+                        <Show when={ staging }>
                             { () =>
                                 <div class="flex min-w-0 flex-col gap-2">
                                     <div class="flex min-w-0 gap-2">
-                                        <IconButton icon="undo" label={ locale.t('backgammon.undo') } variant="secondary" disabled={ staged.length === 0 || board.busy() } onClick={ undo } />
-                                        <span class={ () => [ 'flex min-w-0 flex-1 rounded-control', plan?.done === true && staged.length > 0 ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
+                                        <IconButton icon="undo" label={ locale.t('backgammon.undo') } variant="secondary" disabled={ hops.length === 0 || board.busy() } onClick={ undo } />
+                                        <span class={ () => [ 'flex min-w-0 flex-1 rounded-control', whole ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
                                             <Button
                                                 variant="primary"
                                                 size="md"
                                                 block
                                                 leading="selected"
-                                                disabled={ plan?.done !== true || staged.length === 0 }
+                                                disabled={ !whole }
                                                 loading={ board.busy() }
                                                 onClick={ () => void submit() }
                                             >
@@ -771,34 +763,34 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                         </span>
                                     </div>
 
-                                    <Show when={ options.length > 0 }>
+                                    <Show when={ offered }>
                                         { () =>
                                             <div class="flex min-w-0 flex-col gap-1">
                                                 <p class="bg-info text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
                                                 <Rail class="-mx-1" inner="px-1 py-0.5">
-                                                <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('backgammon.moves') }>
-                                                    <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
-                                                        <li class="flex shrink-0">
-                                                            <button
-                                                                type="button"
-                                                                class={ () => [
-                                                                    'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
-                                                                    picked === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
-                                                                ].join(' ') }
-                                                                disabled={ board.busy() }
-                                                                aria-label={ hopSays(hop) }
-                                                                onClick={ () => add(hop) }
-                                                            >
-                                                                { spotSays(hop.from) }
-                                                                <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
-                                                                { spotSays(hop.to) }
-                                                                <Show when={ hits(outcomeAt(hop)) }>
-                                                                    { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
-                                                                </Show>
-                                                            </button>
-                                                        </li>
-                                                    </For>
-                                                </ul>
+                                                    <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('backgammon.moves') }>
+                                                        <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
+                                                            <li class="flex shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    class={ () => [
+                                                                        'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
+                                                                        chosen === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
+                                                                    ].join(' ') }
+                                                                    disabled={ board.busy() }
+                                                                    aria-label={ hopSays(hop) }
+                                                                    onClick={ () => add(hop) }
+                                                                >
+                                                                    { spotSays(hop.from) }
+                                                                    <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
+                                                                    { spotSays(hop.to) }
+                                                                    <Show when={ hits(outcomeAt(hop)) }>
+                                                                        { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
+                                                                    </Show>
+                                                                </button>
+                                                            </li>
+                                                        </For>
+                                                    </ul>
                                                 </Rail>
                                             </div>
                                         }
@@ -811,7 +803,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             </Show>
         </div>
 
-        <Show when={ over }>
+        <Show when={ result }>
             { () =>
                 <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }

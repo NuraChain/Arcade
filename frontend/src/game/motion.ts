@@ -8,6 +8,7 @@ export interface Rect
 
 export interface Clock
 {
+    now(): number;
     after(ms: number, run: () => void): () => void;
 }
 
