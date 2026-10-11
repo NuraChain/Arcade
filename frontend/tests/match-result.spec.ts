@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchResult from '../src/components/games/match-result.component.azeroth';
+import TableResult from '../src/components/games/table-result.component.azeroth';
 import { rematchOf, type Rematch } from '../src/components/games/boards.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -525,5 +526,35 @@ describe('how a seat that left the game is said to have gone', () =>
         expect(rows.some((row) => row.includes('Lost'))).toBe(true);
         expect(rows.join(' ')).not.toContain('Gave up');
         expect(rows.join(' ')).not.toContain('Timeout');
+    });
+});
+
+describe('the result, laid over a board', () =>
+{
+    it('stands on a card of its own, with the way back to the board outside it', () =>
+    {
+        const container = renderTest(() => TableResult({ match: finished, mine: 0 }) as Rendered).container;
+        const card = container.querySelector('.table-result .table-result-card');
+
+        expect(card).not.toBeNull();
+        expect(card!.textContent).toContain('You won.');
+        expect(card!.querySelectorAll('li')).toHaveLength(2);
+        expect(button(container, 'See the board')!.closest('.table-result-card')).toBeNull();
+    });
+
+    it('gives the board back when asked, and the result back after it', () =>
+    {
+        const container = renderTest(() => TableResult({ match: finished, mine: 0 }) as Rendered).container;
+
+        fire(button(container, 'See the board')!, 'click');
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(container.querySelector('.table-result-card')).toBeNull();
+        expect(buttons(container)).toEqual(['Show the result']);
+
+        fire(button(container, 'Show the result')!, 'click');
+
+        expect(container.querySelector('.table-result .table-result-card')!.textContent).toContain('You won.');
+        expect(container.querySelector('.table-result-tab')).toBeNull();
     });
 });

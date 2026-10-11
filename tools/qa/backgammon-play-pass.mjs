@@ -1,4 +1,4 @@
-import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
+import { BASE, clearTables, launch, pressable, recorder, seat, solid, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 import { stage, turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 import { BAR_LEFT, BAR_WIDTH, HEIGHT, POINT_WIDTH, TRAY, TRAY_LEFT, WIDTH, columnOf } from '../../frontend/src/game/backgammon-layout.ts';
@@ -279,6 +279,7 @@ try
     {
         record(`${ player.handle } is shown the finished match`, await waitFor(async () => /won/i.test(await player.page.locator('main').innerText()), 8000));
         record(`${ player.handle } is offered another`, await waitFor(async () => await pressable(player.page, /Play again/i) !== null, 8000));
+        record(`${ player.handle } reads the result on a card the board does not show through`, await solid(player.page, '.table-result-card'));
     }
 
     console.log('\n[5] the console, over the whole match');

@@ -507,6 +507,13 @@ html:has(.site-drawer[open])
     inline-size: min(100%, 26rem);
 }
 
+.table-result-card
+{
+    border-radius: var(--radius-panel);
+    background: var(--color-lifted);
+    box-shadow: var(--shadow-3);
+}
+
 .table-result-tab
 {
     position: absolute;

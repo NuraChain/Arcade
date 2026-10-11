@@ -3415,7 +3415,15 @@ the moment anything a player needs is below the fold.
   game is live, so no plate of theirs says a turn was missed.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
   only worth their height when one row would squeeze each card below a readable strip.
-- `MatchResult` overlays the stage rather than pushing it down.
+- `MatchResult` overlays the stage rather than pushing it down. The overlay dims and blurs the
+  board, and the standings stand on a card of their own (`.table-result-card`), the `lifted`
+  surface every sheet, toast and popover in the product floats on. The panel's own background is a
+  5% tint, made for a page; laid straight on the blurred board it let the board show through the
+  names and the scores, and the owner asked why the background was transparent. "See the board"
+  stays outside the card and is a solid button: it was grey words drawn straight on the blurred
+  board. `match-result.spec.ts` (*the result, laid over a board*) holds the card
+  and the fold, and the ludo and backgammon play passes ask a real browser whether the card's
+  background is opaque, which no spec can: happy-dom reads no stylesheet.
 - Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
   the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
 - A poker plate is centred on the rail, at 10% and 90% of the table's height, and is CLAMPED onto the

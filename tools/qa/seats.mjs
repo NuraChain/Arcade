@@ -199,6 +199,27 @@ export async function pressable(page, name)
     return await button.isDisabled() ? null : button;
 }
 
+export async function solid(page, selector)
+{
+    return await page.evaluate((chosen) =>
+    {
+        const element = document.querySelector(chosen);
+
+        if (element === null)
+        {
+            return false;
+        }
+
+        const ink = document.createElement('canvas').getContext('2d');
+
+        ink.fillStyle = 'transparent';
+        ink.fillStyle = getComputedStyle(element).backgroundColor;
+        ink.fillRect(0, 0, 1, 1);
+
+        return ink.getImageData(0, 0, 1, 1).data[3] === 255;
+    }, selector);
+}
+
 export async function waitFor(check, timeout = 6000)
 {
     const until = Date.now() + timeout;

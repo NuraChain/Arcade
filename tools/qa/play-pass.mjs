@@ -26,6 +26,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { solid } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
 function cachedChromium()
@@ -387,6 +388,7 @@ try
             record(`${ who.handle } is still looking at the finished game`, /won|ended/i.test(said), said.slice(0, 60));
             record(`${ who.handle } is told what it did to the ratings`, /[+−]\d/.test(said));
             record(`${ who.handle } is offered another game`, await pressable(who.page, /Play again/i) !== null);
+            record(`${ who.handle } reads the result on a card the board does not show through`, await solid(who.page, '.table-result-card'));
         }
     }
 
