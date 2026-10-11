@@ -68,6 +68,8 @@ export interface TableOptions
     onDice?: () => void;
     onCube?: () => void;
     onRoll?: (seed: number, faces: readonly number[], landed: boolean) => void;
+    noMove?: () => string;
+    onPass?: (side: Side, faces: readonly number[]) => void;
 }
 
 export interface BackgammonTable extends Table<Felt, Told>
@@ -109,9 +111,9 @@ export const CUBE_MS = 420;
 
 export const SLIDE_MS = 440;
 
-export const PASS_MS = 700;
+export const PASS_MS = 1100;
 
-export const PASS_LEAST = 300;
+export const PASS_LEAST = 500;
 
 export const GAME_GAP = 260;
 
@@ -138,6 +140,8 @@ const REACH_OVER = 1.2;
 const WAIT_SEED = 7;
 
 const WAIT_MS = 180;
+
+const STICK_MS = 160;
 
 const HOP_BASE = 55;
 
@@ -251,6 +255,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     let wanted: { spent: readonly boolean[]; seed: number } = { spent: [], seed: -2 };
     let rested = true;
     let badge: HTMLElement | null = null;
+    let stuck: HTMLElement | null = null;
     let spots: ReadonlySet<number> = new Set();
     let aims: ReadonlySet<number> = new Set();
     let home: number | null = null;
@@ -761,12 +766,33 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         alive.delete(die);
     };
 
+    const stick = () =>
+    {
+        const words = options.noMove?.() ?? '';
+
+        if (words === '' || stuck !== null)
+        {
+            return;
+        }
+
+        stuck = make('bgt-pass', zone);
+        stuck.textContent = words;
+        stage.animate(stuck, [{ opacity: 0, scale: '0.8', offset: 0 }], { duration: STICK_MS });
+    };
+
+    const unstick = () =>
+    {
+        stuck?.remove();
+        stuck = null;
+    };
+
     const pick = async () =>
     {
         const old = dice;
 
         dice = [];
         waiting = false;
+        unstick();
         count(0);
         live();
 
@@ -826,6 +852,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             drop(die);
         }
 
+        unstick();
         dice = faces.map((face, index) => lay(face, index, faces.length, seed));
         diceSeed = seed;
         used = [];
@@ -994,6 +1021,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         else if (beat.kind === 'pass')
         {
             dice.forEach((die) => die.dim(true));
+            stick();
+            options.onPass?.(beat.side, shown.dice);
 
             if (at.reader)
             {
@@ -1074,6 +1103,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         }
 
         dropAll();
+        unstick();
         alive.clear();
         els.clear();
         tags.clear();

@@ -135,6 +135,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     state says = '';
 
+    state passed = '';
+
     state presenting = false;
 
     derived game = props.match;
@@ -411,6 +413,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         if (told)
         {
             says = next;
+            passed = '';
         }
     }
 
@@ -508,12 +511,26 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 onRoll: (seed, faces, landed) =>
                 {
                     rolled = { seed, faces: faces.join(), landed };
+                },
+                noMove: () => locale.t('backgammon.pass'),
+                onPass: (side, faces) =>
+                {
+                    const dice = locale.list(faces.map((face) => locale.n(face)));
+
+                    passed = side === 'near' && mine !== undefined
+                        ? locale.t('backgammon.passed.you', { dice })
+                        : locale.t('backgammon.passed.them', { name: nameOf(side === 'near' ? viewer : 1 - viewer), dice });
                 }
             });
             presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;
+
+                if (!busy)
+                {
+                    passed = '';
+                }
             });
 
             untrack(() =>
@@ -1067,7 +1084,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             <Show when={ barOpen }>
                 { () =>
                     <section class="table-bar bg-bar">
-                        <p class="sr-only" aria-live="polite">{ says }</p>
+                        <p class="sr-only" aria-live="polite">{ passed === '' ? says : passed }</p>
 
                         <p class="sr-only">
                             <span class="block">{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(view!.round) }) }</span>

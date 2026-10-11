@@ -64,6 +64,8 @@ let digits: (value: number) => string = String;
 let pressed: string[];
 let rolls: [number, boolean][];
 let faced: string[];
+let passes: string[];
+let unplayed: string;
 
 const elapse = async (ms: number) =>
 {
@@ -112,6 +114,8 @@ beforeEach(() =>
     pressed = [];
     rolls = [];
     faced = [];
+    passes = [];
+    unplayed = 'No move';
     host = document.createElement('div');
     host.className = 'bg-layer';
     document.body.append(host);
@@ -137,7 +141,9 @@ beforeEach(() =>
         {
             rolls.push([seed, landed]);
             faced.push(faces.join());
-        }
+        },
+        noMove: () => unplayed,
+        onPass: (side, faces) => passes.push(`${ side } ${ faces.join() }`)
     });
 });
 
@@ -582,6 +588,52 @@ describe('what happened, played on the table', () =>
 
         expect(dice()).toHaveLength(0);
         expect(director.busy()).toBe(false);
+    });
+
+    it('writes on those dice that nobody could play them, tells whoever asked whose they were, and takes the words away with the dice', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [6, 5] }, { e: 'pass', seat: 1 }])], sight(felt(), 6));
+        await elapse(600);
+
+        expect(host.querySelector('.bgt-pass'), 'the dice were called unplayable while they were in the air').toBeNull();
+        expect(passes).toEqual([]);
+
+        await elapse(700);
+
+        expect(host.querySelector('.bgt-dice > .bgt-pass')?.textContent).toBe('No move');
+        expect(passes).toEqual(['far 6,5']);
+
+        await elapse(PASS_MS + PICK_MS + 100);
+
+        expect(host.querySelector('.bgt-pass')).toBeNull();
+        expect(passes).toEqual(['far 6,5']);
+    });
+
+    it('writes nothing on them when the page gives it no words, and still tells whoever asked', async () =>
+    {
+        unplayed = '';
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], sight(felt(), 6));
+        await elapse(1300);
+
+        expect(host.querySelector('.bgt-pass')).toBeNull();
+        expect(passes).toEqual(['near 6,6']);
+    });
+
+    it('takes the words off dice that are drawn again in the middle of the hold', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], sight(felt(), 6));
+        await elapse(1300);
+
+        expect(host.querySelector('.bgt-pass')).not.toBeNull();
+
+        director.cancel();
+        table.reset(sight(felt({ dice: [3, 1] }), 7));
+
+        expect(host.querySelector('.bgt-pass')).toBeNull();
+        expect(dice().map((die) => die.dataset.face)).toEqual(['3', '1']);
     });
 
     it('cuts that hold to its least when the next thing is already waiting', async () =>

@@ -640,6 +640,90 @@ describe('the opening roll', () =>
     });
 });
 
+describe('a roll nobody could play', () =>
+{
+    const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';
+
+    const mark = (container: HTMLElement) => container.querySelector('.bg-layer .bgt-dice > .bgt-pass')?.textContent ?? null;
+
+    it('is said so on the dice and to a screen reader, and the turn that follows is said after it', async () =>
+    {
+        const table = await live(match({ phase: 'roll', turn: 1, dice: [] }, 0, { turn: 1 }));
+
+        table.tell(match({ turn: 0, dice: [5, 2] }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+            { e: 'roll', seat: 1, dice: [6, 5] },
+            { e: 'pass', seat: 1 },
+            { e: 'roll', seat: 0, dice: [5, 2] }
+        ])]);
+        await elapse(1300);
+
+        expect(mark(table.container)).toBe('No move');
+        expect(said(table.container)).toBe('omid.k rolled 6 and 5 and cannot move.');
+        expect(lit(table.container), 'the reader was shown what to move while the other player\'s dice were being called unplayable').toBe(0);
+
+        await elapse(3000);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(mark(table.container)).toBeNull();
+        expect(said(table.container)).toBe('You rolled 5 and 2. Move your checkers.');
+    });
+
+    it('is said of the reader\'s own dice in the reader\'s own words', async () =>
+    {
+        const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        table.tell(match({ turn: 1, dice: [4, 3] }, 0, { rev: 5, turn: 1 }), [happened(5, 0, [
+            { e: 'roll', seat: 0, dice: [6, 6] },
+            { e: 'pass', seat: 0 },
+            { e: 'roll', seat: 1, dice: [4, 3] }
+        ])]);
+        await elapse(1300);
+
+        expect(mark(table.container)).toBe('No move');
+        expect(said(table.container)).toBe('You rolled 6 and 6 and cannot move.');
+
+        await elapse(3000);
+
+        expect(said(table.container)).toBe('omid.k is playing.');
+    });
+
+    it('gives way to the turn when nothing was rolled after it', async () =>
+    {
+        const table = await live(match({ phase: 'roll', turn: 1, dice: [] }, 0, { turn: 1 }));
+
+        table.tell(match({ phase: 'roll', turn: 0, dice: [], doubling: true }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+            { e: 'roll', seat: 1, dice: [6, 5] },
+            { e: 'pass', seat: 1 }
+        ])]);
+        await elapse(1300);
+
+        expect(said(table.container)).toBe('omid.k rolled 6 and 5 and cannot move.');
+
+        await elapse(2500);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(mark(table.container)).toBeNull();
+        expect(said(table.container)).toBe('Your turn. Tap the dice to roll.');
+    });
+
+    it('is written and said in Persian to a Persian reader', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        table.tell(match({ turn: 1, dice: [4, 3] }, 0, { rev: 5, turn: 1 }), [happened(5, 0, [
+            { e: 'roll', seat: 0, dice: [6, 6] },
+            { e: 'pass', seat: 0 },
+            { e: 'roll', seat: 1, dice: [4, 3] }
+        ])]);
+        await elapse(1300);
+
+        expect(mark(table.container)).toBe('حرکتی نیست');
+        expect(said(table.container)).toBe('تاس‌هایت ۶ و ۶ آمد و حرکتی نداری.');
+    });
+});
+
 describe('the backgammon helpers', () =>
 {
     const blot = (mine: number | null = 0) => match({ dice: [5, 3], seats: position({ 13: 1, 1: 14 }, { 17: 1, 6: 14 }) }, mine);

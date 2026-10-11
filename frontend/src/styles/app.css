@@ -2910,6 +2910,23 @@ html:has(.site-drawer[open])
     }
 }
 
+.bgt-pass
+{
+    position: absolute;
+    inset-block-start: calc(var(--dice-em) * 0.95);
+    inset-inline-start: 0;
+    padding: 0.1rem 0.5rem;
+    translate: -50% 0;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.66);
+    color: white;
+    font-size: var(--text-ui-xs);
+    font-weight: 700;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .bgt-hit
 {
     position: absolute;

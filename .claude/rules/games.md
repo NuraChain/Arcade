@@ -2735,8 +2735,19 @@ with, and the one that arrives with a new game, as heard. `match-store.spec.ts`,
 `presenter.spec.ts` (*the opening of a game*) and `backgammon-board.spec.ts` (*the opening roll*)
 hold it.
 
-**What the board does not do yet, so nobody reads this as finished.** A turn with no move says
-nothing, and a game that ends has no banner. Each is its own commit in the plan
+**A roll nobody could play says so, on the dice.** The engine passes for a seat with no move and
+rolls for the next in the same action, so the dice were thrown, dimmed and taken away with no
+word of why. While the table holds them (`PASS_MS`, 1.1 s, cut to `PASS_LEAST`, half a second,
+when something waits: both were shorter until there were words to read in that time) a
+small pill under the dice reads "No move" (`.bgt-pass`, drawn by the table from a string the
+board hands it, and gone with the dice), and the screen reader's sentence is "Omid rolled 6 and
+5 and cannot move." (`onPass`, `passed` on the board). That sentence stands until the next one
+replaces it, which is when the dice that follow have landed, or until the table goes idle when
+nothing was rolled after it. The pill is the one word drawn on this table that is not a number:
+without it the commonest surprise in the game has no explanation a sighted player can see.
+
+**What the board does not do yet, so nobody reads this as finished.** A game that ends has no
+banner. It is its own commit in the plan
 (`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
