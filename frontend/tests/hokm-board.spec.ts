@@ -356,22 +356,45 @@ describe('playing a card with a finger', () =>
         expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
     });
 
-    it('offers a button that plays the lifted card, and moves the lift when another card is tapped', () =>
+    it('moves the lift when another card is tapped, and marks the lifted card as the one a second tap plays', () =>
     {
         useDevice().overrideCoarse(true);
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
 
         fire(cardButton(container, 0), 'click');
+
+        expect(cardButton(container, 0).dataset.go).toBe('true');
+
         fire(cardButton(container, 14), 'click');
 
         expect(cardButton(container, 0).dataset.picked).toBeUndefined();
+        expect(cardButton(container, 0).dataset.go).toBeUndefined();
         expect(cardButton(container, 14).dataset.picked).toBe('true');
+        expect(cardButton(container, 14).dataset.go).toBe('true');
+        expect(play).not.toHaveBeenCalled();
 
-        const button = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith('Play the'));
-        fire(button!, 'click');
+        fire(cardButton(container, 14), 'click');
 
+        expect(play).toHaveBeenCalledTimes(1);
         expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
+    });
+
+    it('offers no button that plays a card but the card: none in the page, with a card lifted or not', () =>
+    {
+        useDevice().overrideCoarse(true);
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+        const beside = () => [...container.querySelectorAll('button')]
+            .filter((one) => !one.classList.contains('card-hold'))
+            .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? '');
+
+        expect(beside()).toEqual(['Sort']);
+
+        fire(cardButton(container, 14), 'click');
+
+        expect(beside()).toEqual(['Sort']);
+        expect(container.querySelector('.hokm-play')).toBeNull();
     });
 
     it('plays on the first click with a mouse, where a hover already lifts the card', () =>
@@ -487,44 +510,47 @@ describe('the game helpers', () =>
         expect(play).not.toHaveBeenCalled();
     });
 
-    it('says whether the card in hand would take the trick, and stops saying it when the helper is off', () =>
+    it('says in the card\'s own name whether it would take the trick, draws no sentence about it, and stops when the helper is off', () =>
     {
         useDevice().overrideCoarse(false);
         const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
 
         cardButton(container, 38).focus();
 
-        expect(container.querySelector('.hokm-outcome')?.textContent).toBe('Takes the trick so far.');
         expect(cardButton(container, 38).getAttribute('aria-label')).toBe('Play the A of Hearts. Takes the trick so far.');
+        expect(container.querySelector('.hokm-outcome')).toBeNull();
+        expect(container.textContent).not.toContain('Takes the trick so far.');
 
         useSettings().update({ hintOutcome: false });
 
-        expect(container.querySelector('.hokm-outcome')).toBeNull();
         expect(cardButton(container, 38).getAttribute('aria-label')).toBe('Play the A of Hearts');
     });
 
-    it('puts the outcome of a lifted card beside the button that plays it', () =>
+    it('keeps the outcome on the lifted card itself, where the second tap is made', () =>
     {
         useDevice().overrideCoarse(true);
         const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
 
         fire(cardButton(container, 38), 'click');
 
-        const button = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith('Play the'));
-
-        expect(button?.getAttribute('aria-label')).toBe('Play the A of Hearts. Takes the trick so far.');
-        expect(container.querySelector('.hokm-outcome')?.textContent).toBe('Takes the trick so far.');
+        expect(cardButton(container, 38).dataset.go).toBe('true');
+        expect(cardButton(container, 38).getAttribute('aria-label')).toBe('Play the A of Hearts. Takes the trick so far.');
+        expect([...container.querySelectorAll('button')].some((one) => one.textContent?.trim().startsWith('Play the'))).toBe(false);
     });
 
-    it('coaches the rule that binds this play, and goes quiet when the coach is off', () =>
+    it('coaches the rule that binds this play from a lamp, and with the coach off keeps the rule for a screen reader alone', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
+        const said = () => [...container.querySelectorAll('.hokm-rail > p.sr-only')].map((one) => one.textContent ?? '');
 
         expect(container.querySelector('[role="note"]')?.textContent).toContain('You have to follow the suit that was led.');
+        expect(container.querySelector('[role="note"]')?.getAttribute('data-lamp')).toBe('true');
+        expect(said()).toEqual(['Your turn.']);
 
         useSettings().update({ hintRules: false });
 
         expect(container.querySelector('[role="note"]')).toBeNull();
+        expect(said()).toEqual(['Your turn.', 'You have to follow the suit that was led.']);
     });
 
     it('tells the hakem which suit they hold most of while trump is being named', () =>
@@ -561,35 +587,51 @@ describe('the two-handed draw', () =>
 
     const drawing = (mine: number | null) => two({ phase: 'draw', turn: 0, stock: 39, hand: [1, 15, 27, 40, 41, 50, 51], ...(mine === 0 ? { offer: 12 } : {}) }, mine);
 
-    const named = (container: HTMLElement, words: string) =>
-        [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes(words)) ?? null;
+    const watching = (): MatchView =>
+    {
+        const seen = drawing(null);
 
-    it('offers the drawn card and its two choices to the drawer alone', () =>
+        return { ...seen, view: { ...seen.view, hand: [] } } as MatchView;
+    };
+
+    const offer = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button.hokm-offer');
+
+    const stock = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button.hokm-stock-press');
+
+    const beside = (container: HTMLElement) => [...container.querySelectorAll('button')]
+        .filter((one) => !one.classList.contains('card-hold'))
+        .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? '');
+
+    it('lays the drawn card on the felt for the drawer alone, and makes the card and the stock the two choices', () =>
     {
         const drawer = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
 
-        expect(drawer.container.querySelector('.hokm-draw .card-face')).not.toBeNull();
-        expect(named(drawer.container, 'Keep the')).not.toBeNull();
-        expect(named(drawer.container, 'Take the next card')).not.toBeNull();
+        expect(offer(drawer.container)?.querySelector('.card-face')).not.toBeNull();
+        expect(offer(drawer.container)?.getAttribute('aria-label')).toBe('Keep the A of Clubs');
+        expect(stock(drawer.container)?.getAttribute('aria-label')).toBe('Take the next card');
+        expect(drawer.container.querySelector('.hokm-stock')?.getAttribute('data-live')).toBe('true');
+        expect(beside(drawer.container)).toEqual(['Take the next card', 'Keep the A of Clubs', 'Sort']);
+        expect(drawer.container.querySelector('.hokm-choose')).toBeNull();
         drawer.unmount();
 
-        for (const reader of [1, null])
+        for (const other of [drawing(1), watching()])
         {
-            const other = renderTest(() => HokmBoard({ match: drawing(reader) }) as Rendered);
+            const seen = renderTest(() => HokmBoard({ match: other }) as Rendered);
 
-            expect(other.container.querySelector('.hokm-draw'), `reader ${ reader }`).toBeNull();
-            expect(named(other.container, 'Take the next card'), `reader ${ reader }`).toBeNull();
-            other.unmount();
+            expect(offer(seen.container), `reader ${ other.mine }`).toBeNull();
+            expect(stock(seen.container), `reader ${ other.mine }`).toBeNull();
+            expect(seen.container.querySelector('.hokm-stock')?.getAttribute('data-live'), `reader ${ other.mine }`).toBeNull();
+            seen.unmount();
         }
     });
 
-    it('keeps or passes the drawn card through the board', () =>
+    it('keeps the drawn card when it is pressed, and passes it when the stock is', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
 
-        fire(named(container, 'Keep the')!, 'click');
-        fire(named(container, 'Take the next card')!, 'click');
+        fire(offer(container)!, 'click');
+        fire(stock(container)!, 'click');
 
         expect(play.mock.calls.map(([body]) => body)).toEqual([
             { kind: 'hokm', verb: 'keep' },
@@ -597,46 +639,59 @@ describe('the two-handed draw', () =>
         ]);
     });
 
-    it('shows the stock as a count to everybody and the hand as so many of thirteen to its holder', () =>
+    it('shows the stock as a count to everybody, counts a hand being filled on its plate and nowhere else, and gives a watcher nothing to press', () =>
     {
         const drawer = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
 
         expect(drawer.container.querySelector('.hokm-stock')?.textContent).toContain('39');
-        expect(drawer.container.querySelector('.hokm-filled')?.textContent).toContain('7/13');
-        expect(drawer.container.querySelector('.hokm-filled')?.textContent).toContain('7 of 13 cards');
+        expect(drawer.container.querySelector('.hokm-filled')).toBeNull();
+        expect(drawer.container.textContent).not.toContain('7/13');
+        expect(drawer.container.querySelector('.hokm-seat[data-seat="0"]')?.textContent).toContain('5 cards');
         drawer.unmount();
 
-        const watcher = renderTest(() => HokmBoard({ match: drawing(null) }) as Rendered);
+        const watcher = renderTest(() => HokmBoard({ match: watching() }) as Rendered);
 
         expect(watcher.container.querySelector('.hokm-stock')?.textContent).toContain('39');
-        expect(watcher.container.querySelector('.hokm-filled')).toBeNull();
+        expect(beside(watcher.container)).toEqual([]);
     });
 
-    it('lets the seat putting cards down choose them, and confirms only at the exact count', () =>
+    it('lets the seat putting cards down lift them, and takes them at the stock only at the exact count', () =>
     {
         useDevice().overrideCoarse(false);
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0) }) as Rendered);
         const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
-        const confirm = () => named(container, 'Put these 3 face down')!;
+        const due = () => container.querySelector('.hokm-stock-due');
 
         expect(hold(3).disabled).toBe(false);
         expect(hold(3).getAttribute('aria-pressed')).toBe('false');
-        expect(confirm().disabled).toBe(true);
+        expect(due()?.textContent?.trim()).toBe('0/3');
+        expect(stock(container)).toBeNull();
 
         [51, 3, 27].forEach((card) => fire(hold(card), 'click'));
 
         expect(hold(3).getAttribute('aria-pressed')).toBe('true');
-        expect(confirm().disabled).toBe(false);
+        expect(hold(3).dataset.go).toBeUndefined();
+        expect(due()?.textContent?.trim()).toBe('3/3');
+        expect(due()?.getAttribute('data-full')).toBe('true');
+        expect(stock(container)?.getAttribute('aria-label')).toBe('Put these 3 face down');
 
         fire(hold(40), 'click');
 
-        expect(confirm().disabled).toBe(true);
+        expect(hold(40).getAttribute('aria-pressed')).toBe('false');
+        expect(due()?.textContent?.trim()).toBe('3/3');
+
+        fire(hold(27), 'click');
+
+        expect(stock(container)).toBeNull();
+        expect(due()?.textContent?.trim()).toBe('2/3');
+        expect(due()?.getAttribute('data-full')).toBeNull();
 
         fire(hold(40), 'click');
-        fire(confirm(), 'click');
+        fire(stock(container)!, 'click');
 
-        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'discard', cards: [3, 27, 51] });
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'discard', cards: [3, 40, 51] });
     });
 
     it('gives the seat waiting on a discard nothing to press', () =>
@@ -644,15 +699,90 @@ describe('the two-handed draw', () =>
         const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'discard', turn: 0, stock: 42, hand: [3, 14, 27, 40, 51] }, 1) }) as Rendered);
 
         expect([...container.querySelectorAll<HTMLButtonElement>('.card-hold')].every((button) => button.disabled)).toBe(true);
-        expect(named(container, 'face down')).toBeNull();
+        expect(stock(container)).toBeNull();
+        expect(container.querySelector('.hokm-stock-due')).toBeNull();
+        expect(beside(container)).toEqual(['Sort']);
     });
 
-    it('tells the drawer which card their keep put face down, and draws nothing else about the cards put down', () =>
+    it('shows the drawer the card their keep put face down, beside the stock and in words for a screen reader, and draws nothing else about the cards put down', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'draw', turn: 1, stock: 37, glimpse: 9, hand: [1, 15, 27, 40, 41, 50] }, 0) }) as Rendered);
 
-        expect(container.textContent).toContain('went face down');
+        expect(container.querySelector('.hokm-glimpse .card-face')).not.toBeNull();
+        expect(container.querySelector('.hokm-glimpse')?.getAttribute('aria-hidden')).toBe('true');
+        expect([...container.querySelectorAll('.hokm-rail > p.sr-only')].map((one) => one.textContent)).toContain('The J of Clubs went face down.');
         expect(container.querySelector('[class*="discard"], [class*="burn"]')).toBeNull();
+    });
+});
+
+describe('the small things in the corner of the table, where a bar used to be', () =>
+{
+    const turn = (extra: Partial<MatchView> = {}): MatchView => ({
+        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30, 45], plays: [0, 14, 30, 45] }, 0),
+        ...extra
+    });
+
+    afterEach(() =>
+    {
+        useSettings().reset();
+    });
+
+    it('lays the stage out as the table and the hand, and keeps the clock, Sort and the tip inside the cell the table is fitted to', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn({ remainingMs: 20_000 }) }) as Rendered);
+        const rail = container.querySelector('.table-fit > .hokm-rail')!;
+
+        expect(container.querySelector('.table-grid')!.classList.contains('hokm-grid')).toBe(true);
+        expect(container.querySelector('.table-grid > .table-bar')).toBeNull();
+        expect(rail.previousElementSibling?.classList.contains('hokm-table')).toBe(true);
+        expect([...rail.querySelectorAll('.hokm-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
+        expect(rail.querySelector('.hokm-tools button')?.getAttribute('aria-label')).toBe('Sort');
+        expect(rail.querySelector('.hokm-tools [role="note"]')?.getAttribute('data-lamp')).toBe('true');
+    });
+
+    it('speaks the turn to a screen reader alone, and still prints it on an empty felt', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+        const live = container.querySelector('[aria-live="polite"]')!;
+
+        expect(live.textContent).toBe('Your turn.');
+        expect(live.classList.contains('sr-only')).toBe(true);
+        expect(live.closest('.hokm-rail')).not.toBeNull();
+        expect(container.querySelector('.hokm-centre')?.textContent).toContain('Your turn.');
+    });
+
+    it('sorts the hand when Sort is pressed, trump first, and says so on the button', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+        const order = () => [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => Number(one.dataset.card));
+        const sort = () => container.querySelector<HTMLButtonElement>('.hokm-tools button')!;
+
+        expect(order()).toEqual([0, 14, 30, 45]);
+        expect(sort().getAttribute('aria-pressed')).toBe('false');
+
+        fire(sort(), 'click');
+
+        expect(order()[0]).toBe(45);
+        expect(sort().getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('gives somebody watching the corner with nothing in it to press', () =>
+    {
+        const seen = match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0 });
+        const { container } = renderTest(() => HokmBoard({ match: { ...seen, mine: undefined } }) as Rendered);
+
+        expect(container.querySelector('.table-fit > .hokm-rail')).not.toBeNull();
+        expect(container.querySelectorAll('button').length).toBe(0);
+        expect(container.querySelector('[role="note"]')).toBeNull();
+        expect(container.querySelector('.hokm-clock')).toBeNull();
+    });
+
+    it('takes the corner away with the game', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn({ finishedAt: new Date(900_000).toISOString(), outcome: 'won', winner: 0 }) }) as Rendered);
+
+        expect(container.querySelector('.hokm-rail')).toBeNull();
+        expect(container.querySelector('.table-result')).not.toBeNull();
     });
 });
 

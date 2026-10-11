@@ -3049,14 +3049,17 @@ winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs fro
   last revision and the whole rematch plays in silence. `hokm-board.spec.ts` fails without it.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
-- **The two-handed draw is drawn on the felt and rings once.** A stock pile with its count sits at the
-  felt's edge; a draw flies one card back from it to the drawer (`draw` beat) and a discard is a sound
-  with nothing flying. The drawer alone gets a panel shaped like the trump chooser - the card, Keep and
-  Take the next card - and the seat putting cards down toggles them in the hand, with a confirm that
-  enables only at the exact count and a "5/13" chip beside the clock. Nothing on screen describes the
-  cards put face down beyond the drawer's own "The 9 of hearts went face down". The turn alternates on
-  every draw, so the turn chime rings on a seat's FIRST draw of the hand and the draw's card-slide is
-  the cue after that.
+- **The two-handed draw is played on the felt, by the card and the stock, and rings once.** A stock
+  pile with its count sits at the felt's edge; a draw flies one card back from it to the drawer
+  (`draw` beat) and a discard is a sound with nothing flying. The seat putting cards down lifts
+  them in the hand. The stock counts them ("2/3") and, at the exact count, lights up and takes
+  them when it is pressed; a lift past the count is refused with the deny cue, so the count never
+  reads "4/3". The drawer alone is shown the drawn card, face up in the middle of the felt:
+  pressing the card keeps it, pressing the stock passes it and takes the next. The card that went
+  face down after a keep is shown to that seat alone, dimmed beside the stock (`.hokm-glimpse`),
+  until its next draw, and said in words to a screen reader. Nothing else on screen describes the
+  cards put face down. The turn alternates on every draw, so the turn chime rings on a seat's
+  FIRST draw of the hand and the draw's card-slide is the cue after that.
 - **`mount` runs in a microtask**, so a spec that renders a component and advances the manual clock
   in the same tick advances it before the component's timers exist. `turn-clock.spec.ts` awaits one.
 
@@ -3227,10 +3230,11 @@ none of them. The only way to know is to fetch the url again from inside the pag
 back - every layer of it, so a table whose felt loaded and whose ornaments did not still fails; the
 check answers 0 for a broken file and -1 for no such element, because a pass asking the
 wrong browser at the wrong moment is a different failure from a broken build. It is asked after trump
-is called, of the browser that did not call it. The pass then puts the cards face down by pressing them
-(the confirm only enables at the exact count), presses Keep and Take the next card for four draws with
-the offer present in the drawer's browser and absent from the other, and finishes the draw over the api
-before it clicks cards.
+is called, of the browser that did not call it. The pass then lifts the cards to put face down by
+pressing them and presses the stock, which takes them only at the exact count; presses the drawn card
+and the stock by turns for four draws, with the card on the felt of the drawer's browser and absent
+from the other; finishes the draw over the api before it clicks cards; and fails if a button on the
+page plays a card other than the card, or a bar of sentences is drawn under the table.
 
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
@@ -3299,15 +3303,66 @@ indices are large: they are what shows of a card overlapped in a hand.
 
 **The layout follows the reference and the rules, not a generic card table.** Seats are placed by
 their place round the table - bottom, then right, top and left at four; top-right and top-left at
-three; top at two - and the trick lies between each seat and the centre. On a phone the order is
-table, hand, then the tiles, so the cards you are holding are never below the fold; on a wide
-container the tiles (trump, score, last trick) are a column beside the table. The hand fans with a
-step that shrinks to fit, and breaks into two rows past thirteen, because the seventeen cards of the
-three-handed game in one row on a phone is a strip too narrow to read.
+three; top at two - and the trick lies between each seat and the centre. The stage is the table and
+under it the hand, at every size, and the trump, the score and the last trick are on the felt. The
+hand fans with a step that shrinks to fit, and breaks into two rows past thirteen, because the
+seventeen cards of the three-handed game in one row on a phone is a strip too narrow to read.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.
+
+**A hokm table has no bar: the cards, the stock and the four suits are everything that is
+pressed.** Under the hand sat a bar: a sentence about the turn, a chip of the trump and the score,
+"5/13" while a hand was being filled, the clock and Sort, and under those "Play the king of
+hearts", "Put these 3 face down", what the card under the pointer would do, the tip and two
+hints. The owner had every such thing taken off every game on 2026-10-11 (*Every move is made on
+the table, and nowhere else*, under *Backgammon*). What is left, and where:
+
+- **A card is played by the card.** A mouse plays on the first click. A finger lifts the card on
+  the first tap and plays it on the second. The lifted card wears a gold ring and a small chevron
+  that bobs above it (`data-go`), which is all that is left of "Tap a card to lift it, then tap it
+  again to play it." The lift under a pointer is inside `@media (hover: hover)`: on a phone
+  `:hover` stays on the last thing tapped, and its rule outranked the lift of a picked card, so a
+  lifted card rose 0.9rem where it should rise 1.6.
+- **The stock and the drawn card are buttons drawn as the things they are**, like ludo's die. Each
+  has a name a screen reader reads ("Put these 3 face down", "Take the next card", "Keep the 9 of
+  Hearts") and takes a keyboard, and neither exists for a seat with nothing to press. The cards
+  and the trump chooser are buttons too, which is why hokm, unlike backgammon and ludo, can still
+  be played from a keyboard.
+- **The sentences are a screen reader's.** The turn sentence is an `sr-only` live region, and so
+  are "You have to follow the suit that was led." (while the coach is not saying it) and "The 9
+  of hearts went face down." The felt still prints the turn in its caption while nothing lies on
+  it. What a card would do is in the card's own name and nowhere on screen, so `hintOutcome`
+  changes nothing a sighted player sees here either.
+- **The clock, Sort and the tip are three small things in the corner of the table**
+  (`.hokm-rail`): the clock as a pill, and under it Sort and the tip's lamp, 44px each. They are
+  inside the fit cell, over its bottom RIGHT corner, physically: the table is printed and does
+  not mirror, its bottom-left corner holds the last trick, and its bottom-right holds nothing at
+  any number of players. On a tall phone that corner is the spare strip between the table and
+  the hand; on a wide or sideways screen it is the margin beside the table; where the table
+  fills its cell both ways it is the table's own corner. `.table-fit` is `position: relative` for
+  it. Being a size container did not make the cell the containing block of an absolutely placed
+  child in the Chromium this was built against: measured without the declaration, the corner was
+  the stage's, and the three lay on the hand.
+- **The clock is brief there** (`<TurnClock brief>`): "23s", "24h". "About 24h left" is 123px,
+  which at 360 wide reached the reader's own plate. A screen reader is still read the sentence.
+- **The trump and the score join the corner** when the felt cannot carry them (a short stage, the
+  open chat, a cramped felt), where they used to join the bar: two chips, the trump's suit and
+  the score without its target. With the chat open, upright or sideways, the clock and the two
+  tools are not drawn and the two chips go to the two bottom corners of the cell. As one chip in
+  one corner, three scores were 129px, and beside the reader's plate at 360 wide there are 122.
+- **The grid is the table and the hand** (`.table-grid.hokm-grid`), at every size. The hand has
+  the whole width of the stage, where a wide screen gave the bar a column of it, and two rows of
+  cards are decided from that width alone. Beside a chat on a phone held sideways the grid gives
+  up its far end, as ludo's does (*A stage with no column beside its board makes the room
+  itself*).
+
+`fit-pass.mjs` fails a hokm cell in which anything in the corner is off the screen or meets a
+plate, a pile, the last trick, a trick card, the stock, the drawn card, the card put face down or
+a card in the hand, and one in which the stock, the drawn card or the card put face down hangs
+off the table or meets any of those. `hokm-board.spec.ts` (*the small things in the corner of the
+table*, *playing a card with a finger*, *the two-handed draw*) holds the rest.
 
 **Each board is its own chunk.** The play page loads `hokm-board` or `match-board` through a dynamic
 import once it knows which game the match is, and renders it through `<Dynamic>` with a props THUNK,
@@ -3399,8 +3454,9 @@ the moment anything a player needs is below the fold.
   `min(100cqw, 100cqh * var(--ratio))` wide - the board is sized from BOTH axes of the room it has, so
   a tall phone and a short laptop each get the largest board that fits. A game that has two drawings
   of its table picks one by the fit cell's aspect, not by the screen's.
-- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts the bar in
-  a side column; backgammon and ludo put the whole side column beside the board instead.
+- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts poker's
+  bar in a side column, and backgammon puts its plates in one beside the board. Ludo and hokm have
+  no bar and no column: their grids are the board alone, and the table and the hand.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
@@ -3556,10 +3612,9 @@ refuses quietly. Hokm keeps a real landscape layout, because a card table is wid
 chips in the felt's top corners at every size, and the last trick is a tile in its bottom-left; the
 full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
 24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
-the last trick would sit on top of the plates, so they leave the felt and the chips move into the bar.
-One line of the caption stays: what takes the hand, which the bar has no room to say. A chip for it
-there was tried first and cost the bar a third row at 360 wide, where the clock alone is 123px - 32px
-that at 360x740 pushed the bottom of the bar under the open chat. The caption is as wide as its words,
+the last trick would sit on top of the plates, so they leave the felt and the chips move into the
+corner of the table (into the bar, while there was one). One line of the caption stays: what takes
+the hand. The caption is as wide as its words,
 up to the medallion's width or nine rem, and never wider than the room between the two side plates
 (`93cqw - 2 * --side-w - 1rem`), so no line of it can sit on one; and a table 17.5rem tall or less -
 where the plates have already given up their piles - drops the caption's crown and name, which pays
@@ -3576,8 +3631,10 @@ A narrow table does the same for the chips alone: upright at 360x740 the tall ta
 a 127px top plate, and both chips sat 16px under it. The board measures it rather than guessing a
 width - a chip touching a plate or a pile sets `data-felt="cramped"` on the stage, the chips go
 `visibility: hidden` (so they keep their box and the next measurement is of the same layout) and the
-bar shows the trump and the score. It is only ever re-judged from scratch when the stage changes size;
-otherwise it can turn on and never off, so the bar cannot grow a chip, shrink the table and bounce.
+corner shows the trump and the score. It is only ever re-judged from scratch when the stage changes
+size; otherwise it can turn on and never off. That latch was written for the bar, which grew a chip,
+shrank the table and bounced; the corner takes no room, and the latch is kept because a chip that
+came and went at one size would be no better.
 
 **The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
 beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
@@ -3631,8 +3688,9 @@ them. Poker's tall table is drawn only in a fit cell at least 19.5rem tall, its 
 just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
-or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt for the bar
-and its caption keeps only the line that says what takes the hand,
+or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt
+for the corner of the table, where the clock and the tools give way to them, and its caption keeps
+only the line that says what takes the hand,
 poker's blinds chip and cost line go, backgammon's match line and pick hint go and its two plates share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
 difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
@@ -3712,9 +3770,10 @@ loaded, so opening a table does not replay the history as bubbles.
 **Things a finger can actually hit.** A tap on the Ludo canvas picks the nearest MOVABLE token within
 1.25 squares of it (`pickNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
 because a pawn on a phone is 17px across and nobody taps a sprite that exactly. On a coarse pointer a
-hokm card is lifted by the first tap and played by the second, or by the "Play the ..." button that
-appears - a hand of thirteen shows each card as a 26px strip, and one mistap used to throw the wrong
-card. A mouse still plays on the first click, because hover already lifts the card.
+hokm card is lifted by the first tap and played by the second - a hand of thirteen shows each card
+as a 26px strip, and one mistap used to throw the wrong card. The "Play the ..." button that used
+to appear beside it went with every other button for a move. A mouse still plays on the first
+click, because hover already lifts the card.
 
 **A badge says only what is unusual.** "Your go" and "Waiting" are what the breathing yard and the
 strip already say, and beside four home dots they truncated to "Your...". They are `sr-only`; won,
@@ -3741,9 +3800,11 @@ its half ("an answer, not a failure") and no spec mounted either page in that st
 preference that is on by default and can be switched off on the settings page or from the table menu
 without leaving the game: `hintMoves` lights up what can move, `hintOutcome` says what a move does
 before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status,
-or a lamp that opens over the board where the bar under it has gone (backgammon and ludo).
-`hintOutcome` has nothing left to switch in those two games: what it switched was the wording of
-the move buttons, and the owner had every list of moves removed. Hokm and poker still read it.
+or a lamp that opens over the board where the bar under it has gone (backgammon, ludo and hokm).
+`hintOutcome` has nothing left to switch that a sighted player sees in those three. In backgammon
+and ludo it switched the wording of the move buttons, and the owner had every list of moves
+removed. In hokm it still writes what a card would do into the card's accessible name, and the
+sentence it drew under the hand is gone. Poker still reads it.
 
 **Every helper is the SERVER's rules asked a question.** `game/helpers/<game>.ts` is pure, imports
 nothing from AzerothJS, and computes from the same modules the engine runs - ludo's board, hokm's
@@ -3754,9 +3815,10 @@ answers null when nothing is worth saying: a tip that is always there is one nob
 
 **Turning a helper off never removes a way to play.** A piece that can move takes a tap whether or
 not it is lit; what `hintMoves` takes away is the lighting on the board, never the move. (The move
-lists that used to be the other way to play are gone from backgammon and ludo, and are going from
-the rest: see *Every move is made on the table, and nowhere else*.) Hokm's hand says why a card is dimmed with the follow line, which stays when the coach
-is off and gives way to the coach's own words when it is on, so it is never said twice.
+lists and the buttons that confirmed a move are gone from backgammon, ludo and hokm, and poker's
+controls move onto its felt: see *Every move is made on the table, and nowhere else*.) Hokm's
+hand says why a card is dimmed with the follow line, to a screen reader, which stays when the
+coach is off and gives way to the coach's own words when it is on, so it is never said twice.
 
 **A poker hand is named by its ranks**: "a pair of kings", "sevens full of twos", and "you are playing
 the board" when the five shared cards alone make the hand, because "a pair" is true of a pair that is

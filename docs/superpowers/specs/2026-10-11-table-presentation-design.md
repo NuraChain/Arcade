@@ -1732,8 +1732,13 @@ card's width in a registered length property. The slot already owns `translate` 
 `rotate` (the tilt), so a FLIP writes absolute values. This lands (commit 4.4) before the deal
 (commit 4.5), so dealt cards land in a fan that can move.
 
-**Controls on the table (D10).** They land with the turn-over (commit 4.6) and the two-handed draw
-(commit 4.7).
+**Controls on the table (D10, D12).** They went ahead of 4.6 and 4.7, with ludo's, the day the
+owner asked for every helper to leave every game. What 4.6 and 4.7 still add is the motion: the
+turn-over, the kept card flying to the hand, the backs leaving for the stock. The bar under the
+hand is gone. The stage's grid is the table and the hand, the sentences are `sr-only`, and the
+clock (brief: "23s"), Sort and the tip's lamp are three small things in the bottom right corner
+of the cell the table is fitted to. The stock and the offered card are real buttons drawn as the
+things they are, as the cards and the suits are, so hokm keeps a keyboard and a screen reader.
 
 | Action | Today's control | Gesture on the table |
 |---|---|---|
@@ -1742,10 +1747,12 @@ card's width in a registered length property. The slot already owns `translate` 
 | Put cards face down (two players) | Cards are toggled in the hand, then "Put these {count} face down" | The chosen cards are sent by tapping the stock |
 | Keep the offered card | "Keep the {card}" in the offer panel | Tap the offered card |
 | Take the next card | "Take the next card" in the offer panel | Tap the stock |
-| Sort | "Sort" in the bar | It stays, as a small control by the hand: a preference, not a move |
+| Sort | "Sort" in the bar | It stays, as a 44 px round control in the corner of the table beside the tip's lamp: a preference, not a move |
 
-Under D10 the offered card is itself a control. Today it is not drawn on a short stage, so
-commit 4.7 has to draw it at every size, and `tools/qa/fit-pass.mjs` has to hold it.
+The offered card is itself the control, so it is drawn at every size, face up in the middle of
+the felt, and `tools/qa/fit-pass.mjs` holds it, the stock and the card put face down clear of
+the plates and of each other. The cards to put face down are counted on the stock ("2/3"), and
+a lift past the count is refused, so the count never passes what is owed.
 
 **Anchors and layouts.**
 
@@ -2224,10 +2231,10 @@ Each commit lands with its first caller, its specs, its pass edits and the parag
     `scaled` go.
 18. **4.4**: the fan and Sort.
 19. **4.5**: the deal and the hand's end.
-20. **4.6**: the turn-over, trump, the refused card. D10 lands here for a played card: a lifted
-    card is tapped again, and the "Play the ..." confirm goes.
-21. **4.7**: the two-handed draw. D10 lands here for the draw: the stock and the offered card are
-    tapped, and the put-down confirm, Keep and Take the next card go.
+20. **4.6**: the turn-over, trump, the refused card. D10 landed ahead of it for a played card: a
+    lifted card is tapped again, and the "Play the ..." confirm is gone.
+21. **4.7**: the two-handed draw. D10 landed ahead of it for the draw: the stock and the offered
+    card are tapped, and the put-down confirm, Keep and Take the next card are gone.
 22. **4.8** `test(qa)`.
 23. **P5 Poker, 5.1**: the board keeps its nodes.
 24. **5.2**: the felt is a model of what has been shown.

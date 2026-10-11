@@ -611,6 +611,43 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         {
             found.push({ kind: 'felt', what: 'an empty hokm felt that does not say what takes the hand' });
         }
+
+        const laid = [...surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-last-tile, .hokm-trick:not([data-landing="true"]) .card-face')].filter(shown);
+        const pressed = [...surface.querySelectorAll('.hokm-stock, .hokm-offer, .hokm-glimpse')].filter(shown);
+
+        for (const one of pressed)
+        {
+            if (beyond(box(one), box(surface)))
+            {
+                found.push({ kind: 'hangs', what: `${ describe(one) } off the table` });
+            }
+
+            for (const other of [...laid, ...pressed.filter((piece) => piece !== one)])
+            {
+                if (meets(box(one), box(other)))
+                {
+                    found.push({ kind: 'felt', what: `${ describe(one) } ${ where(box(one)) } meets ${ describe(other) } ${ where(box(other)) }` });
+                }
+            }
+        }
+
+        const held = [...document.querySelectorAll('.hokm-hand .card-face')].filter(shown);
+
+        for (const one of [...document.querySelectorAll('.hokm-bar-facts > .hokm-chip, .hokm-rail > .hokm-clock, .hokm-tools > *')].filter(shown))
+        {
+            if (outside(box(one)))
+            {
+                found.push({ kind: 'fold', what: `${ describe(one) } in the corner of the table` });
+            }
+
+            for (const other of [...laid, ...pressed, ...held])
+            {
+                if (meets(box(one), box(other)))
+                {
+                    found.push({ kind: 'corner', what: `${ describe(one) } ${ where(box(one)) } in the corner of the table meets ${ describe(other) } ${ where(box(other)) }` });
+                }
+            }
+        }
     }
 
     const seated = given.sides ? [...document.querySelectorAll('.table-plate')].filter(shown) : [];
@@ -653,7 +690,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         found.push({ kind: 'sheet', what: `the open chat (${ sheetMode }) reaches ${ Math.round(box(fitCell).bottom - box(sheet).top) }px over the board` });
     }
 
-    if (given.openChat && sideways && sheet !== null && surface !== null && document.querySelector('.table-grid.ludo-grid') !== null)
+    if (given.openChat && sideways && sheet !== null && surface !== null && document.querySelector('.table-grid:is(.ludo-grid, .hokm-grid)') !== null)
     {
         const lying = box(sheet);
         const roomy = stage !== null && box(stage).width >= 768;

@@ -435,6 +435,22 @@ describe('TurnClock', () =>
         expect(container.textContent).toContain('20');
     });
 
+    it('says the time in a few characters where it is asked to be brief, and keeps its sentence for a screen reader', () =>
+    {
+        const english = renderTest(() => TurnClock({ remainingMs: 23_000, over: false, brief: true }) as Rendered);
+
+        expect(english.container.querySelector('span[aria-hidden="true"]')?.textContent).toBe('23s');
+        expect(english.container.querySelector('.sr-only')?.textContent).toBe('About 23s left');
+        english.unmount();
+
+        useLocale().setLocale('fa');
+        const persian = renderTest(() => TurnClock({ remainingMs: 2 * 3600 * 1000, over: false, brief: true }) as Rendered);
+
+        expect(persian.container.querySelector('span[aria-hidden="true"]')?.textContent).toBe('۲ ساعت');
+        expect(persian.container.querySelector('.tally')).toBeNull();
+        useLocale().setLocale('en');
+    });
+
     it('draws nothing once the game is over', () =>
     {
         const { container } = renderTest(() => TurnClock({ remainingMs: 0, over: true }) as Rendered);

@@ -293,7 +293,7 @@ try
     }
 
     // ---------------------------------------------------------------- 3b. the cards put face down
-    console.log('\n[3b] the cards put face down, chosen by pressing them');
+    console.log('\n[3b] the cards put face down, lifted by pressing them and taken by pressing the stock');
     {
         const board = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
         const caller = board.view.hakem === board.mine ? dana : mina;
@@ -303,10 +303,13 @@ try
         {
             await who.page.waitForTimeout(SETTLE_MS);
 
-            const confirm = who.page.getByRole('button', { name: `Put these ${ count } face down` }).first();
+            const stock = who.page.getByRole('button', { name: `Put these ${ count } face down` }).first();
+            const owed = await who.page.evaluate(() => document.querySelector('main .hokm-stock-due')?.textContent?.trim() ?? '');
 
-            record(`the seat putting ${ count } down is asked to choose, and cannot confirm yet`, await confirm.isDisabled().catch(() => false));
-            record('and the other seat is given nothing to press', await pressable(waiting.page, /face down/) === null);
+            record(`the seat putting ${ count } down is shown how many on the stock, which cannot take them yet`,
+                owed === `0/${ count }` && await stock.count() === 0, owed);
+            record('and the other seat is given nothing to press', await pressable(waiting.page, /face down/) === null
+                && await waiting.page.evaluate(() => document.querySelector('main .hokm-stock-due') === null));
 
             const held = await hand(who.page);
 
@@ -315,9 +318,9 @@ try
                 await who.page.getByRole('button', { name: one.says, exact: true }).first().click();
             }
 
-            record(`choosing exactly ${ count } lets it confirm`, await confirm.isEnabled().catch(() => false));
+            record(`lifting exactly ${ count } lets the stock take them`, await stock.isEnabled().catch(() => false));
 
-            await confirm.click();
+            await stock.click();
             await who.page.waitForTimeout(SETTLE_MS);
 
             const left = await hand(who.page);
@@ -345,10 +348,13 @@ try
             const keep = await pressable(drawer.page, /^Keep the /);
             const next = await pressable(drawer.page, /^Take the next card$/);
 
-            record(`draw ${ pressed + 1 }: the drawer is shown the card and both choices`, keep !== null && next !== null);
+            record(`draw ${ pressed + 1 }: the drawn card lies on the felt, and the card and the stock are the two choices`, keep !== null && next !== null
+                && await drawer.page.evaluate(() => document.querySelector('main button.hokm-offer .card-face') !== null
+                    && document.querySelector('main .hokm-stock[data-live] button.hokm-stock-press') !== null));
             record(`draw ${ pressed + 1 }: the other browser is shown neither`,
                 await pressable(waiting.page, /^Take the next card$/) === null
-                    && await waiting.page.evaluate(() => document.querySelector('main .hokm-draw') === null));
+                    && await waiting.page.evaluate(() => document.querySelector('main .hokm-offer') === null
+                        && document.querySelector('main .hokm-stock[data-live]') === null));
 
             const before = (await hand(drawer.page)).length;
 
@@ -360,7 +366,7 @@ try
             pressed += 1;
         }
 
-        record('draws were made by pressing Keep and Take the next card', pressed === 4, `${ pressed } draws`);
+        record('draws were made by pressing the drawn card and the stock', pressed === 4, `${ pressed } draws`);
 
         const players = {};
 
@@ -448,6 +454,15 @@ try
         }
 
         record('cards were played by clicking', clicked === CLICKED_CARDS, `${ clicked } played`);
+
+        const beside = await dana.page.evaluate(() => [...document.querySelectorAll('main .table-stage button')]
+            .filter((one) => one.closest('.card-hold, .hokm-rail, .table-result') === null)
+            .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? ''));
+        const drawn = await dana.page.evaluate(() => document.querySelector('main .table-grid > .table-bar') !== null
+            || [...document.querySelectorAll('main .hokm-rail > p')].some((one) => !one.classList.contains('sr-only')));
+
+        record('no button on the page plays a card but the card', beside.length === 0, beside.join(' | '));
+        record('no bar of sentences is drawn under the table', !drawn);
         record('the other browser saw the table change', gathered > 0, `${ gathered } of ${ clicked }`);
         record('an illegal card was quiet while a legal one was not', followed > 0, `${ followed } of ${ clicked } turns`);
 
