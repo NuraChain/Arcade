@@ -140,6 +140,35 @@ const dice = (container: HTMLElement) => [...container.querySelectorAll<HTMLElem
 
 const cube = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-cube');
 
+const zone = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice')!;
+
+const tapDice = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice > .bgt-hit')!.click();
+
+const tapPoint = (container: HTMLElement, point: number | 'bar' | 'tray', type = 'pointerup') =>
+{
+    const svg = container.querySelector('svg[viewBox="0 0 1000 820"]') as SVGSVGElement;
+    const column = typeof point === 'number' ? columnOf(point) : null;
+    const x = column === null ? (point === 'bar' ? BAR_LEFT + BAR_WIDTH / 2 : TRAY_LEFT + TRAY / 2) : column.x + POINT_WIDTH / 2;
+    const y = column === null || column.row === 'bottom' ? 700 : 100;
+
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT, right: WIDTH, bottom: HEIGHT, x: 0, y: 0, toJSON: () => ({}) });
+    svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true }));
+};
+
+const staged = (container: HTMLElement) => Number(stageOf(container).dataset.staged);
+
+const hop = (container: HTMLElement, from: number | 'bar', to: number | 'tray') =>
+{
+    const before = staged(container);
+
+    tapPoint(container, from);
+
+    if (staged(container) === before)
+    {
+        tapPoint(container, to);
+    }
+};
+
 beforeEach(() =>
 {
     cleanup();
@@ -190,85 +219,31 @@ describe('the backgammon board geometry', () =>
 
 describe('BackgammonBoard', () =>
 {
-    it('offers every first hop of the opening 6-1 and nothing else', () =>
+    it('lights one checker on every point that can open a 6-1, and none that cannot move', async () =>
     {
-        const { container } = still(match({}));
-        const offered = [...container.querySelectorAll('ul[aria-label="Moves you can make"] button')].map((one) => one.getAttribute('aria-label'));
+        const { container } = await live(match({}));
 
-        expect(offered).toEqual(expect.arrayContaining([
-            'Move a checker from 24 to 18',
-            'Move a checker from 13 to 7',
-            'Move a checker from 8 to 7',
-            'Move a checker from 6 to 5',
-            'Move a checker from 24 to 23'
-        ]));
-        expect(offered).not.toContain('Move a checker from 13 to 12');
-    });
-
-    it('stages a whole turn one checker at a time, and sends it only when it is complete', () =>
-    {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
-        const { container } = still(match({}));
-        const confirm = () => button(container, 'Play the move');
-
-        expect(confirm().disabled).toBe(true);
-
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
-        expect(confirm().disabled).toBe(true);
-
-        fire(button(container, 'Move a checker from 8 to 7'), 'click');
-        expect(confirm().disabled).toBe(false);
-        expect(container.querySelector('ul[aria-label="Moves you can make"]')).toBeNull();
-
-        fire(confirm(), 'click');
-
-        expect(play).toHaveBeenCalledWith({ kind: 'backgammon', verb: 'move', hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] });
-    });
-
-    it('takes a staged hop back with undo', () =>
-    {
-        const { container } = still(match({}));
-        const undo = () => button(container, 'Undo');
-
-        expect(undo().disabled).toBe(true);
-
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
-        expect(undo().disabled).toBe(false);
-        expect(button(container, 'Move a checker from 7 to 6')).toBeDefined();
-
-        fire(undo(), 'click');
-        expect(undo().disabled).toBe(true);
-        expect(button(container, 'Move a checker from 7 to 6')).toBeUndefined();
+        expect(lit(container)).toBe(4);
+        expect(staged(container)).toBe(0);
     });
 
     it('keeps a half-staged turn through a re-read of the same board, and drops it once the board moves', async () =>
     {
         const { container, current, move } = await live(match({}));
-        const undo = () => button(container, 'Undo');
 
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
+        hop(container, 13, 7);
         move({ ...current() });
-        expect(undo().disabled).toBe(false);
+
+        expect(staged(container)).toBe(1);
 
         move({ ...current(), rev: current().rev + 1 });
+
+        expect(staged(container)).toBe(0);
+
         await elapse(2200);
 
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
-        expect(undo().disabled).toBe(true);
-    });
-
-    it('offers roll and a double before the dice are thrown, and sends each as its verb', () =>
-    {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
-        const { container } = still(match({ phase: 'roll', dice: [], doubling: true }));
-
-        fire(button(container, 'Roll'), 'click');
-        fire(button(container, 'Double to 2'), 'click');
-
-        expect(play.mock.calls.map((call) => call[0])).toEqual([
-            { kind: 'backgammon', verb: 'roll' },
-            { kind: 'backgammon', verb: 'double' }
-        ]);
+        expect(lit(container), 'the reader was left with nothing to move after the board had settled').toBeGreaterThan(0);
     });
 
     it('asks the player a double is offered to whether they take it, and nobody else', () =>
@@ -289,7 +264,7 @@ describe('BackgammonBoard', () =>
     {
         const { container } = still(match({}, null));
 
-        expect(container.querySelector('svg')).not.toBeNull();
+        expect(container.querySelector('svg[viewBox="0 0 1000 820"]')).not.toBeNull();
         expect(container.querySelectorAll('button').length).toBe(0);
     });
 
@@ -298,31 +273,30 @@ describe('BackgammonBoard', () =>
         useLocale().setLocale('fa');
         const { container } = still(match({}));
 
-        expect(container.querySelector('svg')?.parentElement?.className).toContain('[direction:ltr]');
+        expect(container.querySelector('svg[viewBox="0 0 1000 820"]')?.parentElement?.className).toContain('[direction:ltr]');
         useLocale().setLocale('en');
     });
 
-    it('keeps the controls the nodes they were when a hop is staged and when the board is read again', async () =>
+    it('keeps the board, its checkers and the sentence the nodes they were when a hop is staged and the board is read again', async () =>
     {
         const { container, current, move } = await live(match({}));
-        const undo = button(container, 'Undo');
-        const confirm = button(container, 'Play the move');
+        const svg = container.querySelector('svg[viewBox="0 0 1000 820"]');
         const said = container.querySelector('[aria-live="polite"]');
-        const kept = button(container, 'Move a checker from 24 to 23');
+        const checkers = [...men(container)];
 
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
-        await flush();
+        hop(container, 13, 7);
+        await elapse(1200);
 
-        expect(button(container, 'Undo')).toBe(undo);
-        expect(button(container, 'Play the move')).toBe(confirm);
-        expect(button(container, 'Move a checker from 24 to 23')).toBe(kept);
+        expect(container.querySelector('svg[viewBox="0 0 1000 820"]')).toBe(svg);
+        expect(checkers.every((one) => document.contains(one)), 'a staged hop drew the checkers again').toBe(true);
 
         move({ ...current() });
         await flush();
 
-        expect(button(container, 'Undo')).toBe(undo);
+        expect(container.querySelector('svg[viewBox="0 0 1000 820"]')).toBe(svg);
         expect(container.querySelector('[aria-live="polite"]')).toBe(said);
-        expect(document.contains(confirm)).toBe(true);
+        expect(checkers.every((one) => document.contains(one)), 'a re-read drew the checkers again').toBe(true);
+        expect(staged(container)).toBe(1);
     });
 
     it('counts the moves left of a double beside its dice, and counts nothing when no double is on the table', async () =>
@@ -345,7 +319,7 @@ describe('BackgammonBoard', () =>
         await flush();
         expect(left(container)).toBe('×4');
 
-        fire(button(container, 'Move a checker from 13 to 10'), 'click');
+        hop(container, 13, 10);
         await flush();
 
         expect(left(container)).toBe('×3');
@@ -440,18 +414,18 @@ describe('the backgammon table on the page', () =>
         const moved = () => animate.mock.contexts.filter((one) => (one as Element).classList.contains('man')).length;
         const { container, tell } = await live(match({}));
 
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
-        fire(button(container, 'Move a checker from 8 to 7'), 'click');
+        hop(container, 13, 7);
+        hop(container, 8, 7);
         await elapse(2000);
 
-        const staged = moved();
+        const flights = moved();
 
-        expect(staged).toBeGreaterThanOrEqual(2);
+        expect(flights).toBeGreaterThanOrEqual(2);
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
 
         const kept = container.querySelector('.bg-layer .man');
 
-        fire(button(container, 'Play the move'), 'click');
+        tapDice(container);
         tell(match({ turn: 1, dice: [4, 2], seats: position({ 6: 5, 7: 2, 8: 2, 13: 4, 24: 2 }, { 6: 5, 8: 3, 13: 5, 24: 2 }) }, 0, { rev: 5, turn: 1 }), [happened(5, 0, [
             { e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false },
             { e: 'move', seat: 0, from: 8, to: 7, die: 1, hit: false },
@@ -464,7 +438,7 @@ describe('the backgammon table on the page', () =>
         await elapse(3000);
 
         expect(document.contains(kept), 'the reader\'s own move was not recognised: the table was drawn again from nothing').toBe(true);
-        expect(moved()).toBe(staged);
+        expect(moved()).toBe(flights);
         expect(dice(container)).toEqual(['4', '2']);
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
     });
@@ -478,7 +452,8 @@ describe('the backgammon table on the page', () =>
         tell(answered(), theirMove());
         await elapse(100);
 
-        expect(container.querySelector('ul[aria-label="Moves you can make"]'), 'a move was offered on dice that had not been thrown').toBeNull();
+        expect(lit(container), 'a checker was lit on dice that had not been thrown').toBe(0);
+        expect(container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(false);
 
         await elapse(3400);
 
@@ -486,7 +461,7 @@ describe('the backgammon table on the page', () =>
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
 
         animate.mockClear();
-        fire(button(container, 'Move a checker from 13 to 10'), 'click');
+        hop(container, 13, 10);
         await flush();
 
         expect(flown(), 'the staged checker waited').toBe(true);
@@ -495,7 +470,7 @@ describe('the backgammon table on the page', () =>
         await elapse(1500);
 
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
-        expect(button(container, 'Undo').disabled).toBe(false);
+        expect(staged(container)).toBe(1);
     });
 
     it('plays the one turn it read to catch up, and goes straight to the board when it missed several', async () =>
@@ -595,32 +570,16 @@ describe('the backgammon helpers', () =>
         useSettings().update({ hintMoves: false });
 
         expect(lit(container)).toBe(0);
-        expect(button(container, 'Move a checker from 13 to 7')).toBeDefined();
+
+        hop(container, 13, 7);
+
+        expect(staged(container), 'the move went with its light').toBe(1);
     });
 
-    it('says a hop hits a blot, in its name and on its face, until the switch is off', () =>
-    {
-        const { container } = still(blot());
-        const hitting = button(container, 'Move a checker from 13 to 8 and hit the blot there');
-
-        expect(hitting).toBeDefined();
-        expect(hitting.textContent).toContain('Hit');
-        expect(button(container, 'Move a checker from 13 to 10')).toBeDefined();
-
-        useSettings().update({ hintOutcome: false });
-
-        const plain = button(container, 'Move a checker from 13 to 8');
-
-        expect(plain).toBeDefined();
-        expect(plain.textContent).not.toContain('Hit');
-        expect(button(container, 'Move a checker from 13 to 8 and hit the blot there')).toBeUndefined();
-    });
-
-    it('says a hop enters from the bar', () =>
+    it('coaches a checker on the bar back in before anything else moves', () =>
     {
         const { container } = still(match({ dice: [5, 3], seats: position({ 25: 1, 6: 14 }, { 6: 15 }) }));
 
-        expect(button(container, 'Enter a checker from the bar on 20')).toBeDefined();
         expect(note(container)).toContain('comes back in first');
     });
 
@@ -649,7 +608,7 @@ describe('the backgammon helpers', () =>
         expect(note(container)).toBeNull();
     });
 
-    it('gives a spectator no tip and no outcome, because they have no move', () =>
+    it('gives a spectator no tip, because they have no move', () =>
     {
         const doubles = still(match({ dice: [3, 3] }, null));
 
@@ -659,47 +618,30 @@ describe('the backgammon helpers', () =>
         const watching = still(blot(null));
 
         expect(note(watching.container)).toBeNull();
-        expect(watching.container.textContent).not.toContain('Hit');
     });
 });
 
 describe('moves made on the table itself', () =>
 {
-    const zone = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice')!;
+    const whole = (container: HTMLElement) => zone(container).dataset.live === 'done';
 
-    const tapDice = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice > .bgt-hit')!.click();
-
-    const tapPoint = (container: HTMLElement, point: number | 'bar' | 'tray', type = 'pointerup') =>
-    {
-        const svg = container.querySelector('svg') as SVGSVGElement;
-        const column = typeof point === 'number' ? columnOf(point) : null;
-        const x = column === null ? (point === 'bar' ? BAR_LEFT + BAR_WIDTH / 2 : TRAY_LEFT + TRAY / 2) : column.x + POINT_WIDTH / 2;
-        const y = column === null || column.row === 'bottom' ? 700 : 100;
-
-        svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT, right: WIDTH, bottom: HEIGHT, x: 0, y: 0, toJSON: () => ({}) });
-        svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true }));
-    };
-
-    const stagedOn = (container: HTMLElement) => button(container, 'Play the move').getAttribute('aria-disabled') !== 'true' && !button(container, 'Play the move').disabled;
-
-    it('keeps every button for a move in the panel a keyboard opens, and none of them on show', async () =>
+    it('has no control of the page for a move anywhere on the stage, shown or hidden', async () =>
     {
         const rolling = await live(match({ phase: 'roll', dice: [], doubling: true }));
         const moving = await live(match({}));
 
         for (const container of [rolling.container, moving.container])
         {
-            const buttons = [...container.querySelectorAll('.table-stage button')];
-
-            expect(buttons.length).toBeGreaterThan(0);
-
-            for (const one of buttons)
-            {
-                expect(one.closest('.bg-keys.sr-only'), one.textContent ?? '').not.toBeNull();
-            }
-
-            expect(container.querySelector('.bg-keys')?.parentElement, 'the panel sits where something clips it').toBe(stageOf(container));
+            expect([...container.querySelectorAll('.table-stage button')].map((one) => one.textContent?.trim()), 'a move is offered as a button').toEqual([]);
+            expect(container.querySelector('.bg-keys'), 'the helper panel is still there').toBeNull();
+            expect(container.querySelector('.table-stage ul')).toBeNull();
         }
+
+        hop(moving.container, 13, 7);
+        await elapse(1200);
+
+        expect(moving.container.querySelectorAll('.table-stage button')).toHaveLength(0);
+        expect(staged(moving.container)).toBe(1);
     });
 
     it('takes no room from the board for words: the sentences are a screen reader\'s, and only the tip is drawn', async () =>
@@ -742,7 +684,7 @@ describe('moves made on the table itself', () =>
         expect(dice(container)).toHaveLength(2);
         expect(container.querySelectorAll('.bgt-dice > .die3d[data-blank]')).toHaveLength(2);
         expect(zone(container).dataset.live).toBe('roll');
-        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Your turn. Roll the dice.');
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Your turn. Tap the dice to roll.');
 
         tapDice(container);
 
@@ -766,12 +708,19 @@ describe('moves made on the table itself', () =>
         expect(zone(container).hasAttribute('data-live')).toBe(false);
         expect(play).not.toHaveBeenCalled();
 
-        fire(button(container, 'Move a checker from 13 to 7'), 'click');
-        fire(button(container, 'Move a checker from 8 to 7'), 'click');
+        hop(container, 13, 7);
+
+        expect(staged(container)).toBe(1);
+
+        tapDice(container);
+
+        expect(play, 'half a turn was sent').not.toHaveBeenCalled();
+
+        hop(container, 8, 7);
         await elapse(2000);
 
         expect(zone(container).dataset.live).toBe('done');
-        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('That is your whole move. Play it, or undo to change it.');
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Your move is whole. Tap the dice to play it.');
 
         tapDice(container);
 
@@ -847,7 +796,7 @@ describe('moves made on the table itself', () =>
     it('moves a checker that is tapped, and takes it back when it is tapped again', async () =>
     {
         const { container } = await live(match({}));
-        const undoing = () => !(button(container, 'Undo').disabled || button(container, 'Undo').getAttribute('aria-disabled') === 'true');
+        const undoing = () => staged(container) > 0;
 
         tapPoint(container, 24);
         await flush();
@@ -865,13 +814,13 @@ describe('moves made on the table itself', () =>
         tapPoint(container, 8);
         await elapse(1200);
 
-        expect(stagedOn(container)).toBe(true);
+        expect(whole(container)).toBe(true);
         expect(container.querySelectorAll('.bg-layer .man[data-back]')).toHaveLength(1);
 
         tapPoint(container, 7);
         await elapse(1200);
 
-        expect(stagedOn(container)).toBe(false);
+        expect(whole(container)).toBe(false);
         expect(undoing()).toBe(true);
 
         tapPoint(container, 18);
@@ -887,7 +836,7 @@ describe('moves made on the table itself', () =>
         const backs = () => container.querySelectorAll('.bg-layer .bgt-mark[data-back]').length;
         const left = () => container.querySelector('.bg-layer .bgt-left')?.textContent ?? null;
 
-        fire(button(container, 'Move a checker from 13 to 10'), 'click');
+        hop(container, 13, 10);
         await elapse(1200);
 
         expect(left()).toBe('×3');
@@ -944,74 +893,49 @@ describe('moves made on the table itself', () =>
         expect(zone(container).dataset.live).toBe('done');
     });
 
-    it('moves the reader along its own moves when they are made from the keyboard', async () =>
+    it('lifts only the checker that was pressed: the one under it stays down when the first has gone', async () =>
     {
         const { container } = await live(match({}));
-        const first = button(container, 'Move a checker from 13 to 7');
+        const held = () => container.querySelectorAll('.bg-layer .man[data-held]').length;
 
-        first.focus();
-        fire(first, 'click');
+        tapPoint(container, 6, 'pointerdown');
+
+        expect(held()).toBe(1);
+
+        tapPoint(container, 6);
         await flush();
 
-        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]'), 'the reader was dropped onto the page').not.toBeNull();
+        expect(staged(container)).toBe(1);
+        expect(held(), 'the next checker on the point was lifted when the pressed one left').toBe(0);
 
-        fire(button(container, 'Move a checker from 8 to 7'), 'click');
-        await flush();
+        await elapse(1200);
 
-        expect(document.activeElement).toBe(button(container, 'Play the move'));
-
-        fire(button(container, 'Undo'), 'click');
-        await flush();
-
-        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]')).not.toBeNull();
+        expect(held()).toBe(0);
     });
 
-    it('puts the reader on their first move after a roll made from the keyboard, and leaves a tap on the dice where it was', async () =>
+    it('keeps a checker lifted while its move waits behind another, and lets go of it when it takes off', async () =>
     {
-        const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
-        const rolled = () => table.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+        const { container } = await live(match({}));
+        const held = () => container.querySelectorAll('.bg-layer .man[data-held]').length;
 
-        vi.spyOn(useBoard(), 'play').mockImplementation(async () =>
-        {
-            rolled();
-
-            return 'now';
-        });
-
-        button(table.container, 'Roll').focus();
-        fire(button(table.container, 'Roll'), 'click');
-        await elapse(300);
-
-        expect(document.activeElement, 'the reader was dropped onto the page while the dice were in the air').toBe(button(table.container, 'Roll'));
-        expect(button(table.container, 'Roll').getAttribute('aria-busy')).toBe('true');
-        expect(table.container.querySelector('ul[aria-label="Moves you can make"]')).toBeNull();
-
-        await elapse(1100);
-
-        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]'), 'the reader was dropped onto the page when Roll went').not.toBeNull();
-        expect(button(table.container, 'Roll')).toBeUndefined();
-        table.unmount();
-
-        const tapped = await live(match({ phase: 'roll', dice: [], doubling: false }));
-
-        vi.spyOn(useBoard(), 'play').mockImplementation(async () =>
-        {
-            tapped.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
-
-            return 'now';
-        });
-
-        tapDice(tapped.container);
+        hop(container, 13, 7);
+        await flush();
+        tapPoint(container, 6, 'pointerdown');
+        tapPoint(container, 6);
         await flush();
 
-        expect(document.activeElement?.closest('.bg-keys') ?? null, 'a tap on the table opened the keyboard\'s panel').toBeNull();
+        expect(staged(container)).toBe(2);
+        expect(held(), 'a checker whose move had to wait was put down at once').toBe(1);
+
+        await elapse(1800);
+
+        expect(held()).toBe(0);
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
     });
 
     describe('a roll is told when it has landed', () =>
     {
         const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent;
-
-        const offered = (container: HTMLElement) => container.querySelectorAll('ul[aria-label="Moves you can make"] button').length;
 
         it('lights no checker, offers no move and takes no tap until the reader\'s own dice have landed', async () =>
         {
@@ -1021,10 +945,9 @@ describe('moves made on the table itself', () =>
             await elapse(300);
 
             expect(lit(table.container), 'checkers were lit while the dice were in the air').toBe(0);
-            expect(offered(table.container)).toBe(0);
-            expect(said(table.container)).toBe('Your turn. Roll the dice.');
+            expect(said(table.container)).toBe('Your turn. Tap the dice to roll.');
             expect(note(table.container)).toBeNull();
-            expect(table.container.querySelector('svg')!.hasAttribute('data-drags')).toBe(false);
+            expect(table.container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(false);
 
             tapPoint(table.container, 13);
             await flush();
@@ -1034,9 +957,8 @@ describe('moves made on the table itself', () =>
             await elapse(1100);
 
             expect(lit(table.container)).toBeGreaterThan(0);
-            expect(offered(table.container)).toBeGreaterThan(0);
             expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
-            expect(table.container.querySelector('svg')!.hasAttribute('data-drags')).toBe(true);
+            expect(table.container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(true);
         });
 
         it('waits through the other player\'s move too when the dice were rolled for the reader with it', async () =>
@@ -1069,7 +991,7 @@ describe('moves made on the table itself', () =>
             await flush();
 
             expect(lit(table.container), 'a reader with seconds left was made to watch their dice land').toBeGreaterThan(0);
-            expect(offered(table.container)).toBeGreaterThan(0);
+            expect(table.container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(true);
         });
 
         it('holds nothing back on a board that is simply drawn with its dice down', async () =>
@@ -1077,7 +999,6 @@ describe('moves made on the table itself', () =>
             const { container } = await live(match({}));
 
             expect(lit(container)).toBeGreaterThan(0);
-            expect(offered(container)).toBeGreaterThan(0);
             expect(said(container)).toBe('You rolled 6 and 1. Move your checkers.');
         });
 
@@ -1111,7 +1032,7 @@ describe('moves made on the table itself', () =>
 
         const pointer = (container: HTMLElement, type: string, x: number, y: number, over: PointerEventInit = {}) =>
         {
-            const svg = container.querySelector('svg') as SVGSVGElement;
+            const svg = container.querySelector('svg[viewBox="0 0 1000 820"]') as SVGSVGElement;
 
             svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT, right: WIDTH, bottom: HEIGHT, x: 0, y: 0, toJSON: () => ({}) });
             svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 3, ...over }));
@@ -1134,7 +1055,7 @@ describe('moves made on the table itself', () =>
 
         const held = (container: HTMLElement) => container.querySelectorAll('.bg-layer .man[data-held]').length;
 
-        const undoing = (container: HTMLElement) => !(button(container, 'Undo').disabled || button(container, 'Undo').getAttribute('aria-disabled') === 'true');
+        const undoing = (container: HTMLElement) => staged(container) > 0;
 
         it('carries the checker with the pointer once it has moved far enough, and marks where it can be put down', async () =>
         {
@@ -1210,7 +1131,7 @@ describe('moves made on the table itself', () =>
         {
             const { container } = await live(match({}));
 
-            fire(button(container, 'Move a checker from 13 to 7'), 'click');
+            hop(container, 13, 7);
             await elapse(1200);
 
             expect(undoing(container)).toBe(true);
@@ -1408,7 +1329,7 @@ describe('moves made on the table itself', () =>
         it('takes the gesture from the page only while there is a checker to carry', async () =>
         {
             const moving = await live(match({}));
-            const board = (container: HTMLElement) => container.querySelector('svg')!;
+            const board = (container: HTMLElement) => container.querySelector('svg[viewBox="0 0 1000 820"]')!;
 
             expect(board(moving.container).classList.contains('touch-none')).toBe(true);
             expect(board(moving.container).closest('[data-drags]'), 'a checker carried from the edge of the screen would swipe the page away').not.toBeNull();

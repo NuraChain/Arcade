@@ -2620,24 +2620,6 @@ html:has(.site-drawer[open])
     text-align: center;
 }
 
-.bg-keys:focus-within
-{
-    inset-block-end: 0;
-    inset-inline: 0;
-    z-index: 3;
-    inline-size: auto;
-    block-size: auto;
-    margin: 0;
-    padding: 0.5rem;
-    overflow: visible;
-    clip-path: none;
-    white-space: normal;
-    border: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-panel);
-    background: var(--color-lifted);
-    box-shadow: var(--shadow-2);
-}
-
 .die3d
 {
     --die: 2rem;

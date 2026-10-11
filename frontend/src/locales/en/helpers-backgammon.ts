@@ -1,9 +1,4 @@
 export const helpersBackgammon = {
-    'helpers.backgammon.hop.hit': 'Move a checker from {from} to {to} and hit the blot there',
-    'helpers.backgammon.hop.enter': 'Enter a checker from the bar on {to}',
-    'helpers.backgammon.hop.enterHit': 'Enter a checker from the bar on {to} and hit the blot there',
-    'helpers.backgammon.hop.off': 'Bear a checker off from {from}',
-    'helpers.backgammon.tag.hit': 'Hit',
     'helpers.backgammon.bar': 'A checker on the bar comes back in first. Nothing else moves until it has entered.',
     'helpers.backgammon.doubles': 'A double plays four times: four moves of {die}.',
     'helpers.backgammon.both': 'Both dice have to be played when they can be, so a move that would leave the other die nowhere to go is not offered.',

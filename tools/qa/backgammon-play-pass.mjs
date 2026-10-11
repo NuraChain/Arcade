@@ -84,7 +84,9 @@ const tapDice = async (player, mode) =>
 };
 
 const shown = async (player) => await player.page.locator('main .table-stage button').evaluateAll((buttons) =>
-    buttons.filter((button) => button.closest('.sr-only, .bg-ask, .table-result') === null).length);
+    buttons.filter((button) => button.closest('.bg-ask, .table-result') === null).length);
+
+const staged = async (player) => Number(await player.page.locator('main .table-stage').getAttribute('data-staged'));
 
 const worded = async (player) => await player.page.locator('main .table-bar').evaluate((bar) =>
     [...bar.children].filter((one) => !one.classList.contains('sr-only') && one.getAttribute('role') !== 'note').length).catch(() => 0);
@@ -157,7 +159,7 @@ try
 
         const before = await drawn(other);
 
-        record(`${ mover.handle } is shown no button for a move and no sentence under the board`, await shown(mover) === 0 && await worded(mover) === 0, `${ await shown(mover) } buttons, ${ await worded(mover) } lines`);
+        record(`${ mover.handle } has no button for a move in the page, shown or hidden, and no sentence under the board`, await shown(mover) === 0 && await worded(mover) === 0, `${ await shown(mover) } buttons, ${ await worded(mover) } lines`);
 
         if (view.phase === 'roll')
         {
@@ -219,7 +221,11 @@ try
                 }
 
                 made.push(hop);
-                await mover.page.waitForTimeout(160);
+
+                if (!await waitFor(async () => await staged(mover) === made.length, 4000))
+                {
+                    record(`${ mover.handle }'s hop from ${ hop.from } to ${ hop.to } was taken by the table`, false, `${ await staged(mover) } of ${ made.length } staged`);
+                }
             }
 
             record(`${ mover.handle } ends a turn made on the table by tapping the dice`, await tapDice(mover, 'done'), `${ hops.length } hops`);

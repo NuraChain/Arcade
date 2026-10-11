@@ -1,14 +1,11 @@
 import { untrack } from 'azerothjs';
 
-import Rail from '../ui/rail.component.azeroth';
 import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
 import { plateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
-import Icon from '../../icons/icon.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
@@ -138,8 +135,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     state says = '';
 
-    state seeking = false;
-
     state presenting = false;
 
     derived game = props.match;
@@ -186,13 +181,10 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived hints = settings.settings().hintMoves;
 
-    derived told = settings.settings().hintOutcome;
-
     let layer: HTMLElement | null = null;
     let men: BackgammonTable | null = null;
     let presenter: Presenter<Told> | null = null;
     let sound: SoundHandle | null = null;
-    let keys: HTMLElement | null = null;
     let drag: Drag | null = null;
 
     const chime = turnChime(() => sound);
@@ -275,30 +267,9 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         ? ''
         : locale.t('backgammon.dice', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
 
-    const spotSays = (spot: number) =>
-    {
-        if (spot === 25)
-        {
-            return locale.t('backgammon.bar');
-        }
-
-        return spot === 0 ? locale.t('backgammon.off') : locale.n(spot);
-    };
-
-    const outcomeAt = (hop: Hop) => (told && plan !== null ? outcomeOf(plan.at, hop) : null);
-
-    const hopSays = (hop: Hop) =>
-    {
-        const said = outcomeAt(hop);
-
-        return locale.t(said === null ? 'backgammon.hop' : `helpers.backgammon.hop.${ said }`, { from: spotSays(hop.from), to: spotSays(hop.to) });
-    };
-
     derived tip = myTurn && landed
         ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged: hops, doubling: view!.doubling, cube: view!.cube })
         : null;
-
-    derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
 
     derived saying = ((): string =>
     {
@@ -375,10 +346,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived staging = plan !== null;
 
-    derived keying = rolling || (seeking && myTurn && !landed);
-
-    derived offered = options.length > 0;
-
     derived whole = plan?.done === true && hops.length > 0;
 
     derived cubed = view?.cubed === true;
@@ -443,25 +410,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         {
             says = next;
         }
-    }
-
-    effect
-    {
-        const ready = staging;
-        const yours = myTurn;
-
-        untrack(() =>
-        {
-            if (!yours)
-            {
-                seeking = false;
-            }
-            else if (ready && seeking)
-            {
-                seeking = false;
-                refocus();
-            }
-        });
     }
 
     effect
@@ -608,7 +556,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         presenter?.predict(next.length === 0 ? null : { rev, covers: (moves) => covered(moves, next) });
     };
 
-    const add = (hop: Hop, onward = false) =>
+    const add = (hop: Hop, onward = false, first = true) =>
     {
         const hit = plan === null ? false : hits(outcomeOf(plan.at, hop));
         const next = [...hops, hop];
@@ -617,6 +565,12 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         picked = null;
         haptic('tick');
         guess(next);
+
+        if (first)
+        {
+            men?.hold(hop.from);
+        }
+
         presenter?.act(async (ctx) =>
         {
             if (men !== null && !(await men.hop({ side: 'near', from: hop.from, to: hop.to, hit }, onward)))
@@ -642,6 +596,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         staged = { at, hops: next };
         picked = null;
         guess(next);
+        men?.hold(last.to);
         presenter?.act(async (ctx) =>
         {
             if (men !== null && !(await men.unhop({ side: 'near', from: last.from, to: last.to, hit })))
@@ -698,7 +653,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
         if (way !== undefined)
         {
-            way.forEach((hop, nth) => add(hop, nth < way.length - 1));
+            way.forEach((hop, nth) => add(hop, nth < way.length - 1, nth === 0));
 
             return true;
         }
@@ -862,9 +817,10 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
         if (held === null || !held.carried)
         {
-            const kept = choose(spotOf(boardAt(event)));
-
-            men?.hold(kept ?? chosen);
+            if (choose(spotOf(boardAt(event))) === null)
+            {
+                men?.hold(chosen);
+            }
 
             return;
         }
@@ -898,22 +854,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         haptic('select');
         sound?.play('die-shake', { gain: 0.8 });
         men?.rattle(true);
-
-        const outcome = await board.play({ kind: 'backgammon', verb: 'roll' });
-
+        await board.play({ kind: 'backgammon', verb: 'roll' });
         men?.rattle(false);
-
-        return outcome !== 'failed';
-    };
-
-    const rollByKey = async () =>
-    {
-        seeking = true;
-
-        if (!(await roll()))
-        {
-            seeking = false;
-        }
     };
 
     const answer = async (verb: 'double' | 'take' | 'drop') =>
@@ -946,8 +888,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             return;
         }
 
-        seeking = false;
-
         if (rolling)
         {
             void roll();
@@ -967,21 +907,13 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         }
     };
 
-    const refocus = () => queueMicrotask(() =>
-    {
-        const next = keys?.querySelector<HTMLElement>(whole ? '[data-key="play"] button' : '[data-key="hops"] button')
-            ?? keys?.querySelector<HTMLElement>('[data-key="undo"] button');
-
-        next?.focus();
-    });
-
     derived plates = [1 - viewer, viewer].map((seat) => ({
         seat,
         tone: toneOf(seat),
         row: view?.seats.find((one) => one.seat === seat)
     }));
 
-    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage bg-stage">
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } data-staged={ hops.length } class="table-stage bg-stage">
         <div class="table-grid bg-grid">
             <Show when={ ready }>
                 { () =>
@@ -1153,80 +1085,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
                         <CoachLine tip={ tip } />
                     </section>
-                }
-            </Show>
-        </div>
-
-        <div class="bg-keys sr-only" ref={ (element) => keys = element }>
-            <Show when={ keying }>
-                { () =>
-                    <div class="flex flex-wrap gap-2" role="group" aria-label={ locale.t('backgammon.keys') }>
-                        <Button variant="primary" size="md" leading="dice" loading={ board.busy() || !rolling } onClick={ () => void rollByKey() }>
-                            { locale.t('backgammon.roll') }
-                        </Button>
-                        <Show when={ mayDouble }>
-                            { () =>
-                                <Button variant="secondary" size="md" disabled={ board.busy() } onClick={ () => void answer('double') }>
-                                    { locale.t('backgammon.double', { cube: locale.n(raised) }) }
-                                </Button>
-                            }
-                        </Show>
-                    </div>
-                }
-            </Show>
-
-            <Show when={ staging }>
-                { () =>
-                    <div class="flex min-w-0 flex-col gap-2" role="group" aria-label={ locale.t('backgammon.keys') }>
-                        <div class="flex min-w-0 gap-2">
-                            <span class="flex" data-key="undo">
-                                <IconButton icon="undo" label={ locale.t('backgammon.undo') } variant="secondary" disabled={ hops.length === 0 || board.busy() } onClick={ () => { undo(); refocus(); } } />
-                            </span>
-                            <span class="flex min-w-0 flex-1" data-key="play">
-                                <Button
-                                    variant="primary"
-                                    size="md"
-                                    block
-                                    leading="selected"
-                                    disabled={ !whole }
-                                    loading={ board.busy() }
-                                    onClick={ () => void submit() }
-                                >
-                                    { locale.t('backgammon.play') }
-                                </Button>
-                            </span>
-                        </div>
-
-                        <Show when={ offered }>
-                            { () =>
-                                <Rail class="-mx-1" inner="px-1 py-0.5">
-                                    <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('backgammon.moves') } data-key="hops">
-                                        <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
-                                            <li class="flex shrink-0">
-                                                <button
-                                                    type="button"
-                                                    class={ () => [
-                                                        'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
-                                                        chosen === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
-                                                    ].join(' ') }
-                                                    disabled={ board.busy() }
-                                                    aria-label={ hopSays(hop) }
-                                                    onClick={ () => { add(hop); refocus(); } }
-                                                >
-                                                    { spotSays(hop.from) }
-                                                    <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
-                                                    { spotSays(hop.to) }
-                                                    <Show when={ hits(outcomeAt(hop)) }>
-                                                        { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
-                                                    </Show>
-                                                </button>
-                                            </li>
-                                        </For>
-                                    </ul>
-                                </Rail>
-                            }
-                        </Show>
-                    </div>
                 }
             </Show>
         </div>

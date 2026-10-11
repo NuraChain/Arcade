@@ -38,8 +38,9 @@ How to read it:
 | D7 | **"Total pot" keeps meaning every chip put in.** It ticks when a bet LANDS on its spot; gathering a street moves discs and changes no number. | The view's `pot` is every chip committed this hand, bets in front of the seats included. The felt labels it "Total pot" and the cost line and the pot presets are priced on it. | A pot that counts up at the gather, which either counts the bets twice or changes what the number means. |
 | D8 | **Lint runs once, at the end.** Each commit runs the three typechecks and the suites, on the commit itself. | The owner's standing rule. | `npm run check` with every commit. |
 | D9 | **The scratch probes leave the repository root.** The lab is rebuilt as `tools/qa/motion-lab.mjs` and runs against the dev server; the production pass is separate. | The probes were untracked, at the root of a public repository, and not ignored. The lab imports `/src/...` modules through the page, which only the dev server serves, so what it measured cannot move into a pass against the production build. | One tool for both servers. |
-| D10 | **Moves are made on the table.** Every game action gets a direct gesture on the table and the HTML controls that offered it go. A keyboard and a screen reader keep a path a touch or mouse player never sees: the same moves as real buttons, visually hidden until keyboard focus enters them. Poker's action controls stay, because an action needs a choice and an amount, but they move onto the felt in front of the reader's seat and are drawn as part of the table. | The owner asked for it on 2026-10-11, after approving the rest: the buttons for the next move go, and everything is done on the table by touch or click. Poker keeping its controls is this design's default. | The recorded rule it replaces (quoted below the table): the board as an illustration with every move a button beside it. |
+| D10 | **Moves are made on the table.** Every game action gets a direct gesture on the table and the HTML controls that offered it go. This row first kept a hidden path for a keyboard and a screen reader, the same moves as real buttons shown on focus; D12 withdrew it. Poker's action controls stay, because an action needs a choice and an amount, but they move onto the felt in front of the reader's seat and are drawn as part of the table. | The owner asked for it on 2026-10-11, after approving the rest: the buttons for the next move go, and everything is done on the table by touch or click. Poker keeping its controls is this design's default. | The recorded rule it replaces (quoted below the table): the board as an illustration with every move a button beside it. |
 | D11 | **No words take room from a board.** The sentences that spell a move out, the turn sentence, the match line and the tip are not drawn under or beside a board on an upright screen: the board has all the room the stage has. The sentences stay for a screen reader, the clock sits on the plate of whoever is on turn, and the tip is a lamp that opens over the board when it is pressed. | The owner, on 2026-10-11, in three messages: "description for movement is useless on games", "we can have more space of game", "game board is more important that descriptions". A bar of text under a board also moved the board as it grew and shrank. | A bar of sentences under every board, as each game had. Not hidden: the rules tip, which has a switch of its own and costs the board nothing as a lamp. |
+| D12 | **No list of moves in the page, not even a hidden one.** A move exists only as a touch or a click on the piece, the card, the die or the cube. No game keeps its moves as buttons for a keyboard or a screen reader, shown, hidden until focus, or on a wider screen. What may stay is what nothing can press: a live sentence and the position in words, both `sr-only`. A question the game itself asks (take or give up a double, the trump suit, an amount to raise) is still asked on the table. | The owner, on 2026-10-11, after seeing backgammon's hidden panel open on a desktop, which one press of Tab after a click on the board does: "also remove that dom helper paly the move 23 > 18 and etc.. on desktop delete these things on all of games game should be real player should tocuh or click on game things such as card dice and etc..". | D10's assistive path, built for backgammon in commit 1.3 as `.bg-keys` and removed again. Its cost is accepted and stated: a turn cannot be made from a keyboard or by a screen reader. The way back, if it is asked for, is play on the table itself: a cursor that walks the pieces. |
 
 The record D1 answers, from "Drawing the board" in `.claude/rules/games.md`:
 
@@ -1127,7 +1128,7 @@ view always: a decision, or a control for a decision already visible.
 | The cube: value and owner | model | It travels on a take, before the doubler's dice. |
 | Score, pips, "Game N" on the plates and the info line | model | Pips come from the men model's counts; score and game number from the `game` events shown. Today the score moves and the pips reset to 167 while the last checker is in the air. |
 | Status words, the dice label for a screen reader, the "x4" chip, the coach tip | model, held by rule 7 | One derived "dice landed for this revision" feeds all of them. |
-| Lit checkers, target marks, the tray's stroke, taps on the board, the assistive hop buttons | model, held by rule 7 | They read the same derived value, so nothing can be staged before the dice land. |
+| Lit checkers, target marks, the tray's stroke, taps on the board | model, held by rule 7 | They read the same derived value, so nothing can be staged before the dice land. |
 | Whether a double may be offered; Crawford | view | A decision surface. Crawford is in no event. |
 
 **Ludo**
@@ -1137,7 +1138,7 @@ view always: a decision, or a control for a decision already visible.
 | Pawns: square, nest seat, home slot, stack and block | model | A nest and a slot belong to a pawn until it leaves. |
 | The die on the board, on the button and on the plate | model | One drawing. The plate's die appears when the thrown die is picked up. |
 | The home dots on a plate | model | Today they flip before the pawn arrives. |
-| The strip sentence, the hint, the coach tip, the assistive move buttons | model, held by rule 7 | The coach names the die ("A six: after this move you roll again"). |
+| The strip sentence, the hint, the coach tip | model, held by rule 7 | The coach names the die ("A six: after this move you roll again"). |
 | The glow and hop of movable pawns, taps on the board | model, held by rule 7 | A yard that lights up says "six". |
 | The three sentences for a roll that could not be played | model | Said when the die has landed, then they give way to the view's sentence. |
 | Confetti | model for when, view for whether | The queue says when; the view's winners say whether and in which colours, because a forfeit-ended game names a side in its `finish` event that the judge may have voided. |
@@ -1188,7 +1189,7 @@ The caps are design choices. What the table means in practice:
   D10 a tap on the board is how a move is made. Backgammon's dice cannot be tapped to finish a turn
   before they have landed, no checker can be picked up and no hop staged; a Ludo pawn cannot be
   tapped while its die is in the air; a Hokm card cannot be lifted before it has been dealt; poker's
-  controls on the felt wait with the cards they act on. The assistive buttons are held with them.
+  controls on the felt wait with the cards they act on.
 - **A hold ends at once** on a snap, in a hidden tab, with no presenter, or when little of the turn
   is left. Reduced motion does not end it (§3.2).
 - **Backgammon holds at the source.** One derived value, "the dice the stage has landed for this
@@ -1237,7 +1238,7 @@ The caps are design choices. What the table means in practice:
 | The flight layer is `inert` and `aria-hidden`, and so are the boards' pieces: nothing drawn there is read. | What matters is said in words, in the live region, with new copy in English and Persian: backgammon's game-end banner (single, gammon, backgammon; for the reader, the opponent and a watcher), a roll that cannot be played, and Ludo's three sentences. Each is said when its scene lands. |
 | Hokm reserves the hand row before a deal. | An undealt slot is laid out and `visibility: hidden`: out of the tab order and out of the accessibility tree until its card lands. |
 | Poker's board list would name the flop before it turns. | Its labels read the model. |
-| D10 removes the lists a keyboard and a screen reader played through. | Every move stays a real button with today's sentence for a name, visually hidden until keyboard focus enters it, and held by rule 7 like the gesture it mirrors (§5, "Controls on the table"). |
+| D10 and D12 remove every way a keyboard and a screen reader had to play. | Accepted by the owner in D12, and said in the notes rather than hidden. Nothing stands in for it; play from a keyboard would be a cursor on the table itself, and is the owner's to ask for. |
 | A card the browser does not know must not get a face. | Unknown cards are back-only nodes. The two-faced turn-over node is built only for a card that is known. |
 | Under reduced motion the turn's ring reads as expired. | It is drawn still and stepped (§6). |
 
@@ -1335,7 +1336,7 @@ score, the game number and the pips join the model in commit 1.5 and read the vi
 | Event or interaction | Scene | Sound and haptic | Notes |
 |---|---|---|---|
 | Opening roll | One die is thrown from each side: `dice[0]` from seat 0's, `dice[1]` from seat 1's. Each is the kit's throw: 650 to 1200 ms with three or four bounces (the dice plan's spec), landing on its face. | `die-land` at each bounce, softer each time, panned. | A later game's opening follows the re-rack and plays from commit 1.2. Game one's plays only when it was delivered (rule 9), from commit 1.4. |
-| Roll | Two dice are thrown from the roller's side, clipped to the board's layer, and rest. The words, the assistive hops, the label and the tip are released when the cast has landed, from commit 1.4a (§4.2 for the cap). | `die-land` per bounce, louder for a harder one. Two dice landing together are one sound: the sound engine drops a repeat of a cue inside 35 ms. | Seeded by the match and the action's revision (`seedOf`), so both players and a reload see one throw, and dice found on a board drawn from nothing rest where they were thrown. |
+| Roll | Two dice are thrown from the roller's side, clipped to the board's layer, and rest. The words, the label and the tip are released when the cast has landed, from commit 1.4a (§4.2 for the cap). | `die-land` per bounce, louder for a harder one. Two dice landing together are one sound: the sound engine drops a repeat of a cue inside 35 ms. | Seeded by the match and the action's revision (`seedOf`), so both players and a reload see one throw, and dice found on a board drawn from nothing rest where they were thrown. |
 | The reader taps the dice to roll | A prelude: the dice rattle while the request is out and are thrown when the faces arrive. | `die-shake` at the press. | It applies only when the reader may double; otherwise the server has already rolled. |
 | The automatic roll at the end of the opponent's move | The hops play, then the dice are picked up and the reader's are thrown. When a batch ends with the reader's own roll, the hops in front are hastened so the dice land inside the bound. | As a roll. | The common case (§4.2). |
 | A hop | The SAME checker node is carried along the base of every point between, one hop per point, each hop landing on its point: 320 to 900 ms by the length of its legs (§3.2), with a 120 ms squash on landing. | `token-step` at the landing. | The flying rung holds for the whole flight (§3.5). The die it used dims as it lands. |
@@ -1355,23 +1356,23 @@ score, the game number and the pips join the model in commit 1.5 and read the vi
 | A turn the server played | Played as the moves they were; the plate is tagged after. | As the moves. | If it was the reader's own turn with hops staged, the record is abandoned: a snap (rule 6). |
 | A view with no events | A quiet settle: the fewest checkers that differ slide straight, no cue. Above eight of them the board is drawn again in place of the slides. | None. | The reconcile of rule 5. |
 
-**Kept as it is.** The board's own tap, turned into a point by `pointAt`. The list of hops on
-offer, as the same nodes after every hop so focus stays (under D10 it is the assistive path). Each
-side's stacks in words for a screen reader. The server's `stage()` deciding which hops are left.
+**Kept as it is.** The board's own tap, turned into a point by `pointAt`. Each side's stacks in
+words for a screen reader. Not kept: the list of hops on offer, which D12 removed. The server's `stage()` deciding which hops are left.
 The `[direction:ltr]` wrapper: the board is printed and does not mirror. Positions in `cqw` from
 `frontend/src/game/backgammon-layout.ts`, the constants the SVG is drawn from.
 
-**Controls on the table (D10).** They landed in commit 1.3, with the press answered at once. The
-last two columns are what that commit built.
+**Controls on the table (D10, D12).** They landed in commit 1.3, with the press answered at once.
+The last column is what was built. The panel of hidden buttons that commit kept for a keyboard is
+gone again (D12).
 
-| Action | Today's control | Gesture on the table | Assistive path |
-|---|---|---|---|
-| Roll | The "Roll" button in the bar | Tap the dice. Two blank dice lie where dice rest, in a ring; they shake while the request is out, are picked up, and the rolled dice are thrown in from the reader's edge. | A real button, visually hidden until keyboard focus enters its panel |
-| Finish the turn | "Play the move" | Tap the dice again: the ring comes back round them when the server's `stage()` says the turn is whole. | The same |
-| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker: with one die's way to go the tap is the move, with more it lifts and its points are marked. It lifts on the press. Or carry it: a press that moves takes it into the hand, and it is set down on any point it can reach this turn, with one die or with both, in one short flight from where it was let go. | The same hops as real buttons, with today's sentences for names |
-| Take a hop back | "Undo" | Tap the checker moved last, or carry it back to the point it came from. A tap never moves that checker on: with nowhere further to go it wears a small arrow and goes back; otherwise it lifts and the point it came from is marked beside its ways on. | A hidden button |
-| Double | "Double to {cube}" | Tap the cube, which wears a ring while a double may be offered. It asks first, on the board: Double, or Not now. A double cannot be taken back and the cube sits among checkers that are being tapped. | A hidden button, which sends the double itself |
-| Answer a double | "Take at {cube}" and "Give up this game" | The same two words on the board, in the place the question about a double is asked, in front of the reader it was offered to and nobody else. A take is told from a drop by the button, as Hokm's trump is chosen on its felt. | The same two buttons: they are real ones |
+| Action | Today's control | Gesture on the table |
+|---|---|---|
+| Roll | The "Roll" button in the bar | Tap the dice. Two blank dice lie where dice rest, in a ring; they shake while the request is out, are picked up, and the rolled dice are thrown in from the reader's edge. |
+| Finish the turn | "Play the move" | Tap the dice again: the ring comes back round them when the server's `stage()` says the turn is whole. |
+| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker: with one die's way to go the tap is the move, with more it lifts and its points are marked. It lifts on the press. Or carry it: a press that moves takes it into the hand, and it is set down on any point it can reach this turn, with one die or with both, in one short flight from where it was let go. |
+| Take a hop back | "Undo" | Tap the checker moved last, or carry it back to the point it came from. A tap never moves that checker on: with nowhere further to go it wears a small arrow and goes back; otherwise it lifts and the point it came from is marked beside its ways on. |
+| Double | "Double to {cube}" | Tap the cube, which wears a ring while a double may be offered. It asks first, on the board: Double, or Not now. A double cannot be taken back and the cube sits among checkers that are being tapped. |
+| Answer a double | "Take at {cube}" and "Give up this game" | The same two words on the board, in the place the question about a double is asked, in front of the reader it was offered to and nobody else. A take is told from a drop by the button, as Hokm's trump is chosen on its felt. |
 
 Before a roll the view holds no dice, so the dice the reader taps to roll are the board's own
 drawing: two dice with no pips, where dice rest. The table lays them only when no dice are on it
@@ -1551,10 +1552,10 @@ home. The turn chime. The names other gates read: `.lb`, `.lp`, `data-movable`, 
 
 **Controls on the table (D10).** It lands in commit 3.3, with the press answered at once.
 
-| Action | Today's control | Gesture on the table | Assistive path |
-|---|---|---|---|
-| Roll | The centre button, drawing a fixed five | Tap the die: the button is the die | The same button. It stays a real, named, focusable target. |
-| Move a pawn | A button per legal move in the list beside the board ("Bring token {token} out of the yard", "Move token {token} forward {die}", "Bring token {token} home", "Move token {token} and send one home"), or a tap near a pawn | Tap the pawn (`pickNear`, as today). The list goes. | The same moves as real buttons with the same sentences, visually hidden until keyboard focus enters them |
+| Action | Today's control | Gesture on the table |
+|---|---|---|
+| Roll | The centre button, drawing a fixed five | Tap the die: the button is the die |
+| Move a pawn | A button per legal move in the list beside the board ("Bring token {token} out of the yard", "Move token {token} forward {die}", "Bring token {token} home", "Move token {token} and send one home"), or a tap near a pawn | Tap the pawn (`pickNear`, as today). The list goes. |
 
 **Anchors and layouts.**
 
@@ -1728,14 +1729,14 @@ card's width in a registered length property. The slot already owns `translate` 
 **Controls on the table (D10).** They land with the turn-over (commit 4.6) and the two-handed draw
 (commit 4.7).
 
-| Action | Today's control | Gesture on the table | Assistive path |
-|---|---|---|---|
-| Call trump | Four suit buttons in the chooser on the felt | Unchanged: the chooser stays, on the felt | The same buttons |
-| Play a card | A click on a legal card. On a touch screen the first tap lifts it and a "Play the {card}" button appears. | A lifted card is tapped again to play it. The confirm button goes. | The cards are buttons already, and stay so |
-| Put cards face down (two players) | Cards are toggled in the hand, then "Put these {count} face down" | The chosen cards are sent by tapping the stock | A real button, visually hidden until keyboard focus enters it |
-| Keep the offered card | "Keep the {card}" in the offer panel | Tap the offered card | A hidden button |
-| Take the next card | "Take the next card" in the offer panel | Tap the stock | A hidden button |
-| Sort | "Sort" in the bar | It stays, as a small control by the hand: a preference, not a move | The same control |
+| Action | Today's control | Gesture on the table |
+|---|---|---|
+| Call trump | Four suit buttons in the chooser on the felt | Unchanged: the chooser stays, on the felt |
+| Play a card | A click on a legal card. On a touch screen the first tap lifts it and a "Play the {card}" button appears. | A lifted card is tapped again to play it. The confirm button goes. |
+| Put cards face down (two players) | Cards are toggled in the hand, then "Put these {count} face down" | The chosen cards are sent by tapping the stock |
+| Keep the offered card | "Keep the {card}" in the offer panel | Tap the offered card |
+| Take the next card | "Take the next card" in the offer panel | Tap the stock |
+| Sort | "Sort" in the bar | It stays, as a small control by the hand: a preference, not a move |
 
 Under D10 the offered card is itself a control. Today it is not drawn on a short stage, so
 commit 4.7 has to draw it at every size, and `tools/qa/fit-pass.mjs` has to hold it.
@@ -1906,12 +1907,12 @@ what it counts (D7). Chips at rest as numbers in pills (D6).
 
 **Controls on the table (D10).** They land with the chips (commit 5.3).
 
-| Action | Today's control | Gesture on the table | Assistive path |
-|---|---|---|---|
-| Fold | "Fold" in the bar under the felt | The same choice, on the felt in front of the reader's seat, drawn as part of the table | The same control: it is a real button |
-| Check or call | "Check", "Call {chips}" or "Call all in, {chips}" in the bar | On the felt, in front of the reader's seat | The same control |
-| Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | On the felt: an action needs a choice and an amount, so the controls stay | The same controls |
-| All in | "All in, {chips}" | On the felt | The same control |
+| Action | Today's control | Gesture on the table |
+|---|---|---|
+| Fold | "Fold" in the bar under the felt | The same choice, on the felt in front of the reader's seat, drawn as part of the table |
+| Check or call | "Check", "Call {chips}" or "Call all in, {chips}" in the bar | On the felt, in front of the reader's seat |
+| Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | On the felt: an action needs a choice and an amount, so the controls stay |
+| All in | "All in, {chips}" | On the felt |
 
 **The bet spot.** A pill is rendered only while a bet is above zero, and its spot is found by
 measurement a frame later; until then it sits at a CSS default, and a new bet can move pills that

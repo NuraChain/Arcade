@@ -2446,7 +2446,7 @@ server right up until the position where it mattered. The rules coach asks the s
 found. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
 
-**Every move is made on the table, and a keyboard still has every one of them.** The owner asked
+**Every move is made on the table, and nowhere else.** The owner asked
 for it in so many words: "remove those html css buttons for next move or smth like this everything
 should be on table by touch or click it is production mode realm game". Roll, Double, Take, Drop,
 Undo, "Play the move" and a row of hop chips used to sit under the board, which reads as a web form
@@ -2466,7 +2466,8 @@ placed in the same 1000 by 820 units through `cqw`. What is pressed now:
   tap opens a question ON the board ("Offer a double to 2?", Double, Not now), because the cube
   sits on the bar among checkers people are tapping and a double cannot be taken back. A double
   that waits on the reader is answered in the same place, Take and Give up, in front of the reader
-  it was offered to and nobody else. These are real buttons, so they are the keyboard's too.
+  it was offered to and nobody else. These two questions are the only buttons a backgammon table
+  has: the game is asking, and there is no object on a board to say no with.
 - **A checker moves when it is tapped, and goes back when it is tapped again.** One way to go and
   the tap is the move; more than one and the checker lifts and its points are marked. The checker
   moved LAST is the exception that makes taking back possible without a button: a tap on it never
@@ -2476,6 +2477,10 @@ placed in the same 1000 by 820 units through `cqw`. What is pressed now:
 - **A checker lifts under the finger.** On the press, not on the release, and at once for a move
   that then has to wait its turn behind a scene: `hold` is a state of the checker, outside the
   queue. The first live check of 1.2 found a pressed checker doing nothing for up to half a second.
+  The lift is put on the checker BEFORE its move is handed to the queue (`add` and `undo` do it),
+  never after: a move with nothing in front of it starts in the same turn of the loop, so holding
+  "whatever is on the point" after the tap held the checker UNDERNEATH, and with a mouse resting on
+  the board it stayed lifted. A finger hid it, because a touch ends in a `pointerleave`.
 - **A checker can be carried.** A press that moves further than a slip of the hand (4px for a
   mouse, 10 for a finger) takes the top checker of the point into the hand (`grab`, `drag`,
   `release` on the table): it follows the pointer above everything on the board, the points it
@@ -2523,16 +2528,21 @@ carried at a time: a second finger moves nothing, a gesture the browser takes aw
 back, and a new first pointer going down on a carry that never ended starts over, so a lost
 `pointerup` cannot leave the board deaf.
 
-**The keyboard's path is the same moves as real buttons, in a panel nobody else sees.** Roll,
-"Double to 2", Undo, "Play the move" and every hop on offer, named as they always were, sit in
-`.bg-keys`, a child of the stage that is `sr-only` until focus enters it and is then drawn over the
-foot of the stage, never in its flow. It is not inside anything that clips: a panel inside a
-hidden element could never be shown. A screen reader is still given each side's stacks in words.
-After a roll, a hop or an undo made there the reader is put on the next hop, or on "Play the move"
-when the turn is whole: the button that was pressed is gone, and the page body is where focus went
-before. A roll made by tapping the dice moves no focus, or the panel would open for somebody who
-never asked for it. The panel's branches read `derived` booleans (`rolling`, `staging`,
-`offered`), so staging a hop keeps every control still on offer the node it was.
+**There is no list of moves in the page, not even a hidden one.** For three commits the same moves
+were kept as real buttons in a panel (`.bg-keys`) that was `sr-only` until keyboard focus entered
+it and was then drawn over the foot of the stage: Roll, "Double to 2", Undo, "Play the move" and a
+chip for every hop on offer. It was my addition, for a keyboard and a screen reader, and the owner
+took it out the day they saw it - one press of Tab after a click on the board opens it on a
+desktop: "also remove that dom helper paly the move 23 > 18 and etc.. on desktop delete these
+things on all of games game should be real player should tocuh or click on game things such as
+card dice and etc..". So it is gone, with the hop sentences, the Hit tag and the eight strings
+only it used, and **no game gets one**: not shown, not hidden, not for a wider screen. What that
+costs is said plainly, because it is a cost: a backgammon turn cannot be made from a keyboard or
+by a screen reader any more. If that is wanted again it has to be play ON the table - a cursor
+that walks the points - and it is the owner's to ask for. What stays is what nobody sees and
+nothing can press: the turn sentence as a live region, the match line, and each side's stacks in
+words. The stage says how many hops are staged (`data-staged`), which is how a spec and the play
+pass know a tap was taken now that no button reports it.
 
 **Nothing textual sits under the board.** The owner again, the same day: "description for movement
 is useless on games", "we can have more space of game", "game board is more important that
@@ -2544,9 +2554,9 @@ the grid there is the fit cell alone. What it said is kept three ways:
 
 - **The sentences are a screen reader's.** The turn sentence is still the live region, and the
   match line still follows it, both `sr-only`. Whose turn it is, a sighted player reads off the
-  table: the plate that glows, the dice in their ring, the checkers that are lit. So the sentences
-  say what the hidden buttons say ("Roll the dice", "Play it, or undo to change it") and never
-  "tap the dice": the only reader they have left cannot tap anything, and has those buttons.
+  table: the plate that glows, the dice in their ring, the checkers that are lit. The sentences
+  name the gesture ("Tap the dice to roll", "Tap the dice to play it"), because the table is the
+  only place a turn is made; while the hidden buttons existed they named those instead.
 - **The clock is on the plate of whoever is on turn.** Each plate is drawn in two places and CSS
   shows one, so there are two clocks; only the one in the fit cell is told the turn is the
   reader's, so the last five seconds tick once whichever copy is on screen.
@@ -2672,20 +2682,16 @@ in the air, and in a match where the engine rolls for the next player they did i
 player's checker was still walking. The table says what dice are on it (`onRoll(seed, faces,
 landed)`: a throw beginning, dice at rest, the felt bare), and the board holds ONE value, `landed`,
 at the source: the plan is not made until it is true. So the lit checkers, the marks, every tap and
-drag, the dice's ring, the keyboard's hops, the tip, the dice's label and the sentence a screen
-reader is told all wait together, with nothing to remember per element. `landed` is the dice of
-this very roll at rest (the seed), or, when nothing is being played, dice at rest with the view's
-faces - without that second half a board read again at a later revision with the same dice would
-hold its reader out for good, because nothing is thrown for a re-read. A press of Roll in the
-keyboard's panel is remembered until there is a move to stand on (`seeking`), where it used to
-look for one the moment the answer came; and Roll stays under the keyboard, busy, for as long as
-the dice are in the air (`keying`), because the first live check found the reader on the page
-body for the nine tenths of a second between the answer and the landing, with the panel closed.
+drag, the dice's ring, the tip, the dice's label and the sentence a screen reader is told all wait
+together, with nothing to remember per element. `landed` is the dice of this very roll at rest
+(the seed), or, when nothing is being played, dice at rest with the view's faces - without that
+second half a board read again at a later revision with the same dice would hold its reader out
+for good, because nothing is thrown for a re-read.
 
 Measured on the production build in a match where the engine rolls: the other player's move
 arrived, their two checkers walked for a second, the reader's dice were thrown and came to rest
-2.06s after the arrival, and the lit checkers, the hops, the drag surface and the sentence all
-appeared on the next frame, 8ms later. Before, all four appeared with the arrival.
+2.06s after the arrival, and the lit checkers, the drag surface and the sentence all appeared on
+the next frame, 8ms later. Before, they appeared with the arrival.
 
 Two things in the design were not built, on purpose. **There is no timer that ends the hold.** The
 design capped a roll's hold at 1200ms from the view's arrival and hastened whatever stood in front
