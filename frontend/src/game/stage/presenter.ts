@@ -15,6 +15,7 @@ export interface Table<V, M>
 {
     readonly kind: string;
     readonly history: number;
+    before?(sight: Sight<V>): Sight<V>;
     reset(sight: Sight<V>): void;
     same(sight: Sight<V>): boolean;
     settle(sight: Sight<V>, ctx: Ctx): Promise<void> | void;
@@ -144,6 +145,22 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         return true;
     };
 
+    const opened = (sight: Sight<V>, batch: Batch) =>
+    {
+        const fresh = actsOf<M>(batch.events, table.kind, 0, sight.rev);
+        const last = fresh.acts[fresh.acts.length - 1];
+
+        if (table.before === undefined || hidden() || last === undefined || !fresh.whole || last.rev !== sight.rev)
+        {
+            return false;
+        }
+
+        cursor = 0;
+        snap(table.before(sight));
+
+        return told(sight, batch);
+    };
+
     const moved = (sight: Sight<V>) =>
     {
         cursor = sight.rev;
@@ -189,12 +206,20 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
                 return;
             }
 
+            const first = batch.id === sight.id && batch.opens !== undefined && batch.opens();
+
             if (sight.id !== matchId)
             {
                 matchId = sight.id;
                 heard = batch.seq;
-                cursor = sight.rev;
                 prediction = null;
+
+                if (first && opened(sight, batch))
+                {
+                    return;
+                }
+
+                cursor = sight.rev;
                 snap(sight);
 
                 return;

@@ -12,6 +12,7 @@ export interface Batch
     events: readonly Logged[];
     live: boolean;
     jump: boolean;
+    opens?: () => boolean;
 }
 
 export interface Act<M>

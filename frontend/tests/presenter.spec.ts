@@ -25,7 +25,7 @@ const flush = async () =>
 
 const cost = (acts: readonly { moves: readonly Move[] }[]) => acts.reduce((sum, act) => sum + act.moves.length * ACT_MS, 0);
 
-const setup = () =>
+const setup = (hooked = true) =>
 {
     const clock = manualClock(1000);
     const stage = createStage({ clock, quiet: () => false });
@@ -68,7 +68,9 @@ const setup = () =>
             calls.push(`played ${ seen.rev }`);
         },
 
-        estimate: cost
+        estimate: cost,
+
+        ...(hooked ? { before: (seen: Sight<null>) => ({ ...seen, rev: 0 }) } : {})
     };
 
     const presenter = createPresenter<null, Move>({ stage, clock, table, sight: () => sight, report: (error) => reported.push(error) });
@@ -586,6 +588,120 @@ describe('what the reader did before the server said so', () =>
         presenter.see(batch([6], {}, 0, mine));
 
         expect(calls).toEqual(['play 6:mine+theirs']);
+    });
+});
+
+describe('the opening of a game', () =>
+{
+    const token = () =>
+    {
+        let asked = 0;
+
+        return { opens: () => (asked += 1) === 1, asked: () => asked };
+    };
+
+    it('is played from the table as it stood before it, when it was delivered here and the board has not moved past it', async () =>
+    {
+        const { presenter, calls, batch, at, elapse } = setup();
+
+        at(1);
+        presenter.see(batch([1], { opens: token().opens }));
+
+        expect(calls).toEqual(['reset m1@0', 'play 1:e1']);
+        expect(presenter.presenting()).toBe(true);
+
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['reset m1@0', 'play 1:e1', 'played 1']);
+        expect(presenter.presenting()).toBe(false);
+    });
+
+    it('is played once: a table put on the page a second time is drawn as it stands', () =>
+    {
+        const first = setup();
+        const second = setup();
+        const once = token();
+        const opening = first.batch([1], { opens: once.opens });
+
+        first.at(1);
+        first.presenter.see(opening);
+        second.at(1);
+        second.presenter.see(opening);
+
+        expect(first.calls).toEqual(['reset m1@0', 'play 1:e1']);
+        expect(second.calls).toEqual(['reset m1@1']);
+    });
+
+    it('is drawn as it stands when the board in hand has moved past it, and is not kept for a later table', () =>
+    {
+        const { presenter, calls, batch, at } = setup();
+        const once = token();
+
+        at(2);
+        presenter.see(batch([1], { opens: once.opens }));
+
+        expect(calls).toEqual(['reset m1@2']);
+        expect(once.asked()).toBe(1);
+    });
+
+    it('is drawn as it stands in a tab that is not on screen', () =>
+    {
+        const { presenter, calls, batch, at } = setup();
+
+        hide();
+        at(1);
+        presenter.see(batch([1], { opens: token().opens }));
+
+        expect(calls).toEqual(['reset m1@1']);
+    });
+
+    it('is drawn as it stands at a table that cannot say how it stood before', () =>
+    {
+        const { presenter, calls, batch, at } = setup(false);
+
+        at(1);
+        presenter.see(batch([1], { opens: token().opens }));
+
+        expect(calls).toEqual(['reset m1@1']);
+    });
+
+    it('is left for its own game when it is another game\'s', () =>
+    {
+        const { presenter, calls, batch, at } = setup();
+        const once = token();
+
+        at(1);
+        presenter.see(batch([1], { id: 'm2', opens: once.opens }));
+
+        expect(calls).toEqual(['reset m1@1']);
+        expect(once.asked()).toBe(0);
+    });
+
+    it('does not take a table already on the page back to the start, and is used up all the same', () =>
+    {
+        const { presenter, calls, batch, at, opened } = setup();
+        const once = token();
+
+        at(1);
+        opened();
+        presenter.see(batch([1], { opens: once.opens }));
+
+        expect(calls).toEqual([]);
+        expect(once.asked()).toBe(1);
+        expect(once.opens(), 'the opening was left for the next table to play late').toBe(false);
+    });
+
+    it('is followed by the next move as any move is', async () =>
+    {
+        const { presenter, calls, batch, at, elapse } = setup();
+
+        at(1);
+        presenter.see(batch([1], { opens: token().opens }));
+        await elapse(ACT_MS);
+        at(2);
+        presenter.see(batch([2]));
+
+        expect(calls.slice(3)).toEqual(['play 2:e2']);
     });
 });
 

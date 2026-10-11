@@ -7,7 +7,7 @@ import '../src/locales/app-catalogue.ts';
 import { en } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { ACK_MS, MEND_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
+import { ACK_MS, MEND_MS, OPENING_MS, useBoard, type MatchEvent } from '../src/stores/match.store.ts';
 import { NUDGE_WINDOW_MS, PROBE_GRACE_MS, PROBE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { ClientFrame, MatchView, ServerFrame } from '../src/api.ts';
@@ -494,6 +494,116 @@ describe('what a board is told of a move', () =>
 
         expect(useBoard().match()?.rev).toBe(6);
         expect(useBoard().events().seq, 'the read that was given up on was heard after all').toBe(1);
+    });
+});
+
+describe('the opening of a game', () =>
+{
+    const second = (rev: number) => board(rev, { id: 'match-2', tableId: 'table-2' });
+
+    const started = (n = 3): ServerFrame => ({ v: 1, t: 'game', n, at: 400_000, match: second(1), events: [rolled(1)] });
+
+    const never = () => new Promise<MatchView>(() => undefined);
+
+    it('keeps the first frame of a game nobody here has open yet, and hands it to the board that opens the game', () =>
+    {
+        matches.view = never;
+        socket.deliver(started());
+
+        expect(useBoard().match()?.id, 'a frame for a game that is not open was shown').toBe('match-1');
+
+        useBoard().open('match-2');
+
+        expect(useBoard().match()).toMatchObject({ id: 'match-2', rev: 1 });
+        expect(useBoard().events()).toMatchObject({ id: 'match-2', live: true, jump: false });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([1]);
+        expect(useBoard().events().opens?.()).toBe(true);
+        expect(useBoard().events().opens?.(), 'one opening was offered twice').toBe(false);
+    });
+
+    it('lets go of a frame nobody opened within ten seconds', async () =>
+    {
+        socket.deliver(started());
+        clock.advance(OPENING_MS + 1);
+        matches.view = async () => second(1);
+
+        const seq = useBoard().events().seq;
+
+        useBoard().open('match-2');
+        await vi.waitFor(() => expect(useBoard().match()?.id).toBe('match-2'), { timeout: 2000 });
+
+        expect(useBoard().events().seq, 'an opening ten seconds old was handed to the board').toBe(seq);
+    });
+
+    it('offers it for ten seconds from when the frame arrived, however late the game was opened', () =>
+    {
+        matches.view = never;
+        socket.deliver(started());
+        clock.advance(OPENING_MS - 1000);
+        useBoard().open('match-2');
+
+        const opens = useBoard().events().opens;
+
+        clock.advance(1001);
+
+        expect(opens?.()).toBe(false);
+    });
+
+    it('keeps nothing of a game that is already under way', async () =>
+    {
+        socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: second(5), events: [rolled(5)] });
+        matches.view = async () => second(5);
+
+        const seq = useBoard().events().seq;
+
+        useBoard().open('match-2');
+        await vi.waitFor(() => expect(useBoard().match()?.id).toBe('match-2'), { timeout: 2000 });
+
+        expect(useBoard().events().seq).toBe(seq);
+    });
+
+    it('says the first frame is the opening when it arrives after the game was opened and before its board was fetched', () =>
+    {
+        matches.view = never;
+        useBoard().open('match-2');
+
+        const seq = useBoard().events().seq;
+
+        socket.deliver(started());
+
+        expect(useBoard().match()).toMatchObject({ id: 'match-2', rev: 1 });
+        expect(useBoard().events()).toMatchObject({ seq: seq + 1, id: 'match-2', live: true });
+        expect(useBoard().events().opens?.()).toBe(true);
+    });
+
+    it('hands a board that was fetched with its dice already down nothing to throw: the frame that began the game says nothing new', () =>
+    {
+        socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: board(1), events: [rolled(1)] });
+
+        expect(useBoard().events().seq, 'a board already drawn at the opening was told of it again').toBe(0);
+    });
+
+    it('calls no later move an opening', () =>
+    {
+        socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: board(2, { turn: 1 }), events: [rolled(2)] });
+
+        expect(useBoard().events().seq).toBe(1);
+        expect(useBoard().events().opens).toBeUndefined();
+    });
+
+    it('does not offer the opening a second time to a game that is closed and opened again', () =>
+    {
+        matches.view = never;
+        socket.deliver(started());
+        useBoard().open('match-2');
+
+        expect(useBoard().events().opens?.()).toBe(true);
+
+        useBoard().close();
+        socket.deliver(started(4));
+        useBoard().open('match-2');
+
+        expect(useBoard().events().opens?.() ?? false).toBe(false);
     });
 });
 

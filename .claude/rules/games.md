@@ -2707,10 +2707,37 @@ what already bounds the queue (fast past a second and a half behind, the board p
 and one rule from the design that IS built: with under eight seconds of the turn left, nothing is
 held (`HURRY_MS`).
 
-**What the board does not do yet, so nobody reads this as finished.** An opening is thrown only
-when it arrives with the end of the game before it, because the first opening of a match never
-reaches a board; a turn with no move says nothing; and a game that ends has no banner. Each is its
-own commit in the plan (`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
+**The first roll of a match is thrown for whoever was there when it was rolled.** The server
+pushes the frame that begins a game before it rings the table, so it reaches a browser that does
+not have that game open yet, and the store used to drop it: every match began with its dice
+already down. Three pieces carry it now, and each is the whole of its part:
+
+- **The store keeps the frame.** A `game` frame for a game that is not open, whose game stands at
+  revision 1 with one event at revision 1, is kept for ten seconds (`OPENING_MS`, `early` in
+  `match.store.ts`), and `open(id)` hands it over as it would a frame that had just arrived. The
+  batch it becomes carries `opens`, a function that answers true ONCE per game and only within
+  ten seconds of the frame's arrival. A frame that arrives after `open()` and before the board
+  was fetched is an opening too. One that arrives after the board was fetched at revision 1 says
+  nothing new, as before: that reader's dice are already down, and they stay down.
+- **The presenter asks, and plays from the table as it stood.** On a mount or on a change of
+  game, and only there, a batch whose `opens()` answers true is played from revision 0: the table
+  is first drawn as `Table.before(sight)` says it stood (backgammon: the same table with no dice
+  on it). It is drawn as it stands instead when the tab is hidden, when the board in hand has
+  moved past the opening, or when the table has no `before`. A presenter already showing the
+  game uses the opening up and plays nothing, so a late frame never takes dice off a table.
+- **The board holds its words from the first frame.** `landed` is false while the board is
+  unrigged and its batch may open the game (`opening`), so the sentence, the lit checkers and
+  the taps wait for this throw as they wait for any other.
+
+A reload has no such frame and shows the position, and so does a table opened late. Hokm and
+poker are handed the same batch and do nothing with it yet: each takes the batch it is mounted
+with, and the one that arrives with a new game, as heard. `match-store.spec.ts`,
+`presenter.spec.ts` (*the opening of a game*) and `backgammon-board.spec.ts` (*the opening roll*)
+hold it.
+
+**What the board does not do yet, so nobody reads this as finished.** A turn with no move says
+nothing, and a game that ends has no banner. Each is its own commit in the plan
+(`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat

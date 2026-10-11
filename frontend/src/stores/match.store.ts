@@ -11,9 +11,12 @@ export interface EventBatch
     events: readonly MatchEvent[];
     live: boolean;
     jump: boolean;
+    opens?: () => boolean;
 }
 
 export const NO_EVENTS: EventBatch = { seq: 0, id: '', events: [], live: false, jump: false };
+
+export const OPENING_MS = 10_000;
 import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { refusalOf } from '../lib/refusal.ts';
@@ -205,6 +208,38 @@ export const useBoard = createStore((): BoardApi =>
     let heardFor = '';
     let heardRev = -1;
 
+    const early = new Map<string, { match: MatchView; events: readonly MatchEvent[]; at: number }>();
+    const opened = new Set<string>();
+
+    const opening = (id: string, at: number) => () =>
+    {
+        if (opened.has(id) || runtime().clock.now() - at > OPENING_MS)
+        {
+            return false;
+        }
+
+        opened.add(id);
+
+        return true;
+    };
+
+    const starts = (match: MatchView, told: readonly MatchEvent[]) => match.rev === 1 && told.length === 1 && told[0].rev === 1;
+
+    const keep = (match: MatchView, told: readonly MatchEvent[]) =>
+    {
+        const now = runtime().clock.now();
+
+        for (const [id, held] of early)
+        {
+            if (now - held.at > OPENING_MS)
+            {
+                early.delete(id);
+            }
+        }
+
+        early.set(match.id, { match, events: told, at: now });
+    };
+
     const waiting = new Map<string, (reply: ReplyFrame) => void>();
 
     let unmended: MatchView | null = null;
@@ -264,7 +299,7 @@ export const useBoard = createStore((): BoardApi =>
         );
     });
 
-    const heard = (match: MatchView, told: readonly MatchEvent[], live: boolean, mended = false) =>
+    const heard = (match: MatchView, told: readonly MatchEvent[], live: boolean, mended = false, at = runtime().clock.now()) =>
     {
         if (match.id !== untrack(openId))
         {
@@ -273,6 +308,7 @@ export const useBoard = createStore((): BoardApi =>
 
         const floor = floorOf(match.id);
         const fresh = told.filter((event) => event.rev > floor && event.rev <= match.rev);
+        const first = live && floor < 1 && heardFor !== match.id && starts(match, told);
 
         if (fresh.length > 0 && floor >= 0 && fresh[0].rev > floor + 1)
         {
@@ -300,7 +336,7 @@ export const useBoard = createStore((): BoardApi =>
 
             if (fresh.length > 0)
             {
-                setEvents((current) => ({ seq: current.seq + 1, id: match.id, events: fresh, live, jump: false }));
+                setEvents((current) => ({ seq: current.seq + 1, id: match.id, events: fresh, live, jump: false, ...(first ? { opens: opening(match.id, at) } : {}) }));
             }
         });
     };
@@ -463,6 +499,15 @@ export const useBoard = createStore((): BoardApi =>
         {
             setLost(false);
             setOpenId(matchId);
+
+            const held = early.get(matchId);
+
+            early.delete(matchId);
+
+            if (held !== undefined && runtime().clock.now() - held.at <= OPENING_MS)
+            {
+                heard(held.match, held.events, true, false, held.at);
+            }
         },
 
         close()
@@ -540,6 +585,13 @@ export const useBoard = createStore((): BoardApi =>
                 if (frame.match.id === untrack(openId))
                 {
                     heard(frame.match, frame.events, true);
+
+                    return;
+                }
+
+                if (starts(frame.match, frame.events))
+                {
+                    keep(frame.match, frame.events);
                 }
             });
 
@@ -588,6 +640,8 @@ export const useBoard = createStore((): BoardApi =>
             heardRev = -1;
             unmended = null;
             waiting.clear();
+            early.clear();
+            opened.clear();
         }
     };
 });

@@ -103,10 +103,10 @@ const elapse = async (ms: number) =>
 
 const still = (match: MatchView) => renderTest(() => BackgammonBoard({ match, events: NO_EVENTS }) as Rendered);
 
-const live = async (first: MatchView) =>
+const live = async (first: MatchView, heard: EventBatch = NO_EVENTS) =>
 {
     const [current, setCurrent] = createSignal(first);
-    const [told, setTold] = createSignal<EventBatch>(NO_EVENTS);
+    const [told, setTold] = createSignal<EventBatch>(heard);
     const view = renderTest(() => BackgammonBoard({
         get match()
         {
@@ -552,6 +552,91 @@ describe('the backgammon table on the page', () =>
 
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
         expect(dice(container)).toEqual(['3', '2']);
+    });
+});
+
+describe('the opening roll', () =>
+{
+    const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';
+
+    const begun = (over: Partial<MatchView> = {}) => match({ dice: [6, 1] }, 0, { rev: 1, ...over });
+
+    const opening = (id: string, opens: () => boolean): EventBatch =>
+        ({ seq: 1, id, events: [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], live: true, jump: false, opens });
+
+    it('is thrown for a game opened with the frame that began it, and nothing is told of it until it has landed', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const table = await live(begun(), opening('match-bg', () => true));
+
+        expect(stageOf(table.container).getAttribute('data-presenting')).toBe('true');
+        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body')), 'no die was thrown').toBe(true);
+        expect(lit(table.container), 'checkers were lit before the opening roll had landed').toBe(0);
+        expect(said(table.container)).not.toContain('rolled');
+        expect(table.container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(false);
+
+        await elapse(1500);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(dice(table.container)).toEqual(['6', '1']);
+        expect(lit(table.container)).toBeGreaterThan(0);
+        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+        expect(men(table.container)).toHaveLength(30);
+    });
+
+    it('is thrown once: a board drawn again with the same frame has its dice down and says so at once', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const table = await live(begun(), opening('match-bg', () => false));
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'))).toBe(false);
+        expect(dice(table.container)).toEqual(['6', '1']);
+        expect(lit(table.container)).toBeGreaterThan(0);
+        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+    });
+
+    it('is thrown for the next game at the same table, when that game comes with the frame that began it', async () =>
+    {
+        const table = await live(match({ dice: [], phase: 'roll' }, 0, {
+            rev: 9,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result: 'won' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost' }
+            ] as MatchView['players']
+        }));
+        const next = begun({ id: 'match-next' });
+
+        expect(table.container.querySelector('.table-result')).not.toBeNull();
+
+        table.tell(next, [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], { opens: () => true });
+        await flush();
+
+        expect(stageOf(table.container).getAttribute('data-presenting')).toBe('true');
+        expect(table.container.querySelector('.table-result'), 'the result of the game before stood over the opening of this one').toBeNull();
+        expect(lit(table.container)).toBe(0);
+        expect(said(table.container), 'a sentence about the game before was read out over the opening of this one').toBe('');
+
+        await elapse(1500);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(dice(table.container)).toEqual(['6', '1']);
+        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+    });
+
+    it('is left alone on a board that is already showing the game: the dice stay where they lie', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const table = await live(begun());
+
+        animate.mockClear();
+        table.tell(begun(), [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], { opens: () => true });
+        await flush();
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'))).toBe(false);
+        expect(dice(table.container)).toEqual(['6', '1']);
     });
 });
 

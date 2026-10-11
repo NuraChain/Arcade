@@ -1091,6 +1091,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         history: HISTORY,
 
+        before: (sight) => ({ ...sight, view: { ...sight.view, dice: [], spent: [] } }),
+
         reset(sight)
         {
             const felt = sight.view;

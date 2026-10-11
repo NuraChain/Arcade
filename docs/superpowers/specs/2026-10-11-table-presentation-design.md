@@ -883,6 +883,14 @@ These are what the kit's unit specs assert.
   it is unplayed and it is younger than the jump limit. It first resets the renderer quietly to the
   table as it stood BEFORE the opening and sets its own cursor to revision 0.
 - A reload has no such frame and shows the position. So does a table opened late.
+- *As built (commit 1.4b).* The frame kept is one whose game stands at revision 1 with one event
+  at revision 1. The played mark is `opens` on the batch: a function that answers true once per
+  game and only within ten seconds of the frame's arrival, so the age is the store's to judge and
+  the presenter keeps no clock for it. The presenter asks it of every batch for the game it shows,
+  so one that is already on the page uses the opening up without playing it. The renderer's part
+  is `Table.before(sight)`. A frame that arrives after the board was fetched at revision 1 is not
+  an opening: those dice are down, and they stay down. The board holds its words from its first
+  frame while it is unrigged and its batch may open the game.
 - Ludo's opening row is empty, so Ludo has no opening scene. A later game of a backgammon match
   needs none of this: its opening arrives in the batch that ended the game before.
 - Spec: the opening delivered, played once, not replayed on a remount.
@@ -947,7 +955,7 @@ Every change to `frontend/src/stores/match.store.ts`:
 | An answer for a match that is not open is ignored. | Play at table A, switch to table B of the same game: A's answer replaced the view and was published as B's next batch. | A table switch with an answer in flight. |
 | On a gap the answer is held back and `since` is read once from the last revision handed on. The board then arrives with the whole run of events in one write. If that read fails, the board arrives with `jump: true` and no events. One read is out at a time, and a gap seen while it is out is read after it. | A push for a later move can overtake the push for an earlier one, since each reads the ledger after its own commit. The store advanced the view and then dropped the events for good. Now every advance of the view arrives with its events or with a jump, and a board never has to guess. | A gap re-read; a pushed frame with a gap reads `since` before the view moves; a failed re-read is a jump. |
 | The events of a batch are cut at the revision of the board they arrive with. | A push reads the match and then the ledger. A commit between the two handed a board events for a move its own view had not reached, and a scene played to a target that did not hold it. | An event past the board's revision is not handed on. |
-| The opening frame of a match that is not open yet is kept for ten seconds and adopted by `open()`, with a played mark in the store. It lands in commit 1.4. | Rule 9. | The opening delivered, played once, not replayed on a remount. |
+| The opening frame of a match that is not open yet is kept for ten seconds and adopted by `open()`, with a played mark in the store. It landed in commit 1.4b. | Rule 9. | The opening delivered, played once, not replayed on a remount. |
 | After a resignation that was applied, `since` is read from the revision held before the press and folded. It lands with the first game a seat can quit and go on watching (commit 3.1). | A resignation is sent with no revision, so its answer carries no events, and the push leaves the quitter out. The quitter's board was handed its own forfeit with no batch. | A resignation folds the feed from the held revision. |
 
 Every change to `frontend/src/stores/watch.store.ts`. Unless a row says otherwise its spec is a case

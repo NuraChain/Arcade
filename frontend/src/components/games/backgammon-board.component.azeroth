@@ -202,7 +202,9 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived hurried = game.remainingMs !== undefined && game.remainingMs < HURRY_MS;
 
-    derived landed = !rigged || wanted === -1 || hurried || (rolled.landed && (rolled.seed === wanted || (!presenting && rolled.faces === faced)));
+    derived opening = !rigged && props.events.opens !== undefined && props.events.id === game.id;
+
+    derived landed = !opening && (!rigged || wanted === -1 || hurried || (rolled.landed && (rolled.seed === wanted || (!presenting && rolled.faces === faced))));
 
     derived plan = landed && myTurn && view!.phase === 'move' && view!.dice.length === 2
         ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops)
@@ -273,7 +275,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived saying = ((): string =>
     {
-        if (view === null)
+        if (view === null || over)
         {
             return '';
         }

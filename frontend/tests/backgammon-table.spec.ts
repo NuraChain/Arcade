@@ -313,6 +313,28 @@ describe('what happened, played on the table', () =>
         expect(fromY(thrown()[1])).toBeLessThan(-5);
     });
 
+    it('says how it stood before its opening roll: the same table with no dice on it', async () =>
+    {
+        const seen = sight(felt({ dice: [6, 2] }), 1);
+        const before = table.before!(seen);
+
+        expect(before).toMatchObject({ id: 'm', rev: 1, seat: 0 });
+        expect(before.view).toMatchObject({ viewer: 0, dice: [], spent: [], seed: seen.view.seed });
+        expect(before.view.near).toBe(seen.view.near);
+        expect(before.view.cube).toBe(seen.view.cube);
+
+        table.reset(before);
+
+        expect(dice()).toHaveLength(0);
+        expect(men()).toHaveLength(30);
+
+        play([act(1, -1, [{ e: 'opening', seat: 0, dice: [6, 2] }])], seen);
+        await elapse(THROW_MS + ROLL_CAP);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['6', '2']);
+        expect(table.same(seen)).toBe(true);
+    });
+
     it('lets the dice go from beyond the edge of the board, however big the board is', async () =>
     {
         const zone = host.querySelector<HTMLElement>('.bgt-dice')!;

@@ -20,6 +20,35 @@ const drawn = async (player) => `${ await says(player) }|${ await player.page.lo
 
 const idle = async (player) => await waitFor(async () => await player.page.locator('.table-stage[data-presenting]').count() === 0, 12000);
 
+const watchOpening = async (player) => await player.page.evaluate(() =>
+{
+    const seen = { first: null, flew: false };
+    const timer = setInterval(() =>
+    {
+        const stage = document.querySelector('.table-stage');
+
+        if (stage === null)
+        {
+            return;
+        }
+
+        const flying = [...document.querySelectorAll('.bg-layer .bgt-dice .die3d-body')]
+            .some((body) => body.getAnimations().some((one) => one.playState === 'running'));
+
+        seen.first ??= { presenting: stage.hasAttribute('data-presenting'), flying };
+        seen.flew ||= flying;
+
+        if (seen.flew && !stage.hasAttribute('data-presenting'))
+        {
+            clearInterval(timer);
+        }
+    }, 25);
+
+    window.__opening = seen;
+});
+
+const faces = async (player) => (await player.page.locator(`${ dice } > .die3d`).evaluateAll((all) => all.map((die) => die.dataset.face))).join();
+
 const placeOf = (spot) =>
 {
     if (spot === 25)
@@ -123,6 +152,8 @@ try
         throw new Error('no Start button');
     }
 
+    await watchOpening(dana);
+    await watchOpening(mina);
     await start.click();
 
     record('the starter sees the board', await waitFor(async () => await dana.page.locator(board).count() > 0));
@@ -134,6 +165,18 @@ try
     for (const player of [dana, mina])
     {
         seats.set((await player.api('GET', `/matches/${ matchId }`)).body.mine, player);
+    }
+
+    const rolled = (await dana.api('GET', `/matches/${ matchId }`)).body.view.dice.slice(0, 2).join();
+
+    for (const player of [dana, mina])
+    {
+        await idle(player);
+
+        const seen = await player.page.evaluate(() => window.__opening);
+
+        record(`${ player.handle } is shown the first roll being thrown, not dice that were already down`, seen?.first?.presenting === true && seen.flew === true, JSON.stringify(seen));
+        record(`${ player.handle }'s dice come to rest on the faces that were rolled`, await faces(player) === rolled, `${ await faces(player) } for ${ rolled }`);
     }
 
     console.log('\n[3] turns played on the table itself');
