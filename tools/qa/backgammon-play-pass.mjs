@@ -20,6 +20,13 @@ const drawn = async (player) => `${ await says(player) }|${ await player.page.lo
 
 const idle = async (player) => await waitFor(async () => await player.page.locator('.table-stage[data-presenting]').count() === 0, 12000);
 
+const level = async (player, rev) => await waitFor(async () => await player.page.evaluate((least) =>
+{
+    const table = document.querySelector('.table-stage');
+
+    return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
+}, rev), 12000);
+
 const watchOpening = async (player) => await player.page.evaluate(() =>
 {
     const seen = { first: null, flew: false };
@@ -48,6 +55,45 @@ const watchOpening = async (player) => await player.page.evaluate(() =>
 });
 
 const faces = async (player) => (await player.page.locator(`${ dice } > .die3d`).evaluateAll((all) => all.map((die) => die.dataset.face))).join();
+
+const watchGames = async (player) => await player.page.evaluate(() =>
+{
+    const seen = { banners: [], early: [] };
+    let up = false;
+
+    const early = (what) =>
+    {
+        if (!seen.early.includes(what))
+        {
+            seen.early.push(what);
+        }
+    };
+
+    setInterval(() =>
+    {
+        const banner = document.querySelector('.bg-layer .bgt-banner');
+        const playing = document.querySelector('.table-stage')?.hasAttribute('data-presenting') === true;
+
+        if (banner !== null && !up)
+        {
+            seen.banners.push([...banner.children].map((line) => line.textContent).join(' / '));
+        }
+
+        if (banner !== null && document.querySelector('.table-result') !== null)
+        {
+            early('the result card stood under a banner');
+        }
+
+        if (playing && [...document.querySelectorAll('.bg-plate .table-plate-tag')].some((tag) => /^(Won|Lost)$/.test((tag.textContent ?? '').trim())))
+        {
+            early('a plate said who had won while the table was still playing');
+        }
+
+        up = banner !== null;
+    }, 30);
+
+    window.__games = seen;
+});
 
 const placeOf = (spot) =>
 {
@@ -177,6 +223,7 @@ try
 
         record(`${ player.handle } is shown the first roll being thrown, not dice that were already down`, seen?.first?.presenting === true && seen.flew === true, JSON.stringify(seen));
         record(`${ player.handle }'s dice come to rest on the faces that were rolled`, await faces(player) === rolled, `${ await faces(player) } for ${ rolled }`);
+        await watchGames(player);
     }
 
     console.log('\n[3] turns played on the table itself');
@@ -282,6 +329,8 @@ try
 
     console.log('\n[4] the rest over the api');
 
+    let round = 0;
+
     for (let step = 0; step < 3000; step += 1)
     {
         const current = (await dana.api('GET', `/matches/${ matchId }`)).body;
@@ -293,7 +342,10 @@ try
 
         const mover = seats.get(current.turn);
         const view = current.view;
+        const began = view.round !== round;
         let play;
+
+        round = view.round;
 
         if (view.phase === 'roll')
         {
@@ -311,12 +363,28 @@ try
             play = { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] };
         }
 
+        if (began || Math.min(...view.seats.map((row) => 15 - row.checkers[0])) <= 4)
+        {
+            await level(dana, current.rev);
+            await level(mina, current.rev);
+        }
+
         await mover.api('POST', `/matches/${ matchId }/play`, { key: `bgp-${ step }-${ matchId }`, rev: current.rev, play });
     }
 
     const final = (await dana.api('GET', `/matches/${ matchId }`)).body;
 
     record('the match ends', final.finishedAt !== undefined);
+
+    for (const player of [dana, mina])
+    {
+        await level(player, final.rev);
+
+        const seen = await player.page.evaluate(() => window.__games);
+
+        record(`${ player.handle } is shown every game being called on the board before its checkers are racked`, seen.banners.length === final.view.round, `${ seen.banners.length } of ${ final.view.round }: ${ seen.banners.join('; ') }`);
+        record(`${ player.handle } is told nothing of the match's result before the last game has been called`, seen.early.length === 0, seen.early.join('; '));
+    }
 
     for (const player of [dana, mina])
     {

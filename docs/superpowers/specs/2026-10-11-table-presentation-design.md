@@ -1337,7 +1337,9 @@ middle. It applies every logged action with `beatsOf` and `step` and requires th
 and the cube to be the board the engine's own view describes after every revision, across game
 boundaries, from either seat (a watcher is viewer 0). It also requires that it met every kind of
 beat while it checked, so a kind the games never produced cannot pass by not being there. The
-score, the game number and the pips join the model in commit 1.5 and read the view until then.
+score, the game number and the pips joined the model in commit 1.5: `Shown.score` and
+`Shown.round` are stepped by `game` and `rack` and compared by `sameAs`, so the same parity run
+holds them, and the pips are counted from the men (`pipsOf`).
 
 **Scenes**, in the order of play.
 
@@ -1356,7 +1358,7 @@ score, the game number and the pips join the model in commit 1.5 and read the vi
 | Double | The cube is offered where it happens: it swells and rocks for 420 ms (rewrite). | `trump`; a `ready` haptic for the player asked. | The reader's own double is answered on the board at once, at the tap. |
 | Take | The cube travels to the taker's end and turns to its new value, 420 ms (rewrite), BEFORE the doubler's dice are thrown. | `bonus`. | In the rewrite the cube's number changed on its first frame. |
 | Drop | Played where it happens, then the game's end. | `pass`. | |
-| A game ends | A banner (single, gammon or backgammon), a linger, thirty checkers racked to the start, the cube back to the middle at 1, then the next opening. | `hand-won` and a haptic for the reader who won it. | The rack, the cube's way back and the opening play from commit 1.2: one arc for each checker, 440 ms, 26 ms apart. The banner and its linger land in commit 1.5, and its words also go to the live region. |
+| A game ends | A banner (single, gammon or backgammon), a linger, thirty checkers racked to the start, the cube back to the middle at 1, then the next opening. | `hand-won` and a haptic for the reader who won it. | The rack, the cube's way back and the opening play from commit 1.2: one arc for each checker, 440 ms, 26 ms apart. The banner and its linger landed in commit 1.5: 1800 ms (900 at the least) for a game inside a match and 1300 (700) for the game that ends it, raised and lowered in 180 ms, drawn by the table from lines the board hands it and in the page's reading direction. Its words also go to the live region, and the plates' score, pips and game number change when the table has shown them (`onFacts`). |
 | The match is won | The same banner; the result arrives after the queue (§6). | `win` and a haptic for the winner, 260 ms after `hand-won`. Decided in commit 1.2: HEAD spaced them 200 ms and the rewrite played both in one tick (§1.2). | |
 | Forfeit | Nothing moves: the engine leaves the checkers. The plate is tagged and the result follows the queue. | None on the board; `win` for the reader who is left. | There is no `game` event, so no banner. |
 | The reader stages a hop, or takes one back | A `complete` prediction: the checker moves at once at full pace, and scenes in front are hastened. | As a hop. | The echo is the reader's own action at `rev + 1`; its covered hops are dropped. |

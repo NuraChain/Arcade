@@ -533,7 +533,7 @@ describe('the backgammon table on the page', () =>
 
         expect(container.querySelector('.table-result')).toBeNull();
 
-        await elapse(2000);
+        await elapse(3000);
 
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(dice(container)).toEqual([]);
@@ -637,6 +637,166 @@ describe('the opening roll', () =>
         expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
         expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'))).toBe(false);
         expect(dice(table.container)).toEqual(['6', '1']);
+    });
+});
+
+describe('a game that ends on the board', () =>
+{
+    const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';
+
+    const flag = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-banner');
+
+    const plate = (container: HTMLElement, name: string) =>
+        [...container.querySelectorAll<HTMLElement>('.bg-plate')].filter((one) => one.textContent?.includes(name));
+
+    const reads = (container: HTMLElement, name: string, words: string) =>
+    {
+        const plates = plate(container, name);
+
+        return plates.length > 0 && plates.every((one) => one.textContent?.includes(words));
+    };
+
+    const seats = (scoreOne: number): Backgammon['seats'] => [
+        { seat: 0, checkers: [...START], pips: 167, score: 0 },
+        { seat: 1, checkers: [...START], pips: 167, score: scoreOne }
+    ];
+
+    const ending = () => match({ turn: 1, dice: [1, 4], seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }, 0, { turn: 1 });
+
+    const lastHop: Played = { e: 'move', seat: 1, from: 1, to: 0, die: 1, hit: false };
+
+    it('leaves the score and the pips on the plates where the board is, and moves each when the board shows it', async () =>
+    {
+        const table = await live(ending());
+
+        expect(reads(table.container, 'omid.k', '0 of 3')).toBe(true);
+        expect(reads(table.container, 'omid.k', '1 pip')).toBe(true);
+        expect(reads(table.container, 'You', '90 pips')).toBe(true);
+
+        table.tell(match({ turn: 0, dice: [5, 2], round: 2, seats: seats(1) }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+            lastHop,
+            { e: 'game', seat: 1, how: 'single', points: 1, cube: 1 },
+            { e: 'opening', seat: 0, dice: [5, 2] }
+        ])]);
+        await flush();
+
+        expect(reads(table.container, 'omid.k', '0 of 3'), 'the point was on the plate before the last checker was off').toBe(true);
+        expect(reads(table.container, 'omid.k', '1 pip')).toBe(true);
+        expect(reads(table.container, 'You', '90 pips'), 'the next game\'s pips were on the plate under the finished board').toBe(true);
+
+        await elapse(760);
+
+        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['omid.k wins the game', '1 point']);
+        expect(said(table.container)).toBe('omid.k wins the game. 1 point.');
+        expect(reads(table.container, 'omid.k', '1 of 3')).toBe(true);
+        expect(reads(table.container, 'omid.k', '0 pips')).toBe(true);
+        expect(reads(table.container, 'You', '90 pips')).toBe(true);
+
+        await elapse(5500);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(flag(table.container)).toBeNull();
+        expect(reads(table.container, 'omid.k', '167 pips')).toBe(true);
+        expect(reads(table.container, 'You', '167 pips')).toBe(true);
+        expect(said(table.container)).toBe('You rolled 5 and 2. Move your checkers.');
+        expect(dice(table.container)).toEqual(['5', '2']);
+    });
+
+    it('says how the game was won when it was more than a single game, and to the winner in the winner\'s words', async () =>
+    {
+        const table = await live(match({ turn: 0, dice: [1, 4], seats: position({ 1: 1, 0: 14 }, { 20: 15 }), cube: 2, owner: 0, target: 5 }, 0));
+
+        table.tell(match({ turn: 1, dice: [5, 2], round: 2, seats: [{ seat: 0, checkers: [...START], pips: 167, score: 4 }, { seat: 1, checkers: [...START], pips: 167, score: 0 }], target: 5 }, 0, { rev: 5, turn: 1 }), [happened(5, 0, [
+            { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
+            { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 },
+            { e: 'opening', seat: 1, dice: [5, 2] }
+        ])]);
+        await elapse(760);
+
+        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['You win the game', 'Gammon, 4 points']);
+        expect(said(table.container)).toBe('You win the game. Gammon, 4 points.');
+    });
+
+    it('calls the last game on the board before the result of the match is shown', async () =>
+    {
+        const table = await live(ending());
+
+        table.tell(match({ turn: 1, dice: [], phase: 'roll', seats: [{ seat: 0, checkers: row({ 6: 15 }), pips: 90, score: 0 }, { seat: 1, checkers: row({ 0: 15 }), pips: 0, score: 3 }] }, 0, {
+            rev: 5,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result: 'lost' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'won' }
+            ] as MatchView['players']
+        }), [happened(5, 1, [
+            lastHop,
+            { e: 'game', seat: 1, how: 'backgammon', points: 3, cube: 1 },
+            { e: 'finish', seat: 1 }
+        ])]);
+        await elapse(760);
+
+        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['omid.k wins the game', 'Backgammon, 3 points']);
+        expect(table.container.querySelector('.table-result'), 'the result of the match stood over the game that was still being called').toBeNull();
+        expect(said(table.container), 'the last game of a match was called to nobody who cannot see the banner').toBe('omid.k wins the game. Backgammon, 3 points.');
+        expect(reads(table.container, 'omid.k', 'Won'), 'a plate said who had won the match while the game was still being called').toBe(false);
+        expect(reads(table.container, 'You', 'Lost')).toBe(false);
+
+        await elapse(2400);
+
+        expect(flag(table.container)).toBeNull();
+        expect(table.container.querySelector('.table-result')).not.toBeNull();
+        expect(reads(table.container, 'omid.k', 'Won')).toBe(true);
+        expect(reads(table.container, 'You', 'Lost')).toBe(true);
+    });
+
+    it('holds the tags of a match that ends with nothing to show for only as long as the table takes to clear', async () =>
+    {
+        const table = await live(match({}));
+
+        table.tell(match({ dice: [] }, 0, {
+            rev: 5,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result: 'won' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned' }
+            ] as MatchView['players']
+        }), [happened(5, 1, [{ e: 'forfeit', seat: 1, reason: 'resign' }, { e: 'finish', seat: 0 }])]);
+        await elapse(900);
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(flag(table.container)).toBeNull();
+        expect(reads(table.container, 'You', 'Won')).toBe(true);
+        expect(table.container.querySelector('.table-result')).not.toBeNull();
+    });
+
+    it('is called in Persian, and read from the right, for a Persian reader', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const table = await live(ending());
+
+        table.tell(match({ turn: 0, dice: [5, 2], round: 2, seats: seats(1) }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+            lastHop,
+            { e: 'game', seat: 1, how: 'single', points: 1, cube: 1 },
+            { e: 'opening', seat: 0, dice: [5, 2] }
+        ])]);
+        await elapse(760);
+
+        expect(flag(table.container)!.dir).toBe('rtl');
+        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['omid.k این دست را برد', '۱ امتیاز']);
+    });
+
+    it('lets the reader\'s pips fall with the checker they have put down, and come back with it', async () =>
+    {
+        const table = await live(match({}));
+
+        expect(reads(table.container, 'You', '167 pips')).toBe(true);
+
+        hop(table.container, 13, 7);
+        await elapse(1200);
+
+        expect(reads(table.container, 'You', '161 pips')).toBe(true);
+        expect(reads(table.container, 'omid.k', '167 pips')).toBe(true);
     });
 });
 

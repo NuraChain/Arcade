@@ -4,7 +4,7 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import type { Haptic } from '../src/lib/haptics.ts';
 import { BAR_GAP, BAR_LEFT, BAR_WIDTH, BOTTOM, HEIGHT, MIDDLE, POINT_WIDTH, RADIUS, TOP, WIDTH, columnOf } from '../src/game/backgammon-layout.ts';
 import { seedOf, spentBy, type Felt, type Told } from '../src/game/backgammon-felt.ts';
-import { BACK_MOST, CUBE_MS, DROP_MOST, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, ROLL_CAP, THROW_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
+import { BACK_MOST, CUBE_MS, DROP_MOST, FLAG_MS, GAME_LEAST, GAME_MS, HISTORY, KNOCK_MS, LAST_MS, PASS_LEAST, PASS_MS, PICK_MS, ROLL_CAP, THROW_MS, WALK_MOST, createBackgammonTable, type BackgammonTable, type Facts } from '../src/game/board/backgammon-table.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { createDirector, type Director } from '../src/game/stage/director.ts';
 import type { Act } from '../src/game/stage/feed.ts';
@@ -35,6 +35,8 @@ const felt = (over: Partial<Felt> = {}): Felt => ({
     spent: spentBy(over.dice ?? [], []),
     seed: seedOf('m', 5),
     cube: { on: true, value: 1, owner: null },
+    score: { near: 0, far: 0 },
+    round: 1,
     ...over
 });
 
@@ -66,6 +68,9 @@ let rolls: [number, boolean][];
 let faced: string[];
 let passes: string[];
 let unplayed: string;
+let flagged: string[];
+let games: string[];
+let facts: Facts[];
 
 const elapse = async (ms: number) =>
 {
@@ -78,7 +83,7 @@ const elapse = async (ms: number) =>
     await flush();
 };
 
-const play = (acts: Act<Told>[], seen: Sight<Felt>) => director.enqueue((ctx) => table.play(acts, seen, ctx));
+const play = (acts: Act<Told>[], seen: Sight<Felt>) => director.enqueue((ctx) => table.play(acts, seen, ctx), { estimate: table.estimate(acts) });
 
 const men = (tone?: string) => [...host.querySelectorAll<HTMLElement>(tone === undefined ? '.man' : `.man[data-tone="${ tone }"]`)];
 
@@ -116,6 +121,9 @@ beforeEach(() =>
     faced = [];
     passes = [];
     unplayed = 'No move';
+    flagged = [];
+    games = [];
+    facts = [];
     host = document.createElement('div');
     host.className = 'bg-layer';
     document.body.append(host);
@@ -143,7 +151,10 @@ beforeEach(() =>
             faced.push(faces.join());
         },
         noMove: () => unplayed,
-        onPass: (side, faces) => passes.push(`${ side } ${ faces.join() }`)
+        onPass: (side, faces) => passes.push(`${ side } ${ faces.join() }`),
+        banner: () => flagged,
+        onGame: (side, how, points) => games.push(`${ side } ${ how } ${ points }`),
+        onFacts: (now) => facts.push(now)
     });
 });
 
@@ -546,7 +557,7 @@ describe('what happened, played on the table', () =>
     it('racks every checker and returns the cube before the next game opens', async () =>
     {
         const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
-        const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6) }), 6);
+        const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
 
         table.reset(sight(before));
         play([act(6, 0, [
@@ -570,6 +581,185 @@ describe('what happened, played on the table', () =>
         expect(table.same(after)).toBe(true);
         expect(host.querySelectorAll('.man[data-off]')).toHaveLength(0);
         expect(director.busy()).toBe(false);
+    });
+
+    describe('a game that is won', () =>
+    {
+        const flag = () => host.querySelector<HTMLElement>('.bgt-banner');
+
+        const racking = () => drawn.filter((one) => one.el.classList.contains('man')).length > 20;
+
+        const won = (last = false) =>
+        {
+            const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
+            const after = last
+                ? sight(felt({ near: row({ 0: 15 }), far: row({ 20: 15 }), cube: { on: true, value: 2, owner: 'near' }, score: { near: 4, far: 0 } }), 6)
+                : sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
+
+            table.reset(sight(before));
+            play([act(6, 0, [
+                { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
+                { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 },
+                ...(last ? [{ e: 'finish', seat: 0 }] : [{ e: 'opening', seat: 1, dice: [2, 5] }])
+            ])], after);
+
+            return after;
+        };
+
+        it('is called on a banner over the board, held there, and only then are the checkers racked', async () =>
+        {
+            flagged = ['You win the game', 'Gammon · 4 points'];
+
+            const after = won();
+
+            await elapse(400 + PICK_MS + 60);
+
+            expect([...flag()!.children].map((line) => line.textContent)).toEqual(['You win the game', 'Gammon · 4 points']);
+            expect(flag()!.dataset.side).toBe('near');
+            expect(games).toEqual(['near gammon 4']);
+            expect(racking(), 'the checkers were racked under the banner').toBe(false);
+            expect(host.querySelectorAll('.man[data-off]')).toHaveLength(15);
+
+            await elapse(GAME_MS - 200);
+
+            expect(flag(), 'the banner came down before its hold was over').not.toBeNull();
+            expect(racking()).toBe(false);
+
+            await elapse(200 + FLAG_MS + 200);
+
+            expect(flag()).toBeNull();
+            expect(racking()).toBe(true);
+
+            await elapse(3200);
+
+            expect(dice().map((die) => die.dataset.face)).toEqual(['2', '5']);
+            expect(table.same(after)).toBe(true);
+            expect(director.busy()).toBe(false);
+        });
+
+        it('is held a shorter while when something is already waiting behind it', async () =>
+        {
+            flagged = ['You win the game', 'Gammon · 4 points'];
+            won();
+            director.enqueue(() => undefined, { cuts: true });
+
+            await elapse(400 + PICK_MS + 60 + GAME_LEAST + FLAG_MS + 120);
+
+            expect(flag()).toBeNull();
+            expect(racking()).toBe(true);
+        });
+
+        it('is called and held when it ends the match too, and nothing is racked after it', async () =>
+        {
+            flagged = ['You win the game', 'Gammon · 4 points'];
+
+            const after = won(true);
+
+            await elapse(400 + PICK_MS + 60);
+
+            expect(flag()).not.toBeNull();
+            expect(cues).toContain('hand-won');
+
+            await elapse(LAST_MS + FLAG_MS + 200);
+
+            expect(flag()).toBeNull();
+            expect(racking()).toBe(false);
+            expect(cues).toContain('win');
+            expect(table.same(after)).toBe(true);
+            expect(director.busy()).toBe(false);
+        });
+
+        it('comes down with everything else when the table is drawn again under it', async () =>
+        {
+            flagged = ['You win the game', 'Gammon · 4 points'];
+            won();
+            await elapse(400 + PICK_MS + 60);
+
+            expect(flag()).not.toBeNull();
+
+            director.cancel();
+            table.reset(sight(felt({ dice: [3, 1] }), 7));
+
+            expect(flag()).toBeNull();
+        });
+
+        it('raises no banner when the page has no words for it, and still says whose game it was', async () =>
+        {
+            won();
+            await elapse(400 + PICK_MS + 60);
+
+            expect(flag()).toBeNull();
+            expect(games).toEqual(['near gammon 4']);
+            expect(racking()).toBe(true);
+        });
+    });
+
+    describe('the score, the game and the pips, as the table shows them', () =>
+    {
+        const last = () => facts[facts.length - 1];
+
+        it('are told at once for a table that is simply drawn', () =>
+        {
+            table.reset(sight(felt({ near: row({ 6: 15 }), far: row({ 25: 1, 1: 14 }), score: { near: 2, far: 1 }, round: 4 })));
+
+            expect(last()).toEqual({ score: { near: 2, far: 1 }, round: 4, pips: { near: 90, far: 39 } });
+        });
+
+        it('change when what they count has been shown: the pips when a checker has landed, the points when the game is called, the next game when the checkers are racked', async () =>
+        {
+            flagged = ['You win the game', 'Gammon · 4 points'];
+
+            const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
+            const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
+
+            table.reset(sight(before));
+
+            expect(last()).toEqual({ score: { near: 0, far: 0 }, round: 1, pips: { near: 1, far: 300 } });
+
+            play([act(6, 0, [
+                { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
+                { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 },
+                { e: 'opening', seat: 1, dice: [2, 5] }
+            ])], after);
+            await elapse(30);
+
+            expect(last().pips.near, 'the pips fell before the checker had landed').toBe(1);
+
+            await elapse(400 + PICK_MS + 60);
+
+            expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 1, pips: { near: 0, far: 300 } });
+
+            await elapse(GAME_MS + FLAG_MS + 2400);
+
+            expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 2, pips: { near: 167, far: 167 } });
+        });
+
+        it('follow the reader\'s own checker when it has been put down, and come back with it', async () =>
+        {
+            table.reset(sight(felt({ dice: [6, 1] })));
+
+            void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+            await elapse(WALK_MOST + 100);
+
+            expect(last().pips).toEqual({ near: 161, far: 167 });
+
+            void table.unhop({ side: 'near', from: 13, to: 7, hit: false });
+            await elapse(WALK_MOST + 100);
+
+            expect(last().pips).toEqual({ near: 167, far: 167 });
+        });
+
+        it('are told once for each change, not once for each thing that happens', async () =>
+        {
+            table.reset(sight(felt()));
+
+            const told = facts.length;
+
+            play([act(6, 1, [{ e: 'roll', seat: 1, dice: [6, 5] }, { e: 'pass', seat: 1 }])], sight(felt(), 6));
+            await elapse(3000);
+
+            expect(facts.length, 'a roll and a pass change neither the score nor a pip').toBe(told);
+        });
     });
 
     it('dims the dice of a roll nobody could play, holds them a moment and picks them up', async () =>

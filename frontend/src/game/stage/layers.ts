@@ -5,7 +5,8 @@ export const LAYER = {
     cube: 25,
     moving: 40,
     airborne: 41,
-    dice: 60
+    dice: 60,
+    banner: 80
 } as const;
 
 export function layered(host: HTMLElement)

@@ -16,6 +16,7 @@ import {
 } from '../backgammon-layout.ts';
 import {
     beatsOf,
+    pipsOf,
     sameAs,
     seedOf,
     shownOf,
@@ -24,6 +25,7 @@ import {
     type Beat,
     type Cube,
     type Felt,
+    type Score,
     type Shown,
     type Told
 } from '../backgammon-felt.ts';
@@ -70,6 +72,17 @@ export interface TableOptions
     onRoll?: (seed: number, faces: readonly number[], landed: boolean) => void;
     noMove?: () => string;
     onPass?: (side: Side, faces: readonly number[]) => void;
+    banner?: (side: Side, how: string, points: number) => readonly string[];
+    reads?: () => 'ltr' | 'rtl';
+    onGame?: (side: Side, how: string, points: number) => void;
+    onFacts?: (facts: Facts) => void;
+}
+
+export interface Facts
+{
+    score: Score;
+    round: number;
+    pips: Score;
 }
 
 export interface BackgammonTable extends Table<Felt, Told>
@@ -116,6 +129,16 @@ export const PASS_MS = 1100;
 export const PASS_LEAST = 500;
 
 export const GAME_GAP = 260;
+
+export const GAME_MS = 1800;
+
+export const GAME_LEAST = 900;
+
+export const LAST_MS = 1300;
+
+export const LAST_LEAST = 700;
+
+export const FLAG_MS = 180;
 
 const UNIT = 100 / WIDTH;
 
@@ -235,7 +258,12 @@ const costOf = (beat: Beat) =>
         return SLIDE_MS + RACK_MOST * STAGGER_MS;
     }
 
-    return beat.kind === 'game' && beat.last ? GAME_GAP : 0;
+    if (beat.kind === 'game')
+    {
+        return (beat.last ? LAST_LEAST : GAME_LEAST) + FLAG_MS;
+    }
+
+    return 0;
 };
 
 export function createBackgammonTable(options: TableOptions): BackgammonTable
@@ -248,7 +276,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     const alive = new Set<Die>();
     const zone = make('bgt-dice', host);
     const cubeEl = make('bgt-cube', host);
-    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], cube: { on: false, value: 1, owner: null } };
+    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 };
     let dice: Die[] = [];
     let diceSeed = -1;
     let used: number[] = [];
@@ -256,6 +284,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     let rested = true;
     let badge: HTMLElement | null = null;
     let stuck: HTMLElement | null = null;
+    let flag: HTMLElement | null = null;
+    let said = '';
     let spots: ReadonlySet<number> = new Set();
     let aims: ReadonlySet<number> = new Set();
     let home: number | null = null;
@@ -766,6 +796,56 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         alive.delete(die);
     };
 
+    const tell = () =>
+    {
+        const now: Facts = { score: shown.score, round: shown.round, pips: pipsOf(shown.men) };
+        const key = JSON.stringify(now);
+
+        if (key !== said)
+        {
+            said = key;
+            options.onFacts?.(now);
+        }
+    };
+
+    const unflag = () =>
+    {
+        flag?.remove();
+        flag = null;
+    };
+
+    const raise = (lines: readonly string[], side: Side) =>
+    {
+        unflag();
+        flag = make('bgt-banner', host);
+        flag.dataset.side = side;
+        flag.dir = options.reads?.() ?? 'ltr';
+
+        for (const line of lines)
+        {
+            make('bgt-banner-line', flag).textContent = line;
+        }
+
+        stage.animate(flag, [{ opacity: 0, scale: '0.86', offset: 0 }], { duration: FLAG_MS });
+    };
+
+    const lower = async () =>
+    {
+        const up = flag;
+
+        if (up === null)
+        {
+            return;
+        }
+
+        await stage.animate(up, [{ offset: 1, opacity: 0, scale: '0.94' }], { duration: FLAG_MS, fill: 'both', quiet: 'out' }).done;
+
+        if (flag === up)
+        {
+            unflag();
+        }
+    };
+
     const stick = () =>
     {
         const words = options.noMove?.() ?? '';
@@ -994,8 +1074,10 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             await swap(felt.dice, felt.seed);
         }
 
+        shown = { ...shown, score: { ...felt.score }, round: felt.round };
         dim();
         wait();
+        tell();
     };
 
     const perform = async (beat: Beat, at: Moment) =>
@@ -1068,13 +1150,24 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         }
         else if (beat.kind === 'game')
         {
+            const lines = options.banner?.(beat.side, beat.how, beat.points) ?? [];
+
             if (at.reader && beat.side === 'near')
             {
                 options.sound()?.play('hand-won');
                 options.feel('hand');
             }
 
-            if (beat.last)
+            options.onGame?.(beat.side, beat.how, beat.points);
+            tell();
+
+            if (lines.length > 0)
+            {
+                raise(lines, beat.side);
+                await at.ctx.linger(beat.last ? LAST_MS : GAME_MS, beat.last ? LAST_LEAST : GAME_LEAST);
+                await lower();
+            }
+            else if (beat.last)
             {
                 await at.ctx.stage.wait(GAME_GAP);
             }
@@ -1088,6 +1181,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             options.sound()?.play('win');
             options.feel('win');
         }
+
+        tell();
     };
 
     const strip = () =>
@@ -1104,6 +1199,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         dropAll();
         unstick();
+        unflag();
         alive.clear();
         els.clear();
         tags.clear();
@@ -1145,6 +1241,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             drawCube(shown.cube);
             wanted = { spent: felt.spent, seed: felt.seed };
             show(felt.dice, felt.seed);
+            tell();
         },
 
         same: (sight) => sameAs(shown, sight.view),
@@ -1188,6 +1285,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
             shown = next.shown;
             await fly(before.men, shown.men, move, next.moved, false, onward);
+            tell();
 
             return true;
         },
@@ -1204,6 +1302,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
             shown = { ...shown, men: result.table };
             await fly(before, shown.men, move, result, true);
+            tell();
 
             return true;
         },

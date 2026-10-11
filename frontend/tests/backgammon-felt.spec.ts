@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { beatsOf, feltOf, sameAs, seedOf, shownOf, spentBy, step, type Beat, type Felt, type Shown, type Told } from '../src/game/backgammon-felt.ts';
+import { beatsOf, feltOf, pipsOf, sameAs, seedOf, shownOf, spentBy, step, type Beat, type Felt, type Shown, type Told } from '../src/game/backgammon-felt.ts';
 import { BAR, OFF, countsOf } from '../src/game/backgammon-men.ts';
 import { seeded } from '../src/game/stage/curves.ts';
 import { START } from '../../backend/src/domains/match/backgammon/board.ts';
@@ -21,7 +21,9 @@ const opening = (viewer: number): Shown => shownOf({
     dice: [],
     spent: [],
     seed: 0,
-    cube: { on: true, value: 1, owner: null }
+    cube: { on: true, value: 1, owner: null },
+    score: { near: 0, far: 0 },
+    round: 1
 });
 
 describe('what the log says, as things to show', () =>
@@ -132,7 +134,7 @@ describe('what each of them does to the table', () =>
 {
     it('moves the checker and sends a blot to the bar of whoever owns it', () =>
     {
-        const before = shownOf({ viewer: 0, near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3], spent: [], seed: 0, cube: { on: true, value: 1, owner: null } });
+        const before = shownOf({ viewer: 0, near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3], spent: [], seed: 0, cube: { on: true, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 });
         const after = step(before, { kind: 'hop', move: { side: 'near', from: 13, to: 8, hit: true }, die: 5 });
 
         expect(after.moved?.knocked?.spot).toBe(BAR);
@@ -159,13 +161,36 @@ describe('what each of them does to the table', () =>
 
     it('puts every checker back where a game starts, and the cube back in the middle', () =>
     {
-        const ended = shownOf({ viewer: 1, near: row({ 0: 15 }), far: row({ 25: 2, 3: 13 }), dice: [], spent: [], seed: 0, cube: { on: true, value: 4, owner: 'near' } });
+        const ended = shownOf({ viewer: 1, near: row({ 0: 15 }), far: row({ 25: 2, 3: 13 }), dice: [], spent: [], seed: 0, cube: { on: true, value: 4, owner: 'near' }, score: { near: 4, far: 1 }, round: 2 });
         const after = step(ended, { kind: 'rack' });
 
         expect(countsOf(after.shown.men)).toEqual({ near: START, far: START });
         expect(after.shown.cube).toEqual({ on: true, value: 1, owner: null });
+        expect(after.shown.round, 'the rack did not begin the next game').toBe(3);
+        expect(after.shown.score).toEqual({ near: 4, far: 1 });
         expect(after.transfers.length).toBeGreaterThan(0);
         expect(new Set(after.shown.men.men.map((man) => man.key))).toEqual(new Set(ended.men.men.map((man) => man.key)));
+    });
+
+    it('gives the points of a game to whoever won it when the game is shown as won, and to nobody before', () =>
+    {
+        const before = opening(0);
+        const hopped = step(before, { kind: 'hop', move: { side: 'far', from: 6, to: 5, hit: false }, die: 1 }).shown;
+        const won = step(hopped, { kind: 'game', side: 'far', how: 'gammon', points: 4, last: false }).shown;
+
+        expect(hopped.score).toEqual({ near: 0, far: 0 });
+        expect(won.score).toEqual({ near: 0, far: 4 });
+        expect(won.round, 'the next game was counted before the checkers were racked').toBe(1);
+        expect(step(won, { kind: 'game', side: 'near', how: 'single', points: 1, last: true }).shown.score).toEqual({ near: 1, far: 4 });
+    });
+
+    it('counts the pips of what it shows: a checker\'s own point, 25 for the bar and nothing once it is off', () =>
+    {
+        const racing = shownOf({ viewer: 0, near: row({ 25: 1, 3: 2, 0: 12 }), far: row({ 1: 15 }), dice: [], spent: [], seed: 0, cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 });
+
+        expect(pipsOf(opening(0).men)).toEqual({ near: 167, far: 167 });
+        expect(pipsOf(racing.men)).toEqual({ near: 31, far: 15 });
+        expect(pipsOf(step(racing, { kind: 'hop', move: { side: 'near', from: 25, to: 20, hit: false }, die: 5 }).shown.men).near).toBe(26);
     });
 
     it('puts the dice down and picks them up', () =>
@@ -223,6 +248,14 @@ describe('the table as a board describes it', () =>
         expect(feltOf(board(), 1, false, 7)).toMatchObject({ viewer: 1, near: row({ 13: 15 }), far: row({ 6: 15 }), cube: { on: true, value: 2, owner: 'near' } });
     });
 
+    it('reads each side\'s score and the game\'s number off the board, the reader\'s own score near', () =>
+    {
+        const scored = board({ round: 3, seats: [{ seat: 0, checkers: row({ 6: 15 }), pips: 90, score: 2 }, { seat: 1, checkers: row({ 13: 15 }), pips: 195, score: 1 }] });
+
+        expect(feltOf(scored, 0, false, 7)).toMatchObject({ score: { near: 2, far: 1 }, round: 3 });
+        expect(feltOf(scored, 1, false, 7)).toMatchObject({ score: { near: 1, far: 2 }, round: 3 });
+    });
+
     it('shows no dice once the match is over, and a cube nobody holds in the middle', () =>
     {
         const { owner: _owner, ...unowned } = board();
@@ -241,6 +274,9 @@ describe('the table as a board describes it', () =>
         expect(sameAs(shown, { ...felt, cube: { ...felt.cube, value: 4 } })).toBe(false);
         expect(sameAs(shown, { ...felt, near: row({ 6: 14, 5: 1 }) })).toBe(false);
         expect(sameAs(shown, { ...felt, viewer: 1 })).toBe(false);
+        expect(sameAs(shown, { ...felt, score: { near: 1, far: 0 } })).toBe(false);
+        expect(sameAs(shown, { ...felt, score: { near: 0, far: 2 } })).toBe(false);
+        expect(sameAs(shown, { ...felt, round: 2 })).toBe(false);
     });
 
     it('rests the dice of one roll in one place for everybody, and the next roll\'s in another', () =>

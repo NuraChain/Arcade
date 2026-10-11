@@ -2910,6 +2910,39 @@ html:has(.site-drawer[open])
     }
 }
 
+.bgt-banner
+{
+    position: absolute;
+    inset: 0;
+    z-index: var(--layer-banner);
+    display: flex;
+    margin: auto;
+    inline-size: max-content;
+    max-inline-size: 86%;
+    block-size: max-content;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.65rem 1.25rem;
+    border: 1px solid rgb(245 230 184 / 0.35);
+    border-radius: 1rem;
+    background: rgb(8 13 25 / 0.88);
+    color: #F5E6B8;
+    font-size: clamp(0.8rem, 3.6cqw, 1.05rem);
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+    text-wrap: balance;
+    pointer-events: none;
+}
+
+.bgt-banner-line:first-child
+{
+    font-size: clamp(0.95rem, 4.6cqw, 1.6rem);
+    font-weight: 800;
+}
+
 .bgt-pass
 {
     position: absolute;

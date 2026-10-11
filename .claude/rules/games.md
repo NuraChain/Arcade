@@ -2746,9 +2746,58 @@ replaces it, which is when the dice that follow have landed, or until the table 
 nothing was rolled after it. The pill is the one word drawn on this table that is not a number:
 without it the commonest surprise in the game has no explanation a sighted player can see.
 
-**What the board does not do yet, so nobody reads this as finished.** A game that ends has no
-banner. It is its own commit in the plan
-(`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
+**A game that ends is called on the board, and the plates count what the board shows.** A game
+won inside a match used to change the score, the pips and the game's number on the plates the
+moment the answer arrived, while the last checker was still in the air, and then the board was
+simply the next game.
+
+- **The table raises a banner** (`.bgt-banner`, on `LAYER.banner`, above everything on the felt)
+  with the lines the board hands it: who won the game ("You win the game", "Omid wins the
+  game") and how ("1 point", "Gammon, 4 points", "Backgammon, 3 points"). It stands for
+  `GAME_MS`, 1.8 s (`GAME_LEAST`, 0.9 s, when something waits), comes down, and only then are
+  the thirty checkers racked, the cube sent back and the next opening thrown. The game that
+  ends the match is called too, for `LAST_MS`, 1.3 s (0.7 at the least), and the result card
+  waits for it as it waits for everything the table plays.
+- **The same words go to the live region** ("Omid wins the game. Gammon, 4 points."), by the
+  route the sentence of a roll nobody could play takes.
+- **The banner reads in the page's direction** (`reads`, which becomes its `dir`). The board is
+  `direction: ltr` because it is a printed object, and a Persian sentence that begins with a
+  Latin name is laid out from the wrong end in a left-to-right paragraph.
+- **Score, pips and the game's number are part of the shown model** (`Shown.score`,
+  `Shown.round`, `pipsOf`). `step` gives the points at `game` and counts the next game at
+  `rack`, and the parity spec holds both against the engine at every revision. The table tells
+  the board when one of them changes (`onFacts`, once for each change): the pips when a
+  checker has LANDED, the points when the game is called, the next game when the checkers are
+  racked. The plates and the screen reader's match line read that, and the view only before
+  the table is rigged. So the reader's own pips fall as they put a checker down and come back
+  when they take it back.
+- **What a finished match puts on the plates waits for the result, as the card does.** "Won"
+  and "Lost" came with the view, two seconds before the banner had come down, and the live
+  region left with the bar the moment the match was over, so the last game was called to
+  nobody who could not see it. The plates' tags read a player with no result while the last
+  scene plays (`tagOf`), and the bar, the live region in it, stays until the result is shown
+  (`barOpen` reads `result`). Both were seen in the recording of a real match to one point.
+- **A unit spec's scene needs its estimate.** The director gives a scene three times its
+  estimate and four seconds before it calls it stuck. The table spec enqueued with none, which
+  was four seconds flat, and a game that ends is now longer than that: the spec's `play`
+  passes `table.estimate(acts)`, as the presenter does.
+- **The play pass counts the calls, and holds its driver while they are made.** `watchGames`
+  counts the banners each browser was shown against the games the match had, and fails a
+  result card under a banner or a plate that says who won while the table is still playing.
+  Built without the banner and with the tags told early it failed both, for both players. Its
+  finish over the api stops for both boards when a side has four checkers or fewer still to
+  bear off AND when a game has just begun, and waits for each board to be level (`level`: the
+  stage's `data-rev` at the server's revision and `data-presenting` gone). The first version
+  stopped only near a game's end. The checkers of the next game stand at the start, so the
+  flood of its moves began under the banner, and the snap that rule 5 gives a board that far
+  behind took the banner off: one game of four was called, on a correct build. A pass that
+  asks whether something was SHOWN has to hold whatever would snap it away. `data-presenting`
+  alone is not "caught up" either: it is absent in the moment before a frame arrives.
+
+The turn mark on a plate still reads the view; it follows the shown model with the hand-off
+(6.2). `backgammon-felt.spec.ts`, `backgammon-table.spec.ts` (*a game that is won*; *the score,
+the game and the pips, as the table shows them*) and `backgammon-board.spec.ts` (*a game that
+ends on the board*) hold it.
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat
