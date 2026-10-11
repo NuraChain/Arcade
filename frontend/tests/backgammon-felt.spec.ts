@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { beatsOf, feltOf, pipsOf, sameAs, seedOf, shownOf, spentBy, step, type Beat, type Felt, type Shown, type Told } from '../src/game/backgammon-felt.ts';
+import { beatsOf, feltOf, pipsOf, sameAs, seedOf, shownOf, spentBy, step, type Beat, type Shown, type Told } from '../src/game/backgammon-felt.ts';
 import { BAR, OFF, countsOf } from '../src/game/backgammon-men.ts';
 import { seeded } from '../src/game/stage/curves.ts';
 import { START } from '../../backend/src/domains/match/backgammon/board.ts';
@@ -14,7 +14,7 @@ const kinds = (beats: readonly Beat[]) => beats.map((beat) => beat.kind);
 
 const row = (points: Record<number, number>) => Array.from({ length: 26 }, (_, point) => points[point] ?? 0);
 
-const opening = (viewer: number): Shown => shownOf({
+const opening = (viewer: number) => shownOf({
     viewer,
     near: START,
     far: START,
@@ -304,7 +304,7 @@ describe('the table against the engine', () =>
         return (log.kind === 'backgammon' ? log.moves : []) as readonly Told[];
     };
 
-    const feltAt = (state: BackgammonState, viewer: number): Felt =>
+    const feltAt = (state: BackgammonState, viewer: number) =>
         feltOf(backgammonEngine.view(state, null) as Board, viewer, state.winner !== null, 0);
 
     const follow = (shown: Shown, events: readonly BackgammonEvent[], viewer: number, where: string, seen: Set<string>) =>

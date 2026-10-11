@@ -587,7 +587,7 @@ describe('the two-handed draw', () =>
 
     const drawing = (mine: number | null) => two({ phase: 'draw', turn: 0, stock: 39, hand: [1, 15, 27, 40, 41, 50, 51], ...(mine === 0 ? { offer: 12 } : {}) }, mine);
 
-    const watching = (): MatchView =>
+    const watching = () =>
     {
         const seen = drawing(null);
 
