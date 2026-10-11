@@ -1815,6 +1815,70 @@ describe('PlayPage', () =>
             expect(container.querySelector('[aria-busy="true"]')).toBeNull();
         });
 
+        it('keeps the board somebody is watching when the watch is read again, and still shows it a later move', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const seated = ['alex', 'sara.k', 'reza.t', 'mina'];
+            const colours = ['red', 'green', 'yellow', 'blue'];
+
+            const seen = {
+                match: {
+                    id: 'match-9',
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev: 3,
+                    seats: 4,
+                    players: seated.map((who, seat) => ({ seat, who, side: seat })),
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: {
+                        kind: 'ludo',
+                        moves: [],
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+                    }
+                },
+                behind: 30,
+                delay: 30,
+                live: true
+            };
+
+            server.watches['match-9'] = seen;
+            held.matchId = 'match-9';
+            await lobby.refresh();
+
+            const titled = () => [...container.querySelectorAll('span')].find((one) => one.textContent === useLocale().t('watch.title'));
+
+            await vi.waitFor(() => expect(titled()).toBeDefined(), { timeout: 4000 });
+            await settle();
+
+            const watch = useWatch();
+            const reads = () => server.calls.filter((one) => one === 'matches.watch').length;
+            const frame = titled()!.parentElement!.parentElement!;
+            const marked = [frame, ...frame.querySelectorAll('*')];
+            const before = reads();
+
+            expect(frame.textContent).not.toContain(useLocale().plural('watch.quiet', 3));
+
+            watch.retry();
+            await vi.waitFor(() => expect(reads()).toBeGreaterThan(before), { timeout: 4000 });
+            await settle();
+
+            expect(marked.filter((node) => !container.contains(node)).length, 'the watched board was drawn again').toBe(0);
+
+            seen.behind = 180;
+
+            const again = reads();
+
+            watch.retry();
+            await vi.waitFor(() => expect(reads()).toBeGreaterThan(again), { timeout: 4000 });
+            await settle();
+
+            expect(container.contains(frame), 'the watched board was drawn again').toBe(true);
+            expect(frame.textContent).toContain(useLocale().plural('watch.quiet', 3));
+        });
+
         it('draws no board for a game the server will not show, and keeps the page', async () =>
         {
             const { container, lobby, held } = await opened('omid.k');

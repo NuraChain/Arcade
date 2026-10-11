@@ -347,6 +347,8 @@ export default component PlayPage()
 
     derived watching = !seated && table?.matchId !== undefined;
 
+    derived watched = watchReady ? watch.view() : null;
+
     derived callAt = talkable ? table?.id : undefined;
 
     derived hostVoice = amHost && table !== null && table.status !== 'closed' ? table.voice !== 'off' : undefined;
@@ -989,8 +991,8 @@ export default component PlayPage()
                     <Show when={ watching }>
                         { () =>
                             <div class="flex min-h-0 flex-1 flex-col gap-3">
-                                <Show when={ watchReady && watch.view() !== null }>
-                                    { () => <Dynamic component={ Watched! } props={ () => ({ watch: watch.view()! }) } /> }
+                                <Show when={ watched } let={ held }>
+                                    <Dynamic component={ Watched! } props={ () => ({ watch: held }) } />
                                 </Show>
                                 <Show when={ watch.refused() }>
                                     { () =>

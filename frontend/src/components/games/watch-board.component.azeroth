@@ -70,16 +70,20 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     derived quietSays = locale.plural('watch.quiet', Math.round(props.watch.behind / MINUTE));
 
+    derived live = props.watch.live;
+
+    derived quiet = props.watch.live && props.watch.behind > props.watch.delay * 2;
+
     const boardProps = (): { match: MatchView } => ({ match: props.watch.match });
 
     <div class="flex min-h-0 flex-1 flex-col gap-2">
         <p class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">
             <Icon name={ props.watch.live ? 'activity' : 'trophy' } size={ 14 } class="shrink-0 text-accent" />
             <span class="font-semibold text-text">{ locale.t(props.watch.live ? 'watch.title' : 'watch.finished') }</span>
-            <Show when={ props.watch.live }>
+            <Show when={ live }>
                 { () => <span>{ behindSays }</span> }
             </Show>
-            <Show when={ props.watch.live && props.watch.behind > props.watch.delay * 2 }>
+            <Show when={ quiet }>
                 { () => <span>{ quietSays }</span> }
             </Show>
             <span class="sr-only">{ locale.t('watch.why') }</span>
