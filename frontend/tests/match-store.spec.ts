@@ -497,6 +497,53 @@ describe('what a board is told of a move', () =>
     });
 });
 
+describe('the game in hand while the next one is on its way', () =>
+{
+    it('is the last game as far as it got, never an earlier copy of it', async () =>
+    {
+        const store = useBoard();
+        const seen: string[] = [];
+        let arrive: (match: MatchView) => void = () => undefined;
+
+        socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: board(2, { turn: 1 }), events: [rolled(2)] });
+        socket.deliver({ v: 1, t: 'game', n: 4, at: 400_000, match: board(3, { turn: 0 }), events: [rolled(3)] });
+
+        expect(store.match()?.rev).toBe(3);
+
+        matches.view = async () => await new Promise<MatchView>((resolve) =>
+        {
+            arrive = resolve;
+        });
+
+        const stop = createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                const match = store.match();
+
+                seen.push(match === null ? 'none' : `${ match.id }@${ match.rev }`);
+            });
+
+            return dispose;
+        });
+
+        store.open('match-2');
+        await settle();
+
+        expect(store.match()?.id).toBe('match-1');
+        expect(store.match()?.rev, 'the last game went back to the copy that was first fetched').toBe(3);
+
+        arrive(board(1, { id: 'match-2' }));
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        await settle();
+        stop();
+
+        expect(store.match()).toMatchObject({ id: 'match-2', rev: 1 });
+        expect(seen).toEqual(['match-1@3', 'match-2@1']);
+    });
+});
+
 describe('a game that could not be fetched', () =>
 {
     const failing = () =>

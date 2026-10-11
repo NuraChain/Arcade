@@ -3179,6 +3179,13 @@ one the board's chunk draws next, and the waiting room is neither drawn nor fetc
 LAST game still in hand it goes on showing that, which is what "Play again" has always looked like:
 the board store hands out the last game it fetched while the next is on its way (a resource keeps
 its value while another key loads), so the finished board stays until the next one takes its place.
+It hands out that game as far as it GOT. The resource keeps the copy it first fetched, and every
+move since arrived as an answer or a push the store keeps beside it; for the open game the newer of
+the two was always the one handed out, and for the game just left only the fetched copy was. So for
+the moment between pressing Play again and the next game arriving, a finished board went back to
+the revision it had been opened at, its score, its plates and its result with it: seen in a real
+browser as a board's revision reading 16, 15, 1. The newer copy of one game is the answer whichever
+game is open. `match-store.spec.ts` (*the game in hand while the next one is on its way*) holds it.
 And behind with the store saying the game could not be fetched (`unfetched`), the complaint takes
 the board's place, with a Try again that asks for the game.
 

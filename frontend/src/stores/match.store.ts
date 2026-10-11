@@ -189,12 +189,17 @@ export const useBoard = createStore((): BoardApi =>
         const fetched = viewing.data() ?? null;
         const held = latest();
 
-        if (held === null || held.id !== openId())
+        if (held === null || fetched === null)
         {
-            return fetched;
+            return held !== null && held.id === openId() ? held : fetched;
         }
 
-        return fetched !== null && fetched.id === held.id && fetched.rev >= held.rev ? fetched : held;
+        if (fetched.id === held.id)
+        {
+            return fetched.rev >= held.rev ? fetched : held;
+        }
+
+        return held.id === openId() ? held : fetched;
     };
 
     let heardFor = '';
