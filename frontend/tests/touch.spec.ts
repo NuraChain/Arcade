@@ -313,6 +313,53 @@ describe('page gestures', () =>
         expect(back).toHaveBeenCalledTimes(2);
         release();
     });
+
+    it('leaves a touch alone when it starts on something that takes drags of its own', () =>
+    {
+        const page = document.createElement('div');
+        const board = document.createElement('div');
+        const piece = document.createElement('span');
+
+        Object.defineProperty(page, 'clientWidth', { value: 400, configurable: true });
+        board.append(piece);
+        page.append(board);
+        document.body.append(page);
+
+        const back = vi.fn();
+        const refresh = vi.fn();
+        const slides: number[] = [];
+        const pulls: number[] = [];
+        const release = attachGestures(page, {
+            rtl: () => false,
+            back,
+            refresh,
+            onSlide: (distance) => slides.push(distance),
+            onPull: (distance) => pulls.push(distance)
+        });
+
+        board.setAttribute('data-drags', 'true');
+        touch(piece, 'touchstart', 8, 300);
+        touch(piece, 'touchmove', 220, 300);
+        touch(piece, 'touchend', 220, 300);
+
+        expect(back, 'carrying a piece away from the edge of the screen left the page').not.toHaveBeenCalled();
+        expect(slides.some((distance) => distance > 0), 'the page slid under a piece that was being carried').toBe(false);
+
+        touch(piece, 'touchstart', 100, 100);
+        touch(piece, 'touchmove', 100, 300);
+        touch(piece, 'touchend', 100, 300);
+
+        expect(refresh, 'carrying a piece down the board refreshed the page').not.toHaveBeenCalled();
+        expect(pulls.some((distance) => distance > 0)).toBe(false);
+
+        board.removeAttribute('data-drags');
+        touch(piece, 'touchstart', 8, 300);
+        touch(piece, 'touchmove', 220, 300);
+        touch(piece, 'touchend', 220, 300);
+
+        expect(back).toHaveBeenCalledTimes(1);
+        release();
+    });
 });
 
 function pointer(target: HTMLElement, type: string, x: number, y: number, kind = 'touch')

@@ -1303,6 +1303,11 @@ The client half of the same audits, each a thing that outlived what it belonged 
 - **A scroll waits on no script unless it could become a gesture.** The pull-to-refresh and back-swipe
   listener has to be non-passive to cancel the scroll, so it is attached only for a touch that starts
   at the leading edge or on a list already at its top, and removed when that touch ends.
+- **A touch that starts on something that takes drags of its own is not the page's.** An element
+  marked `data-drags` (a board with a piece to carry) is left alone by `attachGestures`, whichever
+  edge it sits at. `touch-action: none` does not do this: the page's gestures are touch events of
+  their own. A backgammon checker carried from the board's edge point swiped the page away and left
+  the table (`.claude/rules/games.md`, *While there is a checker to carry*).
 - **The message hover toolbar is not built on a touch screen**, where it can never show - several
   tooltip-wrapped buttons per message, hidden.
 - **The table no longer animates its padding when the chat sheet opens.** The stage is a size container,

@@ -3,6 +3,7 @@ import {
     BAR_WIDTH,
     BOTTOM,
     CUBE,
+    HEIGHT,
     MIDDLE,
     POINT_WIDTH,
     RADIUS,
@@ -51,7 +52,7 @@ import type { Ctx } from '../stage/director.ts';
 import { LAYER, layered } from '../stage/layers.ts';
 import type { Table } from '../stage/presenter.ts';
 import { arc, walk, type Point } from '../stage/route.ts';
-import type { Stage } from '../stage/stage.ts';
+import type { Run, Stage } from '../stage/stage.ts';
 import type { SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
@@ -70,7 +71,7 @@ export interface TableOptions
 
 export interface BackgammonTable extends Table<Felt, Told>
 {
-    hop(move: Move): Promise<boolean>;
+    hop(move: Move, onward?: boolean): Promise<boolean>;
     unhop(move: Move): Promise<boolean>;
     lit(spots: ReadonlySet<number>): void;
     aim(spots: ReadonlySet<number>, back?: number | null): void;
@@ -80,6 +81,9 @@ export interface BackgammonTable extends Table<Felt, Told>
     cubed(live: boolean): void;
     hold(spot: number | null): void;
     undoes(spot: number | null): void;
+    grab(spot: number): boolean;
+    drag(x: number, y: number): void;
+    release(): void;
     relabel(): void;
     dispose(): void;
 }
@@ -147,6 +151,22 @@ const ARC_PACE = 0.5;
 const ARC_LEAST = 320;
 
 const ARC_MOST = 700;
+
+const DROP_BASE = 80;
+
+const DROP_PACE = 0.5;
+
+export const DROP_MOST = 240;
+
+const BACK_BASE = 120;
+
+const BACK_PACE = 0.3;
+
+export const BACK_MOST = 320;
+
+const CARRIED = '1.2';
+
+const SET_DOWN = 'cubic-bezier(0.2, 0.7, 0.3, 1)';
 
 const BAR_X = BAR_LEFT + BAR_WIDTH / 2;
 
@@ -235,6 +255,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     let taken: number | null = null;
     let invited: Invite = null;
     let waiting = false;
+    let carried: { key: string; x: number; y: number } | null = null;
+    const returning = new Map<string, Run>();
 
     const hit = make('bgt-hit', zone);
 
@@ -259,6 +281,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
     layered(host);
     host.style.setProperty('--man', cq(RADIUS * 2));
+    host.style.setProperty('--carried', CARRIED);
     zone.style.left = `${ (DICE_X / WIDTH * 100).toFixed(3) }%`;
     zone.style.top = '50%';
     cubeEl.style.display = 'none';
@@ -367,6 +390,22 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         return top === null || flying.has(top.key) ? null : els.get(top.key) ?? null;
     };
 
+    const dropAll = () =>
+    {
+        if (carried !== null)
+        {
+            els.get(carried.key)?.removeAttribute('data-carried');
+            carried = null;
+        }
+
+        for (const run of returning.values())
+        {
+            run.cancel();
+        }
+
+        returning.clear();
+    };
+
     const lights = () =>
     {
         const marked = new Set(aims);
@@ -425,6 +464,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     {
         const keep = new Set(shown.men.men.map((man) => man.key));
 
+        dropAll();
         flying.clear();
 
         for (const [key, el] of els)
@@ -495,6 +535,36 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         })), { duration: walked.length });
     };
 
+    const letGo = (man: Man): Point | null =>
+    {
+        returning.get(man.key)?.cancel();
+        returning.delete(man.key);
+
+        if (carried === null || carried.key !== man.key)
+        {
+            return null;
+        }
+
+        const at = { x: carried.x, y: carried.y };
+
+        carried = null;
+        ensure(man).removeAttribute('data-carried');
+
+        return at;
+    };
+
+    const setDown = (man: Man, from: Point, to: Point, base: number, pace: number, most: number) =>
+    {
+        const el = ensure(man);
+
+        el.style.zIndex = String(LAYER.moving);
+
+        return stage.animate(el, [
+            { offset: 0, translate: placed(from.x, from.y), scale: CARRIED },
+            { offset: 1, translate: placed(to.x, to.y), scale: '1' }
+        ], { duration: clamp(base + Math.hypot(to.x - from.x, to.y - from.y) * pace, base, most), easing: SET_DOWN });
+    };
+
     const settled = (man: Man, state: Men, squash: boolean) =>
     {
         flying.delete(man.key);
@@ -522,7 +592,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
     const manIn = (state: Men, man: Man) => state.men.find((one) => one.key === man.key) as Man;
 
-    const fly = async (origin: Men, target: Men, move: Move, result: Moved, reverse: boolean) =>
+    const fly = async (origin: Men, target: Men, move: Move, result: Moved, reverse: boolean, onward = false) =>
     {
         const mover = result.mover;
         const hurt = result.knocked;
@@ -530,8 +600,13 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         const to = slotOf(target, mover);
         const pips = Math.max(1, move.from === BAR ? BAR - move.to : move.from - move.to);
         const route = routeOf(move, reverse ? to : from, reverse ? from : to);
-        const swing = carry(mover, reverse ? [...route].reverse() : route);
-        const impact = reverse ? 0 : swing.length * 0.94;
+        const kept = onward && carried?.key === mover.key;
+        const dropped = kept ? null : letGo(mover);
+        const swing = kept ? null : (dropped === null
+            ? carry(mover, reverse ? [...route].reverse() : route)
+            : setDown(mover, dropped, to, DROP_BASE, DROP_PACE, DROP_MOST));
+        const length = swing?.length ?? 0;
+        const impact = reverse ? 0 : length * 0.94;
         let thrown = 0;
 
         flying.add(mover.key);
@@ -546,11 +621,14 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             flying.add(hurt.key);
         }
 
-        rest(mover, target, stage.quiet());
+        if (swing !== null)
+        {
+            rest(mover, target, stage.quiet());
+            stage.after(length, () => options.sound()?.play(to.off ? 'token-yard' : 'token-step', { pan: pan(to.x), rate: 0.96 + (pips % 3) * 0.04 }));
+        }
+
         tally(target);
         lights();
-
-        stage.after(swing.length, () => options.sound()?.play(to.off ? 'token-yard' : 'token-step', { pan: pan(to.x), rate: 0.96 + (pips % 3) * 0.04 }));
 
         if (hurt !== null)
         {
@@ -579,15 +657,17 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             stage.after(thrown, () => options.sound()?.play(reverse ? 'token-step' : 'token-yard', { pan: pan(hurtTo.x) }));
         }
 
-        await swing.done;
-
-        settled(mover, target, true);
-        tally(target);
-        lights();
-
-        if (thrown > swing.length)
+        if (swing !== null)
         {
-            await stage.wait(thrown - swing.length);
+            await swing.done;
+            settled(mover, target, true);
+            tally(target);
+            lights();
+        }
+
+        if (thrown > length)
+        {
+            await stage.wait(thrown - length);
         }
     };
 
@@ -976,6 +1056,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             el.remove();
         }
 
+        dropAll();
         alive.clear();
         els.clear();
         tags.clear();
@@ -1046,7 +1127,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         estimate: (acts) => acts.reduce((total, act) => beatsOf(act.moves, shown.viewer).reduce((sum, beat) => sum + costOf(beat), total), 0),
 
-        async hop(move)
+        async hop(move, onward = false)
         {
             const before = shown;
             const next = step(before, { kind: 'hop', move, die: 0 });
@@ -1057,7 +1138,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             }
 
             shown = next.shown;
-            await fly(before.men, shown.men, move, next.moved, false);
+            await fly(before.men, shown.men, move, next.moved, false, onward);
 
             return true;
         },
@@ -1127,6 +1208,82 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         {
             taken = spot;
             lights();
+        },
+
+        grab(spot)
+        {
+            const top = carried === null ? topAt(shown.men, 'near', spot) : null;
+
+            if (top === null || flying.has(top.key))
+            {
+                return false;
+            }
+
+            const slot = slotOf(shown.men, top);
+            const el = ensure(top);
+
+            rest(top, shown.men, false);
+            carried = { key: top.key, x: slot.x, y: slot.y };
+            flying.add(top.key);
+            el.dataset.carried = '';
+            el.style.zIndex = String(LAYER.airborne);
+            tally(shown.men);
+            lights();
+
+            return true;
+        },
+
+        drag(x, y)
+        {
+            const el = carried === null ? undefined : els.get(carried.key);
+
+            if (carried === null || el === undefined)
+            {
+                return;
+            }
+
+            carried.x = clamp(x, RADIUS, WIDTH - RADIUS);
+            carried.y = clamp(y, RADIUS, HEIGHT - RADIUS);
+            el.style.translate = placed(carried.x, carried.y);
+        },
+
+        release()
+        {
+            const lifted = carried;
+            const man = lifted === null ? undefined : shown.men.men.find((one) => one.key === lifted.key);
+
+            if (lifted === null || man === undefined)
+            {
+                return;
+            }
+
+            const key = man.key;
+
+            carried = null;
+            ensure(man).removeAttribute('data-carried');
+            rest(man, shown.men, false);
+
+            const run = setDown(man, lifted, slotOf(shown.men, man), BACK_BASE, BACK_PACE, BACK_MOST);
+
+            returning.set(key, run);
+            void run.done.then(() =>
+            {
+                const back = shown.men.men.find((one) => one.key === key);
+
+                if (returning.get(key) !== run)
+                {
+                    return;
+                }
+
+                returning.delete(key);
+
+                if (back !== undefined)
+                {
+                    settled(back, shown.men, false);
+                    tally(shown.men);
+                    lights();
+                }
+            });
         },
 
         relabel()

@@ -1353,14 +1353,32 @@ last two columns are what that commit built.
 |---|---|---|---|
 | Roll | The "Roll" button in the bar | Tap the dice. Two blank dice lie where dice rest, in a ring; they shake while the request is out, are picked up, and the rolled dice are thrown in from the reader's edge. | A real button, visually hidden until keyboard focus enters its panel |
 | Finish the turn | "Play the move" | Tap the dice again: the ring comes back round them when the server's `stage()` says the turn is whole. | The same |
-| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker: with one way to go the tap is the move, with more it lifts and its points are marked. It lifts on the press. Dragging is its own commit (1.3b). | The same hops as real buttons, with today's sentences for names |
-| Take a hop back | "Undo" | Tap the checker moved last. A tap never moves that checker on: with nowhere further to go it wears a small arrow and goes back; otherwise it lifts and the point it came from is marked beside its ways on. | A hidden button |
+| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker: with one die's way to go the tap is the move, with more it lifts and its points are marked. It lifts on the press. Or carry it: a press that moves takes it into the hand, and it is set down on any point it can reach this turn, with one die or with both, in one short flight from where it was let go. | The same hops as real buttons, with today's sentences for names |
+| Take a hop back | "Undo" | Tap the checker moved last, or carry it back to the point it came from. A tap never moves that checker on: with nowhere further to go it wears a small arrow and goes back; otherwise it lifts and the point it came from is marked beside its ways on. | A hidden button |
 | Double | "Double to {cube}" | Tap the cube, which wears a ring while a double may be offered. It asks first, on the board: Double, or Not now. A double cannot be taken back and the cube sits among checkers that are being tapped. | A hidden button, which sends the double itself |
 | Answer a double | "Take at {cube}" and "Give up this game" | The same two words on the board, in the place the question about a double is asked, in front of the reader it was offered to and nobody else. A take is told from a drop by the button, as Hokm's trump is chosen on its felt. | The same two buttons: they are real ones |
 
 Before a roll the view holds no dice, so the dice the reader taps to roll are the board's own
 drawing: two dice with no pips, where dice rest. The table lays them only when no dice are on it
 and nothing is being thrown, and they are not in the shown model.
+
+**Carrying a checker (commit 1.3b).** The gesture is the table's (`grab`, `drag`, `release`) and
+the rules are the board's:
+
+- A press becomes a carry after 4 px of a mouse or 10 px of a finger. Under a finger the checker
+  is drawn 2.2 radii above the touch, and it is played on the point it is drawn over, kept inside
+  the frame. Neither the pointer nor the checker within a radius of the board is a change of mind.
+- The points offered are `reachOf`: every point the server's `stage()` lets this checker reach
+  this turn. A point more than one hop away is offered only when every way there leaves the same
+  board. Carried, the checker stays in the hand over the points it only passes and is set down
+  once (`hop(move, onward)`); a lone checker passed over is still knocked away.
+- The set-down is 80 ms plus half a millisecond a board unit, at most 240 ms; the way back from a
+  refused drop is 120 ms plus 0.3, at most 320 ms. Both are stage runs, so reduced motion fades
+  the checker in where it ends.
+- The board takes `touch-action: none` and says `data-drags` only while the reader has a move to
+  make. `data-drags` is what tells `Page` that a touch starting there is not its swipe back: the
+  12 and 13 points are 28 px from the leading edge of a 390 px screen, and a checker carried from
+  one of them left the table.
 
 **No bar under the board (D11).** On an upright screen the grid is the fit cell alone. The turn
 sentence and the match line are `sr-only`, with the turn sentence still the live region. The

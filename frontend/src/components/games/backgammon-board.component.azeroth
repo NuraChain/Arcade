@@ -20,10 +20,11 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { diceOf, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
 import type { Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
-import { coachOf, hits, outcomeOf } from '../../game/helpers/backgammon.ts';
+import { coachOf, hits, outcomeOf, reachOf } from '../../game/helpers/backgammon.ts';
 import { createBackgammonTable, HOP_MS, type BackgammonTable, type Invite } from '../../game/board/backgammon-table.ts';
 import { feltOf, seedOf, type Felt, type Told } from '../../game/backgammon-felt.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { clamp } from '../../game/stage/curves.ts';
 import type { Ctx } from '../../game/stage/director.ts';
 import { createPresenter, type Presenter, type Sight } from '../../game/stage/presenter.ts';
 import { createStage } from '../../game/stage/stage.ts';
@@ -38,6 +39,7 @@ import {
     MIDDLE,
     POINT_HEIGHT,
     POINT_WIDTH,
+    RADIUS,
     TOP,
     TRAY,
     TRAY_LEFT,
@@ -69,7 +71,24 @@ interface Picked
     spot: number;
 }
 
+interface Drag
+{
+    id: number;
+    spot: number;
+    x: number;
+    y: number;
+    carried: boolean;
+}
+
 const NONE: readonly Hop[] = [];
+
+const NOWHERE: ReadonlyMap<number, Hop[]> = new Map();
+
+const FINGER = RADIUS * 2.2;
+
+const SLOP = 10;
+
+const MOUSE_SLOP = 4;
 
 const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
 
@@ -101,6 +120,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     state picked: Picked | null = null;
 
     state doubling = '';
+
+    state carrying = false;
 
     state presenting = false;
 
@@ -155,6 +176,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     let presenter: Presenter<Told> | null = null;
     let sound: SoundHandle | null = null;
     let keys: HTMLElement | null = null;
+    let drag: Drag | null = null;
 
     const chime = turnChime(() => sound);
 
@@ -175,7 +197,11 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived sources = new Set(chosen === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
 
-    derived targets = chosen === null || !hints ? [] : (plan?.next ?? []).filter((hop) => hop.from === chosen).map((hop) => hop.to);
+    derived reach = plan === null || chosen === null
+        ? NOWHERE
+        : reachOf({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops, chosen);
+
+    derived targets = hints ? [...reach.keys()] : [];
 
     derived lights = new Set<number>(chosen === null ? [...sources] : [...sources, chosen]);
 
@@ -520,7 +546,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         presenter?.predict(next.length === 0 ? null : { rev, covers: (moves) => covered(moves, next) });
     };
 
-    const add = (hop: Hop) =>
+    const add = (hop: Hop, onward = false) =>
     {
         const hit = plan === null ? false : hits(outcomeOf(plan.at, hop));
         const next = [...hops, hop];
@@ -531,7 +557,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         guess(next);
         presenter?.act(async (ctx) =>
         {
-            if (men !== null && !(await men.hop({ side: 'near', from: hop.from, to: hop.to, hit })))
+            if (men !== null && !(await men.hop({ side: 'near', from: hop.from, to: hop.to, hit }, onward)))
             {
                 await mend(ctx);
             }
@@ -563,10 +589,23 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         }, HOP_MS);
     };
 
-    const spotAt = (event: PointerEvent) =>
+    const boardAt = (event: PointerEvent) =>
     {
         const box = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
-        const found = pointAt((event.clientX - box.left) / box.width * WIDTH, (event.clientY - box.top) / box.height * HEIGHT);
+
+        return { x: (event.clientX - box.left) / box.width * WIDTH, y: (event.clientY - box.top) / box.height * HEIGHT };
+    };
+
+    const handAt = (event: PointerEvent) =>
+    {
+        const at = boardAt(event);
+
+        return event.pointerType === 'touch' ? { x: at.x, y: at.y - FINGER } : at;
+    };
+
+    const spotOf = (at: { x: number; y: number }) =>
+    {
+        const found = pointAt(at.x, at.y);
 
         if (found === null)
         {
@@ -574,6 +613,42 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         }
 
         return found === 'bar' ? 25 : (found === 'tray' ? 0 : found);
+    };
+
+    const onTable = (at: { x: number; y: number }) =>
+        at.x >= -RADIUS && at.x <= WIDTH + RADIUS && at.y >= -RADIUS && at.y <= HEIGHT + RADIUS;
+
+    const dropAt = (event: PointerEvent) =>
+    {
+        const hand = handAt(event);
+
+        if (!onTable(hand) && !onTable(boardAt(event)))
+        {
+            return null;
+        }
+
+        return spotOf({ x: clamp(hand.x, RADIUS, WIDTH - RADIUS), y: clamp(hand.y, RADIUS, HEIGHT - RADIUS) });
+    };
+
+    const go = (spot: number) =>
+    {
+        const way = reach.get(spot);
+
+        if (way !== undefined)
+        {
+            way.forEach((hop, nth) => add(hop, nth < way.length - 1));
+
+            return true;
+        }
+
+        if (spot === home)
+        {
+            undo();
+
+            return true;
+        }
+
+        return false;
     };
 
     const choose = (spot: number | null) =>
@@ -594,22 +669,11 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
         if (chosen !== null)
         {
-            const hop = held.next.find((one) => one.from === chosen && one.to === spot);
+            const from = chosen;
 
-            if (hop !== undefined)
+            if (go(spot))
             {
-                add(hop);
-
-                return hop.from;
-            }
-
-            if (spot === home)
-            {
-                const back = chosen;
-
-                undo();
-
-                return back;
+                return from;
             }
         }
 
@@ -648,24 +712,124 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         return null;
     };
 
+    const putBack = (refused: boolean) =>
+    {
+        if (refused)
+        {
+            sound?.play('deny', { gain: 0.5 });
+            haptic('deny');
+        }
+
+        picked = null;
+        men?.release();
+    };
+
+    const lose = () =>
+    {
+        if (drag?.carried === true)
+        {
+            putBack(false);
+        }
+
+        drag = null;
+        carrying = false;
+    };
+
     const press = (event: PointerEvent) =>
     {
-        const spot = spotAt(event);
+        const spot = spotOf(boardAt(event));
 
-        if (spot !== null && plan !== null && !board.busy() && (spot === last?.to || plan.next.some((hop) => hop.from === spot)))
+        if (event.button > 0 || (drag !== null && !event.isPrimary))
+        {
+            return;
+        }
+
+        lose();
+
+        if (spot === null || plan === null || board.busy())
+        {
+            return;
+        }
+
+        if (spot === last?.to || plan.next.some((hop) => hop.from === spot))
         {
             men?.hold(spot);
+            drag = { id: event.pointerId, spot, x: event.clientX, y: event.clientY, carried: false };
+            (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
         }
+    };
+
+    const carry = (event: PointerEvent) =>
+    {
+        if (drag === null || drag.id !== event.pointerId)
+        {
+            return;
+        }
+
+        if (!drag.carried)
+        {
+            const slop = event.pointerType === 'mouse' ? MOUSE_SLOP : SLOP;
+
+            if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < slop || men?.grab(drag.spot) !== true)
+            {
+                return;
+            }
+
+            drag.carried = true;
+            carrying = true;
+            picked = { at, spot: drag.spot };
+            haptic('tick');
+        }
+
+        const hand = handAt(event);
+
+        men?.drag(hand.x, hand.y);
     };
 
     const tap = (event: PointerEvent) =>
     {
-        const kept = choose(spotAt(event));
+        const held = drag;
 
-        men?.hold(kept ?? chosen);
+        if (event.button > 0 || (held !== null && held.id !== event.pointerId))
+        {
+            return;
+        }
+
+        drag = null;
+        carrying = false;
+
+        if (held === null || !held.carried)
+        {
+            const kept = choose(spotOf(boardAt(event)));
+
+            men?.hold(kept ?? chosen);
+
+            return;
+        }
+
+        const spot = dropAt(event);
+        const elsewhere = spot !== null && spot !== held.spot;
+
+        if (chosen !== held.spot || board.busy() || !elsewhere || !go(spot))
+        {
+            putBack(elsewhere);
+        }
+
+        men?.hold(chosen);
     };
 
-    const release = () => men?.hold(chosen);
+    const quit = (event: PointerEvent) =>
+    {
+        if (drag !== null && drag.id === event.pointerId)
+        {
+            lose();
+        }
+
+        if (drag === null)
+        {
+            men?.hold(chosen);
+        }
+    };
 
     const roll = async () =>
     {
@@ -776,12 +940,14 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                                 <div class="relative h-full [direction:ltr]">
                                     <svg
                                         viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
-                                        class={ () => [ 'block h-full w-full select-none touch-manipulation rounded-panel', staging ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
+                                        class={ () => [ 'block h-full w-full select-none rounded-panel', carrying ? 'cursor-grabbing' : (staging ? 'cursor-pointer' : ''), staging ? 'touch-none' : 'touch-manipulation' ].filter(Boolean).join(' ') }
                                         aria-hidden="true"
+                                        data-drags={ staging ? 'true' : undefined }
                                         onPointerDown={ press }
+                                        onPointerMove={ carry }
                                         onPointerUp={ tap }
-                                        onPointerCancel={ release }
-                                        onPointerLeave={ release }
+                                        onPointerCancel={ quit }
+                                        onPointerLeave={ quit }
                                     >
                                         <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
                                         <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />

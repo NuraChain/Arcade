@@ -1,4 +1,4 @@
-import { BAR, OFF, allHome, facing, type Hop, type Side } from '../../../../backend/src/domains/match/backgammon/board.ts';
+import { BAR, OFF, allHome, facing, keyOf, type Hop, type Side } from '../../../../backend/src/domains/match/backgammon/board.ts';
 import { canStep, diceOf, forcedDie, landing, longest, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
 import type { Tip } from './tip.ts';
 
@@ -34,6 +34,60 @@ export function outcomeOf(side: Side, hop: Hop): Outcome | null
 export function hits(outcome: Outcome | null)
 {
     return outcome === 'hit' || outcome === 'enterHit';
+}
+
+interface Way
+{
+    hops: Hop[];
+    left: string;
+    plain: boolean;
+}
+
+export function reachOf(side: Side, dice: readonly number[], staged: readonly Hop[], from: number): Map<number, Hop[]>
+{
+    const ways = new Map<number, Way>();
+
+    const walk = (hops: Hop[], spot: number) =>
+    {
+        const held = stage(side, dice, [...staged, ...hops]);
+
+        if (held === null)
+        {
+            return;
+        }
+
+        if (hops.length > 0)
+        {
+            const known = ways.get(spot);
+            const left = keyOf(held.at);
+
+            if (known === undefined || hops.length < known.hops.length)
+            {
+                ways.set(spot, { hops, left, plain: true });
+            }
+            else if (hops.length === known.hops.length && left !== known.left)
+            {
+                known.plain = false;
+            }
+        }
+
+        if (spot === OFF)
+        {
+            return;
+        }
+
+        for (const hop of held.next)
+        {
+            if (hop.from === spot)
+            {
+                walk([...hops, hop], hop.to);
+            }
+        }
+    };
+
+    walk([], from);
+
+    return new Map([...ways].filter(([, way]) => way.plain).map(([to, way]) => [to, way.hops]));
 }
 
 function stepsWith(side: Side, die: number)

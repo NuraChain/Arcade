@@ -10,6 +10,7 @@ import {
     FIELD_RIGHT,
     FRAME,
     HEIGHT,
+    MIDDLE,
     POINT_WIDTH,
     TRAY,
     TRAY_LEFT,
@@ -986,5 +987,330 @@ describe('moves made on the table itself', () =>
         await flush();
 
         expect(document.activeElement?.closest('.bg-keys') ?? null, 'a tap on the table opened the keyboard\'s panel').toBeNull();
+    });
+
+    describe('a checker that is dragged', () =>
+    {
+        const spotXY = (point: number | 'bar' | 'tray') =>
+        {
+            const column = typeof point === 'number' ? columnOf(point) : null;
+
+            return {
+                x: column === null ? (point === 'bar' ? BAR_LEFT + BAR_WIDTH / 2 : TRAY_LEFT + TRAY / 2) : column.x + POINT_WIDTH / 2,
+                y: column === null || column.row === 'bottom' ? 700 : 100
+            };
+        };
+
+        const pointer = (container: HTMLElement, type: string, x: number, y: number, over: PointerEventInit = {}) =>
+        {
+            const svg = container.querySelector('svg') as SVGSVGElement;
+
+            svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT, right: WIDTH, bottom: HEIGHT, x: 0, y: 0, toJSON: () => ({}) });
+            svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 3, ...over }));
+        };
+
+        const dragged = (container: HTMLElement, from: number | 'bar' | 'tray', to: number | 'bar' | 'tray') =>
+        {
+            const start = spotXY(from);
+            const end = spotXY(to);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', start.x + 30, start.y + (start.y > MIDDLE ? -30 : 30));
+            pointer(container, 'pointermove', end.x, end.y);
+            pointer(container, 'pointerup', end.x, end.y);
+        };
+
+        const carried = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.bg-layer .man[data-carried]')];
+
+        const marks = (container: HTMLElement) => container.querySelectorAll('.bg-layer .bgt-mark').length;
+
+        const held = (container: HTMLElement) => container.querySelectorAll('.bg-layer .man[data-held]').length;
+
+        const undoing = (container: HTMLElement) => !(button(container, 'Undo').disabled || button(container, 'Undo').getAttribute('aria-disabled') === 'true');
+
+        it('carries the checker with the pointer once it has moved far enough, and marks where it can be put down', async () =>
+        {
+            const { container } = await live(match({ dice: [3, 2] }));
+            const start = spotXY(13);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', start.x + 3, start.y + 3);
+
+            expect(carried(container), 'a press that barely moved became a drag').toEqual([]);
+            expect(held(container)).toBe(1);
+
+            pointer(container, 'pointermove', 400, 410);
+            await flush();
+
+            expect(carried(container)).toHaveLength(1);
+            expect(held(container), 'the next checker on the point was lifted as well').toBe(0);
+            expect(marks(container)).toBe(3);
+
+            const before = carried(container)[0].style.translate;
+
+            pointer(container, 'pointermove', 520, 300);
+
+            expect(carried(container)[0].style.translate).not.toBe(before);
+        });
+
+        it('makes the move when the checker is let go on a point it can reach', async () =>
+        {
+            const { container } = await live(match({}));
+
+            dragged(container, 13, 7);
+            await flush();
+
+            expect(undoing(container)).toBe(true);
+            expect(carried(container)).toEqual([]);
+
+            await elapse(1200);
+
+            expect(marks(container)).toBe(0);
+            expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        });
+
+        it('puts the checker back when it is let go where it cannot go, and moves nothing', async () =>
+        {
+            const { container } = await live(match({}));
+
+            dragged(container, 13, 1);
+            await elapse(600);
+
+            expect(undoing(container)).toBe(false);
+            expect(carried(container)).toEqual([]);
+            expect(marks(container)).toBe(0);
+            expect(held(container)).toBe(0);
+        });
+
+        it('does not take a checker carried away and brought back for a tap', async () =>
+        {
+            const { container } = await live(match({}));
+
+            dragged(container, 13, 13);
+            await elapse(600);
+
+            expect(undoing(container), 'a checker with one way to go was moved by being put back').toBe(false);
+            expect(carried(container)).toEqual([]);
+
+            tapPoint(container, 13);
+            await elapse(1200);
+
+            expect(undoing(container)).toBe(true);
+        });
+
+        it('takes the last move back when its checker is dragged to where it came from', async () =>
+        {
+            const { container } = await live(match({}));
+
+            fire(button(container, 'Move a checker from 13 to 7'), 'click');
+            await elapse(1200);
+
+            expect(undoing(container)).toBe(true);
+
+            dragged(container, 7, 13);
+            await elapse(1200);
+
+            expect(undoing(container)).toBe(false);
+            expect(carried(container)).toEqual([]);
+        });
+
+        it('makes both hops when a checker is let go on a point only both dice reach', async () =>
+        {
+            const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+            const { container } = await live(match({}));
+
+            dragged(container, 13, 6);
+            await elapse(2400);
+
+            expect(zone(container).dataset.live).toBe('done');
+
+            tapDice(container);
+
+            expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'move', hops: [{ from: 13, to: 7 }, { from: 7, to: 6 }] }]);
+        });
+
+        it('makes both hops for a tap on that point as well', async () =>
+        {
+            const { container } = await live(match({ dice: [3, 2] }));
+
+            tapPoint(container, 13);
+            await flush();
+
+            expect(marks(container)).toBe(3);
+
+            tapPoint(container, 8);
+            await elapse(2400);
+
+            expect(zone(container).dataset.live).toBe('done');
+        });
+
+        it('does not guess between two ways there that are different plays', async () =>
+        {
+            const { container } = await live(match({ dice: [5, 3], seats: position({ 13: 1, 1: 14 }, { 17: 1, 6: 14 }) }));
+            const start = spotXY(13);
+            const end = spotXY(5);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', 400, 410);
+            await flush();
+
+            expect(marks(container)).toBe(2);
+
+            pointer(container, 'pointerup', end.x, end.y);
+            await elapse(600);
+
+            expect(undoing(container)).toBe(false);
+            expect(carried(container)).toEqual([]);
+        });
+
+        it('puts the checker back when the browser takes the gesture away, and takes the next drag', async () =>
+        {
+            const { container } = await live(match({}));
+            const start = spotXY(13);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', 400, 410);
+            pointer(container, 'pointercancel', 400, 410);
+            await elapse(600);
+
+            expect(carried(container)).toEqual([]);
+            expect(undoing(container)).toBe(false);
+            expect(marks(container)).toBe(0);
+
+            dragged(container, 13, 7);
+            await flush();
+
+            expect(undoing(container), 'the board took no drag after one was cancelled').toBe(true);
+        });
+
+        it('carries one checker at a time: a second finger moves nothing', async () =>
+        {
+            const { container } = await live(match({}));
+            const start = spotXY(13);
+            const other = spotXY(8);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', 400, 410);
+            pointer(container, 'pointerdown', other.x, other.y, { pointerId: 9 });
+            pointer(container, 'pointermove', 600, 300, { pointerId: 9 });
+            pointer(container, 'pointerup', other.x, other.y, { pointerId: 9 });
+            await flush();
+
+            expect(carried(container)).toHaveLength(1);
+            expect(undoing(container)).toBe(false);
+        });
+
+        it('holds the checker above a finger, where it can be seen, and drops it where it is shown', async () =>
+        {
+            const mouse = await live(match({}));
+            const start = spotXY(13);
+            const over7 = { x: columnOf(7).x + POINT_WIDTH / 2, y: MIDDLE + 40 };
+
+            pointer(mouse.container, 'pointerdown', start.x, start.y, { pointerType: 'mouse' });
+            pointer(mouse.container, 'pointermove', 400, 410, { pointerType: 'mouse' });
+
+            const under = carried(mouse.container)[0].style.translate;
+
+            pointer(mouse.container, 'pointermove', over7.x, over7.y, { pointerType: 'mouse' });
+            pointer(mouse.container, 'pointerup', over7.x, over7.y, { pointerType: 'mouse' });
+            await flush();
+
+            expect(undoing(mouse.container)).toBe(true);
+            mouse.unmount();
+
+            const finger = await live(match({}));
+
+            pointer(finger.container, 'pointerdown', start.x, start.y, { pointerType: 'touch' });
+            pointer(finger.container, 'pointermove', 400, 410, { pointerType: 'touch' });
+
+            expect(carried(finger.container)[0].style.translate, 'the checker sat under the finger').not.toBe(under);
+
+            pointer(finger.container, 'pointermove', over7.x, over7.y, { pointerType: 'touch' });
+            pointer(finger.container, 'pointerup', over7.x, over7.y, { pointerType: 'touch' });
+            await flush();
+
+            expect(undoing(finger.container), 'the checker was shown over the top row and was played on the bottom one').toBe(false);
+        });
+
+        it('plays a checker where it is shown when the finger under it is at the very edge of the board', async () =>
+        {
+            const { container } = await live(match({}));
+            const start = spotXY(24);
+            const edge = { x: columnOf(18).x + POINT_WIDTH / 2, y: 60 };
+
+            pointer(container, 'pointerdown', start.x, start.y, { pointerType: 'touch' });
+            pointer(container, 'pointermove', edge.x, 200, { pointerType: 'touch' });
+            pointer(container, 'pointermove', edge.x, edge.y, { pointerType: 'touch' });
+            pointer(container, 'pointerup', edge.x, edge.y, { pointerType: 'touch' });
+            await flush();
+
+            expect(undoing(container), 'a checker drawn on the point under the finger was refused').toBe(true);
+        });
+
+        it('takes a checker let go just over the frame for the point it is drawn on, and one let go well off the board for a change of mind', async () =>
+        {
+            const near = await live(match({}));
+            const start = spotXY(13);
+            const x = columnOf(7).x + POINT_WIDTH / 2;
+
+            pointer(near.container, 'pointerdown', start.x, start.y);
+            pointer(near.container, 'pointermove', x, 600);
+            pointer(near.container, 'pointermove', x, HEIGHT + 10);
+            pointer(near.container, 'pointerup', x, HEIGHT + 10);
+            await flush();
+
+            expect(undoing(near.container)).toBe(true);
+            near.unmount();
+
+            const far = await live(match({}));
+
+            pointer(far.container, 'pointerdown', start.x, start.y);
+            pointer(far.container, 'pointermove', x, 600);
+            pointer(far.container, 'pointermove', x, HEIGHT + 200);
+            pointer(far.container, 'pointerup', x, HEIGHT + 200);
+            await elapse(600);
+
+            expect(undoing(far.container), 'a checker carried off the table was played on the nearest point').toBe(false);
+            expect(carried(far.container)).toEqual([]);
+        });
+
+        it('starts over when a new first pointer goes down on a carry that never ended', async () =>
+        {
+            const { container } = await live(match({}));
+            const start = spotXY(13);
+            const other = spotXY(8);
+
+            pointer(container, 'pointerdown', start.x, start.y);
+            pointer(container, 'pointermove', 400, 410);
+
+            expect(carried(container)).toHaveLength(1);
+
+            pointer(container, 'pointerdown', other.x, other.y, { pointerId: 11, isPrimary: true });
+            await elapse(600);
+
+            expect(carried(container), 'a checker stayed in a hand that had gone').toEqual([]);
+            expect(held(container)).toBe(1);
+
+            pointer(container, 'pointerup', other.x, other.y, { pointerId: 11, isPrimary: true });
+            await flush();
+
+            expect(marks(container), 'the board took no press after a carry that never ended').toBe(2);
+        });
+
+        it('takes the gesture from the page only while there is a checker to carry', async () =>
+        {
+            const moving = await live(match({}));
+            const board = (container: HTMLElement) => container.querySelector('svg')!;
+
+            expect(board(moving.container).classList.contains('touch-none')).toBe(true);
+            expect(board(moving.container).closest('[data-drags]'), 'a checker carried from the edge of the screen would swipe the page away').not.toBeNull();
+            moving.unmount();
+
+            const waiting = await live(match({ turn: 1 }, 0, { turn: 1 }));
+
+            expect(board(waiting.container).classList.contains('touch-none')).toBe(false);
+            expect(board(waiting.container).classList.contains('touch-manipulation')).toBe(true);
+            expect(board(waiting.container).closest('[data-drags]')).toBeNull();
+        });
     });
 });

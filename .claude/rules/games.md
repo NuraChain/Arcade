@@ -2476,11 +2476,52 @@ placed in the same 1000 by 820 units through `cqw`. What is pressed now:
 - **A checker lifts under the finger.** On the press, not on the release, and at once for a move
   that then has to wait its turn behind a scene: `hold` is a state of the checker, outside the
   queue. The first live check of 1.2 found a pressed checker doing nothing for up to half a second.
+- **A checker can be carried.** A press that moves further than a slip of the hand (4px for a
+  mouse, 10 for a finger) takes the top checker of the point into the hand (`grab`, `drag`,
+  `release` on the table): it follows the pointer above everything on the board, the points it
+  can be put down on are marked, and the count on the point it left goes down by one. Let go on a
+  point it can reach and that is the move, set down from where it was let go in one short flight
+  and not walked along the points again (93 to 155ms on the production build, for 47 and 145px);
+  a lone checker there is knocked away when it lands, not when the hand opens. Let go anywhere else
+  and it goes back, with the refusal sound when the place was a point it may not have. Put back on
+  its own point it is put back and nothing more: a checker carried away and brought home is not a
+  tap, or one with a single way to go would be played by a change of mind. The checker moved last
+  is carried home to take the move back.
+- **It is played where it is shown.** Under a finger the checker is held 2.2 radii above the
+  touch (26px on a phone), where it can be seen, and the point it is dropped on is the point it
+  is drawn over, kept inside the frame. So a finger resting on a point at the very edge of the
+  board plays that point although the checker is drawn above the finger, and a mouse let go a few
+  pixels over the frame plays the point the checker is on. Let go well off the board - neither the
+  pointer nor the checker within a radius of it - is a change of mind.
+- **One drop can be both dice.** `reachOf` (`game/helpers/backgammon.ts`) asks the server's own
+  `stage()` how far the chosen checker can go this turn: one die, the other, or both, and up to
+  four hops of a double. A point more than one hop away is offered only when every way there
+  leaves the same board; when one way hits a checker and the other does not, nobody's intention is
+  guessed and the checker goes a die at a time. Bearing off with one die is never offered as two.
+  Those points are marked with the others, and a tap on one works as a drop does. Carried, the
+  checker stays in the hand over the points it only passes (`hop(move, onward)`; a lone checker
+  there is still knocked away) and is set down once, at the end; tapped, it walks to the first
+  point, lands and walks on. A tap on a checker with one die's way to go is still the move, at
+  once, whatever both dice could do.
 
 The SVG takes the tap itself and turns the pointer into a point with `pointAt`, rather than
 twenty-four invisible buttons none of which could be 44px wide on a phone; the dice and the cube
 are the only things in the layer that take a pointer, each only while it can be pressed, the cube
 through a 44px area of its own.
+
+**While there is a checker to carry, the board owns the gesture, and the page is told so.** The
+SVG captures the pointer on the press and takes `touch-action: none`, but only while the reader
+has a move to make, so the board scrolls and zooms like the rest of the page the rest of the time.
+That was not enough, and only a phone showed it: `Page` listens for TOUCH events of its own, and a
+touch that starts within 30px of the screen's leading edge and moves inwards is its swipe back.
+The 12 and 13 points are 28px from that edge on a 390px screen. Measured on the production build
+before the fix, a checker carried from the 13 point across the board slid the whole page under the
+finger, 22 to 174px, and letting go left the table for the games list. An element that takes drags
+of its own says `data-drags`, and `attachGestures` leaves a touch that starts on one alone
+(`touch.spec.ts`); the board carries it exactly as long as it carries `touch-none`. One checker is
+carried at a time: a second finger moves nothing, a gesture the browser takes away puts the checker
+back, and a new first pointer going down on a carry that never ended starts over, so a lost
+`pointerup` cannot leave the board deaf.
 
 **The keyboard's path is the same moves as real buttons, in a panel nobody else sees.** Roll,
 "Double to 2", Undo, "Play the move" and every hop on offer, named as they always were, sit in
@@ -2517,9 +2558,12 @@ the grid there is the fit cell alone. What it said is kept three ways:
 Measured on the production build at 390 by 844, through a roll, a hop, a whole turn and the other
 player's turn, the board does not move at all.
 
-`backgammon-board.spec.ts` (*moves made on the table itself*) taps the dice, the cube and points of
-the board, `backgammon-table.spec.ts` (*what is pressed on the table itself*) holds the table's
-half, and `backgammon-play-pass.mjs` plays its turns on the table in two real browsers.
+`backgammon-board.spec.ts` (*moves made on the table itself*, and *a checker that is dragged*
+inside it) taps the dice, the cube and points of the board and carries checkers across it,
+`backgammon-table.spec.ts` (*what is pressed on the table itself*, *a checker carried by hand*)
+holds the table's half, `helpers-backgammon.spec.ts` (*how far one checker can be carried in a
+turn*) holds `reachOf`, and `backgammon-play-pass.mjs` plays its turns on the table in two real
+browsers, carrying the first checker of each turn and tapping the rest.
 
 **The checkers are objects, and a move is that checker travelling.** The board was a drawing of
 counts: every action drew thirty circles again where the new position put them, with a sound.
@@ -2624,8 +2668,7 @@ faces and a 1 for a 6 until the fade ended, so the fade is on the die's outer no
 **What the board does not do yet, so nobody reads this as finished.** The words and the marks still
 read the board the server sent, so they tell a roll before the dice have landed; an opening is
 thrown only when it arrives with the end of the game before it, because the first opening of a
-match never reaches a board; a game that ends has no banner; and a checker cannot be dragged, only
-tapped. Each is its own commit in the plan
+match never reaches a board; and a game that ends has no banner. Each is its own commit in the plan
 (`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
@@ -3133,9 +3176,10 @@ before it clicks cards.
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
 for themselves. Backgammon plays eight turns ON THE TABLE - it taps the dice to roll and to end a
-turn, the cube and then Double, Take on the board, and the points of the board for every hop, with
-where a point is taken from the layout module the board is drawn from - and fails if a button for
-a move is on show under the board. Poker plays
+turn, the cube and then Double, Take on the board, carries the first checker of each turn to its
+point with the mouse held down and taps the points of the board for the other hops, with where a
+point is taken from the layout module the board is drawn from - and fails if a button for a move
+is on show under the board. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
 and both finish over the api and assert the result in both browsers. What "the other browser saw it"
 means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,

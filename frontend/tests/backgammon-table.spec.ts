@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import type { Haptic } from '../src/lib/haptics.ts';
-import { BAR_GAP, BAR_LEFT, BAR_WIDTH, BOTTOM, MIDDLE, POINT_WIDTH, RADIUS, TOP, WIDTH, columnOf } from '../src/game/backgammon-layout.ts';
+import { BAR_GAP, BAR_LEFT, BAR_WIDTH, BOTTOM, HEIGHT, MIDDLE, POINT_WIDTH, RADIUS, TOP, WIDTH, columnOf } from '../src/game/backgammon-layout.ts';
 import { seedOf, spentBy, type Felt, type Told } from '../src/game/backgammon-felt.ts';
-import { CUBE_MS, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
+import { BACK_MOST, CUBE_MS, DROP_MOST, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { createDirector, type Director } from '../src/game/stage/director.ts';
 import type { Act } from '../src/game/stage/feed.ts';
@@ -1110,5 +1110,222 @@ describe('what is pressed on the table itself', () =>
 
         expect(host.querySelectorAll('.bgt-mark')).toHaveLength(0);
         expect(host.querySelectorAll('.man[data-back]')).toHaveLength(0);
+    });
+});
+
+describe('a checker carried by hand', () =>
+{
+    const carried = () => [...host.querySelectorAll<HTMLElement>('.man[data-carried]')];
+
+    const last = (el: Element) => of(el)[of(el).length - 1];
+
+    const top13 = placed(columnOf(13).x + POINT_WIDTH / 2, TOP + RADIUS + 8 * RADIUS);
+
+    const on7 = placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS);
+
+    it('follows the hand above everything else on the board, and is not counted where it was lifted from', () =>
+    {
+        table.reset(sight(felt({ near: row({ 6: 8, 5: 7 }), dice: [6, 1] })));
+
+        expect(table.grab(6)).toBe(true);
+        expect(carried()).toHaveLength(1);
+        expect([...host.querySelectorAll('.bgt-count')].map((tag) => tag.textContent).sort()).toEqual(['7', '7']);
+
+        table.drag(500, 400);
+
+        expect(carried()[0].style.translate).toBe(placed(500, 400));
+        expect(Number(carried()[0].style.zIndex)).toBe(LAYER.airborne);
+
+        table.drag(-200, 5000);
+
+        expect(carried()[0].style.translate, 'a carried checker left the board').toBe(placed(RADIUS, HEIGHT - RADIUS));
+    });
+
+    it('lifts nothing from a point the reader has no checker on, nor a checker that is in the air', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        expect(table.grab(1)).toBe(false);
+        expect(table.grab(12), 'the other side\'s checker was lifted').toBe(false);
+        expect(carried()).toEqual([]);
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+
+        expect(table.grab(7), 'a checker was caught in flight').toBe(false);
+
+        await elapse(WALK_MOST + 100);
+
+        expect(table.grab(7)).toBe(true);
+        expect(table.grab(13), 'a second checker was lifted with one already in the hand').toBe(false);
+    });
+
+    it('goes back to where it was lifted from when it is let go', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.grab(13);
+        table.drag(500, 400);
+
+        const el = carried()[0];
+
+        table.release();
+
+        expect(last(el).frames[0].translate).toBe(placed(500, 400));
+        expect(last(el).frames[last(el).frames.length - 1].translate).toBe(top13);
+        expect(Number(last(el).options.duration)).toBeLessThanOrEqual(BACK_MOST);
+        expect(el.hasAttribute('data-carried')).toBe(false);
+        expect(table.grab(13), 'a checker on its way back was lifted again').toBe(false);
+
+        await elapse(BACK_MOST + 40);
+
+        expect(el.style.translate).toBe(top13);
+        expect(Number(el.style.zIndex)).toBeLessThan(LAYER.moving);
+        expect(table.grab(13)).toBe(true);
+        expect(carried()[0]).toBe(el);
+    });
+
+    it('lands from where it was let go when the drop is a move: one short flight and not the walk along the points', async () =>
+    {
+        const there = { x: columnOf(7).x + POINT_WIDTH / 2 + 12, y: 520 };
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.grab(13);
+        table.drag(there.x, there.y);
+
+        const el = carried()[0];
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+
+        expect(last(el).frames).toHaveLength(2);
+        expect(last(el).frames[0].translate).toBe(placed(there.x, there.y));
+        expect(last(el).frames[1].translate).toBe(on7);
+        expect(Number(last(el).options.duration)).toBeLessThanOrEqual(DROP_MOST);
+        expect(el.hasAttribute('data-carried')).toBe(false);
+        expect(cues).toEqual([]);
+
+        await elapse(DROP_MOST + 200);
+
+        expect(el.style.translate).toBe(on7);
+        expect(cues).toEqual(['token-step']);
+        expect(table.grab(7)).toBe(true);
+    });
+
+    it('knocks a lone checker away when the dropped one lands on it, not when it is let go', async () =>
+    {
+        const far = row({ 18: 1, 6: 14 });
+
+        table.reset(sight(felt({ far, dice: [6, 1] })));
+        table.grab(13);
+        table.drag(columnOf(7).x + POINT_WIDTH / 2, 640);
+        void table.hop({ side: 'near', from: 13, to: 7, hit: true });
+
+        expect(felt_).toEqual([]);
+
+        await elapse(DROP_MOST + KNOCK_MS + 200);
+
+        expect(felt_).toEqual(['capture']);
+        expect(cues).toContain('token-capture');
+        expect(men().filter((man) => man.style.translate === placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE - BAR_GAP - RADIUS))).toHaveLength(1);
+    });
+
+    it('flies home from the hand when the drop takes the move back', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+        await elapse(WALK_MOST + 100);
+        table.grab(7);
+        table.drag(300, 300);
+
+        const el = carried()[0];
+
+        void table.unhop({ side: 'near', from: 13, to: 7, hit: false });
+
+        expect(last(el).frames).toHaveLength(2);
+        expect(last(el).frames[0].translate).toBe(placed(300, 300));
+        expect(last(el).frames[1].translate).toBe(top13);
+
+        await elapse(DROP_MOST + 200);
+
+        expect(el.style.translate).toBe(top13);
+    });
+
+    it('is put back where the board says when the board is drawn again under the hand, and follows no hand after that', () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.grab(13);
+        table.drag(500, 400);
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        expect(carried()).toEqual([]);
+
+        table.drag(300, 300);
+        table.release();
+
+        expect(men()).toHaveLength(30);
+        expect(men().some((man) => man.style.translate === placed(300, 300))).toBe(false);
+        expect(table.grab(13)).toBe(true);
+    });
+
+    it('fades to where it is going when motion is reduced, and still says so', async () =>
+    {
+        still = true;
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.grab(13);
+        table.drag(500, 400);
+
+        const el = carried()[0];
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+
+        expect(last(el).frames.some((frame) => 'translate' in frame || 'transform' in frame)).toBe(false);
+        expect(el.style.translate).toBe(on7);
+
+        await elapse(400);
+
+        expect(cues).toEqual(['token-step']);
+    });
+    it('stays in the hand over the first of two hops, and is set down by the second', async () =>
+    {
+        const over6 = { x: columnOf(6).x + POINT_WIDTH / 2, y: 600 };
+        const on6 = placed(columnOf(6).x + POINT_WIDTH / 2, BOTTOM - RADIUS);
+
+        table.reset(sight(felt({ near: row({ 13: 1, 1: 14 }), far: row({ 6: 15 }), dice: [6, 1] })));
+        table.grab(13);
+        table.drag(over6.x, over6.y);
+
+        const el = carried()[0];
+        const flights = of(el).length;
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false }, true);
+        await elapse(40);
+
+        expect(of(el), 'the checker left the hand for a point it only passed over').toHaveLength(flights);
+        expect(carried()).toEqual([el]);
+        expect(el.style.translate).toBe(placed(over6.x, over6.y));
+        expect(cues).toEqual([]);
+
+        void table.hop({ side: 'near', from: 7, to: 6, hit: false });
+
+        expect(of(el)).toHaveLength(flights + 1);
+        expect(last(el).frames[0].translate).toBe(placed(over6.x, over6.y));
+        expect(last(el).frames[1].translate).toBe(on6);
+
+        await elapse(DROP_MOST + 200);
+
+        expect(carried()).toEqual([]);
+        expect(cues).toEqual(['token-step']);
+        expect(el.style.translate).toBe(on6);
+    });
+
+    it('still knocks away a lone checker the hand passes over', async () =>
+    {
+        table.reset(sight(felt({ near: row({ 13: 1, 1: 14 }), far: row({ 18: 1, 6: 14 }), dice: [6, 1] })));
+        table.grab(13);
+        table.drag(columnOf(6).x + POINT_WIDTH / 2, 600);
+        void table.hop({ side: 'near', from: 13, to: 7, hit: true }, true);
+        await elapse(KNOCK_MS + 100);
+
+        expect(felt_).toEqual(['capture']);
+        expect(carried()).toHaveLength(1);
+        expect(men().filter((man) => man.style.translate === placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE - BAR_GAP - RADIUS))).toHaveLength(1);
     });
 });

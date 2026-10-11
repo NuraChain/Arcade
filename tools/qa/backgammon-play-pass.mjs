@@ -37,12 +37,36 @@ const placeOf = (spot) =>
     return { x: column.x + POINT_WIDTH / 2, y: column.row === 'top' ? HEIGHT * 0.12 : HEIGHT * 0.88 };
 };
 
-const tapSpot = async (player, spot) =>
+const onPage = async (player, spot) =>
 {
     const box = await player.page.locator(board).boundingBox();
     const at = placeOf(spot);
 
-    await player.page.mouse.click(box.x + at.x / WIDTH * box.width, box.y + at.y / HEIGHT * box.height);
+    return { x: box.x + at.x / WIDTH * box.width, y: box.y + at.y / HEIGHT * box.height };
+};
+
+const tapSpot = async (player, spot) =>
+{
+    const at = await onPage(player, spot);
+
+    await player.page.mouse.click(at.x, at.y);
+};
+
+const dragSpot = async (player, from, to) =>
+{
+    const start = await onPage(player, from);
+    const end = await onPage(player, to);
+
+    await player.page.mouse.move(start.x, start.y);
+    await player.page.mouse.down();
+    await player.page.mouse.move((start.x + end.x) / 2, (start.y + end.y) / 2, { steps: 6 });
+
+    const carried = await player.page.locator('.bg-layer .man[data-carried]').count() === 1;
+
+    await player.page.mouse.move(end.x, end.y, { steps: 6 });
+    await player.page.mouse.up();
+
+    return carried;
 };
 
 const tapDice = async (player, mode) =>
@@ -179,12 +203,19 @@ try
                 const offered = stage({ me: [...own], them: [...theirs] }, view.dice, made).next.filter((one) => one.from === hop.from);
                 const direct = new Set(offered.map((one) => one.to)).size === 1 && made[made.length - 1]?.to !== hop.from;
 
-                await tapSpot(mover, hop.from);
-
-                if (!direct)
+                if (made.length === 0)
                 {
-                    await mover.page.waitForTimeout(80);
-                    await tapSpot(mover, hop.to);
+                    record(`${ mover.handle } carries a checker to its point with the pointer`, await dragSpot(mover, hop.from, hop.to), `${ hop.from } to ${ hop.to }`);
+                }
+                else
+                {
+                    await tapSpot(mover, hop.from);
+
+                    if (!direct)
+                    {
+                        await mover.page.waitForTimeout(80);
+                        await tapSpot(mover, hop.to);
+                    }
                 }
 
                 made.push(hop);

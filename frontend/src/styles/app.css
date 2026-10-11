@@ -2363,6 +2363,13 @@ html:has(.site-drawer[open])
     transition: scale 90ms ease-out;
 }
 
+.man[data-carried]
+{
+    scale: var(--carried);
+    box-shadow: 0 0 0 calc(var(--man) * 0.09) var(--accent), 0 calc(var(--man) * 0.3) calc(var(--man) * 0.45) rgb(0 0 0 / 0.5);
+    transition: scale 90ms ease-out, translate 50ms linear;
+}
+
 .man[data-back]::before,
 .bgt-mark[data-back]::before
 {

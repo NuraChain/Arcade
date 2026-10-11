@@ -48,7 +48,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
 
     const onStart = (event: TouchEvent) =>
     {
-        if (event.touches.length !== 1)
+        if (event.touches.length !== 1 || (event.target instanceof Element && event.target.closest('[data-drags]') !== null))
         {
             reset();
             return;
