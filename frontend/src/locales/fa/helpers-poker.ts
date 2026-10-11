@@ -41,7 +41,7 @@ export const helpersPoker: Pick<Dictionary, keyof typeof reference> = {
     'helpers.poker.rank.many.12': 'آس',
     'helpers.poker.cost': 'کال کردن {chips} خرج دارد و پات {pot} است.',
     'helpers.poker.free': 'چیزی برای کال کردن نیست، پس چک کردن برایت هزینه‌ای ندارد.',
-    'helpers.poker.facing': 'برای ماندن در دست {chips} لازم است: کال کن، رِیز کن یا فولد کن.',
-    'helpers.poker.facing.noRaise': 'برای ماندن در دست {chips} لازم است: کال کن یا فولد کن. اینجا رِیز کردن برایت باز نیست.',
+    'helpers.poker.facing': 'برای ماندن در دست {chips} لازم است: کال کن، رِیز کن یا فولد کن. برای فولد روی کارت‌هایت بزن، بعد دوباره بزن.',
+    'helpers.poker.facing.noRaise': 'برای ماندن در دست {chips} لازم است: کال کن یا فولد کن. اینجا رِیز کردن برایت باز نیست. برای فولد روی کارت‌هایت بزن، بعد دوباره بزن.',
     'helpers.poker.allIn': 'آل‌این هستی. چیزی برای بِت زدن نمانده، پس بقیه را کارت‌ها تعیین می‌کنند.'
 };

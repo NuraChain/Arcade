@@ -1,4 +1,4 @@
-import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
+import { BASE, clearTables, launch, pressable, recorder, seat, solid, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
 const CLICKED_ACTIONS = 8;
@@ -50,8 +50,20 @@ try
 
     record('the dealer sees the table', await waitFor(async () => await dana.page.locator(felt).count() > 0));
     record('the other browser, on a phone, is shown the table without pressing anything', await waitFor(async () => await mina.page.locator(felt).count() > 0));
-    record('each player is shown two cards of their own', await waitFor(async () =>
-        await dana.page.locator('ul[aria-label="Your cards"] li').count() === 2 && await mina.page.locator('ul[aria-label="Your cards"] li').count() === 2));
+    const held = async (player) => await player.page.locator('.poker-hand .card-face').count();
+
+    const named = async (player) => await player.page.evaluate(() =>
+    {
+        const hand = document.querySelector('.poker-hand');
+        const list = hand?.querySelector('ul[aria-label="Your cards"]') ?? null;
+
+        return list === null
+            ? /^Your cards: \S/.test(hand?.querySelector('.sr-only')?.textContent ?? '')
+            : [...list.querySelectorAll('li[role="img"]')].filter((one) => (one.getAttribute('aria-label') ?? '') !== '').length === 2;
+    });
+
+    record('each player is shown two cards of their own', await waitFor(async () => await held(dana) === 2 && await held(mina) === 2));
+    record('and each is told them in words, whether or not they are the cards that fold', await named(dana) && await named(mina));
 
     const matchId = (await dana.api('GET', `/tables/${ tableId }`)).body.matchId;
     const seats = new Map();
@@ -115,6 +127,15 @@ try
         record(`${ other.handle } sees it without reloading`, await waitFor(async () => (await drawn(other)) !== before, 8000), verb);
     }
 
+    const beside = await dana.page.evaluate(() => ({
+        bar: document.querySelector('main .table-grid > .table-bar') !== null,
+        said: [...document.querySelectorAll('main .table-corner > p')].filter((one) => !one.classList.contains('sr-only')).length,
+        strays: [...document.querySelectorAll('main .table-stage button')].filter((one) => one.closest('.poker-hand, .poker-last, .table-result') === null).length
+    }));
+
+    record('no bar of buttons or sentences is drawn under the table', !beside.bar && beside.said === 0);
+    record('every control is the reader’s own cards and chips, or the chooser they opened', beside.strays === 0, `${ beside.strays } elsewhere`);
+
     console.log('\n[4] the rest over the api, all in');
 
     for (let step = 0; step < 400; step += 1)
@@ -143,6 +164,7 @@ try
     {
         record(`${ player.handle } is shown the finished match`, await waitFor(async () => /won/i.test(await player.page.locator('main').innerText()), 8000));
         record(`${ player.handle } is offered another`, await waitFor(async () => await pressable(player.page, /Play again/i) !== null, 8000));
+        record(`${ player.handle } reads the result on a card the board does not show through`, await solid(player.page, '.table-result-card'));
     }
 
     console.log('\n[5] the console, over the whole match');

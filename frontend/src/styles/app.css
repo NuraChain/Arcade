@@ -1365,7 +1365,7 @@ html:has(.site-drawer[open])
     color: var(--bright-ink);
 }
 
-.table-bar.hokm-rail
+.table-bar.table-corner
 {
     position: absolute;
     right: 0;
@@ -1373,7 +1373,6 @@ html:has(.site-drawer[open])
     z-index: 3;
     grid-area: auto;
     flex-direction: column;
-    align-items: flex-end;
     gap: 0.25rem;
     inline-size: auto;
     justify-self: auto;
@@ -1381,41 +1380,42 @@ html:has(.site-drawer[open])
     pointer-events: none;
 }
 
-.table-bar.hokm-rail > *
+.table-bar.table-corner > *
 {
+    margin-left: auto;
     pointer-events: auto;
 }
 
-.table-bar.hokm-rail > .hokm-bar-facts
+.table-bar.table-corner > :is(.hokm-bar-facts, .poker-bar-facts)
 {
     pointer-events: none;
 }
 
-.table-bar.hokm-rail .coach-line[data-lamp]
+.table-bar.table-corner .coach-line[data-lamp]
 {
     position: static;
 }
 
-.table-bar.hokm-rail .coach-line[data-lamp] > span:last-child
+.table-bar.table-corner .coach-line[data-lamp] > span:last-child
 {
     inset-inline-start: auto;
     right: 0;
 }
 
-.hokm-tools
+.table-corner-tools
 {
     display: flex;
     align-items: center;
     gap: 0.25rem;
 }
 
-[data-sheet] .hokm-rail > :is(.hokm-clock, .hokm-tools),
-[data-beside] .hokm-rail > :is(.hokm-clock, .hokm-tools)
+[data-sheet] .table-corner > :is(.table-corner-clock, .table-corner-tools),
+[data-beside] .table-corner > :is(.table-corner-clock, .table-corner-tools)
 {
     display: none;
 }
 
-[data-beside] .table-grid.hokm-grid
+[data-beside] .table-grid:is(.hokm-grid, .poker-grid)
 {
     padding-inline-end: var(--beside);
 }
@@ -1803,9 +1803,18 @@ html:has(.site-drawer[open])
     }
 }
 
+.table-grid.poker-grid
+{
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: 'fit' 'hand';
+}
+
 .poker-stage .table-fit
 {
     --fit-min: 12.5rem;
+
+    position: relative;
 }
 
 .poker-chips
@@ -2047,15 +2056,163 @@ html:has(.site-drawer[open])
     --card-w: clamp(2.6rem, min(13cqi, 10cqb), 4.5rem);
 
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     gap: 0.75rem;
     margin-block-start: -0.25rem;
 }
 
-.poker-bar
+.poker-hole
+{
+    display: flex;
+    gap: 0.375rem;
+}
+
+.poker-hand-name
+{
+    display: -webkit-box;
+    overflow: hidden;
+    min-inline-size: 0;
+    flex: 0 1 9rem;
+    align-self: center;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    color: var(--color-text);
+    font-size: var(--text-ui-xs);
+    font-weight: 600;
+    text-align: end;
+}
+
+.poker-acts
+{
+    display: flex;
+    align-items: flex-end;
+    gap: 0.625rem;
+}
+
+.poker-thing
 {
     position: relative;
+    display: flex;
+    min-inline-size: 2.75rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+.poker-thing:disabled
+{
+    cursor: default;
+    opacity: 0.6;
+}
+
+.poker-thing-says
+{
+    color: var(--color-muted);
+    font-size: var(--text-ui-2xs);
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.poker-disc
+{
+    display: flex;
+    box-sizing: border-box;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 3px dashed rgb(255 255 255 / 0.85);
+    border-radius: 999px;
+    background: var(--color-raised);
+    color: white;
+    box-shadow: 0 0 0 2px rgb(0 0 0 / 0.4), 0 6px 14px -6px rgb(0 0 0 / 0.7);
+    transition: translate 140ms var(--ease-ui, ease), box-shadow 140ms ease;
+}
+
+.poker-disc[data-act='call']
+{
+    background: var(--madder);
+}
+
+.poker-disc[data-act='raise']
+{
+    background: var(--accent-fill);
+}
+
+.poker-disc[data-act='allin']
+{
+    border-color: rgb(8 13 25 / 0.75);
+    background: var(--gold);
+}
+
+.poker-thing[aria-pressed='true'] > .poker-disc
+{
+    translate: 0 -0.3rem;
+    box-shadow: 0 0 0 2px var(--accent), 0 10px 18px -6px rgb(0 0 0 / 0.7);
+}
+
+.poker-thing > .poker-hole > span
+{
+    position: relative;
+    transition: translate 160ms var(--ease-ui, ease);
+}
+
+.poker-thing > .poker-hole .card-face
+{
+    transition: box-shadow 160ms ease;
+}
+
+.poker-thing[data-armed] > .poker-hole .card-face
+{
+    box-shadow: 0 0 0 3px var(--danger), 0 8px 18px -6px rgb(0 0 0 / 0.6);
+}
+
+.poker-thing[data-armed] > .poker-thing-says
+{
+    color: var(--danger);
+}
+
+.poker-thing[data-armed] > .poker-hole > span::before
+{
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--card-w) * 0.08);
+    box-shadow: 0 0 0 3px var(--danger), 0 0 14px 2px color-mix(in srgb, var(--danger) 70%, transparent);
+    animation: bgt-invite 1.6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@media (hover: hover)
+{
+    .poker-thing:enabled:hover > .poker-disc
+    {
+        translate: 0 -0.2rem;
+    }
+
+    .poker-thing:enabled:hover > .poker-hole > span
+    {
+        translate: 0 -0.3rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .poker-disc,
+    .poker-thing > .poker-hole > span,
+    .poker-thing > .poker-hole .card-face
+    {
+        transition: none;
+    }
+
+    .poker-thing[data-armed] > .poker-hole > span::before
+    {
+        animation: none;
+    }
 }
 
 .poker-bar-facts
@@ -2081,16 +2238,7 @@ html:has(.site-drawer[open])
     }
 }
 
-@container stage (max-height: 24rem) and (max-aspect-ratio: 3 / 2)
-{
-    .poker-cost,
-    .poker-bar [role='note']
-    {
-        display: none;
-    }
-}
-
-[data-sheet] :is(.poker-chips > .poker-chip, .poker-cost),
+[data-sheet] .poker-chips > .poker-chip,
 .poker-stage[data-felt='short'] .poker-chips > .poker-chip
 {
     display: none;
@@ -2102,10 +2250,15 @@ html:has(.site-drawer[open])
     margin-inline-start: auto;
 }
 
-[data-sheet] .poker-bar-facts,
 .poker-stage[data-felt='short'] .poker-bar-facts
 {
     display: flex;
+}
+
+[data-sheet] .poker-stage .poker-bar-facts,
+[data-beside] .poker-stage .poker-bar-facts
+{
+    display: none;
 }
 
 @media (max-height: 540px)
@@ -2118,27 +2271,14 @@ html:has(.site-drawer[open])
     }
 }
 
-@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
-{
-    .poker-bar
-    {
-        position: static;
-    }
-
-    .poker-bar > .poker-raise
-    {
-        inset-block: auto 0.5rem;
-        inset-inline: 0.5rem auto;
-        inline-size: min(22rem, 62%);
-    }
-}
-
 .poker-raise
 {
     position: absolute;
     z-index: 10;
     inset-inline: 0;
     bottom: calc(100% + 0.5rem);
+    max-inline-size: 24rem;
+    margin-inline: auto;
     display: flex;
     flex-direction: column;
     gap: 0.625rem;

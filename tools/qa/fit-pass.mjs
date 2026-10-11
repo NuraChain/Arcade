@@ -612,7 +612,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             found.push({ kind: 'felt', what: 'an empty hokm felt that does not say what takes the hand' });
         }
 
-        const laid = [...surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-last-tile, .hokm-trick:not([data-landing="true"]) .card-face')].filter(shown);
+        const laid = [...surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-last-tile, .hokm-trick:not([data-landing="true"]) .card-face, .poker-bet, .poker-backs, .poker-centre > *')].filter(shown);
         const pressed = [...surface.querySelectorAll('.hokm-stock, .hokm-offer, .hokm-glimpse')].filter(shown);
 
         for (const one of pressed)
@@ -631,9 +631,9 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             }
         }
 
-        const held = [...document.querySelectorAll('.hokm-hand .card-face')].filter(shown);
+        const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc')].filter(shown);
 
-        for (const one of [...document.querySelectorAll('.hokm-bar-facts > .hokm-chip, .hokm-rail > .hokm-clock, .hokm-tools > *')].filter(shown))
+        for (const one of [...document.querySelectorAll('.hokm-bar-facts > .hokm-chip, .table-corner > .poker-bar-facts, .table-corner-clock, .table-corner-tools > *')].filter(shown))
         {
             if (outside(box(one)))
             {
@@ -690,7 +690,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         found.push({ kind: 'sheet', what: `the open chat (${ sheetMode }) reaches ${ Math.round(box(fitCell).bottom - box(sheet).top) }px over the board` });
     }
 
-    if (given.openChat && sideways && sheet !== null && surface !== null && document.querySelector('.table-grid:is(.ludo-grid, .hokm-grid)') !== null)
+    if (given.openChat && sideways && sheet !== null && surface !== null && document.querySelector('.table-grid:is(.ludo-grid, .hokm-grid, .poker-grid)') !== null)
     {
         const lying = box(sheet);
         const roomy = stage !== null && box(stage).width >= 768;
@@ -883,8 +883,9 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
 const lift = async (page) => await page.evaluate(async () =>
 {
+    const fold = document.querySelector('.poker-hand .poker-thing:has(> .poker-hole):enabled');
     const tapped = matchMedia('(pointer: coarse)').matches && document.querySelector('.hokm-stock-due') === null;
-    const thing = tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:enabled') : null;
+    const thing = fold ?? (tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:enabled') : null);
     const rev = () => document.querySelector('.table-stage')?.getAttribute('data-rev') ?? null;
     const before = rev();
 
@@ -902,7 +903,7 @@ const lift = async (page) => await page.evaluate(async () =>
         return [];
     }
 
-    const lifted = document.querySelector('.card-hold[data-go]');
+    const lifted = document.querySelector('.poker-thing[data-armed], .card-hold[data-go]');
 
     if (lifted === null)
     {
@@ -911,9 +912,15 @@ const lift = async (page) => await page.evaluate(async () =>
 
     const found = [];
     const ring = 3;
-    const glow = getComputedStyle(lifted, '::before');
+    const glowing = lifted.matches('.card-hold') ? [lifted] : [...lifted.querySelectorAll('.poker-hole > span')];
+    const lit = glowing.filter((one) =>
+    {
+        const glow = getComputedStyle(one, '::before');
 
-    if (glow.content === 'none' || glow.animationName !== 'bgt-invite')
+        return glow.content !== 'none' && glow.animationName === 'bgt-invite';
+    });
+
+    if (glowing.length === 0 || lit.length !== glowing.length)
     {
         found.push({ kind: 'lift', what: 'what was lifted does not show that the next press sends it' });
     }
@@ -962,6 +969,7 @@ const cell = async (label, spec, page, url, size, openChat, language, waits, las
 
     if (!openChat)
     {
+        await page.locator('.poker-hand .poker-thing:has(> .poker-hole):enabled').first().hover({ timeout: 500 }).catch(() => null);
         found.push(...await lift(page));
     }
 

@@ -1305,7 +1305,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
                         <Show when={ !over }>
                             { () =>
-                                <section class="table-bar hokm-rail">
+                                <section class="table-bar table-corner hokm-rail">
                                     <p class="sr-only" aria-live="polite">{ says }</p>
                                     <Show when={ following }>
                                         { () => <p class="sr-only">{ locale.t('hokm.follow') }</p> }
@@ -1335,8 +1335,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                             </For>
                                         </span>
                                     </span>
-                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } class="hokm-clock" brief />
-                                    <div class="hokm-tools">
+                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } class="table-corner-clock hokm-clock" brief />
+                                    <div class="table-corner-tools hokm-tools">
                                         <Show when={ sortable }>
                                             { () => <IconButton icon="sort" label={ locale.t('hokm.sort') } variant="secondary" pressed={ sorted } class="hokm-sort" onClick={ () => sorted = !sorted } /> }
                                         </Show>

@@ -38,7 +38,7 @@ export const helpersPoker = {
     'helpers.poker.rank.many.12': 'aces',
     'helpers.poker.cost': 'Calling costs {chips} against a pot of {pot}.',
     'helpers.poker.free': 'There is nothing to call, so checking costs you nothing.',
-    'helpers.poker.facing': 'It costs {chips} to stay in: call it, raise over it, or fold.',
-    'helpers.poker.facing.noRaise': 'It costs {chips} to stay in: call it or fold. Raising is not open to you here.',
+    'helpers.poker.facing': 'It costs {chips} to stay in: call it, raise over it, or fold. To fold, tap your cards, then tap them again.',
+    'helpers.poker.facing.noRaise': 'It costs {chips} to stay in: call it or fold. Raising is not open to you here. To fold, tap your cards, then tap them again.',
     'helpers.poker.allIn': 'You are all in. There is nothing left to bet, so the cards decide the rest.'
 };

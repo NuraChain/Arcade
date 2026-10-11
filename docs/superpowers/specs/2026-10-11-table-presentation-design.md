@@ -1918,14 +1918,21 @@ them for a board that did not exist yet.
 the pot (`seatBets`, which gains each pill's previous spot, below). The wording "Total pot" and
 what it counts (D7). Chips at rest as numbers in pills (D6).
 
-**Controls on the table (D10).** They land with the chips (commit 5.3).
+**Controls on the table (D10, D12).** They went ahead of 5.3, with hokm's, the day the owner asked
+for every helper to leave every game. What 5.3 still adds is the motion: the chips leaving the
+plate for the bet spot. The bar under the felt is gone, and the reader's own cards and chips are
+what is pressed, in their hand under the table. Each wears a word or two under it, which is the
+button's own text.
 
-| Action | Today's control | Gesture on the table |
+| Action | The control that was | What is pressed now |
 |---|---|---|
-| Fold | "Fold" in the bar under the felt | The same choice, on the felt in front of the reader's seat, drawn as part of the table |
-| Check or call | "Check", "Call {chips}" or "Call all in, {chips}" in the bar | On the felt, in front of the reader's seat |
-| Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | On the felt: an action needs a choice and an amount, so the controls stay |
-| All in | "All in, {chips}" | On the felt |
+| Fold | "Fold" in the bar under the felt | The reader's two cards, twice: the first press arms them under a red ring that breathes, the second folds. A press anywhere else on the page, Escape or focus leaving them lets them go. Only while there is a bet to meet |
+| Check or call | "Check", "Call {chips}" or "Call all in, {chips}" in the bar | A red chip with the amount in its caption, or a plain disc with a hand on it when there is nothing to call |
+| Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | A chip with a plus opens the same chooser over the foot of the felt: an amount is a question the game has to ask, and it is asked on the table |
+| All in | "All in, {chips}" | A gold chip, when the whole stack is the only raise left |
+
+The clock and the tip's lamp are in the corner of the table, the one hokm uses (`.table-corner`),
+with the blinds above them where the felt has shed its chip.
 
 **The bet spot.** A pill is rendered only while a bet is above zero, and its spot is found by
 measurement a frame later; until then it sits at a CSS default, and a new bet can move pills that
@@ -2238,8 +2245,8 @@ Each commit lands with its first caller, its specs, its pass edits and the parag
 22. **4.8** `test(qa)`.
 23. **P5 Poker, 5.1**: the board keeps its nodes.
 24. **5.2**: the felt is a model of what has been shown.
-25. **5.3**: chips travel. D10 lands here for poker: the action controls move onto the felt in
-    front of the reader's seat.
+25. **5.3**: chips travel. D10 landed ahead of it for poker: the bar is gone and the reader's own
+    cards and chips are the controls.
 26. **5.4**: cards are dealt, turned and mucked.
 27. **5.5**: a hand ends in front of the table.
 28. **5.6** `test(qa)`.

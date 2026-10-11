@@ -98,12 +98,92 @@ describe('PokerBoard', () =>
         const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
 
         fire(button(container, 'Fold')!, 'click');
+        fire(button(container, 'Fold')!, 'click');
         fire(button(container, 'Call 20')!, 'click');
 
         expect(play.mock.calls.map((call) => call[0])).toEqual([
             { kind: 'poker', verb: 'fold' },
             { kind: 'poker', verb: 'call' }
         ]);
+    });
+
+    it('folds the reader’s own cards on the second press and never on the first, and lets them go when anything else is pressed', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
+        const cards = () => button(container, 'Fold')!;
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(cards().querySelectorAll('.card-face')).toHaveLength(2);
+        expect(cards().getAttribute('aria-pressed')).toBe('false');
+        expect(container.querySelector('.poker-hand .sr-only')?.textContent, 'the cards stopped being said once they were the thing that folds').toMatch(/^Your cards: \S/);
+
+        fire(cards(), 'click');
+
+        expect(play).not.toHaveBeenCalled();
+        expect(cards().getAttribute('aria-pressed')).toBe('true');
+        expect(cards().dataset.armed).toBe('true');
+
+        fire(container.querySelector('.poker-table')!, 'pointerdown');
+
+        expect(cards().getAttribute('aria-pressed')).toBe('false');
+        expect(cards().dataset.armed).toBeUndefined();
+
+        fire(cards(), 'click');
+        fire(document.body, 'pointerdown');
+
+        expect(cards().dataset.armed, 'a press on the page outside the table left a fold armed').toBeUndefined();
+
+        fire(cards(), 'click');
+        fire(cards(), 'focusout');
+
+        expect(cards().dataset.armed).toBeUndefined();
+
+        fire(cards(), 'click');
+        cards().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+        expect(cards().dataset.armed).toBeUndefined();
+        expect(play).not.toHaveBeenCalled();
+
+        fire(cards(), 'click');
+        fire(cards(), 'pointerdown');
+
+        expect(cards().dataset.armed).toBe('true');
+
+        fire(cards(), 'click');
+
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(play).toHaveBeenCalledWith({ kind: 'poker', verb: 'fold' });
+    });
+
+    it('draws no bar under the table: the cards and the chips are in the reader’s hand, the turn is said to a screen reader alone, and the clock and the tip stand in the corner', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: { ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }), remainingMs: 20_000 } }) as Rendered);
+        const corner = container.querySelector('.table-fit > .table-corner')!;
+        const live = container.querySelector('[aria-live="polite"]')!;
+
+        expect(container.querySelector('.table-grid')!.classList.contains('poker-grid')).toBe(true);
+        expect(container.querySelector('.table-grid > .table-bar')).toBeNull();
+        expect(container.querySelector('.poker-bar')).toBeNull();
+        expect(live.classList.contains('sr-only')).toBe(true);
+        expect(live.textContent).toBe('Your turn. 20 to call.');
+        expect(live.closest('.table-corner')).toBe(corner);
+        expect([...corner.querySelectorAll('.table-corner-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
+        expect(corner.querySelector('.table-corner-tools [role="note"]')?.getAttribute('data-lamp')).toBe('true');
+        expect([...container.querySelectorAll('.poker-hand button')].map((one) => one.textContent?.trim())).toEqual(['Fold', 'Call 20', 'Raise']);
+        expect([...container.querySelectorAll('button')].every((one) => one.closest('.poker-hand') !== null)).toBe(true);
+    });
+
+    it('gives a seat that is not on turn its cards and nothing to press', () =>
+    {
+        const waiting = match({ toCall: 20, turn: 3 });
+        const { container } = renderTest(() => PokerBoard({ match: { ...waiting, turn: 3 } }) as Rendered);
+
+        expect(container.querySelectorAll('.poker-hand .card-face')).toHaveLength(2);
+        expect(container.querySelector('ul.poker-hole')?.getAttribute('aria-label')).toBe('Your cards');
+        expect(container.querySelectorAll('button')).toHaveLength(0);
     });
 
     it('puts the call in front of the reader at the press, and takes it back if the server refuses', async () =>
@@ -402,7 +482,7 @@ describe('where a bet sits on the felt', () =>
         return container.querySelector<HTMLElement>('.poker-stage')!;
     };
 
-    it('sheds the blinds chip from a felt shorter than 16rem, so the bar carries it and a crowded pot keeps the rail', async () =>
+    it('sheds the blinds chip from a felt shorter than 16rem, so the corner carries it and a crowded pot keeps the rail', async () =>
     {
         const stage = feltOf(214);
 

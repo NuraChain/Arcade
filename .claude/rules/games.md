@@ -2755,6 +2755,55 @@ places the next seat to the reader's left; `poker-board.spec.ts` pins it. See
 `docs/games/03-poker.md`, *The table*, for the pot split the view shows and why a folded player is
 sent no cards.
 
+**A poker table has no bar: the reader's own cards and chips are what is pressed.** Under the
+table sat a bar: a sentence about the turn, the clock, the tip, what a call costs, and Fold,
+Check or Call, and Raise as buttons. The owner had every such thing taken off every game on
+2026-10-11 (*Every move is made on the table, and nowhere else*, under *Backgammon*). A poker
+action is a choice and sometimes an amount, so the choices are the reader's own things, in
+their hand under the table:
+
+- **The cards fold.** They are a button only while there is a bet to meet, as Fold was offered
+  only then. The first press arms them: a red ring that breathes, as a lifted card's does at
+  hokm, and the word under them in red. The second press folds. A press anywhere else on the
+  PAGE lets them go (the listener is the document's: a phone that does not move focus on a tap
+  would otherwise leave them armed while the reader typed in the chat), and so do Escape, focus
+  leaving them, another action and the turn passing: a fold left armed is one stray press from
+  a lost hand. A fold cannot be taken back, so one press never does it, with a mouse or a
+  finger. The tip that speaks while there is a bet to meet ends by naming the gesture, as
+  hokm's tips name theirs. Armed cards do not rise. They did, by 0.9rem, and on a phone held
+  sideways the hand lies 4px under the reader's own plate: the cards and their ring lay 13px
+  over it, which nobody saw until the fit pass armed them at every size.
+- **A chip calls, and in the same place a disc checks.** The chip is red and its caption says
+  the amount ("Call 20", "Call all in, 300"); with nothing to call it is a plain disc with a hand
+  on it.
+- **A chip with a plus raises.** It opens the chooser over the foot of the felt: the slider, Min,
+  Half pot and Pot, and one button that says what will be sent ("Raise to 120"). The amount is a
+  question the game has to ask, and it is asked on the table, as the trump is at hokm. When the
+  whole stack is the only raise left the chip is gold and says "All in, 300", and pressing it is
+  the all-in.
+- **Each thing wears a word or two under it** ("Fold", "Call 20", "Raise"). That caption is the
+  button's own text, so it is its name to a screen reader and to the passes, and no `aria-label`
+  can drift from what is drawn.
+- **The sentences are a screen reader's**: the turn, and what a call costs against the pot. The
+  name of the reader's best hand stays beside the cards, which is all `hintOutcome` still draws.
+- **The clock and the tip are in the corner of the table** (`.table-corner`, the corner hokm
+  uses, shared), with the blinds above them when the felt has shed its chip. The corner is the
+  table's RIGHT in both languages, because a felt does not mirror, and its things keep to that
+  edge by `margin-left: auto`: `align-items: flex-end` is the left of a column in Persian, and it
+  left the lamp a clock's width in from the edge there. The street is not said in the corner:
+  the cards on the board already say which street it is. The bets are seated clear of the
+  corner: `seatBets` is handed its boxes beside the pot and the cards. With the chat open the
+  corner is empty, the blinds included. On the smallest felt a phone gives, six bets, the pot
+  and the cards leave no spare spot: with the blinds in the corner a 1,500 bet went under them,
+  and with the corner made an obstacle the same bet went onto the pot.
+- **The grid is the table and the hand** (`.table-grid.poker-grid`). Beside a chat on a phone
+  held sideways it gives up its far end, as ludo's and hokm's do.
+
+`poker-board.spec.ts` holds the two presses, the press elsewhere, Escape, the focus leaving, the
+corner and the seat that is not on turn; `fit-pass.mjs` holds the corner clear of every plate,
+bet, card and chip at every size, and with the chat shut it arms the reader's cards, as it
+lifts a card at hokm, and fails one that does not breathe or whose ring reaches a plate.
+
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
 table rather than touring a lobby for the rest of the run. A finish clears readiness, and the
@@ -3459,9 +3508,9 @@ the moment anything a player needs is below the fold.
   `min(100cqw, 100cqh * var(--ratio))` wide - the board is sized from BOTH axes of the room it has, so
   a tall phone and a short laptop each get the largest board that fits. A game that has two drawings
   of its table picks one by the fit cell's aspect, not by the screen's.
-- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts poker's
-  bar in a side column, and backgammon puts its plates in one beside the board. Ludo and hokm have
-  no bar and no column: their grids are the board alone, and the table and the hand.
+- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts
+  backgammon's plates in a column beside the board. Ludo, hokm and poker have no bar and no
+  column: their grids are the board alone, or the table and the hand.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
@@ -3485,8 +3534,8 @@ the moment anything a player needs is below the fold.
   board. `match-result.spec.ts` (*the result, laid over a board*) holds the card
   and the fold, and the ludo and backgammon play passes ask a real browser whether the card's
   background is opaque, which no spec can: happy-dom reads no stylesheet.
-- Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
-  the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
+- Poker's raise opens the slider over the foot of the table from the chip that raises; the last
+  hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
 - A poker plate is centred on the rail, at 10% and 90% of the table's height, and is CLAMPED onto the
   table (`.poker-seat`, a `translate` over the table's own `cqw`/`cqh`), because a plate with its avatar
   and a tag is 93px: on a 266px table - a phone held sideways, reader folded - it hung 20px past the
@@ -3696,7 +3745,7 @@ just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt
 for the corner of the table, where the clock and the tools give way to them, and its caption keeps
 only the line that says what takes the hand,
-poker's blinds chip and cost line go, backgammon's match line and pick hint go and its two plates share
+poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two plates share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
 difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
 not. It used to get the short layout for free, because the 48dvh sheet made the stage that short; a
@@ -3757,9 +3806,9 @@ end to it:
   screen reader.
 
 The result of a game gives up the same room at every table, where its card used to be centred
-half under the chat. A stage that still has a column (backgammon's plates, poker's bar) keeps that
-column under the chat, as it always has. `play.spec.ts` holds the attribute through narrow, wide
-and closed.
+half under the chat. Backgammon's stage still has a column, for its plates, and keeps that column
+under the chat as it always has. `play.spec.ts` holds the attribute through narrow, wide and
+closed.
 
 **One chat instance, never unmounted while the table is open.** The card and the sheet are the same
 `TableChat` in one container whose classes change with the posture and which is `hidden` when closed.
@@ -3809,7 +3858,8 @@ or a lamp that opens over the board where the bar under it has gone (backgammon,
 `hintOutcome` has nothing left to switch that a sighted player sees in those three. In backgammon
 and ludo it switched the wording of the move buttons, and the owner had every list of moves
 removed. In hokm it still writes what a card would do into the card's accessible name, and the
-sentence it drew under the hand is gone. Poker still reads it.
+sentence it drew under the hand is gone. In poker it still draws the name of the reader's best
+hand beside their cards, and what a call costs is said to a screen reader.
 
 **Every helper is the SERVER's rules asked a question.** `game/helpers/<game>.ts` is pure, imports
 nothing from AzerothJS, and computes from the same modules the engine runs - ludo's board, hokm's

@@ -1423,6 +1423,21 @@ layout that should flip; a number that came from the layout engine already has a
 it logically flips it a second time. `.tooltip` and its arrow use `left`/`top` for exactly that
 reason.
 
+**A shape made by turning a box is not a direction to flip.** At first the sign over
+poker's cards about to fold was a chevron: two borders of a small box turned 45 degrees, so that
+it pointed up at the table. Written as `border-block-start` and `border-inline-start` the same
+turn pointed it sideways in Persian, where inline-start is the right border. Hokm's chevron over a
+lifted card was written that way and was right only because its hand is `direction: ltr`. Both
+are gone, and a lifted card's ring breathes instead, which has no direction to get wrong; but the
+trap is anybody's, and the borders of a turned shape are `border-top` and `border-left`. It was
+seen at a Persian table, with every gate and the fit pass green.
+
+**A table does not mirror, so what stands at a place on it is placed physically.** The corner of
+small things (`.table-corner`: the clock, the tip, hokm's Sort) is the felt's right in both
+languages, because the seats are. Its things keep to that edge with `margin-left: auto`:
+`align-items: flex-end` is the LEFT of a column in Persian, and it left poker's lamp a clock's
+width in from the edge there.
+
 The language is not carried in the url, because AzerothJS prefix routing is recorded as broken in the
 framework's own `framework-bugs.md`. It is a `locale` COOKIE, written by the framework's own
 `setLocale`, so the server can answer the first request in it: `tools/prerender-locales.mjs` writes
