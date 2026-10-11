@@ -2665,11 +2665,44 @@ still land one after the other, a fade apart. A thrown die fades as a whole: an 
 on the cube's own body flattens its six faces into one plane, which drew nothing for four of the
 faces and a 1 for a 6 until the fade ended, so the fade is on the die's outer node.
 
-**What the board does not do yet, so nobody reads this as finished.** The words and the marks still
-read the board the server sent, so they tell a roll before the dice have landed; an opening is
-thrown only when it arrives with the end of the game before it, because the first opening of a
-match never reaches a board; and a game that ends has no banner. Each is its own commit in the plan
-(`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
+**A roll is told when it has landed, and by nothing before that.** The view arrives with the dice
+in it a second or more before they are at rest on the felt, and everything that read the view gave
+the roll away: the reader's checkers lit up and the points were marked while the dice were still
+in the air, and in a match where the engine rolls for the next player they did it while the OTHER
+player's checker was still walking. The table says what dice are on it (`onRoll(seed, faces,
+landed)`: a throw beginning, dice at rest, the felt bare), and the board holds ONE value, `landed`,
+at the source: the plan is not made until it is true. So the lit checkers, the marks, every tap and
+drag, the dice's ring, the keyboard's hops, the tip, the dice's label and the sentence a screen
+reader is told all wait together, with nothing to remember per element. `landed` is the dice of
+this very roll at rest (the seed), or, when nothing is being played, dice at rest with the view's
+faces - without that second half a board read again at a later revision with the same dice would
+hold its reader out for good, because nothing is thrown for a re-read. A press of Roll in the
+keyboard's panel is remembered until there is a move to stand on (`seeking`), where it used to
+look for one the moment the answer came; and Roll stays under the keyboard, busy, for as long as
+the dice are in the air (`keying`), because the first live check found the reader on the page
+body for the nine tenths of a second between the answer and the landing, with the panel closed.
+
+Measured on the production build in a match where the engine rolls: the other player's move
+arrived, their two checkers walked for a second, the reader's dice were thrown and came to rest
+2.06s after the arrival, and the lit checkers, the hops, the drag surface and the sentence all
+appeared on the next frame, 8ms later. Before, all four appeared with the arrival.
+
+Two things in the design were not built, on purpose. **There is no timer that ends the hold.** The
+design capped a roll's hold at 1200ms from the view's arrival and hastened whatever stood in front
+to make room. The dice of an engine-rolled turn come at the END of the other player's move, two to
+four seconds behind the view; a cap fires with the dice in the air, which is the leak the hold
+exists to stop, and a move played at four times its speed cannot be read - and reading the other
+side's move is the game. So the other player's move plays at its own speed and the hold ends when
+the dice land. The 1200ms is kept as what it was for, the reader's own wait for a throw:
+`backgammon-table.spec.ts` holds pick-up plus throw under `ROLL_CAP`. What stops a hold growing is
+what already bounds the queue (fast past a second and a half behind, the board past its history),
+and one rule from the design that IS built: with under eight seconds of the turn left, nothing is
+held (`HURRY_MS`).
+
+**What the board does not do yet, so nobody reads this as finished.** An opening is thrown only
+when it arrives with the end of the game before it, because the first opening of a match never
+reaches a board; a turn with no move says nothing; and a game that ends has no banner. Each is its
+own commit in the plan (`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat

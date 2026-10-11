@@ -4,7 +4,7 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import type { Haptic } from '../src/lib/haptics.ts';
 import { BAR_GAP, BAR_LEFT, BAR_WIDTH, BOTTOM, HEIGHT, MIDDLE, POINT_WIDTH, RADIUS, TOP, WIDTH, columnOf } from '../src/game/backgammon-layout.ts';
 import { seedOf, spentBy, type Felt, type Told } from '../src/game/backgammon-felt.ts';
-import { BACK_MOST, CUBE_MS, DROP_MOST, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
+import { BACK_MOST, CUBE_MS, DROP_MOST, HISTORY, KNOCK_MS, PASS_LEAST, PASS_MS, PICK_MS, ROLL_CAP, THROW_MS, WALK_MOST, createBackgammonTable, type BackgammonTable } from '../src/game/board/backgammon-table.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { createDirector, type Director } from '../src/game/stage/director.ts';
 import type { Act } from '../src/game/stage/feed.ts';
@@ -62,6 +62,8 @@ let still: boolean;
 let broke: unknown[];
 let digits: (value: number) => string = String;
 let pressed: string[];
+let rolls: [number, boolean][];
+let faced: string[];
 
 const elapse = async (ms: number) =>
 {
@@ -108,6 +110,8 @@ beforeEach(() =>
     still = false;
     digits = String;
     pressed = [];
+    rolls = [];
+    faced = [];
     host = document.createElement('div');
     host.className = 'bg-layer';
     document.body.append(host);
@@ -128,7 +132,12 @@ beforeEach(() =>
         feel: (kind) => felt_.push(kind),
         say: (value) => digits(value),
         onDice: () => pressed.push('dice'),
-        onCube: () => pressed.push('cube')
+        onCube: () => pressed.push('cube'),
+        onRoll: (seed, faces, landed) =>
+        {
+            rolls.push([seed, landed]);
+            faced.push(faces.join());
+        }
     });
 });
 
@@ -1110,6 +1119,71 @@ describe('what is pressed on the table itself', () =>
 
         expect(host.querySelectorAll('.bgt-mark')).toHaveLength(0);
         expect(host.querySelectorAll('.man[data-back]')).toHaveLength(0);
+    });
+});
+
+describe('when a roll can be told', () =>
+{
+    it('says when a throw begins and when its dice have come to rest, by the roll they are', async () =>
+    {
+        const after = sight(felt({ dice: [5, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt()));
+
+        expect(rolls, 'a table drawn with no dice on it did not say it was bare').toEqual([[-1, true]]);
+        expect(faced).toEqual(['']);
+
+        rolls.length = 0;
+        faced.length = 0;
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [5, 2] }])], after);
+        await elapse(0);
+
+        expect(rolls).toEqual([[seedOf('m', 6), false]]);
+
+        await elapse(300);
+
+        expect(rolls, 'dice in the air were called landed').toHaveLength(1);
+
+        await elapse(THROW_MS);
+
+        expect(rolls).toEqual([[seedOf('m', 6), false], [seedOf('m', 6), true]]);
+        expect(faced).toEqual(['5,2', '5,2']);
+    });
+
+    it('says so at once for dice that are simply laid out, and again when they are laid for a later roll', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        expect(rolls).toEqual([[seedOf('m', 5), true]]);
+
+        director.enqueue((ctx) => table.settle(sight(felt({ dice: [6, 1], seed: seedOf('m', 9) }), 9), ctx));
+        await elapse(600);
+
+        expect(rolls[rolls.length - 1]).toEqual([seedOf('m', 9), true]);
+        expect(rolls).toContainEqual([-1, true]);
+        expect(faced[faced.length - 1]).toBe('6,1');
+    });
+
+    it('says the table is bare when the dice are picked up', async () =>
+    {
+        const after = sight(felt({ near: row({ 6: 5, 7: 1, 8: 3, 12: 1, 13: 3, 24: 2 }) }), 6);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        play([act(6, 0, [
+            { e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false },
+            { e: 'move', seat: 0, from: 13, to: 12, die: 1, hit: false }
+        ])], after);
+        await elapse(3000);
+
+        expect(dice()).toHaveLength(0);
+        expect(rolls[rolls.length - 1]).toEqual([-1, true]);
+        expect(faced[faced.length - 1]).toBe('');
+    });
+
+    it('throws within the time a reader is asked to wait for their dice', () =>
+    {
+        expect(PICK_MS + THROW_MS).toBeLessThanOrEqual(ROLL_CAP);
+        expect(ROLL_CAP).toBe(1200);
     });
 });
 

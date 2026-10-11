@@ -67,6 +67,7 @@ export interface TableOptions
     say: (value: number) => string;
     onDice?: () => void;
     onCube?: () => void;
+    onRoll?: (seed: number, faces: readonly number[], landed: boolean) => void;
 }
 
 export interface BackgammonTable extends Table<Felt, Told>
@@ -126,7 +127,9 @@ const QUIET_MOST = 8;
 
 const STAGGER_MS = 26;
 
-const THROW_MS = 950;
+export const THROW_MS = 950;
+
+export const ROLL_CAP = 1200;
 
 const REACH = 5.6;
 
@@ -767,6 +770,11 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         count(0);
         live();
 
+        if (old.length > 0)
+        {
+            options.onRoll?.(-1, [], true);
+        }
+
         await Promise.all(old.map((die, index) =>
             stage.animate(die.node, [{ offset: 0, scale: '1' }, { offset: 1, opacity: 0, scale: '0.6' }], { duration: PICK_MS, delay: index * 40, fill: 'both', quiet: 'out' }).done.then(() => drop(die))));
     };
@@ -825,6 +833,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         waiting = false;
         dim();
         wait();
+
+        options.onRoll?.(faces.length > 0 ? seed : -1, faces, true);
     };
 
     const reach = () =>
@@ -838,6 +848,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     {
         rested = false;
         await pick();
+        options.onRoll?.(seed, faces, false);
 
         const random = seeded(seed);
         const far = reach();
@@ -859,9 +870,15 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             }).done;
         }));
 
+        if (diceSeed !== seed)
+        {
+            return;
+        }
+
         rested = true;
         dim();
         wait();
+        options.onRoll?.(seed, faces, true);
     };
 
     const swap = async (faces: readonly number[], seed: number) =>

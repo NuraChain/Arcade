@@ -251,6 +251,9 @@ describe('BackgammonBoard', () =>
         expect(undo().disabled).toBe(false);
 
         move({ ...current(), rev: current().rev + 1 });
+        await elapse(2200);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
         expect(undo().disabled).toBe(true);
     });
 
@@ -466,19 +469,27 @@ describe('the backgammon table on the page', () =>
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
     });
 
-    it('moves the checker the reader staged at once, even while the other player\'s move is still playing', async () =>
+    it('gives the reader nothing to move while the other player\'s move and their own dice are playing, and then moves a staged checker at once', async () =>
     {
         const animate = vi.spyOn(Element.prototype, 'animate');
+        const flown = () => animate.mock.contexts.some((one) => (one as Element).classList.contains('man'));
         const { container, tell } = await live(theirs());
 
         tell(answered(), theirMove());
         await elapse(100);
-        animate.mockClear();
 
-        fire(button(container, 'Move a checker from 13 to 10'), 'click');
-        await elapse(700);
+        expect(container.querySelector('ul[aria-label="Moves you can make"]'), 'a move was offered on dice that had not been thrown').toBeNull();
+
+        await elapse(3400);
 
         expect(dice(container)).toEqual(['3', '2']);
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+
+        animate.mockClear();
+        fire(button(container, 'Move a checker from 13 to 10'), 'click');
+        await flush();
+
+        expect(flown(), 'the staged checker waited').toBe(true);
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(true);
 
         await elapse(1500);
@@ -969,9 +980,16 @@ describe('moves made on the table itself', () =>
 
         button(table.container, 'Roll').focus();
         fire(button(table.container, 'Roll'), 'click');
-        await flush();
+        await elapse(300);
+
+        expect(document.activeElement, 'the reader was dropped onto the page while the dice were in the air').toBe(button(table.container, 'Roll'));
+        expect(button(table.container, 'Roll').getAttribute('aria-busy')).toBe('true');
+        expect(table.container.querySelector('ul[aria-label="Moves you can make"]')).toBeNull();
+
+        await elapse(1100);
 
         expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]'), 'the reader was dropped onto the page when Roll went').not.toBeNull();
+        expect(button(table.container, 'Roll')).toBeUndefined();
         table.unmount();
 
         const tapped = await live(match({ phase: 'roll', dice: [], doubling: false }));
@@ -987,6 +1005,96 @@ describe('moves made on the table itself', () =>
         await flush();
 
         expect(document.activeElement?.closest('.bg-keys') ?? null, 'a tap on the table opened the keyboard\'s panel').toBeNull();
+    });
+
+    describe('a roll is told when it has landed', () =>
+    {
+        const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent;
+
+        const offered = (container: HTMLElement) => container.querySelectorAll('ul[aria-label="Moves you can make"] button').length;
+
+        it('lights no checker, offers no move and takes no tap until the reader\'s own dice have landed', async () =>
+        {
+            const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+            table.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+            await elapse(300);
+
+            expect(lit(table.container), 'checkers were lit while the dice were in the air').toBe(0);
+            expect(offered(table.container)).toBe(0);
+            expect(said(table.container)).toBe('Your turn. Roll the dice.');
+            expect(note(table.container)).toBeNull();
+            expect(table.container.querySelector('svg')!.hasAttribute('data-drags')).toBe(false);
+
+            tapPoint(table.container, 13);
+            await flush();
+
+            expect(table.container.querySelectorAll('.bg-layer .man[data-held]'), 'a checker was moved by dice nobody had seen').toHaveLength(0);
+
+            await elapse(1100);
+
+            expect(lit(table.container)).toBeGreaterThan(0);
+            expect(offered(table.container)).toBeGreaterThan(0);
+            expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+            expect(table.container.querySelector('svg')!.hasAttribute('data-drags')).toBe(true);
+        });
+
+        it('waits through the other player\'s move too when the dice were rolled for the reader with it', async () =>
+        {
+            const table = await live(match({ turn: 1 }, 0, { turn: 1 }));
+            const moved = position(START.reduce<Record<number, number>>((all, count, point) => ({ ...all, [point]: count }), {}), { 6: 5, 7: 2, 8: 2, 13: 4, 24: 2 });
+
+            table.tell(match({ turn: 0, dice: [5, 2], seats: moved }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+                { e: 'move', seat: 1, from: 13, to: 7, die: 6, hit: false },
+                { e: 'move', seat: 1, from: 8, to: 7, die: 1, hit: false },
+                { e: 'roll', seat: 0, dice: [5, 2] }
+            ])]);
+            await elapse(900);
+
+            expect(lit(table.container), 'the reader was shown what to move before their dice had been thrown').toBe(0);
+            expect(said(table.container)).not.toContain('You rolled');
+
+            await elapse(3200);
+
+            expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+            expect(lit(table.container)).toBeGreaterThan(0);
+            expect(said(table.container)).toBe('You rolled 5 and 2. Move your checkers.');
+        });
+
+        it('holds nothing back when little of the turn is left', async () =>
+        {
+            const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+            table.tell(match({}, 0, { rev: 5, remainingMs: 6000 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+            await flush();
+
+            expect(lit(table.container), 'a reader with seconds left was made to watch their dice land').toBeGreaterThan(0);
+            expect(offered(table.container)).toBeGreaterThan(0);
+        });
+
+        it('holds nothing back on a board that is simply drawn with its dice down', async () =>
+        {
+            const { container } = await live(match({}));
+
+            expect(lit(container)).toBeGreaterThan(0);
+            expect(offered(container)).toBeGreaterThan(0);
+            expect(said(container)).toBe('You rolled 6 and 1. Move your checkers.');
+        });
+
+        it('tells the reader nothing of the other player\'s dice before they land either', async () =>
+        {
+            const table = await live(match({ phase: 'roll', turn: 1, dice: [] }, 0, { turn: 1 }));
+            const label = () => table.container.querySelector('.table-surface [role="img"]')?.getAttribute('aria-label') ?? null;
+
+            table.tell(match({ turn: 1, dice: [4, 3] }, 0, { rev: 5, turn: 1 }), [happened(5, 1, [{ e: 'roll', seat: 1, dice: [4, 3] }])]);
+            await elapse(300);
+
+            expect(label(), 'the dice were read out while they were in the air').toBeNull();
+
+            await elapse(1100);
+
+            expect(label()).toContain('4 and 3');
+        });
     });
 
     describe('a checker that is dragged', () =>

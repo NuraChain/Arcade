@@ -672,6 +672,8 @@ Ten rules hold for every table. Each is followed by why.
    *Why.* A roll is given away by far more than its sentence (§4), and "landed" is not "the queue
    is idle". A control that waited on the queue with no bound of its own could cost a turn on a
    thirty-second clock, which controls reading the view never could.
+   *As built for backgammon (commit 1.4a).* The cap is not a timer and nothing in front is
+   hastened; §4.2 says why. The hold ends at the landing, and at once with little of the turn left.
 8. **A hold on the felt is `linger(ms, least)`.** It ends at `least` when a follower that may cut it
    exists or arrives, and at `ms` otherwise. Ambient rests (a resting die, a glow, a "+1",
    confetti) are not in the queue.
@@ -1173,7 +1175,7 @@ view always: a decision, or a control for a decision already visible.
 
 | Game | Chance result | Held together | Released | Cap |
 |---|---|---|---|---|
-| Backgammon | A roll | Status words, the hop list, the dice label, the "x4" chip, the coach, lit checkers, target marks, taps on the board | The cast's last impact | 1200 ms |
+| Backgammon | A roll | Status words, the hop list, the dice label, the "x4" chip, the coach, lit checkers, target marks, taps on the board | The cast's last impact | 1200 ms, as the length of the throw (as built, below) |
 | Ludo | A roll | The strip sentence, the move list, the hint, the coach, the plate's die, the pawns' glow, taps on the board | The throw's last impact | 1200 ms |
 | Hokm | The Hâkem's five | The chooser, its sentence, its chime and haptic, the coach, the five cards | The fifth card lands | 2000 ms |
 | Hokm | The rest of the deal | The undealt cards | The reader's last packet lands | 2000 ms |
@@ -1196,6 +1198,19 @@ The caps are design choices. What the table means in practice:
   player may not double: after up to four hops, a pick-up and the throw, that is two to four
   seconds by the rewrite's own durations, not 1.2. So when a batch ends with the reader's own roll,
   the hops in front are hastened.
+- **Backgammon as built (commit 1.4a): the cap is the throw, and nothing is hastened.** The two
+  sentences above did not survive being built. A timer of 1200 ms from the view's arrival fires
+  while the dice of an engine-rolled turn are still in the air, which is the leak the hold is
+  for; and the hops it would hasten are the other player's move, which at four times its speed
+  cannot be read. So the other player's move plays at its own speed, the dice are thrown, and
+  the hold ends when they land. The 1200 ms is kept as a bound on the reader's own wait for a
+  throw: pick-up plus throw is 1150 ms, and a spec holds it under `ROLL_CAP`. The hold cannot
+  grow past what bounds the queue (rule 5), and it ends at once with under 8 s of the turn left
+  (`HURRY_MS`), on a snap, in a hidden tab and with no presenter. The signal is not
+  `ctx.reveal(rev)` either: the table reports what dice are on it, `onRoll(seed, faces, landed)`,
+  and `landed` is "the dice of this roll are at rest", or, with nothing being played, "dice with
+  the view's faces are at rest", which is what lets a board read again at a later revision with
+  the same dice go on. Hokm's and poker's caps are decided when those holds are built.
 - **Hokm's chooser has a bound because the turn does.** At a hand boundary the batch is card,
   trick, hand, deal: 360 + 120 + 900 + 525 + 1400 + 450 + 4 x 110 + 260 = 4455 ms on today's
   timings before the new Hâkem could press anything, out of a 30 s deadline that the trump call
@@ -1320,7 +1335,7 @@ score, the game number and the pips join the model in commit 1.5 and read the vi
 | Event or interaction | Scene | Sound and haptic | Notes |
 |---|---|---|---|
 | Opening roll | One die is thrown from each side: `dice[0]` from seat 0's, `dice[1]` from seat 1's. Each is the kit's throw: 650 to 1200 ms with three or four bounces (the dice plan's spec), landing on its face. | `die-land` at each bounce, softer each time, panned. | A later game's opening follows the re-rack and plays from commit 1.2. Game one's plays only when it was delivered (rule 9), from commit 1.4. |
-| Roll | Two dice are thrown from the roller's side, clipped to the board's layer, and rest. The words, the assistive hops, the label and the tip are released at the cast's last impact (cap 1200 ms), from commit 1.4. | `die-land` per bounce, louder for a harder one. Two dice landing together are one sound: the sound engine drops a repeat of a cue inside 35 ms. | Seeded by the match and the action's revision (`seedOf`), so both players and a reload see one throw, and dice found on a board drawn from nothing rest where they were thrown. |
+| Roll | Two dice are thrown from the roller's side, clipped to the board's layer, and rest. The words, the assistive hops, the label and the tip are released when the cast has landed, from commit 1.4a (§4.2 for the cap). | `die-land` per bounce, louder for a harder one. Two dice landing together are one sound: the sound engine drops a repeat of a cue inside 35 ms. | Seeded by the match and the action's revision (`seedOf`), so both players and a reload see one throw, and dice found on a board drawn from nothing rest where they were thrown. |
 | The reader taps the dice to roll | A prelude: the dice rattle while the request is out and are thrown when the faces arrive. | `die-shake` at the press. | It applies only when the reader may double; otherwise the server has already rolled. |
 | The automatic roll at the end of the opponent's move | The hops play, then the dice are picked up and the reader's are thrown. When a batch ends with the reader's own roll, the hops in front are hastened so the dice land inside the bound. | As a roll. | The common case (§4.2). |
 | A hop | The SAME checker node is carried along the base of every point between, one hop per point, each hop landing on its point: 320 to 900 ms by the length of its legs (§3.2), with a 120 ms squash on landing. | `token-step` at the landing. | The flying rung holds for the whole flight (§3.5). The die it used dims as it lands. |

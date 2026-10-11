@@ -71,6 +71,13 @@ interface Picked
     spot: number;
 }
 
+interface Rolled
+{
+    seed: number;
+    faces: string;
+    landed: boolean;
+}
+
 interface Drag
 {
     id: number;
@@ -87,6 +94,8 @@ const NOWHERE: ReadonlyMap<number, Hop[]> = new Map();
 const FINGER = RADIUS * 2.2;
 
 const SLOP = 10;
+
+const HURRY_MS = 8000;
 
 const MOUSE_SLOP = 4;
 
@@ -122,6 +131,14 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     state doubling = '';
 
     state carrying = false;
+
+    state rigged = false;
+
+    state rolled: Rolled = { seed: -1, faces: '', landed: true };
+
+    state says = '';
+
+    state seeking = false;
 
     state presenting = false;
 
@@ -187,7 +204,15 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         untrack(() => chime(yours && props.match.mine !== undefined));
     }
 
-    derived plan = myTurn && view!.phase === 'move' && view!.dice.length === 2
+    derived wanted = view !== null && !over && view.dice.length > 0 ? seedOf(game.id, game.rev) : -1;
+
+    derived faced = view === null ? '' : view.dice.slice(0, 2).join();
+
+    derived hurried = game.remainingMs !== undefined && game.remainingMs < HURRY_MS;
+
+    derived landed = !rigged || wanted === -1 || hurried || (rolled.landed && (rolled.seed === wanted || (!presenting && rolled.faces === faced)));
+
+    derived plan = landed && myTurn && view!.phase === 'move' && view!.dice.length === 2
         ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops)
         : null;
 
@@ -246,7 +271,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         return used;
     })();
 
-    derived diceSaid = view === null || over || view.dice.length === 0
+    derived diceSaid = view === null || over || view.dice.length === 0 || !landed
         ? ''
         : locale.t('backgammon.dice', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
 
@@ -269,13 +294,13 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         return locale.t(said === null ? 'backgammon.hop' : `helpers.backgammon.hop.${ said }`, { from: spotSays(hop.from), to: spotSays(hop.to) });
     };
 
-    derived tip = myTurn
+    derived tip = myTurn && landed
         ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged: hops, doubling: view!.doubling, cube: view!.cube })
         : null;
 
     derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
 
-    derived says = ((): string =>
+    derived saying = ((): string =>
     {
         if (view === null)
         {
@@ -350,6 +375,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived staging = plan !== null;
 
+    derived keying = rolling || (seeking && myTurn && !landed);
+
     derived offered = options.length > 0;
 
     derived whole = plan?.done === true && hops.length > 0;
@@ -405,6 +432,36 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         void game.rev;
 
         untrack(() => presenter?.see(batch));
+    }
+
+    effect
+    {
+        const next = saying;
+        const told = landed;
+
+        if (told)
+        {
+            says = next;
+        }
+    }
+
+    effect
+    {
+        const ready = staging;
+        const yours = myTurn;
+
+        untrack(() =>
+        {
+            if (!yours)
+            {
+                seeking = false;
+            }
+            else if (ready && seeking)
+            {
+                seeking = false;
+                refocus();
+            }
+        });
     }
 
     effect
@@ -497,7 +554,11 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 },
                 say: (value) => locale.n(value),
                 onDice: () => pressDice(),
-                onCube: () => pressCube()
+                onCube: () => pressCube(),
+                onRoll: (seed, faces, landed) =>
+                {
+                    rolled = { seed, faces: faces.join(), landed };
+                }
             });
             presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report });
             unwatch = presenter.watch((busy) =>
@@ -515,6 +576,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 men!.hold(chosen);
                 men!.undoes(taken);
             });
+            rigged = true;
         }
 
         return () =>
@@ -836,8 +898,22 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         haptic('select');
         sound?.play('die-shake', { gain: 0.8 });
         men?.rattle(true);
-        await board.play({ kind: 'backgammon', verb: 'roll' });
+
+        const outcome = await board.play({ kind: 'backgammon', verb: 'roll' });
+
         men?.rattle(false);
+
+        return outcome !== 'failed';
+    };
+
+    const rollByKey = async () =>
+    {
+        seeking = true;
+
+        if (!(await roll()))
+        {
+            seeking = false;
+        }
     };
 
     const answer = async (verb: 'double' | 'take' | 'drop') =>
@@ -869,6 +945,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         {
             return;
         }
+
+        seeking = false;
 
         if (rolling)
         {
@@ -1080,10 +1158,10 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         </div>
 
         <div class="bg-keys sr-only" ref={ (element) => keys = element }>
-            <Show when={ rolling }>
+            <Show when={ keying }>
                 { () =>
                     <div class="flex flex-wrap gap-2" role="group" aria-label={ locale.t('backgammon.keys') }>
-                        <Button variant="primary" size="md" leading="dice" loading={ board.busy() } onClick={ () => void roll().then(refocus) }>
+                        <Button variant="primary" size="md" leading="dice" loading={ board.busy() || !rolling } onClick={ () => void rollByKey() }>
                             { locale.t('backgammon.roll') }
                         </Button>
                         <Show when={ mayDouble }>
