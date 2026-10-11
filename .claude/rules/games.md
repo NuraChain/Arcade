@@ -2799,6 +2799,15 @@ The turn mark on a plate still reads the view; it follows the shown model with t
 the game and the pips, as the table shows them*) and `backgammon-board.spec.ts` (*a game that
 ends on the board*) hold it.
 
+**The motion itself is held by a lab and a pass**: `tools/qa/motion-lab.mjs` on the dev server
+and `tools/qa/motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`, *The motion lab and the
+motion pass*). They follow each checker and each die by its name through every frame, and fail
+one that jumps, cuts a corner, vanishes and comes back, or moves when nothing moved it. The pass
+makes its moves on the table at five sizes, with the chat shut and open, and reads both browsers.
+So every checker and every die carries `data-key`: a checker's for its whole life, a die's
+(`die-<n>`) for one laying, because dice that are thrown again did not slide to where they land.
+`backgammon-table.spec.ts` holds the names.
+
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat
 the server gave them. Seat 0 plays the light checkers and seat 1 the dark, for everybody.

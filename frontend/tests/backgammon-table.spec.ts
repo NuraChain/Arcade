@@ -182,6 +182,24 @@ describe('a backgammon table, drawn from a board', () =>
         expect(table.same(sight(felt({ dice: [6, 1] })))).toBe(true);
     });
 
+    it('gives every checker and every die a name of its own, and dice that are thrown again new ones', async () =>
+    {
+        table.reset(sight(felt({ dice: [6, 1] })));
+
+        const first = dice().map((die) => die.dataset.key);
+
+        expect(new Set(men().map((man) => man.dataset.key)).size).toBe(30);
+        expect(first.every((name) => /^die-\d+$/.test(name ?? ''))).toBe(true);
+        expect(new Set(first).size).toBe(2);
+
+        play([act(6, 1, [{ e: 'roll', seat: 1, dice: [5, 2] }])], sight(felt({ dice: [5, 2], seed: seedOf('m', 6) }), 6));
+        await elapse(1600);
+
+        const second = dice().map((die) => die.dataset.key);
+
+        expect(new Set([...first, ...second]).size).toBe(4);
+    });
+
     it('gives seat 0 the light checkers wherever the reader sits', () =>
     {
         table.reset(sight(felt({ viewer: 1, near: row({ 6: 15 }), far: row({ 6: 15 }) })));

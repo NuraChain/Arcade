@@ -144,3 +144,108 @@ all of it is still signed in under the handle they came with; and the server sti
 It leaves every table and group it made, but not the two accounts, the garbage it muted or the
 names it gave its own device: run it where the other passes run, against a database that is
 disposable.
+
+## The motion lab and the motion pass
+
+`motion.mjs` is a frame sampler and what judges its frames; `motion-lab.mjs` and `motion-pass.mjs`
+are its two callers. Both ask what no other gate here can: when something on a table moved, did
+THAT object travel the way it should, or was the table drawn again with it somewhere else. The
+design is §8 of `docs/superpowers/specs/2026-10-11-table-presentation-design.md`.
+
+**The sampler follows nodes by name.** `watch(page, { nodes, within, body, marks })` records, on
+every animation frame, the centre, width and opacity of each node that carries `data-key`, in units
+of the board (1000 across the frame element), whether the stage says it is presenting, and whether
+each named mark is in the document. A node with no key is counted, never followed by its index: an
+index renames every node behind one that is removed. Two nodes with one key in a frame are one
+object and the more opaque is taken, which is what a clone standing in for a hidden original
+needs. `body` measures a descendant instead (the cube inside a die) and keeps its computed matrix.
+
+**What `judge(frames, key, route)` fails.**
+
+- A node that does not start where it stood or come to rest where it belongs (4 units).
+- A path more than 15% longer or shorter than its route.
+- A step, in one frame, over the larger of 35% of the route and three times the median step. The
+  bound is scaled by the frames that really elapsed: a frame the browser dropped is a long step,
+  not a jump.
+- A node that was hidden (absent, or under 0.1 opacity) and came back further off than three
+  median steps. The last place it was SEEN is kept across the gap, so fading out here and in
+  there is called what it is, and for a hidden node no fraction of the route excuses it.
+- A point of the route the sampled line passes more than 12 units from.
+- Opacity that falls and rises again.
+
+`bystanders` names every other node that moved more than 3 units or was missing from a frame.
+`smooth` applies the step rules to a node with no known route, a die.
+
+**A die's face is read from the cube, not from its label.** `faceOf` takes the computed
+`matrix3d` of `.die3d-body`, whose third row says how much of each of the cube's own axes points
+at the viewer, and answers the face whose normal (`NORMALS` in `stage/dice.ts`) points there
+most, and how squarely. `data-face` is only what the table says it laid.
+
+**Expected places come from the layout, never from the renderer.** `backgammon-routes.mjs`
+imports `backgammon-layout.ts` and `slotAt` from `backgammon-men.ts` and works out, from the
+counts on a board, where a hop starts, every point it passes and where it lands (`routeOf`),
+where a blot goes (`knockOf`) and where thirty checkers stand (`expectedOf`). `planOf` finds
+WHICH node stands at each start by reading the page at rest. `differs` compares what is drawn
+with what is expected through the SVG's own screen matrix, to 1.5px.
+
+**The lab is the real table on a bare page of the DEV server.**
+`QA_LAB=http://127.0.0.1:<port> node tools/qa/motion-lab.mjs`. It needs vite and nothing else, no
+api and no database: `node ../node_modules/vite/bin/vite.js --port <port> --strictPort` from
+`frontend/`, on a port of its own so nobody's `npm run dev` on 3100 is touched. Playwright answers
+one address on that origin with a page that holds an SVG and an empty `.bg-layer` and links
+`/src/styles.css`, and the page imports the renderer, the stage and the presenter as vite serves
+them. So it drives the product's own modules, through the presenter, with batches shaped like the
+store's. It exists for positions chance will not give on demand: a walk round the corner of the
+board, a hit, an entry from the bar, bearing off, the reader's own hop and its undoing, a game
+that ends (the banner, the rack, the next opening), every face of a die, less motion and a hidden
+tab. And for the instrument itself, which is handed doctored frames - a checker frozen and then
+elsewhere, hidden and back, cutting the corner, a bystander that drifts, a checker three pixels
+off its place - and has to fail each. 80 checks.
+
+**The pass is two real browsers at one real match on the BUILT server.**
+`QA_BASE=http://localhost:5300 node tools/qa/motion-pass.mjs`, limiter raised, about five
+minutes. It plays forward over the api until the position it wants exists, waits until both
+boards are level with the server (`data-rev` at the revision, `data-presenting` gone), and makes
+the move ON THE TABLE with the mouse. At 360x640, 390x844, 844x390, 768x1024 and 1280x800, with
+the chat shut and open:
+
+- the checker that was pressed has a script-made animation within two frames of the press;
+- it travels its route in the mover's browser;
+- every hop of the turn travels its route in the OTHER browser;
+- nobody else moves in either;
+- the answer moves nothing a second time in the mover's;
+- before and after, every checker rests on the centre of its place (at 320 wide too).
+
+Then a roll made by tapping the dice (thrown, tumbling, the faces read from the cubes in both
+browsers), a turn that begins with a hit, less motion, a hidden tab and a reload, a turn that
+begins by bearing off, and Play again. About two hundred checks: a turn is two hops or four.
+
+Four things worth knowing before changing either:
+
+- **A die laid on the table is a new node with a new name** (`die-<n>`, counted for the table's
+  life). Named by their place in the pair, dice kept one name across a pick-up and a throw, and
+  the sampler rightly called that a die vanishing and coming back elsewhere.
+- **Less motion makes every style change a transition.** `base.css` sets
+  `transition-duration: 0.01ms` on everything for `prefers-reduced-motion: reduce`, and the
+  initial `transition-property` is `all`, so a checker placed by its `translate` is then a
+  CSSTransition a hundredth of a millisecond long. `watchKeyframes` leaves out anything shorter
+  than a frame (17ms). Without that the first production run failed on one sample of 167. The lab
+  does not meet it, because its switch is the stage's own and not the media query.
+- **A hidden tab is acted.** Headless Chromium calls every page visible, so `hideTab` gives the
+  document a `visibilityState` of its own and sends `visibilitychange`, the two things the
+  presenter reads.
+- **A table's `matchId` is the LIVE game's and is absent between games.** Waiting for it to
+  differ from the last game's is true the moment that game ends, with no new game anywhere.
+
+**Proved red first, on real code.** The lab against a renderer broken four ways on the dev server
+(no points on the way, the blot leaving at once, a die resting on the wrong face, less motion
+ignored) failed 13 checks of 75. The pass against a production build broken four ways (no points
+on the way, the reader's own hop held back 120ms, a board drawn again without its dice, less
+motion ignored) failed 39 of 193: the press at all twelve turns, the route in both browsers, the
+dice after a hidden tab and after a reload, and the keyframes. Each file was restored from a
+copy, never from git.
+
+Not in the pass yet, each with the commit that makes it true: a third, watching browser (the
+watch read carries no events until 2.1); the chat opened, the screen turned and full screen
+entered in the middle of a flight (P6); a frame check under a throttled processor. Ludo, hokm
+and poker add a section each as they move onto the stage.

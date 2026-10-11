@@ -286,6 +286,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     let stuck: HTMLElement | null = null;
     let flag: HTMLElement | null = null;
     let said = '';
+    let laid = 0;
     let spots: ReadonlySet<number> = new Set();
     let aims: ReadonlySet<number> = new Set();
     let home: number | null = null;
@@ -781,8 +782,10 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         const die = createDie();
         const spot = restOf(seed, index, count);
 
+        laid += 1;
         alive.add(die);
         zone.append(die.node);
+        die.node.dataset.key = `die-${ laid }`;
         die.node.style.left = `${ spot.x }em`;
         die.node.style.top = `${ spot.y }em`;
         die.show(face, seed + index * 977);

@@ -2136,6 +2136,12 @@ demand: a hit, a bar entry, bearing off, an undo, the re-rack, a capture, a home
 fate. It mounts the real renderer on a stage in the page and drives it directly, which only the
 dev server can serve.
 
+Backgammon's part landed in commit 1.6. The page is a bare one that Playwright answers for on the
+dev server's own origin, so nothing of the app boots and no api is needed: it holds an SVG and an
+empty layer, links the product's stylesheet and imports the renderer, the stage and the presenter
+as vite serves them. The table is driven THROUGH the presenter, with batches shaped like the
+store's, and the instrument is handed doctored frames that it has to fail.
+
 **The pass** (`tools/qa/motion-pass.mjs`, on the production build on port 5300 with the limiter
 raised; two players and a watcher per game). It fast-forwards over the API until a predicate
 holds, waits for `data-presenting` to clear, makes that one move THROUGH THE TABLE and samples
@@ -2144,14 +2150,14 @@ the checker, the dice, the card, and no longer a list of buttons. It asserts:
 
 | Assertion | Threshold |
 |---|---|
-| Path length | Within 15% of the expected route. |
-| No teleport | No step over the larger of 35% of the route and three times the median step. |
+| Path length | Within 15% of the expected route, and within 12 board units of every point on it. |
+| No teleport | No step over the larger of 35% of the route and three times the median step, for each frame that really elapsed. A node that was hidden and comes back further off than three median steps fails whatever its route. |
 | A clone's opacity | Never rises after it falls. |
 | Bystanders | Pawns the event did not name do not move. |
 | The die | Its face is read from the cube's computed matrix. |
 | The press is answered | A new script-made animation targets the pressed object within two frames. |
-| Reduced motion | No keyframe on the table carries a transform. |
-| The watcher | Its board does not move for 25 s, and then travels. |
+| Reduced motion | No keyframe on the table that lasts a frame or more carries a transform. |
+| The watcher | Its board does not move for 25 s, and then travels. Lands with commit 2.1. |
 | Reload and hidden tab | Each leaves the board equal to `GET /matches/:id`. |
 | The console | Clean. |
 
@@ -2163,7 +2169,7 @@ Each game's `test(qa)` commit adds its own section to the pass:
 
 | Section | Adds |
 |---|---|
-| Backgammon | After a hidden tab and after Play again, the dice in the document are connected and count the server's dice, and the cube is connected. A resting checker's centre equals its point's centre, taken from the SVG's own screen matrix, at 320, 390 and 1280 wide. |
+| Backgammon | After a hidden tab and after Play again, the dice in the document are connected and count the server's dice, and the cube is connected. A resting checker's centre equals its point's centre, taken from the SVG's own screen matrix, at 320, 390 and 1280 wide. Landed in commit 1.6, with a reload beside the hidden tab, and the centres at every size the pass tours. |
 | Ludo | No frame shows two dice for one roll. |
 | Hokm | At 390 wide and four players, the first sample of an opponent's card lies inside that seat's plate. |
 | Poker | At every frame the numbers on the felt plus what is in the air equal the chips in play. The reader's dealt cards equal that hand's `hole` from the API. A nine-seat run on a phone: the deal, a three-way all-in with side pots, the reader first to act. Overlap is sampled during the showdown's linger at six and nine seats. |
@@ -2185,6 +2191,22 @@ uncommitted with the rewrite (§1.2), and what is called "as written" below is t
   `tools/qa/backgammon-play-pass.mjs` already imports the engine's move generator.
 - A window is judged only when `data-presenting` says a scene played; a batch that legitimately
   snapped under rule 5 is recorded as snapped, not failed.
+
+As built in commit 1.6 (`tools/qa/CLAUDE.md`, *The motion lab and the motion pass*), with four
+things the list above did not foresee:
+
+- **A die is named for each time it is laid** (`die-<n>`), not for its place in the pair. One
+  name across a pick-up and a throw is one object that vanishes and comes back elsewhere, and
+  the second rule above rightly calls that a jump.
+- **A step is judged against the frames that really elapsed.** A frame the browser drops is one
+  long step, and without the scaling a busy machine fails a correct walk. A hidden node gets no
+  such allowance and no 35%: it fails if it comes back further off than three median steps.
+- **A keyframe shorter than a frame is not motion.** The product's reduced-motion reset makes
+  every style change a transition a hundredth of a millisecond long, so a checker that is simply
+  placed is, for that instant, a running transition on `translate`.
+- **A snapped window is not excused in the pass.** It keeps both boards level with the server
+  before every move it watches, so a board that draws itself again there is a finding, and the
+  failure says that no scene played.
 
 A frame check runs in Chromium only, without the sampler: CPU throttling is a Chromium protocol
 call. Its bound is a design choice this document does not fix. Tables that pause are opened as
