@@ -792,6 +792,15 @@ that comes back with more to say has a new time and is news again; an older unre
 up the list when the rows above it are dismissed is not, and neither is one that was read somewhere
 else before this page showed it.
 
+**A turn is not announced at the table it is at.** A table played a move a day files a `turn`
+notice whenever the turn comes to somebody, so that they hear of it wherever they are. Somebody
+already looking at that table has heard it from the board, which chimes the turn and shows it,
+and was then told again by a toast whose button led to the page they were on, with a second chime,
+once for every move the other side made. The tracker passes over a `turn` whose table is the one
+the lobby has open (`lobby.openId()`, read untracked, so opening a table announces nothing by
+itself). The row is still unread in the bell, and a turn at any other table is still said.
+`cues.spec.ts` holds both.
+
 **A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
 server starts the game when the last chair fills, which can be minutes later and on another page, and
 a live turn is thirty seconds: the sweep was playing the first turns of people who never knew they

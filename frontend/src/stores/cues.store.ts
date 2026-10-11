@@ -224,7 +224,8 @@ export const useCues = createStore((): CuesApi =>
             }
 
             const fresh = rows.filter((row) => !row.read && Date.parse(row.at) > noticedAt);
-            const item = fresh.find((row) => !SAID_ELSEWHERE.has(row.kind));
+            const shown = untrack(() => lobby.openId());
+            const item = fresh.find((row) => !SAID_ELSEWHERE.has(row.kind) && !(row.kind === 'turn' && row.ref.tableId === shown));
 
             noticedAt = Math.max(noticedAt, ...(noticeSeeded ? fresh : rows).map((row) => Date.parse(row.at)));
 

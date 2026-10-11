@@ -663,6 +663,28 @@ describe('the cues store', () =>
             expect(said()[0]).toContain('saved you a seat');
         });
 
+        it('is not a turn at the table the reader is looking at, where the board has already said it, and is a turn at any other table', async () =>
+        {
+            const here = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 2, mode: 'turns', privacy: 'public' }, []);
+
+            await armed();
+            useLobby().open(here);
+            await settle();
+
+            server.notify({ kind: 'turn', ref: { tableId: here }, dedupeKey: `turn:${ here }` });
+            await useNotifications().refresh();
+            await settle();
+
+            expect(useNotifications().latest()[0]).toMatchObject({ kind: 'turn', read: false });
+            expect(said()).toEqual([]);
+
+            server.notify({ kind: 'turn', ref: { tableId: 't-7' }, dedupeKey: 'turn:t-7' });
+            await useNotifications().refresh();
+            await settle();
+
+            expect(said()).toEqual(['It is your go']);
+        });
+
         it('is announced while the page shows only another kind', async () =>
         {
             server.notify({ kind: 'friend-request', actor: 'reza.t', dedupeKey: 'friend:reza.t' });
