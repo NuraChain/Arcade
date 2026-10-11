@@ -1400,9 +1400,8 @@ the rules are the board's:
 sentence and the match line are `sr-only`, with the turn sentence still the live region. The
 clock is on the plate of whoever is on turn; each plate is drawn in two places, so there are two
 clocks, and only the one in the fit cell is told the turn is the reader's, which keeps the last
-seconds ticking once. The tip is a 44 px lamp in the corner of the stage that opens over the
-board. Beside the board, on a wide or sideways screen, the column that holds the plates shows the
-tip in full. With the bar in the layout the board moved 58 px at 390 by 844 whenever the turn
+seconds ticking once. The tip is a 44 px lamp that opens over the board, at every size
+(`<CoachLine lamp>`). With the bar in the layout the board moved 58 px at 390 by 844 whenever the turn
 changed hands, and still 31 px with the buttons gone; with it out, the board does not move.
 
 **Anchors and layouts.**
@@ -1550,7 +1549,11 @@ two opponents side by side. Depth by y. The white burst where a pawn was taken a
 home. The turn chime. The names other gates read: `.lb`, `.lp`, `data-movable`, `data-colour`,
 `.board-token`, and a roll control that is a real button named "Roll the dice".
 
-**Controls on the table (D10).** It lands in commit 3.3, with the press answered at once.
+**Controls on the table (D10, D12).** The list and the strip went ahead of 3.3, the day the owner
+asked for every helper to leave every game; the press answered at once still lands in 3.3. The
+stage's grid is the board alone at every size, the turn sentence is an `sr-only` live region, the
+tip is a lamp and the clock a pill at the two ends of the stage's foot, and "turn your phone
+upright" is a note between them on a phone held sideways.
 
 | Action | Today's control | Gesture on the table |
 |---|---|---|

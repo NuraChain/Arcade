@@ -1689,8 +1689,9 @@ What reads them:
   seat's side, as the board it was sent has them, and `.yard-badge` paints the pip half and half
   from them (`--team-a`, `--team-b`), so red's plate and yellow's wear one disc and no second copy
   of the pairing lives in a stylesheet. Hokm keeps the shared pip.
-- **The strip says whose tokens are moving.** "Your four are home: move {name}'s tokens." stands
-  where "Your turn." stood, and the move list is headed "{name}'s tokens". Everybody else reads
+- **The turn sentence says whose tokens are moving.** "Your four are home: move {name}'s tokens."
+  stands where "Your turn." stood, for a screen reader now that the strip is gone, and the plate
+  says "Helping" for everybody. Everybody else reads
   "{name} is moving {partner}'s tokens.", and the partner reads "{name} is moving your tokens.": a
   third sentence, because the second names a reader to themselves in the third person.
 - **The renderer draws a block by side** (`BoardToken.side`), so a pair of partners stands one pawn
@@ -2562,8 +2563,9 @@ the grid there is the fit cell alone. What it said is kept three ways:
   reader's, so the last five seconds tick once whichever copy is on screen.
 - **The tip is a lamp in the corner of the stage.** 44px, it opens over the board when it is
   pressed and takes nothing from it closed; its words stay in the accessibility tree while it is
-  closed. Beside the board, on a wide or sideways screen, the column that holds the plates shows
-  the tip in full, because that room was never the board's.
+  closed. It is a lamp at every size and in every game that has let its bar go
+  (`<CoachLine lamp>`): for one commit a wide screen showed the tip in full in the column beside
+  the board, and the owner's next message took every helper off the page.
 
 Measured on the production build at 390 by 844, through a roll, a hop, a whole turn and the other
 player's turn, the board does not move at all.
@@ -2869,13 +2871,30 @@ it has never heard of. `budgets.mjs` reads that registry - one dynamic import pe
 each module on disk and in a chunk of its own - so the rule is about the property rather than about
 one file.
 
-**The board is the illustration, not the interface.** Every move is takeable from a button beside
-it, the turn is an `aria-live` region, and the pieces are `aria-hidden` inside a labelled host. That
-is what makes the game playable by keyboard and readable by a screen reader. Pointing at a token is a
-shortcut to the move list and nothing more: a tap anywhere near a token the server called legal picks
-it (`pickNear`), and a tap on anything else does nothing. On a six every token still in the yard is
-playable, because they are interchangeable: `pieceFor` turns a tap on any of them into the one entry
-the move list offers, and the engine accepts any yard token for it (D12).
+**The board IS the interface: a pawn is moved by the pawn, and the die by the die.** For a long
+time the rule here was the opposite, "the board is the illustration, not the interface": every
+move was a button in a list beside the board ("Bring token 1 out of the yard"), under a sentence
+about the turn, a hint and the clock, and pointing at a token was a shortcut to that list. The
+owner had it removed from every game on 2026-10-11 ("remove that dom helper ... on all of games
+game should be real player should tocuh or click on game things such as card dice"), after
+saying the same of the buttons and of the sentences earlier that day. So:
+
+- A tap anywhere near a token the server called legal moves it (`pickNear`), and a tap on anything
+  else does nothing. On a six every token still in the yard is playable, because they are
+  interchangeable: `pieceFor` turns a tap on any of them into the one entry the server offered,
+  and the engine accepts any yard token for it (D12 of the games plan).
+- The die in the middle of the board is the roll. It is the one real button a ludo table has,
+  because it is drawn as the thing it is.
+- There is no list of moves in the page, shown or hidden, and no sentence under or beside the
+  board. The turn sentence is an `sr-only` live region; the pieces are `aria-hidden` inside a
+  labelled host. The tip is a lamp at the foot of the stage (`<CoachLine lamp>`), the clock a pill
+  at the other end of the foot, and "turn your phone upright" a small note between them on a phone
+  held sideways. The stage's grid is the board alone at every size: the 18rem column a wide screen
+  gave the panel is the board's now.
+- What that costs is said, as it is for backgammon: a ludo turn can be rolled from a keyboard and
+  cannot be moved from one. `outcomeOf`, which worked out what a move would do for the words on
+  those buttons, went with them, and its sixteen cases with it; the engine-parity runs of
+  `helpers-ludo.spec.ts` still hold `movedTo`, which the board draws from.
 
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
 board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,
@@ -3176,7 +3195,8 @@ from the theme's `--z-*`: the result panel is above anything in flight.
 
 `tools/qa/play-pass.mjs` is two real browsers playing one game through the interface, run by hand
 against the built server. It seats two wallet fixtures at one table, presses Start, takes ten turns
-by CLICKING the roll button and the move list, plays the rest out over the api, and then asserts in
+by CLICKING the die and the pawns on the board (it fails if a list of moves or a button for one
+is in the page beside them), plays the rest out over the api, and then asserts in
 BOTH browsers that the finished game is still on screen, says what it did to the ratings and offers
 another.
 
@@ -3589,8 +3609,9 @@ floor without the notice yielding was refused: the composer went off the bottom 
 
 The floors are the boards' own needs, and `fit-pass.mjs` holds the surface to each (`USABLE`):
 backgammon 16rem wide, where the two 1.75rem dice still clear the point tips (124 of the 820 viewBox
-units) and a checker is 15.7px across - the move list is the 44px path, because a point column is
-17px wide on any phone; ludo 13rem, where the roll die in the middle (3.2 cells) is still a 44px
+units) and a checker is 15.7px across - no target there is 44px, because a point column is 17px
+wide at that floor and 26px on a 390px phone, and since the owner had the move list removed the
+whole column of a point is the only target a checker has; ludo 13rem, where the roll die in the middle (3.2 cells) is still a 44px
 target, in a 20rem fit cell with its plates; hokm a 13rem fit cell for a table of 12rem by 18rem,
 the height four trick cards at their 2.6rem minimum need clear of the top plate and the bottom one
 (`--top-room`, `--band` and `--trick-w` on the table, with the piles of backs and the avatars gone
@@ -3685,7 +3706,10 @@ its half ("an answer, not a failure") and no spec mounted either page in that st
 `docs/superpowers/specs/2026-09-24-game-helpers-design.md` is the design. Three helpers, each a device
 preference that is on by default and can be switched off on the settings page or from the table menu
 without leaving the game: `hintMoves` lights up what can move, `hintOutcome` says what a move does
-before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status.
+before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status,
+or a lamp that opens over the board where the bar under it has gone (backgammon and ludo).
+`hintOutcome` has nothing left to switch in those two games: what it switched was the wording of
+the move buttons, and the owner had every list of moves removed. Hokm and poker still read it.
 
 **Every helper is the SERVER's rules asked a question.** `game/helpers/<game>.ts` is pure, imports
 nothing from AzerothJS, and computes from the same modules the engine runs - ludo's board, hokm's
@@ -3694,9 +3718,10 @@ browser agrees with the server right up until the position where it matters. Eac
 games through the real engine and fails on any sentence the engine would contradict. `coachOf`
 answers null when nothing is worth saying: a tip that is always there is one nobody reads.
 
-**Turning a helper off never removes a way to play.** The move lists beside every board are the
-keyboard and screen-reader path, and they stay whatever `hintMoves` says; what goes is the lighting
-on the board. Hokm's hand says why a card is dimmed with the follow line, which stays when the coach
+**Turning a helper off never removes a way to play.** A piece that can move takes a tap whether or
+not it is lit; what `hintMoves` takes away is the lighting on the board, never the move. (The move
+lists that used to be the other way to play are gone from backgammon and ludo, and are going from
+the rest: see *Every move is made on the table, and nowhere else*.) Hokm's hand says why a card is dimmed with the follow line, which stays when the coach
 is off and gives way to the coach's own words when it is on, so it is never said twice.
 
 **A poker hand is named by its ranks**: "a pair of kings", "sevens full of twos", and "you are playing

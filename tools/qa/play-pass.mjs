@@ -16,9 +16,9 @@
  * opens the chat, a finished game that vanished from the screen at the moment it had something to
  * say. Every one of those is a green matrix and a wrong product.
  *
- * Two wallet fixtures, two contexts, one table. The moves are made by clicking the same buttons a
- * person clicks, and the assertions are made in the OTHER browser - because a move that only the
- * mover can see is the failure this exists to catch.
+ * Two wallet fixtures, two contexts, one table. The moves are made the way a person makes them, by
+ * pressing the die and the pawn on the board, and the assertions are made in the OTHER browser -
+ * because a move that only the mover can see is the failure this exists to catch.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -233,6 +233,7 @@ try
         let clicked = 0;
         let rolled = 0;
         let moved = 0;
+        let listed = 0;
         /**
          * Every distinct sentence the WATCHER's live region showed while somebody else played.
          *
@@ -268,14 +269,16 @@ try
             rolled += 1;
             await actor.page.waitForTimeout(SETTLE_MS);
 
-            const move = await pressable(actor.page, /^(Move token|Bring token)/i);
+            const pawn = actor.page.locator('.board-canvas .lp[data-movable] .lp-pawn').first();
 
-            if (move !== null)
+            listed += await actor.page.locator('main .table-stage ul, main .table-stage button:not(.board-roll)').count();
+
+            if (await pawn.count() > 0)
             {
                 otherSaw.add(await watcher.page.evaluate(() =>
                     document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
 
-                await move.click();
+                await pawn.click();
                 moved += 1;
                 clicked += 1;
                 await watcher.page.waitForTimeout(SETTLE_MS);
@@ -291,7 +294,8 @@ try
         }
 
         record('a roll is takeable from the button', rolled > 0, `${ rolled } rolls clicked`);
-        record('a move is takeable from the list beside the board', moved > 0, `${ moved } moves clicked`);
+        record('a move is made by pressing the pawn on the board', moved > 0, `${ moved } pawns pressed`);
+        record('no list of moves and no button for one is in the page beside the board', listed === 0, `${ listed } found`);
 
         /**
          * The defect this replaces an afternoon of: the panel updated every turn while the canvas

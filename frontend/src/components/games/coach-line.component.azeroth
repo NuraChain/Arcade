@@ -3,7 +3,7 @@ import type { Tip } from '../../game/helpers/tip.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 
-export default component CoachLine(props: { tip: Tip | null; class?: string })
+export default component CoachLine(props: { tip: Tip | null; class?: string; lamp?: boolean })
 {
     const locale = useLocale();
     const settings = useSettings();
@@ -22,6 +22,7 @@ export default component CoachLine(props: { tip: Tip | null; class?: string })
                 role="note"
                 tabindex="0"
                 data-open={ open ? 'true' : undefined }
+                data-lamp={ props.lamp === true ? 'true' : undefined }
                 onClick={ toggle }
                 onKeyDown={ (event) =>
                 {

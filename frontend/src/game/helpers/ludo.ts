@@ -2,13 +2,6 @@ import { FINISHED, RING_STEPS, YARD, capturesAt, cellAt, obstacle, ringIndex, ty
 import type { LudoBoard, LudoSeat } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
 
-export type LudoOutcome =
-    | { kind: 'enter'; count?: number }
-    | { kind: 'capture'; victim: number; count: number }
-    | { kind: 'safe' }
-    | { kind: 'home' }
-    | { kind: 'step' };
-
 export interface LudoHappened
 {
     e: string;
@@ -99,45 +92,6 @@ export function movedTo(board: LudoBoard, piece: number): LudoBoard | null
     delete next.die;
 
     return next;
-}
-
-export function outcomeOf(board: LudoBoard, piece: number): LudoOutcome | null
-{
-    const mover = movedBy(board);
-    const to = mover === undefined || board.die === undefined ? null : landing(mover, piece, board.die);
-
-    if (mover === undefined || to === null || !board.moves.includes(piece))
-    {
-        return null;
-    }
-
-    if (mover.tokens.find((one) => one.piece === piece)?.at === YARD)
-    {
-        const victims = standingOn(board, mover.side, squareOf(mover, 0));
-
-        return victims.length === 0 ? { kind: 'enter' } : { kind: 'enter', count: victims.length };
-    }
-
-    if (to === FINISHED)
-    {
-        return { kind: 'home' };
-    }
-
-    if (to >= RING_STEPS)
-    {
-        return { kind: 'step' };
-    }
-
-    const square = squareOf(mover, to);
-
-    if (!capturesAt(mover.colour as LudoColour, to))
-    {
-        return { kind: 'safe' };
-    }
-
-    const victims = standingOn(board, mover.side, square);
-
-    return victims.length === 0 ? { kind: 'step' } : { kind: 'capture', victim: victims[0], count: victims.length };
 }
 
 const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>

@@ -184,7 +184,7 @@ try
                 for (const [one, two] of [[reza, leila], [leila, reza]])
                 {
                     const roll = one.page.getByRole('button', { name: 'Roll the dice', exact: true });
-                    const moves = one.page.locator('ul[aria-label="Where you can go"] button:not([disabled])');
+                    const moves = one.page.locator('.board-canvas .lp[data-movable] .lp-pawn');
                     if (await roll.count() > 0 && await roll.first().isEnabled({ timeout: 300 }).catch(() => false))
                     {
                         [mover, watcher, control] = [one, two, roll.first()];

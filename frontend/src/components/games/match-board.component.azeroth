@@ -6,7 +6,6 @@ import TableResult from './table-result.component.azeroth';
 import DieFace from './die-face.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import YardBadge from './yard-badge.component.azeroth';
-import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
@@ -19,7 +18,7 @@ import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
-import { coachOf, movedTo, outcomeOf, pieceFor } from '../../game/helpers/ludo.ts';
+import { coachOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts';
 import { partnerOf, variantOf } from '../../../../backend/src/domains/match/sides.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
@@ -55,8 +54,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived helping = !over && game.turn !== undefined && ludo.controls !== game.turn;
 
-    derived helper = helping && mine !== undefined && mine === game.turn;
-
     const nameFor = (seat: number | undefined) =>
     {
         const player = game.players.find((one) => one.seat === seat);
@@ -72,8 +69,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     derived nameOf = nameFor(turnOf?.seat);
 
     derived owner = nameFor(ludo.controls);
-
-    derived ownerSays = locale.t('match.moves.for', { name: owner });
 
     derived says = (() =>
     {
@@ -118,21 +113,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     }));
 
     derived sideways = device.landscape() && device.height() <= SHORT_MAX;
-
-    derived hint = ((): string =>
-    {
-        if (over || mine === undefined || mine !== game.turn)
-        {
-            return '';
-        }
-
-        if (board.canRoll())
-        {
-            return locale.t('match.hint.roll');
-        }
-
-        return ludo.die !== undefined && board.moves().length > 0 ? locale.t(help.hintMoves ? 'match.hint.move' : 'helpers.ludo.hint.move') : '';
-    })();
 
     derived tip = over ? null : coachOf(ludo, mine, game.turn, board.events().events.flatMap((event) => event.log.kind === 'ludo' ? event.log.moves : []));
 
@@ -196,36 +176,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         }
     };
 
-    const moveSays = (piece: number) =>
-    {
-        const token = locale.n(piece + 1);
-        const outcome = mine === undefined ? null : outcomeOf(ludo, piece);
-
-        if (outcome?.kind === 'enter')
-        {
-            return help.hintOutcome && outcome.count !== undefined
-                ? locale.plural('helpers.ludo.move.enterCapture', outcome.count, { token })
-                : locale.t('match.move.enter', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'home')
-        {
-            return locale.t('match.move.home', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'safe')
-        {
-            return locale.t('helpers.ludo.move.safe', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'capture')
-        {
-            return locale.plural('helpers.ludo.move.capture', outcome.count, { token, name: nameFor(outcome.victim) });
-        }
-
-        return locale.t('match.move.step', { token, die: locale.n(ludo.die ?? 0) });
-    };
-
     <div data-rev={ props.match.rev } class="table-stage p-2.5 rounded-hero [background:radial-gradient(ellipse_70%_60%_at_50%_42%,rgb(255_184_110/0.16),transparent_70%),radial-gradient(ellipse_85%_80%_at_50%_50%,transparent_52%,rgb(6_3_1/0.62)_100%),#3A2110_url('/board/ludo-table.webp')_center/cover_no-repeat] [box-shadow:inset_0_1px_0_rgb(255_255_255/0.07),inset_0_0_0_1px_rgb(0_0_0/0.45),0_24px_48px_-28px_rgb(0_0_0/0.9)] slim:mx-[calc(0.375rem_-_var(--page-pad,1rem))]">
         <div class="table-grid ludo-grid">
             <div class="table-fit">
@@ -274,50 +224,18 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
             <Show when={ !over }>
                 { () =>
-                    <section class="table-bar p-3 border border-[rgb(255_255_255/0.08)] rounded-panel bg-[rgb(8_13_25/0.8)] [backdrop-filter:blur(8px)] [box-shadow:0_16px_30px_-18px_rgb(0_0_0/0.9)]">
-                        <div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                            <div class="flex min-w-0 flex-[1_1_9rem] flex-col gap-0.5">
-                                <p class="text-ui-base font-semibold text-white" aria-live="polite">{ says }</p>
-                                <Show when={ hint !== '' }>
-                                    { () => <p class="text-ui-xs text-muted">{ hint }</p> }
-                                </Show>
-                                <Show when={ sideways }>
-                                    { () =>
-                                        <p class="flex items-center gap-1.5 text-ui-xs text-gold">
-                                            <Icon name="phone" size={ 14 } class="shrink-0" />
-                                            <span>{ locale.t('match.upright') }</span>
-                                        </p>
-                                    }
-                                </Show>
-                            </div>
-                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ !over && mine !== undefined && mine === game.turn } />
-                        </div>
-
-                        <CoachLine tip={ tip } />
-
-                        <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>
+                    <section class="table-bar ludo-bar">
+                        <p class="sr-only" aria-live="polite">{ says }</p>
+                        <CoachLine tip={ tip } lamp />
+                        <Show when={ sideways }>
                             { () =>
-                                <div class="flex flex-col gap-1.5">
-                                    <Show when={ helper }>
-                                        <p class="label text-ui-2xs text-faint">{ ownerSays }</p>
-                                    </Show>
-                                    <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
-                                        <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
-                                            <li class="min-w-0">
-                                                <Button
-                                                    variant="secondary"
-                                                    class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
-                                                    disabled={ board.busy() }
-                                                    onClick={ () => void moveNow(piece) }
-                                                >
-                                                    <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
-                                                </Button>
-                                            </li>
-                                        </For>
-                                    </ul>
-                                </div>
+                                <p class="ludo-upright">
+                                    <Icon name="phone" size={ 14 } class="shrink-0" />
+                                    <span>{ locale.t('match.upright') }</span>
+                                </p>
                             }
                         </Show>
+                        <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ !over && mine !== undefined && mine === game.turn } class="ludo-clock" />
                     </section>
                 }
             </Show>

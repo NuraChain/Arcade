@@ -1083,7 +1083,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                             </Show>
                         </p>
 
-                        <CoachLine tip={ tip } />
+                        <CoachLine tip={ tip } lamp />
                     </section>
                 }
             </Show>

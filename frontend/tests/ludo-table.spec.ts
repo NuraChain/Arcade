@@ -135,6 +135,18 @@ describe('the ludo table', () =>
         expect(roll).toHaveBeenCalledTimes(1);
     });
 
+    it('offers a move nowhere but on the pawn: no list, no button, and no sentence on show', async () =>
+    {
+        const container = await show(ludo({}, { die: 6, moves: [0] }));
+        const bar = container.querySelector('.table-bar') as HTMLElement;
+        const drawn = [...bar.children].filter((one) => !one.classList.contains('sr-only'));
+
+        expect(container.querySelectorAll('.table-stage button'), 'a move is offered as a button').toHaveLength(0);
+        expect(container.querySelector('.table-stage ul')).toBeNull();
+        expect(bar.querySelector('p[aria-live="polite"]')?.classList.contains('sr-only')).toBe(true);
+        expect(drawn.every((one) => one.getAttribute('role') === 'note' || one.classList.contains('ludo-clock') || one.classList.contains('ludo-upright')), drawn.map((one) => one.className).join(' | ')).toBe(true);
+    });
+
     it('offers no die once the roll is in, nor on somebody else’s turn', async () =>
     {
         const rolled = await show(ludo({}, { die: 4, moves: [] }));
@@ -289,8 +301,6 @@ describe('the ludo table, two against two', () =>
 
     const stripOf = (container: HTMLElement) => container.querySelector('.table-bar p[aria-live="polite"]')?.textContent ?? null;
 
-    const linesOf = (container: HTMLElement) => [...container.querySelectorAll('.table-bar p')].map((line) => line.textContent ?? '');
-
     const drawn = async (container: HTMLElement) =>
     {
         for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
@@ -392,14 +402,13 @@ describe('the ludo table, two against two', () =>
         expect(sidesSaid(container)[2]).toBe(locale.t('card.partner'));
     });
 
-    it('tells a reader whose four are home whose tokens they are moving, on the strip, on the plate and over the moves', async () =>
+    it('tells a reader whose four are home whose tokens they are moving, in the sentence and on the plate', async () =>
     {
         const locale = useLocale();
         const waiting = await show(pairs({}, handedOver()));
 
         expect(stripOf(waiting)).toBe(locale.t('match.turn.helping', { name: nameOf('reza.t') }));
         expect(tagsOf(waiting)).toEqual([locale.t('card.helping'), null, locale.t('card.partner'), null]);
-        expect(linesOf(waiting)).not.toContain(locale.t('match.moves.for', { name: nameOf('reza.t') }));
 
         cleanup();
         useBoard().close();
@@ -407,17 +416,15 @@ describe('the ludo table, two against two', () =>
         const rolled = await show(pairs({}, handedOver({ die: 3, moves: [0] })));
 
         expect(stripOf(rolled)).toBe(locale.t('match.turn.rolled', { die: '3' }));
-        expect(linesOf(rolled)).toContain(locale.t('match.moves.for', { name: nameOf('reza.t') }));
-        expect(rolled.querySelectorAll('.table-bar ul button')).toHaveLength(1);
+        expect(tagsOf(rolled)).toEqual([locale.t('card.helping'), null, locale.t('card.partner'), null]);
+        expect(rolled.querySelector('.table-stage ul')).toBeNull();
     });
 
-    it('puts no name over the moves of a reader moving their own tokens', async () =>
+    it('tags nobody as helping while a reader moves their own tokens', async () =>
     {
         const locale = useLocale();
         const container = await show(pairs({}, { die: 6, moves: [0] }));
 
-        expect(container.querySelectorAll('.table-bar ul button')).toHaveLength(1);
-        expect(linesOf(container).some((line) => line === locale.t('match.moves.for', { name: nameOf('reza.t') }) || line === locale.t('match.moves.for', { name: nameOf('alex') }))).toBe(false);
         expect(tagsOf(container)).toEqual([null, null, locale.t('card.partner'), null]);
     });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coachOf, handOf, movedTo, outcomeOf, pieceFor, type LudoHappened, type LudoOutcome } from '../src/game/helpers/ludo.ts';
+import { coachOf, handOf, movedTo, pieceFor, type LudoHappened } from '../src/game/helpers/ludo.ts';
 import type { LudoBoard } from '../src/data/match.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
 import { apply, create } from '../../backend/src/domains/match/ludo/engine.ts';
@@ -46,42 +46,8 @@ const moved = (state: LudoState, piece: number) =>
     return outcome;
 };
 
-describe('what a ludo move does', () =>
+describe('the board a ludo move leaves', () =>
 {
-    const cases: { name: string; pieces: number[][]; die: number; turn?: number; piece: number; says: LudoOutcome | null }[] = [
-        { name: 'a six brings a token out', pieces: [YARD, YARD], die: 6, piece: 0, says: { kind: 'enter' } },
-        { name: 'coming out sends home an opponent on the start square', pieces: [YARD, [26, 10, -1, -1]], die: 6, piece: 0, says: { kind: 'enter', count: 1 } },
-        { name: 'coming out sends home every colour on the start square', pieces: [YARD, [39, 39, -1, -1], YARD, [13, -1, -1, -1]], die: 6, piece: 0, says: { kind: 'enter', count: 3 } },
-        { name: 'landing on the start square of another colour takes nothing', pieces: [[24, -1, -1, -1], [13, -1, -1, -1], YARD, YARD], die: 2, piece: 0, says: { kind: 'safe' } },
-        { name: 'landing exactly on a token sends it home', pieces: [[10, -1, -1, -1], [38, -1, -1, -1]], die: 2, piece: 0, says: { kind: 'capture', victim: 1, count: 1 } },
-        { name: 'a block of two is not a move at all', pieces: [[10, -1, -1, -1], [38, 38, -1, -1]], die: 2, piece: 0, says: null },
-        { name: 'passing a block is not a move at all', pieces: [[10, -1, -1, -1], [38, 38, -1, -1]], die: 4, piece: 0, says: null },
-        { name: 'passing over a token takes nothing', pieces: [[10, -1, -1, -1], [37, -1, -1, -1]], die: 2, piece: 0, says: { kind: 'step' } },
-        { name: 'an own token is neither a block nor a victim', pieces: [[10, 12, -1, -1], YARD], die: 2, piece: 0, says: { kind: 'step' } },
-        { name: 'a token on a star is safe from one landing on it', pieces: [[5, -1, -1, -1], [34, -1, -1, -1]], die: 3, piece: 0, says: { kind: 'safe' } },
-        { name: 'an empty star is a safe square', pieces: [[5, -1, -1, -1], YARD], die: 3, piece: 0, says: { kind: 'safe' } },
-        { name: 'the exact count reaches home', pieces: [[53, -1, -1, -1], YARD], die: 3, piece: 0, says: { kind: 'home' } },
-        { name: 'the home run is nobody else\'s square', pieces: [[49, -1, -1, -1], [27, -1, -1, -1]], die: 4, piece: 0, says: { kind: 'step' } },
-        { name: 'an overshoot is not a move at all', pieces: [[54, 10, -1, -1], YARD], die: 3, piece: 0, says: null },
-        { name: 'yellow captures across the top of the ring', pieces: [[49, -1, -1, -1], [20, -1, -1, -1]], die: 3, turn: 1, piece: 0, says: { kind: 'capture', victim: 0, count: 1 } },
-        { name: 'four seats name the right victim', pieces: [[17, -1, -1, -1], [7, -1, -1, -1], YARD, YARD], die: 3, piece: 0, says: { kind: 'capture', victim: 1, count: 1 } }
-    ];
-
-    for (const { name, pieces, die, turn, piece, says } of cases)
-    {
-        it(name, () =>
-        {
-            expect(outcomeOf(boardOf(position(pieces, die, turn ?? 0)), piece)).toEqual(says);
-        });
-    }
-
-    it('says nothing to somebody watching', () =>
-    {
-        const state = position([[10, -1, -1, -1], [38, -1, -1, -1]], 2);
-
-        expect(outcomeOf(boardOf(state, null), 0)).toBeNull();
-    });
-
     it('agrees with the engine over whole games at two, three and four', () =>
     {
         let seed = 11;
@@ -92,7 +58,6 @@ describe('what a ludo move does', () =>
         };
 
         let checked = 0;
-        let entries = 0;
 
         for (const count of [2, 3, 4])
         {
@@ -120,7 +85,6 @@ describe('what a ludo move does', () =>
 
                     const board = boardOf(state);
                     const piece = board.moves[next() % board.moves.length];
-                    const said = outcomeOf(board, piece);
                     const ahead = movedTo(board, piece);
                     const after = moved(state, piece);
 
@@ -131,24 +95,6 @@ describe('what a ludo move does', () =>
                     expect(guessed?.tokens.find((token) => token.piece === piece)).toEqual(mineAfter.tokens.find((token) => token.piece === piece));
                     expect(guessed?.home).toBe(mineAfter.home);
 
-                    const captures = after.events.filter((event) => event.e === 'capture');
-
-                    expect(said?.kind === 'capture' || (said?.kind === 'enter' && said.count !== undefined)).toBe(captures.length > 0);
-                    expect(said?.kind === 'home').toBe(after.events.some((event) => event.e === 'home'));
-                    expect(said?.kind === 'enter').toBe(after.events.some((event) => event.e === 'enter'));
-
-                    if (said?.kind === 'capture')
-                    {
-                        expect(said.count).toBe(captures.length);
-                        expect(captures.every((event) => event.e === 'capture' && event.victim === said.victim)).toBe(true);
-                    }
-
-                    if (said?.kind === 'enter' && said.count !== undefined)
-                    {
-                        expect(said.count).toBe(captures.length);
-                        entries += 1;
-                    }
-
                     checked += 1;
                     state = after.state;
                 }
@@ -156,7 +102,6 @@ describe('what a ludo move does', () =>
         }
 
         expect(checked).toBeGreaterThan(1000);
-        expect(entries, 'some self-played entry must capture').toBeGreaterThan(0);
     });
 });
 
@@ -291,23 +236,22 @@ describe('two against two', () =>
     const coached = (state: LudoState, mine: number, recent: readonly LudoHappened[] = []) =>
         coachOf(boardOf(state, mine), mine, state.players[state.turn].seat, recent)?.key ?? null;
 
-    describe('what a move does', () =>
+    describe('what a move may land on', () =>
     {
         it('sends nobody home by landing on a partner, and says that the two make a block', () =>
         {
             const state = pairs([[27, -1, -1, -1], YARD, [4, -1, -1, -1], YARD], 3);
 
-            expect(outcomeOf(boardOf(state), 0)).toEqual({ kind: 'step' });
             expect(coached(state, 0)).toBe('helpers.ludo.tip.partner');
             expect(moved(state, 0).events.map((event) => event.e)).toEqual(['step']);
         });
 
-        it('still sends home an opponent it lands on, and names that opponent', () =>
+        it('still sends home an opponent it lands on, and has nothing to coach about it', () =>
         {
             const state = pairs([[27, -1, -1, -1], [17, -1, -1, -1], [10, -1, -1, -1], YARD], 3);
 
-            expect(outcomeOf(boardOf(state), 0)).toEqual({ kind: 'capture', victim: 1, count: 1 });
             expect(coached(state, 0)).toBeNull();
+            expect(moved(state, 0).events.map((event) => event.e)).toContain('capture');
         });
 
         it('offers no move onto or past a pair of opponents of two colours, and says why in the words for sides', () =>
@@ -316,7 +260,7 @@ describe('two against two', () =>
             const board = boardOf(state);
 
             expect(board.moves).toEqual([1]);
-            expect(outcomeOf(board, 0)).toBeNull();
+            expect(movedTo(board, 0)).toBeNull();
             expect(coached(state, 0)).toBe('helpers.ludo.tip.blockedTeams');
             expect(coached(pairs([[26, 5, -1, -1], [17, -1, -1, -1], YARD, [43, -1, -1, -1]], 6), 0)).toBe('helpers.ludo.tip.blockedTeams');
         });
@@ -337,7 +281,7 @@ describe('two against two', () =>
 
     describe('a seat whose four are home', () =>
     {
-        it('moves the tokens of its partner: the outcome, the board ahead and a tap on the yard are all theirs', () =>
+        it('moves the tokens of its partner: the board ahead and a tap on the yard are theirs', () =>
         {
             const state = pairs([HOME, [25, -1, -1, -1], [10, -1, 20, -1], YARD], 2);
             const board = boardOf(state);
@@ -345,20 +289,17 @@ describe('two against two', () =>
 
             expect(board.controls).toBe(2);
             expect(board.moves).toEqual([0, 2]);
-            expect(outcomeOf(board, 0)).toEqual({ kind: 'capture', victim: 1, count: 1 });
-            expect(outcomeOf(board, 2)).toEqual({ kind: 'step' });
             expect(ahead.seats.find((one) => one.seat === 2)!.tokens.find((token) => token.piece === 0)!.at).toBe(12);
             expect(ahead.seats.find((one) => one.seat === 0)).toEqual(board.seats.find((one) => one.seat === 0));
             expect(pieceFor(board, 1)).toBeNull();
         });
 
-        it('brings out a token of its partner onto the partner\'s start square, and counts the opponents standing there', () =>
+        it('brings out a token of its partner onto the partner\'s start square, and sends home the opponent standing there', () =>
         {
             const state = pairs([HOME, [13, -1, -1, -1], [-1, 10, -1, -1], [13, -1, -1, -1]], 6);
             const board = boardOf(state);
 
             expect(board.moves).toEqual([0, 1]);
-            expect(outcomeOf(board, 0)).toEqual({ kind: 'enter', count: 1 });
             expect([0, 2, 3].map((piece) => pieceFor(board, piece))).toEqual([0, 0, 0]);
             expect(moved(state, 0).events).toEqual([
                 { e: 'enter', seat: 0, owner: 2, piece: 0 },
@@ -402,7 +343,7 @@ describe('two against two', () =>
         });
     });
 
-    it('agrees with the engine over whole games, never names a partner a victim, and tells every seat when it starts moving its partner\'s tokens', () =>
+    it('agrees with the engine over whole games, never sends a partner home, and tells every seat when it starts moving its partner\'s tokens', () =>
     {
         const TOKEN: readonly GameEvent['e'][] = ['enter', 'step', 'home', 'capture'];
         let seed = 29;
@@ -444,7 +385,6 @@ describe('two against two', () =>
                 const hand = board.controls;
                 const sideOf = (who: number) => board.seats.find((one) => one.seat === who)!.side;
                 const piece = board.moves[next() % board.moves.length];
-                const said = outcomeOf(board, piece);
                 const ahead = movedTo(board, piece);
                 const after = moved(state, piece);
 
@@ -458,21 +398,7 @@ describe('two against two', () =>
                 expect(ahead?.seats.filter((one) => one.seat !== hand)).toEqual(board.seats.filter((one) => one.seat !== hand));
                 expect(after.events.filter((event) => TOKEN.includes(event.e)).every((event) => 'owner' in event && event.owner === hand)).toBe(true);
 
-                expect(said?.kind === 'capture' || (said?.kind === 'enter' && said.count !== undefined)).toBe(captures.length > 0);
-                expect(said?.kind === 'home').toBe(after.events.some((event) => event.e === 'home'));
-                expect(said?.kind === 'enter').toBe(after.events.some((event) => event.e === 'enter'));
-
-                if (said?.kind === 'capture')
-                {
-                    expect(said.count).toBe(captures.length);
-                    expect(sideOf(said.victim), 'a partner was named a victim').not.toBe(sideOf(seat));
-                    expect(captures.every((event) => event.e === 'capture' && event.victim === said.victim)).toBe(true);
-                }
-
-                if (said?.kind === 'enter' && said.count !== undefined)
-                {
-                    expect(said.count).toBe(captures.length);
-                }
+                expect(captures.every((event) => event.e === 'capture' && sideOf(event.victim) !== sideOf(seat)), 'a partner was sent home').toBe(true);
 
                 for (const token of board.seats.find((one) => one.seat === hand)!.tokens)
                 {
