@@ -9,6 +9,7 @@ import {
     FIELD_LEFT,
     FIELD_RIGHT,
     FRAME,
+    HEIGHT,
     POINT_WIDTH,
     TRAY,
     TRAY_LEFT,
@@ -647,5 +648,343 @@ describe('the backgammon helpers', () =>
 
         expect(note(watching.container)).toBeNull();
         expect(watching.container.textContent).not.toContain('Hit');
+    });
+});
+
+describe('moves made on the table itself', () =>
+{
+    const zone = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice')!;
+
+    const tapDice = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-dice > .bgt-hit')!.click();
+
+    const tapPoint = (container: HTMLElement, point: number | 'bar' | 'tray', type = 'pointerup') =>
+    {
+        const svg = container.querySelector('svg') as SVGSVGElement;
+        const column = typeof point === 'number' ? columnOf(point) : null;
+        const x = column === null ? (point === 'bar' ? BAR_LEFT + BAR_WIDTH / 2 : TRAY_LEFT + TRAY / 2) : column.x + POINT_WIDTH / 2;
+        const y = column === null || column.row === 'bottom' ? 700 : 100;
+
+        svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT, right: WIDTH, bottom: HEIGHT, x: 0, y: 0, toJSON: () => ({}) });
+        svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true }));
+    };
+
+    const stagedOn = (container: HTMLElement) => button(container, 'Play the move').getAttribute('aria-disabled') !== 'true' && !button(container, 'Play the move').disabled;
+
+    it('keeps every button for a move in the panel a keyboard opens, and none of them on show', async () =>
+    {
+        const rolling = await live(match({ phase: 'roll', dice: [], doubling: true }));
+        const moving = await live(match({}));
+
+        for (const container of [rolling.container, moving.container])
+        {
+            const buttons = [...container.querySelectorAll('.table-stage button')];
+
+            expect(buttons.length).toBeGreaterThan(0);
+
+            for (const one of buttons)
+            {
+                expect(one.closest('.bg-keys.sr-only'), one.textContent ?? '').not.toBeNull();
+            }
+
+            expect(container.querySelector('.bg-keys')?.parentElement, 'the panel sits where something clips it').toBe(stageOf(container));
+        }
+    });
+
+    it('takes no room from the board for words: the sentences are a screen reader\'s, and only the tip is drawn', async () =>
+    {
+        const { container } = await live(match({ dice: [3, 3] }));
+        const bar = container.querySelector('.table-bar') as HTMLElement;
+        const drawn = [...bar.children].filter((one) => !one.classList.contains('sr-only'));
+
+        expect(container.querySelector('[aria-live="polite"]')?.classList.contains('sr-only')).toBe(true);
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('You rolled 3 and 3. Move your checkers.');
+        expect(bar.textContent).toContain('Match to 3');
+        expect(drawn.map((one) => one.getAttribute('role'))).toEqual(['note']);
+    });
+
+    it('puts the clock on the plate of whoever is on turn', async () =>
+    {
+        const mine = await live(match({}, 0, { remainingMs: 20_000 }));
+        const rows = (container: HTMLElement) => [...container.querySelectorAll('.bg-plate')].filter((row) => row.querySelector('.bg-clock') !== null);
+
+        expect(rows(mine.container).length).toBeGreaterThan(0);
+        expect(rows(mine.container).every((row) => row.classList.contains('table-hand') || row.hasAttribute('data-me'))).toBe(true);
+        expect(mine.container.querySelector('.table-bar .bg-clock')).toBeNull();
+        mine.unmount();
+
+        const theirs = await live(match({ turn: 1 }, 0, { turn: 1, remainingMs: 20_000 }));
+
+        expect(rows(theirs.container).length).toBeGreaterThan(0);
+        expect(rows(theirs.container).some((row) => row.classList.contains('table-hand') || row.hasAttribute('data-me'))).toBe(false);
+    });
+
+    it('rolls when the dice lying on the table are tapped, and shakes them until the answer comes', async () =>
+    {
+        let answer: (outcome: 'now' | 'failed') => void = () => undefined;
+        const play = vi.spyOn(useBoard(), 'play').mockImplementation(async () => await new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+        const { container } = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        expect(dice(container)).toHaveLength(2);
+        expect(container.querySelectorAll('.bgt-dice > .die3d[data-blank]')).toHaveLength(2);
+        expect(zone(container).dataset.live).toBe('roll');
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Your turn. Roll the dice.');
+
+        tapDice(container);
+
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'roll' }]);
+        expect(zone(container).hasAttribute('data-shake')).toBe(true);
+
+        answer('failed');
+        await flush();
+
+        expect(zone(container).hasAttribute('data-shake')).toBe(false);
+        expect(zone(container).dataset.live).toBe('roll');
+    });
+
+    it('plays the turn when the dice are tapped once the move is whole, and does nothing before that', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = await live(match({}));
+
+        tapDice(container);
+
+        expect(zone(container).hasAttribute('data-live')).toBe(false);
+        expect(play).not.toHaveBeenCalled();
+
+        fire(button(container, 'Move a checker from 13 to 7'), 'click');
+        fire(button(container, 'Move a checker from 8 to 7'), 'click');
+        await elapse(2000);
+
+        expect(zone(container).dataset.live).toBe('done');
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('That is your whole move. Play it, or undo to change it.');
+
+        tapDice(container);
+
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'move', hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }]);
+    });
+
+    it('asks before a double is offered: the cube opens the question, and only its answer sends anything', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = await live(match({ phase: 'roll', dice: [], doubling: true }));
+        const ask = () => container.querySelector<HTMLElement>('.bg-ask');
+
+        expect(cube(container)?.hasAttribute('data-live')).toBe(true);
+        expect(ask()).toBeNull();
+
+        cube(container)!.click();
+        await flush();
+
+        expect(play).not.toHaveBeenCalled();
+        expect(ask()?.textContent).toContain('Offer a double to 2?');
+
+        fire(button(ask()!, 'Not now'), 'click');
+        await flush();
+
+        expect(ask()).toBeNull();
+        expect(play).not.toHaveBeenCalled();
+
+        cube(container)!.click();
+        await flush();
+        fire(button(ask()!, 'Double to 2'), 'click');
+        await flush();
+
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'double' }]);
+        expect(ask()).toBeNull();
+    });
+
+    it('leaves the cube alone when no double may be offered', async () =>
+    {
+        const { container } = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        expect(cube(container)?.hasAttribute('data-live')).toBe(false);
+
+        cube(container)!.click();
+        await flush();
+
+        expect(container.querySelector('.bg-ask')).toBeNull();
+    });
+
+    it('puts the answer to a double on the board in front of the player it was offered to, and of nobody else', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const asked = await live(match({ phase: 'double', turn: 0, dice: [] }));
+        const ask = asked.container.querySelector<HTMLElement>('.table-surface .bg-ask')!;
+
+        expect(ask.textContent).toContain('doubles to 2.');
+        expect(ask.getAttribute('dir')).toBe('ltr');
+
+        fire(button(ask, 'Take at 2'), 'click');
+
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'take' }]);
+        asked.unmount();
+
+        const waiting = await live(match({ phase: 'double', turn: 1, dice: [] }));
+
+        expect(waiting.container.querySelector('.bg-ask')).toBeNull();
+        waiting.unmount();
+
+        const watching = await live(match({ phase: 'double', turn: 0, dice: [] }, null));
+
+        expect(watching.container.querySelector('.bg-ask')).toBeNull();
+    });
+
+    it('moves a checker that is tapped, and takes it back when it is tapped again', async () =>
+    {
+        const { container } = await live(match({}));
+        const undoing = () => !(button(container, 'Undo').disabled || button(container, 'Undo').getAttribute('aria-disabled') === 'true');
+
+        tapPoint(container, 24);
+        await flush();
+
+        expect(undoing(), 'a checker with two ways to go was moved by the first tap').toBe(false);
+        expect(container.querySelectorAll('.bg-layer .bgt-mark')).toHaveLength(2);
+        expect(container.querySelectorAll('.bg-layer .man[data-held]')).toHaveLength(1);
+
+        tapPoint(container, 18);
+        await elapse(1200);
+
+        expect(undoing()).toBe(true);
+        expect(container.querySelectorAll('.bg-layer .man[data-back]'), 'a checker with nowhere further to go was not marked as one a tap takes back').toHaveLength(1);
+
+        tapPoint(container, 8);
+        await elapse(1200);
+
+        expect(stagedOn(container)).toBe(true);
+        expect(container.querySelectorAll('.bg-layer .man[data-back]')).toHaveLength(1);
+
+        tapPoint(container, 7);
+        await elapse(1200);
+
+        expect(stagedOn(container)).toBe(false);
+        expect(undoing()).toBe(true);
+
+        tapPoint(container, 18);
+        await elapse(1200);
+
+        expect(undoing()).toBe(false);
+        expect(container.querySelectorAll('.bg-layer .man[data-back]')).toHaveLength(0);
+    });
+
+    it('offers the way back beside the ways on when the checker last moved could also go further', async () =>
+    {
+        const { container } = await live(match({ dice: [3, 3] }));
+        const backs = () => container.querySelectorAll('.bg-layer .bgt-mark[data-back]').length;
+        const left = () => container.querySelector('.bg-layer .bgt-left')?.textContent ?? null;
+
+        fire(button(container, 'Move a checker from 13 to 10'), 'click');
+        await elapse(1200);
+
+        expect(left()).toBe('×3');
+        expect(container.querySelectorAll('.bg-layer .man[data-back]'), 'a checker that can go on was marked as only going back').toHaveLength(0);
+
+        tapPoint(container, 10);
+        await flush();
+
+        expect(left(), 'the tap moved the checker on instead of asking').toBe('×3');
+        expect(backs()).toBe(1);
+        expect(container.querySelectorAll('.bg-layer .man[data-held]')).toHaveLength(1);
+
+        tapPoint(container, 13);
+        await elapse(1200);
+
+        expect(left()).toBe('×4');
+        expect(backs()).toBe(0);
+    });
+
+    it('lifts a checker the moment it is pressed, and puts it down when the press is let go elsewhere', async () =>
+    {
+        const { container } = await live(match({}));
+        const held = () => container.querySelectorAll('.bg-layer .man[data-held]').length;
+
+        tapPoint(container, 13, 'pointerdown');
+
+        expect(held()).toBe(1);
+
+        tapPoint(container, 13, 'pointerleave');
+
+        expect(held()).toBe(0);
+
+        tapPoint(container, 1, 'pointerdown');
+
+        expect(held(), 'a point with nothing to move lifted a checker').toBe(0);
+    });
+
+    it('keeps a tapped checker lifted until it takes off, when its move has to wait behind another', async () =>
+    {
+        const { container } = await live(match({}));
+        const held = () => container.querySelectorAll('.bg-layer .man[data-held]').length;
+
+        tapPoint(container, 13);
+        await flush();
+        tapPoint(container, 8);
+        await flush();
+
+        expect(held(), 'the second checker did nothing until the first had landed').toBe(1);
+
+        await elapse(1600);
+
+        expect(held()).toBe(0);
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(zone(container).dataset.live).toBe('done');
+    });
+
+    it('moves the reader along its own moves when they are made from the keyboard', async () =>
+    {
+        const { container } = await live(match({}));
+        const first = button(container, 'Move a checker from 13 to 7');
+
+        first.focus();
+        fire(first, 'click');
+        await flush();
+
+        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]'), 'the reader was dropped onto the page').not.toBeNull();
+
+        fire(button(container, 'Move a checker from 8 to 7'), 'click');
+        await flush();
+
+        expect(document.activeElement).toBe(button(container, 'Play the move'));
+
+        fire(button(container, 'Undo'), 'click');
+        await flush();
+
+        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]')).not.toBeNull();
+    });
+
+    it('puts the reader on their first move after a roll made from the keyboard, and leaves a tap on the dice where it was', async () =>
+    {
+        const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+        const rolled = () => table.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+
+        vi.spyOn(useBoard(), 'play').mockImplementation(async () =>
+        {
+            rolled();
+
+            return 'now';
+        });
+
+        button(table.container, 'Roll').focus();
+        fire(button(table.container, 'Roll'), 'click');
+        await flush();
+
+        expect((document.activeElement as HTMLElement | null)?.closest('[data-key="hops"]'), 'the reader was dropped onto the page when Roll went').not.toBeNull();
+        table.unmount();
+
+        const tapped = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        vi.spyOn(useBoard(), 'play').mockImplementation(async () =>
+        {
+            tapped.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+
+            return 'now';
+        });
+
+        tapDice(tapped.container);
+        await flush();
+
+        expect(document.activeElement?.closest('.bg-keys') ?? null, 'a tap on the table opened the keyboard\'s panel').toBeNull();
     });
 });

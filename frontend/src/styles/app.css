@@ -1880,6 +1880,36 @@ html:has(.site-drawer[open])
 {
     display: flex;
     min-inline-size: 0;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+}
+
+.bg-plate > .table-plate
+{
+    flex: none;
+}
+
+.bg-plate-out
+{
+    flex-wrap: wrap;
+}
+
+.bg-plate-in > .bg-clock
+{
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+[data-sheet] .bg-clock
+{
+    display: none;
+}
+
+.bg-plate-in[data-me] > .bg-clock
+{
+    order: -1;
 }
 
 .bg-plate-in:not([data-me])
@@ -1897,25 +1927,74 @@ html:has(.site-drawer[open])
     display: none;
 }
 
+@container stage not ((min-width: 44rem) and (min-aspect-ratio: 3 / 2))
+{
+    @media not ((orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3))
+    {
+        .bg-grid
+        {
+            grid-template-rows: minmax(0, 1fr);
+            grid-template-areas: 'fit';
+        }
+
+        .bg-bar
+        {
+            position: absolute;
+            inset-block-end: 0;
+            inset-inline-start: 0;
+            z-index: 2;
+            inline-size: auto;
+        }
+
+        .bg-bar .coach-line
+        {
+            position: relative;
+            box-sizing: border-box;
+            inline-size: 2.75rem;
+            block-size: 2.75rem;
+            min-block-size: 0;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border-radius: 999px;
+        }
+
+        .bg-bar .coach-line > span:last-child
+        {
+            position: absolute;
+            inset-block-end: calc(100% + 0.5rem);
+            inset-inline-start: 0;
+            display: block;
+            overflow: hidden;
+            inline-size: 1px;
+            block-size: 1px;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+
+        .bg-bar .coach-line[data-open] > span:last-child
+        {
+            overflow: visible;
+            inline-size: min(20rem, 100cqw - 2rem);
+            block-size: auto;
+            padding: 0.5rem 0.75rem;
+            clip-path: none;
+            white-space: normal;
+            border: 1px solid var(--color-line-strong);
+            border-radius: var(--radius-tile);
+            background: var(--color-lifted);
+            color: var(--color-text);
+            box-shadow: var(--shadow-2);
+        }
+    }
+}
+
 @container stage (max-width: 36rem)
 {
     .bg-stage .table-fit
     {
         margin-inline: calc(0.375rem - var(--page-pad, 1rem));
     }
-}
-
-@container stage (max-height: 24rem)
-{
-    .bg-info
-    {
-        display: none;
-    }
-}
-
-[data-sheet] .bg-info
-{
-    display: none;
 }
 
 [data-sheet] .table-bar .coach-line
@@ -2277,6 +2356,33 @@ html:has(.site-drawer[open])
     box-shadow: 0 0 0 calc(var(--man) * 0.09) var(--accent), 0 calc(var(--man) * 0.06) calc(var(--man) * 0.13) rgb(0 0 0 / 0.5);
 }
 
+.man[data-held]
+{
+    scale: 1.12;
+    box-shadow: 0 0 0 calc(var(--man) * 0.09) var(--accent), 0 calc(var(--man) * 0.16) calc(var(--man) * 0.3) rgb(0 0 0 / 0.55);
+    transition: scale 90ms ease-out;
+}
+
+.man[data-back]::before,
+.bgt-mark[data-back]::before
+{
+    content: '';
+    position: absolute;
+    inset: 24%;
+    background: var(--ink, var(--nard-inlay));
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.man[data-tone='light'][data-back]
+{
+    --ink: var(--nard-dark);
+}
+
+.man[data-tone='dark'][data-back]
+{
+    --ink: var(--nard-light);
+}
+
 .man[data-off]
 {
     background: linear-gradient(var(--hi), var(--fill) 70%, var(--lo));
@@ -2328,6 +2434,12 @@ html:has(.site-drawer[open])
     background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
+.bgt-mark[data-back]
+{
+    border-color: var(--nard-inlay);
+    background: color-mix(in srgb, var(--nard-frame) 55%, transparent);
+}
+
 .bgt-dice
 {
     --dice-em: clamp(1.75rem, 7.5cqw, 2.75rem);
@@ -2368,6 +2480,66 @@ html:has(.site-drawer[open])
     }
 }
 
+.bgt-hit
+{
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: 3.9em;
+    block-size: 2.3em;
+    translate: -50% -50%;
+    border-radius: 0.5em;
+    opacity: 0;
+}
+
+.bgt-dice[data-live] > .bgt-hit
+{
+    cursor: pointer;
+    pointer-events: auto;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    box-shadow: 0 0 0 0.07em color-mix(in srgb, var(--accent) 75%, transparent);
+    opacity: 1;
+    animation: bgt-invite 1.6s ease-in-out infinite;
+}
+
+.bgt-dice[data-live='roll'] > .die3d
+{
+    animation: bgt-wait 1.6s ease-in-out infinite;
+}
+
+.bgt-dice[data-shake] > .die3d
+{
+    animation: bgt-rattle 110ms ease-in-out infinite alternate;
+}
+
+.bgt-dice[data-shake] > .die3d + .die3d
+{
+    animation-direction: alternate-reverse;
+}
+
+.die3d[data-blank] .die3d-pip
+{
+    opacity: 0;
+}
+
+@keyframes bgt-invite
+{
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+@keyframes bgt-wait
+{
+    0%, 100% { scale: 1; }
+    50% { scale: 1.07; }
+}
+
+@keyframes bgt-rattle
+{
+    from { rotate: -11deg; }
+    to { rotate: 11deg; }
+}
+
 .bgt-cube
 {
     position: absolute;
@@ -2383,6 +2555,80 @@ html:has(.site-drawer[open])
     color: var(--nard-dark);
     font-weight: 800;
     box-shadow: 0 0.4cqw 0.9cqw rgb(0 0 0 / 0.45);
+}
+
+.bgt-cube[data-live]
+{
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 0 0 0.45cqw var(--accent), 0 0.4cqw 0.9cqw rgb(0 0 0 / 0.45);
+}
+
+.bgt-cube[data-live]::before
+{
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: max(100%, 2.75rem);
+    block-size: max(100%, 2.75rem);
+    translate: -50% -50%;
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .bgt-dice[data-live] > .bgt-hit,
+    .bgt-dice[data-live='roll'] > .die3d,
+    .bgt-dice[data-shake] > .die3d
+    {
+        animation: none;
+    }
+}
+
+.bg-ask
+{
+    position: absolute;
+    top: 50%;
+    left: 36%;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    inline-size: max-content;
+    max-inline-size: calc(100% - 1.5rem);
+    padding: 0.75rem;
+    translate: -50% -50%;
+    border: 1px solid color-mix(in srgb, var(--nard-inlay) 60%, transparent);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--nard-tray) 90%, transparent);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 18px 36px -18px rgb(0 0 0 / 0.9);
+}
+
+.bg-ask-title
+{
+    color: var(--nard-light);
+    font-size: var(--text-ui-sm);
+    font-weight: 600;
+    text-align: center;
+}
+
+.bg-keys:focus-within
+{
+    inset-block-end: 0;
+    inset-inline: 0;
+    z-index: 3;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    padding: 0.5rem;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-panel);
+    background: var(--color-lifted);
+    box-shadow: var(--shadow-2);
 }
 
 .die3d

@@ -2446,20 +2446,80 @@ server right up until the position where it mattered. The rules coach asks the s
 found. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
 
-**Every move is a button as well as a tap.** The field - frame, points, bar and tray - is one inline
-SVG drawn from `game/backgammon-layout.ts`, and the checkers, the dice, the cube, the marks on the
-points a picked checker can reach and the count of a double's moves are elements in a layer over it
-(`.bg-layer`), placed in the same 1000 by 820 units through `cqw`. Both are
-`aria-hidden`; the hops on offer are listed beneath the board as real buttons with sentences for
-names, and a screen reader is given each side's stacks in words. That is the canvas rule ludo already
-follows, for the same two reasons: a keyboard and a screen reader can play, and the responsive matrix
-has something to hit-test. The SVG takes the tap itself and turns the pointer into a point with
-`pointAt`, rather than twenty-four invisible buttons none of which could be 44px wide on a phone; the
-layer over it lets every pointer through. The bar's branches read `derived` booleans (`rolling`,
-`answering`, `staging`, `offered`), so staging a hop keeps Undo, "Play the move" and every hop still
-on offer the nodes they were: they sat under conditions that read the board and the plan, both new
-objects after every hop, and were drawn again each time. `backgammon-board.spec.ts` holds the nodes
-through a staged hop and a re-read.
+**Every move is made on the table, and a keyboard still has every one of them.** The owner asked
+for it in so many words: "remove those html css buttons for next move or smth like this everything
+should be on table by touch or click it is production mode realm game". Roll, Double, Take, Drop,
+Undo, "Play the move" and a row of hop chips used to sit under the board, which reads as a web form
+beside a picture of a game. The field - frame, points, bar and tray - is one inline SVG drawn from
+`game/backgammon-layout.ts`, and the checkers, the dice, the cube, the marks on the points a picked
+checker can reach and the count of a double's moves are elements in a layer over it (`.bg-layer`),
+placed in the same 1000 by 820 units through `cqw`. What is pressed now:
+
+- **The dice roll, and the dice end the turn.** When the roll is the reader's to make, two blank
+  dice lie where dice rest, in a ring that breathes, and a tap on them is the roll: they shake
+  while the request is out, are picked up, and the dice that were rolled are thrown in from the
+  reader's edge. When the staged turn is whole the same ring comes back round the rolled dice and a
+  tap plays the turn, as picking the dice up ends a turn across a real board. The table keeps this
+  itself (`invite`): the blank dice are laid only when no dice are on the table and nothing is
+  being thrown, and they are back after the table is drawn again.
+- **The cube doubles, and it asks first.** While a double may be offered the cube wears a ring; a
+  tap opens a question ON the board ("Offer a double to 2?", Double, Not now), because the cube
+  sits on the bar among checkers people are tapping and a double cannot be taken back. A double
+  that waits on the reader is answered in the same place, Take and Give up, in front of the reader
+  it was offered to and nobody else. These are real buttons, so they are the keyboard's too.
+- **A checker moves when it is tapped, and goes back when it is tapped again.** One way to go and
+  the tap is the move; more than one and the checker lifts and its points are marked. The checker
+  moved LAST is the exception that makes taking back possible without a button: a tap on it never
+  moves it on. With nowhere further to go it wears a small arrow and the tap takes it back; with
+  somewhere to go it lifts, its ways on are marked, and so is the point it came from, in brass with
+  the same arrow.
+- **A checker lifts under the finger.** On the press, not on the release, and at once for a move
+  that then has to wait its turn behind a scene: `hold` is a state of the checker, outside the
+  queue. The first live check of 1.2 found a pressed checker doing nothing for up to half a second.
+
+The SVG takes the tap itself and turns the pointer into a point with `pointAt`, rather than
+twenty-four invisible buttons none of which could be 44px wide on a phone; the dice and the cube
+are the only things in the layer that take a pointer, each only while it can be pressed, the cube
+through a 44px area of its own.
+
+**The keyboard's path is the same moves as real buttons, in a panel nobody else sees.** Roll,
+"Double to 2", Undo, "Play the move" and every hop on offer, named as they always were, sit in
+`.bg-keys`, a child of the stage that is `sr-only` until focus enters it and is then drawn over the
+foot of the stage, never in its flow. It is not inside anything that clips: a panel inside a
+hidden element could never be shown. A screen reader is still given each side's stacks in words.
+After a roll, a hop or an undo made there the reader is put on the next hop, or on "Play the move"
+when the turn is whole: the button that was pressed is gone, and the page body is where focus went
+before. A roll made by tapping the dice moves no focus, or the panel would open for somebody who
+never asked for it. The panel's branches read `derived` booleans (`rolling`, `staging`,
+`offered`), so staging a hop keeps every control still on offer the node it was.
+
+**Nothing textual sits under the board.** The owner again, the same day: "description for movement
+is useless on games", "we can have more space of game", "game board is more important that
+descriptions". The bar that held the turn sentence, the match line, the tip and the buttons took up
+to 126px of a phone, and because the board is centred in what the bar leaves it moved the whole
+board as it grew and shrank: 58px at 390 by 844 when the turn changed, and still 31px with the
+buttons gone, while the tip came and went. On an upright screen the bar is out of the layout, and
+the grid there is the fit cell alone. What it said is kept three ways:
+
+- **The sentences are a screen reader's.** The turn sentence is still the live region, and the
+  match line still follows it, both `sr-only`. Whose turn it is, a sighted player reads off the
+  table: the plate that glows, the dice in their ring, the checkers that are lit. So the sentences
+  say what the hidden buttons say ("Roll the dice", "Play it, or undo to change it") and never
+  "tap the dice": the only reader they have left cannot tap anything, and has those buttons.
+- **The clock is on the plate of whoever is on turn.** Each plate is drawn in two places and CSS
+  shows one, so there are two clocks; only the one in the fit cell is told the turn is the
+  reader's, so the last five seconds tick once whichever copy is on screen.
+- **The tip is a lamp in the corner of the stage.** 44px, it opens over the board when it is
+  pressed and takes nothing from it closed; its words stay in the accessibility tree while it is
+  closed. Beside the board, on a wide or sideways screen, the column that holds the plates shows
+  the tip in full, because that room was never the board's.
+
+Measured on the production build at 390 by 844, through a roll, a hop, a whole turn and the other
+player's turn, the board does not move at all.
+
+`backgammon-board.spec.ts` (*moves made on the table itself*) taps the dice, the cube and points of
+the board, `backgammon-table.spec.ts` (*what is pressed on the table itself*) holds the table's
+half, and `backgammon-play-pass.mjs` plays its turns on the table in two real browsers.
 
 **The checkers are objects, and a move is that checker travelling.** The board was a drawing of
 counts: every action drew thirty circles again where the new position put them, with a sound.
@@ -2561,10 +2621,11 @@ still land one after the other, a fade apart. A thrown die fades as a whole: an 
 on the cube's own body flattens its six faces into one plane, which drew nothing for four of the
 faces and a 1 for a 6 until the fade ended, so the fade is on the die's outer node.
 
-**What 1.2 does not do yet, so nobody reads this as finished.** The controls still read the board
-the server sent, so the words and the hop list tell a roll before the dice have landed; an opening
-is thrown only when it arrives with the end of the game before it, because the first opening of a
-match never reaches a board; and a game that ends has no banner. Each is its own commit in the plan
+**What the board does not do yet, so nobody reads this as finished.** The words and the marks still
+read the board the server sent, so they tell a roll before the dice have landed; an opening is
+thrown only when it arrives with the end of the game before it, because the first opening of a
+match never reaches a board; a game that ends has no banner; and a checker cannot be dragged, only
+tapped. Each is its own commit in the plan
 (`docs/superpowers/specs/2026-10-11-table-presentation-design.md`).
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
@@ -3071,7 +3132,10 @@ before it clicks cards.
 
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
-for themselves. Backgammon plays eight turns by pressing Roll, Double, Take and the move list, poker
+for themselves. Backgammon plays eight turns ON THE TABLE - it taps the dice to roll and to end a
+turn, the cube and then Double, Take on the board, and the points of the board for every hop, with
+where a point is taken from the layout module the board is drawn from - and fails if a button for
+a move is on show under the board. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
 and both finish over the api and assert the result in both browsers. What "the other browser saw it"
 means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,

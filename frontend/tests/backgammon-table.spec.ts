@@ -61,6 +61,7 @@ let drawn: Drawn[];
 let still: boolean;
 let broke: unknown[];
 let digits: (value: number) => string = String;
+let pressed: string[];
 
 const elapse = async (ms: number) =>
 {
@@ -106,6 +107,7 @@ beforeEach(() =>
     broke = [];
     still = false;
     digits = String;
+    pressed = [];
     host = document.createElement('div');
     host.className = 'bg-layer';
     document.body.append(host);
@@ -119,7 +121,15 @@ beforeEach(() =>
 
     stage = createStage({ clock, quiet: () => still, report: (error) => broke.push(error) });
     director = createDirector(stage, clock, (error) => broke.push(error));
-    table = createBackgammonTable({ host, stage, sound: () => sound, feel: (kind) => felt_.push(kind), say: (value) => digits(value) });
+    table = createBackgammonTable({
+        host,
+        stage,
+        sound: () => sound,
+        feel: (kind) => felt_.push(kind),
+        say: (value) => digits(value),
+        onDice: () => pressed.push('dice'),
+        onCube: () => pressed.push('cube')
+    });
 });
 
 afterEach(() =>
@@ -925,5 +935,180 @@ describe('a board that moved with nothing said about it', () =>
         expect(dice().map((die) => die.dataset.face)).toEqual(['4', '2']);
         expect(cues).toEqual([]);
         expect(drawn.some((one) => one.el.classList.contains('die3d-body'))).toBe(false);
+    });
+});
+
+describe('what is pressed on the table itself', () =>
+{
+    const zone = () => host.querySelector<HTMLElement>('.bgt-dice')!;
+
+    const tapDice = () => host.querySelector<HTMLElement>('.bgt-dice > .bgt-hit')!.click();
+
+    it('puts two blank dice out when the roll is the reader\'s, and a tap on them is the roll', () =>
+    {
+        table.reset(sight(felt()));
+
+        expect(dice()).toHaveLength(0);
+
+        tapDice();
+        expect(pressed, 'dice nobody was offered could be pressed').toEqual([]);
+
+        table.invite('roll');
+
+        expect(dice()).toHaveLength(2);
+        expect(dice().every((die) => die.hasAttribute('data-blank'))).toBe(true);
+        expect(zone().dataset.live).toBe('roll');
+        expect(table.same(sight(felt())), 'dice that are only waiting were taken for a roll').toBe(true);
+
+        tapDice();
+
+        expect(pressed).toEqual(['dice']);
+    });
+
+    it('shakes them while the roll is out, then picks them up and throws the dice that were rolled', async () =>
+    {
+        const after = sight(felt({ dice: [5, 2], seed: seedOf('m', 6) }), 6);
+
+        table.reset(sight(felt()));
+        table.invite('roll');
+        table.rattle(true);
+
+        const blank = dice();
+
+        expect(zone().hasAttribute('data-shake')).toBe(true);
+
+        play([act(6, 0, [{ e: 'roll', seat: 0, dice: [5, 2] }])], after);
+        await elapse(0);
+
+        expect(zone().hasAttribute('data-shake')).toBe(false);
+        expect(zone().hasAttribute('data-live')).toBe(false);
+
+        await elapse(PICK_MS + 60);
+
+        expect(blank.every((die) => !die.isConnected)).toBe(true);
+        expect(thrown()).toHaveLength(2);
+        expect(thrown().map((one) => fromY(one) > 5)).toEqual([true, true]);
+
+        table.invite('done');
+        await elapse(400);
+
+        expect(zone().hasAttribute('data-live'), 'the dice could be pressed to end the turn while they were still in the air').toBe(false);
+
+        await elapse(1000);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['5', '2']);
+        expect(dice().some((die) => die.hasAttribute('data-blank'))).toBe(false);
+        expect(zone().dataset.live).toBe('done');
+
+        tapDice();
+
+        expect(pressed).toEqual(['dice']);
+    });
+
+    it('takes the blank dice away when the roll is no longer the reader\'s, and has them back after the table is drawn again', async () =>
+    {
+        table.reset(sight(felt()));
+        table.invite('roll');
+        table.reset(sight(felt()));
+
+        expect(dice()).toHaveLength(2);
+        expect(dice().every((die) => die.hasAttribute('data-blank'))).toBe(true);
+        expect(zone().dataset.live).toBe('roll');
+
+        table.invite(null);
+
+        expect(zone().hasAttribute('data-live')).toBe(false);
+
+        await elapse(PICK_MS + 80);
+
+        expect(dice()).toHaveLength(0);
+    });
+
+    it('lays no blank dice over dice that are on the table, and brings them out when those are picked up', async () =>
+    {
+        table.reset(sight(felt({ dice: [3, 2] })));
+        table.invite('roll');
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['3', '2']);
+        expect(dice().some((die) => die.hasAttribute('data-blank'))).toBe(false);
+        expect(zone().hasAttribute('data-live')).toBe(false);
+
+        play([act(6, 1, [{ e: 'move', seat: 1, from: 13, to: 10, die: 3, hit: false }, { e: 'move', seat: 1, from: 13, to: 11, die: 2, hit: false }])], sight(felt({ far: row({ 6: 5, 8: 3, 10: 1, 11: 1, 13: 3, 24: 2 }) }), 6));
+        await elapse(WALK_MOST * 2 + PICK_MS + 200);
+
+        expect(director.busy()).toBe(false);
+        expect(dice()).toHaveLength(2);
+        expect(dice().every((die) => die.hasAttribute('data-blank'))).toBe(true);
+        expect(zone().dataset.live).toBe('roll');
+    });
+
+    it('lets the cube be pressed only while a double may be offered', () =>
+    {
+        table.reset(sight(felt()));
+        cube().click();
+
+        expect(pressed).toEqual([]);
+
+        table.cubed(true);
+        expect(cube().hasAttribute('data-live')).toBe(true);
+
+        cube().click();
+        expect(pressed).toEqual(['cube']);
+
+        table.cubed(false);
+        cube().click();
+
+        expect(cube().hasAttribute('data-live')).toBe(false);
+        expect(pressed).toEqual(['cube']);
+    });
+
+    it('lifts the checker that was pressed at once, and lets go of it when it leaves', async () =>
+    {
+        const held = () => [...host.querySelectorAll<HTMLElement>('.man[data-held]')];
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        table.hold(13);
+
+        expect(held()).toHaveLength(1);
+        expect(held()[0].style.translate).toBe(placed(columnOf(13).x + POINT_WIDTH / 2, TOP + RADIUS + 8 * RADIUS));
+
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+
+        expect(held()).toEqual([]);
+
+        await elapse(WALK_MOST + 100);
+
+        expect(held(), 'the next checker on the point was lifted in its place').toEqual([]);
+
+        table.hold(8);
+        expect(held()).toHaveLength(1);
+
+        table.hold(null);
+        expect(held()).toEqual([]);
+    });
+
+    it('marks the checker a tap would take back, and where it would go back to', async () =>
+    {
+        const backs = () => [...host.querySelectorAll<HTMLElement>('.bgt-mark[data-back]')].map((mark) => mark.style.translate);
+
+        table.reset(sight(felt({ dice: [6, 1] })));
+        void table.hop({ side: 'near', from: 13, to: 7, hit: false });
+        await elapse(WALK_MOST + 100);
+
+        table.undoes(7);
+
+        expect(host.querySelectorAll('.man[data-back]')).toHaveLength(1);
+        expect(host.querySelector<HTMLElement>('.man[data-back]')!.style.translate).toBe(placed(columnOf(7).x + POINT_WIDTH / 2, BOTTOM - RADIUS));
+
+        table.aim(new Set([6]), 13);
+
+        expect(backs()).toEqual([placed(columnOf(13).x + POINT_WIDTH / 2, TOP + RADIUS + 8 * RADIUS)]);
+        expect(host.querySelectorAll('.bgt-mark')).toHaveLength(2);
+
+        table.aim(new Set());
+        table.undoes(null);
+
+        expect(host.querySelectorAll('.bgt-mark')).toHaveLength(0);
+        expect(host.querySelectorAll('.man[data-back]')).toHaveLength(0);
     });
 });

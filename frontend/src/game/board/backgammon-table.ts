@@ -55,6 +55,8 @@ import type { Stage } from '../stage/stage.ts';
 import type { SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
+export type Invite = 'roll' | 'done' | null;
+
 export interface TableOptions
 {
     host: HTMLElement;
@@ -62,6 +64,8 @@ export interface TableOptions
     sound: () => SoundHandle | null;
     feel: (kind: Haptic) => void;
     say: (value: number) => string;
+    onDice?: () => void;
+    onCube?: () => void;
 }
 
 export interface BackgammonTable extends Table<Felt, Told>
@@ -69,8 +73,13 @@ export interface BackgammonTable extends Table<Felt, Told>
     hop(move: Move): Promise<boolean>;
     unhop(move: Move): Promise<boolean>;
     lit(spots: ReadonlySet<number>): void;
-    aim(spots: ReadonlySet<number>): void;
+    aim(spots: ReadonlySet<number>, back?: number | null): void;
     spend(spent: readonly boolean[], seed: number): void;
+    invite(what: Invite): void;
+    rattle(on: boolean): void;
+    cubed(live: boolean): void;
+    hold(spot: number | null): void;
+    undoes(spot: number | null): void;
     relabel(): void;
     dispose(): void;
 }
@@ -118,6 +127,10 @@ const THROW_MS = 950;
 const REACH = 5.6;
 
 const REACH_OVER = 1.2;
+
+const WAIT_SEED = 7;
+
+const WAIT_MS = 180;
 
 const HOP_BASE = 55;
 
@@ -217,6 +230,32 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     let badge: HTMLElement | null = null;
     let spots: ReadonlySet<number> = new Set();
     let aims: ReadonlySet<number> = new Set();
+    let home: number | null = null;
+    let held: string | null = null;
+    let taken: number | null = null;
+    let invited: Invite = null;
+    let waiting = false;
+
+    const hit = make('bgt-hit', zone);
+
+    const pressDice = () =>
+    {
+        if (zone.hasAttribute('data-live'))
+        {
+            options.onDice?.();
+        }
+    };
+
+    const pressCube = () =>
+    {
+        if (cubeEl.hasAttribute('data-live'))
+        {
+            options.onCube?.();
+        }
+    };
+
+    hit.addEventListener('click', pressDice);
+    cubeEl.addEventListener('click', pressCube);
 
     layered(host);
     host.style.setProperty('--man', cq(RADIUS * 2));
@@ -321,33 +360,51 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         }
     };
 
+    const resting = (spot: number | null) =>
+    {
+        const top = spot === null ? null : topAt(shown.men, 'near', spot);
+
+        return top === null || flying.has(top.key) ? null : els.get(top.key) ?? null;
+    };
+
     const lights = () =>
     {
+        const marked = new Set(aims);
+
+        if (home !== null)
+        {
+            marked.add(home);
+        }
+
         for (const el of els.values())
         {
             el.removeAttribute('data-lit');
+            el.removeAttribute('data-held');
+            el.removeAttribute('data-back');
         }
 
         for (const spot of spots)
         {
-            const top = topAt(shown.men, 'near', spot);
-
-            if (top !== null && !flying.has(top.key))
-            {
-                els.get(top.key)?.setAttribute('data-lit', '');
-            }
+            resting(spot)?.setAttribute('data-lit', '');
         }
+
+        if (held !== null && !flying.has(held))
+        {
+            els.get(held)?.setAttribute('data-held', '');
+        }
+
+        resting(taken)?.setAttribute('data-back', '');
 
         for (const [spot, mark] of marks)
         {
-            if (!aims.has(spot))
+            if (!marked.has(spot))
             {
                 mark.remove();
                 marks.delete(spot);
             }
         }
 
-        for (const spot of aims)
+        for (const spot of marked)
         {
             const here = shown.men.men.filter((man) => man.side === 'near' && man.spot === spot && !flying.has(man.key)).length;
             const slot = slotAt('near', spot, Math.min(here, STACK_SHOWN - 1));
@@ -360,6 +417,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             }
 
             mark.style.translate = placed(slot.x, slot.y);
+            mark.toggleAttribute('data-back', spot === home && !aims.has(spot));
         }
     };
 
@@ -477,6 +535,11 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         let thrown = 0;
 
         flying.add(mover.key);
+
+        if (held === mover.key)
+        {
+            held = null;
+        }
 
         if (hurt !== null)
         {
@@ -620,10 +683,52 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         const old = dice;
 
         dice = [];
+        waiting = false;
         count(0);
+        live();
 
         await Promise.all(old.map((die, index) =>
             stage.animate(die.node, [{ offset: 0, scale: '1' }, { offset: 1, opacity: 0, scale: '0.6' }], { duration: PICK_MS, delay: index * 40, fill: 'both', quiet: 'out' }).done.then(() => drop(die))));
+    };
+
+    const live = () =>
+    {
+        const mode = invited === 'roll'
+            ? (waiting ? 'roll' : null)
+            : (invited === 'done' && rested && dice.length > 0 ? 'done' : null);
+
+        if (mode === null)
+        {
+            zone.removeAttribute('data-live');
+            zone.removeAttribute('data-shake');
+        }
+        else
+        {
+            zone.dataset.live = mode;
+        }
+    };
+
+    const wait = () =>
+    {
+        if (waiting && invited !== 'roll')
+        {
+            void pick();
+        }
+
+        if (invited === 'roll' && rested && dice.length === 0)
+        {
+            dice = [0, 1].map((index) => lay(1, index, 2, WAIT_SEED));
+            diceSeed = -1;
+            waiting = true;
+
+            for (const die of dice)
+            {
+                die.node.setAttribute('data-blank', '');
+                stage.animate(die.node, [{ opacity: 0, scale: '0.8', offset: 0 }], { duration: WAIT_MS });
+            }
+        }
+
+        live();
     };
 
     const show = (faces: readonly number[], seed: number) =>
@@ -637,7 +742,9 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         diceSeed = seed;
         used = [];
         rested = true;
+        waiting = false;
         dim();
+        wait();
     };
 
     const reach = () =>
@@ -649,6 +756,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
     const cast = async (faces: readonly number[], sides: readonly Side[], seed: number) =>
     {
+        rested = false;
         await pick();
 
         const random = seeded(seed);
@@ -657,7 +765,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         dice = faces.map((face, index) => lay(face, index, faces.length, seed));
         diceSeed = seed;
         used = [];
-        rested = false;
+        waiting = false;
         dim();
 
         await Promise.all(dice.map((die, index) =>
@@ -673,6 +781,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         rested = true;
         dim();
+        wait();
     };
 
     const swap = async (faces: readonly number[], seed: number) =>
@@ -762,6 +871,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         }
 
         dim();
+        wait();
     };
 
     const perform = async (beat: Beat, at: Moment) =>
@@ -798,6 +908,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         else if (beat.kind === 'clear')
         {
             await pick();
+            wait();
         }
         else if (beat.kind === 'offer')
         {
@@ -871,7 +982,10 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         marks.clear();
         flying.clear();
         dice = [];
+        waiting = false;
+        rested = true;
         count(0);
+        live();
     };
 
     return {
@@ -970,9 +1084,10 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             lights();
         },
 
-        aim(next)
+        aim(next, back = null)
         {
             aims = next;
+            home = back;
             lights();
         },
 
@@ -984,6 +1099,34 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             {
                 dim();
             }
+        },
+
+        invite(what)
+        {
+            invited = what;
+            wait();
+        },
+
+        rattle(on)
+        {
+            zone.toggleAttribute('data-shake', on && waiting);
+        },
+
+        cubed(on)
+        {
+            cubeEl.toggleAttribute('data-live', on);
+        },
+
+        hold(spot)
+        {
+            held = spot === null ? null : topAt(shown.men, 'near', spot)?.key ?? null;
+            lights();
+        },
+
+        undoes(spot)
+        {
+            taken = spot;
+            lights();
         },
 
         relabel()
@@ -1000,6 +1143,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         dispose()
         {
             strip();
+            hit.removeEventListener('click', pressDice);
+            cubeEl.removeEventListener('click', pressCube);
             zone.remove();
             cubeEl.remove();
         }

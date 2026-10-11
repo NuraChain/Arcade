@@ -9,6 +9,6 @@ export const helpersBackgammon = {
     'helpers.backgammon.both': 'Both dice have to be played when they can be, so a move that would leave the other die nowhere to go is not offered.',
     'helpers.backgammon.higher': 'Only one die can be played here, and when either fits it has to be the higher: the {die}.',
     'helpers.backgammon.bear': 'All your checkers are home, so you can start bearing them off.',
-    'helpers.backgammon.double': 'Before you roll you can double. They then play on at {cube} or give up this game.',
+    'helpers.backgammon.double': 'Before you roll you can double: tap the cube. They then play on at {cube} or give up this game.',
     'helpers.backgammon.take': 'Take and this game goes on at {cube}. Give up and it ends now, at {now}.'
 };

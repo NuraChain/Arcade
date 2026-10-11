@@ -39,6 +39,7 @@ How to read it:
 | D8 | **Lint runs once, at the end.** Each commit runs the three typechecks and the suites, on the commit itself. | The owner's standing rule. | `npm run check` with every commit. |
 | D9 | **The scratch probes leave the repository root.** The lab is rebuilt as `tools/qa/motion-lab.mjs` and runs against the dev server; the production pass is separate. | The probes were untracked, at the root of a public repository, and not ignored. The lab imports `/src/...` modules through the page, which only the dev server serves, so what it measured cannot move into a pass against the production build. | One tool for both servers. |
 | D10 | **Moves are made on the table.** Every game action gets a direct gesture on the table and the HTML controls that offered it go. A keyboard and a screen reader keep a path a touch or mouse player never sees: the same moves as real buttons, visually hidden until keyboard focus enters them. Poker's action controls stay, because an action needs a choice and an amount, but they move onto the felt in front of the reader's seat and are drawn as part of the table. | The owner asked for it on 2026-10-11, after approving the rest: the buttons for the next move go, and everything is done on the table by touch or click. Poker keeping its controls is this design's default. | The recorded rule it replaces (quoted below the table): the board as an illustration with every move a button beside it. |
+| D11 | **No words take room from a board.** The sentences that spell a move out, the turn sentence, the match line and the tip are not drawn under or beside a board on an upright screen: the board has all the room the stage has. The sentences stay for a screen reader, the clock sits on the plate of whoever is on turn, and the tip is a lamp that opens over the board when it is pressed. | The owner, on 2026-10-11, in three messages: "description for movement is useless on games", "we can have more space of game", "game board is more important that descriptions". A bar of text under a board also moved the board as it grew and shrank. | A bar of sentences under every board, as each game had. Not hidden: the rules tip, which has a switch of its own and costs the board nothing as a lamp. |
 
 The record D1 answers, from "Drawing the board" in `.claude/rules/games.md`:
 
@@ -1345,19 +1346,30 @@ side's stacks in words for a screen reader. The server's `stage()` deciding whic
 The `[direction:ltr]` wrapper: the board is printed and does not mirror. Positions in `cqw` from
 `frontend/src/game/backgammon-layout.ts`, the constants the SVG is drawn from.
 
-**Controls on the table (D10).** It lands in commit 1.3, with the press answered at once.
+**Controls on the table (D10).** They landed in commit 1.3, with the press answered at once. The
+last two columns are what that commit built.
 
 | Action | Today's control | Gesture on the table | Assistive path |
 |---|---|---|---|
-| Roll | The "Roll" button in the bar | Tap the dice | A real button, visually hidden until keyboard focus enters it |
-| Finish the turn | "Play the move" | Tap the dice again. The server's `stage()` still says when the turn is whole. | The same |
-| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker and then its point, or drag it | The same hops as real buttons, with today's sentences for names |
-| Take a hop back | "Undo" | Tap the last checker moved | A hidden button |
-| Double | "Double to {cube}" | Tap the cube | A hidden button |
-| Answer a double | "Take at {cube}" and "Give up this game" | At the cube. D10 does not say how a take is told from a drop; commit 1.3 records it. | Two hidden buttons |
+| Roll | The "Roll" button in the bar | Tap the dice. Two blank dice lie where dice rest, in a ring; they shake while the request is out, are picked up, and the rolled dice are thrown in from the reader's edge. | A real button, visually hidden until keyboard focus enters its panel |
+| Finish the turn | "Play the move" | Tap the dice again: the ring comes back round them when the server's `stage()` says the turn is whole. | The same |
+| Stage a hop | A hop chip in "Moves you can make", or a tap on the board | Tap a checker: with one way to go the tap is the move, with more it lifts and its points are marked. It lifts on the press. Dragging is its own commit (1.3b). | The same hops as real buttons, with today's sentences for names |
+| Take a hop back | "Undo" | Tap the checker moved last. A tap never moves that checker on: with nowhere further to go it wears a small arrow and goes back; otherwise it lifts and the point it came from is marked beside its ways on. | A hidden button |
+| Double | "Double to {cube}" | Tap the cube, which wears a ring while a double may be offered. It asks first, on the board: Double, or Not now. A double cannot be taken back and the cube sits among checkers that are being tapped. | A hidden button, which sends the double itself |
+| Answer a double | "Take at {cube}" and "Give up this game" | The same two words on the board, in the place the question about a double is asked, in front of the reader it was offered to and nobody else. A take is told from a drop by the button, as Hokm's trump is chosen on its felt. | The same two buttons: they are real ones |
 
 Before a roll the view holds no dice, so the dice the reader taps to roll are the board's own
-drawing; where they wait is settled in commit 1.3 as well.
+drawing: two dice with no pips, where dice rest. The table lays them only when no dice are on it
+and nothing is being thrown, and they are not in the shown model.
+
+**No bar under the board (D11).** On an upright screen the grid is the fit cell alone. The turn
+sentence and the match line are `sr-only`, with the turn sentence still the live region. The
+clock is on the plate of whoever is on turn; each plate is drawn in two places, so there are two
+clocks, and only the one in the fit cell is told the turn is the reader's, which keeps the last
+seconds ticking once. The tip is a 44 px lamp in the corner of the stage that opens over the
+board. Beside the board, on a wide or sideways screen, the column that holds the plates shows the
+tip in full. With the bar in the layout the board moved 58 px at 390 by 844 whenever the turn
+changed hands, and still 31 px with the buttons gone; with it out, the board does not move.
 
 **Anchors and layouts.**
 

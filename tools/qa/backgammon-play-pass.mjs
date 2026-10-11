@@ -1,6 +1,7 @@
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
-import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
+import { stage, turns } from '../../backend/src/domains/match/backgammon/moves.ts';
+import { BAR_LEFT, BAR_WIDTH, HEIGHT, POINT_WIDTH, TRAY, TRAY_LEFT, WIDTH, columnOf } from '../../frontend/src/game/backgammon-layout.ts';
 
 const CLICKED_TURNS = 8;
 
@@ -9,9 +10,60 @@ const browser = await launch();
 const dana = await seat(browser, 'dana.w');
 const mina = await seat(browser, 'mina');
 
+const board = 'svg[viewBox="0 0 1000 820"]';
+
+const dice = '.bg-layer .bgt-dice';
+
 const says = async (player) => (await player.page.locator('section p[aria-live="polite"]').first().textContent().catch(() => '')) ?? '';
 
-const drawn = async (player) => `${ await says(player) }|${ await player.page.locator('svg[viewBox="0 0 1000 820"]').evaluate((element) => element.parentElement?.innerHTML ?? '').catch(() => '') }`;
+const drawn = async (player) => `${ await says(player) }|${ await player.page.locator(board).evaluate((element) => element.parentElement?.innerHTML ?? '').catch(() => '') }`;
+
+const idle = async (player) => await waitFor(async () => await player.page.locator('.table-stage[data-presenting]').count() === 0, 12000);
+
+const placeOf = (spot) =>
+{
+    if (spot === 25)
+    {
+        return { x: BAR_LEFT + BAR_WIDTH / 2, y: HEIGHT * 0.72 };
+    }
+
+    if (spot === 0)
+    {
+        return { x: TRAY_LEFT + TRAY / 2, y: HEIGHT * 0.85 };
+    }
+
+    const column = columnOf(spot);
+
+    return { x: column.x + POINT_WIDTH / 2, y: column.row === 'top' ? HEIGHT * 0.12 : HEIGHT * 0.88 };
+};
+
+const tapSpot = async (player, spot) =>
+{
+    const box = await player.page.locator(board).boundingBox();
+    const at = placeOf(spot);
+
+    await player.page.mouse.click(box.x + at.x / WIDTH * box.width, box.y + at.y / HEIGHT * box.height);
+};
+
+const tapDice = async (player, mode) =>
+{
+    const live = player.page.locator(`${ dice }[data-live="${ mode }"] > .bgt-hit`);
+
+    if (!await waitFor(async () => await live.count() > 0, 8000))
+    {
+        return false;
+    }
+
+    await live.click();
+
+    return true;
+};
+
+const shown = async (player) => await player.page.locator('main .table-stage button').evaluateAll((buttons) =>
+    buttons.filter((button) => button.closest('.sr-only, .bg-ask, .table-result') === null).length);
+
+const worded = async (player) => await player.page.locator('main .table-bar').evaluate((bar) =>
+    [...bar.children].filter((one) => !one.classList.contains('sr-only') && one.getAttribute('role') !== 'note').length).catch(() => 0);
 
 try
 {
@@ -47,8 +99,6 @@ try
 
     await start.click();
 
-    const board = 'svg[viewBox="0 0 1000 820"]';
-
     record('the starter sees the board', await waitFor(async () => await dana.page.locator(board).count() > 0));
     record('the other browser is shown the board without pressing anything', await waitFor(async () => await mina.page.locator(board).count() > 0));
 
@@ -60,7 +110,7 @@ try
         seats.set((await player.api('GET', `/matches/${ matchId }`)).body.mine, player);
     }
 
-    console.log('\n[3] turns played by pressing the controls');
+    console.log('\n[3] turns played on the table itself');
 
     let doubled = false;
 
@@ -76,54 +126,72 @@ try
         const mover = seats.get(current.turn);
         const other = mover === dana ? mina : dana;
         const view = current.view;
-        const before = await drawn(other);
         let verb = '';
 
-        await mover.page.waitForTimeout(400);
+        await idle(mover);
+        await idle(other);
+
+        const before = await drawn(other);
+
+        record(`${ mover.handle } is shown no button for a move and no sentence under the board`, await shown(mover) === 0 && await worded(mover) === 0, `${ await shown(mover) } buttons, ${ await worded(mover) } lines`);
 
         if (view.phase === 'roll')
         {
-            const double = !doubled && view.doubling ? await pressable(mover.page, /^Double to/) : null;
+            const cube = mover.page.locator('.bg-layer .bgt-cube[data-live]');
 
-            if (double !== null)
+            if (!doubled && view.doubling && await cube.count() > 0)
             {
                 doubled = true;
                 verb = 'double';
-                await double.click();
+                await cube.click();
+
+                const offer = await pressable(mover.page, /^Double to/);
+
+                record(`${ mover.handle } is asked before the cube is offered`, offer !== null && await mover.page.locator('.bg-ask').count() === 1);
+                await offer?.click();
             }
             else
             {
                 verb = 'roll';
-                const roll = await pressable(mover.page, /^Roll$/);
-
-                record(`${ mover.handle } is offered Roll on their turn`, roll !== null);
-                await roll?.click();
+                record(`${ mover.handle } rolls by tapping the dice on the table`, await tapDice(mover, 'roll'));
             }
         }
         else if (view.phase === 'double')
         {
             verb = 'take';
-            const take = await pressable(mover.page, /^Take at/);
+            const take = mover.page.locator('.bg-ask').getByRole('button', { name: /^Take at/ });
 
-            record(`${ mover.handle } is offered Take when a double waits on them`, take !== null);
-            record(`${ other.handle } is not offered Take for their own double`, await pressable(other.page, /^Take at/) === null);
-            await take?.click();
+            record(`${ mover.handle } is asked on the board whether they take the double`, await waitFor(async () => await take.count() === 1));
+            record(`${ other.handle } is not asked about their own double`, await other.page.locator('.bg-ask').count() === 0);
+            await take.click();
         }
         else
         {
             verb = 'move';
-            const list = mover.page.locator('ul[aria-label="Moves you can make"] button');
 
-            for (let hop = 0; hop < 4 && await list.count() > 0; hop += 1)
+            const own = view.seats.find((row) => row.seat === current.turn).checkers;
+            const theirs = view.seats.find((row) => row.seat !== current.turn).checkers;
+            const hops = turns({ me: [...own], them: [...theirs] }, view.dice)[0] ?? [];
+            const made = [];
+
+            for (const hop of hops)
             {
-                await list.first().click();
-                await mover.page.waitForTimeout(120);
+                const offered = stage({ me: [...own], them: [...theirs] }, view.dice, made).next.filter((one) => one.from === hop.from);
+                const direct = new Set(offered.map((one) => one.to)).size === 1 && made[made.length - 1]?.to !== hop.from;
+
+                await tapSpot(mover, hop.from);
+
+                if (!direct)
+                {
+                    await mover.page.waitForTimeout(80);
+                    await tapSpot(mover, hop.to);
+                }
+
+                made.push(hop);
+                await mover.page.waitForTimeout(160);
             }
 
-            const confirm = await pressable(mover.page, /^Play the move$/);
-
-            record(`${ mover.handle } can play a whole turn staged from the move list`, confirm !== null);
-            await confirm?.click();
+            record(`${ mover.handle } ends a turn made on the table by tapping the dice`, await tapDice(mover, 'done'), `${ hops.length } hops`);
         }
 
         const moved = await waitFor(async () => (await mover.api('GET', `/matches/${ matchId }`)).body.rev > current.rev);
