@@ -653,6 +653,22 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         found.push({ kind: 'sheet', what: `the open chat (${ sheetMode }) reaches ${ Math.round(box(fitCell).bottom - box(sheet).top) }px over the board` });
     }
 
+    if (given.openChat && sideways && sheet !== null && surface !== null && document.querySelector('.table-grid.ludo-grid') !== null)
+    {
+        const lying = box(sheet);
+        const roomy = stage !== null && box(stage).width >= 768;
+
+        for (const one of [surface, ...(roomy ? document.querySelectorAll('.table-stage .table-plate') : [])].filter(shown))
+        {
+            const rect = box(one);
+
+            if (meets(rect, lying))
+            {
+                found.push({ kind: 'sheet', what: `the chat beside the board lies ${ Math.round(Math.min(rect.right, lying.right) - Math.max(rect.left, lying.left)) }px over ${ describe(one) }, on a board with no column to give it` });
+            }
+        }
+    }
+
     if (given.openChat && given.half && sheet !== null && sheet.classList.contains('table-sheet') && sheetMode !== 'half')
     {
         found.push({ kind: 'sheet', what: `the chat took the screen (${ sheetMode }) where the board and a half sheet both fit` });

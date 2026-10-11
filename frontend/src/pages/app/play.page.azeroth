@@ -892,6 +892,7 @@ export default component PlayPage()
                 <div
                     ref={ (element) => arena = element }
                     data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
+                    data-beside={ besideSheet ? (chatWide ? 'wide' : 'narrow') : undefined }
                     class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                 >
                     <PlayHeader

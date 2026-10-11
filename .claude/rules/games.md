@@ -3473,7 +3473,9 @@ plate on the table that reaches past its edge, a felt chip on a plate, a bet chi
 anything but itself, a bet chip that meets a plate, another chip, the cards, the pot or the felt's own
 chips and their tap areas, a trick card that meets a plate, a pile of backs or another trick card or
 whose centre or either index corner hits anything but the card, and an open bottom sheet whose top
-edge is above the bottom of the board's fit cell. On a hokm felt with nothing on it, it also fails on
+edge is above the bottom of the board's fit cell. On a phone held sideways it fails an open chat
+that meets the board of a stage with no column beside the board, and from a stage 48rem wide one
+that meets a plate there. On a hokm felt with nothing on it, it also fails on
 a line of the caption that meets a plate, a pile of backs or the stock, and on a caption that does
 not say what takes the hand. Three exceptions are deliberate: a button in a
 horizontally scrolling rail is judged by its rail; the open chat may overlay the bar on a phone held
@@ -3671,6 +3673,30 @@ which is rail posture) opened a 23rem card straight over the board, and an uprig
 same over the bottom of the board. A board is sized by the screen's height in landscape, which
 leaves room beside it, and by its width upright, which leaves room below it - so the card goes where
 the room is. `play.spec.ts` holds both shapes.
+
+**A stage with no column beside its board makes the room itself.** On a phone held sideways the
+chat is a sheet down the side of the screen, 23rem wide, and it used to lie over the column every
+stage kept there for its bar. Ludo's stage lost that column the day its panel went (*The board IS
+the interface*), so the board was centred in the whole width and the chat covered 95px of it at
+844x390 and 132px at 740x360, and two plates with it. No gate failed: a sideways chat was judged
+only by the buttons under it, and those are excused. The arena says when a chat lies beside it
+(`data-beside`, `narrow` or `wide`), and a stage whose grid is the board alone gives up its inline
+end to it:
+
+- From a stage 48rem wide it gives up the whole of the sheet, and the board and all four plates
+  stand beside the chat: 216px of board at 844x390.
+- Under that there is no room for both. Clear of the chat with its plates, the board at 740x360
+  was 164px, under its usable 13rem. So the stage gives up the sheet less one column of plates:
+  the two far plates go under the chat, as they did while the bar's column was there, and the
+  board is whole at 216px.
+- The foot's lamp, its clock and "turn your phone upright" are not drawn beside a chat. With no
+  margin left beside the board they lay on the two bottom plates. The turn sentence stays for a
+  screen reader.
+
+The result of a game gives up the same room at every table, where its card used to be centred
+half under the chat. A stage that still has a column (backgammon's plates, poker's bar) keeps that
+column under the chat, as it always has. `play.spec.ts` holds the attribute through narrow, wide
+and closed.
 
 **One chat instance, never unmounted while the table is open.** The card and the sheet are the same
 `TableChat` in one container whose classes change with the posture and which is `hidden` when closed.

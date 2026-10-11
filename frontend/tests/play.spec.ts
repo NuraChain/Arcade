@@ -3246,15 +3246,22 @@ describe('the table’s chat and its controls', () =>
         expect(sheet.className).not.toContain('h-[var(--sheet-h,48dvh)]');
         expect(container.querySelector('[class*="pb-[var(--sheet"]')).toBeNull();
         expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(header().parentElement!.getAttribute('data-beside')).toBe('narrow');
         expect(header().className).toContain('pe-[min(23rem,60vw)]');
         expect(button(header(), 'Show chat')).toBeUndefined();
         expect(header().querySelector('nav.play-others')!.classList.contains('order-1')).toBe(true);
         expect([...header().querySelectorAll('nav.play-others a')].map((link) => link.getAttribute('href'))).toEqual([`/app/play/${ waiting }`]);
         expect(header().querySelector('nav.play-others p')!.textContent).toContain('waiting on you');
 
+        fire(await found(sheet, 'Make the chat bigger'), 'click');
+        await settle();
+
+        expect(header().parentElement!.getAttribute('data-beside')).toBe('wide');
+
         fire(await found(sheet, 'Hide chat'), 'click');
         await settle();
 
+        expect(header().parentElement!.hasAttribute('data-beside')).toBe(false);
         expect(header().className).not.toContain('pe-[');
         expect(button(header(), 'Show chat')).toBeDefined();
     });

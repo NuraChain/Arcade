@@ -263,6 +263,39 @@ html:has(.site-drawer[open])
     margin-inline-start: auto;
 }
 
+[data-beside]
+{
+    --beside: calc(min(23rem, 60vw) - var(--page-pad, 1rem) + 0.5rem);
+}
+
+[data-beside='wide']
+{
+    --beside: calc(min(30rem, 85vw) - var(--page-pad, 1rem) + 0.5rem);
+}
+
+[data-beside] .table-grid.ludo-grid
+{
+    padding-inline-end: calc(var(--beside) - 6.5rem);
+}
+
+@container stage (min-width: 48rem)
+{
+    [data-beside] .table-grid.ludo-grid
+    {
+        padding-inline-end: var(--beside);
+    }
+}
+
+[data-beside] .table-bar.ludo-bar > :is(.coach-line, .ludo-upright, .ludo-clock)
+{
+    display: none;
+}
+
+[data-beside] .table-result
+{
+    padding-inline-end: calc(var(--beside) + 0.75rem);
+}
+
 .ludo-upright
 {
     display: flex;

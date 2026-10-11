@@ -1553,7 +1553,10 @@ home. The turn chime. The names other gates read: `.lb`, `.lp`, `data-movable`, 
 asked for every helper to leave every game; the press answered at once still lands in 3.3. The
 stage's grid is the board alone at every size, the turn sentence is an `sr-only` live region, the
 tip is a lamp and the clock a pill at the two ends of the stage's foot, and "turn your phone
-upright" is a note between them on a phone held sideways.
+upright" is a note between them on a phone held sideways. With the chat open on such a phone the
+chat lies beside the board, and a stage that is the board alone gives up its far end to it
+(`data-beside` on the arena): the board is whole beside the chat, the two far plates go under it
+where there is no room for them, and the foot is not drawn.
 
 | Action | Today's control | Gesture on the table |
 |---|---|---|
