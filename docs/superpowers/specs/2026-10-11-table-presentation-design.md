@@ -635,18 +635,21 @@ Ten rules hold for every table. Each is followed by why.
    a felt still showing the old showdown has been told the result by the controls.
 5. **Catch-up.** The newest action is the present. Behind is everything in front of it: the queue
    plus the earlier actions of the arriving batch. A live batch plays, at double speed when behind
-   is past 1.5 s, with lingers never under 300 ms. History (read through `since` after a gap, a
-   reconnect or a return to the tab) is played only when the queue plus the whole of it fits the
-   game's limit, and snaps otherwise. A snap also follows a hidden tab, a scene that throws (logged
-   first), and the stage's box changing under a flight. A view that moved with no events
-   reconciles quietly: straight slides, no cue, no capture, and a redraw in place of the slides
-   above a count.
+   is past 1.5 s, with lingers never under 300 ms, unless the queue alone is already more than two
+   of the game's limits long: then it snaps, and play goes on from the board. History (read
+   through `since` after a gap, a reconnect or a return to the tab) is played only when the queue
+   plus the whole of it fits the game's limit, and snaps otherwise. A snap also follows a hidden
+   tab, a scene that throws (logged first), and the stage's box changing under a flight. A view
+   that moved with no events reconciles quietly: straight slides, no cue, no capture, and a redraw
+   in place of the slides above a count.
    *Why.* Judged before the arriving batch is queued, a reconnect lands on an empty queue and
    replays the past at full pace beside controls that show the present. Judged with the newest
    action counted in, an ordinary turn is behind itself: two hops and a hit are longer than 1.5 s
    and were played at double speed for being exactly as long as they are, which commit 1.2 found
-   in a real browser. A view with no events must never be drawn as captures or as journeys that
-   did not happen.
+   in a real browser. Live play with no bound at all left a table half a minute in the past when a
+   seat moved faster than its moves could be shown, with the result of the game waiting behind
+   the replay. A view with no events must never be drawn as captures or as journeys that did not
+   happen.
 6. **A press is answered in its own turn.** The reader's object moves at once at full pace. Scenes
    in front are HASTENED (live runs and timers at 4x, cues in order, lingers at their least), never
    settled in place. One prediction record `{ rev, covers, kind }` ends three ways: confirmed by the
@@ -990,7 +993,7 @@ rebuilds everything it owns; `same(sight)`; `settle(sight, ctx)`, the quiet reco
 | The first view after an open, before any fresh answer for that open | Draws it. Judges nothing as an opening or as unexplained yet: a re-opened table first mounts on the last view the store held, which may be stale. |
 | A mount or a new match id, with a delivered, unplayed opening for this match | Quiet reset to the table before the opening, then plays it (rule 9). |
 | A mount or a new match id, otherwise | Quiet reset to the view: pieces re-racked, cards collected, no cue. |
-| A live batch (pushed or acknowledged), contiguous | Enqueues ONE scene for its actions, played to the board that arrived with it. Behind is the queue plus the estimate of every action in front of the newest: past 1.5 s the scene plays at double speed with lingers never under 300 ms. |
+| A live batch (pushed or acknowledged), contiguous | Enqueues ONE scene for its actions, played to the board that arrived with it. Behind is the queue plus the estimate of every action in front of the newest: past 1.5 s the scene plays at double speed with lingers never under 300 ms. When the queue alone is already more than two of the game's limits long (`LIVE_OVER`), it snaps instead and play goes on from the board. |
 | A history batch (`live: false`) | Plays, fast when behind is past 1.5 s, if the queue plus the whole of it fits the game's limit (`table.history`); snaps otherwise. |
 | A batch marked `jump` | Snaps. |
 | The view moved with no events | Reconciles quietly when the queue is busy or the table is not already that board (`table.same`): straight slides, no cue, no capture, a redraw in place of the slides above a count. In a hidden tab it snaps instead. |
@@ -1009,7 +1012,7 @@ timestamp: a watcher's feed is thirty seconds old by design and is not "behind".
 
 | Game | A scene is | Plays fast | History snaps |
 |---|---|---|---|
-| Backgammon | One batch, played action by action: the mover's hops, the roll that follows, a game's end. | Live, with more than 1.5 s in front of its newest action. | When the queue plus the batch is longer than four seconds of scene (`HISTORY` in `backgammon-table.ts`). The estimate is the renderer's own: a cast 1150 ms, a hop 520 ms, a hit 420 ms more, a rack 1220 ms. A turn with the roll that follows it is about 2.2 s and is played; two such turns are not. |
+| Backgammon | One batch, played action by action: the mover's hops, the roll that follows, a game's end. | Live, with more than 1.5 s in front of its newest action. | When the queue plus the batch is longer than four seconds of scene (`HISTORY` in `backgammon-table.ts`). The estimate is the renderer's own: a cast 1150 ms, a hop 520 ms, a hit 420 ms more, a rack 1220 ms. A turn with the roll that follows it is about 2.2 s and is played; two such turns are not. A live move snaps when the queue is already more than eight seconds long. |
 | Ludo | One ACTION, so a swept turn of several rolls plays compressed instead of snapping. Every rest inside a batch of several actions ends at its least. | Live and more than 1.5 s behind. | Open, pinned in commit 3.1 by its acceptance case: a fold of roll 6, enter, roll 6, step, roll 2, step is played compressed and not snapped, and the roll that follows it is thrown. |
 | Hokm | One batch. Its estimate is the time to its last scheduled beat (the trick taken), never the linger or the gather after it. | More than 1500 ms behind. | More than 3000 ms behind, more than twelve actions, or more than one hand. These are today's numbers, held unchanged by the specs of commit 4.1. |
 | Poker | A batch cut at each `deal` into separate entries (a hand's end; a deal), each with its own estimate. | The view says it is the reader's turn while the felt is in an earlier hand; or live and more than 1.5 s behind. | Counted in hands, not milliseconds: with two or more deals waiting, the model is folded over everything before the newest one, the felt is set there in one step, and play goes on from there. It snaps to the view only for a gap or a hidden tab. |

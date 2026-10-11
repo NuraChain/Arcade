@@ -49,6 +49,8 @@ export interface Presenter<M>
 
 export const FAST_OVER = 1500;
 
+export const LIVE_OVER = 2;
+
 export const SETTLE = 400;
 
 const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
@@ -126,7 +128,7 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         const estimate = table.estimate(acts);
         const waiting = director.backlog();
 
-        if (!batch.live && waiting + estimate > table.history)
+        if (batch.live ? waiting > table.history * LIVE_OVER : waiting + estimate > table.history)
         {
             snap(sight);
 

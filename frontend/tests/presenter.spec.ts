@@ -440,7 +440,7 @@ describe('catching up', () =>
         expect(calls).toEqual(['play 6:e6 7:e7', 'reset m1@12']);
     });
 
-    it('never drops a move that arrived live, however many came together', () =>
+    it('plays every move of a live batch that finds the table idle, however many came together', () =>
     {
         const { presenter, calls, batch, at, opened } = setup();
 
@@ -449,6 +449,33 @@ describe('catching up', () =>
         presenter.see(batch([6, 7, 8, 9, 10, 11, 12]));
 
         expect(calls).toEqual(['play 6:e6 7:e7 8:e8 9:e9 10:e10 11:e11 12:e12']);
+    });
+
+    it('goes straight to the board when moves arrive live faster than they can be shown, and plays on from there', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const long = [{ e: 'a' }, { e: 'b' }, { e: 'c' }, { e: 'd' }, { e: 'e' }];
+        let rev = 5;
+
+        opened();
+
+        while (!calls.some((call) => call.startsWith('reset')) && rev < 30)
+        {
+            rev += 1;
+            at(rev);
+            presenter.see(batch([rev], {}, 1, long));
+        }
+
+        expect(calls, 'the table went on queueing moves it was already seconds behind').toEqual(['play 6:a+b+c+d+e', `reset m1@${ rev }`]);
+        expect(rev).toBeGreaterThan(8);
+        expect(rev).toBeLessThan(12);
+        expect(presenter.presenting()).toBe(false);
+
+        at(rev + 1);
+        presenter.see(batch([rev + 1]));
+        await elapse(ACT_MS);
+
+        expect(calls.slice(2)).toEqual([`play ${ rev + 1 }:e${ rev + 1 }`, `played ${ rev + 1 }`]);
     });
 });
 

@@ -2987,13 +2987,17 @@ ask for the board as it should stand now (`sight`). In order:
 - A batch that says `jump`, a gap in what it was told, and anything at all while the tab is hidden:
   go straight to the board. So does a tab that is hidden while something plays.
 - Otherwise the actions after the last revision it has shown, and no later than the board in hand,
-  are played to that board. `live` ones are always played, at double speed once more than a second
-  and a half stands IN FRONT of the newest action: the queue, plus the earlier actions that arrived
-  with it. Weighing only the queue let a reconnect replay a dozen actions at full pace beside
-  controls that showed the present. Weighing the newest action as well played an ordinary turn of
-  two hops and a hit at double speed, for being exactly as long as it is. What was read to catch up
-  is played only if the queue and all of it fit the game's own limit (four seconds of scene at
+  are played to that board. `live` ones are played, at double speed once more than a second and a
+  half stands IN FRONT of the newest action: the queue, plus the earlier actions that arrived with
+  it. Weighing only the queue let a reconnect replay a dozen actions at full pace beside controls
+  that showed the present. Weighing the newest action as well played an ordinary turn of two hops
+  and a hit at double speed, for being exactly as long as it is. What was read to catch up is
+  played only if the queue and all of it fit the game's own limit (four seconds of scene at
   backgammon), and is otherwise the board.
+- A live move that finds the table already more than two of those limits behind goes straight to
+  the board, and play goes on from there. Live play had no bound at first. A seat that moved faster
+  than its moves could be shown - a script did, forty-four revisions in three seconds - left the
+  table half a minute in the past at double speed, and the result of the game waiting behind it.
 - A board that moved with nothing said about it is reached by sliding (`table.settle`): no sound,
   nothing captured. This is all a watcher's board does until the watch read carries events.
 - A scene that throws is logged, and then the table is drawn again.
