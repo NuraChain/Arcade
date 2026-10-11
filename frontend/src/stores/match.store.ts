@@ -1,4 +1,4 @@
-import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+import { batch, createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { ApiError, client, type MatchPlay, type MatchView } from '../api.ts';
 
@@ -195,8 +195,13 @@ export const useBoard = createStore((): BoardApi =>
 
     const waiting = new Map<string, (reply: ReplyFrame) => void>();
 
-    const heard = (match: MatchView, batch: readonly MatchEvent[]) =>
+    const heard = (match: MatchView, told: readonly MatchEvent[]) =>
     {
+        if (match.id !== untrack(openId))
+        {
+            return;
+        }
+
         const held = untrack(board);
         const base = held !== null && held.id === match.id ? held.rev : -1;
 
@@ -207,17 +212,23 @@ export const useBoard = createStore((): BoardApi =>
         }
 
         const floor = Math.max(base, heardRev);
-        const fresh = batch.filter((event) => event.rev > floor);
+        const fresh = told.filter((event) => event.rev > floor);
+        const whole = fresh.length > 0 && !(floor >= 0 && fresh[0].rev > floor + 1);
 
-        setLatest((current) => current !== null && current.id === match.id && current.rev >= match.rev ? current : match);
-
-        if (fresh.length === 0 || (floor >= 0 && fresh[0].rev > floor + 1))
+        if (whole)
         {
-            return;
+            heardRev = fresh[fresh.length - 1].rev;
         }
 
-        heardRev = fresh[fresh.length - 1].rev;
-        setEvents((current) => ({ seq: current.seq + 1, events: fresh }));
+        batch(() =>
+        {
+            setLatest((current) => current !== null && current.id === match.id && current.rev >= match.rev ? current : match);
+
+            if (whole)
+            {
+                setEvents((current) => ({ seq: current.seq + 1, events: fresh }));
+            }
+        });
     };
 
     const overSocket = (id: string, key: string, rev: number, play: MatchPlay): Promise<Answer | null> =>

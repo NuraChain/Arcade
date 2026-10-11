@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createEffect, createRoot } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -216,6 +217,76 @@ describe('playing over the socket', () =>
         socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: { ...board(9), id: 'match-2' }, events: [] });
 
         expect(useBoard().match()?.rev).toBe(1);
+    });
+
+    it('hands a board the new position and what happened in one go, never the position beside the last batch', () =>
+    {
+        const seen: { rev: number; seq: number }[] = [];
+        const stop = createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                seen.push({ rev: useBoard().match()?.rev ?? -1, seq: useBoard().events().seq });
+            });
+
+            return dispose;
+        });
+
+        seen.length = 0;
+        socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: board(2, { turn: 1 }), events: [rolled(2)] });
+        stop();
+
+        expect(seen).toEqual([{ rev: 2, seq: 1 }]);
+    });
+
+    it('does not take the answer to a play at one table for the game at the table opened since', async () =>
+    {
+        const rolling = useBoard().roll();
+        await settle();
+        const [sent] = plays();
+
+        matches.view = async () => board(7, { id: 'match-2', tableId: 'table-2' });
+        useBoard().open('match-2');
+        await vi.waitFor(() => expect(useBoard().match()?.id).toBe('match-2'), { timeout: 2000 });
+
+        const seq = useBoard().events().seq;
+
+        socket.deliver({ v: 1, t: 'ack', n: 3, key: sent.key, match: board(2), applied: 'now', events: [rolled(2)] });
+        await rolling;
+
+        expect(useBoard().match()?.id).toBe('match-2');
+        expect(useBoard().match()?.rev).toBe(7);
+        expect(useBoard().events().seq, 'the events of the other game were handed to this board').toBe(seq);
+    });
+
+    it('does not take a catch-up that was asked about one game for the game opened while it was out', async () =>
+    {
+        let answer = (): void => undefined;
+
+        matches.since = async () =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+
+            return { match: board(3), events: [rolled(2), rolled(3)] };
+        };
+
+        clock.advance(NUDGE_WINDOW_MS);
+        socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'game', id: 'match-1', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        matches.view = async () => board(7, { id: 'match-2', tableId: 'table-2' });
+        useBoard().open('match-2');
+        await vi.waitFor(() => expect(useBoard().match()?.id).toBe('match-2'), { timeout: 2000 });
+
+        const seq = useBoard().events().seq;
+
+        answer();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(useBoard().match()?.rev).toBe(7);
+        expect(useBoard().events().seq).toBe(seq);
     });
 });
 

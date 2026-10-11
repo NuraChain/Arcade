@@ -2653,6 +2653,17 @@ because by the time the view arrives the die is already spent and gone. The rend
 beats, and a roll followed by a `pass` tumbles, wobbles and dims before it fades - "deny" and a red
 tint for three sixes. A batch already on screen when the board mounts is never replayed.
 
+**A board is told of a move once, and only of its own game.** The store wrote the new position and
+then the events as two signal writes, and each top-level write drains its effects, so everything
+that reads both ran twice per action: first with the new position beside the LAST batch, then with
+the new batch. A board that draws from the difference between two positions moved its pieces on the
+first run and was told why on the second. `heard` makes the two writes inside one `batch()`. It
+also asks whether the answer in hand is for the game that is open: a play sent at one table and
+answered after the reader had opened another used to hand the first game's events to the second
+game's board, which then found a gap in revisions that were never its own, and a catch-up read that
+was still out when the table changed did the same. An answer for a game that is not the open one is
+dropped. `match-store.spec.ts` holds the single run and both late answers.
+
 **The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
 glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
 paper is a ring nobody sees - which is true, and which misses that a red ring around a red piece in
