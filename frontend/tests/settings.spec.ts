@@ -3,7 +3,6 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import SettingsPage from '../src/pages/app/settings.page.azeroth';
-import MePage from '../src/pages/app/me.page.azeroth';
 import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
