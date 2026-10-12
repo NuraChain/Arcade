@@ -500,7 +500,7 @@ export interface MatchPort
     /** `after` is the last rank already shown, so a page continues the numbering rather than restarting. */
     leaderboard(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>;
 
-    watch(me: string, matchId: string): Promise<MatchWatch | null>;
+    watch(me: string, matchId: string, rev: number | null): Promise<MatchWatch | null>;
 
     /** Public tables with a game running on them, for somebody looking for one to watch. */
     watchable(me: string, game: string | null): Promise<WatchableTables>;

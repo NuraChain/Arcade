@@ -118,7 +118,7 @@ describe.skipIf(!active)('the match a reader is sent, against a real database', 
         const seen = [
             match,
             ...await Promise.all(players.map((player) => ports.match.view(player, match.id))),
-            (await ports.match.watch(watcher, match.id))?.match,
+            (await ports.match.watch(watcher, match.id, 0))?.match,
             ...pushed.map((push) => push.match)
         ];
 
@@ -139,7 +139,7 @@ describe.skipIf(!active)('the match a reader is sent, against a real database', 
             ended.match,
             ...await Promise.all(players.map((player) => ports.match.view(player, match.id))),
             (await ports.match.since(players[0], match.id, 0))?.match,
-            (await ports.match.watch(watcher, match.id))?.match,
+            (await ports.match.watch(watcher, match.id, 0))?.match,
             ...pushed.map((push) => push.match)
         ];
 

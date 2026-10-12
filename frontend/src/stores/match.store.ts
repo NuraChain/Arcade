@@ -18,6 +18,7 @@ export const NO_EVENTS: EventBatch = { seq: 0, id: '', events: [], live: false, 
 
 export const OPENING_MS = 10_000;
 import { ludoOf } from '../data/match.ts';
+import { runOf } from '../game/stage/feed.ts';
 import { useAccount } from './account.store.ts';
 import { refusalOf } from '../lib/refusal.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -307,10 +308,10 @@ export const useBoard = createStore((): BoardApi =>
         }
 
         const floor = floorOf(match.id);
-        const fresh = told.filter((event) => event.rev > floor && event.rev <= match.rev);
+        const { fresh, gap } = runOf(told, floor, match.rev);
         const first = live && floor < 1 && heardFor !== match.id && starts(match, told);
 
-        if (fresh.length > 0 && floor >= 0 && fresh[0].rev > floor + 1)
+        if (gap)
         {
             if (mended)
             {

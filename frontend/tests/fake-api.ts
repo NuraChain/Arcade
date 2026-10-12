@@ -1,6 +1,7 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
+import { WATCH_TAIL } from '../../backend/src/domains/match/turns.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { PEOPLE_FOUND_MAX, SEARCH_FROM, searchNeedle } from '../../backend/src/domains/social/names.ts';
 import { handleFromAddress } from '../../backend/src/domains/identity/handle.ts';
@@ -489,6 +490,8 @@ export const server =
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
     watches: {} as Record<string, unknown>,
+    ledgers: {} as Record<string, { rev: number }[]>,
+    watchedFrom: [] as string[],
 
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
@@ -501,6 +504,8 @@ export const server =
     {
         server.watching = [];
         server.watches = {};
+        server.ledgers = {};
+        server.watchedFrom = [];
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
@@ -1853,18 +1858,26 @@ export const client =
             return { matches: server.history.map((row) => ({ ...row })) };
         },
 
-        async watch({ params }: { params: { id: string } })
+        async watch({ params, query }: { params: { id: string }; query?: { rev?: string } })
         {
             server.calls.push('matches.watch');
+            server.watchedFrom.push(query?.rev ?? '');
 
-            const held = server.watches[params.id];
+            const held = server.watches[params.id] as { match: { rev: number } } | undefined;
 
             if (held === undefined)
             {
                 throw new ApiError(404, 'not-found', 'Nothing to watch there.', undefined);
             }
 
-            return structuredClone(held);
+            const asked = query?.rev ?? '';
+            const shown = held.match.rev;
+            const from = /^\d{1,15}$/.test(asked) ? Math.min(Number(asked), shown) : shown;
+            const events = shown - from > WATCH_TAIL
+                ? []
+                : (server.ledgers[params.id] ?? []).filter((event) => event.rev > from && event.rev <= shown);
+
+            return structuredClone({ ...held, events });
         }
     },
 

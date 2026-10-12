@@ -1736,7 +1736,9 @@ export const matchWatch = object({
     delay: number(),
 
     /** Whether the game is still being played. */
-    live: boolean()
+    live: boolean(),
+
+    events: array(matchEvent)
 });
 
 export type MatchWatch = Infer<typeof matchWatch>;

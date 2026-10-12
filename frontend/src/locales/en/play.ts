@@ -177,6 +177,7 @@ export const play = {
     'watch.gone': 'You are out of this game.',
     'watch.finished': 'This game is over',
     'watch.over': 'The game ended.',
+    'watch.back': 'Back to the table',
     'watch.behind': {
         one: 'The board you see is at least {count} minute behind the one they are playing on.',
         other: 'The board you see is at least {count} minutes behind the one they are playing on.'

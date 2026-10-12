@@ -182,6 +182,34 @@ describe.skipIf(!active)('a request that is not well formed, against Postgres', 
                 expect((await ports.match.since(host.id, match.id, rev))?.events, String(rev)).toEqual(whole?.events);
             }
         });
+
+        it('reads the same way for somebody watching', async () =>
+        {
+            const host = await makeUser();
+            const guest = await makeUser();
+            const watcher = await makeUser();
+            const table = await ports.table.create(host.id, { game: 'ludo', seats: 2, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: [] });
+
+            await ports.table.claim(guest.id, table.id);
+            await ports.table.setReady(host.id, table.id, true);
+            await ports.table.setReady(guest.id, table.id, true);
+
+            const match = await ports.match.start(host.id, table.id);
+            const whole = await ports.match.watch(watcher.id, match.id, 0);
+
+            expect(whole?.events.length).toBeGreaterThan(0);
+
+            for (const rev of [match.rev, match.rev + 1, 2_147_483_646, 2_147_483_647, 2_147_483_648, 99_999_999_999_999, Number.MAX_SAFE_INTEGER, Number.NaN, Number.POSITIVE_INFINITY])
+            {
+                expect(await said(() => ports.match.watch(watcher.id, match.id, rev)), String(rev)).toBe('answered');
+                expect((await ports.match.watch(watcher.id, match.id, rev))?.events, String(rev)).toEqual([]);
+            }
+
+            for (const rev of [-1, -2_147_483_649, -99_999_999_999_999])
+            {
+                expect((await ports.match.watch(watcher.id, match.id, rev))?.events, String(rev)).toEqual(whole?.events);
+            }
+        });
     });
 
     describe('a cursor that is no cursor', () =>

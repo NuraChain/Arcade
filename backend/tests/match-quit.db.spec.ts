@@ -216,7 +216,7 @@ describe.skipIf(!active)('a seat that has quit a game still being played, agains
 
         const second = await step(match.id, players);
         const mine = await ports.match.view(players[2], match.id);
-        const theirs = await ports.match.watch(watcher, match.id);
+        const theirs = await ports.match.watch(watcher, match.id, left);
         const since = await ports.match.since(players[2], match.id, left);
 
         expect(second).toBeGreaterThan(first);
@@ -227,6 +227,8 @@ describe.skipIf(!active)('a seat that has quit a game still being played, agains
         expect(since?.match.rev).toBe(first);
         expect(since?.events.map((event) => event.rev)).toEqual(expect.arrayContaining([first]));
         expect(since?.events.every((event) => event.rev <= first)).toBe(true);
+        expect(theirs?.events.length, 'a watcher was told nothing of the move its board shows').toBeGreaterThan(0);
+        expect(theirs?.events, 'a watcher and a seat that quit are told the same things').toEqual(since?.events);
     });
 
     it('is sent no move as it is made, and is rung with the watchers instead', async () =>
@@ -359,17 +361,22 @@ describe.skipIf(!active)('a seat that has quit a game still being played, agains
 
             await ports.match.resign(players[2], match.id, { key: 'gives-up' });
 
-            const young = await ports.match.watch(watcher, match.id);
+            const forfeits = (seen: Awaited<ReturnType<typeof ports.match.watch>>) =>
+                (seen?.events ?? []).flatMap((event) => (event.log.kind === 'ludo' ? event.log.moves : [])).filter((move) => move.e === 'forfeit');
+
+            const young = await ports.match.watch(watcher, match.id, 0);
 
             expect(young?.match.rev).toBeLessThanOrEqual(before);
             expect(exitOf(young?.match, 2)).toBeUndefined();
+            expect(forfeits(young), 'a watcher was told a seat had gone before its board showed it').toEqual([]);
 
             await aged(match.id, before);
 
-            const shown = await ports.match.watch(watcher, match.id);
+            const shown = await ports.match.watch(watcher, match.id, young!.match.rev);
 
             expect(shown?.match.players.find((player) => player.seat === 2)?.result).toBe('abandoned');
             expect(exitOf(shown?.match, 2)).toBe('resign');
+            expect(forfeits(shown).map((move) => move.seat)).toEqual([2]);
         });
 
         it('goes on saying it once the game is over, each seat the way it went itself', async () =>

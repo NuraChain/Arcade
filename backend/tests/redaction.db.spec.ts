@@ -288,5 +288,35 @@ describe.skipIf(!active)('one seat cannot read another', () =>
                 expect(nobody, `a seatless reader was pushed ${ secret }`).not.toContain(String(secret));
             }
         });
+
+        it('tells somebody watching nothing either seat is told alone, and a seat only what is its own', async () =>
+        {
+            const { matchId } = await secretMatch();
+            const dealt = (await matches.peek(matchId))!;
+
+            const watcher = await matches.told({ ...dealt, mine: -1 }, 0);
+            const seated = JSON.stringify(await matches.told({ ...dealt, mine: 0 }, 0));
+
+            expect(watcher.length, 'a watcher was told of no action at all').toBeGreaterThan(0);
+
+            for (const secret of SECRETS)
+            {
+                expect(JSON.stringify(watcher), `a watcher was told ${ secret }`).not.toContain(String(secret));
+            }
+
+            expect(seated).toContain(String(SECRETS[0]));
+            expect(seated, 'a seat was told what only another seat may know').not.toContain(String(SECRETS[1]));
+        });
+
+        it('tells nobody of an action the board they are handed has not reached', async () =>
+        {
+            const { matchId } = await secretMatch();
+            const dealt = (await matches.peek(matchId))!;
+            const held = { ...dealt, match: { ...dealt.match, rev: dealt.match.rev - 1 }, mine: 0 };
+
+            expect((await matches.told(held, 0)).map((event) => event.rev)).toEqual(Array.from({ length: held.match.rev }, (_, index) => index + 1));
+            expect(await matches.told(held, held.match.rev)).toEqual([]);
+            expect(await matches.told(held, dealt.match.rev + 40)).toEqual([]);
+        });
     });
 });

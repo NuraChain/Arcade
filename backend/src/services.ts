@@ -20,7 +20,7 @@ import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
-import { WATCH_DELAY_MS } from './domains/match/turns.ts';
+import { WATCH_DELAY_MS, WATCH_TAIL } from './domains/match/turns.ts';
 import { createWatchService } from './domains/match/watch.ts';
 import { createParties, type PartyWhy } from './domains/party/parties.ts';
 import { partyRefused } from './domains/party/refusal.ts';
@@ -2309,7 +2309,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             leaderboard: (game, window, after) => achieve.leaderboardOf(game, window, after),
 
-            async watch(me, matchId)
+            async watch(me, matchId, rev)
             {
                 const found = await watch.delayed(matchId);
 
@@ -2332,7 +2332,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
+                const shown = found.load.match.rev;
+                const from = rev === null || !Number.isFinite(rev) ? shown : Math.min(Math.max(Math.trunc(rev), 0), shown);
+                const events = shown - from > WATCH_TAIL ? [] : await match.told(found.load, from);
+
+                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live, events: logged(events) };
             },
 
             async watchable(me, game)

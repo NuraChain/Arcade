@@ -46,6 +46,7 @@ const QUERIES = {
     '/tables/watching': ['game', 'mode'],
     '/matches/history': ['cursor'],
     '/matches/:id/since': ['rev'],
+    '/matches/:id/watch': ['rev'],
     '/notifications': ['cursor', 'notice'],
     '/chat': ['cursor'],
     '/chat/:id/epoch': ['epoch', 'device'],

@@ -1033,7 +1033,8 @@ timestamp: a watcher's feed is thirty seconds old by design and is not "behind".
 `data-presenting` on `.table-stage` from it, beside the `data-rev` every board root already
 carries. `data-rev` says which revision is drawn;
 `data-presenting` says the motion for it has not finished. Every browser pass waits on it instead
-of sleeping (§8).
+of sleeping (§8). Since commit 2.1 the board hands the same signal to whoever drew it, as
+`onPresenting` on `BoardProps`, for a frame that states an outcome of its own (§7.4).
 
 **The quiet reader.** A reader is quiet when `!inPlay(match)` (`frontend/src/data/match.ts`): a
 watcher, a seat that quit, a poker seat out of chips. A quiet reader gets foley only: no turn
@@ -2109,6 +2110,45 @@ nobody in its last hand.
 The database specs are skipped unless `TEST_DATABASE_URL` is set, so commit 2.1 is gated with
 `npm run test:db --workspace backend` against a disposable database, and with the garbage pass.
 
+### 7.4 As built (commit 2.1)
+
+Everything in 7.1 to 7.3 landed as written, with these differences.
+
+- **The bound is a count of its own.** The presenter's catch-up bound became a length of scene
+  per game in commit 1.2 (four seconds at backgammon), so there is no number for the server to
+  share. `WATCH_TAIL` is twelve actions in `backend/src/domains/match/turns.ts`, and the specs'
+  server reads the same constant.
+- **A revision is digits or it is nothing.** The route reads `rev` as a whole number of at most
+  fifteen digits. `12abc`, `1.5`, `-1` and a number of twenty digits are no revision: the board
+  and no events. The port clamps what it is handed all the same.
+- **The fold is not one function shared whole.** The board store mends a gap by reading `since`
+  and the watch store shows the board alone, so what they share is the rule both start from:
+  `runOf(events, floor, upTo)` in `stage/feed.ts`, which answers the fresh run, whether it has a
+  gap at its start and whether it is whole. `watch-store.spec.ts` drives one run of moves
+  through both stores and requires the same batches.
+- **Reads are one chain, not an aborted fetch.** The store is no longer a resource. A read
+  asked for while one is out is that read and one more.
+- **A watcher's batches are live.** They are what the watcher is being shown now, so the
+  presenter plays them, at double speed when much stands in front, and goes straight to the
+  board only past twice the table's limit, as it does for a player.
+- **The ring of everything is answered.** A watcher with no socket was moved only by the
+  half-minute poll; the store reads on the lifeline's ring too, which with a revision held is
+  one cheap read.
+- **The frame's words wait for the board.** Found in the browser: read from the view alone,
+  the frame called the game over, and offered the way back, about four seconds before the
+  board had shown its end. A board on the stage tells whoever drew it when it is playing
+  (`onPresenting` on `BoardProps`; the backgammon board passes on the presenter's `watch` and
+  says false when it is taken down), and `WatchBoard` calls a game over when it is finished
+  and its board is still. Each later board takes this on in the commit that puts it on the
+  stage (3.1, 4.3, 5.2), with the same test: the real board in the real frame, handed the end
+  and its events in one write.
+- **The panel that offers a chair waits for the reader, not for the result.** Over a finished
+  game the watched board offers "Back to the table", and that press closes the watch. A panel
+  that arrives by itself under a result would move the table while somebody is reading it.
+- **A seat that quit is unchanged here.** The store already reads `since` across a gap (commit
+  1.2). A resignation folding the feed from the revision held before the press still lands with
+  the first game a seat can quit and go on watching (commit 3.1).
+
 ## 8. Verification
 
 **Per commit.** `tsc --noEmit -p tsconfig.json` in `backend/`, the language server's `tsc-cli` in
@@ -2157,7 +2197,7 @@ the checker, the dice, the card, and no longer a list of buttons. It asserts:
 | The die | Its face is read from the cube's computed matrix. |
 | The press is answered | A new script-made animation targets the pressed object within two frames. |
 | Reduced motion | No keyframe on the table that lasts a frame or more carries a transform. |
-| The watcher | Its board does not move for 25 s, and then travels. Lands with commit 2.1. |
+| The watcher | Its board does not move for 25 s, and then travels. Landed in commit 2.1, with the move arriving no sooner than the delay and on the nodes that were already there. The move that ends the match is made in front of a watcher whose board is level: it travels, the game is called on the board before the result card, and on no frame does the page say the game is over, or offer the way back, while the board is still playing. |
 | Reload and hidden tab | Each leaves the board equal to `GET /matches/:id`. |
 | The console | Clean. |
 

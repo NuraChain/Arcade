@@ -7,6 +7,7 @@ import type { DataSource } from 'typeorm';
 import { NotFoundError } from '@azerothjs/http';
 
 import { buildApp } from '../src/app.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { partyRefusal, partyRefused } from '../src/domains/party/refusal.ts';
 import { PARTY_REFUSALS, type PartyRefusal } from '../src/domains/party/rules.ts';
 import { tableRefusal } from '../src/domains/table/service.ts';
@@ -504,6 +505,96 @@ describe('teaming up', () =>
         {
             expect(spared, path).toContain(`'${ path }'`);
         }
+    });
+});
+
+describe('watching a game', () =>
+{
+    const shown = {
+        match: {
+            id: 'a-match',
+            tableId: 'a-table',
+            game: 'ludo',
+            rev: 3,
+            seats: 2,
+            players: [{ seat: 0, who: 'dana' }, { seat: 1, who: 'omid' }],
+            turn: 0,
+            view: ludoEngine.view(ludoEngine.create([0, 1], { die: () => 1 }, { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state, null),
+            startedAt: '2026-10-12T00:00:00.000Z'
+        },
+        behind: 31,
+        delay: 30,
+        live: true,
+        events: [{ rev: 3, seat: 0, at: '2026-10-12T00:00:31.000Z', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 4 }] } }]
+    };
+
+    const watchedAs = (told: unknown[][], answer: unknown = shown) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            match: {
+                watch: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve(answer);
+                }
+            }
+        } as unknown as Ports
+    });
+
+    it('hands the read the id as it came and the revision the reader holds', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await call(watchedAs(told), '/api/matches/A-MATCH/watch?rev=2');
+
+        expect(response.status).toBe(200);
+        expect(told).toEqual([['somebody', 'A-MATCH', 2]]);
+    });
+
+    it('reads a revision that is absent, or is no whole number, as no revision at all', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = watchedAs(told);
+        const queries = ['', '?rev=', '?rev=abc', '?rev=-1', '?rev=1.5', '?rev=2e3', '?rev=12abc', '?rev=%201', '?rev=99999999999999999999'];
+
+        for (const query of queries)
+        {
+            expect((await call(app, `/api/matches/a-match/watch${ query }`)).status, query).toBe(200);
+        }
+
+        expect(told.map((said) => said[2])).toEqual(queries.map(() => null));
+    });
+
+    it('sends the events beside the board, and nothing the wire does not declare', async () =>
+    {
+        const answer = { ...shown, secret: 'x', events: [{ ...shown.events[0], secret: 'y' }] };
+        const body = await (await call(watchedAs([], answer), '/api/matches/a-match/watch?rev=0')).json() as Record<string, unknown>;
+
+        expect(body.events).toEqual(shown.events);
+        expect(Object.keys(body).sort()).toEqual(['behind', 'delay', 'events', 'live', 'match']);
+    });
+
+    it('answers nothing to watch in one sentence, whatever revision was asked from', async () =>
+    {
+        const app = watchedAs([], null);
+        const said: unknown[] = [];
+
+        for (const query of ['', '?rev=0', '?rev=7', '?rev=abc'])
+        {
+            const response = await call(app, `/api/matches/a-match/watch${ query }`);
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect(response.status, query).toBe(404);
+            said.push([body.error.code, body.error.message]);
+        }
+
+        expect(new Set(said.map((one) => JSON.stringify(one))).size).toBe(1);
+        expect(said[0]).toEqual(['not-found', 'No game to watch there.']);
     });
 });
 

@@ -120,6 +120,19 @@ describe('the projector', () =>
         expect(source).toContain('load.mine < 0 ? null : load.mine');
     });
 
+    it('tells somebody watching through the reader that is bounded by the board they are shown, after asking whether they may watch', () =>
+    {
+        const from = source.indexOf('async watch(me, matchId, rev)');
+        const port = source.slice(from, source.indexOf('async watchable(me, game)'));
+
+        expect(from).toBeGreaterThan(-1);
+        expect(port, 'the watch read took the feed, which is bounded by nothing').not.toContain('.feed(');
+        expect(port, 'the watch read named the live game\'s own events').not.toContain('.since(');
+        expect(port).toContain('match.told(found.load, from)');
+        expect(port.indexOf('table.watchableTable('), 'the events were read before the reader was asked about').toBeLessThan(port.indexOf('match.told('));
+        expect(port.indexOf('table.watchableTable(')).toBeGreaterThan(-1);
+    });
+
     it('puts no seat on turn where the engine named nobody', () =>
     {
         expect(source).toContain('...(turn === null ? {} : { turn })');

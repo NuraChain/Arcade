@@ -9,4 +9,6 @@ export const MISSES_ALLOWED = 3;
 
 export const WATCH_DELAY_MS = 30_000;
 
+export const WATCH_TAIL = 12;
+
 export const nextMissForfeits = (timeouts: number) => timeouts + 1 >= MISSES_ALLOWED;

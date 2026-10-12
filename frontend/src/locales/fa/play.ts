@@ -180,6 +180,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'watch.gone': 'از این بازی بیرون رفتی.',
     'watch.finished': 'این بازی تمام شده',
     'watch.over': 'بازی تمام شد.',
+    'watch.back': 'برگشت به میز',
     'watch.behind': {
         one: 'صفحه‌ای که می‌بینی دست‌کم {count} دقیقه عقب‌تر از چیزی است که آن‌ها روی آن بازی می‌کنند.',
         other: 'صفحه‌ای که می‌بینی دست‌کم {count} دقیقه عقب‌تر از چیزی است که آن‌ها روی آن بازی می‌کنند.'

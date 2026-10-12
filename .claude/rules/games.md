@@ -2018,8 +2018,9 @@ second copy answer `already`. The API passes play hundreds of turns through them
 keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
 a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching -
 but is RUNG once a move is old enough to show them (`WATCH_DELAY_MS` and a second, `gameWatched` in the
-hub, players excluded), and re-reads through the watch route; its poll is a thirty-second safety net
-rather than the only way a watcher's board moved.
+hub, players excluded), and re-reads through the watch route, which answers what happened since the
+revision the watcher holds; its poll is a thirty-second safety net rather than the only way a
+watcher's board moved.
 
 **Every board answers the press before the server does, and only with what the press decides.** A
 hokm card leaves the hand and flies to the felt at once, and the server's echo of that same card is
@@ -2157,9 +2158,103 @@ at one that is no uuid, or at a table that stopped being public under its game -
 alike, while somebody in a chair there is still shown it. `envelope.spec.ts` holds the missing count
 with no Postgres, and `table-plate.spec.ts` and `ludo-table.spec.ts` hold the plates.
 
-One thing still reaches somebody early, and it is not this route's. The play page closes the watch
-the moment the table drops its `matchId`, which is the LIVE finish, so a watcher learns a game ended
-thirty seconds before their board would have shown it and never sees the last board.
+**A watcher is told what happened, up to the board they are shown and no further.** The watch
+read carried a board and nothing else, so a watcher's board could only be slid from one position
+to the next: no walk, no hit, no thrown die, in a product whose brief is that nothing is a fade
+and a re-render. `GET /matches/:id/watch?rev=N` answers `events` beside the board: the actions in
+(N, R], where R is the revision of the board in the same answer.
+
+- **One reader, bounded by the load it is handed.** `match.told(load, rev)` clamps the revision to
+  the load's own, reads the rows between, and composes them for the load's reader: nobody, for a
+  load with no seat. A player's `since` calls it after `shownTo` has chosen the load, and the watch
+  port calls it with the DELAYED load, so "no event past the board beside it" is one line for a
+  player, a seat that quit and a watcher alike. Two shapes that already existed would each have
+  handed over the whole thirty seconds and are not used: `match.feed`, which reads every row after
+  a revision against the LIVE game (it stays the push's reader), and the live row that is in
+  scope inside the delayed read. `engine-seam.spec.ts` reads the port for both.
+- **What `rev` means.** Absent, or anything that is not a whole number of at most fifteen digits:
+  the board and no events, because read as zero it would be the most expensive answer there is,
+  the whole game. Zero: the rows from the beginning, which for a game nobody has moved in is the
+  one row that began it (seat -1). N: the rows after N, in order, ending at the board's revision;
+  nothing is read when N is R, which is every idle read. More than `WATCH_TAIL`, twelve, behind:
+  the board alone. A tail that long is more than a board will play, and a caller who asks from far
+  back would otherwise be handed every earlier showdown and every action's time in one request.
+- **The events are read after the reader has been asked about.** The port's order is the delayed
+  read, then `watchableTable`, then `told`. Read sooner, a refused reader would make the server
+  read a ledger for a revision they chose, and how long a 404 took would tell a private game from
+  a missing id.
+- **A watcher's log holds nothing a seat's log hides.** With the real engines that proves
+  nothing, because their logs ignore their reader; `redaction.db.spec.ts` asks `told` with its
+  engine of one secret a seat and a load with no seat.
+
+**The browser folds each answer into a board and, when the events explain it, a batch.**
+`watch.store.ts` was a resource whose data was the view. It keeps a cursor now and asks from it:
+zero on the first read of a game, the revision it holds after that.
+
+- **One rule for what is handed to a board, and both stores read it.** `runOf(events, floor,
+  upTo)` in `stage/feed.ts` answers the fresh run, whether it starts where the revision in hand
+  left off (`gap`, which the board store mends by reading `since`) and whether it reaches the
+  board one revision after another (`whole`). A watcher is handed a batch only for a whole run.
+  Anything else - a hole, a tail past the cap, an older answer, a game opened in its middle - is
+  the board alone, and the presenter slides to it quietly.
+- **The board and its batch are one write, and reads are one chain.** A second read asked for
+  while one is out is that read and one more after it, so two answers never fold at once and an
+  answer for a game the store has stopped watching is dropped whole. The batch counter only grows
+  and the cursor is dropped with the game, so a rematch starts from its own beginning.
+- **The opening is thrown for a watcher who arrives while the board is still the opening**: the
+  first answer is exactly the row that began the game, at the board's revision, and the batch
+  carries the same once-only `opens` the board store's does.
+- **It looks again** when it is rung about its game, when everything is rung (all a browser with
+  no socket ever hears: the half-minute poll was otherwise the only thing that moved such a
+  watcher's board, thirty seconds of play at a time), and every half minute while the tab is on
+  show. A game that is over is not asked about again.
+- **`view()` hands out the game, how far behind it is, the rule and whether it is live; the batch
+  has a getter of its own**, so the raw events never ride on the view into something that could
+  read them unfolded. `WatchBoard` takes both and hands them to the board it draws.
+
+**A watcher stays through the end.** The page closed the watch the moment the table let go of
+its game, which is the LIVE finish: the board was taken down with up to thirty seconds of play
+unseen and a panel offering a chair took its place. When the table lets go of the game the watch
+holds, the page asks the store to `settle`: it reads the same game once more, and a finished game
+is answered whole, so the last moves arrive as events when they are inside the cap and as the
+board alone when they are not. The board plays them and then shows the result, with nothing to
+play again. The watch is closed by the table naming another game, which the page then follows, by
+the reader sitting down, or by the reader: over a finished game `WatchBoard` offers "Back to the
+table", and the panel that offers a chair waits for that press. `play.spec.ts` (*a table that is
+read again*) holds the end read once, from the revision on screen, no chair offered over it, the
+way back, and the next game.
+
+**The words over a watched board wait for the board.** `WatchBoard` read `live` from the view
+and nothing else, so the moment the last answer arrived it said "This game is over" and offered
+the way back, about four seconds before the board under it had borne off its last checker: the
+view running ahead of the felt, in the one frame that had not been taught otherwise, and a
+button that took the board away in the middle of the scene this whole change exists to show. A
+board on the stage now tells whoever drew it when it is playing: `onPresenting` on `BoardProps`,
+which the backgammon board calls from the presenter's `watch` and once more, with false, when it
+is taken down, so a frame is never left waiting on a board that has gone. `WatchBoard` calls a
+game over when it is finished AND its board is still, and the sentence a screen reader is given
+about why the board is behind is said only until then: a finished game is not behind, and "This
+game is over. Everyone watching is behind by the same amount" was what every watcher's reader
+heard at the end of every game once the end was something a watcher stayed for. A board that is
+not on the stage yet says nothing and its frame follows the view, as before; each one takes this
+on in the commit that puts it on the stage. `watch-board.spec.ts` holds the frame waiting.
+`backgammon-board.spec.ts` holds the board telling, and the real board in the real frame handed
+the end and its events in one write: at no step of the clock is the game called over under a
+table still showing it.
+
+`match.db.spec.ts` (*watching*) holds the read against Postgres: three actions of which two are
+old enough, asked from the beginning, and exactly those revisions back; the opening row of a
+young game; the revisions after the one asked from, once and in order; nothing for nobody who
+asked from nowhere; the board alone past the cap; a finished game's rest; and a stranger at a
+friends' table answered nothing whatever revision they name, live and finished.
+`match-quit.db.spec.ts` holds a watcher and a seat that quit to the same events, and a forfeit to
+arriving with the plate that shows it. `well-formed.db.spec.ts` sends the revisions `since` is
+sent. `app.spec.ts` (*watching a game*) holds the route. `watch-store.spec.ts` holds the fold,
+`watch-board.spec.ts` what the board is handed, and `motion-pass.mjs` a third, watching browser.
+
+One thing it costs, stated. A watcher learns that a game has ended when it ends, as before, and
+is then shown its last half minute at once, at double speed when there is much of it: the delay
+protects a game that is being played, and a finished one has nothing left to protect.
 
 **A seat that quit a game still being played is a watcher from the move it quit on** (D31, the
 owner, 2026-10-05). Ludo plays on at three and four seats and poker at three or more, and whoever
@@ -3002,8 +3097,9 @@ reads, so a client can ship before the server flips a status and never offer a g
 The leaderboard keeps `status`, because a board of results needs no renderer.
 
 A spectator gets the same board a player does, with no `mine`, which every board already reads as
-"no controls". It has no clock either: a watcher's board is thirty seconds old, and a countdown for
-the live turn beside a board from three moves ago says two different things at once.
+"no controls", and the watch store's events where a player's board gets the board store's. It has
+no clock either: a watcher's board is thirty seconds old, and a countdown for the live turn beside
+a board from three moves ago says two different things at once.
 
 **`game/scenes.ts` decides WHICH renderer draws which game, and it is the only place that does.**
 `board-canvas` named one module, one export and one image file, so a second game's board meant
@@ -3309,7 +3405,8 @@ ask for the board as it should stand now (`sight`). In order:
   than its moves could be shown - a script did, forty-four revisions in three seconds - left the
   table half a minute in the past at double speed, and the result of the game waiting behind it.
 - A board that moved with nothing said about it is reached by sliding (`table.settle`): no sound,
-  nothing captured. This is all a watcher's board does until the watch read carries events.
+  nothing captured. A watcher's board does this for an answer the server would not explain: a
+  tail past the cap, or a game opened in its middle.
 - A scene that throws is logged, and then the table is drawn again.
 
 A snap is always `director.cancel()` and then `table.reset(sight)`, and **`reset` rebuilds
@@ -3327,7 +3424,9 @@ else's move.
 
 **A table is told it is playing.** `presenter.watch` mirrors the queue into the board, which
 writes `data-presenting` on `.table-stage`; the result panel waits for it, and a browser pass
-waits for it to clear instead of sleeping.
+waits for it to clear instead of sleeping. The board hands the same word to whoever drew it
+(`onPresenting`), which is how the frame round a watched board knows not to call a game over
+yet.
 
 **The layers of a table are one ladder** (`stage/layers.ts`): resting pieces, the count on a tall
 stack, a mark, the cube, a piece that is moving, one in the air, the dice. The renderer sets the

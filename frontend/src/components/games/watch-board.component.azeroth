@@ -1,5 +1,6 @@
 import { Dynamic, untrack } from 'azerothjs';
 
+import Button from '../ui/button.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import ErrorState from '../ui/error-state.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
@@ -7,11 +8,12 @@ import Icon from '../../icons/icon.component.azeroth';
 import { reloadPage } from '../../lib/chunks.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { NO_EVENTS, type EventBatch } from '../../stores/match.store.ts';
+import type { EventBatch } from '../../stores/match.store.ts';
+import type { Watched } from '../../stores/watch.store.ts';
 import { BOARDS, drawable, type BoardComponent } from './boards.ts';
-import type { MatchView, MatchWatch } from '../../api.ts';
+import type { MatchView } from '../../api.ts';
 
-export default component WatchBoard(props: { watch: MatchWatch })
+export default component WatchBoard(props: { watch: Watched; events: EventBatch; onDone?: () => void })
 {
     const locale = useLocale();
     const people = usePeople();
@@ -31,6 +33,8 @@ export default component WatchBoard(props: { watch: MatchWatch })
     state drawn = '';
 
     state lost = false;
+
+    state busy = false;
 
     derived game = props.watch.match.game;
 
@@ -71,23 +75,38 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     derived quietSays = locale.plural('watch.quiet', Math.round(props.watch.behind / MINUTE));
 
-    derived live = props.watch.live;
+    derived over = !props.watch.live && !busy;
+
+    derived live = !over;
 
     derived quiet = props.watch.live && props.watch.behind > props.watch.delay * 2;
 
-    const boardProps = (): { match: MatchView; events: EventBatch } => ({ match: props.watch.match, events: NO_EVENTS });
+    derived leavable = over && props.onDone !== undefined;
+
+    const presenting = (now: boolean) =>
+    {
+        busy = now;
+    };
+
+    const boardProps = (): { match: MatchView; events: EventBatch; onPresenting: (busy: boolean) => void } =>
+        ({ match: props.watch.match, events: props.events, onPresenting: presenting });
 
     <div class="flex min-h-0 flex-1 flex-col gap-2">
         <p class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">
-            <Icon name={ props.watch.live ? 'activity' : 'trophy' } size={ 14 } class="shrink-0 text-accent" />
-            <span class="font-semibold text-text">{ locale.t(props.watch.live ? 'watch.title' : 'watch.finished') }</span>
+            <Icon name={ over ? 'trophy' : 'activity' } size={ 14 } class="shrink-0 text-accent" />
+            <span class="font-semibold text-text">{ locale.t(over ? 'watch.finished' : 'watch.title') }</span>
             <Show when={ live }>
                 { () => <span>{ behindSays }</span> }
             </Show>
             <Show when={ quiet }>
                 { () => <span>{ quietSays }</span> }
             </Show>
-            <span class="sr-only">{ locale.t('watch.why') }</span>
+            <Show when={ live }>
+                { () => <span class="sr-only">{ locale.t('watch.why') }</span> }
+            </Show>
+            <Show when={ leavable }>
+                { () => <Button variant="ghost" size="sm" class="ms-auto" onClick={ () => props.onDone?.() }>{ locale.t('watch.back') }</Button> }
+            </Show>
         </p>
 
         <Show when={ drawn !== '' && drawn === game }>

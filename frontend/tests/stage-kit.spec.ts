@@ -3,7 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { manualClock } from '../src/lib/clock.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { FAST, HASTE, LINGER_FLOOR, OVERRUN, OVERRUN_GRACE, createDirector } from '../src/game/stage/director.ts';
-import { actsOf } from '../src/game/stage/feed.ts';
+import { actsOf, runOf } from '../src/game/stage/feed.ts';
 import { LAYER, layered } from '../src/game/stage/layers.ts';
 import { arc, walk } from '../src/game/stage/route.ts';
 import { createStage } from '../src/game/stage/stage.ts';
@@ -802,6 +802,31 @@ describe('the feed', () =>
     it('ignores another game\'s events, and has nothing to say of nothing', () =>
     {
         expect(actsOf([event(4, 0, 'poker')], 'hokm', 3, 4)).toEqual({ acts: [], whole: true });
+    });
+});
+
+describe('the run of events a store hands on', () =>
+{
+    const told = (...revs: number[]) => revs.map((rev) => ({ rev }));
+
+    it('is what came after the revision in hand and no later than the board', () =>
+    {
+        expect(runOf(told(2, 3, 4, 5, 6), 3, 5)).toEqual({ fresh: told(4, 5), gap: false, whole: true });
+    });
+
+    it('has a gap when it does not start where the revision in hand left off, and none when nothing is in hand', () =>
+    {
+        expect(runOf(told(5, 6), 3, 6)).toMatchObject({ gap: true, whole: false });
+        expect(runOf(told(5, 6), -1, 6)).toMatchObject({ gap: false, whole: false });
+    });
+
+    it('is whole only when it reaches the board, one revision after another', () =>
+    {
+        expect(runOf(told(4, 5), 3, 6), 'it stops short of the board').toMatchObject({ gap: false, whole: false });
+        expect(runOf(told(4, 6), 3, 6), 'a hole in the middle').toMatchObject({ gap: false, whole: false });
+        expect(runOf(told(4, 4, 5), 3, 5), 'a revision twice').toMatchObject({ whole: false });
+        expect(runOf(told(), 3, 3), 'nothing new').toEqual({ fresh: [], gap: false, whole: true });
+        expect(runOf(told(), 3, 5), 'a board that moved with nothing said').toEqual({ fresh: [], gap: false, whole: false });
     });
 });
 

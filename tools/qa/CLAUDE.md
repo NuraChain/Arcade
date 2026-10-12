@@ -202,9 +202,9 @@ tab. And for the instrument itself, which is handed doctored frames - a checker 
 elsewhere, hidden and back, cutting the corner, a bystander that drifts, a checker three pixels
 off its place - and has to fail each. 80 checks.
 
-**The pass is two real browsers at one real match on the BUILT server.**
-`QA_BASE=http://localhost:5300 node tools/qa/motion-pass.mjs`, limiter raised, about five
-minutes. It plays forward over the api until the position it wants exists, waits until both
+**The pass is two real browsers at one real match on the BUILT server, and a third that
+watches.** `QA_BASE=http://localhost:5300 node tools/qa/motion-pass.mjs`, limiter raised, about
+four minutes. It plays forward over the api until the position it wants exists, waits until both
 boards are level with the server (`data-rev` at the revision, `data-presenting` gone), and makes
 the move ON THE TABLE with the mouse. At 360x640, 390x844, 844x390, 768x1024 and 1280x800, with
 the chat shut and open:
@@ -218,7 +218,24 @@ the chat shut and open:
 
 Then a roll made by tapping the dice (thrown, tumbling, the faces read from the cubes in both
 browsers), a turn that begins with a hit, less motion, a hidden tab and a reload, a turn that
-begins by bearing off, and Play again. About two hundred checks: a turn is two hops or four.
+begins by bearing off, and Play again. About two hundred and thirty checks: a turn is two hops
+or four.
+
+**The watcher is a third account that opens the table's page with no chair.** The pass lets the
+table lie quiet for the delay, so the watcher's board is the live one, makes one turn over the
+api and holds everything still. For twenty-five seconds nothing on the watcher's board may move
+and its revision may not change; then the move has to arrive by itself, travel its route like
+any other, no sooner than the delay after it was made, on the nodes that were already there.
+
+**The match ends in front of the watcher.** The pass plays on until one move would end the
+match (the engine's own test: the mover's last checkers off, and the points that makes), lets
+the table lie quiet for the delay again and makes that move with a recorder in the watcher's
+page that reads, every frame, what the page says. A finished game is not delayed, so the move
+arrives at once: it has to travel its route, the game has to be called on the board before the
+result card, and on no frame may the page say "This game is over" or offer the way back while
+the board is still playing. The watcher is then shown the finished game with its result and the
+way back, no chair and no Play again, and is taken on to the next game when the players start
+one. The three waits are a minute and a half of the pass.
 
 Four things worth knowing before changing either:
 
@@ -245,7 +262,6 @@ motion ignored) failed 39 of 193: the press at all twelve turns, the route in bo
 dice after a hidden tab and after a reload, and the keyframes. Each file was restored from a
 copy, never from git.
 
-Not in the pass yet, each with the commit that makes it true: a third, watching browser (the
-watch read carries no events until 2.1); the chat opened, the screen turned and full screen
-entered in the middle of a flight (P6); a frame check under a throttled processor. Ludo, hokm
+Not in the pass yet, each with the commit that makes it true: the chat opened, the screen turned
+and full screen entered in the middle of a flight (P6); a frame check under a throttled processor. Ludo, hokm
 and poker add a section each as they move onto the stage.

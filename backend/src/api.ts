@@ -720,9 +720,10 @@ export function buildApi(ports: Ports)
                 return found;
             }),
 
-            watch: routes.get('/:id/watch', { output: matchWatch }, async (context) =>
+            watch: routes.get('/:id/watch', { query: sinceQuery, output: matchWatch }, async (context) =>
             {
-                const found = await ports.match.watch(context.principal.userId, context.params.id);
+                const asked = context.query.rev ?? '';
+                const found = await ports.match.watch(context.principal.userId, context.params.id, /^\d{1,15}$/.test(asked) ? Number(asked) : null);
 
                 if (found === null)
                 {

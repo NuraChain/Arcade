@@ -34,6 +34,7 @@ export interface BoardProps
     rematch?: Rematch;
     speech?: Record<string, string>;
     turnMs?: number;
+    onPresenting?: (busy: boolean) => void;
 }
 
 export type BoardComponent = (props: BoardProps) => MountNode;

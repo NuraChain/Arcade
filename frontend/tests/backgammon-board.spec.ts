@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
 import BackgammonBoard from '../src/components/games/backgammon-board.component.azeroth';
+import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import {
     BAR_LEFT,
     BAR_WIDTH,
@@ -23,7 +24,9 @@ import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -552,6 +555,123 @@ describe('the backgammon table on the page', () =>
 
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
         expect(dice(container)).toEqual(['3', '2']);
+    });
+
+    it('tells whoever drew it when it is playing something, when it has finished, and when it is taken down', async () =>
+    {
+        const heard: boolean[] = [];
+        const [current, setCurrent] = createSignal(match({ turn: 1, dice: [6, 1] }, null, { turn: 1 }));
+        const view = renderTest(() => BackgammonBoard({
+            get match()
+            {
+                return current();
+            },
+            events: NO_EVENTS,
+            onPresenting: (busy: boolean) =>
+            {
+                heard.push(busy);
+            }
+        }) as Rendered);
+
+        await flush();
+
+        expect(heard, 'a board at rest said it was playing').not.toContain(true);
+
+        setCurrent(match({ turn: 0, dice: [3, 2], seats: position({ 6: 5, 8: 3, 13: 5, 24: 2 }, { 6: 5, 7: 2, 8: 2, 13: 4, 24: 2 }) }, null, { rev: 5 }));
+        await flush();
+
+        expect(heard.at(-1), 'the board moved and whoever drew it was not told').toBe(true);
+        expect(stageOf(view.container).getAttribute('data-presenting')).toBe('true');
+
+        await elapse(1500);
+
+        expect(heard.at(-1)).toBe(false);
+        expect(stageOf(view.container).hasAttribute('data-presenting')).toBe(false);
+
+        setCurrent(match({ turn: 1, dice: [4, 1], seats: position({ 6: 5, 8: 3, 13: 5, 24: 2 }, { 6: 5, 8: 3, 13: 5, 24: 2 }) }, null, { rev: 6, turn: 1 }));
+        await flush();
+
+        expect(heard.at(-1)).toBe(true);
+
+        const before = heard.length;
+
+        cleanup();
+
+        expect(heard.slice(before), 'a board taken down in the middle of a scene left whoever drew it waiting').toEqual([false]);
+    });
+
+    it('is not called over, for somebody watching, before the table has shown how it ended', async () =>
+    {
+        vi.spyOn(usePeople(), 'want').mockImplementation(() => undefined);
+
+        const ending = match({ turn: 1, dice: [1, 4], seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }, null, { turn: 1 });
+        const ended = match({ turn: 1, dice: [], phase: 'roll', seats: position({ 6: 15 }, { 0: 15 }) }, null, {
+            rev: 5,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result: 'lost' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'won' }
+            ] as MatchView['players']
+        });
+        const [watch, setWatch] = createSignal<Watched>({ match: ending, behind: 30, delay: 30, live: true });
+        const [told, setTold] = createSignal<EventBatch>(NO_EVENTS);
+        const { container } = renderTest(() => WatchBoard({
+            get watch()
+            {
+                return watch();
+            },
+            get events()
+            {
+                return told();
+            },
+            onDone: () => undefined
+        }) as Rendered);
+        const over = () => container.textContent?.includes(useLocale().t('watch.finished')) ?? false;
+        const back = () => [...container.querySelectorAll('button')].some((one) => one.textContent?.trim() === useLocale().t('watch.back'));
+
+        await vi.waitFor(() => expect(container.querySelector('.table-stage')).not.toBeNull(), { timeout: 4000 });
+        await flush();
+
+        batch(() =>
+        {
+            setWatch({ match: ended, behind: 0, delay: 30, live: false });
+            setTold({
+                seq: 1,
+                id: ended.id,
+                events: [happened(5, 1, [
+                    { e: 'move', seat: 1, from: 1, to: 0, die: 1, hit: false },
+                    { e: 'game', seat: 1, how: 'single', points: 1, cube: 1 },
+                    { e: 'finish', seat: 1 }
+                ])],
+                live: true,
+                jump: false
+            });
+        });
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting'), 'the end of the game was not played').toBe('true');
+        expect(over(), 'the game was called over while its last checker was still in the air').toBe(false);
+        expect(back()).toBe(false);
+        expect(container.querySelector('.table-result')).toBeNull();
+
+        const clock = runtime().clock as ManualClock;
+        let early = 0;
+
+        for (let step = 0; step < 300; step += 1)
+        {
+            clock.advance(10);
+            await flush();
+
+            if ((over() || back()) && stageOf(container).hasAttribute('data-presenting'))
+            {
+                early += 1;
+            }
+        }
+
+        expect(early, 'the frame said the game was over under a table still showing it').toBe(0);
+        expect(over()).toBe(true);
+        expect(back()).toBe(true);
+        expect(container.querySelector('.table-result')).not.toBeNull();
     });
 });
 

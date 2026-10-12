@@ -13,7 +13,7 @@ import TableMenu from '../src/components/games/table-menu.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { BOARDS } from '../src/components/games/boards.ts';
-import type { MatchView, MatchWatch } from '../src/api.ts';
+import type { MatchView } from '../src/api.ts';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
@@ -29,7 +29,7 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard } from '../src/stores/match.store.ts';
+import { NO_EVENTS, useBoard } from '../src/stores/match.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
@@ -39,7 +39,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
-import { useWatch } from '../src/stores/watch.store.ts';
+import { useWatch, type Watched } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { inPlay } from '../src/data/match.ts';
 import { ApiError, client, server } from './fake-api.ts';
@@ -1895,6 +1895,116 @@ describe('PlayPage', () =>
             expect(frame.textContent).toContain(useLocale().plural('watch.quiet', 3));
         });
 
+        it('keeps the game somebody is watching through its end, reads the end once, and gives the table back when they ask', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const seated = ['alex', 'sara.k', 'reza.t', 'mina'];
+            const colours = ['red', 'green', 'yellow', 'blue'];
+
+            const seen = {
+                match: {
+                    id: 'match-9',
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev: 3,
+                    seats: 4,
+                    players: seated.map((who, seat) => ({ seat, who, side: seat })),
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: {
+                        kind: 'ludo',
+                        moves: [],
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+                    }
+                },
+                behind: 30,
+                delay: 30,
+                live: true
+            };
+
+            server.watches['match-9'] = seen;
+            held.matchId = 'match-9';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+            await settle();
+
+            const reads = () => server.calls.filter((one) => one === 'matches.watch').length;
+            const before = reads();
+            const back = () => [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('watch.back'));
+
+            expect(back(), 'the way back was offered over a game still being played').toBeUndefined();
+
+            seen.live = false;
+            seen.behind = 0;
+            seen.match.rev = 5;
+            delete held.matchId;
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.finished')), { timeout: 4000 });
+            await settle();
+
+            expect(reads(), 'the end of the game was not read').toBe(before + 1);
+            expect(server.watchedFrom.at(-1), 'the end was asked for from somewhere other than the board on screen').toBe('3');
+            expect(container.textContent, 'a chair was offered over a game still being shown').not.toContain(useLocale().t('play.table.sitDown'));
+
+            await lobby.refresh();
+            await settle();
+
+            expect(reads(), 'a finished game was read again').toBe(before + 1);
+            expect(container.textContent).toContain(useLocale().t('watch.finished'));
+
+            fire(back()!, 'click');
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('play.table.sitDown')), { timeout: 4000 });
+
+            expect(container.textContent).not.toContain(useLocale().t('watch.finished'));
+        });
+
+        it('moves on to the next game at the table when one starts while the last is still being shown', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const game = (id: string, rev: number, live: boolean) => ({
+                match: {
+                    id,
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev,
+                    seats: 4,
+                    players: [],
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
+                },
+                behind: live ? 30 : 0,
+                delay: 30,
+                live
+            });
+
+            server.watches['match-9'] = game('match-9', 3, true);
+            held.matchId = 'match-9';
+            await lobby.refresh();
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+
+            server.watches['match-9'] = game('match-9', 5, false);
+            delete held.matchId;
+            await lobby.refresh();
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.finished')), { timeout: 4000 });
+
+            server.watches['match-10'] = game('match-10', 1, true);
+            held.matchId = 'match-10';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+            await settle();
+
+            expect(useWatch().view()?.match.id).toBe('match-10');
+            expect(server.watchedFrom.at(-1), 'the next game was asked about from the last game\'s revision').toBe('0');
+        });
+
         it('draws no board for a game the server will not show, and keeps the page', async () =>
         {
             const { container, lobby, held } = await opened('omid.k');
@@ -2865,9 +2975,9 @@ describe('PlayPage', () =>
             behind: 30,
             delay: 30,
             live: true
-        } as MatchWatch);
+        } as Watched);
 
-        const { container } = renderTest(() => WatchBoard({ watch: watching('chess') }) as Rendered);
+        const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
 
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
@@ -2891,7 +3001,7 @@ describe('PlayPage', () =>
             behind: 30,
             delay: 30,
             live: true
-        } as MatchWatch);
+        } as Watched);
 
         const settle = async () =>
         {
@@ -2904,7 +3014,7 @@ describe('PlayPage', () =>
 
         it('loads the page again from its Reload, which is what fetches a copy that can', async () =>
         {
-            const { container } = renderTest(() => WatchBoard({ watch: watching('chess') }) as Rendered);
+            const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
             const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
 
             fire(reload, 'click');
@@ -2921,7 +3031,7 @@ describe('PlayPage', () =>
         it('says the board could not load when its chunk will not come, where it drew a placeholder for ever, and loads the page again when asked', async () =>
         {
             const asked = chunk.asked;
-            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo') }) as Rendered);
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo'), events: NO_EVENTS }) as Rendered);
 
             await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
 
@@ -2939,7 +3049,7 @@ describe('PlayPage', () =>
         {
             answering = true;
 
-            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo') }) as Rendered);
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo'), events: NO_EVENTS }) as Rendered);
 
             await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
             await settle();

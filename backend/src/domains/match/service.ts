@@ -263,6 +263,31 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         return { ...shown.load, mine: load.mine };
     };
 
+    const told = async (load: MatchLoad, rev: number): Promise<ActionLog[]> =>
+    {
+        const engine = engineFor(load.match.game);
+        const from = Number.isFinite(rev) ? Math.min(Math.max(Math.trunc(rev), 0), load.match.rev) : load.match.rev;
+
+        if (engine === null || from >= load.match.rev)
+        {
+            return [];
+        }
+
+        const rows = await db.getRepository(MatchAction).find({
+            select: { rev: true, seat: true, createdAt: true, events: true },
+            where: { matchId: load.match.id, rev: Between(from + 1, load.match.rev) },
+            order: { rev: 'ASC' }
+        });
+        const reader = load.mine < 0 ? null : load.mine;
+
+        return rows.map((row) => ({
+            rev: row.rev,
+            seat: row.seat,
+            at: row.createdAt,
+            log: engine.log((row.events ?? []) as unknown[], reader)
+        }));
+    };
+
     const dealtIn = async (me: string, matchId: string) =>
     {
         const mine = await read(me, matchId);
@@ -438,42 +463,17 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 return null;
             }
 
-            const engine = engineFor(dealt.match.game);
-
-            if (engine === null)
+            if (engineFor(dealt.match.game) === null)
             {
                 return null;
             }
 
             const load = await shownTo(dealt);
-            const from = Math.min(Math.max(rev, 0), load.match.rev);
 
-            const rows = await db.getRepository(MatchAction).find({
-                select: { rev: true, seat: true, createdAt: true, events: true },
-                where: { matchId, rev: Between(from + 1, load.match.rev) },
-                order: { rev: 'ASC' }
-            });
-
-            /**
-             * Composed for the READER, not for the seat that acted.
-             *
-             * `row.seat` says who took the action and `load.mine` says who is asking, and it is the
-             * second one the engine is handed - otherwise a log would be redacted for whoever
-             * happened to move, which is the one person it never needed hiding from. A watcher
-             * arrives with `mine: -1` and is handed `null`, like the board.
-             */
-            const reader = load.mine < 0 ? null : load.mine;
-
-            return {
-                load,
-                events: rows.map((row) => ({
-                    rev: row.rev,
-                    seat: row.seat,
-                    at: row.createdAt,
-                    log: engine.log((row.events ?? []) as unknown[], reader)
-                }))
-            };
+            return { load, events: await told(load, rev) };
         },
+
+        told,
 
         start: async (me: string, tableId: string) =>
         {

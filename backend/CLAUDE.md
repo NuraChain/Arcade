@@ -143,7 +143,10 @@ was written half of them answered one that way: forty-nine of its ninety-eight c
   on trust and sent them as text; `historyAfter` parses them and hands Postgres a `Date`. A day the
   calendar does not have is whatever JavaScript makes of it, which is a day.
 - **`since` clamps the revision it is asked from** to what the game has reached. A number past the
-  column's range reads as nothing new and one before the beginning as the whole game.
+  column's range reads as nothing new and one before the beginning as the whole game. The watch
+  read clamps the same way, through the same reader (`match.told`), and reads a revision that is
+  absent or is no whole number as no revision at all: the board, and no events
+  (`.claude/rules/games.md`, *A watcher is told what happened*).
 
 `well-formed.spec.ts` holds the first two with no Postgres: every route in the manifest that takes
 a name from its address, refused with nobody asked. `well-formed.db.spec.ts` holds the other three

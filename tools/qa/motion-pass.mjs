@@ -1,6 +1,9 @@
 import { mkdirSync } from 'node:fs';
 
+import { CHECKERS, OFF } from '../../backend/src/domains/match/backgammon/board.ts';
 import { settle, stage, turns } from '../../backend/src/domains/match/backgammon/moves.ts';
+import { VALUE, kindOf } from '../../backend/src/domains/match/backgammon/scoring.ts';
+import { WATCH_DELAY_MS } from '../../backend/src/domains/match/turns.ts';
 import { BAR_LEFT, BAR_WIDTH, HEIGHT, POINT_WIDTH, TRAY, TRAY_LEFT, WIDTH, columnOf } from '../../frontend/src/game/backgammon-layout.ts';
 import { countsOf, differs, expectedOf, menOf, planOf, tonesOf } from './backgammon-routes.mjs';
 import { armPress, bystanders, diceOf, faceOf, hideTab, judge, keyframesOf, pressOf, seriesOf, smooth, stopWatching, travelOf, unkeyedIn, watch, watchKeyframes } from './motion.mjs';
@@ -29,6 +32,7 @@ const { record, finish } = recorder('motion pass');
 const browser = await launch();
 const dana = await seat(browser, 'dana.w', { width: 1280, height: 800 });
 const mina = await seat(browser, 'mina', { width: 1280, height: 800 });
+const omid = await seat(browser, 'omid.k', { width: 1280, height: 800 });
 const seats = new Map();
 let matchId = '';
 let plays = 0;
@@ -117,6 +121,29 @@ const hitting = (played, side) => tidy(played, side) && played[0].hit && side.th
 
 const bearing = (played, side) => tidy(played, side) && played[0].to === 0 && played.every((hop) => !hop.hit);
 
+const ending = (current) =>
+{
+    if (current.view.phase !== 'move')
+    {
+        return null;
+    }
+
+    const side = sideOf(current);
+    const score = current.view.seats.find((row) => row.seat === current.turn).score;
+
+    for (const hops of turns(side, current.view.dice))
+    {
+        const after = settle(side, current.view.dice, hops);
+
+        if (after !== null && after.side.me[OFF] === CHECKERS && score + VALUE[kindOf(after.side.them)] * current.view.cube >= current.view.target)
+        {
+            return after.played.map((one) => ({ from: one.from, to: one.to, hit: one.hit }));
+        }
+    }
+
+    return null;
+};
+
 const turnOf = (current, wanted) =>
 {
     if (current.view.phase !== 'move')
@@ -198,10 +225,66 @@ const chat = async (player, open) =>
 
 const rested = async (label, player, view) =>
 {
-    const viewer = [...seats].find(([, one]) => one === player)[0];
+    const viewer = [...seats].find(([, one]) => one === player)?.[0] ?? 0;
     const wrong = differs(await menOf(player.page), expectedOf(countsOf(view, viewer), tonesOf(viewer)));
 
     record(`${ label }: in ${ player.handle }'s browser every checker rests on the centre of its place, by the board's own screen matrix`, wrong.length === 0, wrong.slice(0, 3).join('; '));
+};
+
+const stamp = async (player) => await player.page.evaluate(() =>
+{
+    for (const node of document.querySelectorAll('.table-stage, .bg-layer, .bg-layer .man'))
+    {
+        node.stamped = true;
+    }
+});
+
+const unstamped = async (player) => await player.page.evaluate(() =>
+    [...document.querySelectorAll('.table-stage, .bg-layer, .bg-layer .man')].filter((node) => node.stamped !== true).length);
+
+const watchWords = async (player) => await player.page.evaluate(() =>
+{
+    const seen = { frames: 0, playing: 0, early: 0, banner: null, over: null, back: null, result: null, done: false };
+    const started = performance.now();
+
+    const sample = () =>
+    {
+        const main = document.querySelector('main');
+        const playing = document.querySelector('.table-stage')?.hasAttribute('data-presenting') ?? false;
+        const over = /This game is over/.test(main?.textContent ?? '');
+        const back = [...(main?.querySelectorAll('button') ?? [])].some((one) => /Back to the table/.test(one.textContent ?? ''));
+        const at = Math.round(performance.now() - started);
+
+        seen.frames += 1;
+        seen.playing += playing ? 1 : 0;
+        seen.early += playing && (over || back) ? 1 : 0;
+        seen.banner ??= document.querySelector('.bg-layer .bgt-banner') === null ? null : at;
+        seen.over ??= over ? at : null;
+        seen.back ??= back ? at : null;
+        seen.result ??= document.querySelector('.table-result') === null ? null : at;
+
+        if (!seen.done)
+        {
+            requestAnimationFrame(sample);
+        }
+    };
+
+    window.__words = seen;
+    requestAnimationFrame(sample);
+});
+
+const stopWords = async (player) => await player.page.evaluate(() =>
+{
+    window.__words.done = true;
+
+    return window.__words;
+});
+
+const firstStir = (frames, key) =>
+{
+    const { steps } = travelOf(frames, key);
+
+    return steps.find((one) => one.size > 0.5)?.at ?? null;
 };
 
 const judged = (label, frames, plan, played = true) =>
@@ -331,7 +414,7 @@ try
 {
     console.log('\n[1] a backgammon table two people are sitting at');
 
-    await clearTables(dana, mina);
+    await clearTables(dana, mina, omid);
 
     const made = await dana.api('POST', '/tables/', tableBody({ game: 'backgammon', seats: 2, mode: 'turns', privacy: 'public', target: 3, cube: true }));
     const tableId = made.body?.id;
@@ -541,7 +624,68 @@ try
         await diceTold('after a reload', gone, back.view);
     }
 
-    console.log('\n[7] bearing off');
+    console.log('\n[7] somebody watching, half a minute behind');
+
+    await omid.page.goto(`${ BASE }/app/play/${ tableId }`, { waitUntil: 'networkidle' });
+
+    record('a stranger at a public table is shown the game, and told they are watching', await waitFor(async () =>
+        await omid.page.locator(board).count() > 0 && /You are watching/.test(await omid.page.locator('main').innerText()), 15000));
+
+    const watchedTurn = await forward((current) => turnOf(current, plain));
+
+    if (watchedTurn === null)
+    {
+        record('a turn for the watcher to be shown came', false);
+    }
+    else
+    {
+        const before = watchedTurn.current;
+        const side = before.turn === 0 ? 'near' : 'far';
+
+        await omid.page.waitForTimeout(WATCH_DELAY_MS + 3000);
+        record('once the table has been quiet for the delay, the watcher\'s board is the live one', await level(omid, before.rev), `revision ${ before.rev }`);
+        await rested('watching', omid, before.view);
+        await stamp(omid);
+
+        const restWatched = await menOf(omid.page);
+
+        await watch(omid.page, MEN);
+        await omid.page.waitForTimeout(80);
+
+        const started = Date.now();
+
+        await post(before, { kind: 'backgammon', verb: 'move', hops: watchedTurn.found.map((hop) => ({ from: hop.from, to: hop.to })) });
+
+        const made = Date.now();
+        const moved = await state();
+
+        await omid.page.waitForTimeout(25000);
+
+        const early = await omid.page.locator('.table-stage').getAttribute('data-rev');
+        const stirred = bystanders(await stopWatching(omid.page), []);
+
+        record('for twenty-five seconds after a move nothing on the watcher\'s board moves', stirred.length === 0 && Number(early) === before.rev,
+            `${ stirred.slice(0, 3).join('; ') } revision ${ early } of ${ moved.rev }`);
+
+        await watch(omid.page, MEN);
+
+        const restarted = Date.now();
+
+        record('the move reaches the watcher by itself, with no reload', await level(omid, moved.rev), `revision ${ await omid.page.locator('.table-stage').getAttribute('data-rev') } of ${ moved.rev }`);
+        await omid.page.waitForTimeout(300);
+
+        const late = await stopWatching(omid.page);
+        const plan = planOf(restWatched.men, countsOf(before.view, 0), watchedTurn.found.map((hop) => ({ side, ...hop })), tonesOf(0), (key) => travelOf(late, key).moved > 3);
+        const stirs = plan === null ? [] : [...plan.routes.keys()].map((key) => firstStir(late, key)).filter((at) => at !== null);
+        const waited = stirs.length === 0 ? 0 : restarted + Math.min(...stirs) - made;
+
+        judged(`the watcher sees ${ watchedTurn.found.map((hop) => `${ hop.from } to ${ hop.to }`).join(', ') }`, late, plan, late.some((frame) => frame.presenting));
+        record('and sees it no sooner than the delay', waited >= WATCH_DELAY_MS - 1500, `${ (waited / 1000).toFixed(1) }s after it was made (the sampler started ${ ((restarted - started) / 1000).toFixed(1) }s in)`);
+        record('on the board it was already looking at: no node of it was made again', await unstamped(omid) === 0, `${ await unstamped(omid) } new nodes`);
+        await rested('watching, afterwards', omid, moved.view);
+    }
+
+    console.log('\n[8] bearing off');
 
     const homing = await forward((current) => turnOf(current, bearing), 900);
 
@@ -554,13 +698,56 @@ try
         await observe('bearing off', homing.current, homing.found);
     }
 
-    console.log('\n[8] the match is finished and played again');
+    console.log('\n[9] the match is finished in front of the watcher, and played again');
 
-    await forward(() => null, 2500);
+    const last = await forward((current) => ending(current), 2500);
+
+    if (last === null)
+    {
+        record('a move that ends the match came', false);
+    }
+    else
+    {
+        const side = last.current.turn === 0 ? 'near' : 'far';
+
+        await omid.page.waitForTimeout(WATCH_DELAY_MS + 3000);
+        record('before the last move the watcher\'s board is the live one', await level(omid, last.current.rev), `revision ${ last.current.rev }`);
+        await rested('watching, before the last move', omid, last.current.view);
+
+        const restLast = await menOf(omid.page);
+
+        await watchWords(omid);
+        await watch(omid.page, MEN);
+        await omid.page.waitForTimeout(80);
+        await post(last.current, { kind: 'backgammon', verb: 'move', hops: last.found.map((hop) => ({ from: hop.from, to: hop.to })) });
+
+        const carded = await waitFor(async () => await omid.page.locator('.table-result').count() === 1, 20000);
+
+        await omid.page.waitForTimeout(300);
+
+        const lastFrames = await stopWatching(omid.page);
+        const words = await stopWords(omid);
+
+        record('the watcher is shown the result of the game it was watching', carded);
+        judged(`the watcher sees the last move, ${ last.found.map((hop) => `${ hop.from } to ${ hop.to }`).join(', ') }`, lastFrames,
+            planOf(restLast.men, countsOf(last.current.view, 0), last.found.map((hop) => ({ side, ...hop })), tonesOf(0), (key) => travelOf(lastFrames, key).moved > 3),
+            lastFrames.some((frame) => frame.presenting));
+        record('the game is called on the watcher\'s board, and its result comes after', words.banner !== null && words.result !== null && words.banner < words.result,
+            `the banner at ${ words.banner } ms, the result at ${ words.result } ms`);
+        record('the watcher is not told the game is over, or offered the way back, while the board is still showing how it ended',
+            words.early === 0 && words.playing > 0 && words.over !== null && words.back !== null,
+            `${ words.early } of ${ words.playing } frames of play; "This game is over" at ${ words.over } ms, the way back at ${ words.back } ms, the result at ${ words.result } ms`);
+    }
 
     const finished = await state();
 
     record('the match ends', finished.finishedAt !== undefined);
+    record('the watcher is shown the end of the game it was watching, not a table to sit at', await waitFor(async () =>
+        /This game is over/.test(await omid.page.locator('main').innerText()) && await omid.page.locator('.table-result').count() === 1, 20000));
+    record('the watcher is offered the way back to the table, and no game to play again',
+        await pressable(omid.page, /Back to the table/) !== null && await pressable(omid.page, /Play again/i) === null);
+    record('the watcher\'s board is the finished one', await level(omid, finished.rev), `revision ${ await omid.page.locator('.table-stage').getAttribute('data-rev') } of ${ finished.rev }`);
+    await rested('watching the finished game', omid, finished.view);
 
     for (const player of [dana, mina])
     {
@@ -603,11 +790,17 @@ try
             await diceTold('after Play again', player, fresh.view);
             record(`after Play again: ${ player.handle } has thirty checkers`, await player.page.locator('.bg-layer .man').count() === 30);
         }
+
+        record('the watcher is taken on to the next game at the table', await waitFor(async () =>
+            /You are watching/.test(await omid.page.locator('main').innerText()) && await omid.page.locator('.table-result').count() === 0, 20000));
+        record('and is shown its opening', await level(omid, fresh.rev) && await omid.page.locator('.bg-layer .man').count() === 30,
+            `revision ${ await omid.page.locator('.table-stage').getAttribute('data-rev') } of ${ fresh.rev }`);
+        await diceTold('watching the next game', omid, fresh.view);
     }
 
-    console.log('\n[9] the console, over all of it');
+    console.log('\n[10] the console, over all of it');
 
-    record('nothing was logged in either browser', dana.errors.length + mina.errors.length === 0, [...dana.errors, ...mina.errors].slice(0, 4).join(' | '));
+    record('nothing was logged in any of the three browsers', dana.errors.length + mina.errors.length + omid.errors.length === 0, [...dana.errors, ...mina.errors, ...omid.errors].slice(0, 4).join(' | '));
 }
 catch (error)
 {
