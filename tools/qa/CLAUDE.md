@@ -357,3 +357,55 @@ thrown, the watcher's walk, and a result that came with no confetti and no play 
 Not in a pass yet, each with the commit that makes it true: the chat opened, the screen turned
 and full screen entered in the middle of a flight (P6); a frame check under a throttled
 processor. Hokm and poker get a lab and a pass of their own as they move onto the stage.
+
+## The notifications pass
+
+`tools/qa/notify-pass.mjs` (built server, limiter raised, about a minute, 35 checks) holds what
+the browser is told when nobody is looking at the app: the toast in a page that is seen, the
+notice a hidden page raises through the worker's registration, and the notice the worker raises
+for a push. `dana.w` sits in a browser that has said yes to notifications; `mina` and `leila.a`
+do things to it over the api.
+
+Three things cannot be had the plain way, and each is done the way that keeps the product code
+real.
+
+- **A document cannot be hidden in a driven browser.** A second tab and a minimised window both
+  leave `visibilityState` at `visible`. So the pass overrides it in the page and dispatches the
+  event: the page's own listeners and its own `tellSystem` run exactly as for a reader.
+- **The worker reads the tab's TRUE visibility**, which no override reaches. So "nobody is
+  looking at the app" is, for the worker, a tab on a page outside it (`/not-a-page`, the
+  not-found page, which is light), and "the app is on the screen" is a tab on `/app`.
+- **A push needs keys this server does not have.** The event is delivered to the real worker
+  through the devtools protocol (`ServiceWorker.deliverPushMessage`), which is what the Push
+  button in the browser's own tools does. Everything after the event is the product's: the read
+  of the list over the session, the kept words, the name, the notice.
+
+It refuses to run against a server that publishes a push key: with a subscription a hidden page
+leaves what the server pushes to the worker, and most of its lines would be about the wrong
+outlet. The keyed path was looked at by hand with a throwaway pair
+(`.claude/rules/chat-and-keys.md`, *The keyed path can be looked at without keys in `.env`*).
+
+Not in it, each for a stated reason: a chat message (one can only be posted sealed, by a
+browser that enrolled a device, which `chat-pass.mjs` does; the cue is held by `cues.spec.ts`
+and the contract between the page and the worker); a press on a notice (a driven browser
+cannot make one, and a synthetic `notificationclick` is untrusted, so `push-worker.spec.ts`
+runs the worker's real source; the pass checks what that spec cannot, that the worker sees a
+page it does not control and that a message from it moves the page with no reload).
+
+**Three lessons from writing it**, each a run that failed with the product right. A toast with a
+button stays up for seconds, so a line that asks for NO toast after one that raised the same
+sentence has to wait for the first to leave. "Play until it is the reader's turn" has to see the
+turn be somebody else's first: when the dice gave the reader the first move, the loop stopped
+after the reader's own roll, the turn had never left them, and no turn had "come round" to be
+told. And a name used for a helper and again for a value inside the `try` is a dead zone that
+stops the pass at its second line with a `ReferenceError`, which reads like a product failure
+in the summary: read the log, not the count.
+
+**Proved red first, on real code.** Against a production build broken eleven ways (a page that is
+looked at telling the system too, nothing taken down on return, a cue that does not wait for a name,
+a friend request deaf to its switch, the device switch ignored, no turn told on the open table, a
+worker that speaks over the app, asks nobody's name and keeps no mark, a home page that is not
+inside the app, a device that is switched off asking for the key) the pass failed 14 of 35, at least
+one line for each fault. Its first red run failed 15 and still let the missing name through: the
+fixture account already knew the inviter from old rows, so the pass begins by dismissing every
+notification the account has. The source was put back from a saved copy, never from git.

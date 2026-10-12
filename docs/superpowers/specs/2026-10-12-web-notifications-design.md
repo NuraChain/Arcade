@@ -130,3 +130,37 @@ Each with its specs, driven in a real browser, and the notes it makes false.
 - It does not make a phone ring when the app is closed on a server with no push keys. That
   needs the three `VAPID_*` values in `.env`, which are the owner's.
 - It adds no email and no sound outside the page.
+
+## 7. As built
+
+Sections 3 to 5 are the design as it was approved. This is what was made, where it differs
+and why. The notes the code is held to are `.claude/rules/chat-and-keys.md` (the worker, the
+reach, a pressed notice) and `frontend/CLAUDE.md` (the cues).
+
+| Design | Built | Why |
+|---|---|---|
+| N2: the reader's turn from `lobby.waiting()` | From the game frame, the same frame a start is heard from | The frame says whose turn it is at once; the list is a later read, and a turn the reader already held when the page loaded must not be said. |
+| N2: the sentence it already has | A cue waits for the name of whoever it is about (`people.want`, which now answers when it settles) | The first notice the real build showed read "mina saved you a seat": an invitation can come from somebody the page never loaded, and a notice is not redrawn. |
+| N5: the five kinds, as now | The page's own cues ask the same three mutes the server asks | A message and a friend request are heard from the page's own lists, so "Messages" off, a muted thread and a muted person emptied the bell and still rang the page. |
+| N3: the newest unread row | Every unread row newer than a mark the worker keeps, three at most, the newest only the first time | Two things close together arrive as two pushes and both read the same newest row. |
+| N3: nothing when a page of ours is visible | Nothing when a page INSIDE THE APP is visible; and a hidden page leaves what the server pushes to the worker when a push reaches the device | The landing page has no toast to show. And without one speaker a server with keys alerts twice for one message, from the socket and from the push. |
+| N4: focus an open tab, post the target | A tab already showing the target is focused and told nothing; inside the app is `/app` or under it; pages the worker does not control are asked for too | Found in a real browser: the home page is `/app`, and the page the switch was just turned on in is not controlled by the worker. |
+| N-D4: no server change | One: signing out everywhere drops the account's push subscriptions | A browser nobody is signed in on was still woken, and the worker could only say that something was new. |
+| not in the design | A device that is switched on keeps its reach: at start it subscribes where the server has gained keys, tells the server again, and gives up a subscription with nothing behind it; signing out gives it up | This deployment has no keys today; set later, they would have reached nobody. |
+| not in the design | A new worker takes over at install; notices are taken down when the app opens; the notifications list asks for the names of the people in it | Each found while the others were looked at in a browser. |
+
+Commits: `af43e10` the device switch and a notice from a hidden page; `d9a3c0e` the list asks
+for names; `4180097` a cue is silent wherever the reader said so; `4b1a88a` a pressed notice
+goes to the thing; `c5b760e` the worker says what happened; `db8738a` a device keeps its
+reach; and the pass, `tools/qa/notify-pass.mjs`.
+
+A real push was looked at, once, by starting the built server with a throwaway key pair on
+the command line: a driven Chrome subscribed to its own push service and the worker showed
+what the server pushed. Two things were not, because nothing here can do them: a tab that is
+truly hidden (a driven browser keeps `visibilityState` at `visible` whatever is done to its
+window), and Safari, which is said to end a subscription after a few pushes that show nothing,
+where this worker shows nothing while the app is on the screen.
+
+One line the design would have liked and the server does not give it: a `turn` row has no
+game in its `ref`, so the bell's list and a push say "It is your go" where the page, which has
+the lobby, says "Your turn at Ludo".
