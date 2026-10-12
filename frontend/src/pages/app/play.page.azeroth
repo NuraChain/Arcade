@@ -558,6 +558,8 @@ export default component PlayPage()
 
     derived playing = showing ? (board.match()?.game ?? '') : '';
 
+    derived played = playing !== '' && drawn === playing ? board.match() : null;
+
     state boardFailed = false;
 
     const draw = (want: string) =>
@@ -616,8 +618,8 @@ export default component PlayPage()
 
     derived rematch = table !== null && seated ? rematchOf(table) : undefined;
 
-    const boardProps = (): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
-        match: board.match()!,
+    const boardProps = (match: MatchView): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
+        match,
         events: board.events(),
         starting,
         onAgain: seated ? () => void again() : undefined,
@@ -642,7 +644,7 @@ export default component PlayPage()
 
         const held = board.match();
 
-        if (held === null || held.tableId !== table?.id)
+        if (held === null || held.tableId !== table?.id || id !== undefined)
         {
             board.close();
         }
@@ -962,8 +964,8 @@ export default component PlayPage()
                         </p>
                     </Show>
 
-                    <Show when={ playing !== '' && drawn === playing }>
-                        { () => <Dynamic component={ Board! } props={ boardProps } /> }
+                    <Show when={ played } let={ match }>
+                        <Dynamic component={ Board! } props={ () => boardProps(match) } />
                     </Show>
 
                     <Show when={ unfetched || (playing !== '' && drawn !== playing && boardFailed) }>

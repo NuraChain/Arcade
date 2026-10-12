@@ -787,8 +787,81 @@ try
         record('the table thread records how the game ended', lines.length > 0, lines[0]?.payload?.key);
     }
 
-    // ---------------------------------------------------------------- 6. the console, throughout
-    console.log('\n[6] the console, over the whole game');
+    // ---------------------------------------------------------------- 6. a chair given up from somewhere else
+    console.log('\n[6] a chair given up from another device, with the page still open');
+    {
+        const omid = await seat('omid.k');
+        const sara = await seat('sara.k');
+        const rest = [mina, omid, sara];
+        let four = null;
+
+        try
+        {
+            const made = await dana.request.post(`${ BASE }/api/tables/`, {
+                data: tableBody({ game: 'ludo', seats: 4, mode: 'turns', privacy: 'public' })
+            });
+
+            four = (await made.json()).id;
+
+            for (const who of rest)
+            {
+                await who.request.post(`${ BASE }/api/tables/${ four }/seat`);
+            }
+
+            for (const who of [dana, ...rest])
+            {
+                await who.request.post(`${ BASE }/api/tables/${ four }/ready`, { data: { ready: true } });
+            }
+
+            const started = await dana.request.post(`${ BASE }/api/tables/${ four }/start`);
+
+            await dana.page.goto(`${ BASE }/app/play/${ four }`, { waitUntil: 'networkidle' });
+            await dana.page.waitForTimeout(SETTLE_MS);
+
+            const before = await dana.page.evaluate(() => document.querySelectorAll('.table-stage').length);
+
+            record('a game of four is on the page of one of its players', started.ok() && before === 1, `${ started.status() }, ${ before } board`);
+
+            /**
+             * The walkout is made over the api, which is what the same account's other device is to
+             * this page: the chair and the game go, and nothing here was pressed. The page that
+             * asked for a walkout leaves for the games list, so only this one ever sees what
+             * follows.
+             */
+            await dana.request.post(`${ BASE }/api/tables/${ four }/leave`, { data: { forfeit: true } });
+
+            const settled = await dana.page.waitForFunction(
+                () => document.querySelector('[data-gone]') === null
+                    && document.querySelectorAll('.table-stage').length === 1
+                    && document.body.textContent.includes('You are watching'),
+                null,
+                { timeout: 60000 }
+            ).then(() => true).catch(() => false);
+            const after = await dana.page.evaluate(() => ({
+                boards: document.querySelectorAll('.table-stage').length,
+                fallen: document.querySelector('.ludo-frame') === null && document.querySelectorAll('.table-stage').length === 0
+            }));
+
+            record('the page that stayed open still stands when its game leaves it', !after.fallen, after.fallen ? 'no table is left on the page' : '');
+            record('and it draws the game once, as a watcher\'s', settled && after.boards === 1, `${ after.boards } board`);
+        }
+        finally
+        {
+            if (four !== null)
+            {
+                for (const who of rest)
+                {
+                    await who.request.post(`${ BASE }/api/tables/${ four }/leave`, { data: { forfeit: true } }).catch(() => null);
+                }
+            }
+
+            await omid.context.close();
+            await sara.context.close();
+        }
+    }
+
+    // ---------------------------------------------------------------- 7. the console, throughout
+    console.log('\n[7] the console, over the whole game');
     {
         record('nothing was logged in either browser', dana.errors.length === 0 && mina.errors.length === 0,
             [...dana.errors, ...mina.errors].slice(0, 2).join(' | '));

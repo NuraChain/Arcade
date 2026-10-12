@@ -2287,6 +2287,29 @@ Now:
 - **The page says so.** Above the board: "You are out of this game." and the watcher's own
   sentence about being thirty seconds behind. And it no longer offers "Give up" to somebody who
   already has, which it did, to be refused.
+- **A chair given up from somewhere else makes a watcher of the page that is still open.** The
+  page kept the board of a game for as long as the game belonged to the table, seated or not,
+  which is what keeps a finished game's result in front of somebody. A walkout takes the chair
+  as well as the game, and the page that asked for it goes to the games list; but the same
+  account's page on another device stays, with a table that has a game on and no chair of its
+  own - so it kept the player's board, was offered the watcher's as well, and drew the game
+  twice, one under the other. Seen in a real browser on a public table after a pass had cleared
+  the fixture's tables from under it. The page now lets the board go when the table has a game
+  on and the reader has no chair at it, and the watch is the one board. An invite-only table
+  goes with the chair, so there it is still "No such table".
+
+  Letting the board go was a crash before it was a fix. The page handed its board
+  `board.match()!`, and a Ludo board that was still on the page read a game that was no longer
+  there in the tick before its branch was taken down: "The lights went out." It showed only in
+  a real browser. Which runs first, the branch or the board's own effects, turns on what else
+  on the page read the same signals that round, and neither spec could be made to throw. The
+  board now takes its match through the branch's own value (`<Show when={ played } let={ match
+  }>`), which answers with the last real match while the branch is being taken down: the rule
+  `frontend/CLAUDE.md` already had for a table, applied to the one read it had missed.
+  `play.spec.ts` holds the one board at a poker table and `play-quit.spec.ts` at a Ludo table
+  with the real board on the page; the Ludo play pass walks out over the api under an open
+  page and asks that the page still stands and draws the game once, which is the check that
+  fails on the crash.
 
 `WATCH_DELAY_MS` moved to `match/turns.ts`, which imports nothing, so the page can say the number
 the server keeps. `match-quit.db.spec.ts` holds each of the five answers at a three-seat Ludo
@@ -3794,6 +3817,14 @@ renderer's own numbers, imported, so the pass holds the browser to the code and 
 it. Built with six faults (the size set above the die, every seat's die thrown from the hand,
 every die resting in green's yard, the face after the one rolled, the pawns lit with the answer,
 and a die of the button's own under the table's), the pass failed those seven lines and no other.
+
+When the game is over the pass seats four at a second table, opens it as one of them and walks
+that one out over the api, which is what the same account's other device is to the page. Two
+lines are asked of the page that stayed: that it still stands, and that it draws the game once,
+as a watcher's. Built with the board reading the store's own match under itself, as it used to,
+the page fell to the error boundary and the pass failed both, and the line about a clean console
+with them (*A chair given up from somewhere else*, under *Playing a game*). No spec can be made
+to: the order in which the outer branch and the board's own effects run is the browser's.
 
 It presses a pawn where it is, with the mouse (`press`), and not through a locator. A pawn that may
 be moved hops, and a locator's click waits for its element to hold still for two frames in a row and

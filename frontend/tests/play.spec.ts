@@ -1390,9 +1390,9 @@ describe('PlayPage', () =>
             return await opened(held, playing);
         };
 
-        const resignedAt = async () =>
+        const resignedAt = async (privacy: ReturnType<typeof defaultTable>['privacy'] = defaultTable('poker').privacy) =>
         {
-            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length, privacy }, []);
             const held = server.tables.find((one) => one.id === id)!;
 
             for (const chair of held.chairs)
@@ -1496,6 +1496,45 @@ describe('PlayPage', () =>
 
             expect(control(container, 'match.resign')).toBeUndefined();
             expect(control(container, 'play.lobby.leave')).toBeDefined();
+        });
+
+        it('draws one board for somebody whose chair was given up from somewhere else: the game they left is watched, not played and watched at once', async () =>
+        {
+            const thrown: unknown[] = [];
+            const caught = (event: ErrorEvent | PromiseRejectionEvent) => thrown.push('reason' in event ? event.reason : event.error);
+
+            window.addEventListener('error', caught);
+            window.addEventListener('unhandledrejection', caught);
+
+            const complaints = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { container, held } = await resignedAt('public');
+            const { mine: _theirs, ...watched } = gaveUp(held.id);
+
+            expect(container.querySelectorAll('.table-stage')).toHaveLength(1);
+            expect(container.querySelector('[data-gone]')).not.toBeNull();
+
+            server.watches[held.matchId!] = { match: watched, behind: 30, delay: 30, live: true };
+
+            try
+            {
+                delete held.chairs[0].who;
+                await useLobby().refresh();
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+                await vi.waitFor(() => expect(container.querySelector('.table-stage'), 'the watcher was never shown the board').not.toBeNull(), { timeout: 4000 });
+
+                expect(container.querySelector('[data-gone]'), 'the board of a chair they no longer hold stayed on the page').toBeNull();
+                expect(container.querySelectorAll('.table-stage'), 'the game is drawn twice, once as theirs and once as a watcher\'s').toHaveLength(1);
+                expect(useBoard().match(), 'the board of a game they are no longer in is still held').toBeNull();
+                expect(thrown, 'the board was told its game was gone while it was still on the page').toEqual([]);
+                expect(complaints.mock.calls.map((call) => String(call[0])), 'something on the page complained while the board was let go').toEqual([]);
+            }
+            finally
+            {
+                window.removeEventListener('error', caught);
+                window.removeEventListener('unhandledrejection', caught);
+                delete server.watches[held.matchId!];
+            }
         });
 
         it('says neither to somebody still playing, who is offered the way out', async () =>
