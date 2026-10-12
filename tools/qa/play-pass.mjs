@@ -208,13 +208,22 @@ const walking = (who, forMs) => who.page.evaluate((limit) => new Promise((resolv
  * many pawns were lit while it was in the air, the face it shows at rest, where it rests and how
  * big it is drawn, as fractions of the board. A browser in which no die is thrown answers with an
  * empty path.
+ *
+ * That fifth of a second is read from the clock. It was thirteen frames once, which is a fifth of a
+ * second on a screen that draws sixty of them and ninety milliseconds on one that draws a hundred
+ * and forty-four: the time the base takes to come back under a die that has landed. The die was
+ * read with its base at 0.97 and reported as one that never stood on anything.
  */
 const throwOf = (who, forMs = 6000) => who.page.evaluate((limit) => new Promise((resolve) =>
 {
     const started = performance.now();
     const path = [];
     let lit = 0;
-    let still = 0;
+    let ended = 0;
+    let under = 0;
+    let cube = 6;
+
+    const drawn = (die) => [...die.querySelectorAll('.die3d-face')].filter((face) => getComputedStyle(face).visibility === 'visible');
 
     const tick = () =>
     {
@@ -229,22 +238,27 @@ const throwOf = (who, forMs = 6000) => who.page.evaluate((limit) => new Promise(
 
             path.push([(box.left + box.width / 2 - board.left) / board.width, (box.top + box.height / 2 - board.top) / board.height]);
             lit = Math.max(lit, document.querySelectorAll('.board-canvas .lp[data-movable]').length);
-            still = 0;
+            under = Math.max(under, Number(getComputedStyle(holder.querySelector('.die3d-base')).opacity));
+            cube = Math.min(cube, drawn(holder).length);
+            ended = 0;
         }
-        else if (path.length > 0)
+        else if (path.length > 0 && ended === 0)
         {
-            still += 1;
+            ended = performance.now();
         }
 
-        if (still > 12 || performance.now() - started > limit)
+        if ((ended > 0 && performance.now() - ended > 200) || performance.now() - started > limit)
         {
             const box = body === null || board === undefined || holder.hidden ? null : body.getBoundingClientRect();
-            const cube = holder?.querySelector('.die3d') ?? null;
+            const die = holder?.querySelector('.die3d') ?? null;
+            const faces = die === null ? [] : drawn(die);
 
             resolve({
                 path,
                 lit,
-                size: cube === null || board === undefined ? 0 : Number.parseFloat(getComputedStyle(cube).fontSize) / board.width,
+                air: { under, cube },
+                landed: die === null ? null : { faces: faces.map((face) => Number(face.getAttribute('data-n'))), base: Number(getComputedStyle(die.querySelector('.die3d-base')).opacity) },
+                size: die === null || board === undefined ? 0 : Number.parseFloat(getComputedStyle(die).fontSize) / board.width,
                 dice: document.querySelectorAll('.board-stage .die3d').length,
                 face: Number(holder?.querySelector('.die3d')?.getAttribute('data-face') ?? 0),
                 rest: box === null ? null : [(box.left + box.width / 2 - board.left) / board.width, (box.top + box.height / 2 - board.top) / board.height]
@@ -615,6 +629,13 @@ try
         const wrong = faced.filter((one) => one.mine.face !== one.rolled || one.theirs.face !== one.rolled);
         const doubled = throws.filter((one) => one.mine.dice !== 1 || one.theirs.dice !== 1);
         const fitted = throws.filter((one) => sized(one.mine.size) && sized(one.theirs.size));
+        const tumbled = throws.filter((one) => [one.mine, one.theirs].every((seen) => seen.air.under === 0 && seen.air.cube === 6));
+        const stood = faced.filter((one) => [one.mine, one.theirs].every((seen) => seen.landed !== null && seen.landed.base === 1 && seen.landed.faces.length === 1 && seen.landed.faces[0] === one.rolled));
+        const inAir = (seen) => `${ seen.air.cube } faces over a base at ${ seen.air.under }`;
+        const atRest = (seen) => (seen.landed === null ? 'no die' : `${ seen.landed.faces.join(' ') || 'no face' } on a base at ${ seen.landed.base }`);
+        const both = (one, read) => `${ read(one.mine) } and ${ read(one.theirs) }`;
+        const grounded = throws.find((one) => !tumbled.includes(one));
+        const fallen = faced.find((one) => !stood.includes(one));
 
         record('the die is thrown from the middle, where it was pressed, by whoever rolls', flown.length === throws.length && throws.length > 0, `${ flown.length } of ${ throws.length }`);
         record('the other browser sees it come in over the roller\'s corner', entered.length === throws.length && throws.length > 0, `${ entered.length } of ${ throws.length }`);
@@ -622,6 +643,10 @@ try
         record('no pawn is lit while the die is in the air', early.length === 0, `${ early.length } of ${ throws.length } lit early`);
         record('the die shows the face the server rolled, in both browsers', faced.length > 0 && wrong.length === 0, `${ faced.length - wrong.length } of ${ faced.length }`);
         record('there is one die on the board, never two', doubled.length === 0, `${ doubled.length } throws with another`);
+        record('in the air the die is a whole cube with nothing under it, in both browsers', tumbled.length === throws.length && throws.length > 0,
+            `${ tumbled.length } of ${ throws.length }${ grounded === undefined ? '' : ', one seen as ' + both(grounded, inAir) }`);
+        record('once it has landed it is the one face that was rolled, standing on its base, in both browsers', faced.length > 0 && stood.length === faced.length,
+            `${ stood.length } of ${ faced.length }${ fallen === undefined ? '' : `, a ${ fallen.rolled } seen as ${ both(fallen, atRest) }` }`);
         record(`the die is ${ DIE_SIZE } squares across in both browsers, whatever the screen`, fitted.length === throws.length && throws.length > 0, `${ fitted.length } of ${ throws.length }`);
         record('a move is made by pressing the pawn on the board', moved > 0, `${ moved } pawns pressed`);
         record('no list of moves and no button for one is in the page beside the board', listed === 0, `${ listed } found`);

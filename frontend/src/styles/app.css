@@ -3551,42 +3551,52 @@ html:has(.site-drawer[open])
     box-shadow: inset 0 0.012em 0.025em rgb(0 0 0 / 0.5);
 }
 
-.die3d[data-flat]
-{
-    filter: drop-shadow(0 0.05em 0 #2A1E5C);
-}
-
 .die3d[data-flat][data-spent]
 {
     opacity: 1;
 }
 
-.die3d[data-flat][data-spent] .die3d-face
-{
-    background: #CFC8BA;
-}
-
-.die3d[data-flat][data-spent] .die3d-pip
-{
-    background: #6A6387;
-}
-
 .die3d[data-flat] .die3d-shadow
 {
-    inset: 14% 0 -10% 6%;
-    border-radius: 24%;
+    inset: 62% -20% -34% -10%;
+    border-radius: 50%;
     background: #2A1E5C;
     filter: none;
-    opacity: 0.22;
+    opacity: 0.3;
+}
+
+.die3d[data-flat] .die3d-base
+{
+    position: absolute;
+    inset: 0;
+    translate: 0 0.15em;
+    border-radius: 0.24em;
+    background: #E6D6B4;
+    box-shadow: inset 0 0 0 0.05em #2A1E5C, inset 0 -0.075em 0 0.05em #CDBB8F;
+    transition: opacity 90ms var(--ease-ui, ease), background-color 200ms var(--ease-ui, ease);
+}
+
+.die3d[data-flat][data-air] .die3d-base
+{
+    opacity: 0;
+    transition: none;
+}
+
+.die3d[data-flat]:not([data-air]) .die3d-face:not([data-up])
+{
+    visibility: hidden;
 }
 
 .die3d[data-flat] .die3d-face
 {
     gap: 0;
-    padding: 0.095em;
-    border-radius: 0.2em;
-    background: #FFFFFF;
-    box-shadow: inset 0 0 0 0.05em #2A1E5C;
+    padding: 0.11em;
+    border-radius: 0.24em;
+    outline: 1px solid transparent;
+    background:
+        radial-gradient(ellipse 34% 11% at 36% 15%, #FFFFFF 0 96%, rgb(255 255 255 / 0) 100%),
+        linear-gradient(160deg, #FFFFFF 0%, #FFFFFF 55%, #F6EFDF 100%);
+    box-shadow: inset 0 0 0 0.05em #2A1E5C, inset -0.04em -0.05em 0 0.05em #EFE4CB;
     filter: none;
     transition: background-color 200ms var(--ease-ui, ease);
 }
@@ -3597,26 +3607,52 @@ html:has(.site-drawer[open])
     inset: 0;
     border-radius: inherit;
     background: #E6D6B4;
-    box-shadow: inherit;
+    box-shadow: inset 0 0 0 0.05em #2A1E5C;
     opacity: 0;
-}
-
-.die3d[data-flat][data-spent='three-sixes'] .die3d-face
-{
-    background: #FF9D92;
-}
-
-.die3d[data-flat][data-spent='three-sixes'] .die3d-pip
-{
-    background: #2A1E5C;
 }
 
 .die3d[data-flat] .die3d-pip
 {
     position: relative;
-    inline-size: 63%;
-    background: #2A1E5C;
+    inline-size: 68%;
+    background:
+        radial-gradient(ellipse 30% 20% at 36% 30%, rgb(255 255 255 / 0.9) 0 92%, rgb(255 255 255 / 0) 100%),
+        radial-gradient(circle at 50% 50%, #3A2C80 0 52%, #2A1E5C 70%);
     box-shadow: none;
+}
+
+.die3d[data-flat][data-spent] .die3d-face
+{
+    background: #DAD5C8;
+    box-shadow: inset 0 0 0 0.05em #6A6387;
+}
+
+.die3d[data-flat][data-spent] .die3d-base
+{
+    background: #BDB5A3;
+    box-shadow: inset 0 0 0 0.05em #6A6387;
+}
+
+.die3d[data-flat][data-spent] .die3d-pip
+{
+    background: #6A6387;
+}
+
+.die3d[data-flat][data-spent='three-sixes'] .die3d-face
+{
+    background: #FF9D92;
+    box-shadow: inset 0 0 0 0.05em #2A1E5C;
+}
+
+.die3d[data-flat][data-spent='three-sixes'] .die3d-base
+{
+    background: #D8372D;
+    box-shadow: inset 0 0 0 0.05em #2A1E5C;
+}
+
+.die3d[data-flat][data-spent='three-sixes'] .die3d-pip
+{
+    background: #2A1E5C;
 }
 
 .lb-die > .die3d

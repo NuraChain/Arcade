@@ -382,5 +382,89 @@ describe('the die, drawn flat', () =>
         expect(drawn[0].el).toBe(die.node);
         expect(drawn[0].frames).toEqual([{ opacity: 0, offset: 0 }]);
         expect(die.face()).toBe(6);
+        expect(die.node.hasAttribute('data-air'), 'a die that only fades in was drawn as one in the air, with no base under it').toBe(false);
+    });
+
+    const upOf = (node: HTMLElement) => [...node.querySelectorAll<HTMLElement>('.die3d-face')].filter((side) => side.hasAttribute('data-up')).map((side) => side.dataset.n);
+
+    const elapse = async (clock: { advance(ms: number): void }, ms: number) =>
+    {
+        for (let left = ms; left > 0; left -= 5)
+        {
+            clock.advance(Math.min(5, left));
+
+            for (let turn = 0; turn < 12; turn += 1)
+            {
+                await Promise.resolve();
+            }
+        }
+    };
+
+    it('rests as a face on a base: the one face that looks at the reader is marked, and the base is turned the way that face is', () =>
+    {
+        const die = createDie({ flat: true });
+        const base = die.node.querySelector<HTMLElement>('.die3d-base');
+
+        expect([...die.node.children].map((part) => part.className), 'the base is not under the die, between its shadow and its body').toEqual(['die3d-shadow', 'die3d-base', 'die3d-body']);
+
+        die.show(3, 19);
+
+        expect(upOf(die.node)).toEqual(['3']);
+        expect(base?.style.rotate).toBe(`${ yawOf(19).toFixed(4) }rad`);
+
+        die.show(6, 4242);
+
+        expect(upOf(die.node)).toEqual(['6']);
+        expect(base?.style.rotate).toBe(`${ yawOf(4242).toFixed(4) }rad`);
+        expect(yawOf(19)).not.toBeCloseTo(yawOf(4242), 3);
+        expect(createDie().node.querySelector('.die3d-base'), 'the lit die grew a flat one\'s base').toBeNull();
+        expect(upOf(createDie().node), 'the lit die marks a face, which it has no use for').toEqual([]);
+    });
+
+    it('puts its base away while it is in the air, and stands on it again when it has landed', async () =>
+    {
+        const clock = manualClock(0);
+        const stage = createStage({ clock, quiet: () => false });
+        const die = createDie({ flat: true });
+
+        expect(die.node.hasAttribute('data-air')).toBe(false);
+
+        const run = die.toss(stage, 4242, 4, { x: 3, y: -2 });
+
+        expect(die.node.hasAttribute('data-air'), 'a die in the air is drawn standing on its base').toBe(true);
+        expect(upOf(die.node)).toEqual(['4']);
+
+        await elapse(clock, run.length - 20);
+
+        expect(die.node.hasAttribute('data-air'), 'the base came back before the die had landed').toBe(true);
+
+        await elapse(clock, 40);
+
+        expect(die.node.hasAttribute('data-air'), 'the die landed and its base never came back').toBe(false);
+    });
+
+    it('is not left in the air, nor landed early, by a throw that another overtook', async () =>
+    {
+        const clock = manualClock(0);
+        const stage = createStage({ clock, quiet: () => false });
+        const die = createDie({ flat: true });
+        const first = die.toss(stage, 4242, 4, { x: 3, y: -2 });
+
+        await elapse(clock, first.length - 30);
+
+        const second = die.toss(stage, 977, 2, { x: -3, y: 2 });
+
+        await elapse(clock, 60);
+
+        expect(die.node.hasAttribute('data-air'), 'the first throw\'s landing stood the second throw on its base in mid air').toBe(true);
+
+        await elapse(clock, second.length);
+
+        expect(die.node.hasAttribute('data-air')).toBe(false);
+
+        die.toss(stage, 31, 5, { x: 1, y: 1 });
+        die.show(5, 31);
+
+        expect(die.node.hasAttribute('data-air'), 'a die that was shown at rest is still drawn as one in the air').toBe(false);
     });
 });

@@ -74,7 +74,9 @@ export function createDie(options: DieOptions = {}): Die
     const flat = options.flat === true;
     const node = element('die3d');
     const shadow = element('die3d-shadow', node);
+    const base = flat ? element('die3d-base', node) : null;
     const body = element('die3d-body', node);
+    const sides: HTMLElement[] = [];
     const tones: HTMLElement[] = [];
     const veils: HTMLElement[] = [];
 
@@ -86,6 +88,7 @@ export function createDie(options: DieOptions = {}): Die
 
         side.dataset.n = String(face);
         side.style.transform = FACE_PLACE[face];
+        sides.push(side);
 
         if (flat)
         {
@@ -107,6 +110,8 @@ export function createDie(options: DieOptions = {}): Die
 
     let shown = 1;
 
+    let thrown = 0;
+
     const pose = (turn: Turn, x: number, y: number, lift: number, grown: number) => (flat
         ? `translate(${ x.toFixed(3) }em, ${ y.toFixed(3) }em) scale(${ (nearness(lift) * grown).toFixed(4) }) ${ matrixOf(seenFlat(turn)) }`
         : `perspective(${ PERSPECTIVE }em) translate3d(${ x.toFixed(3) }em, ${ y.toFixed(3) }em, ${ lift.toFixed(3) }em) ${ matrixOf(turn) }`);
@@ -115,7 +120,7 @@ export function createDie(options: DieOptions = {}): Die
         ? {
             translate: `${ (x + lift * 0.16).toFixed(3) }em ${ (y + lift * 0.3).toFixed(3) }em`,
             scale: (1 / (1 + lift * 0.25)).toFixed(3),
-            opacity: (0.22 / (1 + lift * 0.5)).toFixed(3)
+            opacity: (0.3 / (1 + lift * 0.5)).toFixed(3)
         }
         : {
             translate: `${ (x + lift * 0.35).toFixed(3) }em ${ (y + lift * 0.55).toFixed(3) }em`,
@@ -125,12 +130,25 @@ export function createDie(options: DieOptions = {}): Die
 
     const rest = (face: number, seed: number) =>
     {
-        const turn = restTurn(face, yawOf(seed));
+        const yaw = yawOf(seed);
+        const turn = restTurn(face, yaw);
         const seen = seenFlat(turn);
 
         shown = face;
+        thrown += 1;
         node.dataset.face = String(face);
+        node.removeAttribute('data-air');
         body.style.transform = flat ? matrixOf(seen) : `perspective(${ PERSPECTIVE }em) ${ matrixOf(turn) }`;
+
+        if (base !== null)
+        {
+            base.style.rotate = `${ yaw.toFixed(4) }rad`;
+
+            for (const [index, side] of sides.entries())
+            {
+                side.toggleAttribute('data-up', index + 1 === face);
+            }
+        }
 
         for (const [index, tone] of tones.entries())
         {
@@ -164,6 +182,20 @@ export function createDie(options: DieOptions = {}): Die
             rest(face, seed);
 
             const fall = stage.animate(stage.quiet() ? node : body, bodyFrames, { duration: length });
+
+            if (flat && !stage.quiet())
+            {
+                const mine = thrown;
+
+                node.setAttribute('data-air', '');
+                void fall.done.then(() =>
+                {
+                    if (mine === thrown)
+                    {
+                        node.removeAttribute('data-air');
+                    }
+                });
+            }
 
             stage.animate(shadow, shadowFrames, { duration: length, quiet: 'skip' });
 

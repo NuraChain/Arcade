@@ -3304,9 +3304,33 @@ the air, on the board, leaving it, or on a plate.
   die in the air is drawn larger for being nearer whoever looks (`nearness`), where the other die
   moves toward the eye. The faces are white with the board's ink line and ink pips. Each face
   carries a tone, the lip colour of a white piece, by how far it has turned away, and a veil that
-  hides its pips before it is edge-on, where they would be a smear. The shadow is a hard offset
-  one that shrinks as the die rises. `dice-plan.spec.ts` (*the die, drawn flat*) holds the pose,
-  the tones and the sizes.
+  hides its pips before it is edge-on, where they would be a smear. `dice-plan.spec.ts` (*the
+  die, drawn flat*) holds the pose, the tones and the sizes.
+- **At rest it is a face on a base, drawn the way the board draws a tile.** The owner, 2026-10-12:
+  "on ludo dice does not have good looking it is low quality". Looked at closely, it was. The
+  cube at a tenth of a radian showed its sides as a lip, and a side seen that steeply has its
+  own ink line squashed to nothing: a bold line round the face, a hairline under it, and a hard
+  offset line standing in for the rest. Tipping the cube further was tried first and was worse.
+  Faces with round corners do not meet, so the corners gaped, and the side that is nearly
+  edge-on is a sliver with an outline. So the cube is what tumbles and nothing else. A die that
+  has come to rest marks the one face that looks at the reader (`data-up`), the others are not
+  drawn, and it stands on a base of its own (`.die3d-base`): the face's shape again in the lip
+  colour of a white piece with a darker foot, inside the same ink line, set straight down the
+  screen and turned the way the face is turned. That is `sticker()` in `tools/art/boards.mjs`,
+  which is how every tile on the board is drawn. The base is put away while the die is in the
+  air (`data-air`) and comes back when the throw's run is done; a throw that another overtakes
+  neither lands the newer one early nor leaves it in the air, and a die that only fades in, for
+  somebody who asked for less motion, is never in the air at all. The pips are beads with a
+  glint, as a pawn's head has, and the shadow is the pawn's: a flat ellipse of ink under the
+  base that shrinks and fades as the die rises. The drawing was tried on a page of its own
+  first, built from the die's real code at the sizes it is seen at (26px in a phone's yard, 34
+  on a phone's plate, 44 in a phone's hand, 82 in a desktop's), because a build is three minutes
+  and a drawing is not right the first time. `dice-plan.spec.ts` holds the base, the mark and
+  the two states; the play pass asks of every throw, in both browsers, that the die in the air
+  is a whole cube with nothing under it and that the one that has landed is the face that was
+  rolled, alone, on its base. Built with the base left under a die in the air and every face
+  drawn at rest, the pass failed those two lines and no other. Eleven faults put into the die's
+  code one at a time were each caught by a spec.
 - **It waits in the reader's hand, in the middle of the board.** While the roll is the reader's
   the die lies there two squares across (`HAND`), bobbing, under the roll button, which draws
   nothing of its own once the renderer has arrived: the button is the die. The press lifts it and
@@ -3900,15 +3924,26 @@ nothing slides to every position in turn, and after the rest of the game had bee
 api it was still far behind when the pass stopped waiting.
 
 Of every roll it presses it follows the die in BOTH browsers, frame by frame (`throwOf`), and
-asks seven things. The roller's own die leaves the middle of the board, where it was pressed. The
+asks nine things. The roller's own die leaves the middle of the board, where it was pressed. The
 other browser sees it come in over the roller's corner. It comes to rest where the renderer's own
 `dieRest` puts that seat's die, in both. No pawn is lit while it is in the air. It shows the face
 the server rolled, in both. There is one die on the board, never two. And it is `DIE_SIZE`
-squares across in both, measured against the board. The resting place and the size are the
+squares across in both, measured against the board. In the air it is a whole cube with nothing
+under it, and once it has landed it is the one face that was rolled, standing on its base (the
+two lines the die's redrawing added). The resting place and the size are the
 renderer's own numbers, imported, so the pass holds the browser to the code and not to a copy of
 it. Built with six faults (the size set above the die, every seat's die thrown from the hand,
 every die resting in green's yard, the face after the one rolled, the pawns lit with the answer,
 and a die of the button's own under the table's), the pass failed those seven lines and no other.
+
+It reads the die at rest a fifth of a second after the die's own animation has ended, and that
+fifth of a second is the clock's. It was thirteen frames first, which is the same thing on a
+screen that draws sixty frames a second and ninety milliseconds on one that draws a hundred and
+forty-four: the time the base takes to come back under a die that has landed. On such a screen
+the base was read at 0.97 and a die that was right was failed, four times out of four, with a
+detail that said "0 of 4" and nothing else. **A wait counted in frames is a wait of no known
+length**, and a line that fails says what it saw: both of the die's lines now name the faces and
+the base they read.
 
 When the game is over the pass seats four at a second table, opens it as one of them and walks
 that one out over the api, which is what the same account's other device is to the page. Two

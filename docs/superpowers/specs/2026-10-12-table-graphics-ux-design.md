@@ -213,6 +213,18 @@ playing surface where something is played; on poker's rail and Hokm's frame it m
   was handed twice, and somebody whose chair was given up from another device was shown the
   game twice on one page.
 
+**As built (commit 3.8).** Asked for by the owner while 3.7 was in hand: the die looked low
+quality.
+
+- D1 said the die is drawn as the cartoon draws things, and it was drawn as less than that: a
+  white square with a lip. It is now drawn as the board draws a tile and as the art draws a
+  pawn: a face inside one bold ink line, on a base in the lip colour with a darker foot, pips
+  that are beads with a glint, and the pawn's own flat shadow under it.
+- The cube is kept for the throw and for nothing else. At rest the one face that was rolled is
+  drawn, on its base; a cube tipped far enough to show real sides gaped at its round corners.
+- Nothing about the throw changed: its path, its bounces, its turning and the face it lands on
+  are the kit's.
+
 ### 3.3 Backgammon
 
 - **Upright** (B1): the board keeps its shape and its width; the bands become the two seats. Each
