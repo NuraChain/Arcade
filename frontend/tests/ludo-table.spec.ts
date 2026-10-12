@@ -11,6 +11,7 @@ import { CELL, centreOf } from '../src/game/layout.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
@@ -152,7 +153,142 @@ describe('the ludo table', () =>
         expect(container.querySelectorAll('.table-stage button'), 'a move is offered as a button').toHaveLength(0);
         expect(container.querySelector('.table-stage ul')).toBeNull();
         expect(bar.querySelector('p[aria-live="polite"]')?.classList.contains('sr-only')).toBe(true);
-        expect(drawn.every((one) => one.getAttribute('role') === 'note' || one.classList.contains('ludo-clock') || one.classList.contains('ludo-upright')), drawn.map((one) => one.className).join(' | ')).toBe(true);
+        expect(drawn.map((one) => one.className), 'something is drawn at the foot of the table').toEqual([]);
+    });
+
+    it('draws nothing at the foot of the table: the clock is on the plate of whoever is to play, short, with the long words for a reader', async () =>
+    {
+        const day = 24 * 3_600_000;
+        const locale = useLocale();
+        const timersIn = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.yard-badge .table-plate')].map((plate) => plate.querySelector<HTMLElement>('.table-plate-facts .plate-timer'));
+
+        const theirs = await show(ludo({ turn: 1, remainingMs: day }));
+
+        expect(theirs.querySelector('.table-bar .plate-timer, .table-bar .coach-line, .table-bar [role="note"]')).toBeNull();
+        expect(timersIn(theirs).map((timer) => timer !== null), 'the clock is not on the plate of the seat to play, and only there').toEqual([false, true]);
+        expect(timersIn(theirs)[1]!.querySelector('span[aria-hidden="true"]')?.textContent).toBe(locale.t('match.deadline.brief.hours', { hours: locale.n(24) }));
+        expect(timersIn(theirs)[1]!.querySelector('.sr-only')?.textContent).toBe(locale.t('match.deadline.hours', { hours: locale.n(24) }));
+        expect(timersIn(theirs)[1]!.parentElement?.getAttribute('dir')).toBe('ltr');
+
+        cleanup();
+        useBoard().close();
+
+        const mine = await show(ludo({ remainingMs: 45_000 }));
+
+        expect(timersIn(mine).map((timer) => timer !== null)).toEqual([true, false]);
+        expect(timersIn(mine)[0]!.querySelector('span[aria-hidden="true"]')?.textContent).toBe(locale.t('match.deadline.brief', { seconds: locale.n(45) }));
+
+        cleanup();
+        useBoard().close();
+        locale.setLocale('fa');
+
+        const persian = await show(ludo({ turn: 1, remainingMs: day }));
+        const timer = timersIn(persian)[1]!;
+
+        expect(timer.querySelector('span[aria-hidden="true"]')?.textContent).toBe(locale.t('match.deadline.brief.hours', { hours: locale.n(24) }));
+        expect(timer.parentElement?.getAttribute('dir'), 'the Persian clock took the direction of the frame, which never turns').toBe('rtl');
+        expect(timer.closest('.ludo-frame')).not.toBeNull();
+
+        cleanup();
+        useBoard().close();
+
+        const still = await show(ludo({ turn: 1 }));
+
+        expect(timersIn(still), 'a clock is drawn at a table that keeps no time').toEqual([null, null]);
+    });
+
+    it('stands the lamp in the frame of the board, in the reader\'s own direction, and gives it the advice to turn a phone held sideways', async () =>
+    {
+        const turned = (width: number, height: number) =>
+        {
+            Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+            Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+            useDevice().start();
+            window.dispatchEvent(new Event('resize'));
+        };
+
+        const locale = useLocale();
+        const lampIn = (container: HTMLElement) => container.querySelector<HTMLElement>('.ludo-frame > .ludo-lamp');
+
+        turned(844, 390);
+
+        try
+        {
+            const container = await show(ludo({ turn: 1 }));
+
+            expect(container.querySelector('.table-bar .coach-line')).toBeNull();
+            expect(lampIn(container)?.getAttribute('dir')).toBe('ltr');
+            expect(lampIn(container)?.querySelector('.coach-line[data-lamp]')?.textContent).toContain(locale.t('match.upright'));
+
+            turned(390, 844);
+            await settle();
+
+            expect(lampIn(container)?.querySelector('.coach-line'), 'a board held upright is told to turn the phone').toBeNull();
+
+            cleanup();
+            useBoard().close();
+            turned(844, 390);
+
+            const ruled = await show(ludo({}));
+            const lamp = lampIn(ruled)?.querySelector('.coach-line[data-lamp]');
+
+            expect(lamp?.textContent, 'the advice to turn the phone was said over a rule of the game').toContain(locale.t('helpers.ludo.tip.yard'));
+            expect(lamp?.textContent).not.toContain(locale.t('match.upright'));
+
+            cleanup();
+            useBoard().close();
+            locale.setLocale('fa');
+
+            const persian = await show(ludo({ turn: 1 }));
+
+            expect(lampIn(persian)?.getAttribute('dir')).toBe('rtl');
+            expect(lampIn(persian)?.querySelector('.coach-line[data-lamp]')?.textContent).toContain(locale.t('match.upright'));
+
+            cleanup();
+            useBoard().close();
+
+            const finished = await show(ludo({
+                finishedAt: new Date(500_000).toISOString(),
+                players: [
+                    { seat: 0, who: 'alex', timeouts: 0, result: 'lost' },
+                    { seat: 1, who: 'sara.k', timeouts: 0, result: 'won' }
+                ] as MatchView['players']
+            }));
+
+            expect(finished.querySelector('.ludo-lamp .coach-line'), 'a game that is over was told to turn the phone').toBeNull();
+        }
+        finally
+        {
+            turned(1024, 768);
+            useDevice().stop();
+        }
+    });
+
+    it('keeps a plate\'s tag and its clock in one strip of the plate\'s own line, so neither is a piece of the pill', async () =>
+    {
+        const locale = useLocale();
+        const container = await show(pairs({ turn: 2, remainingMs: 60_000 }));
+        const plates = [...container.querySelectorAll<HTMLElement>('.yard-badge .table-plate')];
+        const strips = plates.map((plate) => plate.querySelector<HTMLElement>('.table-plate-facts .plate-tabs'));
+        const partner = strips[2]!;
+
+        expect(strips.every((strip) => strip !== null), 'a plate has no strip for its tag and its clock').toBe(true);
+        expect([...partner.querySelectorAll('.table-plate-tag, .plate-timer')].map((one) => (one.classList.contains('plate-timer') ? 'clock' : one.textContent))).toEqual([locale.t('card.partner'), 'clock']);
+        expect(partner.querySelector('.table-plate-tag')?.getAttribute('data-tone')).toBe('neutral');
+        expect(partner.querySelector('.table-plate-tag')?.getAttribute('dir')).toBe('ltr');
+        expect(plates.flatMap((plate) => [...plate.children]).filter((one) => one.classList.contains('table-plate-tag')), 'a tag is a piece of the pill again, where it lay on the pawns-home dots of a phone').toEqual([]);
+        expect(strips.map((strip) => strip!.querySelectorAll('.table-plate-tag, .plate-timer').length)).toEqual([0, 0, 2, 0]);
+        expect(strips[0]!.children).toHaveLength(0);
+
+        cleanup();
+        useBoard().close();
+        locale.setLocale('fa');
+
+        const persian = await show(pairs({ turn: 2, remainingMs: 60_000 }));
+        const tag = [...persian.querySelectorAll<HTMLElement>('.yard-badge .plate-tabs .table-plate-tag')][0];
+
+        expect(tag?.textContent).toBe(locale.t('card.partner'));
+        expect(tag?.getAttribute('dir'), 'a Persian tag took the direction of the frame, which never turns, and a count in it would stand on the wrong side').toBe('rtl');
     });
 
     it('offers no die once the roll is in, nor on somebody else’s turn', async () =>
@@ -283,7 +419,7 @@ describe('the ludo table', () =>
 
             expect(plates.map((plate) => plate.querySelector('.table-plate-tag')?.textContent)).toEqual([locale.t('card.lost'), locale.t('card.won')]);
             expect(plates.map((plate) => [plate.getAttribute('aria-current'), plate.dataset.turn ?? null])).toEqual([[null, null], [null, null]]);
-            expect(container.querySelector('.table-plate-clock, .table-plate-trail, .board-roll, .table-bar')).toBeNull();
+            expect(container.querySelector('.table-plate-clock, .table-plate-trail, .board-roll, .table-bar, .plate-timer, .ludo-lamp .coach-line')).toBeNull();
 
             for (const said of [locale.t('match.turn.yours'), locale.t('card.yourTurn'), locale.t('card.turn')])
             {
@@ -1180,7 +1316,7 @@ describe('the ludo table, played from what happened', () =>
 
         const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
         const six = stepped(before, { kind: 'roll', seat: 0, die: 6 });
-        const tipOf = (container: HTMLElement) => container.querySelector('.table-bar [role="note"]')?.textContent ?? null;
+        const tipOf = (container: HTMLElement) => container.querySelector('.ludo-frame > .ludo-lamp [role="note"]')?.textContent ?? null;
         const { container, tell } = await live(seen(before, 0, 1));
 
         expect(tipOf(container)).toBeNull();

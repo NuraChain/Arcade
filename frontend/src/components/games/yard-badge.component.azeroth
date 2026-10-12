@@ -1,5 +1,6 @@
 import DieFace from './die-face.component.azeroth';
 import TablePlate, { type PlateTeam } from './table-plate.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
 import { goneKey, type PlateTone } from './plate-tag.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -115,6 +116,8 @@ export default component YardBadge(props: {
         return partnered ? locale.t('card.partner') : undefined;
     })();
 
+    derived tagged = tag !== undefined && tag !== '';
+
     derived team = ((): PlateTeam | undefined =>
     {
         if (!sided)
@@ -162,8 +165,6 @@ export default component YardBadge(props: {
             turnMs={ props.turnMs }
             ink={ `var(--ludo-${ props.seat.colour })` }
             dim={ props.seat.out }
-            tag={ tag }
-            tone={ tone }
             team={ team }
             bubble={ props.bubble }
             below={ props.corner.startsWith('top') }
@@ -171,7 +172,7 @@ export default component YardBadge(props: {
             marker={ <span class="grid place-items-center inline-[1.1rem] block-[1.1rem] rounded-[999px] bg-(--ink) text-white text-[0.625rem] font-extrabold leading-none [box-shadow:0_0_0_2px_var(--void)]" aria-hidden="true">{ INITIAL[props.seat.colour] }</span> }
             facts={
                 <span class="contents">
-                    <span class="flex flex-none items-center gap-[3px]" role="img" aria-label={ locale.plural('match.tokens', home) }>
+                    <span class="plate-pips flex flex-none items-center gap-[3px]" role="img" aria-label={ locale.plural('match.tokens', home) }>
                         <For each={ PIPS } key={ (pip) => pip } let={ pip }>
                             <span class="flex-none rounded-[999px] border-[color:color-mix(in_oklab,var(--ink)_75%,transparent)] data-[home=true]:border-[color:var(--ink)] data-[home=true]:bg-(--ink) data-[home=true]:[box-shadow:0_0_6px_-1px_var(--ink)] inline-[0.5rem] block-[0.5rem] border-[1.5px]" data-home={ pip < home ? 'true' : 'false' } aria-hidden="true"></span>
                         </For>
@@ -179,6 +180,18 @@ export default component YardBadge(props: {
                     <Show when={ routine }>
                         { () => <span class="sr-only">{ says }</span> }
                     </Show>
+                    <span class="plate-tabs">
+                        <Show when={ tagged }>
+                            { () => <span class="table-plate-tag" data-tone={ tone } dir={ locale.dir() }>{ tag }</span> }
+                        </Show>
+                        <Show when={ turn }>
+                            { () =>
+                                <span class="contents" dir={ locale.dir() }>
+                                    <TurnClock remainingMs={ props.remainingMs } over={ false } yours={ mine } brief class="plate-timer" />
+                                </span>
+                            }
+                        </Show>
+                    </span>
                 </span>
             }
             trail={ rolled

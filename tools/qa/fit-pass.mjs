@@ -23,6 +23,8 @@ const SIZES = [
     { width: 844, height: 390, touch: true }
 ];
 
+const BROWSER_BARS = { width: 360, height: 560, touch: true, shut: true };
+
 const GAMES = [
     { id: 'hokm-2', game: 'hokm', seats: 2, mode: 'turns', target: 7 },
     { id: 'hokm-2-draw', game: 'hokm', seats: 2, mode: 'turns', target: 7, stop: 'draw' },
@@ -37,8 +39,9 @@ const GAMES = [
     { id: 'poker-6-crowd', game: 'poker', seats: 6, mode: 'live', target: 0, viewers: ['crowd'] },
     { id: 'poker-2-facing', game: 'poker', seats: 2, mode: 'live', target: 0, viewers: ['facing'] },
     { id: 'backgammon', game: 'backgammon', seats: 2, mode: 'turns', target: 3 },
-    { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0 },
-    { id: 'ludo-4-teams', game: 'ludo', seats: 4, mode: 'turns', target: 0, teams: true }
+    { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0, also: [BROWSER_BARS] },
+    { id: 'ludo-4-rolled', game: 'ludo', seats: 4, mode: 'turns', target: 0, stop: 'rolled', viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
+    { id: 'ludo-4-teams', game: 'ludo', seats: 4, mode: 'turns', target: 0, teams: true, also: [BROWSER_BARS] }
 ];
 
 const USABLE = {
@@ -70,7 +73,11 @@ const option = (name) =>
 
 const only = option('only')?.split(',') ?? null;
 
-const sizes = option('sizes')?.split(',').map((one) => SIZES.find((size) => `${ size.width }x${ size.height }` === one)).filter(Boolean) ?? SIZES;
+const wanted = option('sizes')?.split(',') ?? null;
+
+const sizes = wanted?.map((one) => SIZES.find((size) => `${ size.width }x${ size.height }` === one)).filter(Boolean) ?? SIZES;
+
+const sizesOf = (spec) => [...sizes, ...(spec.also ?? []).filter((size) => wanted === null || wanted.includes(`${ size.width }x${ size.height }`))];
 
 const languagesAt = (size) =>
 {
@@ -151,9 +158,11 @@ const matchOf = async (player, id) =>
 const play = async (player, id, rev, move, key) =>
     await player.api('POST', `/matches/${ id }/play`, { key, rev, play: move });
 
+const FAR_SIDE = new Set(['green', 'yellow']);
+
 const advance = async (spec, table) =>
 {
-    for (let step = 0; step < 40; step += 1)
+    for (let step = 0; step < (spec.stop === 'rolled' ? 600 : 40); step += 1)
     {
         const state = await matchOf(table.players[0], table.matchId);
         const actor = table.bySeat.get(state.turn);
@@ -194,7 +203,27 @@ const advance = async (spec, table) =>
             await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, key);
         }
 
+        if (spec.game === 'ludo' && spec.stop === 'rolled')
+        {
+            const mine = await matchOf(actor, table.matchId);
+            const offered = mine.view.die === undefined ? [] : (mine.view.moves ?? []);
+            const colour = mine.view.seats.find((seat) => seat.seat === mine.turn)?.colour;
+
+            if (offered.length > 0 && FAR_SIDE.has(colour))
+            {
+                return;
+            }
+
+            await play(actor, table.matchId, mine.rev, offered.length > 0 ? { kind: 'ludo', verb: 'move', piece: offered[0] } : { kind: 'ludo', verb: 'roll' }, key);
+            continue;
+        }
+
         return;
+    }
+
+    if (spec.stop === 'rolled')
+    {
+        throw new Error('fit-pass: a ludo table never came to a roll held on the far side of the board');
     }
 };
 
@@ -482,6 +511,18 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         return `${ Math.round(rect.right - rect.left) }x${ Math.round(rect.bottom - rect.top) }@${ Math.round(rect.left - frame.left) },${ Math.round(rect.top - frame.top) }`;
     };
     const meets = (one, two) => one.left < two.right - 1 && two.left < one.right - 1 && one.top < two.bottom - 1 && two.top < one.bottom - 1;
+    const clippedAway = (one) =>
+    {
+        for (let node = one; node !== null && !node.classList.contains('table-stage'); node = node.parentElement)
+        {
+            if (getComputedStyle(node).clipPath !== 'none')
+            {
+                return true;
+            }
+        }
+
+        return false;
+    };
     const reach = (element) =>
     {
         const rect = box(element);
@@ -650,6 +691,98 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         }
     }
 
+    const ludoFrame = document.querySelector('.ludo-frame');
+
+    if (ludoFrame !== null)
+    {
+        const drawn = (one) =>
+        {
+            const rect = box(one);
+            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+            return hit !== null && one.contains(hit);
+        };
+        const named = (one) => (one.classList.contains('plate-timer') ? `the clock "${ one.textContent?.trim().slice(0, 24) ?? '' }"` : (one.closest('.ludo-lamp') !== null ? 'the lamp' : describe(one)));
+        const tools = [...ludoFrame.querySelectorAll('.ludo-lamp > *, .plate-timer, .table-plate-tag')].filter(shown).filter(drawn);
+        const around = [...ludoFrame.querySelectorAll('.table-plate, .board-stage'), ...tools].filter(shown);
+
+        for (const one of tools)
+        {
+            if (outside(box(one)))
+            {
+                found.push({ kind: 'fold', what: `${ named(one) } ${ where(box(one)) } beside the ludo board` });
+            }
+
+            for (const other of around)
+            {
+                if (other !== one && !other.contains(one) && meets(box(one), box(other)))
+                {
+                    found.push({ kind: 'foot', what: `${ named(one) } ${ where(box(one)) } meets ${ named(other) } ${ where(box(other)) }` });
+                }
+            }
+        }
+
+        for (const one of [...document.querySelectorAll('.table-bar.ludo-bar > :not(.sr-only)')].filter(shown))
+        {
+            found.push({ kind: 'foot', what: `${ describe(one) } ${ where(box(one)) } is drawn at the foot of the ludo table` });
+        }
+
+        if (sheetMode === null && document.querySelector('[data-beside]') === null)
+        {
+            for (const one of [...ludoFrame.querySelectorAll('.plate-timer, .table-plate-tag')].filter(shown))
+            {
+                if (!drawn(one))
+                {
+                    found.push({ kind: 'plates', what: `${ named(one) } ${ where(box(one)) } is not drawn, at a table with nothing lying over it` });
+                }
+            }
+        }
+
+        const cell = box(document.querySelector('.table-stage .table-fit'));
+        const tall = cell.width <= cell.height * 0.6;
+        const taller = cell.width <= cell.height * 0.54;
+        const floor = taller && cell.width >= 380 ? 44 : (taller && cell.width >= 356 ? 41 : (tall && cell.width >= 324 ? 38 : 0));
+
+        for (const face of [...ludoFrame.querySelectorAll('.table-plate-avatar')].filter(shown))
+        {
+            if (box(face).width < floor)
+            {
+                found.push({ kind: 'plates', what: `a face ${ Math.round(box(face).width) }px across beside a board with ${ Math.round(cell.height - cell.width) }px of table to spare` });
+            }
+        }
+
+        for (const die of [...ludoFrame.querySelectorAll('.table-plate-trail')].filter(shown))
+        {
+            if (floor > 0 && box(die).width < 30)
+            {
+                found.push({ kind: 'plates', what: `the die on a plate is ${ Math.round(box(die).width) }px across on a tall phone` });
+            }
+        }
+
+        for (const plate of [...ludoFrame.querySelectorAll('.table-plate')].filter(shown))
+        {
+            const within = box(plate);
+            const held = [...plate.querySelectorAll('.table-plate-avatar, .table-plate-name, .plate-pips, .table-plate-trail')].filter(shown).filter((one) => !clippedAway(one));
+            const parts = [...held, ...[...plate.querySelectorAll('.plate-timer, .table-plate-tag')].filter(shown).filter(drawn)];
+
+            for (const part of parts)
+            {
+                if (held.includes(part) && beyond(box(part), within))
+                {
+                    found.push({ kind: 'plates', what: `${ describe(part) } ${ where(box(part)) } spills out of its plate ${ where(within) }` });
+                }
+
+                for (const other of parts.slice(parts.indexOf(part) + 1))
+                {
+                    if (meets(box(part), box(other)))
+                    {
+                        found.push({ kind: 'plates', what: `${ describe(part) } ${ where(box(part)) } lies on ${ describe(other) } ${ where(box(other)) } in one plate` });
+                    }
+                }
+            }
+        }
+    }
+
     const seated = given.sides ? [...document.querySelectorAll('.table-plate')].filter(shown) : [];
 
     if (given.sides && seated.length === 0)
@@ -741,7 +874,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
     for (const tag of document.querySelectorAll('.table-plate-tag'))
     {
-        if (shown(tag) && tag.scrollWidth > tag.clientWidth + 0.5)
+        if (shown(tag) && !clippedAway(tag) && tag.scrollWidth > tag.clientWidth + 0.5)
         {
             found.push({ kind: 'cut', what: `tag "${ tag.textContent.trim() }" needs ${ tag.scrollWidth }px and has ${ tag.clientWidth }` });
         }
@@ -865,7 +998,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             continue;
         }
 
-        if (button.classList.contains('card-hold') || target !== button || button.disabled)
+        if (button.classList.contains('card-hold') || target !== button || button.disabled || getComputedStyle(button).pointerEvents === 'none')
         {
             continue;
         }
@@ -1022,11 +1155,11 @@ try
 
         tables.push({ spec, table });
 
-        for (const size of sizes)
+        for (const size of sizesOf(spec))
         {
             for (const language of languagesAt(size))
             {
-                for (const openChat of [false, true])
+                for (const openChat of size.shut === true ? [false] : [false, true])
                 {
                     for (const viewer of spec.viewers ?? ['turn'])
                     {

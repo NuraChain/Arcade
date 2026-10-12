@@ -178,20 +178,33 @@ html:has(.site-drawer[open])
     .ludo-frame .yard-badge .table-plate,
     .ludo-frame .yard-badge[data-corner$='right'] .table-plate
     {
-        flex-direction: column;
-        gap: 0.2rem;
+        flex-flow: row wrap;
+        justify-content: center;
+        gap: 0.2rem 0.5rem;
         inline-size: var(--plate-col);
         padding: 0.45rem 0.35rem 0.4rem;
         border-radius: 0.9rem;
         text-align: center;
     }
 
+    .ludo-frame .yard-badge[data-corner$='right'] .table-plate
+    {
+        flex-direction: row-reverse;
+    }
+
     .ludo-frame .yard-badge .table-plate-text,
     .ludo-frame .yard-badge[data-corner$='right'] .table-plate-text
     {
+        order: 2;
+        flex: none;
+        inline-size: 100%;
         align-items: center;
-        max-inline-size: 100%;
         text-align: center;
+    }
+
+    .ludo-frame .yard-badge .table-plate-trail
+    {
+        order: 1;
     }
 }
 
@@ -201,6 +214,274 @@ html:has(.site-drawer[open])
     {
         display: none;
     }
+}
+
+@container fit (max-height: 28.25rem) and (max-aspect-ratio: 1249 / 1000)
+{
+    .ludo-frame .yard-badge .table-plate:has(.table-plate-trail) :is(.table-plate-name, .plate-pips)
+    {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+}
+
+@container fit (max-width: 20.4rem) and (min-aspect-ratio: 3 / 5) and (max-aspect-ratio: 1249 / 1000)
+{
+    .ludo-frame .yard-badge .table-plate:has(.table-plate-trail) :is(.table-plate-name, .plate-pips)
+    {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+}
+
+.ludo-lamp
+{
+    position: absolute;
+    z-index: 2;
+    inset-block-end: -1px;
+    inset-inline-start: 50%;
+    display: flex;
+    margin-inline-start: -1.375rem;
+}
+
+.ludo-frame .ludo-lamp .coach-line[data-lamp][data-open] > span:last-child
+{
+    inset-inline-start: 50%;
+    margin-inline-start: calc(min(20rem, 100cqw - 2rem) / -2);
+}
+
+.ludo-frame .yard-badge[data-corner^='bottom'] .table-plate
+{
+    max-inline-size: calc(100% - 1.75rem);
+}
+
+.yard-badge .table-plate-facts
+{
+    flex-wrap: wrap;
+    align-content: flex-start;
+    box-sizing: content-box;
+    block-size: 0.875rem;
+    margin-block: -0.3rem;
+    padding-block: 0.3rem;
+    overflow-x: visible;
+    overflow-y: clip;
+}
+
+.yard-badge[data-corner$='right'] .table-plate-facts
+{
+    flex-direction: row-reverse;
+}
+
+.yard-badge .plate-pips
+{
+    min-block-size: 0.875rem;
+}
+
+.yard-badge .table-plate-name
+{
+    max-inline-size: 100%;
+}
+
+.yard-badge .plate-tabs
+{
+    position: absolute;
+    inset-block-end: calc(100% + 0.2rem);
+    left: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+}
+
+.yard-badge .plate-tabs:empty
+{
+    display: none;
+}
+
+.yard-badge[data-corner^='bottom'] .plate-tabs
+{
+    inset-block: calc(100% + 0.2rem) auto;
+}
+
+.yard-badge[data-corner$='right'] .plate-tabs
+{
+    right: 0.5rem;
+    left: auto;
+    flex-direction: row-reverse;
+}
+
+.yard-badge .plate-tabs > .table-plate-tag
+{
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+
+.yard-badge .plate-timer
+{
+    block-size: 1rem;
+    gap: 0.2rem;
+    padding-inline: 0.4rem;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(8 13 25 / 0.9);
+    font-size: var(--text-ui-2xs);
+    line-height: 1;
+}
+
+@container fit (min-width: 35rem) and (min-height: 42rem) and (min-aspect-ratio: 3 / 5)
+{
+    .table-fit .ludo-frame
+    {
+        --tabs: 0rem;
+    }
+
+    .ludo-frame .yard-badge .plate-tabs
+    {
+        display: contents;
+    }
+
+    .ludo-frame .yard-badge .plate-timer
+    {
+        block-size: 0.875rem;
+        padding-inline: 0;
+        border: 0;
+        background: none;
+    }
+}
+
+@container fit (max-aspect-ratio: 3 / 5)
+{
+    .table-fit .ludo-frame
+    {
+        --foot: 4.875rem;
+        --tabs: 0rem;
+    }
+
+    .ludo-lamp
+    {
+        inset-block-end: calc(-1 * var(--foot));
+    }
+
+    .ludo-frame .yard-badge[data-corner^='bottom'] .table-plate
+    {
+        max-inline-size: 100%;
+    }
+}
+
+@container fit (max-aspect-ratio: 3 / 5) and (min-width: 20.25rem)
+{
+    .table-fit .ludo-frame
+    {
+        --plate-row: 3.5rem;
+    }
+
+    .ludo-frame .yard-badge .table-plate
+    {
+        zoom: 1.2;
+    }
+}
+
+@container fit (max-aspect-ratio: 27 / 50) and (min-width: 22.25rem)
+{
+    .table-fit .ludo-frame
+    {
+        --plate-row: 3.75rem;
+    }
+
+    .ludo-frame .yard-badge .table-plate
+    {
+        zoom: 1.3;
+    }
+}
+
+@container fit (max-aspect-ratio: 27 / 50) and (min-width: 23.75rem)
+{
+    .table-fit .ludo-frame
+    {
+        --plate-row: 4rem;
+    }
+
+    .ludo-frame .yard-badge .table-plate
+    {
+        zoom: 1.4;
+    }
+}
+
+@container fit (min-aspect-ratio: 5 / 4)
+{
+    .ludo-lamp
+    {
+        inset-block: 50% auto;
+        inset-inline-start: calc(var(--plate-col) / 2);
+        margin-block-start: -1.375rem;
+    }
+
+    .ludo-frame .ludo-lamp .coach-line[data-lamp][data-open] > span:last-child
+    {
+        inset-inline-start: 0;
+        margin-inline-start: 0;
+    }
+
+    .ludo-frame .yard-badge[data-corner^='bottom'] .table-plate
+    {
+        max-inline-size: 100%;
+    }
+
+    .ludo-frame .yard-badge .table-plate-facts
+    {
+        justify-content: center;
+        row-gap: 0.15rem;
+        block-size: auto;
+        margin-block: 0;
+        padding-block: 0;
+        overflow-y: visible;
+    }
+
+    .table-fit .ludo-frame .yard-badge .plate-tabs
+    {
+        display: contents;
+    }
+
+    .ludo-frame .yard-badge .plate-timer
+    {
+        block-size: 0.875rem;
+        padding-inline: 0;
+        border: 0;
+        background: none;
+    }
+
+}
+
+[data-sheet] .ludo-lamp,
+[data-beside] .ludo-lamp
+{
+    display: none;
+}
+
+[data-sheet] .table-fit .ludo-frame,
+[data-beside] .table-fit .ludo-frame
+{
+    --foot: 0rem;
+    --tabs: 0rem;
+}
+
+[data-sheet] .ludo-frame .yard-badge[data-corner^='bottom'] .table-plate,
+[data-beside] .ludo-frame .yard-badge[data-corner^='bottom'] .table-plate
+{
+    max-inline-size: 100%;
+}
+
+[data-sheet] .yard-badge .plate-tabs,
+[data-beside] .yard-badge .plate-tabs
+{
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
 }
 
 .yard-badge[data-corner$='right'] .table-plate
@@ -242,25 +523,9 @@ html:has(.site-drawer[open])
 {
     position: absolute;
     inset-block-end: 0;
-    inset-inline: 0;
-    z-index: 2;
-    flex-direction: row;
-    align-items: flex-end;
-    gap: 0.5rem;
+    inset-inline-start: 0;
     inline-size: auto;
-    justify-self: stretch;
-    align-self: end;
     pointer-events: none;
-}
-
-.table-bar.ludo-bar > *
-{
-    pointer-events: auto;
-}
-
-.table-bar.ludo-bar > .ludo-clock
-{
-    margin-inline-start: auto;
 }
 
 [data-beside]
@@ -286,28 +551,10 @@ html:has(.site-drawer[open])
     }
 }
 
-[data-beside] .table-bar.ludo-bar > :is(.coach-line, .ludo-upright, .ludo-clock)
-{
-    display: none;
-}
 
 [data-beside] .table-result
 {
     padding-inline-end: calc(var(--beside) + 0.75rem);
-}
-
-.ludo-upright
-{
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.625rem;
-    border: 1px solid color-mix(in srgb, var(--color-gold) 40%, transparent);
-    border-radius: var(--radius-tile);
-    background: rgb(8 13 25 / 0.85);
-    color: var(--color-gold);
-    font-size: var(--text-ui-xs);
 }
 
 @keyframes yard-breathe
@@ -462,7 +709,7 @@ html:has(.site-drawer[open])
     -webkit-line-clamp: unset;
 }
 
-.table-bar .coach-line[data-lamp]
+:is(.table-bar, .ludo-lamp) .coach-line[data-lamp]
 {
     position: relative;
     box-sizing: border-box;
@@ -476,7 +723,7 @@ html:has(.site-drawer[open])
     border-radius: 999px;
 }
 
-.table-bar .coach-line[data-lamp] > span:last-child
+:is(.table-bar, .ludo-lamp) .coach-line[data-lamp] > span:last-child
 {
     position: absolute;
     inset-block-end: calc(100% + 0.5rem);
@@ -489,7 +736,7 @@ html:has(.site-drawer[open])
     white-space: nowrap;
 }
 
-.table-bar .coach-line[data-lamp][data-open] > span:last-child
+:is(.table-bar, .ludo-lamp) .coach-line[data-lamp][data-open] > span:last-child
 {
     overflow: visible;
     inline-size: min(20rem, 100cqw - 2rem);

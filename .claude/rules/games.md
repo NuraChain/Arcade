@@ -3493,6 +3493,98 @@ failed the lines about the ring and about Enter; built with the keyboard never p
 it failed those two and the line that finds it there. Forty-nine faults put into the code one
 at a time were each caught by a spec.
 
+**The clock is on the plate of whoever is to play, and the lamp stands in the board's own
+frame.** The bar at the foot of the ludo table held three things: the lamp at its start, the
+"plays best upright" sentence on a phone held sideways, and the clock at its end. It was laid
+out against the cell, and the plates are laid out against the board, so wherever the board
+filled the cell the bar lay on a plate. Measured on the build before this one: the sentence over
+the bottom-left plate and the board on every phone held sideways; the clock over the
+bottom-right plate at 740x360, 667x375, 1024x768, and with the chat open at 1280x800, 1920x1080,
+768x1024 and on every phone; the lamp over the bottom-left plate at 1024x768. Nothing is drawn
+at the foot of the table now. The bar keeps the sentence a screen reader hears and nothing else.
+
+- **The advice to turn the phone is the lamp's.** `match.upright` is a tip that `match-board`
+  hands the lamp when the coach has nothing to say; a rule of the game is said over it. It
+  follows the `hintRules` switch with the other tips, which the sentence did not.
+- **A plate's tag and its clock are one strip in the plate's own line** (`.plate-tabs`, in
+  `YardBadge`'s `facts`), and the tag is no longer a piece of the pill. On a phone the pill has
+  half a row, and a face, four dots and "Partner" or "Missed 1" are wider than that: the tag lay
+  on the dots, by two pixels for years and by thirty once the plates grew. The clock is
+  `TurnClock`, short, on the plate that is to play, and it ticks for the reader on the reader's
+  own plate. Where the strip stands is the arrangement's:
+  - *an upright cell with no room in the pill* (anything narrower than 560px or shorter than
+    672px, and every tall cell): the strip hangs off the plate as two chips, over a top plate
+    and under a bottom one, from the plate's outer end. It needs 19px. A tall cell has the bare
+    wood for it; any other keeps 12px back from the board (`--tabs`) and the table's own padding
+    gives the rest, which costs a board that fills its cell 2% of its width;
+  - *an upright cell with room* (a tablet, a wide desktop with the chat card open): the tag and
+    the clock follow the dots in the pill, where a face, a name, four dots, a tag, a clock and a
+    die all fit in half a row;
+  - *a wide cell*: the plate is a column and each takes a line of its own when it has to;
+  - *under an open chat*: the strip is not drawn. Neither is the lamp. The ring round the face
+    still runs and the last five seconds still tick.
+- **The lamp has a place that is free in each arrangement.** Under the board in a tall cell, in
+  a strip the frame leaves below itself (`--foot`, deep enough that the lamp clears the chips
+  under the bottom plates); between the two bottom plates in any other upright cell, where the
+  bottom plates are held 1.75rem short of their half so that the gap exists whoever sits there;
+  and in the middle of the plate column on the reader's side in a wide cell. The frame is laid
+  out left to right in both languages; the lamp and the clock carry the reader's direction
+  themselves (`dir` on the lamp's holder and round the clock).
+- **On a tall phone the plates grow into the wood they stand on** (finding L4). The whole plate
+  is zoomed: 1.2 from a cell 324px wide, 1.3 from 356px and 1.4 from 380px where the cell is
+  also very tall, which is a face of 38, 42 and 45px and a die on the plate of 34, 36 and 39px
+  (L5 asked for 30). The step is set by the width and not by the height, because two plates
+  share a row and the one that holds the die must fit a face, four dots and a die in half of
+  it. The first cut zoomed by the height, 1.5 on a 360px phone, and put the dots under the die.
+- **In a wide cell the die on a plate lies beside the face**, toward the board. It used to be a
+  row of its own that made the plate 31px taller for as long as the roll stood, and on a phone
+  held sideways that is the room the lamp stands in. **On a pill with no room for both the die
+  stands in for the name and the dots** while it is there; they are still read out. That is an
+  upright cell 28.25rem tall or less, or one under 20.4rem wide that is not tall: a phone with
+  the chat up, or inside a browser that leaves the table little height. The second was found by
+  the pass and not by hand: its own pages carry a row mine did not, the cell was 58px shorter,
+  and the dots lay on the die.
+- **A name is held to its column on every plate.** A right-hand plate lays its text out from
+  the far end, and there a name was as wide as its words: once the plate grew and the die took
+  its share, "Sara Kamali" ran under the die. Seen in the first sweep of the built pages.
+
+`TablePlate` built everything it was handed twice, which is how the clock came to tick twice a
+second; that is its own note in `frontend/CLAUDE.md` and its own commit. `ludo-table.spec.ts`
+holds the empty foot, the clock on the plate that is to play in both languages and its absence
+at a table that keeps no time, the strip with a partner's tag and the clock in it and no tag in
+the pill, and the lamp in the frame with the advice and the direction. `turn-clock.spec.ts`
+holds the ticks on the reader's own plate and the silence on anybody else's. The fit pass holds
+the rest for the ludo cells, at one more size than the other games are yet held to (360x560
+with the chat shut: a phone inside a browser with its bars up) and in one more position than it
+had: `ludo-4-rolled` plays over the api until a seat on the right of the board holds a roll
+with a move on offer, so every size is looked at with a die on a plate, a clock beside it and
+pawns lit, by the seat that rolled and by one that did not, whose page spells the roller's
+name out beside the die. It has to be a seat on the right: a plate there is laid out from its
+far end, and that is where the name ran under the die. The cell stopped on whoever rolled
+first to begin with, and a build with the name let go passed it clean, 87 checks, because the
+roller sat on the left. (A
+lit pawn's box is a button that takes no pointer, because the board reads a press by where it
+lands; the pass's rule about a covered button leaves such a button alone.) The lamp, a clock and a tag that
+are drawn meet no other plate, not the board and not each other, and stay on the screen; a tag
+or a clock that is in the page IS drawn unless the chat lies over the table, which is what
+fails a strip that has quietly wrapped out of sight; nothing is drawn at the foot; a face in a
+tall cell is at least 38, 41 or 44px by the cell's width and a die on a plate there at least
+30; and in a plate the face, the name, the dots, the die, the tag and the clock do not lie on
+one another, nor the first four spill out of it. The pass's older rule about a tag drawn cut
+now leaves alone a tag that is deliberately not drawn.
+
+Proved red on real builds. Built with eight faults at once (the lamp in the corner of a wide
+frame, no room kept for it under a tall one, the strip left in the pill, the lamp back at the
+foot, a plate zoomed half as large again, the die no longer standing in for the dots in a short
+cell or a narrow one), the pass failed 96 of the 138 ludo cells: something drawn at the foot in
+87, the lamp on a plate in 51, a clock not drawn in 29 and a tag in 5, the dots on the die in
+10. Built with the plates left at their old size and the tag put back in the pill, it failed
+ten: a face of 32px in every tall cell, and the dots on the tag at the table of two sides.
+Built with a name no longer held to its column, it failed the five tall cells in which a seat
+that did not roll looks at one that did. Twenty-six faults put into the components and the
+page one at a time were each caught by a spec, two of them only after the spec was mended: it
+had asked for a direction on any ancestor of the clock and found the document's.
+
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
 told what happened as well as where things stand. The reply's events are composed by calling the
@@ -4239,7 +4331,7 @@ upright, which is also what it looks like.
 **Ludo is played upright, and landscape is its safety net rather than its layout.** The board is
 square, so turning a phone sideways only makes it smaller - 258px against 360px upright on the same
 phone. A browser cannot stop a phone rotating, so the landscape layout stays and fits the screen, and
-it says so: "Ludo plays best upright" in the strip. Full screen from a ludo table also asks
+it says so: "Ludo plays best upright", in the lamp. Full screen from a ludo table also asks
 `screen.orientation.lock('portrait')`, which Android grants in full screen and everything else
 refuses quietly. Hokm keeps a real landscape layout, because a card table is wide.
 

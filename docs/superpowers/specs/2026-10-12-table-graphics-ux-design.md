@@ -189,6 +189,30 @@ playing surface where something is played; on poker's rail and Hokm's frame it m
 - Not built here: a shorter way to the board than the page's own tab order, which is 25 stops
   on a desktop. The hand-off above means it is walked once a game.
 
+**As built (commit 3.7).** The third, and more than it asked for.
+
+- The finding was one sentence over one plate. Measured, it was the whole foot of the table:
+  the sentence, the clock and the lamp were laid out against the cell and the plates against
+  the board, and they met in thirteen of the twenty-six cells measured. Nothing is drawn at the
+  foot now.
+- The advice to turn the phone is a tip, and the lamp says it. The lamp stands in the board's
+  own frame: under the board on a tall phone, between the bottom plates in any other upright
+  cell, in the middle of the plate column in a wide one.
+- The clock's number is on the plate that is to play, with the tag beside it, as one strip. In
+  an upright cell with no room in the pill the strip hangs off the plate as two chips in the
+  wood. In one with room it follows the dots. In a wide cell each takes a line. This is what
+  section 3.1 means by the clock being the seat's; the ring was always there.
+- On a tall phone the plate is zoomed 1.2 to 1.4 by the width of the table: a face of 38 to
+  45px and a die on the plate of 34 to 39px. The die on the board's corner is still 25px for
+  the moment it rests there; it cannot grow without touching the nest or the yard's corner,
+  and it is picked up to the plate, where it is read.
+- The cost, stated: under an open chat the plates show a face and their dots and nothing else.
+  The tag, the number and the lamp wait for the chat to shut. The ring and the last ticks do
+  not.
+- Found on the way and fixed in their own commits: every plate at every table built what it
+  was handed twice, and somebody whose chair was given up from another device was shown the
+  game twice on one page.
+
 ### 3.3 Backgammon
 
 - **Upright** (B1): the board keeps its shape and its width; the bands become the two seats. Each
