@@ -13,6 +13,7 @@ export interface FakeNotices
     registered: string[];
     subscribed(): boolean;
     hide(hidden: boolean): void;
+    fromWorker(data: unknown): void;
     restore(): void;
 }
 
@@ -32,6 +33,7 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
     const urls: string[] = options.registered === false ? [] : ['/push-worker.js'];
     const worker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
     const seen = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    const listening = new Set<(event: MessageEvent) => void>();
     let allowed = permission;
     let hidden = false;
     let subscription: { endpoint: string; getKey: () => ArrayBuffer; unsubscribe: () => Promise<boolean> } | null = null;
@@ -111,7 +113,20 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
 
                 return registration;
             },
-            getRegistration: async (url: string) => (urls.includes(url) ? registration : undefined)
+            getRegistration: async (url: string) => (urls.includes(url) ? registration : undefined),
+
+            addEventListener: (type: string, listener: (event: MessageEvent) => void) =>
+            {
+                if (type === 'message')
+                {
+                    listening.add(listener);
+                }
+            },
+
+            removeEventListener: (_type: string, listener: (event: MessageEvent) => void) =>
+            {
+                listening.delete(listener);
+            }
         }
     });
 
@@ -127,6 +142,14 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
         {
             hidden = next;
             document.dispatchEvent(new Event('visibilitychange'));
+        },
+
+        fromWorker(data)
+        {
+            for (const listener of [...listening])
+            {
+                listener(new MessageEvent('message', { data }));
+            }
         },
 
         restore()

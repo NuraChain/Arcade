@@ -843,7 +843,9 @@ hidden: the reader's turn there, and the game starting for somebody waiting on t
 page, which is the case the whole thing exists for. When the document is seen again every notice
 of ours is taken down (`clearSystem`): the page has the truth now. `system-notice.spec.ts` holds
 the outlet, `cues.spec.ts` (*what the browser is told when nobody is looking at the page*) what
-is said through it, and `device-notices.spec.ts` the switch.
+is said through it, and `device-notices.spec.ts` the switch. Pressing a notice is the worker's
+(`.claude/rules/chat-and-keys.md`, *A pressed notice goes to the thing itself*): this store
+only listens for where it led (`onWent`) and hands the path to the shell's `navigate`.
 
 **A cue waits for the name of whoever it is about.** A toast and a notice are said once and are
 not redrawn, so every cue with a person in it goes through `named`, which asks the people store

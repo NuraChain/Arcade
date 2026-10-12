@@ -1770,3 +1770,67 @@ describe('what the reader switched off', () =>
         expect(told()).toEqual({ toasts: ['cue.chat.c-reza'], notices: ['chat:c-reza'] });
     });
 });
+
+describe('a notice that was pressed', () =>
+{
+    let browser: FakeNotices;
+
+    const NOWHERE: unknown[] = [
+        null,
+        'nura.go',
+        { type: 'nura.go' },
+        { to: '/app/games' },
+        { type: 'other', to: '/app/games' },
+        { type: 'nura.go', to: 7 },
+        { type: 'nura.go', to: '/sign-in' },
+        { type: 'nura.go', to: '//elsewhere.example/app/' },
+        { type: 'nura.go', to: 'https://elsewhere.example/app/games' }
+    ];
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+    });
+
+    it('takes the open page to what the notice was about', () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+        browser.fromWorker({ type: 'nura.go', to: '/app/chats/c-sara' });
+
+        expect(went).toEqual(['/app/chats/c-sara']);
+    });
+
+    it('takes the page nowhere for anything else the worker might say, or anywhere outside the app', () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+
+        for (const told of NOWHERE)
+        {
+            browser.fromWorker(told);
+        }
+
+        expect(went).toEqual([]);
+    });
+
+    it('is not acted on by a store that has stopped', () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start()();
+        browser.fromWorker({ type: 'nura.go', to: '/app/chats/c-sara' });
+
+        expect(went).toEqual([]);
+    });
+});

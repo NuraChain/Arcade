@@ -5,7 +5,7 @@ import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
 import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
-import { clearSystem, tellSystem } from '../lib/system-notice.ts';
+import { clearSystem, onWent, tellSystem } from '../lib/system-notice.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useChat } from './chat.store.ts';
 import { useLobby } from './lobby.store.ts';
@@ -416,6 +416,8 @@ export const useCues = createStore((): CuesApi =>
             yourTurn(frame.match, started(frame.match));
         });
 
+        const offWent = onWent((to) => go.current?.(to));
+
         const back = () =>
         {
             if (document.visibilityState === 'visible')
@@ -444,6 +446,7 @@ export const useCues = createStore((): CuesApi =>
             running = false;
             end();
             offGame();
+            offWent();
             sound?.dispose();
             untitle?.();
 

@@ -80,3 +80,37 @@ export async function clearSystem()
         shown.close();
     }
 }
+
+export function wentTo(told: unknown)
+{
+    if (typeof told !== 'object' || told === null || !('type' in told) || !('to' in told))
+    {
+        return null;
+    }
+
+    return told.type === 'nura.go' && typeof told.to === 'string' && told.to.startsWith('/app/') ? told.to : null;
+}
+
+export function onWent(go: (to: string) => void)
+{
+    if (!noticesSupported())
+    {
+        return () => undefined;
+    }
+
+    const heard = (event: MessageEvent<unknown>) =>
+    {
+        const to = wentTo(event.data);
+
+        if (to !== null)
+        {
+            go(to);
+        }
+    };
+
+    const worker = navigator.serviceWorker;
+
+    worker.addEventListener('message', heard);
+
+    return () => worker.removeEventListener('message', heard);
+}

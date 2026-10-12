@@ -1039,6 +1039,39 @@ the cues store's (`frontend/CLAUDE.md`, *What a cue says is also told to the sys
 url is its identity, so a hashed filename would register a new worker on every deploy while the
 old one kept running.
 
+**A pressed notice goes to the thing itself.** Every notice carries `data.target`, the page's
+and the worker's alike, and the worker's `notificationclick` is the one place either is pressed.
+It closes the notice and then, in this order: a tab already showing the target is brought
+forward and told nothing (a table's own page, hidden, is the common case, and a second copy of
+a board is a second socket); a tab inside the app is brought forward and posted
+`{ type: 'nura.go', to }`; with no tab inside the app, or one that went away while it was being
+focused, it opens the target itself. The landing page open in a tab is not "inside the app": it
+has no shell to hear the message. Inside is `/app` itself or anything under it (`inApp`): the
+home page IS `/app`, and the rule as first written asked for `/app/`, which would have opened a
+second window for anybody sitting on the home page. Only the look in a real browser showed it,
+because every spec had invented a `/app/home` that does not exist; the specs use real paths now.
+The worker asks for every window of ours, controlled or not (`includeUncontrolled`): a page
+that was open before the worker was registered, which is the page the switch was just turned
+on in, is not controlled by it. In a real browser `matchAll` without that option answered
+nothing for such a page, while a message posted to it still arrived and it went.
+On the page `onWent` in `lib/system-notice.ts` listens on
+`navigator.serviceWorker` and the cues store hands the path to the shell's `navigate`: the
+store already holds the router's hand, and the shell chunk has no room for a listener. A target
+that is not a path under `/app/` is the list in the worker and nothing at all in the page:
+each side checks, since neither can know what the other was sent. It used to focus whichever
+tab came first and stop there, so a notice about a message opened the page the reader had left.
+
+**A new worker takes over at once** (`skipWaiting` on `install`). It has no `fetch` handler and
+keeps nothing a page depends on, so there is no version of a page it could break; without it a
+browser that never closes every tab goes on running the worker it first registered, and a
+changed click or a changed notice reaches nobody who keeps the app open.
+
+A click cannot be made in a test browser: a synthetic `notificationclick` is untrusted and
+`waitUntil` throws on it. So `push-worker.spec.ts` runs the worker's real source against a fake
+scope (`tests/fake-worker.ts`) and hands what it posts to `wentTo`, the page's own reader, which
+is the contract between the two files; `cues.spec.ts` (*a notice that was pressed*) holds the
+page's half.
+
 Sending is fire-and-forget and never blocks a request: a slow push service must not make sending a
 message slow, and a dead one must not make it fail. A 404 or 410 from the service means the
 subscription is over — the row is retired rather than retried forever.

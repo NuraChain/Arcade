@@ -30,23 +30,51 @@ self.addEventListener('push', (event) =>
     }));
 });
 
+const LIST = '/app/notifications';
+
+const targetOf = (notification) =>
+{
+    const target = notification.data?.target;
+
+    return typeof target === 'string' && target.startsWith('/app/') ? target : LIST;
+};
+
+const placeOf = (tab) =>
+{
+    const at = new URL(tab.url);
+
+    return at.pathname + at.search;
+};
+
+const inApp = (tab) => /^\/app(\/|\?|$)/.test(placeOf(tab));
+
+const goTo = async (target) =>
+{
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const there = tabs.find((tab) => placeOf(tab) === target);
+    const inside = there ?? tabs.find(inApp);
+    const front = await inside?.focus().catch(() => null) ?? null;
+
+    if (front === null)
+    {
+        await self.clients.openWindow(target);
+
+        return;
+    }
+
+    if (there === undefined)
+    {
+        front.postMessage({ type: 'nura.go', to: target });
+    }
+};
+
 self.addEventListener('notificationclick', (event) =>
 {
     event.notification.close();
+    event.waitUntil(goTo(targetOf(event.notification)));
+});
 
-    // Focus a tab that is already open rather than adding another. Somebody who has the app in a
-    // background tab wants that tab, not a second copy of it.
-    event.waitUntil((async () =>
-    {
-        const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        for (const client of open)
-        {
-            if (new URL(client.url).origin === self.location.origin)
-            {
-                await client.focus();
-                return;
-            }
-        }
-        await self.clients.openWindow('/app/notifications');
-    })());
+self.addEventListener('install', (event) =>
+{
+    event.waitUntil(self.skipWaiting());
 });
