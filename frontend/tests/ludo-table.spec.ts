@@ -1831,7 +1831,7 @@ describe('the ludo table, played from what happened', () =>
     it('is not called over, for somebody watching, before the board has shown how it ended', async () =>
     {
         quiet();
-        vi.spyOn(usePeople(), 'want').mockImplementation(() => undefined);
+        vi.spyOn(usePeople(), 'want').mockImplementation(async () => undefined);
 
         const { before, after } = closing();
         const [watch, setWatch] = createSignal<Watched>({ match: seen(before, null, 1), behind: 30, delay: 30, live: true });

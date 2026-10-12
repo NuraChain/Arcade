@@ -21,12 +21,13 @@ export interface PeopleApi
     remember(people: readonly PersonSummary[]): void;
 
     /**
-     * Asks about handles nothing has mentioned.
+     * Asks about handles nothing has mentioned, and settles once every one of them has been
+     * answered or refused. It never rejects: somebody nobody would describe stays a handle.
      *
      * Call it from a `mount` or after a fetch settles, never from a render path: it writes the
      * signal that `byHandle` reads, and a `derived` that triggered it would be a cycle.
      */
-    want(handles: readonly string[]): void;
+    want(handles: readonly string[]): Promise<unknown>;
 
     reset(): void;
 }
@@ -52,8 +53,11 @@ export const usePeople = createStore((): PeopleApi =>
 {
     const [known, setKnown] = createSignal<Map<string, PersonSummary>>(new Map());
 
-    /** Handles already asked about, so a thread of strangers asks once rather than once per render. */
-    const asked = new Set<string>();
+    /**
+     * Handles already asked about and the answer each waits on, so a thread of strangers asks once
+     * rather than once per render. A refused request forgets its handles: a refusal is not an answer.
+     */
+    const asked = new Map<string, Promise<void>>();
 
     const remember = (people: readonly PersonSummary[]) =>
     {
@@ -100,19 +104,20 @@ export const usePeople = createStore((): PeopleApi =>
                 return [...new Set(handles)].filter((handle) => handle !== '' && !held.has(handle) && !asked.has(handle));
             });
 
-            for (const handle of missing)
-            {
-                asked.add(handle);
-            }
-
             for (let start = 0; start < missing.length; start += NAMES_MAX)
             {
                 const batch = missing.slice(start, start + NAMES_MAX);
-
-                void client.social.names({ query: { handles: batch.join(',') } })
+                const answered = client.social.names({ query: { handles: batch.join(',') } })
                     .then((answer) => remember(answer.people))
-                    .catch(() => undefined);
+                    .catch(() => batch.forEach((handle) => asked.delete(handle)));
+
+                for (const handle of batch)
+                {
+                    asked.set(handle, answered);
+                }
             }
+
+            return Promise.all(handles.map((handle) => asked.get(handle)));
         },
 
         reset()

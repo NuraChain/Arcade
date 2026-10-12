@@ -602,7 +602,7 @@ describe('the backgammon table on the page', () =>
 
     it('is not called over, for somebody watching, before the table has shown how it ended', async () =>
     {
-        vi.spyOn(usePeople(), 'want').mockImplementation(() => undefined);
+        vi.spyOn(usePeople(), 'want').mockImplementation(async () => undefined);
 
         const ending = match({ turn: 1, dice: [1, 4], seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }, null, { turn: 1 });
         const ended = match({ turn: 1, dice: [], phase: 'roll', seats: position({ 6: 15 }, { 0: 15 }) }, null, {

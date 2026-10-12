@@ -9,12 +9,15 @@ import { useCues } from '../src/stores/cues.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { BACKOFF_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { ApiError, client, type MatchView } from '../src/api.ts';
 import { server } from './fake-api.ts';
+import { fakeNotices, type FakeNotices } from './fake-notices.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -1210,5 +1213,436 @@ describe('the cues store', () =>
         await settle();
 
         expect(useToasts().items()).toHaveLength(0);
+    });
+});
+
+const seatedAt = async (mode: 'live' | 'turns' = 'live') =>
+{
+    const id = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 2, mode, privacy: 'public' }, []);
+
+    await settle();
+
+    return id;
+};
+
+const playingAt = async (mode: 'live' | 'turns' = 'live') =>
+{
+    const id = await seatedAt(mode);
+
+    server.tables.find((one) => one.id === id)!.matchId = `match-${ id }`;
+    await useLobby().refresh();
+    await settle();
+
+    return id;
+};
+
+const boardOf = (tableId: string, over: Partial<MatchView> = {}): MatchView => ({
+    id: `match-${ tableId }`,
+    tableId,
+    game: 'ludo',
+    rev: 1,
+    seats: 2,
+    players: [
+        { seat: 0, who: 'alex', timeouts: 0 },
+        { seat: 1, who: 'sara.k', timeouts: 0 }
+    ] as MatchView['players'],
+    turn: 1,
+    mine: 0,
+    startedAt: new Date(clock.now()).toISOString(),
+    view: { kind: 'ludo', moves: [], controls: 1, seats: [] },
+    ...over
+});
+
+let frames = 20;
+
+const frame = async (match: MatchView) =>
+{
+    frames += 1;
+    socket.deliver({ v: 1, t: 'game', n: frames, at: clock.now(), match, events: [] });
+    await settle();
+};
+
+describe('the reader\'s turn at a table they are not looking at', () =>
+{
+    const said = (tableId: string) => useToasts().items().filter((toast) => toast.dedupe === `cue.turn.${ tableId }`);
+
+    it('is said when it comes round at a live table, with the game\'s name and the way there', async () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+
+        const tableId = await playingAt();
+
+        await frame(boardOf(tableId, { rev: 4, turn: 1 }));
+
+        expect(said(tableId), 'somebody else\'s turn was called the reader\'s').toHaveLength(0);
+
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(1);
+        expect(said(tableId)[0].text).toBe('Your turn at Ludo');
+        expect(said(tableId)[0].action?.label).toBe('Go to the table');
+
+        said(tableId)[0].action?.run();
+
+        expect(went).toEqual([`/app/play/${ tableId }`]);
+    });
+
+    it('is said once for a turn, and again for the next one', async () =>
+    {
+        useCues().start();
+
+        const tableId = await playingAt();
+
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+        useToasts().reset();
+        await frame(boardOf(tableId, { rev: 6, turn: 0 }));
+
+        expect(said(tableId), 'a turn the reader still holds was said again').toHaveLength(0);
+
+        await frame(boardOf(tableId, { rev: 7, turn: 1 }));
+        await frame(boardOf(tableId, { rev: 8, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(1);
+    });
+
+    it('is not said of a turn that was the reader\'s before the page heard anything', async () =>
+    {
+        useCues().start();
+
+        const tableId = await playingAt();
+
+        server.tables.find((one) => one.id === tableId)!.yourTurn = true;
+        await useLobby().refresh();
+        await settle();
+        await frame(boardOf(tableId, { rev: 9, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(0);
+    });
+
+    it('is not said to somebody looking at that table, or of a game that is over', async () =>
+    {
+        useCues().start();
+
+        const tableId = await playingAt();
+
+        useLobby().open(tableId);
+        await settle();
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(0);
+
+        useLobby().close();
+        await settle();
+        await frame(boardOf(tableId, { rev: 6, turn: 1 }));
+        await frame(boardOf(tableId, { rev: 7, turn: 0, finishedAt: new Date(clock.now()).toISOString() }));
+
+        expect(said(tableId)).toHaveLength(0);
+    });
+
+    it('is left, at a table played a move a day, to the notification that is written for it', async () =>
+    {
+        useCues().start();
+
+        const tableId = await playingAt('turns');
+
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(0);
+    });
+
+    it('is not said, and neither is a game starting, to somebody who switched games off', async () =>
+    {
+        useCues().start();
+        await useSocial().toggleMute('notice', 'turns');
+        await settle();
+
+        const playing = await playingAt();
+        const waiting = await seatedAt();
+
+        await frame(boardOf(playing, { rev: 5, turn: 0 }));
+        await frame(boardOf(waiting));
+
+        expect(useToasts().items().filter((toast) => toast.dedupe?.startsWith('cue.turn.') || toast.dedupe?.startsWith('cue.started.'))).toHaveLength(0);
+    });
+
+    it('is not said in the same breath as the game starting', async () =>
+    {
+        useCues().start();
+
+        const tableId = await seatedAt();
+
+        await frame(boardOf(tableId, { turn: 0 }));
+
+        expect(useToasts().items().map((toast) => toast.dedupe)).toEqual([`cue.started.${ tableId }`]);
+
+        await frame(boardOf(tableId, { rev: 2, turn: 1 }));
+        await frame(boardOf(tableId, { rev: 3, turn: 0 }));
+
+        expect(said(tableId)).toHaveLength(1);
+    });
+});
+
+describe('what the browser is told when nobody is looking at the page', () =>
+{
+    let browser: FakeNotices;
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+        useSettings().update({ notify: true });
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+        useSettings().reset();
+    });
+
+    const messageFrom = async () =>
+    {
+        laterMessageIn('c-reza');
+        await useChat().refresh();
+        await settle();
+    };
+
+    const armed = async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+    };
+
+    it('is told a message came, under that thread\'s own tag and with where it leads', async () =>
+    {
+        await armed();
+        browser.hide(true);
+        await messageFrom();
+
+        expect(browser.shown).toHaveLength(1);
+        expect(browser.shown[0].title).toBe('Reza Tehrani sent a message');
+        expect(browser.shown[0].options).toMatchObject({ tag: 'chat:c-reza', lang: 'en', dir: 'ltr', data: { target: '/app/chats/c-reza' } });
+    });
+
+    it('is told nothing while the page is being looked at, and nothing with the switch for this device off', async () =>
+    {
+        await armed();
+        await messageFrom();
+
+        expect(browser.shown, 'a page somebody was looking at notified them as well').toEqual([]);
+
+        useSettings().update({ notify: false });
+        browser.hide(true);
+        laterMessageIn('c-reza');
+        await useChat().refresh();
+        await settle();
+
+        expect(browser.shown).toEqual([]);
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.chat.c-reza'), 'the toast went with the notice').toHaveLength(1);
+    });
+
+    it('is told of a friend request and of an invitation, each under its own tag', async () =>
+    {
+        await armed();
+        browser.hide(true);
+
+        knock('maya.c');
+        await useSocial().refresh();
+        await settle();
+        server.notify({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 't-1' }, dedupeKey: 'table:t-1' });
+        await useNotifications().refresh();
+        await settle();
+
+        expect(browser.shown.map((one) => [one.options.tag, one.options.data.target])).toEqual([
+            ['request', '/app/friends?tab=requests'],
+            ['table-invite:t-1', '/app/play/t-1']
+        ]);
+        expect(browser.shown[0].title).toContain('Maya Chen');
+        expect(browser.shown[1].title).toContain('saved you a seat');
+    });
+
+    it('is told a turn has come at a table that is open on the page, where no toast is drawn', async () =>
+    {
+        await armed();
+
+        const tableId = await playingAt();
+
+        useLobby().open(tableId);
+        await settle();
+        browser.hide(true);
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(browser.shown.map((one) => [one.title, one.options.tag, one.options.data.target])).toEqual([['Your turn at Ludo', `turn:${ tableId }`, `/app/play/${ tableId }`]]);
+        expect(useToasts().items().filter((toast) => toast.dedupe?.startsWith('cue.turn.'))).toHaveLength(0);
+    });
+
+    it('is told a turn written as a notification with the game\'s name, under the tag the board\'s own cue uses', async () =>
+    {
+        await armed();
+
+        const tableId = await playingAt('turns');
+
+        browser.hide(true);
+        server.notify({ kind: 'turn', ref: { tableId }, dedupeKey: `turn:${ tableId }` });
+        await useNotifications().refresh();
+        await settle();
+
+        expect(browser.shown.map((one) => [one.title, one.options.tag])).toEqual([['Your turn at Ludo', `turn:${ tableId }`]]);
+
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(browser.shown, 'the two voices of one turn were two notices').toHaveLength(1);
+    });
+
+    it('is told a game has started for somebody waiting on that table\'s own page', async () =>
+    {
+        await armed();
+
+        const tableId = await seatedAt();
+
+        useLobby().open(tableId);
+        await settle();
+        browser.hide(true);
+        await frame(boardOf(tableId));
+
+        expect(browser.shown.map((one) => [one.title, one.options.tag, one.options.data.target])).toEqual([['Your Ludo game has started', `table:${ tableId }`, `/app/play/${ tableId }`]]);
+    });
+
+    it('is told in Persian, right to left, when that is the reader\'s language', async () =>
+    {
+        useLocale().setLocale('fa');
+        await armed();
+        browser.hide(true);
+        await messageFrom();
+
+        expect(browser.shown[0].options).toMatchObject({ lang: 'fa', dir: 'rtl' });
+        expect(browser.shown[0].title).toContain('پیامی فرستاد');
+    });
+
+    it('has its notices taken down when the reader comes back to the page', async () =>
+    {
+        await armed();
+        browser.hide(true);
+        await messageFrom();
+
+        expect(browser.closed).toEqual([]);
+
+        browser.hide(false);
+        await settle();
+
+        expect(browser.closed).toEqual(['chat:c-reza']);
+    });
+
+    it('is told nothing once the store is stopped, and nothing is taken down for it either', async () =>
+    {
+        const stop = useCues().start();
+
+        await useChat().refresh();
+        await settle();
+        browser.hide(true);
+        await messageFrom();
+        stop();
+        browser.hide(false);
+        await settle();
+
+        expect(browser.closed).toEqual([]);
+    });
+});
+
+describe('somebody the page has not been told about', () =>
+{
+    const invited = { kind: 'table-invite' as const, actor: 'peyman', ref: { tableId: 't-9' }, dedupeKey: 'table:t-9' };
+
+    const said = () => useToasts().items().filter((toast) => toast.dedupe === 'cue.notice').map((toast) => toast.text);
+
+    const armed = async () =>
+    {
+        usePeople().reset();
+
+        const stop = useCues().start();
+
+        await useNotifications().refresh();
+        await settle();
+
+        return stop;
+    };
+
+    it('is named before anything is said of them, by asking who they are', async () =>
+    {
+        await armed();
+
+        expect(usePeople().byHandle('peyman'), 'the fixture is somebody this page already knew').toBeNull();
+
+        server.notify(invited);
+        await useNotifications().refresh();
+        await settle();
+        await settle();
+
+        expect(said()).toEqual(['Peyman Salehi saved you a seat']);
+        expect(server.calls).toContain('social.names');
+    });
+
+    it('is called by their handle when nobody will say who they are', async () =>
+    {
+        const names = client.social.names;
+
+        client.social.names = async () =>
+        {
+            throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
+        };
+
+        try
+        {
+            await armed();
+            server.notify(invited);
+            await useNotifications().refresh();
+            await settle();
+            await settle();
+
+            expect(said()).toEqual(['peyman saved you a seat']);
+        }
+        finally
+        {
+            client.social.names = names;
+        }
+    });
+
+    it('is not spoken of by a store that stopped while their name was still being asked', async () =>
+    {
+        const names = client.social.names;
+        let answer: () => void = () => undefined;
+
+        client.social.names = async (input) =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                answer = resolve;
+            });
+
+            return await names(input);
+        };
+
+        try
+        {
+            const stop = await armed();
+
+            server.notify(invited);
+            await useNotifications().refresh();
+            await settle();
+            stop();
+            answer();
+            await settle();
+            await settle();
+
+            expect(said()).toEqual([]);
+        }
+        finally
+        {
+            client.social.names = names;
+        }
     });
 });

@@ -159,7 +159,7 @@ export const useParty = createStore((): PartyApi =>
     {
         arrived = runtime().clock.now();
         setReadFor(me);
-        people.want([
+        void people.want([
             ...(answer.party === undefined ? [] : [answer.party.leader, answer.party.member]),
             ...answer.invites.map((invite) => invite.from),
             ...(answer.ended?.by === undefined ? [] : [answer.ended.by])

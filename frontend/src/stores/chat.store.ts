@@ -123,7 +123,7 @@ export const useChat = createStore((): ChatApi =>
      */
     const ingest = (loaded: Conversation[]) =>
     {
-        people.want(loaded.flatMap((conversation) => conversation.participants));
+        void people.want(loaded.flatMap((conversation) => conversation.participants));
         if (loaded.some((conversation) => conversation.groupId !== null))
         {
             groups.want();

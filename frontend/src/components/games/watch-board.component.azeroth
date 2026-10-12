@@ -24,7 +24,7 @@ export default component WatchBoard(props: { watch: Watched; events: EventBatch;
 
         if (handles.length > 0)
         {
-            people.want(handles);
+            void people.want(handles);
         }
     }
 

@@ -22,6 +22,7 @@ export interface Settings
     hintOutcome: boolean;
     hintRules: boolean;
     quickAsks: Record<string, unknown>;
+    notify: boolean;
 }
 
 const STORAGE_KEY = 'nura-games.settings';
@@ -46,7 +47,8 @@ export function defaultSettings(): Settings
         hintMoves: true,
         hintOutcome: true,
         hintRules: true,
-        quickAsks: {}
+        quickAsks: {},
+        notify: false
     };
 }
 

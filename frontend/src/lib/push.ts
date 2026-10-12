@@ -11,9 +11,7 @@
  * old one kept running.
  */
 
-const WORKER = '/push-worker.js';
-
-export type PushState = 'unsupported' | 'unconfigured' | 'denied' | 'off' | 'on';
+export const WORKER = '/push-worker.js';
 
 export interface PushSubscriptionKeys
 {

@@ -822,6 +822,42 @@ an arrival by construction, so there is nothing to arm: a table the list does no
 answered for, which is a silence on a cold load and never a false start. It lives in the cues chunk,
 which the shell imports after it mounts, and costs the shell nothing.
 
+**A turn that comes round while the reader is elsewhere says so too.** The same frame says whose
+turn it is. When it becomes the reader's, at a table that is not on the screen, the store says
+"Your turn at Ludo" with the way there: once for a turn, never for a turn the reader already held
+when the page first heard of the game (the lobby's own `yourTurn` is the baseline until a frame
+has been seen), never in the same breath as the game starting, and not as a toast at a table
+played a move a day, where the server writes a `turn` notification that has a toast of its own.
+Both are under the account's "Games" switch (the `turns` mute), which silences the start as well.
+
+**What a cue says is also told to the system, when nobody is looking at the page.** Every place
+the cues store raises a toast it also calls `system(text, tag, target)`, and `tellSystem` in
+`lib/system-notice.ts` shows a notification through the worker's registration only when the
+device switch is on (`settings.notify`), the browser has said yes and `document.visibilityState`
+is `hidden`. So a visible page has its toast and a hidden one has a notice, never both. The tag
+names the subject (`chat:<thread>`, `turn:<table>`, `table:<table>`, `request`,
+`<kind>:<subject>` for a notification), so a burst in one thread is one notice that is refreshed,
+and the two voices a turn can have at a table played a move a day land on one notice. Two cues
+have a notice and no toast, because the table they are about is the page that is open and
+hidden: the reader's turn there, and the game starting for somebody waiting on that table's own
+page, which is the case the whole thing exists for. When the document is seen again every notice
+of ours is taken down (`clearSystem`): the page has the truth now. `system-notice.spec.ts` holds
+the outlet, `cues.spec.ts` (*what the browser is told when nobody is looking at the page*) what
+is said through it, and `device-notices.spec.ts` the switch.
+
+**A cue waits for the name of whoever it is about.** A toast and a notice are said once and are
+not redrawn, so every cue with a person in it goes through `named`, which asks the people store
+(`people.want`) and speaks when that settles: at once for somebody known, after one request for a
+stranger, and by handle when nobody will describe them. The first notice the real build ever
+showed read "mina saved you a seat": an invitation can come from somebody this page has never
+loaded. A store that stopped while the name was out says nothing. `cues.spec.ts` (*somebody the
+page has not been told about*) holds the three.
+
+**A notice's pictures are files the server has.** `/apple-touch-icon.png` and `/favicon-32.png`,
+in `lib/system-notice.ts` and in the worker: the one first written for both (`/icon-192.png`) was
+never in `public/`, a 404 in the console for every notice and a blank picture on the lock screen.
+`system-notice.spec.ts` reads the paths out of both files and asks `public/` for each.
+
 **Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
 belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
 `parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it

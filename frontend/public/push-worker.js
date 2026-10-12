@@ -20,8 +20,8 @@ self.addEventListener('push', (event) =>
     // Every push looks the same, because every push IS the same: a knock on the door.
     event.waitUntil(self.registration.showNotification('Nura Games', {
         body: 'Something happened. Open Nura Games to see.',
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: '/apple-touch-icon.png',
+        badge: '/favicon-32.png',
 
         // One notice at a time. A stack of identical knocks is noise, and the app has the real
         // list the moment it opens.

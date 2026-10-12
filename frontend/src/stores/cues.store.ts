@@ -4,13 +4,14 @@ import type { NotificationKind } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
+import { clearSystem, tellSystem } from '../lib/system-notice.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useChat } from './chat.store.ts';
 import { useLobby } from './lobby.store.ts';
 import { useLocale } from './locale.store.ts';
 import { useNotifications } from './notifications.store.ts';
 import { usePeople } from './people.store.ts';
-import { useRealtime } from './realtime.store.ts';
+import { useRealtime, type GameFrame } from './realtime.store.ts';
 import { useSettings } from './settings.store.ts';
 import { useSocial } from './social.store.ts';
 import { useToasts } from './toasts.store.ts';
@@ -69,6 +70,8 @@ export const useCues = createStore((): CuesApi =>
 
     const begun = new Set<string>();
 
+    const turns = new Map<string, boolean>();
+
     const run = (): (() => void) =>
     {
         const toasts = useToasts();
@@ -82,7 +85,18 @@ export const useCues = createStore((): CuesApi =>
         const settings = useSettings();
         const catalogue = useCatalogue();
 
-        const nameOf = (handle: string) => people.byHandle(handle)?.displayName ?? handle;
+        let running = true;
+
+        const named = (handle: string, say: (who: string) => void) =>
+        {
+            void people.want([handle]).then(() =>
+            {
+                if (running)
+                {
+                    say(untrack(() => people.byHandle(handle)?.displayName ?? handle));
+                }
+            });
+        };
 
         /**
          * The chime, imported on first use. The sound engine must not sit in the shell chunk.
@@ -106,17 +120,33 @@ export const useCues = createStore((): CuesApi =>
                 .catch(() => undefined);
         };
 
-        const announceChat = (id: string, from: string) =>
+        const system = (title: string, tag: string, target: string) =>
         {
+            const to = untrack(() => (settings.settings().notify ? { lang: locale.locale(), dir: locale.dir() } : null));
+
+            if (to !== null)
+            {
+                void tellSystem({ title, tag, target, ...to }).catch(() => undefined);
+            }
+        };
+
+        const gameSays = (key: 'notify.system.turn' | 'quickMatch.started', game: string) =>
+            locale.t(key, { game: locale.t(catalogue.byId(game as GameId).nameKey) });
+
+        const announceChat = (id: string, from: string) => named(from, (who) =>
+        {
+            const text = locale.t('cue.chatBody', { who });
+
             toasts.show({
                 kind: 'live',
                 icon: 'chats',
-                text: locale.t('cue.chatBody', { who: nameOf(from) }),
+                text,
                 action: { label: locale.t('cue.open'), run: () => go.current?.(`/app/chats/${ id }`) },
                 dedupe: `cue.chat.${ id }`
             });
+            system(text, `chat:${ id }`, `/app/chats/${ id }`);
             chime();
-        };
+        });
 
         const trackChat = () => createEffect(() =>
         {
@@ -195,14 +225,20 @@ export const useCues = createStore((): CuesApi =>
 
             if (requestSeeded && arrived !== undefined && live.status() === 'connected')
             {
-                toasts.show({
-                    kind: 'live',
-                    icon: 'friend-add',
-                    text: locale.t('cue.requestBody', { who: nameOf(arrived.from) }),
-                    action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
-                    dedupe: 'cue.request'
+                named(arrived.from, (who) =>
+                {
+                    const text = locale.t('cue.requestBody', { who });
+
+                    toasts.show({
+                        kind: 'live',
+                        icon: 'friend-add',
+                        text,
+                        action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
+                        dedupe: 'cue.request'
+                    });
+                    system(text, 'request', '/app/friends?tab=requests');
+                    chime();
                 });
-                chime();
             }
             requestSeeded = true;
         }, { name: 'cues.requests' });
@@ -231,11 +267,20 @@ export const useCues = createStore((): CuesApi =>
 
             if (noticeSeeded && item !== undefined && live.status() === 'connected')
             {
-                const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, nameOf(item.actor ?? ''), locale) };
-                const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
+                named(item.actor ?? '', (who) =>
+                {
+                    const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, who, locale) };
+                    const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
+                    const game = item.kind === 'turn' ? untrack(lobby.seated).find((one) => one.id === item.ref.tableId)?.game : undefined;
 
-                toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
-                chime();
+                    toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
+                    system(
+                        game === undefined ? told.text : gameSays('notify.system.turn', game),
+                        `${ item.kind }:${ item.ref.tableId ?? item.ref.groupId ?? item.ref.conversationId ?? item.actor ?? '' }`,
+                        targetOf(item) ?? '/app/notifications'
+                    );
+                    chime();
+                });
             }
             noticeSeeded = true;
         }, { name: 'cues.notices' });
@@ -285,38 +330,100 @@ export const useCues = createStore((): CuesApi =>
             };
         };
 
-        const offGame = live.onGame((frame) =>
-        {
-            const match = frame.match;
+        const heard = () => !social.isMuted('notice', 'turns');
 
-            if (match.finishedAt !== undefined || match.mine === undefined || begun.has(match.id))
+        const yourTurn = (match: GameFrame['match'], opening: boolean) =>
+        {
+            const table = lobby.seated().find((one) => one.id === match.tableId);
+            const mine = match.finishedAt === undefined && match.mine !== undefined && match.turn === match.mine;
+            const was = turns.get(match.id) ?? (table?.matchId === match.id && table.yourTurn === true);
+
+            if (match.finishedAt !== undefined)
+            {
+                turns.delete(match.id);
+
+                return;
+            }
+
+            turns.set(match.id, mine);
+
+            if (!mine || was || opening || !heard())
             {
                 return;
+            }
+
+            const text = gameSays('notify.system.turn', match.game);
+            const target = `/app/play/${ match.tableId }`;
+
+            system(text, `turn:${ match.tableId }`, target);
+
+            if (lobby.openId() !== match.tableId && table?.mode !== 'turns')
+            {
+                toasts.show({ kind: 'live', icon: 'dice', text, action: { label: locale.t('quickMatch.go'), run: () => go.current?.(target) }, dedupe: `cue.turn.${ match.tableId }` });
+                chime();
+            }
+        };
+
+        const started = (match: GameFrame['match']) =>
+        {
+            if (match.finishedAt !== undefined || match.mine === undefined || begun.has(match.id))
+            {
+                return false;
             }
 
             const table = lobby.seated().find((one) => one.id === match.tableId);
 
             if (table === undefined || table.matchId !== undefined)
             {
-                return;
+                return false;
             }
 
             begun.add(match.id);
 
+            if (!heard())
+            {
+                return true;
+            }
+
+            const text = gameSays('quickMatch.started', table.game);
+            const target = `/app/play/${ table.id }`;
+
+            system(text, `table:${ table.id }`, target);
+
             if (lobby.openId() === table.id || lobby.finding().includes(table.game as GameId))
             {
-                return;
+                return true;
             }
 
             toasts.show({
                 kind: 'live',
                 icon: 'play',
-                text: locale.t('quickMatch.started', { game: locale.t(catalogue.byId(table.game as GameId).nameKey) }),
-                action: { label: locale.t('quickMatch.go'), run: () => go.current?.(`/app/play/${ table.id }`) },
+                text,
+                action: { label: locale.t('quickMatch.go'), run: () => go.current?.(target) },
                 dedupe: `cue.started.${ table.id }`
             });
             chime();
+
+            return true;
+        };
+
+        const offGame = live.onGame((frame) =>
+        {
+            yourTurn(frame.match, started(frame.match));
         });
+
+        const back = () =>
+        {
+            if (document.visibilityState === 'visible')
+            {
+                void clearSystem().catch(() => undefined);
+            }
+        };
+
+        if (typeof document !== 'undefined')
+        {
+            document.addEventListener('visibilitychange', back);
+        }
 
         const end = createRoot((dispose) =>
         {
@@ -330,10 +437,16 @@ export const useCues = createStore((): CuesApi =>
 
         return () =>
         {
+            running = false;
             end();
             offGame();
             sound?.dispose();
             untitle?.();
+
+            if (typeof document !== 'undefined')
+            {
+                document.removeEventListener('visibilitychange', back);
+            }
         };
     };
 
@@ -372,6 +485,7 @@ export const useCues = createStore((): CuesApi =>
             noticeSeeded = false;
             noticeSeenBusy = false;
             begun.clear();
+            turns.clear();
         },
 
         navigateTo(navigate)

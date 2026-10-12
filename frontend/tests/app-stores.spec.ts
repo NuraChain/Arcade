@@ -505,12 +505,87 @@ describe('people nobody has described yet', () =>
         people.reset();
         server.calls = [];
 
-        people.want(['sara.k', 'reza.t', 'mina', 'sara.k']);
-        people.want(['sara.k']);
+        void people.want(['sara.k', 'reza.t', 'mina', 'sara.k']);
+        void people.want(['sara.k']);
         await vi.waitFor(() => expect(people.byHandle('mina')?.displayName).toBe('Mina Sadeghi'));
 
         expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
         expect(server.calls).not.toContain('social.person');
+    });
+
+    it('are known by the time the asking settles, to whoever asked while it was out as well', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        const first = people.want(['mina', 'reza.t']);
+        const second = people.want(['mina']);
+
+        expect(people.byHandle('mina'), 'somebody was known before anybody answered').toBeNull();
+
+        await second;
+        expect(people.byHandle('mina')?.displayName, 'the second asking settled before the answer it waits on').toBe('Mina Sadeghi');
+
+        await first;
+        expect(people.byHandle('reza.t')?.displayName).toBe('Reza Tehrani');
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+    });
+
+    it('cost nothing to ask about once another payload has described them, and an empty handle asks nobody', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        people.remember((await client.social.names({ query: { handles: 'mina' } })).people);
+        server.calls = [];
+
+        await people.want(['mina', '']);
+        await people.want(['']);
+
+        expect(people.byHandle('mina')?.displayName).toBe('Mina Sadeghi');
+        expect(server.calls).toEqual([]);
+    });
+
+    it('are asked about again after a request that was refused, and the asking settles all the same', async () =>
+    {
+        const people = usePeople();
+        const names = client.social.names;
+        people.reset();
+        server.calls = [];
+
+        client.social.names = async () =>
+        {
+            throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
+        };
+
+        try
+        {
+            await people.want(['mina']);
+        }
+        finally
+        {
+            client.social.names = names;
+        }
+
+        expect(people.byHandle('mina')).toBeNull();
+
+        await people.want(['mina']);
+
+        expect(people.byHandle('mina')?.displayName, 'one refusal left a person a handle for good').toBe('Mina Sadeghi');
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+    });
+
+    it('are asked about once when nobody will describe them, however often they come up', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        await people.want(['nobody.at.all']);
+        await people.want(['nobody.at.all']);
+
+        expect(people.byHandle('nobody.at.all')).toBeNull();
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
     });
 });
 

@@ -772,9 +772,9 @@ export function buildApi(ports: Ports)
             /**
              * The key a browser subscribes with.
              *
-             * Absent when this deployment has no push configured, and the client then never asks
-             * for permission - a prompt for something that cannot be delivered is worse than no
-             * prompt at all.
+             * Absent when this deployment has no push configured, and the client then subscribes
+             * to nothing: what this device is told comes from a page that is open, and the
+             * settings panel says so.
              */
             pushKey: routes.get('/push', { output: pushKey }, () =>
             {

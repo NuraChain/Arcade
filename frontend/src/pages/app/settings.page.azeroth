@@ -16,7 +16,7 @@ import { NURA_CHAIN } from '../../data/chain.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
-import PushToggle from '../../components/app/push-toggle.component.azeroth';
+import DeviceNotices from '../../components/app/device-notices.component.azeroth';
 import { signOut } from '../../components/app/sign-out.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { RESERVED_KEYS, keyName } from '../../lib/talk-key.ts';
@@ -464,7 +464,7 @@ export default component SettingsPage()
                         <section id="settings-notifications" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-notifications-title">
                             <SectionHeading id="settings-notifications-title" title={ locale.t('settings.notifications') } />
                             <div class="mb-3">
-                                <PushToggle />
+                                <DeviceNotices />
                             </div>
                             <Panel>
                                 <div class="grid gap-5 @3xl:grid-cols-2 @3xl:gap-x-8">

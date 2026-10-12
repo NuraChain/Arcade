@@ -2695,7 +2695,7 @@ describe('PlayPage', () =>
         {
             await calling();
 
-            usePeople().want(['sara.k']);
+            void usePeople().want(['sara.k']);
             await vi.waitFor(() => expect(usePeople().byHandle('sara.k')).not.toBeNull(), { timeout: 4000 });
 
             link('sara.k', 'connecting');

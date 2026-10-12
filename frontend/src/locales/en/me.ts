@@ -125,7 +125,7 @@ export const me = {
     'settings.notifications.requests': 'Friend requests',
     'settings.notifications.messages': 'Messages',
     'settings.notifications.groups': 'Being added to a group',
-    'settings.notifications.turns': 'Your turn in a turn-based game',
+    'settings.notifications.turns': 'Games: your turn, and a game starting',
     'settings.notifications.sound': 'Sound at the table',
     'settings.notifications.haptics': 'Vibration',
     'settings.notifications.hapticsHint': 'A short buzz when a table is ready, a hand is won, or a gesture lands.',

@@ -310,13 +310,16 @@ export const social = {
     'notify.tableRemoved': '{who} took you out of a {game} table',
     'notify.turn': 'It is your go',
     'notify.message': { one: '{who} sent you a message', other: '{count} new messages from {who}' },
+    'notify.system.turn': 'Your turn at {game}',
 
-    'notify.push.title': 'Push notifications',
-    'notify.push.lead': 'Get a nudge on this device when something happens. The notice never says what — the app fetches that when you open it.',
-    'notify.push.enable': 'Turn on for this device',
-    'notify.push.disable': 'Turn off for this device',
-    'notify.push.on': 'On for this device',
-    'notify.push.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
+    'notify.device.title': 'Notifications on this device',
+    'notify.device.lead': 'When something happens while you are not looking at Nura Games, this browser tells you what it was. It never shows what a message says.',
+    'notify.device.enable': 'Turn on for this device',
+    'notify.device.disable': 'Turn off for this device',
+    'notify.device.on': 'On for this device',
+    'notify.device.closed': 'Also when Nura Games is closed.',
+    'notify.device.open': 'While Nura Games is open in a tab.',
+    'notify.device.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
 
     'seal.noDevice': 'Nobody can write here yet. {who} has not given any of their browsers keys, so there is nothing to seal a message to.',
     'seal.noDeviceMine': 'You cannot write here yet. None of your browsers has been given keys, so there is nothing to seal a message to.',
@@ -342,8 +345,6 @@ export const social = {
     'locked.noKey': 'Locked. The key this browser holds does not open this message.',
     'locked.noEpochKey': 'Locked. This browser was not given the key for this part of the conversation.',
     'locked.tampered': 'Locked. This arrived without the parts needed to check it.',
-
-    'notify.push.unavailable': 'Push is not set up on this server yet.',
 
     'party.teamUp': 'Team up',
     'party.private': 'Private table',

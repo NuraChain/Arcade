@@ -135,7 +135,7 @@ describe('a chair the host can take somebody out of', () =>
 
         held.chairs[1].who = 'sara.k';
         lobby.open(id);
-        usePeople().want(['sara.k']);
+        void usePeople().want(['sara.k']);
         await vi.waitFor(() => expect(lobby.table()?.taken).toBe(2));
         await vi.waitFor(() => expect(usePeople().byHandle('sara.k')?.displayName).toBe('Sara Kamali'));
         useToasts().reset();

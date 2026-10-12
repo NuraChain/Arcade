@@ -69,7 +69,7 @@ export default component WatchPage()
 
         if (handles.length > 0)
         {
-            people.want(handles);
+            void people.want(handles);
         }
     }
 

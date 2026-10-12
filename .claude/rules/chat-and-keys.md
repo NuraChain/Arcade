@@ -90,6 +90,15 @@ Two rules make that store safe to read anywhere. It only ever holds what the ser
 is derived or defaulted - and `byHandle` never fetches, so it is safe inside a `derived`; asking is
 a separate `want()` the owning store calls once its own list has landed.
 
+`want` answers with a promise that settles once everybody it named has been answered or refused,
+and never rejects. Most callers drop it (`void people.want(...)`): their screen redraws when the
+name lands. The one that waits is whatever says a name ONCE - a toast and a system notice are not
+redrawn (`named` in the cues store). A handle is asked about once: a second asker while the request
+is out waits on the same answer, and somebody the server would not describe is not asked about
+again. A REFUSED request forgets its handles, so the next mention asks again: a refusal is not an
+answer, and before this one failed request left a person a bare handle until the page was reloaded.
+`app-stores.spec.ts` (*people nobody has described yet*) holds each of those.
+
 The chat view types moved to `data/chat.ts`, which is where they always belonged: they are the
 client's view of a `ConversationSummary` and a `ChatMessage`, not fixture shapes. `Message.text` is
 a plain string now, because a message is what somebody typed.
@@ -974,7 +983,9 @@ since the server writes the row and pushes the wake-up. A preference the writer 
 switch with nothing behind it. The categories are `NOTICES` in `domains/notify/notices.ts`, a
 zero-import module the settings page reads too, and `NOTICE_OF` maps each kind onto one; turning a
 category off is a `notice` mute, which `tell` checks in the same `exists` as the actor and the
-conversation. `mutes_notice_known` is a CHECK, so a category with no kinds behind it cannot be
+conversation. The `turns` category reads "Games: your turn, and a game starting" since the page
+itself began to say both (the cues store honours the same mute for them, though neither is a
+row the server writes at a live table). `mutes_notice_known` is a CHECK, so a category with no kinds behind it cannot be
 stored, and `reference-parity.spec.ts` holds every kind to exactly one category.
 
 **The mute is checked when the row is WRITTEN**, not when it is rendered. A notification that
@@ -1002,8 +1013,19 @@ reader is already authorised on.
 
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are all three optional and all
 three needed TOGETHER. With none set, `GET /notifications/push` answers with no key and the
-client never asks the browser for permission: a prompt for something that cannot be delivered is
-one somebody denies once and never sees again.
+client subscribes to nothing.
+
+**The switch for this device does not wait for push keys.** A browser can show a notification
+for a page that is open and not being looked at with no push service involved, so
+`device-notices.component.azeroth` (it was `PushToggle`, drawn only when the server had keys)
+offers "Notifications on this device" everywhere a browser has them. Turning it on is the
+reader's own press, so that is when permission is asked: it registers the worker, keeps
+`settings.notify` in this browser the way the other device settings are kept, and subscribes
+as well when the server published a key. The panel then says which it is: "Also when Nura Games
+is closed." or "While Nura Games is open in a tab." A browser that says no is shown how to
+change its mind and no button that cannot work. Nothing is asked before that press: a prompt
+nobody asked for is one somebody denies once and never sees again. What is shown, and when, is
+the cues store's (`frontend/CLAUDE.md`, *What a cue says is also told to the system*).
 
 **`public/push-worker.js` is plain JavaScript served as-is, never bundled.** A service worker's
 url is its identity, so a hashed filename would register a new worker on every deploy while the

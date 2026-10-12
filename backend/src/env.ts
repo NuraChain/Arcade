@@ -86,8 +86,9 @@ export function loadServerConfig()
          * Web Push, all three optional and all three needed together.
          *
          * With none set the product has no push and says so: `GET /notifications/push` answers
-         * with no key, the client never asks the browser for permission, and nothing is silently
-         * dropped. A push from here carries NO payload, so there is no content key to hold.
+         * with no key, the client subscribes to nothing and tells the reader that this device
+         * hears only while a tab is open, and nothing is silently dropped. A push from here
+         * carries NO payload, so there is no content key to hold.
          */
         vapidPublicKey: blank('VAPID_PUBLIC_KEY'),
         vapidPrivateKey: blank('VAPID_PRIVATE_KEY', { secret: true }),

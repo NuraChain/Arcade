@@ -79,7 +79,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
 
         if (handles.length > 0)
         {
-            people.want(handles);
+            void people.want(handles);
         }
     }
 

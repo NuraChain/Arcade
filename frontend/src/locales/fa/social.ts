@@ -313,13 +313,16 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'notify.tableRemoved': '{who} تو را از یک میز {game} بلند کرد',
     'notify.turn': 'نوبت توست',
     'notify.message': { one: '{who} برایت پیام فرستاد', other: '{count} پیام تازه از {who}' },
+    'notify.system.turn': 'نوبت توست در {game}',
 
-    'notify.push.title': 'اعلان‌ها',
-    'notify.push.lead': 'وقتی اتفاقی می‌افتد روی این دستگاه خبرت کنیم. خود اعلان چیزی نمی‌گوید — محتوا وقتی برنامه را باز می‌کنی می‌آید.',
-    'notify.push.enable': 'روشن کن برای این دستگاه',
-    'notify.push.disable': 'خاموش کن برای این دستگاه',
-    'notify.push.on': 'برای این دستگاه روشن است',
-    'notify.push.denied': 'این مرورگر اعلان‌ها را بسته است. اول از تنظیمات سایت اجازه بده.',
+    'notify.device.title': 'اعلان‌ها روی این دستگاه',
+    'notify.device.lead': 'وقتی اتفاقی می‌افتد و بازی‌های نورا جلوی چشمت نیست، همین مرورگر می‌گوید چه شد. متن پیام‌ها هیچ‌وقت نشان داده نمی‌شود.',
+    'notify.device.enable': 'روشن کن برای این دستگاه',
+    'notify.device.disable': 'خاموش کن برای این دستگاه',
+    'notify.device.on': 'برای این دستگاه روشن است',
+    'notify.device.closed': 'حتی وقتی بازی‌های نورا بسته است.',
+    'notify.device.open': 'تا وقتی بازی‌های نورا در یک زبانه باز است.',
+    'notify.device.denied': 'این مرورگر اعلان‌ها را بسته است. اول از تنظیمات سایت اجازه بده.',
 
     'seal.noDevice': 'هنوز کسی نمی‌تواند اینجا بنویسد. {who} به هیچ‌کدام از مرورگرهایش کلید نداده، پس چیزی نیست که پیام برایش مهروموم شود.',
     'seal.noDeviceMine': 'هنوز نمی‌توانی اینجا بنویسی. به هیچ‌کدام از مرورگرهایت کلید نداده‌ای، پس چیزی نیست که پیام برایش مهروموم شود.',
@@ -338,8 +341,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'locked.noKey': 'قفل است. کلیدی که این مرورگر دارد این پیام را باز نمی‌کند.',
     'locked.noEpochKey': 'قفل است. کلید این بخش از گفتگو به این مرورگر داده نشده بود.',
     'locked.tampered': 'قفل است. بدون آن بخش‌هایی رسیده که برای بررسی‌اش لازم است.',
-
-    'notify.push.unavailable': 'روی این سرور هنوز اعلان تنظیم نشده.',
 
     'party.teamUp': 'هم‌تیمی شو',
     'party.private': 'میز خصوصی',

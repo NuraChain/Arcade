@@ -39,7 +39,7 @@ export default component WatchableList(props: { game: GameId })
 
         if (handles.length > 0)
         {
-            people.want(handles);
+            void people.want(handles);
         }
     }
 

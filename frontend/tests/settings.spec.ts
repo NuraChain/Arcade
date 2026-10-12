@@ -153,7 +153,7 @@ describe('the notification switches', () =>
         const switchFor = (label: string) =>
             [...container.querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.querySelector('span span')?.textContent === label)!;
 
-        expect(switchFor('Your turn in a turn-based game').getAttribute('aria-checked')).toBe('false');
+        expect(switchFor('Games: your turn, and a game starting').getAttribute('aria-checked')).toBe('false');
         expect(switchFor('Messages').getAttribute('aria-checked')).toBe('true');
 
         switchFor('Messages').click();
