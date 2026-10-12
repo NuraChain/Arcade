@@ -94,6 +94,41 @@ export async function fakeChain(answer: (rpc: Rpc) => Answer | Promise<Answer>)
     return { url: await listen(server), asked };
 }
 
+export async function tiredHost(answer: (request: { url: string; body: string }) => unknown)
+{
+    const answered = new WeakMap<Socket, number>();
+    const held = new Set<ServerResponse>();
+    let sockets = 0;
+    const server = httpServer(async (request, response) =>
+    {
+        let body = '';
+        for await (const chunk of request)
+        {
+            body += String(chunk);
+        }
+        const before = answered.get(request.socket) ?? 0;
+        answered.set(request.socket, before + 1);
+        if (before > 0)
+        {
+            held.add(response);
+            return;
+        }
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify(answer({ url: request.url ?? '', body })));
+    });
+    server.on('connection', () =>
+    {
+        sockets += 1;
+    });
+    open.push(() =>
+    {
+        held.forEach((response) => response.destroy());
+        server.closeAllConnections();
+        server.close();
+    });
+    return { url: await listen(server), sockets: () => sockets };
+}
+
 export async function lookupGateway()
 {
     let hits = 0;

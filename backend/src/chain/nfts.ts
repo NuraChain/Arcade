@@ -3,7 +3,7 @@ import { request } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { isAddress, parseAbi, type Address } from 'viem';
 
-import { boundedClient, refusedByContract } from './rpc.ts';
+import { ONE_USE, boundedClient, refusedByContract } from './rpc.ts';
 
 export type NftStandard = 'erc721' | 'erc1155';
 
@@ -315,7 +315,7 @@ export function createNftReader(settings: NftSettings): NftReader
             {
                 url.searchParams.set(key, value);
             }
-            const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+            const response = await fetch(url, { headers: ONE_USE, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
             if (!response.ok)
             {
                 throw new Error(`the explorer answered ${ response.status }`);

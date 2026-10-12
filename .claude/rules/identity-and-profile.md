@@ -57,6 +57,32 @@ cases in `chain-profile.spec.ts`, `nfts.spec.ts` and `identity.spec.ts` must fin
 so a regression to 8 fails them. Failing fast does not change what failing means: the profile still
 throws, and the page still has to render that failure.
 
+**Every chain read and every explorer read is made on a connection of its own** (`ONE_USE`, a
+`connection: close` header, in `boundedClient` and on the explorer's `fetch`). Node keeps a
+connection it has used and asks the next question on it, and the front end of `rpc.nurachain.net`
+and `explorer.nurachain.net` does not answer a second question on a connection: measured on
+2026-10-12, four calls a second and a half apart went 0.5 s, 22 s and a reset, 0.5 s, 23 s and a
+reset, while the same four on fresh connections took half a second each, and two unrelated hosts
+answered a reused connection in a fifth of a second. So every SECOND chain read gave up at four
+seconds, `/api/chain/people/:handle`, `/api/chain/profile` and `/api/chain/nfts` answered 500 on
+every second view of a profile, half the cells of the `person` and `me` routes of the QA matrix
+had a dirty console, and the contract-wallet check of a sign-in could wait four seconds and then
+fail. A connection for each read costs a handshake, which against that host is the half second
+the first call already paid. `tiredHost` in `tests/fake-chain.ts` is a server that answers the
+first request on a connection and sits on any later one; `chain-rpc.spec.ts` (*a chain that sits
+on a connection it has answered once*) and `nfts.spec.ts` (*what a wallet holds, asked of an
+explorer that sits on a connection it has answered once*) ask it twice. Without the header the
+first gives up at four seconds and the second at eight.
+
+What that did not cure, measured on the built server the same day: of 363 chain reads after the
+fix, 6 still gave up at four seconds. They came in bursts of half a minute in which the reads
+beside them took one to three and a half seconds against a median of 530 ms, while every other
+request the server answered in those windows kept its usual few milliseconds. So the chain was
+slow, not the server, and the read after each failure was quick again. One retry inside the same
+eight seconds would have answered all six, at the price of a dead chain being given up on at
+eight seconds where it is four now, which is the opposite of what *fail fast* above decided. It
+is the owner's to weigh, and until then a slow chain is still a 500 on those three routes.
+
 **A fake chain never listens where `fetch` will not go.** Those specs stand a local server up on a
 port the system picks, and viem reaches it with `fetch`, which refuses eighty-two ports outright
 before it opens a socket (the Fetch Standard's port blocking: 6000, 6665 to 6669, 10080 and the rest;

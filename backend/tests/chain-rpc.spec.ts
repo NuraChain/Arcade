@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { boundedClient } from '../src/chain/rpc.ts';
-import { REFUSED_BY_FETCH, closeChains, fakeChain, listen } from './fake-chain.ts';
+import { REFUSED_BY_FETCH, closeChains, fakeChain, listen, tiredHost } from './fake-chain.ts';
 
 const after = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -50,6 +50,27 @@ describe('where a fake chain listens', () =>
 
         expect(refusals.filter((one) => one !== 'bad port')).toEqual([]);
     });
+});
+
+describe('a chain that sits on a connection it has answered once', () =>
+{
+    afterEach(closeChains);
+
+    it('is asked on a connection of its own every time, and so answers every time', async () =>
+    {
+        const fake = await tiredHost(({ body }) => ({ jsonrpc: '2.0', id: (JSON.parse(body) as { id: number }).id, result: '0x1' }));
+        const started = performance.now();
+
+        await expect(boundedClient(fake.url).request({ method: 'eth_chainId' })).resolves.toBe('0x1');
+        await expect(boundedClient(fake.url).request({ method: 'eth_chainId' })).resolves.toBe('0x1');
+
+        const chain = boundedClient(fake.url);
+
+        await expect(chain.request({ method: 'eth_chainId' })).resolves.toBe('0x1');
+        await expect(chain.request({ method: 'eth_chainId' })).resolves.toBe('0x1');
+        expect(fake.sockets()).toBe(4);
+        expect(performance.now() - started).toBeLessThan(3_000);
+    }, 20_000);
 });
 
 describe('one operation against a chain', () =>
