@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import TablePlate from '../src/components/games/table-plate.component.azeroth';
 import { plateTag } from '../src/components/games/plate-tag.ts';
@@ -81,6 +82,60 @@ describe('the seat plate every table draws', () =>
 
         expect(container.querySelector('.table-plate-team')).toBeNull();
         expect(container.querySelector<HTMLElement>('.table-plate')!.dataset.team).toBeUndefined();
+    });
+
+    it('builds what it is handed once: a mark, a line of its own and a trailing piece are each read a single time', async () =>
+    {
+        const built = { marker: 0, facts: 0, trail: 0 };
+        const [rolled, setRolled] = createSignal(true);
+
+        const piece = (slot: keyof typeof built) =>
+        {
+            const node = document.createElement('i');
+
+            built[slot] += 1;
+            node.className = `handed-${ slot }`;
+
+            return node;
+        };
+
+        const { container } = renderTest(() => TablePlate({
+            who: 'sara.k',
+            name: 'Sara',
+            get marker()
+            {
+                return piece('marker');
+            },
+            get facts()
+            {
+                return piece('facts');
+            },
+            get trail()
+            {
+                return rolled() ? piece('trail') : undefined;
+            }
+        }) as Rendered);
+
+        expect(built, 'a piece handed to the plate was built more than once, and whatever lives in the spare one runs twice').toEqual({ marker: 1, facts: 1, trail: 1 });
+        expect(container.querySelectorAll('.table-plate-marker > .handed-marker, .table-plate-facts > .handed-facts, .table-plate-trail > .handed-trail')).toHaveLength(3);
+
+        setRolled(false);
+        await Promise.resolve();
+
+        expect(container.querySelector('.table-plate-trail')).toBeNull();
+
+        setRolled(true);
+        await Promise.resolve();
+
+        expect(built).toEqual({ marker: 1, facts: 1, trail: 2 });
+        expect(container.querySelectorAll('.table-plate-trail > .handed-trail')).toHaveLength(1);
+    });
+
+    it('draws no holder for a piece it was not handed', () =>
+    {
+        const { container } = renderTest(() => TablePlate({ who: 'sara.k', name: 'Sara' }) as Rendered);
+
+        expect(container.querySelector('.table-plate-marker, .table-plate-facts, .table-plate-trail')).toBeNull();
     });
 
     it('wears a ring on the whole plate while its player is heard, where the turn clock cannot cover it', async () =>

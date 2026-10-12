@@ -616,6 +616,15 @@ level in, on nine routes, in five shapes worth knowing by sight:
   'locked'`, `props.current`) re-runs it whenever the PARENT's expression for that prop does, and
   inside a keyed list that is every time the row is handed its item. The child takes a derived
   boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`.
+- **Markup handed in as a prop is built again at every read of the prop.** A prop is a getter, and
+  `facts={ <span>...</span> }` is a getter that makes a new span. `TablePlate` asked
+  `props.facts !== undefined` in a `when` and drew `props.facts` in the branch, so every plate at
+  every table built its mark, its line and its trailing piece twice and threw one away, with
+  whatever was alive in it still running. It showed the day a `TurnClock` went into Ludo's line:
+  the clock ticked twice a second, once from a copy that was never in the document. A component
+  that tests a slot and then draws it reads it ONCE, into a `derived` (`derived facts =
+  props.facts`), and tests and draws that. `table-plate.spec.ts` counts the builds, and
+  `turn-clock.spec.ts` the ticks of a clock that sits on a plate.
 - **Two things rode on those rebuilds and had to be put right with them.** A `Link`'s `to` is read
   ONCE unless it is a function (`to={ () => ... }`): a click follows the prop, the `href` does not,
   so a link that is kept now and whose address can change (the other person's handle, at the head
