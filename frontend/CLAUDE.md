@@ -853,6 +853,17 @@ showed read "mina saved you a seat": an invitation can come from somebody this p
 loaded. A store that stopped while the name was out says nothing. `cues.spec.ts` (*somebody the
 page has not been told about*) holds the three.
 
+**A cue is silent wherever the reader said so.** The server writes no notification for a kind
+that is switched off, from somebody the reader muted or in a thread they muted (`tell`, in one
+`exists`). A message and a friend request are heard by the page from its own lists, not from
+that row, so the cues store asks the same three mutes itself (`hushed(notice, from, thread)`),
+and the toast, its chime and the notice to the system go quiet together. Until this the
+"Messages" and "Friend requests" switches, a muted thread and a muted person emptied the bell's
+list and nothing else: the page still rang for every one, and with the device switch on so did
+the system. The turn and the start ask it too, by kind alone. `cues.spec.ts` (*what the reader
+switched off*) holds each mute, a thread that is not muted beside one that is, and the voice
+coming back when the switch does.
+
 **A notice's pictures are files the server has.** `/apple-touch-icon.png` and `/favicon-32.png`,
 in `lib/system-notice.ts` and in the worker: the one first written for both (`/icon-192.png`) was
 never in `public/`, a 404 in the console for every notice and a blank picture on the lock screen.

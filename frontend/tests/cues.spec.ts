@@ -1646,3 +1646,127 @@ describe('somebody the page has not been told about', () =>
         }
     });
 });
+
+describe('what the reader switched off', () =>
+{
+    let browser: FakeNotices;
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+        useSettings().update({ notify: true });
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+        useSettings().reset();
+    });
+
+    const armed = async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+        browser.hide(true);
+    };
+
+    const off = async (kind: 'notice' | 'person' | 'conversation', id: string) =>
+    {
+        await useSocial().toggleMute(kind, id);
+        await settle();
+    };
+
+    const writes = async (thread: string) =>
+    {
+        laterMessageIn(thread);
+        await useChat().refresh();
+        await settle();
+        await settle();
+    };
+
+    const asks = async (from: string) =>
+    {
+        knock(from);
+        await useSocial().refresh();
+        await settle();
+        await settle();
+    };
+
+    const told = () => ({
+        toasts: useToasts().items().map((toast) => toast.dedupe),
+        notices: browser.shown.map((one) => one.options.tag)
+    });
+
+    const NOTHING = { toasts: [], notices: [] };
+
+    it('is not said of a message once Messages is off, in a toast or to the system', async () =>
+    {
+        await armed();
+        await off('notice', 'messages');
+        await writes('c-reza');
+
+        expect(told()).toEqual(NOTHING);
+    });
+
+    it('is not said of a message in a thread that was muted, and still is of every other thread', async () =>
+    {
+        await armed();
+        await off('conversation', 'c-reza');
+        await writes('c-reza');
+
+        expect(told()).toEqual(NOTHING);
+
+        await writes('c-parisa');
+
+        expect(told()).toEqual({ toasts: ['cue.chat.c-parisa'], notices: ['chat:c-parisa'] });
+    });
+
+    it('is not said of a message from somebody who was muted', async () =>
+    {
+        const from = server.conversations.find((one) => one.id === 'c-reza')?.last?.from ?? '';
+
+        expect(from, 'the thread\'s last word was the reader\'s own').not.toBe('alex');
+
+        await armed();
+        await off('person', from);
+        await writes('c-reza');
+
+        expect(told()).toEqual(NOTHING);
+    });
+
+    it('is not said of a friend request once Friend requests is off', async () =>
+    {
+        await armed();
+        await off('notice', 'requests');
+        await asks('maya.c');
+
+        expect(told()).toEqual(NOTHING);
+    });
+
+    it('is not said of a friend request from somebody who was muted, and still is of anybody else\'s', async () =>
+    {
+        await armed();
+        await off('person', 'maya.c');
+        await asks('maya.c');
+
+        expect(told()).toEqual(NOTHING);
+
+        await asks('peyman');
+
+        expect(told()).toEqual({ toasts: ['cue.request'], notices: ['request'] });
+    });
+
+    it('is said again once it is switched back on', async () =>
+    {
+        await armed();
+        await off('notice', 'messages');
+        await writes('c-reza');
+        await off('notice', 'messages');
+        await writes('c-reza');
+
+        expect(told()).toEqual({ toasts: ['cue.chat.c-reza'], notices: ['chat:c-reza'] });
+    });
+});

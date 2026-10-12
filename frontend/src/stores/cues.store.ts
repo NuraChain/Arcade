@@ -1,6 +1,7 @@
 import { createEffect, createRoot, createStore, untrack } from 'azerothjs';
 
 import type { NotificationKind } from '../api.ts';
+import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
 import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
@@ -86,6 +87,11 @@ export const useCues = createStore((): CuesApi =>
         const catalogue = useCatalogue();
 
         let running = true;
+
+        const hushed = (notice: Notice, from?: string, thread?: string) => untrack(() =>
+            social.isMuted('notice', notice)
+            || (from !== undefined && social.isMuted('person', from))
+            || (thread !== undefined && social.isMuted('conversation', thread)));
 
         const named = (handle: string, say: (who: string) => void) =>
         {
@@ -188,7 +194,7 @@ export const useCues = createStore((): CuesApi =>
                 const at = last?.at ?? 0;
                 const arrived = at > (lastAt.get(conversation.id) ?? newest);
 
-                if (arrived && last?.kind === 'text' && last.from !== me && conversation.id !== open && liveNow)
+                if (arrived && last?.kind === 'text' && last.from !== me && conversation.id !== open && liveNow && !hushed('messages', last.from, conversation.id))
                 {
                     announceChat(conversation.id, last.from);
                 }
@@ -223,7 +229,7 @@ export const useCues = createStore((): CuesApi =>
                 asked.add(request.id);
             }
 
-            if (requestSeeded && arrived !== undefined && live.status() === 'connected')
+            if (requestSeeded && arrived !== undefined && live.status() === 'connected' && !hushed('requests', arrived.from))
             {
                 named(arrived.from, (who) =>
                 {
@@ -330,8 +336,6 @@ export const useCues = createStore((): CuesApi =>
             };
         };
 
-        const heard = () => !social.isMuted('notice', 'turns');
-
         const yourTurn = (match: GameFrame['match'], opening: boolean) =>
         {
             const table = lobby.seated().find((one) => one.id === match.tableId);
@@ -347,7 +351,7 @@ export const useCues = createStore((): CuesApi =>
 
             turns.set(match.id, mine);
 
-            if (!mine || was || opening || !heard())
+            if (!mine || was || opening || hushed('turns'))
             {
                 return;
             }
@@ -380,7 +384,7 @@ export const useCues = createStore((): CuesApi =>
 
             begun.add(match.id);
 
-            if (!heard())
+            if (hushed('turns'))
             {
                 return true;
             }
