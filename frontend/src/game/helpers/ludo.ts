@@ -94,6 +94,31 @@ export function movedTo(board: LudoBoard, piece: number): LudoBoard | null
     return next;
 }
 
+export function goalsOf(board: LudoBoard)
+{
+    const mover = movedBy(board);
+    const die = board.die;
+
+    if (mover === undefined || die === undefined)
+    {
+        return [];
+    }
+
+    return board.moves.flatMap((piece) =>
+    {
+        const to = landing(mover, piece, die);
+
+        if (to === null)
+        {
+            return [];
+        }
+
+        const takes = capturesAt(mover.colour as LudoColour, to) ? standingOn(board, mover.side, squareOf(mover, to)).length : 0;
+
+        return [{ piece, to, takes }];
+    });
+}
+
 const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
     board.moves.some((piece) =>
     {

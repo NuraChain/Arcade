@@ -20,6 +20,15 @@ export interface BoardToken
     playable: boolean;
 }
 
+export interface BoardGoal
+{
+    key: string;
+
+    to: number;
+
+    takes: number;
+}
+
 export interface Facts
 {
     home: Readonly<Record<number, number>>;
@@ -49,7 +58,7 @@ export interface BoardOptions
 
 export interface BoardHandle extends Table<Felt, Told>
 {
-    lit(keys: ReadonlySet<string>, hints: boolean): void;
+    lit(keys: ReadonlySet<string>, hints: boolean, goals: readonly BoardGoal[]): void;
 
     advance(key: string, to: number): Promise<boolean>;
 

@@ -2521,6 +2521,129 @@ html:has(.site-drawer[open])
     animation: lp-breathe 1110ms calc(var(--i) * 90ms) infinite;
 }
 
+.lp[data-aim] .lp-pawn
+{
+    filter: brightness(1.08);
+}
+
+.lp[data-aim] svg > ellipse:last-child
+{
+    stroke-dasharray: none;
+    stroke-width: 7.5;
+}
+
+.lg
+{
+    pointer-events: auto;
+    cursor: pointer;
+    transition: opacity 140ms var(--ease-ui);
+}
+
+.lg-art
+{
+    position: absolute;
+    inset-inline-start: calc(var(--c) * -0.6);
+    inset-block-start: calc(var(--c) * -0.3);
+    inline-size: calc(var(--c) * 1.2);
+    block-size: calc(var(--c) * 0.6);
+    max-inline-size: none;
+    overflow: visible;
+    scale: var(--s, 1);
+    animation: lg-in 180ms var(--ease-pop) both, lg-breathe 1500ms ease-in-out 180ms infinite;
+}
+
+.lg-pad
+{
+    fill: var(--tone);
+    stroke: #2A1E5C;
+    stroke-width: 7;
+    stroke-linejoin: round;
+}
+
+.lg-eye
+{
+    fill: none;
+    stroke: #FFFFFF;
+    stroke-width: 6;
+}
+
+.lg-step
+{
+    box-sizing: border-box;
+    inline-size: calc(var(--c) * 0.32);
+    block-size: calc(var(--c) * 0.16);
+    margin-inline-start: calc(var(--c) * -0.16);
+    margin-block-start: calc(var(--c) * -0.08);
+    border: max(1px, calc(var(--c) * 0.04)) solid #2A1E5C;
+    border-radius: 50%;
+    background: var(--tone);
+    pointer-events: none;
+    transition: opacity 140ms var(--ease-ui), scale 140ms var(--ease-ui);
+}
+
+.lb[data-aiming] .lg:not([data-aim])
+{
+    opacity: 0.4;
+}
+
+.lb[data-aiming] .lg-step:not([data-aim])
+{
+    opacity: 0.25;
+}
+
+.lg[data-aim] .lg-art
+{
+    scale: calc(var(--s, 1) * 1.2);
+    animation: none;
+}
+
+.lg-step[data-aim]
+{
+    scale: 1.25;
+}
+
+.lp[data-threat] .lp-lift
+{
+    animation: lp-shiver 900ms ease-in-out infinite;
+}
+
+.lb[data-still] .lg-art,
+.lb[data-still] .lp[data-threat] .lp-lift
+{
+    animation: none;
+}
+
+@keyframes lg-in
+{
+    from
+    {
+        scale: calc(var(--s, 1) * 0.5);
+        opacity: 0;
+    }
+}
+
+@keyframes lg-breathe
+{
+    50%
+    {
+        scale: calc(var(--s, 1) * 1.1);
+    }
+}
+
+@keyframes lp-shiver
+{
+    0%,
+    100%
+    {
+        rotate: -3deg;
+    }
+
+    50%
+    {
+        rotate: 3deg;
+    }
+}
+
 @keyframes lp-dash
 {
     to

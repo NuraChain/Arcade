@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { coachOf, handOf, movedTo, pieceFor, type LudoHappened } from '../src/game/helpers/ludo.ts';
+import { coachOf, goalsOf, handOf, movedTo, pieceFor, type LudoHappened } from '../src/game/helpers/ludo.ts';
 import type { LudoBoard } from '../src/data/match.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
 import { apply, create } from '../../backend/src/domains/match/ludo/engine.ts';
-import { FINISHED, coloursFor } from '../../backend/src/domains/match/ludo/board.ts';
+import { FINISHED, RING_STEPS, coloursFor, ringIndex, type LudoColour } from '../../backend/src/domains/match/ludo/board.ts';
 import type { GameEvent, LudoState } from '../../backend/src/domains/match/ludo/state.ts';
 
 const YARD = [-1, -1, -1, -1];
@@ -427,5 +427,116 @@ describe('two against two', () =>
         expect(finished, 'a self-played team game did not end').toBe(6);
         expect(helped, 'no seat ever moved a token of its partner').toBeGreaterThan(0);
         expect(handed, 'no seat was told its four were home').toBeGreaterThan(0);
+    });
+});
+
+describe('where each move on offer would end', () =>
+{
+    const standsOn = (colour: LudoColour, square: number) =>
+    {
+        for (let progress = 0; progress < RING_STEPS; progress += 1)
+        {
+            if (ringIndex(colour, progress) === square)
+            {
+                return progress;
+            }
+        }
+
+        throw new Error(`no ${ colour } token can stand on ${ square }`);
+    };
+
+    it('names a square for every token the server offered, and nothing without a roll or for somebody watching', () =>
+    {
+        const rolled = position([[10, 20, -1, -1], [5, -1, -1, -1]], 3);
+
+        expect(goalsOf(boardOf(rolled))).toEqual([{ piece: 0, to: 13, takes: 0 }, { piece: 1, to: 23, takes: 0 }]);
+        expect(goalsOf(boardOf(position([[10, 20, -1, -1], [5, -1, -1, -1]], null)))).toEqual([]);
+        expect(goalsOf(boardOf(rolled, null))).toEqual([]);
+        expect(goalsOf(boardOf(rolled, 1))).toEqual([]);
+    });
+
+    it('counts who a landing sends home, and nobody on a star', () =>
+    {
+        const [mine, theirs] = coloursFor(2) as LudoColour[];
+        const open = ringIndex(mine, 12);
+        const star = ringIndex(mine, 13);
+
+        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, open), -1, -1, -1]], 2)))).toEqual([{ piece: 0, to: 12, takes: 1 }]);
+        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, star), -1, -1, -1]], 3)))).toEqual([{ piece: 0, to: 13, takes: 0 }]);
+    });
+
+    it('sends home whoever stands on the start a token comes out onto, and ends a home run at home', () =>
+    {
+        const [mine, theirs] = coloursFor(2) as LudoColour[];
+        const out = goalsOf(boardOf(position([YARD, [standsOn(theirs, ringIndex(mine, 0)), -1, -1, -1]], 6)));
+
+        expect(out).toHaveLength(1);
+        expect(out[0]).toMatchObject({ to: 0, takes: 1 });
+        expect(goalsOf(boardOf(position([[FINISHED - 2, FINISHED, FINISHED, FINISHED], [5, -1, -1, -1]], 2)))).toEqual([{ piece: 0, to: FINISHED, takes: 0 }]);
+    });
+
+    it('agrees with the engine about every move of whole games, alone and two against two', () =>
+    {
+        let seed = 53;
+        const next = () =>
+        {
+            seed = (seed * 48271) % 2147483647;
+            return seed;
+        };
+
+        let checked = 0;
+        let took = 0;
+        let home = 0;
+
+        for (const sides of [[0, 1], [0, 1, 2], [0, 1, 2, 3], PAIRED])
+        {
+            for (let game = 0; game < 4; game += 1)
+            {
+                const seats = sides.map((_, seat) => seat);
+                let state = create(seats, game, sides);
+
+                for (let step = 0; step < 12_000 && state.winner === null; step += 1)
+                {
+                    const seat = state.players[state.turn].seat;
+
+                    if (state.die === null)
+                    {
+                        const rolled = apply(state, { kind: 'roll', seat, die: next() % 6 + 1 });
+
+                        if (!rolled.ok)
+                        {
+                            throw new Error(rolled.reason);
+                        }
+
+                        state = rolled.state;
+                        continue;
+                    }
+
+                    const board = boardOf(state);
+                    const goals = goalsOf(board);
+
+                    expect(goals.map((goal) => goal.piece)).toEqual(board.moves);
+
+                    for (const goal of goals)
+                    {
+                        const after = moved(state, goal.piece);
+                        const token = boardOf(after.state, seat).seats.find((one) => one.seat === board.controls)!.tokens.find((one) => one.piece === goal.piece)!;
+
+                        expect(token.at).toBe(goal.to);
+                        expect(after.events.filter((event) => event.e === 'capture')).toHaveLength(goal.takes);
+
+                        checked += 1;
+                        took += goal.takes;
+                        home += goal.to === FINISHED ? 1 : 0;
+                    }
+
+                    state = moved(state, board.moves[next() % board.moves.length]).state;
+                }
+            }
+        }
+
+        expect(checked).toBeGreaterThan(2000);
+        expect(took, 'no move on offer ever sent anybody home').toBeGreaterThan(0);
+        expect(home, 'no move on offer ever reached home').toBeGreaterThan(0);
     });
 });

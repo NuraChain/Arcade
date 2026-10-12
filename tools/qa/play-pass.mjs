@@ -69,7 +69,7 @@ const SEATS = ['dana.w', 'mina'];
  * is takeable from the list beside the board" as a failure. Two consecutive runs did exactly that
  * while the product was fine.
  */
-const CLICKED_MOVES = 3;
+const CLICKED_MOVES = 4;
 
 /**
  * The most rolls those moves may take, so a run cannot go on for ever.
@@ -132,6 +132,35 @@ const press = async (who, pawn) =>
 
     await who.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 };
+
+/**
+ * The pawns that are lit and the squares that are marked for them, where each is drawn.
+ *
+ * A pawn and a mark are both placed by one point, the foot of the square, so the two can be
+ * compared directly: the mark of a pawn is where that pawn's own point comes to rest.
+ */
+const marksOf = (who) => who.page.evaluate((cell) =>
+{
+    const at = (node) =>
+    {
+        const box = node.getBoundingClientRect();
+
+        return { key: node.dataset.key ?? node.dataset.goal, x: box.x, y: box.y };
+    };
+
+    return {
+        cell: document.querySelector('.board-canvas').getBoundingClientRect().width * cell,
+        lit: [...document.querySelectorAll('.board-canvas .lp[data-movable]')].map(at),
+        marks: [...document.querySelectorAll('.board-canvas .lg')].map(at)
+    };
+}, CELL);
+
+const restOf = (who, key) => who.page.evaluate((name) =>
+{
+    const box = document.querySelector(`.board-canvas .lp[data-key="${ name }"]`).getBoundingClientRect();
+
+    return { x: box.x, y: box.y };
+}, key);
 
 /**
  * Whether a pawn is seen walking in one browser within a time.
@@ -388,8 +417,11 @@ try
         let listed = 0;
         let answered = 0;
         let followed = 0;
+        let onMarks = 0;
         const throws = [];
         const unseen = [];
+        const offered = [];
+        const landings = [];
         /**
          * Every distinct sentence the WATCHER's live region showed while somebody else played.
          *
@@ -448,9 +480,24 @@ try
                 otherSaw.add(await watcher.page.evaluate(() =>
                     document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
 
+                const aimed = await marksOf(actor);
+                const byMark = moved % 2 === 1 && aimed.marks.length > 0;
+                const target = byMark ? aimed.marks[0] : aimed.marks.find((one) => one.key === aimed.lit[0]?.key);
+
+                offered.push({ lit: aimed.lit.length, marked: aimed.marks.length, elsewhere: await watcher.page.locator('.board-canvas .lg').count() });
+
                 const seen = walking(watcher, 2000);
 
-                await press(actor, pawn);
+                if (byMark)
+                {
+                    await actor.page.mouse.click(target.x, target.y);
+                    onMarks += 1;
+                }
+                else
+                {
+                    await press(actor, pawn);
+                }
+
                 answered += await actor.page.evaluate(() => document.querySelector('.board-canvas .lp[data-moving]') !== null) ? 1 : 0;
 
                 const theirs = await seen;
@@ -464,6 +511,13 @@ try
                 moved += 1;
                 clicked += 1;
                 await watcher.page.waitForTimeout(SETTLE_MS);
+
+                if (target !== undefined)
+                {
+                    const rest = await restOf(actor, target.key);
+
+                    landings.push(Math.hypot(rest.x - target.x, rest.y - target.y) / aimed.cell);
+                }
 
                 otherSaw.add(await watcher.page.evaluate(() =>
                     document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
@@ -501,6 +555,10 @@ try
         record(`the die is ${ DIE_SIZE } squares across in both browsers, whatever the screen`, fitted.length === throws.length && throws.length > 0, `${ fitted.length } of ${ throws.length }`);
         record('a move is made by pressing the pawn on the board', moved > 0, `${ moved } pawns pressed`);
         record('no list of moves and no button for one is in the page beside the board', listed === 0, `${ listed } found`);
+        record('every roll that lights a pawn marks the square it would reach', offered.length > 0 && offered.every((one) => one.marked > 0 && one.marked <= one.lit), offered.map((one) => `${ one.marked } for ${ one.lit }`).join(', '));
+        record('the other browser is shown none of those marks', offered.every((one) => one.elsewhere === 0), `${ offered.reduce((sum, one) => sum + one.elsewhere, 0) } drawn`);
+        record('a move is made by pressing the marked square as well', onMarks > 0, `${ onMarks } marks pressed`);
+        record('a pawn comes to rest on the square that was marked for it', landings.length > 0 && landings.every((far) => far < 0.6), landings.map((far) => far.toFixed(2)).join(', '));
         record('a pressed pawn is walking when the press returns', moved > 0 && answered === moved, `${ answered } of ${ moved }`);
         record('the other browser sees each of those pawns walk, not appear', moved > 0 && followed === moved, `${ followed } of ${ moved }${ unseen.length === 0 ? '' : `; not seen: ${ unseen.join('; ') }` }`);
 

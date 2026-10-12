@@ -512,6 +512,7 @@ describe('the ludo table, two against two', () =>
 
         expect(helper.querySelectorAll('.lp')).toHaveLength(16);
         expect([...helper.querySelectorAll<HTMLElement>('.lp[data-movable]')].map((piece) => piece.dataset.colour)).toEqual(['yellow', 'yellow', 'yellow', 'yellow']);
+        expect([...helper.querySelectorAll<HTMLElement>('.lg')].map((one) => one.dataset.colour), 'the square a partner\'s token would reach is not marked in the partner\'s colour').toEqual(['yellow']);
     });
 
     it('throws confetti in the colour of every seat that won, and none where nobody did', async () =>
@@ -885,6 +886,8 @@ describe('the ludo table, played from what happened', () =>
 
     const lit = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.lp[data-movable]')].map((one) => one.dataset.key);
 
+    const marked = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.lg')].map((one) => one.dataset.goal);
+
     const tap = (container: HTMLElement, colour: 'red' | 'yellow', progress: number) =>
     {
         const host = container.querySelector('.board-canvas') as HTMLElement;
@@ -936,6 +939,7 @@ describe('the ludo table, played from what happened', () =>
         expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
         expect(saying(container), 'the roll was said while its die was in the air').toBe(yours);
         expect(lit(container), 'a pawn lit up before the die had landed').toEqual([]);
+        expect(marked(container), 'a landing was marked before the die had landed').toEqual([]);
         expect(plateDie(container, 0)).toBeNull();
 
         tap(container, 'red', 10);
@@ -947,6 +951,8 @@ describe('the ludo table, played from what happened', () =>
 
         expect(saying(container)).toBe(useLocale().t('match.turn.rolled', { die: useLocale().n(3) }));
         expect(lit(container)).toEqual(['0-0']);
+        expect(marked(container)).toEqual(['0-0']);
+        expect(container.querySelector<HTMLElement>('.lg')!.style.translate).toBe(onSquare('red', 13));
         expect(hand(container).hasAttribute('data-rattle')).toBe(false);
         expect(container.querySelectorAll('.board-stage .die3d')).toHaveLength(1);
 
@@ -1359,12 +1365,15 @@ describe('the ludo table, played from what happened', () =>
         const cell = cellAt('red', 10)!;
         const spot = centreOf(cell.col, cell.row, 1000);
 
+        expect(marked(container)).toEqual(['0-0']);
+
         vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
         host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 300, bubbles: true }));
         await flush();
 
         expect(move).toHaveBeenCalledWith(0);
         expect(pawn(container, '0-0').hasAttribute('data-moving'), 'the pawn waited for the server').toBe(true);
+        expect(marked(container), 'the mark stayed on the board under a pawn that had set off').toEqual([]);
 
         await elapse(600);
 
@@ -1398,6 +1407,26 @@ describe('the ludo table, played from what happened', () =>
 
         expect(pawn(again.container, '0-0').style.translate, 'a refused move was left where the reader put it').toBe(onSquare('red', 10));
         expect(stageOf(again.container).hasAttribute('data-presenting')).toBe(false);
+        expect(marked(again.container), 'a refused move left its square unmarked').toEqual(['0-0']);
+    });
+
+    it('takes a press on the marked square as a press on the pawn that would land there', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], 3, 0);
+        const move = vi.spyOn(useBoard(), 'move').mockResolvedValue('now');
+        const { container } = await live(seen(before, 0, 1));
+        const host = container.querySelector('.board-canvas') as HTMLElement;
+        const cell = cellAt('red', 13)!;
+        const spot = centreOf(cell.col, cell.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y, bubbles: true }));
+        await flush();
+
+        expect(move).toHaveBeenCalledWith(0);
+        expect(pawn(container, '0-0').hasAttribute('data-moving')).toBe(true);
     });
 
     it('plays nothing that happened before the board could be drawn', async () =>

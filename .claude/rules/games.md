@@ -3137,8 +3137,9 @@ owner had it removed from every game on 2026-10-11 ("remove that dom helper ... 
 game should be real player should tocuh or click on game things such as card dice"), after
 saying the same of the buttons and of the sentences earlier that day. So:
 
-- A tap anywhere near a token the server called legal moves it (`pickNear`), and a tap on anything
-  else does nothing. On a six every token still in the yard is playable, because they are
+- A tap anywhere near a token the server called legal moves it, a tap on the square marked for
+  that token does the same (`aimNear`), and a tap on anything else does nothing. On a six every
+  token still in the yard is playable, because they are
   interchangeable: `pieceFor` turns a tap on any of them into the one entry the server offered,
   and the engine accepts any yard token for it (D12 of the games plan).
 - The die in the middle of the board is the roll. It is the one real button a ludo table has,
@@ -3251,7 +3252,8 @@ arrive.
 - **The renderer owns no clock and no sound.** `BoardOptions` hands it the stage, a way to ask
   for the page's sound and a way to tick the phone (`feel`, which `MatchBoard` leaves silent for
   somebody watching). `BoardHandle` is the presenter's `Table` and a few verbs beside it: `lit`
-  (which pawns may be pressed, and whether to show it), `advance`, `swap`, `still`, `offer` and
+  (which pawns may be pressed, whether to show it, and where each would land), `advance`, `swap`,
+  `still`, `offer` and
   `rattle` (the die in the reader's hand, and under the press), and `pause` and `resume` under a
   sheet that blocks the page.
 
@@ -3355,6 +3357,59 @@ table starts no scene, so nobody is told the table is playing.
 of a refused entry and the two ways a press is forgotten; `ludo-table.spec.ts` the hurried walk
 and the still table. Seen in a real browser by rewriting the revision in the reader's own play
 frame on its way to the server, which answers that the board has moved on.
+
+**A lit pawn shows where it would land, and the square can be pressed.** A pawn that may move
+said so with a ring under its foot and said nothing of where it would go: a player counted
+squares, and with two or three pawns lit counted them for each. The owner's second brief asks
+that where a move ends be drawn before it is made (D17 of
+`docs/superpowers/specs/2026-10-12-table-graphics-ux-design.md`).
+
+- **Where each move ends is the server's rules asked a question.** `goalsOf(board)` in
+  `game/helpers/ludo.ts` answers, for every token the board offers, the progress it would reach
+  and how many pawns it would send home there: `capturesAt` for the square, the mover's side
+  left out, as the engine counts them. `helpers-ludo.spec.ts` (*where each move on offer would
+  end*) applies every move on offer in whole games, alone and two against two, and compares both
+  numbers with what the engine then did.
+- **The mark is a pad in the pawn's own colour**, inside the board's ink line with a white ring
+  in it, drawn where the pawn's foot will stand. At a table of two sides the mark for a
+  partner's pawn is the partner's colour. The first drawing was the ring a lit pawn wears, two
+  strokes with a small seed in it, and on a phone, where a square is 22 px, it could not be
+  made out. A landing that sends somebody home is another SHAPE, a spiked burst that shows
+  round the feet of whoever stands there, and that pawn trembles (`data-threat`), because a
+  colour alone says nothing to a reader who cannot tell red from green. A landing at home is
+  drawn in the home, at the slot the pawn would take, and takes no slot to do it (`freeSlot`
+  asks, `slotOf` takes). The squares on the way are beads in the same colour. An entry has
+  none: it is one arc.
+- **Marks lie under every pawn** (`Z_GOAL`, below the pieces' rung), so a pawn standing on a
+  marked square is never hidden by the mark and a burst shows only round its feet.
+- **They are told with the lit pawns and held with them.** `lit(keys, hints, goals)` is one
+  call, and the renderer draws a mark only for a pawn among the keys, on a square ahead of where
+  that pawn stands. So the hold on a roll (rule 7) holds the marks with no rule of its own: no
+  pawn is lit until the die has landed, none for a reader who is not on turn, and nothing is
+  marked while `hintMoves` is off, when a pawn still takes a tap. Every mark goes at the press,
+  and they are drawn again when a refused pawn is back and when the board is drawn again, as
+  the pawns are relit.
+- **A press on a mark is a press on its pawn.** `aimNear` in `game/layout.ts` takes both: the
+  nearest pawn that may move, within `PICK_REACH`, and the nearest mark, within `GOAL_REACH`. A
+  press within `PAWN_REACH` of a pawn's body is that pawn, whatever is marked on the square it
+  stands on. Otherwise the mark wins, so a press on a marked square beside another lit pawn no
+  longer moves that other pawn. `pickNear` is gone with its one caller.
+- **Under a mouse the pawn and its mark answer together** (`data-aim`): the pawn's ring turns
+  solid, its mark grows and stops breathing, and every other mark and bead steps back
+  (`data-aiming`). A finger has no hover, so nothing depends on it: every mark and every bead is
+  drawn from the moment the die lands.
+- **Less motion draws them still**: no arrival, no breathing and no trembling.
+
+`ludo-board.spec.ts` (*where a lit pawn would land*) holds the renderer, `game.spec.ts`
+(*pointing at a token on a phone*) the reach, `ludo-table.spec.ts` the hold, the press, the
+refusal and a partner's colour, and `match-board-helpers.spec.ts` the switch. The play pass
+presses every second move on its mark and asks that the pawn comes to rest where the mark was,
+that every roll that lights a pawn marks a square, and that the other browser is shown none.
+Built with a mark drawn one square further on and a press on a mark not taken, the pass failed
+the line about where a pawn comes to rest and the two about a pressed pawn walking; built with
+no mark drawn at all, it failed the three lines about the marks. Forty-three faults put into the
+code one at a time were each caught by a spec, and six guards that no fault could tell from
+their absence were taken out.
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
@@ -4258,7 +4313,7 @@ map and publishes a version stamp rather than writing `speech` from itself, whic
 loaded, so opening a table does not replay the history as bubbles.
 
 **Things a finger can actually hit.** A tap on the Ludo canvas picks the nearest MOVABLE token within
-1.25 squares of it (`pickNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
+1.25 squares of it (`aimNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
 because a pawn on a phone is 17px across and nobody taps a sprite that exactly. On a coarse pointer a
 hokm card is lifted by the first tap and played by the second - a hand of thirteen shows each card
 as a 26px strip, and one mistap used to throw the wrong card. The "Play the ..." button that used

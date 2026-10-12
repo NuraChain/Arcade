@@ -14,7 +14,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
-import type { BoardHandle, BoardOptions, Facts } from '../../game/bridge.ts';
+import type { BoardGoal, BoardHandle, BoardOptions, Facts } from '../../game/bridge.ts';
 import { chairsOf, ludoOf, type LudoSeat, type MatchPlayer } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { turnChime } from './table-cues.ts';
@@ -23,7 +23,7 @@ import { HISTORY, feltOf, keyOf, type Felt, type Told } from '../../game/ludo-fe
 import { createSound, type SoundHandle } from '../../game/sound.ts';
 import { createPresenter, type Sight, type Table } from '../../game/stage/presenter.ts';
 import { createStage } from '../../game/stage/stage.ts';
-import { coachOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts';
+import { coachOf, goalsOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { partnerOf, variantOf } from '../../../../backend/src/domains/match/sides.ts';
@@ -35,6 +35,8 @@ const PRESS_MS = 400;
 const HURRY_MS = 8000;
 
 const NOTHING: ReadonlySet<string> = new Set();
+
+const NO_GOALS: readonly BoardGoal[] = [];
 
 const SPENT = { 'no-move': 'match.stuck', 'three-sixes': 'match.sixes', wasted: 'match.wasted' } as const;
 
@@ -125,6 +127,8 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
     derived tokens = seatsFor(drawn, mine);
 
     derived movable = new Set(tokens.filter((token) => token.playable).map((token) => token.key));
+
+    derived goals = movable.size === 0 ? NO_GOALS : goalsOf(drawn).map((goal) => ({ key: keyOf(drawn.controls, goal.piece), to: goal.to, takes: goal.takes }));
 
     derived result = over && !presenting;
 
@@ -244,7 +248,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
         made.reset(untrack(sightNow));
         made.offer(untrack(offering));
-        made.lit(untrack(() => (landed ? movable : NOTHING)), untrack(() => help.hintMoves));
+        made.lit(untrack(() => (landed ? movable : NOTHING)), untrack(() => help.hintMoves), untrack(() => goals));
     };
 
     effect
@@ -264,9 +268,10 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
     effect
     {
         const keys = landed ? movable : NOTHING;
+        const marks = goals;
         const hints = help.hintMoves;
 
-        untrack(() => table?.lit(keys, hints));
+        untrack(() => table?.lit(keys, hints, marks));
     }
 
     effect

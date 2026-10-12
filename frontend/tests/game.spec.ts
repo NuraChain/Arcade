@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BLOCK, CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
+import { BLOCK, CELL, GOAL_REACH, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, aimNear, centreOf, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
 import { unpack } from '../src/game/sound-files.ts';
@@ -797,8 +797,8 @@ describe('pointing at a token on a phone', () =>
     {
         const spot = centreOf(6, 13, size);
 
-        expect(pickNear(tokens, spot.x + cell * 0.9, spot.y, size)).toBe('a');
-        expect(pickNear(tokens, spot.x, spot.y - cell * 0.6, size)).toBe('a');
+        expect(aimNear(tokens, [], spot.x + cell * 0.9, spot.y, size)).toBe('a');
+        expect(aimNear(tokens, [], spot.x, spot.y - cell * 0.6, size)).toBe('a');
     });
 
     it('chooses the nearer of two movable tokens and never one that cannot move', () =>
@@ -807,16 +807,53 @@ describe('pointing at a token on a phone', () =>
         const right = centreOf(8, 13, size);
         const frozen = centreOf(7, 12, size);
 
-        expect(pickNear(tokens, right.x - cell * 0.2, right.y, size)).toBe('b');
-        expect(pickNear(tokens, left.x + cell * 0.2, left.y, size)).toBe('a');
-        expect(pickNear(tokens.slice(2), frozen.x, frozen.y, size)).toBeNull();
+        expect(aimNear(tokens, [], right.x - cell * 0.2, right.y, size)).toBe('b');
+        expect(aimNear(tokens, [], left.x + cell * 0.2, left.y, size)).toBe('a');
+        expect(aimNear(tokens.slice(2), [], frozen.x, frozen.y, size)).toBeNull();
     });
 
     it('ignores a tap far from anything that can move', () =>
     {
         const spot = centreOf(0, 0, size);
 
-        expect(pickNear(tokens, spot.x, spot.y, size)).toBeNull();
+        expect(aimNear(tokens, [], spot.x, spot.y, size)).toBeNull();
+    });
+
+    it('takes a tap on a marked square as the token the mark belongs to', () =>
+    {
+        const goals = [{ key: 'a', col: 6, row: 9 }, { key: 'b', col: 8, row: 10 }];
+        const marked = centreOf(6, 9, size);
+
+        expect(aimNear(tokens, goals, marked.x, marked.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, marked.x + cell * GOAL_REACH * 0.9, marked.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, marked.x + cell * (GOAL_REACH + 0.1), marked.y - cell * 2, size)).toBeNull();
+    });
+
+    it('takes the nearer of two marks that are both within reach', () =>
+    {
+        const goals = [{ key: 'a', col: 6, row: 9 }, { key: 'b', col: 7, row: 9 }];
+        const left = centreOf(6, 9, size);
+
+        expect(aimNear(tokens, goals, left.x + cell * 0.45, left.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, left.x + cell * 0.55, left.y, size)).toBe('b');
+    });
+
+    it('takes a tap on a token as that token, whatever is marked on its square', () =>
+    {
+        const goals = [{ key: 'b', col: 6, row: 13 }];
+        const spot = centreOf(6, 13, size);
+
+        expect(aimNear(tokens, goals, spot.x, spot.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, spot.x, spot.y - cell * 0.3, size)).toBe('a');
+    });
+
+    it('takes a tap on a mark beside a token as the mark, where the token alone would have had it', () =>
+    {
+        const goals = [{ key: 'a', col: 7, row: 13 }];
+        const marked = centreOf(7, 13, size);
+
+        expect(aimNear(tokens, [], marked.x + cell * 0.2, marked.y, size)).toBe('b');
+        expect(aimNear(tokens, goals, marked.x + cell * 0.2, marked.y, size)).toBe('a');
     });
 });
 

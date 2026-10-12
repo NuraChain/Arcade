@@ -145,11 +145,14 @@ describe('the ludo helpers, and the switch for each', () =>
 
         expect(container.querySelectorAll('.lp')).toHaveLength(8);
         expect(lit()).toBe(1);
+        expect(container.querySelectorAll('.lg'), 'the square the lit token would reach is not marked').toHaveLength(1);
+        expect(container.querySelector('.lg')!.hasAttribute('data-takes'), 'a landing that sends somebody home is marked like any other').toBe(true);
 
         useSettings().update({ hintMoves: false });
         await settle();
 
         expect(lit()).toBe(0);
+        expect(container.querySelectorAll('.lg, .lg-step'), 'the marks stayed on the board with the lights off').toHaveLength(0);
 
         const host = container.querySelector('.board-canvas') as HTMLElement;
         const token = seatsFor(ludoOf(match)!, match.mine).find((one) => one.key === '0-0')!;

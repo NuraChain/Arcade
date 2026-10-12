@@ -162,6 +162,19 @@ playing surface where something is played; on poker's rail and Hokm's frame it m
 - Turned over, the upright notice sits clear of every plate (L3). On a tall phone the plates use
   the wood they stand on: a larger face and the name (L4). The die at rest is at least 30 px (L5).
 
+**As built (commit 3.5).** The first of those.
+
+- The mark is a pad in the pawn's own colour inside the board's ink line, with a white ring. The
+  first drawing was the pawn's own two-stroke ring with a small seed in it, and on a phone, where
+  a square is 22 px, it could not be made out. A landing that sends somebody home is a spiked
+  burst under whoever stands there, and that pawn trembles: two signs, neither of them a colour.
+- The squares on the way are beads in the same colour. They are drawn for every lit pawn and not
+  only under a pointer, because a finger has no pointer to rest.
+- A press on a mark moves its pawn. A press on a pawn that stands on a marked square moves that
+  pawn (`aimNear` in `game/layout.ts`).
+- Marks wait for the die to land (motion spec, rule 7), follow the `hintMoves` switch, and are
+  drawn for the reader on turn alone.
+
 ### 3.3 Backgammon
 
 - **Upright** (B1): the board keeps its shape and its width; the bands become the two seats. Each

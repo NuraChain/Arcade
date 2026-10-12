@@ -17,7 +17,7 @@ import { createStage, type Stage } from '../src/game/stage/stage.ts';
 import type { Cue, SoundHandle } from '../src/game/sound.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
 import { apply } from '../../backend/src/domains/match/ludo/engine.ts';
-import { FINISHED, YARD, cellAt, coloursFor, type LudoColour } from '../../backend/src/domains/match/ludo/board.ts';
+import { FINISHED, RING_STEPS, YARD, cellAt, coloursFor, ringIndex, type LudoColour } from '../../backend/src/domains/match/ludo/board.ts';
 import type { EngineAction, LudoState } from '../../backend/src/domains/match/ludo/state.ts';
 
 interface Drawn
@@ -270,7 +270,7 @@ describe('the ludo board as it is drawn', () =>
 
         vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
         table.reset(sight(state));
-        table.lit(new Set(['0-0']), true);
+        table.lit(new Set(['0-0']), true, []);
 
         expect(pawns().filter((one) => one.hasAttribute('data-movable')).map((one) => one.dataset.key)).toEqual(['0-0']);
 
@@ -278,7 +278,7 @@ describe('the ludo board as it is drawn', () =>
 
         expect(picked).toEqual([]);
 
-        table.lit(new Set(['0-0']), false);
+        table.lit(new Set(['0-0']), false, []);
 
         expect(pawns().filter((one) => one.hasAttribute('data-movable'))).toHaveLength(0);
 
@@ -1390,7 +1390,7 @@ describe('a move the server would not take', () =>
         const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 4);
 
         table.reset(sight(before));
-        table.lit(new Set(['0-0']), true);
+        table.lit(new Set(['0-0']), true, []);
         void table.advance('0-0', 14);
         await elapse(700);
 
@@ -1567,5 +1567,303 @@ describe('a ludo turn the server played all at once', () =>
         expect(presenter.presenting()).toBe(false);
 
         presenter.dispose();
+    });
+});
+
+describe('where a lit pawn would land', () =>
+{
+    const marks = () => [...host.querySelectorAll<HTMLElement>('.lg')];
+
+    const mark = (key: string) => host.querySelector<HTMLElement>(`.lg[data-goal="${ key }"]`)!;
+
+    const steps = (key: string) => [...host.querySelectorAll<HTMLElement>(`.lg-step[data-goal="${ key }"]`)];
+
+    const sized = () => vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+
+    const middleOf = (colour: LudoColour, progress: number) => centreOf(cellAt(colour, progress)!.col, cellAt(colour, progress)!.row, 1000);
+
+    const point = (type: string, at: { x: number; y: number }, pointerType = 'mouse') =>
+    {
+        const event = new MouseEvent(type, { clientX: at.x, clientY: at.y, bubbles: true });
+
+        Object.defineProperty(event, 'pointerType', { value: pointerType });
+        host.dispatchEvent(event);
+    };
+
+    it('marks the square each lit pawn would reach, under the pawns, with the squares on the way', () =>
+    {
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }]);
+
+        expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0', '0-1']);
+        expect(mark('0-0').style.translate).toBe(onSquare('red', 13));
+        expect(mark('0-0').dataset.colour).toBe('red');
+        expect(mark('0-0').hasAttribute('data-takes')).toBe(false);
+        expect(mark('0-0').querySelector('.lg-burst')).toBeNull();
+        expect(steps('0-0').map((one) => one.style.translate)).toEqual([onSquare('red', 11), onSquare('red', 12)]);
+        expect(steps('0-1').map((one) => one.style.translate)).toEqual([onSquare('red', 31), onSquare('red', 32)]);
+
+        const lowest = Math.min(...pawns().map((one) => Number(one.style.zIndex)));
+
+        for (const drawn of [...marks(), ...steps('0-0'), ...steps('0-1')])
+        {
+            expect(Number(drawn.style.zIndex), 'a mark is drawn over a pawn').toBeLessThan(lowest);
+        }
+    });
+
+    it('draws a landing that sends somebody home as another shape, and a landing at home in the home', () =>
+    {
+        table.reset(sight(standing([[10, FINISHED - 3, YARD, YARD], [38, YARD, YARD, YARD]], 2)));
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 1 }]);
+
+        expect(mark('0-0').hasAttribute('data-takes')).toBe(true);
+        expect(mark('0-0').querySelector('.lg-burst')).not.toBeNull();
+        expect(pawns().filter((one) => one.hasAttribute('data-threat')).map((one) => one.dataset.key), 'the pawn that would be sent home, and only that one, shows it').toEqual(['1-0']);
+
+        table.lit(new Set(['0-1']), true, [{ key: '0-1', to: FINISHED, takes: 0 }]);
+
+        expect(marks().map((one) => one.dataset.goal)).toEqual(['0-1']);
+        expect(pawn('1-0').hasAttribute('data-threat'), 'a pawn went on showing a threat that is no longer made').toBe(false);
+        expect(mark('0-1').hasAttribute('data-home')).toBe(true);
+        expect(mark('0-1').style.translate).toBe(atHome('red', 0));
+        expect(mark('0-1').style.getPropertyValue('--s')).toBe(String(HOME_SCALE));
+        expect(steps('0-1').map((one) => one.style.translate)).toEqual([onSquare('red', FINISHED - 2), onSquare('red', FINISHED - 1)]);
+    });
+
+    it('points at a home slot without taking it, so the pawn that comes home first has the first one', async () =>
+    {
+        const before = standing([[FINISHED - 2, FINISHED - 2, YARD, YARD], [5, YARD, YARD, YARD]], 2);
+        const home = stepped(before, { kind: 'move', seat: 0, piece: 1 });
+
+        table.reset(sight(before));
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: FINISHED, takes: 0 }, { key: '0-1', to: FINISHED, takes: 0 }]);
+
+        expect(mark('0-0').style.translate).toBe(atHome('red', 0));
+        expect(mark('0-1').style.translate).toBe(atHome('red', 0));
+
+        table.lit(new Set(), true, []);
+        void play([home.act], sight(home.state));
+        await elapse(2000);
+
+        expect(pawn('0-1').style.translate, 'a mark kept the home slot it only pointed at').toBe(atHome('red', 0));
+    });
+
+    it('shows the threat on whoever would be sent home and never on a partner standing there', () =>
+    {
+        const [red, green, yellow] = coloursFor(4);
+        const start = ringIndex(red, 0);
+        const on = (colour: LudoColour) => Array.from({ length: RING_STEPS }, (_, progress) => progress).find((progress) => ringIndex(colour, progress) === start)!;
+
+        table.reset(sight(standing([EMPTY, [on(green), YARD, YARD, YARD], [on(yellow), YARD, YARD, YARD], EMPTY], 6, 0, 1, [0, 1, 0, 1])));
+        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 1 }]);
+
+        expect(pawns().filter((one) => one.hasAttribute('data-threat')).map((one) => one.dataset.key)).toEqual(['1-0']);
+
+        const [mine, theirs] = coloursFor(2);
+        const star = Array.from({ length: RING_STEPS }, (_, progress) => progress).find((progress) => ringIndex(theirs, progress) === ringIndex(mine, 13))!;
+
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [star, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+
+        expect(pawn('1-0').style.translate, 'the other pawn does not stand on the square that is marked').toBe(mark('0-0').style.translate);
+        expect(pawns().filter((one) => one.hasAttribute('data-threat')), 'a pawn safe on a star was shown a threat').toHaveLength(0);
+    });
+
+    it('marks one start square for a yard that may come out, and no square on the way', () =>
+    {
+        table.reset(sight(standing([EMPTY, [5, YARD, YARD, YARD]], 6)));
+        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 0 }]);
+
+        expect(marks()).toHaveLength(1);
+        expect(mark('0-0').style.translate).toBe(onSquare('red', 0));
+        expect(host.querySelectorAll('.lg-step')).toHaveLength(0);
+
+        sized();
+
+        const seat = nestAt('red', 2);
+        const body = centreOf(seat.col, seat.row, 1000);
+
+        point('pointermove', { x: body.x, y: body.y - CELL * 300 });
+
+        expect(pawn('0-2').hasAttribute('data-aim')).toBe(true);
+        expect(mark('0-0').hasAttribute('data-aim'), 'a yard pawn that may come out does not point at the start square').toBe(true);
+    });
+
+    it('draws nothing while hints are off, for a pawn it was not told may move, or for a square behind the pawn', () =>
+    {
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 13, takes: 0 }]);
+
+        expect(marks()).toHaveLength(0);
+
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }, { key: '9-9', to: 3, takes: 0 }]);
+
+        expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0']);
+
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 10, takes: 0 }]);
+
+        expect(marks()).toHaveLength(0);
+    });
+
+    it('marks no square on the way to a landing further off than a die reaches', () =>
+    {
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 30, takes: 0 }]);
+
+        expect(marks()).toHaveLength(1);
+        expect(steps('0-0')).toHaveLength(0);
+    });
+
+    it('lets go of a pawn under the mouse when it may no longer move, with no mark on the board', () =>
+    {
+        const body = middleOf('red', 10);
+
+        sized();
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), true, []);
+        point('pointermove', { x: body.x, y: body.y - CELL * 300 });
+
+        expect(pawn('0-0').hasAttribute('data-aim')).toBe(true);
+
+        table.lit(new Set(), true, []);
+
+        expect(pawn('0-0').hasAttribute('data-aim')).toBe(false);
+    });
+
+    it('shows nothing under the mouse while the hints are off, and lets go of what it showed when they are turned off', () =>
+    {
+        const body = middleOf('red', 10);
+
+        sized();
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), false, []);
+        point('pointermove', { x: body.x, y: body.y - CELL * 300 });
+
+        expect(host.querySelectorAll('[data-aim]'), 'a pawn showed under the mouse that it may move, with the hints off').toHaveLength(0);
+
+        table.lit(new Set(['0-0']), true, []);
+        point('pointermove', { x: body.x, y: body.y - CELL * 300 });
+
+        expect(pawn('0-0').hasAttribute('data-aim')).toBe(true);
+
+        table.lit(new Set(['0-0']), false, []);
+        point('pointermove', { x: body.x, y: body.y - CELL * 300 });
+
+        expect(host.querySelectorAll('[data-aim]')).toHaveLength(0);
+    });
+
+    it('keeps the marks it has drawn when it is told the same thing again', () =>
+    {
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+
+        const first = mark('0-0');
+
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+
+        expect(first.isConnected).toBe(true);
+        expect(mark('0-0')).toBe(first);
+    });
+
+    it('takes a press on a mark as a press on its pawn, and a press on a pawn as that pawn whatever is marked under it', () =>
+    {
+        sized();
+        table.reset(sight(standing([[10, 12, YARD, YARD], [5, YARD, YARD, YARD]], 2)));
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 0 }, { key: '0-1', to: 14, takes: 0 }]);
+
+        point('pointerup', middleOf('red', 14));
+
+        expect(picked).toEqual(['0-1']);
+
+        point('pointerup', middleOf('red', 12));
+
+        expect(picked, 'a press on a pawn moved the pawn whose mark lies under it').toEqual(['0-1', '0-1']);
+
+        table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 1)));
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 11, takes: 0 }]);
+        picked.length = 0;
+        point('pointerup', middleOf('red', 11));
+
+        expect(picked).toEqual(['0-0']);
+
+        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 11, takes: 0 }]);
+        picked.length = 0;
+        point('pointerup', middleOf('red', 15));
+
+        expect(picked, 'a square that is not marked took a press').toEqual([]);
+    });
+
+    it('shows which mark is a pawn\'s under a mouse, on the pawn or on the mark, and lets go when the mouse leaves', () =>
+    {
+        sized();
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }]);
+
+        const board = host.querySelector<HTMLElement>('.lb')!;
+
+        point('pointermove', middleOf('red', 13));
+
+        expect(mark('0-0').hasAttribute('data-aim')).toBe(true);
+        expect(steps('0-0').every((one) => one.hasAttribute('data-aim'))).toBe(true);
+        expect(pawn('0-0').hasAttribute('data-aim')).toBe(true);
+        expect(mark('0-1').hasAttribute('data-aim')).toBe(false);
+        expect(board.hasAttribute('data-aiming')).toBe(true);
+
+        point('pointermove', middleOf('red', 30));
+
+        expect(mark('0-1').hasAttribute('data-aim')).toBe(true);
+        expect(pawn('0-1').hasAttribute('data-aim')).toBe(true);
+        expect(mark('0-0').hasAttribute('data-aim')).toBe(false);
+        expect(pawn('0-0').hasAttribute('data-aim')).toBe(false);
+
+        point('pointerleave', middleOf('red', 30));
+
+        expect(host.querySelectorAll('[data-aim]')).toHaveLength(0);
+        expect(board.hasAttribute('data-aiming')).toBe(false);
+
+        point('pointermove', middleOf('red', 13), 'touch');
+
+        expect(host.querySelectorAll('[data-aim]'), 'a finger on its way somewhere is not a pointer resting').toHaveLength(0);
+    });
+
+    it('takes the marks away at the press, and puts them back when the move is refused', async () =>
+    {
+        const before = standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 4);
+        const goals = [{ key: '0-0', to: 14, takes: 0 }, { key: '0-1', to: 34, takes: 0 }];
+
+        table.reset(sight(before));
+        table.lit(new Set(['0-0', '0-1']), true, goals);
+        void table.advance('0-0', 14);
+
+        expect(marks(), 'the marks stayed on the board under a walking pawn').toHaveLength(0);
+        expect(host.querySelectorAll('.lg-step')).toHaveLength(0);
+
+        table.lit(new Set(['0-0', '0-1']), true, [...goals]);
+
+        expect(marks().map((one) => one.dataset.goal), 'a pawn that had set off was marked again').toEqual(['0-1']);
+
+        await elapse(700);
+        director.enqueue((ctx) => table.settle(sight(before), ctx), { estimate: 600 });
+        await elapse(STEP_LEAST * 4 + 200);
+
+        expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0', '0-1']);
+    });
+
+    it('draws them again, like the lit pawns, when the board is drawn again', () =>
+    {
+        const state = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3);
+
+        table.reset(sight(state));
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+
+        const first = mark('0-0');
+
+        table.reset(sight(state));
+
+        expect(first.isConnected, 'a mark outlived the board it was drawn on').toBe(false);
+        expect(pawn('0-0').hasAttribute('data-movable')).toBe(true);
+        expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0']);
+        expect(mark('0-0').style.translate).toBe(onSquare('red', 13));
+        expect(steps('0-0')).toHaveLength(2);
     });
 });

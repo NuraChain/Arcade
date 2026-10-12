@@ -1,4 +1,4 @@
-import { BLOCK, CELL, GRID, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
+import { BLOCK, CELL, GRID, HOME_SCALE, MARGIN, aimNear, stackSpot } from '../layout.ts';
 import { HISTORY, beatsOf, placeOf, sameAs, shownOf, step, type Beat, type Felt, type Pawn, type Rolled, type Shown } from '../ludo-felt.ts';
 import { celebrate } from '../stage/celebrate.ts';
 import { clamp, hashOf } from '../stage/curves.ts';
@@ -9,7 +9,7 @@ import type { Sight } from '../stage/presenter.ts';
 import { arc, walk, type Point } from '../stage/route.ts';
 import type { Run } from '../stage/stage.ts';
 import { FINISHED, RING_STEPS, YARD, pathBetween } from './path.ts';
-import type { BoardHandle, BoardOptions } from '../bridge.ts';
+import type { BoardGoal, BoardHandle, BoardOptions } from '../bridge.ts';
 
 const C = CELL * 100;
 
@@ -28,6 +28,10 @@ const Z_AIR = LAYER.airborne * BAND;
 const Z_DIE = LAYER.dice * BAND;
 
 const Z_BURST = LAYER.burst * BAND;
+
+const Z_GOAL = Z_PIECE - 20;
+
+const TRAIL_MOST = 6;
 
 export const STEP_MS = 120;
 
@@ -106,6 +110,14 @@ interface Piece
     pawn: HTMLImageElement;
     shadow: HTMLImageElement;
     at: Spot;
+}
+
+interface Mark
+{
+    root: HTMLElement;
+    steps: HTMLElement[];
+    col: number;
+    row: number;
 }
 
 interface Moment
@@ -196,6 +208,18 @@ const costOf = (beat: Beat) =>
 
 const RING = '<svg viewBox="-60 -30 120 60" aria-hidden="true" class="block inline-full block-full overflow-visible"><ellipse class="fill-none stroke-[#0B1220] [stroke-opacity:0.55] stroke-[10]" rx="56" ry="28"/><ellipse class="fill-none stroke-[#FFFFFF] [stroke-opacity:0.95] stroke-[5.5] [stroke-dasharray:7.5_2.5] animate-[lp-dash_2400ms_linear_infinite] [.lp[data-movable]:hover_&]:[stroke-dasharray:none] [.lp[data-movable]:hover_&]:stroke-[7.5] [.lb[data-still]_&]:animate-none [.lb[data-still]_&]:[stroke-dasharray:none]" rx="56" ry="28" pathLength="120"/></svg>';
 
+const SPIKES = Array.from({ length: 16 }, (_, index) =>
+{
+    const reach = index % 2 === 0 ? 70 : 47;
+    const turn = index / 16 * Math.PI * 2;
+
+    return `${ index === 0 ? 'M' : 'L' }${ (Math.cos(turn) * reach).toFixed(1) } ${ (Math.sin(turn) * reach / 2).toFixed(1) }`;
+}).join(' ');
+
+const SPOT = '<svg viewBox="-60 -30 120 60" aria-hidden="true" class="lg-art"><ellipse class="lg-pad" rx="48" ry="24"/><ellipse class="lg-eye" rx="26" ry="13"/></svg>';
+
+const BURST = `<svg viewBox="-60 -30 120 60" aria-hidden="true" class="lg-art"><path class="lg-pad lg-burst" d="${ SPIKES } Z"/><ellipse class="lg-eye" rx="26" ry="13"/></svg>`;
+
 const SPRITE = 'absolute max-inline-none select-none [-webkit-user-drag:none]';
 
 const STILL = '[.lb[data-still]_&]:animate-none';
@@ -213,12 +237,17 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     const pressed = new Map<string, number>();
     const flying = new Set<string>();
     const transient = new Set<HTMLElement>();
+    const marks = new Map<string, Mark>();
+    const threatened = new Set<string>();
 
     let shown: Shown = NOBODY;
     let matchId = '';
     let celebrated = '';
     let movable: ReadonlySet<string> = new Set();
     let hints = true;
+    let goals: readonly BoardGoal[] = [];
+    let marked = '';
+    let aimed: string | null = null;
     let plateDie: Rolled | null = null;
     let where: Where = 'none';
     let offered: number | null = null;
@@ -246,7 +275,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
     const seatOf = (pawn: Pawn) => nest.get(pawn.key) ?? pawn.piece;
 
-    const slotOf = (pawn: Pawn) =>
+    const freeSlot = (pawn: Pawn) =>
     {
         const held = slot.get(pawn.key);
 
@@ -256,7 +285,13 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
 
         const taken = new Set(shown.pawns.filter((one) => one.owner === pawn.owner).map((one) => slot.get(one.key)));
-        const free = [0, 1, 2, 3].find((one) => !taken.has(one)) ?? 0;
+
+        return [0, 1, 2, 3].find((one) => !taken.has(one)) ?? 0;
+    };
+
+    const slotOf = (pawn: Pawn) =>
+    {
+        const free = freeSlot(pawn);
 
         slot.set(pawn.key, free);
 
@@ -384,6 +419,147 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             if (piece !== undefined)
             {
                 dress(piece, pawn);
+            }
+        }
+    };
+
+    const markFor = (key: string) =>
+    {
+        const own = marks.get(key);
+        const pawn = pawnOf(shown, key);
+
+        if (own !== undefined || pawn === undefined || pawn.progress !== YARD || !movable.has(key))
+        {
+            return own;
+        }
+
+        for (const [other, drawn] of marks)
+        {
+            const one = pawnOf(shown, other);
+
+            if (one !== undefined && one.owner === pawn.owner && one.progress === YARD)
+            {
+                return drawn;
+            }
+        }
+
+        return undefined;
+    };
+
+    const aimAt = (key: string | null) =>
+    {
+        if (key === aimed)
+        {
+            return;
+        }
+
+        for (const node of root.querySelectorAll('[data-aim]'))
+        {
+            node.removeAttribute('data-aim');
+        }
+
+        aimed = key;
+
+        const drawn = key === null ? undefined : markFor(key);
+
+        root.toggleAttribute('data-aiming', drawn !== undefined);
+
+        if (key !== null)
+        {
+            pieces.get(key)?.root.setAttribute('data-aim', '');
+        }
+
+        if (drawn !== undefined)
+        {
+            drawn.root.setAttribute('data-aim', '');
+
+            for (const step of drawn.steps)
+            {
+                step.setAttribute('data-aim', '');
+            }
+        }
+    };
+
+    const unmark = () =>
+    {
+        aimAt(null);
+
+        for (const drawn of marks.values())
+        {
+            drawn.root.remove();
+
+            for (const step of drawn.steps)
+            {
+                step.remove();
+            }
+        }
+
+        for (const key of threatened)
+        {
+            pieces.get(key)?.root.removeAttribute('data-threat');
+        }
+
+        marks.clear();
+        threatened.clear();
+        marked = '';
+    };
+
+    const mark = () =>
+    {
+        const wanted = hints ? goals.flatMap((goal) =>
+        {
+            const pawn = pawnOf(shown, goal.key);
+
+            return pawn !== undefined && movable.has(goal.key) && goal.to > pawn.progress ? [{ goal, pawn }] : [];
+        }) : [];
+        const said = wanted.map(({ goal, pawn }) => `${ goal.key }:${ pawn.progress }:${ goal.to }:${ goal.takes }`).join();
+
+        if (said === marked)
+        {
+            return;
+        }
+
+        unmark();
+        marked = said;
+
+        for (const { goal, pawn } of wanted)
+        {
+            const home = goal.to >= FINISHED;
+            const place = home ? placeOf(pawn.colour, FINISHED, 0, freeSlot(pawn)) : placeOf(pawn.colour, goal.to, 0, 0);
+            const walked = goal.to - pawn.progress > TRAIL_MOST ? [] : pathBetween(pawn.colour, pawn.progress, goal.to);
+            const steps = (home ? walked : walked.slice(0, -1)).map((cell) =>
+            {
+                const step = element('span', 'lg-step absolute inset-s-0 inset-bs-0', root);
+
+                step.dataset.goal = goal.key;
+                step.style.setProperty('--tone', TONE[pawn.colour] ?? '#FFFFFF');
+                step.style.translate = at(foot(cell.col, cell.row));
+                step.style.zIndex = String(Z_GOAL);
+
+                return step;
+            });
+            const node = element('div', 'lg absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
+
+            node.dataset.goal = goal.key;
+            node.dataset.colour = pawn.colour;
+            node.toggleAttribute('data-takes', goal.takes > 0);
+            node.toggleAttribute('data-home', home);
+            node.style.setProperty('--tone', TONE[pawn.colour] ?? '#FFFFFF');
+            node.style.setProperty('--s', String(home ? HOME_SCALE : 1));
+            node.style.translate = at(foot(place.col, place.row));
+            node.style.zIndex = String(Z_GOAL + 1);
+            node.innerHTML = goal.takes > 0 ? BURST : SPOT;
+            marks.set(goal.key, { root: node, steps, col: place.col, row: place.row });
+
+            for (const other of goal.takes > 0 ? shown.pawns : [])
+            {
+                const stood = cellOf(other);
+
+                if (other.side !== pawn.side && stood.col === place.col && stood.row === place.row)
+                {
+                    threatened.add(other.key);
+                    pieces.get(other.key)?.root.setAttribute('data-threat', '');
+                }
             }
         }
     };
@@ -1116,6 +1292,8 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             await Promise.all([...relayout(SLIDE_MS, 'in'), ...back].map((run) => run.done));
         }
 
+        mark();
+
         if (ctx.live())
         {
             await applaud(felt.winners, ctx);
@@ -1125,6 +1303,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     const strip = () =>
     {
         clearDie();
+        unmark();
         where = 'none';
         rattling = false;
         pressed.clear();
@@ -1139,10 +1318,22 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         flying.clear();
     };
 
-    const pick = (event: PointerEvent) =>
+    const under = (event: PointerEvent) =>
     {
         const box = host.getBoundingClientRect();
-        const key = pickNear(shown.pawns.map((pawn) => ({ key: pawn.key, ...placeFor(pawn), playable: movable.has(pawn.key) && !flying.has(pawn.key) })), event.clientX - box.left, event.clientY - box.top, box.width);
+
+        return aimNear(
+            shown.pawns.map((pawn) => ({ key: pawn.key, ...placeFor(pawn), playable: movable.has(pawn.key) && !flying.has(pawn.key) })),
+            [...marks].map(([key, one]) => ({ key, col: one.col, row: one.row })),
+            event.clientX - box.left,
+            event.clientY - box.top,
+            box.width
+        );
+    };
+
+    const pick = (event: PointerEvent) =>
+    {
+        const key = under(event);
 
         if (key !== null)
         {
@@ -1150,7 +1341,16 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
+    const hover = (event: PointerEvent) =>
+    {
+        aimAt(hints && event.pointerType === 'mouse' ? under(event) : null);
+    };
+
+    const leave = () => aimAt(null);
+
     host.addEventListener('pointerup', pick);
+    host.addEventListener('pointermove', hover);
+    host.addEventListener('pointerleave', leave);
 
     return {
         kind: 'ludo',
@@ -1186,6 +1386,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             rest();
             seatDie();
             tell();
+            mark();
         },
 
         same: (sight) => sameAs(shown, sight.view) && pending.size === 0 && celebrated === sight.view.winners.join(),
@@ -1261,11 +1462,19 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             }
         },
 
-        lit(keys, visible)
+        lit(keys, visible, wanted)
         {
             movable = keys;
             hints = visible;
+            goals = wanted;
             dressAll();
+
+            if (aimed !== null && !movable.has(aimed))
+            {
+                aimAt(null);
+            }
+
+            mark();
         },
 
         async advance(key, to)
@@ -1278,6 +1487,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
                 return false;
             }
 
+            unmark();
             spend();
             pressed.set(key, was.progress);
             shown = { ...shown, die: null, pawns: shown.pawns.map((pawn) => (pawn.key === key ? { ...pawn, progress: to } : pawn)) };
@@ -1330,6 +1540,8 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         dispose()
         {
             host.removeEventListener('pointerup', pick);
+            host.removeEventListener('pointermove', hover);
+            host.removeEventListener('pointerleave', leave);
             strip();
             pieces.clear();
             root.remove();
