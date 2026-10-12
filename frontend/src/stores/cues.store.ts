@@ -6,6 +6,7 @@ import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { CUE_KEYS, REQUEST_TAG, chatTag, keepWords, rowTag, wordsOf } from '../lib/notice-words.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
+import { keepReach } from '../lib/push.ts';
 import { clearSystem, onWent, tellSystem } from '../lib/system-notice.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useChat } from './chat.store.ts';
@@ -419,6 +420,8 @@ export const useCues = createStore((): CuesApi =>
         });
 
         const offWent = onWent((to) => go.current?.(to));
+
+        void keepReach(untrack(() => settings.settings().notify)).catch(() => undefined);
 
         const back = () =>
         {

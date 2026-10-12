@@ -1076,9 +1076,49 @@ pushed with the row the server writes for it, and the sentence, tag, target, lan
 direction must be equal, in English and in Persian), the words (*the words kept for the
 worker*) and the one speaker (*a device a push reaches*).
 
+**A device that is switched on keeps its reach.** "A push reaches this device" is read from the
+browser, so it has to stay true, and three things made it false. Keys set on the server after
+the switch was turned on reached nobody until each reader switched off and on; this deployment
+has none today, so that was its path. A row the server had lost (retired after a 410, a rebuilt
+database, another account signed in on this browser) left the browser subscribed to nothing.
+And a subscription made with a key the server no longer has, or held with the switch off, left
+the page waiting for a push that would never come. `keepReach(on)` in `lib/push.ts` runs once
+when the cues store starts and when the panel turns the switch on. With the switch on, a
+published key and the browser's yes, it subscribes where nothing is held, tells the server
+again where something is (the route is an upsert on the endpoint and clears `failed_at`), and
+makes the subscription again when the key has changed; otherwise it gives up whatever the
+browser holds. With the switch off, which is how every device begins, it asks the server
+nothing at all. Two rules keep it from doing harm: a server that does not answer changes
+nothing, and an existing subscription is never given up because telling the server failed,
+while a NEW one the server refused is, so the browser never holds a subscription no server
+was told of. It never asks for permission: that is the panel's press.
+
+**Signing out gives the reach up.** `components/app/sign-out.ts` calls `leaveReach()` before
+the session ends, while the server can still be told. Signing out everywhere drops every push
+subscription of the account on the server (`forgetReach`, a courtesy after the sessions are
+ended, so a failure there cannot keep the sockets open). Before, a browser nobody was signed
+in on went on being woken, and the worker, with no session to read the list, told whoever was
+sitting there that something was new.
+
+`reach.spec.ts` holds each case, `device-notices.spec.ts` the two presses, `cues.spec.ts` the
+call at start, and `housekeeping.db.spec.ts` the server's half.
+
+**The keyed path can be looked at without keys in `.env`.** Start the built server with a
+throwaway pair on the command line (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`;
+the one-liner that makes a pair is in `.env.example`) and a driven Chrome subscribes for real,
+to its own push service. Done once, 2026-10-12: the panel said "Also when Nura Games is
+closed."; an invitation was pushed and the worker showed its sentence with nothing scripted;
+at the next start the app asked for the key and told the server again without making a new
+subscription; on a page that believed itself hidden the invitation was left to the push while
+a game starting was told by the page; signing out posted the removal before the sign-out and
+the browser, signed out, was not woken by the next invitation. One thing a driven browser will
+not do is be truly hidden (a second tab and a minimised window both leave `visibilityState`
+at `visible`), so the worker's side of "one speaker" for a hidden tab is held by
+`push-worker.spec.ts` alone.
+
 Not verified: Safari is said to end a subscription after a few pushes that show no notice, and
-this worker shows none while the app is on the screen. This server has no push keys and no
-Safari was at hand; when keys are set, look at it on one.
+this worker shows none while the app is on the screen. No Safari was at hand; look at it on
+one before relying on push there.
 
 **A pressed notice goes to the thing itself.** Every notice carries `data.target`, the page's
 and the worker's alike, and the worker's `notificationclick` is the one place either is pressed.

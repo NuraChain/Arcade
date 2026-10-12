@@ -266,6 +266,18 @@ export function createNotifyService(db: DataSource, social: SocialService)
             await db.getRepository(PushSubscription).delete({ userId: me, endpoint });
         },
 
+        /**
+         * Every browser of an account, let go at once.
+         *
+         * For the moment no session of that account is left: a push wakes a worker that reads the
+         * list over a session, and with none it could only say that something happened to
+         * somebody who is no longer signed in there.
+         */
+        async forgetReach(me: string)
+        {
+            await db.getRepository(PushSubscription).delete({ userId: me });
+        },
+
         /** Every live subscription for an account. What the push sender walks. */
         async subscriptionsOf(userId: string): Promise<{ id: string; endpoint: string }[]>
         {

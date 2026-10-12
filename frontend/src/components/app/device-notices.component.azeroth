@@ -1,5 +1,5 @@
 import { client } from '../../api.ts';
-import { currentSubscription, pushSupported, subscribe, unsubscribe } from '../../lib/push.ts';
+import { currentSubscription, keepReach, leaveReach, pushSupported } from '../../lib/push.ts';
 import { allowNotices, noticesAllowed, noticesBlocked, noticesSupported } from '../../lib/system-notice.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
@@ -47,29 +47,6 @@ export default component DeviceNotices()
         void settle();
     }
 
-    const reach = async () =>
-    {
-        try
-        {
-            const subscription = await subscribe(key);
-
-            if (subscription === null)
-            {
-                return false;
-            }
-
-            await client.notifications.subscribe({ input: subscription });
-
-            return true;
-        }
-        catch
-        {
-            await unsubscribe().catch(() => null);
-
-            return false;
-        }
-    };
-
     const turnOn = async () =>
     {
         busy = true;
@@ -83,7 +60,7 @@ export default component DeviceNotices()
 
             settings.update({ notify: true });
             standing = 'on';
-            closed = key !== '' && pushSupported() && await reach();
+            closed = await keepReach(true);
         }
         catch
         {
@@ -102,14 +79,7 @@ export default component DeviceNotices()
         {
             settings.update({ notify: false });
             standing = 'off';
-
-            const endpoint = await unsubscribe();
-
-            if (endpoint !== null)
-            {
-                await client.notifications.unsubscribe({ input: { endpoint } });
-            }
-
+            await leaveReach();
             closed = false;
         }
         catch

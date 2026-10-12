@@ -1350,6 +1350,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const ended = await identity.signOutEverywhere(userId);
 
+                await courtesy('letting go of push subscriptions', () => notify.forgetReach(userId));
                 live?.sessionsRevoked(ended);
                 return ended.length;
             },

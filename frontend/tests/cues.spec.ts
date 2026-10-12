@@ -4,6 +4,7 @@ import { cleanup } from '@azerothjs/testing';
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { WORDS, wordsOf } from '../src/lib/notice-words.ts';
+import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useCues } from '../src/stores/cues.store.ts';
@@ -1937,9 +1938,12 @@ describe('a device a push reaches', () =>
 {
     let browser: FakeNotices;
 
+    const KEY = 'BPnJ0YVvZs7GkY7iYy5yTGmVvJ0O2m0cP0kWn0dD3mJ4qv7o3bWvX2Jm1mQe4yZ6m0qfS6rL1tV9Yx2pKc8Dd4s';
+
     beforeEach(() =>
     {
-        browser = fakeNotices('granted', { subscribed: true });
+        server.pushKey = KEY;
+        browser = fakeNotices('granted', { subscribed: true, madeWith: decodeKey(KEY) });
         useSettings().update({ notify: true });
     });
 
@@ -1958,6 +1962,24 @@ describe('a device a push reaches', () =>
         await settle();
         browser.hide(true);
     };
+
+    it('is told to the server again when the app starts, and is given up when it starts with the switch off', async () =>
+    {
+        await armed();
+        await settle();
+
+        expect(browser.made, 'a subscription that was good was made again').toHaveLength(1);
+        expect(server.pushSubscriptions.map((one) => one.endpoint), 'the server was not told where to knock').toEqual(['https://push.example/1']);
+
+        useCues().reset();
+        useSettings().update({ notify: false });
+        useCues().start();
+        await settle();
+        await settle();
+
+        expect(browser.subscribed(), 'a device that is switched off was still being pushed to').toBe(false);
+        expect(server.pushSubscriptions).toEqual([]);
+    });
 
     it('leaves a message, a friend request and an invitation to the push, and still draws a toast for each', async () =>
     {

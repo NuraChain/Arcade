@@ -14,6 +14,8 @@ export interface FakeNotices
     closed: string[];
     registered: string[];
     kept: Map<string, string>;
+    made: string[];
+    left: string[];
     subscribed(): boolean;
     hide(hidden: boolean): void;
     fromWorker(data: unknown): void;
@@ -27,6 +29,7 @@ export interface FakeNoticesOptions
     push?: boolean;
     pushFails?: boolean;
     subscribed?: boolean;
+    madeWith?: ArrayBuffer;
 }
 
 export function fakeNotices(permission: NotificationPermission, options: FakeNoticesOptions = {}): FakeNotices
@@ -41,15 +44,28 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
     const kept = new Map<string, string>();
     let allowed = permission;
     let hidden = false;
-    let subscription: { endpoint: string; getKey: () => ArrayBuffer; unsubscribe: () => Promise<boolean> } | null = null;
+    const made: string[] = [];
+    const left: string[] = [];
 
-    const subscribed = () =>
+    let subscription: {
+        endpoint: string;
+        options: { applicationServerKey: ArrayBuffer | null };
+        getKey: () => ArrayBuffer;
+        unsubscribe: () => Promise<boolean>;
+    } | null = null;
+
+    const subscribed = (key: ArrayBuffer | null) =>
     {
+        const endpoint = `https://push.example/${ made.length + 1 }`;
+
+        made.push(endpoint);
         subscription = {
-            endpoint: 'https://push.example/one',
+            endpoint,
+            options: { applicationServerKey: key },
             getKey: () => new ArrayBuffer(4),
             unsubscribe: async () =>
             {
+                left.push(endpoint);
                 subscription = null;
 
                 return true;
@@ -61,7 +77,7 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
 
     if (options.subscribed === true)
     {
-        subscribed();
+        subscribed(options.madeWith ?? null);
     }
 
     const registration = {
@@ -89,14 +105,14 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
 
         pushManager: {
             getSubscription: async () => subscription,
-            subscribe: async () =>
+            subscribe: async (asked?: { applicationServerKey?: ArrayBuffer }) =>
             {
                 if (options.pushFails === true)
                 {
                     throw new Error('the push service is not answering');
                 }
 
-                return subscribed();
+                return subscribed(asked?.applicationServerKey ?? null);
             }
         }
     };
@@ -154,6 +170,8 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
         closed,
         registered: urls,
         kept,
+        made,
+        left,
         subscribed: () => subscription !== null,
 
         hide(next)
