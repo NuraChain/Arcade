@@ -1861,7 +1861,7 @@ things they are, as the cards and the suits are, so hokm keeps a keyboard and a 
 | Put cards face down (two players) | Cards are toggled in the hand, then "Put these {count} face down" | The chosen cards are sent by tapping the stock |
 | Keep the offered card | "Keep the {card}" in the offer panel | Tap the offered card |
 | Take the next card | "Take the next card" in the offer panel | Tap the stock |
-| Sort | "Sort" in the bar | It stays, as a 44 px round control in the corner of the table beside the tip's lamp: a preference, not a move |
+| Sort | "Sort" in the bar | It stays, as a 44 px round control at one end of the hand's row, with the tip's lamp at the other: a preference, not a move |
 
 The offered card is itself the control, so it is drawn at every size, face up in the middle of
 the felt, and `tools/qa/fit-pass.mjs` holds it, the stock and the card put face down clear of
@@ -2045,7 +2045,7 @@ button's own text.
 | Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | A chip with a plus opens the same chooser over the foot of the felt: an amount is a question the game has to ask, and it is asked on the table |
 | All in | "All in, {chips}" | A gold chip, when the whole stack is the only raise left |
 
-The clock and the tip's lamp are in the corner of the table, the one hokm uses (`.table-corner`),
+The clock and the tip's lamp are in the corner of the table, the one hokm used (`.table-corner`),
 with the blinds above them where the felt has shed its chip.
 
 **The bet spot.** A pill is rendered only while a bet is above zero, and its spot is found by

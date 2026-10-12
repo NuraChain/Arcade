@@ -715,29 +715,111 @@ describe('the two-handed draw', () =>
     });
 });
 
-describe('the small things in the corner of the table, where a bar used to be', () =>
+describe('the clock on a plate, and the two things beside the hand', () =>
 {
-    const turn = (extra: Partial<MatchView> = {}): MatchView => ({
-        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30, 45], plays: [0, 14, 30, 45] }, 0),
+    const turn = (extra: Partial<MatchView> = {}, view: Partial<Hokm> = {}): MatchView => ({
+        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30, 45], plays: [0, 14, 30, 45], ...view }, 0),
         ...extra
     });
+
+    const clocks = (container: HTMLElement) => [...container.querySelectorAll('.hokm-clock')].map((one) => one.closest('.hokm-seat')?.getAttribute('data-seat') ?? 'nowhere');
 
     afterEach(() =>
     {
         useSettings().reset();
     });
 
-    it('lays the stage out as the table and the hand, and keeps the clock, Sort and the tip inside the cell the table is fitted to', () =>
+    it('lays the stage out as the table and a row under it, and puts nothing of its own over the table', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: turn({ remainingMs: 20_000 }) }) as Rendered);
-        const rail = container.querySelector('.table-fit > .hokm-rail')!;
+        const foot = container.querySelector('.table-grid > .hokm-foot')!;
 
         expect(container.querySelector('.table-grid')!.classList.contains('hokm-grid')).toBe(true);
         expect(container.querySelector('.table-grid > .table-bar')).toBeNull();
-        expect(rail.previousElementSibling?.classList.contains('hokm-table')).toBe(true);
-        expect([...rail.querySelectorAll('.hokm-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
-        expect(rail.querySelector('.hokm-tools button')?.getAttribute('aria-label')).toBe('Sort');
-        expect(rail.querySelector('.hokm-tools [role="note"]')?.getAttribute('data-lamp')).toBe('true');
+        expect(container.querySelector('.table-fit')!.children.length, 'something lies in the table\'s cell beside the table').toBe(1);
+        expect(foot.classList.contains('table-hand')).toBe(true);
+        expect([...foot.children].map((one) => one.classList[one.classList.length - 1])).toEqual(['hokm-rail', 'hokm-hands']);
+        expect(container.querySelector('.hokm-table button'), 'a tool is drawn on the felt').toBeNull();
+    });
+
+    it('puts Sort at one end of that row and the tip\'s lamp at the other', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+        const ends = [...container.querySelectorAll('.hokm-rail > .hokm-rail-end')];
+
+        expect(ends.length).toBe(2);
+        expect(ends[0].querySelector('button')?.getAttribute('aria-label')).toBe('Sort');
+        expect(ends[0].querySelector('[role="note"]')).toBeNull();
+        expect(ends[1].querySelector('[role="note"]')?.getAttribute('data-lamp')).toBe('true');
+        expect(ends[1].querySelector('button')).toBeNull();
+    });
+
+    it('lets the tip be read in the reader\'s own direction, in a row that does not mirror', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+        const lamp = container.querySelector('.hokm-rail-end:last-of-type [role="note"]')!;
+
+        expect(lamp.closest('[dir]')?.getAttribute('dir')).toBe('rtl');
+        expect(lamp.closest('[dir]')?.classList.contains('contents'), 'the wrapper that carries the direction takes a place of its own in the row').toBe(true);
+        expect(container.querySelector('.hokm-rail-end:first-of-type .hokm-sort')).not.toBeNull();
+    });
+
+    it('keeps room for the two whether or not there is a tip, so the table does not change size with the turn', () =>
+    {
+        const [current, setCurrent] = createSignal(turn());
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
+        const foot = container.querySelector('.hokm-foot')!;
+
+        expect(container.querySelector('.hokm-rail [role="note"]'), 'the reader on turn has no tip to start from').not.toBeNull();
+        expect(foot.getAttribute('data-tools')).toBe('true');
+
+        setCurrent(turn({ rev: 4 }, { turn: 1, plays: [] }));
+
+        expect(container.querySelector('.hokm-rail [role="note"]')).toBeNull();
+        expect(container.querySelector('.hokm-foot')).toBe(foot);
+        expect(foot.getAttribute('data-tools')).toBe('true');
+    });
+
+    it('puts the clock on the plate of whoever is to play, and moves it when the turn does', () =>
+    {
+        const [current, setCurrent] = createSignal(turn({ remainingMs: 20_000 }));
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
+        const mine = container.querySelector('.hokm-seat[data-seat="0"] > .hokm-clock')!;
+
+        expect(clocks(container)).toEqual(['0']);
+        expect([...mine.querySelectorAll('span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
+        expect(mine.previousElementSibling?.classList.contains('table-plate')).toBe(true);
+
+        setCurrent(turn({ remainingMs: 30_000, rev: 4 }, { turn: 1, plays: [] }));
+
+        expect(clocks(container)).toEqual(['1']);
+        expect(container.querySelector('.hokm-seat[data-seat="1"] > .hokm-clock')?.textContent).toContain('30s');
+    });
+
+    it('writes on each plate what that seat has taken and holds, in its side\'s colour, and dims a seat that has left', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn({}, { seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 13 - seat, tricks: seat, out: seat === 3 })) }) }) as Rendered);
+        const plate = (seat: number) => container.querySelector(`.hokm-seat[data-seat="${ seat }"] .table-plate`)!;
+
+        expect([0, 1, 2, 3].map((seat) => [...plate(seat).querySelectorAll('.table-plate-facts .tally')].map((one) => one.textContent))).toEqual([['0', '13'], ['1', '12'], ['2', '11'], ['3', '10']]);
+        expect([0, 1, 2, 3].map((seat) => plate(seat).querySelector('.table-plate-facts svg')?.getAttribute('class'))).toEqual(['text-accent', 'text-gold', 'text-accent', 'text-gold']);
+        expect([0, 1, 2, 3].map((seat) => plate(seat).getAttribute('data-dim'))).toEqual([null, null, null, 'true']);
+        expect(plate(2).querySelector('.table-plate-facts .sr-only')?.textContent).toContain('2 tricks');
+    });
+
+    it('puts it on the Hâkem while trump is being named', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn({ remainingMs: 20_000 }, { phase: 'trump', trump: undefined, hakem: 2, turn: 2, lead: 2, hand: [], plays: [] }) }) as Rendered);
+
+        expect(clocks(container)).toEqual(['2']);
     });
 
     it('speaks the turn to a screen reader alone, and still prints it on an empty felt', () =>
@@ -755,7 +837,7 @@ describe('the small things in the corner of the table, where a bar used to be', 
     {
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
         const order = () => [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => Number(one.dataset.card));
-        const sort = () => container.querySelector<HTMLButtonElement>('.hokm-tools button')!;
+        const sort = () => container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!;
 
         expect(order()).toEqual([0, 14, 30, 45]);
         expect(sort().getAttribute('aria-pressed')).toBe('false');
@@ -766,22 +848,34 @@ describe('the small things in the corner of the table, where a bar used to be', 
         expect(sort().getAttribute('aria-pressed')).toBe('true');
     });
 
-    it('gives somebody watching the corner with nothing in it to press', () =>
+    it('gives somebody watching no tool, no tip, no clock and no room kept for any', () =>
     {
         const seen = match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0 });
-        const { container } = renderTest(() => HokmBoard({ match: { ...seen, mine: undefined } }) as Rendered);
+        const { container } = renderTest(() => HokmBoard({ match: { ...seen, mine: undefined, remainingMs: undefined } }) as Rendered);
 
-        expect(container.querySelector('.table-fit > .hokm-rail')).not.toBeNull();
+        expect(container.querySelector('.table-grid > .hokm-foot > .hokm-rail')).not.toBeNull();
+        expect(container.querySelector('.hokm-foot')!.hasAttribute('data-tools')).toBe(false);
         expect(container.querySelectorAll('button').length).toBe(0);
         expect(container.querySelector('[role="note"]')).toBeNull();
         expect(container.querySelector('.hokm-clock')).toBeNull();
     });
 
-    it('takes the corner away with the game', () =>
+    it('keeps the row, and what a screen reader is told, for a reader who holds nothing yet', () =>
     {
-        const { container } = renderTest(() => HokmBoard({ match: turn({ finishedAt: new Date(900_000).toISOString(), outcome: 'won', winner: 0 }) }) as Rendered);
+        const { container } = renderTest(() => HokmBoard({ match: turn({}, { phase: 'trump', trump: undefined, hakem: 2, turn: 2, lead: 2, hand: [], plays: [] }) }) as Rendered);
 
+        expect(container.querySelector('.hokm-hands')).toBeNull();
+        expect(container.querySelector('.hokm-foot > .hokm-rail [aria-live="polite"]')?.textContent).toContain('is choosing trump');
+        expect(container.querySelector('.hokm-foot')!.getAttribute('data-tools')).toBe('true');
+    });
+
+    it('takes the row away with the game', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: turn({ remainingMs: 20_000, finishedAt: new Date(900_000).toISOString(), outcome: 'won', winner: 0 }) }) as Rendered);
+
+        expect(container.querySelector('.hokm-foot')).toBeNull();
         expect(container.querySelector('.hokm-rail')).toBeNull();
+        expect(container.querySelector('.hokm-clock')).toBeNull();
         expect(container.querySelector('.table-result')).not.toBeNull();
     });
 });
@@ -1156,7 +1250,7 @@ describe('a table that is read again', () =>
         const order = () => [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card);
         const dealt = order();
 
-        fire(container.querySelector<HTMLButtonElement>('.hokm-tools button[aria-label="Sort"]')!, 'click');
+        fire(container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!, 'click');
 
         expect(order()).not.toEqual(dealt);
         expect(gone(hand)).toEqual([]);

@@ -1503,7 +1503,7 @@ trap is anybody's, and the borders of a turned shape are `border-top` and `borde
 seen at a Persian table, with every gate and the fit pass green.
 
 **A table does not mirror, so what stands at a place on it is placed physically.** The corner of
-small things (`.table-corner`: the clock, the tip, hokm's Sort) is the felt's right in both
+small things (`.table-corner`: poker's clock and tip) is the felt's right in both
 languages, because the seats are. Its things keep to that edge with `margin-left: auto`:
 `align-items: flex-end` is the LEFT of a column in Persian, and it left poker's lamp a clock's
 width in from the edge there.

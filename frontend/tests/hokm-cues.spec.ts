@@ -396,6 +396,35 @@ describe('what a hokm table is heard to do', () =>
         expect(told.felt).toEqual([]);
     });
 
+    it('counts down the reader\'s own last seconds aloud, and nobody else\'s', async () =>
+    {
+        const ticks = () => count('tick') + count('tick-hi');
+
+        drive();
+        renderTest(() => HokmBoard({ match: { ...match({ turn: 0, lead: 0, plays: [40, 41] }), remainingMs: 7000 } }) as Rendered);
+        await settle();
+
+        for (let second = 0; second < 7; second += 1)
+        {
+            clock().advance(1000);
+        }
+
+        expect(ticks(), 'the reader\'s last five seconds were not counted').toBe(5);
+
+        cleanup();
+        told.heard.length = 0;
+        drive();
+        renderTest(() => HokmBoard({ match: { ...match({ turn: 1, lead: 1 }), remainingMs: 7000 } }) as Rendered);
+        await settle();
+
+        for (let second = 0; second < 7; second += 1)
+        {
+            clock().advance(1000);
+        }
+
+        expect(ticks(), 'somebody else\'s clock was counted aloud').toBe(0);
+    });
+
     it('ends on the sound of a win for the side that won the match, and on nothing for the side that lost', async () =>
     {
         const won = drive();

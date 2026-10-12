@@ -3003,7 +3003,7 @@ their hand under the table:
 - **The sentences are a screen reader's**: the turn, and what a call costs against the pot. The
   name of the reader's best hand stays beside the cards, which is all `hintOutcome` still draws.
 - **The clock and the tip are in the corner of the table** (`.table-corner`, the corner hokm
-  uses, shared), with the blinds above them when the felt has shed its chip. The corner is the
+  used until its clock went to a plate), with the blinds above them when the felt has shed its chip. The corner is the
   table's RIGHT in both languages, because a felt does not mirror, and its things keep to that
   edge by `margin-left: auto`: `align-items: flex-end` is the left of a column in Persian, and it
   left the lamp a clock's width in from the edge there. The street is not said in the corner:
@@ -4125,34 +4125,49 @@ the table, and nowhere else*, under *Backgammon*). What is left, and where:
   of hearts went face down." The felt still prints the turn in its caption while nothing lies on
   it. What a card would do is in the card's own name and nowhere on screen, so `hintOutcome`
   changes nothing a sighted player sees here either.
-- **The clock, Sort and the tip are three small things in the corner of the table**
-  (`.hokm-rail`): the clock as a pill, and under it Sort and the tip's lamp, 44px each. They are
-  inside the fit cell, over its bottom RIGHT corner, physically: the table is printed and does
-  not mirror, its bottom-left corner holds the last trick, and its bottom-right holds nothing at
-  any number of players. On a tall phone that corner is the spare strip between the table and
-  the hand; on a wide or sideways screen it is the margin beside the table; where the table
-  fills its cell both ways it is the table's own corner. `.table-fit` is `position: relative` for
-  it. Being a size container did not make the cell the containing block of an absolutely placed
-  child in the Chromium this was built against: measured without the declaration, the corner was
-  the stage's, and the three lay on the hand.
-- **The clock is brief there** (`<TurnClock brief>`): "23s", "24h". "About 24h left" is 123px,
-  which at 360 wide reached the reader's own plate. A screen reader is still read the sentence.
-- **The trump and the score join the corner** when the felt cannot carry them (a short stage, the
-  open chat, a cramped felt), where they used to join the bar: two chips, the trump's suit and
-  the score without its target. With the chat open, upright or sideways, the clock and the two
-  tools are not drawn and the two chips go to the two bottom corners of the cell. As one chip in
-  one corner, three scores were 129px, and beside the reader's plate at 360 wide there are 122.
-- **The grid is the table and the hand** (`.table-grid.hokm-grid`), at every size. The hand has
-  the whole width of the stage, where a wide screen gave the bar a column of it, and two rows of
-  cards are decided from that width alone. Beside a chat on a phone held sideways the grid gives
-  up its far end, as ludo's does (*A stage with no column beside its board makes the room
-  itself*).
+- **The clock is on the plate of whoever is to play.** A small tab, `<TurnClock brief>`, "23s" or
+  "24h", hung on the edge of the plate that faces away from the middle of the table: under the
+  reader's plate, over the one across from them, so it never lies where a trick does. It is ONE
+  clock, mounted for the seat on turn by that seat's own component (`HokmSeat`, which keeps a
+  boolean of its own for it) and for no other seat, which is also what keeps the reader's last
+  seconds from being ticked four times. At three players the two corner seats wear theirs
+  underneath: hung above, it left the top of a short table. On a table 21rem tall or less there
+  is no room over or under a plate, so the reader's own stands beside their plate (from 18rem of
+  table) and the one across from them does where the table is 30rem wide; a clock with no room
+  is not drawn, and the ring round the face still runs. A screen reader is still read the
+  sentence.
+- **Sort and the tip's lamp are the hand's** (`.hokm-rail`, in `.hokm-foot`, the row under the
+  table): Sort at one end and the lamp at the other, 44px each. Where the row is 34rem wide they
+  stand beside the fan. On a phone they stand above the fan's two ends, and the cards' own room
+  to rise is tucked under them, so the row costs the table 34px and not 44. The room is kept for a reader whether or not there is a tip (`data-tools`): a
+  row that grew when the lamp came on would change the size of the table with every turn.
+- **The trump and the score join that row** when the felt cannot carry them (a short stage, the
+  open chat, a cramped felt): two chips, the trump's suit beside Sort and the score without its
+  target beside the lamp. With the chat open, upright or sideways, Sort and the lamp are not
+  drawn and the two chips are lifted over the two bottom corners of the table's cell, so the
+  row is the cards alone: on a 740 by 360 phone a row of tools took the table under its usable
+  size.
+- **The row is a grid of three columns** (an end, the fan, an end), so the fan has exactly the
+  room the two ends leave, whatever is in them: at three players the score is three numbers
+  wide, and a fan given a fixed margin for one 44px tool ran under it. The row does not mirror
+  (`direction: ltr`, as the table and the fan do not), and the lamp's own words are put back in
+  the reader's direction by a wrapper that takes no place in the row.
+- **The grid is the table and that row** (`.table-grid.hokm-grid`), at every size, and nothing of
+  the page's own lies over the table. For a while the clock, Sort and the lamp were three things
+  in the bottom right corner of the table's cell: on a small phone that was the table's own
+  corner, and on a desktop it was empty page beside it. The row is a container of its own
+  (`foot`): beside an open chat on a phone held sideways the grid gives up its far end (*A stage
+  with no column beside its board makes the room itself*) and the row is half the stage wide.
+  Asked of the stage, the tools stood beside a fan that had no room for them, and the fit pass
+  found the two chips lying on the cards.
 
-`fit-pass.mjs` fails a hokm cell in which anything in the corner is off the screen or meets a
-plate, a pile, the last trick, a trick card, the stock, the drawn card, the card put face down or
-a card in the hand, and one in which the stock, the drawn card or the card put face down hangs
-off the table or meets any of those. `hokm-board.spec.ts` (*the small things in the corner of the
-table*, *playing a card with a finger*, *the two-handed draw*) holds the rest.
+`fit-pass.mjs` fails a hokm cell in which Sort, the lamp, a chip in that row or a plate's clock is
+off the screen or meets a plate (a clock may touch its own), a pile, the last trick, a trick
+card, the stock, the drawn card, the card put face down or a card in the hand; one in which a
+clock hangs off the table; and one in which the stock, the drawn card or the card put face down
+hangs off the table or meets any of those. `hokm-board.spec.ts` (*the clock on a plate, and the
+two things beside the hand*, *playing a card with a finger*, *the two-handed draw*) holds the
+rest.
 
 **The table is drawn once and stays.** Its felt, its hand and its corner each sat in a branch
 that read the board, and the board is a new object with every answer. So every move at the
@@ -4429,7 +4444,7 @@ chips in the felt's top corners at every size, and the last trick is a tile in i
 full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
 24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
 the last trick would sit on top of the plates, so they leave the felt and the chips move into the
-corner of the table (into the bar, while there was one). One line of the caption stays: what takes
+row under the table (into the bar, while there was one). One line of the caption stays: what takes
 the hand. The caption is as wide as its words,
 up to the medallion's width or nine rem, and never wider than the room between the two side plates
 (`93cqw - 2 * --side-w - 1rem`), so no line of it can sit on one; and a table 17.5rem tall or less -
@@ -4505,7 +4520,7 @@ just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
 or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt
-for the corner of the table, where the clock and the tools give way to them, and its caption keeps
+for the row under the table, and its caption keeps
 only the line that says what takes the hand,
 poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two plates share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the

@@ -674,16 +674,23 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
         const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc')].filter(shown);
 
-        for (const one of [...document.querySelectorAll('.hokm-bar-facts > .hokm-chip, .table-corner > .poker-bar-facts, .table-corner-clock, .table-corner-tools > *')].filter(shown))
+        for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .table-corner > .poker-bar-facts, .table-corner-clock, .table-corner-tools > *')].filter(shown))
         {
+            const seat = one.closest('.hokm-seat');
+
             if (outside(box(one)))
             {
                 found.push({ kind: 'fold', what: `${ describe(one) } in the corner of the table` });
             }
 
+            if (seat !== null && beyond(box(one), box(surface)))
+            {
+                found.push({ kind: 'hangs', what: `the clock of ${ describe(seat.querySelector('.table-plate')) } ${ where(box(one)) } off the table` });
+            }
+
             for (const other of [...laid, ...pressed, ...held])
             {
-                if (meets(box(one), box(other)))
+                if (seat?.contains(other) !== true && meets(box(one), box(other)))
                 {
                     found.push({ kind: 'corner', what: `${ describe(one) } ${ where(box(one)) } in the corner of the table meets ${ describe(other) } ${ where(box(other)) }` });
                 }
