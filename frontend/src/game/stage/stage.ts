@@ -9,6 +9,7 @@ export interface Timing
     easing?: string;
     fill?: FillMode;
     quiet?: Quiet;
+    landed?: () => void;
 }
 
 export interface Run
@@ -218,6 +219,11 @@ export function createStage(options: StageOptions): Stage
                     catch
                     {
                         animation = null;
+                    }
+
+                    if (!cancelled && timing.landed !== undefined)
+                    {
+                        guarded(timing.landed);
                     }
 
                     if (!abandon)

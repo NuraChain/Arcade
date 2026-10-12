@@ -89,6 +89,57 @@ describe('the stage', () =>
         expect(done).toBe(true);
     });
 
+    it('tells a run\'s own landing before whoever waits for the run, and nothing of a run that was stopped', async () =>
+    {
+        const { stage, elapse } = rig();
+        const told: string[] = [];
+        const frames = [{ opacity: 0 }, { opacity: 1 }];
+        const run = stage.animate(document.createElement('div'), frames, { duration: 200, landed: () => told.push('landed') });
+
+        void run.done.then(() => told.push('done'));
+
+        await elapse(195);
+        expect(told).toEqual([]);
+
+        await elapse(5);
+        expect(told).toEqual(['landed', 'done']);
+
+        stage.animate(document.createElement('div'), frames, { duration: 200, landed: () => told.push('stopped') }).cancel();
+        await elapse(250);
+        stage.animate(document.createElement('div'), frames, { duration: 200, landed: () => told.push('cleared') });
+        stage.clear();
+        await elapse(250);
+
+        expect(told, 'a run that never arrived said it had landed').toEqual(['landed', 'done']);
+
+        stage.animate(document.createElement('div'), frames, { duration: 200, landed: () => told.push('finished') }).finish();
+        await flush();
+
+        expect(told).toEqual(['landed', 'done', 'finished']);
+    });
+
+    it('reports a landing that throws, and the run is done all the same', async () =>
+    {
+        const { stage, elapse, failed } = rig();
+        let done = false;
+
+        void stage.animate(document.createElement('div'), [{ opacity: 0 }, { opacity: 1 }], {
+            duration: 100,
+            landed: () =>
+            {
+                throw new Error('the landing broke');
+            }
+        }).done.then(() =>
+        {
+            done = true;
+        });
+
+        await elapse(100);
+
+        expect(done).toBe(true);
+        expect(failed.map(String)).toEqual(['Error: the landing broke']);
+    });
+
     it('takes a run already in flight to a new pace, from where it had got to', async () =>
     {
         const { stage, elapse } = rig();

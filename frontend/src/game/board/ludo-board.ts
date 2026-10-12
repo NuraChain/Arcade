@@ -717,11 +717,13 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         if (from === YARD)
         {
             const flight = arc(start, end, { duration: ENTER_MS, arch: 1 });
-            const run = stage.animate(piece.root, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: at(one), scale: String(scale + (1 - scale) * one.progress) })), { duration: ENTER_MS });
+            const run = stage.animate(piece.root, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: at(one), scale: String(scale + (1 - scale) * one.progress) })), {
+                duration: ENTER_MS,
+                landed: () => sound()?.play('token-step', { pan: pan(end.x) })
+            });
 
             stage.animate(piece.lift, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: `0 ${ cq(-0.9 * C * one.lift) }` })), { duration: ENTER_MS, quiet: 'skip' });
             stage.animate(piece.shadow, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), scale: String(1 - 0.3 * one.lift) })), { duration: ENTER_MS, quiet: 'skip' });
-            stage.after(run.length, () => sound()?.play('token-step', { pan: pan(end.x) }));
 
             return run;
         }
@@ -729,22 +731,23 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         const each = stepOf(stops.length);
         const walked = walk([start, ...stops], { hops: stops.map((_, leg) => each * (leg === stops.length - 1 ? 1.15 : 1)), lifts: stops.map(() => 1) });
         const first = walked.lands[0];
+        const last = stops.length - 1;
+        const hopping = !stage.quiet();
         const run = stage.animate(piece.root, walked.steps.map((one) => ({
             offset: Math.min(1, one.at / walked.length),
             translate: at(one),
             scale: String(scale + (1 - scale) * Math.min(1, one.at / first))
-        })), { duration: walked.length });
+        })), {
+            duration: walked.length,
+            landed: () => sound()?.play('token-step', hopping ? { pan: pan(end.x), rate: 0.92 + last * 0.03 } : { pan: pan(end.x) })
+        });
 
         stage.animate(piece.lift, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), translate: `0 ${ cq(-0.22 * C * one.lift) }` })), { duration: walked.length, quiet: 'skip' });
         stage.animate(piece.shadow, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), scale: String(1 - 0.2 * one.lift) })), { duration: walked.length, quiet: 'skip' });
 
-        if (stage.quiet())
+        if (hopping)
         {
-            stage.after(run.length, () => sound()?.play('token-step', { pan: pan(end.x) }));
-        }
-        else
-        {
-            for (const [leg, landed] of walked.lands.entries())
+            for (const [leg, landed] of walked.lands.slice(0, last).entries())
             {
                 stage.after(landed, () => sound()?.play('token-step', { pan: pan(stops[leg].x), rate: 0.92 + leg * 0.03 }));
             }

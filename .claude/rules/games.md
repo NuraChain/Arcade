@@ -3821,12 +3821,27 @@ and is shown again by cancelling that fade, so for one commit every die after th
 thrown at opacity 0: measured on that commit's production build, where the first roll of a game
 was drawn and every later one flashed only as its own fade began. `stage-kit.spec.ts` holds it.
 
+**A run tells its own landing before anybody who waits for it.** `timing.landed` is called when a
+run comes to its end by itself, inside the end and before `done` resolves. A run that is cancelled
+or cleared calls nothing. It is there because a cue scheduled with `stage.after` for the moment a
+run ends is a second timer due at the same instant, and a browser runs promises between two
+timers. The run's timer is made first, so whoever awaited the run went first, and a ludo pawn's
+last step was heard AFTER the capture or the home chime it had set off: `token-step,
+token-capture, token-step, token-yard`. A manual clock fires every timer that is due in one go and
+runs the promises afterwards, so every spec heard the right order while the browser played the
+wrong one. The ludo lab found it, in a real browser (`tools/qa/CLAUDE.md`). A pawn's last step and
+an entry's one step are told by `landed` now; the steps before the last are still timers, which
+fall due before the run does. `stage-kit.spec.ts` holds the hook, and `ludo-board.spec.ts` (*a
+ludo landing, with timers that fire one at a time as a browser's do*) plays a capture, a home and
+an entry onto a held square on a clock that runs the promises between its timers. With the old
+timing it hears the order the browser played.
+
 **Less motion is the stage's decision, so a renderer has one path.** With the reader's setting on,
 `animate` swaps a run's frames for a 140 ms fade where the thing ends up (`quiet: 'out'` fades out
 something that ends in nothing and leaves it gone; `quiet: 'skip'` drops a flourish altogether) and
 keeps its delay. Timers are untouched. A run says how long it really is (`run.length`), and a
 renderer schedules a cue against that, which is what keeps every sound and haptic, in order, when
-nothing moves.
+nothing moves. (A cue that belongs to the run's own end goes in `landed`, above.)
 
 **The director plays scenes one after another.** A scene is a function that awaits runs; the next
 starts when it returns. `fast` plays one at double speed. `urgent` is the reader's own press: it

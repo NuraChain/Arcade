@@ -618,6 +618,110 @@ describe('a ludo move, played', () =>
     });
 });
 
+describe('a ludo landing, with timers that fire one at a time as a browser\'s do', () =>
+{
+    const tasks = (start: number) =>
+    {
+        let now = start;
+        let made = 0;
+        let waiting: { at: number; order: number; run: () => void }[] = [];
+
+        return {
+            now: () => now,
+
+            after(ms: number, run: () => void)
+            {
+                made += 1;
+
+                const due = { at: now + Math.max(0, ms), order: made, run };
+
+                waiting.push(due);
+
+                return () =>
+                {
+                    waiting = waiting.filter((one) => one !== due);
+                };
+            },
+
+            async elapse(ms: number)
+            {
+                const until = now + ms;
+
+                for (;;)
+                {
+                    const next = waiting.filter((one) => one.at <= until).sort((one, other) => one.at - other.at || one.order - other.order)[0];
+
+                    if (next === undefined)
+                    {
+                        break;
+                    }
+
+                    waiting = waiting.filter((one) => one !== next);
+                    now = Math.max(now, next.at);
+                    next.run();
+                    await flush();
+                }
+
+                now = until;
+                await flush();
+            }
+        };
+    };
+
+    it('sounds the last step of a walk before the capture or the home it sets off, and an entry before whoever it sends home', async () =>
+    {
+        const timers = tasks(1000);
+        const heard: Cue[] = [];
+        const own = document.createElement('div');
+        const sound: SoundHandle = {
+            play: (cue) =>
+            {
+                heard.push(cue);
+            },
+            setEnabled: () => undefined,
+            dispose: () => undefined
+        };
+        const ownStage = createStage({ clock: timers, quiet: () => false, report: (error) => broke.push(error) });
+        const ownDirector = createDirector(ownStage, timers, (error) => broke.push(error));
+        const board = await createLudoBoard({ host: own, plate: '', stage: ownStage, sound: () => sound, feel: () => undefined });
+        const shown = async (acts: Act<Told>[], seen: Sight<Felt>) =>
+        {
+            heard.length = 0;
+            void ownDirector.enqueue((ctx) => board.play(acts, seen, ctx), { estimate: board.estimate(acts) });
+            await timers.elapse(2000);
+
+            return [...heard];
+        };
+
+        document.body.append(own);
+
+        const taking = standing([[10, YARD, YARD, YARD], [38, YARD, YARD, YARD]], 2);
+        const took = stepped(taking, { kind: 'move', seat: 0, piece: 0 });
+
+        board.reset(sight(taking));
+
+        expect(await shown([took.act], sight(took.state))).toEqual(['token-step', 'token-step', 'token-capture', 'token-yard']);
+
+        const homing = standing([[53, YARD, YARD, YARD], EMPTY], 3);
+        const homed = stepped(homing, { kind: 'move', seat: 0, piece: 0 });
+
+        board.reset(sight(homing, 0, 'n'));
+
+        expect(await shown([homed.act], sight(homed.state, 0, 'n'))).toEqual(['token-step', 'token-step', 'home']);
+
+        const crowded = standing([EMPTY, [39, 5, YARD, YARD], [26, YARD, YARD, YARD]], 6);
+        const came = stepped(crowded, { kind: 'move', seat: 0, piece: 0 });
+
+        board.reset(sight(crowded, 0, 'o'));
+
+        expect(await shown([came.act], sight(came.state, 0, 'o'))).toEqual(['token-step', 'token-capture', 'token-yard']);
+
+        ownDirector.cancel();
+        board.dispose();
+        own.remove();
+    });
+});
+
 describe('the layers of a ludo board', () =>
 {
     const layerOf = (el: HTMLElement) => Number(el.style.zIndex);
