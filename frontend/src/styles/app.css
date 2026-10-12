@@ -310,26 +310,10 @@ html:has(.site-drawer[open])
     font-size: var(--text-ui-xs);
 }
 
-.board-roll::before
-{
-    content: '';
-    position: absolute;
-    inset: 4%;
-    border-radius: inherit;
-    box-shadow: 0 0 0 calc(var(--cell-cq) * 0.12) var(--accent), 0 0 calc(var(--cell-cq) * 1.2) calc(var(--cell-cq) * 0.1) var(--accent);
-    animation: roll-ring 1.4s ease-in-out infinite;
-}
-
 @keyframes yard-breathe
 {
     0%, 100% { opacity: 0.6; }
     50% { opacity: 1; }
-}
-
-@keyframes roll-ring
-{
-    0%, 100% { opacity: 0.55; scale: 1; }
-    50% { opacity: 1; scale: 1.06; }
 }
 
 @keyframes roll-bob
@@ -349,8 +333,7 @@ html:has(.site-drawer[open])
 
 @media (prefers-reduced-motion: reduce)
 {
-    .yard-badge .table-plate[data-turn]::before,
-    .board-roll::before
+    .yard-badge .table-plate[data-turn]::before
     {
         animation: none;
     }
@@ -3235,9 +3218,27 @@ html:has(.site-drawer[open])
     box-shadow: none;
 }
 
+.lb-die > .die3d
+{
+    transition: opacity 200ms var(--ease-ui, ease), scale 140ms var(--ease-ui, ease);
+}
+
 .lb-die[data-hand] > .die3d
 {
     animation: lb-bob 1.4s ease-in-out infinite;
+}
+
+@media (hover: hover)
+{
+    .board-stage:has(.board-roll:hover:not(:disabled)) .lb-die[data-hand] > .die3d
+    {
+        scale: 1.07;
+    }
+}
+
+.board-stage:has(.board-roll:active:not(:disabled)) .lb-die[data-hand] > .die3d
+{
+    scale: 0.93;
 }
 
 .lb-die[data-rattle] > .die3d

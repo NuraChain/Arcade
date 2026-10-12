@@ -5,6 +5,8 @@ export const RIM = 0.016 / 0.380;
 
 export const FIELD = 1 - RIM * 2;
 
+export const FRAME_ROUND = 63 / 1024;
+
 /**
  * The playing grid does NOT fill the paper, and assuming it did put every token near an edge about
  * a quarter of a cell too far out - exact in the middle, worst in the corners, which is the hardest

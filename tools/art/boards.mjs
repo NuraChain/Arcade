@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CELL, MARGIN, NEST, NEST_RADIUS, NEST_SPREAD, NEST_WELLS, RIM } from '../../frontend/src/game/layout.ts';
+import { CELL, FRAME_ROUND, MARGIN, NEST, NEST_RADIUS, NEST_SPREAD, NEST_WELLS, RIM } from '../../frontend/src/game/layout.ts';
 import { ENTRY, HOME_CELLS, RING, RING_CELLS, RING_STEPS, SAFE, ringIndex } from '../../backend/src/domains/match/ludo/board.ts';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'board');
@@ -10,6 +10,7 @@ const S = 1024;
 const G = MARGIN * S;
 const C = CELL * S;
 const EDGE = RIM * S;
+const FRAME_RADIUS = Math.round(FRAME_ROUND * S);
 
 const round = (value) => Math.round(value * 100) / 100;
 
@@ -75,18 +76,8 @@ function frame()
 {
     const inner = round(S - EDGE * 2);
 
-    const grain = [
-        [0.18, 0.012], [0.46, 0.018], [0.74, 0.011],
-        [0.3, 0.988], [0.62, 0.982], [0.86, 0.989]
-    ].map(([u, v]) => `<path d="M${ round(u * S - 26) } ${ round(v * S) }h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>`)
-        .concat([[0.012, 0.3], [0.018, 0.64], [0.988, 0.38], [0.982, 0.72]]
-            .map(([u, v]) => `<path d="M${ round(u * S) } ${ round(v * S - 26) }v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>`))
-        .join('\n');
-
-    return `<rect x="5" y="9" width="${ S - 10 }" height="${ S - 12 }" rx="58" fill="#A85A22" stroke="${ INK }" stroke-width="6"/>
-<rect x="5" y="5" width="${ S - 10 }" height="${ S - 14 }" rx="58" fill="#D9843F" stroke="${ INK }" stroke-width="6"/>
-<rect x="18" y="14" width="${ S - 36 }" height="16" rx="8" fill="#F2AC6A" opacity="0.9"/>
-${ grain }
+    return `<rect x="3" y="7" width="${ S - 6 }" height="${ S - 10 }" rx="${ FRAME_RADIUS - 3 }" fill="#A85A22" stroke="${ INK }" stroke-width="6"/>
+<rect x="3" y="3" width="${ S - 6 }" height="${ S - 12 }" rx="${ FRAME_RADIUS - 3 }" fill="#D9843F" stroke="${ INK }" stroke-width="6"/>
 <rect x="${ round(EDGE - 2) }" y="${ round(EDGE + 2) }" width="${ inner + 4 }" height="${ inner }" rx="24" fill="#8C4A1B"/>
 <rect x="${ round(EDGE) }" y="${ round(EDGE) }" width="${ inner }" height="${ inner }" rx="22" fill="${ PAPER }" stroke="${ INK }" stroke-width="5"/>`;
 }

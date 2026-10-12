@@ -2,19 +2,8 @@
 <defs>
 <clipPath id="centre-clip"><rect x="423.85" y="423.85" width="176.3" height="176.3" rx="14"/></clipPath>
 </defs>
-<rect x="5" y="9" width="1014" height="1012" rx="58" fill="#A85A22" stroke="#2A1E5C" stroke-width="6"/>
-<rect x="5" y="5" width="1014" height="1010" rx="58" fill="#D9843F" stroke="#2A1E5C" stroke-width="6"/>
-<rect x="18" y="14" width="988" height="16" rx="8" fill="#F2AC6A" opacity="0.9"/>
-<path d="M158.32 12.29h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M445.04 18.43h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M731.76 11.26h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M281.2 1011.71h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M608.88 1005.57h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M854.64 1012.74h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M12.29 281.2v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M18.43 629.36v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M1011.71 363.12v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
-<path d="M1005.57 711.28v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+<rect x="3" y="7" width="1018" height="1014" rx="60" fill="#A85A22" stroke="#2A1E5C" stroke-width="6"/>
+<rect x="3" y="3" width="1018" height="1012" rx="60" fill="#D9843F" stroke="#2A1E5C" stroke-width="6"/>
 <rect x="41.12" y="45.12" width="941.77" height="937.77" rx="24" fill="#8C4A1B"/>
 <rect x="43.12" y="43.12" width="937.77" height="937.77" rx="22" fill="#FFF4DC" stroke="#2A1E5C" stroke-width="5"/>
 <g>

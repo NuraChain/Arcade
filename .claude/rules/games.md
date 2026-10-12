@@ -3022,6 +3022,22 @@ ink line (`#2A1E5C`) on every shape, flat colours a shade brighter than the piec
 toy-wood frame, round yard houses whose four seats are recessed rings, chunky outlined stars, and a
 gold star at the centre.
 
+**The frame is plain wood with a lip, and the board ends where the frame does.** The frame used to
+carry the sticker's lighter band across its top and ten short strokes of grain. On a strip that
+thin the band read as a stray line along the top of the board, and the owner asked for it gone
+(2026-10-12); the strokes went with it, being the same thing at every edge. The frame fills its
+square to the edge, and its corner is one number, `FRAME_ROUND` in `game/layout.ts`, read by the
+art, by the plate that clips the board and by the stage that casts its shadow. The plate was
+rounded at the panel's 14px under a frame rounded at six percent of the board, so the shadow was a
+squarer box than the board that cast it.
+
+**The die in the middle wears no ring.** The roll button drew the product's blue ring and a wide
+blue glow round itself: a translucent box over the squares beside the die, on a board where nothing
+else is translucent. It is the other thing the owner asked to have removed. The die says it can be
+rolled by lying in the middle and bobbing. Under a mouse it grows a little, and it gives under a
+press before it is lifted (`:has()` on the stage, because the button and the die are in different
+subtrees). A keyboard's focus is still the button's own outline.
+
 **The board and the pieces are ONE paint and ONE line.** `PAINT` in the generator (`fill`, `light`,
 `dark`, plus `tint` and `well` for the seats) colours the board and the pawns alike, `INK` outlines
 both, and `--ludo-*` in `tokens.css` and `TONE` in `ludo-board.ts` are the same four fills - kept equal

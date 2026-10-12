@@ -1,7 +1,7 @@
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
-import { CELL, MARGIN } from '../../game/layout.ts';
+import { CELL, FRAME_ROUND, MARGIN } from '../../game/layout.ts';
 import { FINISHED } from '../../game/board/path.ts';
 import type { BoardHandle, BoardOptions, BoardToken } from '../../game/bridge.ts';
 import { sceneFor } from '../../game/scenes.ts';
@@ -103,10 +103,10 @@ export default component BoardCanvas(props: { game: string; tokens: readonly Boa
     }
 
     <div
-        class="board-plate [direction:ltr] relative isolate @container inline-full block-full bg-[url('/board/ludo-board.svg')] bg-[length:100%_100%] bg-no-repeat rounded-panel overflow-hidden"
+        class="board-plate [direction:ltr] relative isolate @container inline-full block-full bg-[url('/board/ludo-board.svg')] bg-[length:100%_100%] bg-no-repeat overflow-hidden"
         role="img"
         aria-label={ locale.t('match.board') }
-        style={ `--rim:${ (MARGIN * 100).toFixed(4) }cqi; --cell:${ (CELL * 100).toFixed(4) }cqi` }
+        style={ `--rim:${ (MARGIN * 100).toFixed(4) }cqi; --cell:${ (CELL * 100).toFixed(4) }cqi; border-radius:${ (FRAME_ROUND * 100).toFixed(3) }%` }
     >
         <div class="board-canvas absolute inset-0" aria-hidden="true" ref={ (element) => host = element }></div>
 
