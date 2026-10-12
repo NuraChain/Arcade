@@ -1148,24 +1148,42 @@ html:has(.site-drawer[open])
     }
 }
 
-.hokm-table
+.hokm-stage .table-surface.hokm-table
 {
-    --ratio: 0.8333;
-
+    inline-size: min(100cqw, 100cqh * 3);
+    block-size: min(100cqh, 100cqw / 0.52);
+    aspect-ratio: auto;
     direction: ltr;
     container-type: size;
-    background:
-        url('/board/hokm-ornaments-tall.svg') center / 100% 100% no-repeat,
-        url('/board/hokm-table-tall.webp') center / 100% 100% no-repeat;
 }
 
-@container fit (min-aspect-ratio: 15 / 13)
+.hokm-table::before,
+.hokm-table::after
 {
-    .hokm-table
-    {
-        --ratio: 1.6;
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border: 0 solid transparent;
+    pointer-events: none;
+}
 
-        background-image: url('/board/hokm-ornaments-wide.svg'), url('/board/hokm-table-wide.webp');
+.hokm-table::before
+{
+    border-image: url('/board/hokm-table-tall.webp') 110 fill / 11cqmin stretch;
+}
+
+.hokm-table::after
+{
+    border-image: url('/board/hokm-frame.svg') 330 / 33cqmin stretch;
+    background: url('/board/hokm-medallion.svg') center / 36cqmin 36cqmin no-repeat;
+}
+
+@container (min-aspect-ratio: 1 / 1)
+{
+    .hokm-table::before
+    {
+        border-image-source: url('/board/hokm-table-wide.webp');
     }
 }
 
@@ -1190,9 +1208,10 @@ html:has(.site-drawer[open])
     --top-room: calc(var(--edge) + var(--plate-h) + var(--pile-h));
     --foot-room: calc(var(--edge) + var(--plate-h));
     --band: calc(100cqh - var(--top-room) - var(--foot-room) - 2 * var(--trick-gap));
-    --trick-w: min(clamp(2.6rem, 12cqmin, 4.75rem), (var(--band) - 2 * var(--trick-gap)) / 2.85);
+    --side-w: 3.25rem;
+    --side-room: calc(3.5cqw + var(--side-w));
+    --trick-w: min(clamp(2.6rem, 16cqmin, 9rem), (var(--band) - 2 * var(--trick-gap)) / 2.85, (100cqw - 2 * var(--side-room) - 4 * var(--trick-gap)) / 3.4);
     --trick-h: calc(var(--trick-w) * 288 / 204);
-    --side-w: min(5.75rem, 46.5cqw - 1.5 * var(--trick-w) - 3 * var(--trick-gap));
 }
 
 @container stage (max-width: 36rem)
@@ -1290,8 +1309,8 @@ html:has(.site-drawer[open])
     flex-direction: column;
     gap: 0.2rem;
     max-inline-size: var(--side-w);
-    padding: 0.4rem 0.4rem 0.35rem;
-    border-radius: 0.9rem;
+    padding: 0.3rem 0.3rem 0.35rem;
+    border-radius: 1.4rem;
     text-align: center;
 }
 
@@ -1301,13 +1320,39 @@ html:has(.site-drawer[open])
     max-inline-size: 100%;
 }
 
+.hokm-seat:is([data-side='left'], [data-side='right']) .table-plate-name
+{
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    clip-path: inset(50%);
+}
+
+.hokm-seat:is([data-side='left'], [data-side='right']) .table-plate-facts
+{
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
 .hokm-seat:is([data-side='left'], [data-side='right']) .hokm-pile
 {
     display: none;
 }
 
-@container (min-width: 36rem)
+@container (min-aspect-ratio: 1 / 1) and (min-width: 32rem)
 {
+    .hokm-table > *
+    {
+        --side-w: 5.75rem;
+        --side-room: calc(3.5cqw + 8.5rem);
+    }
+
+    .hokm-seat:is([data-side='left'], [data-side='right'])
+    {
+        max-inline-size: 8.5rem;
+    }
+
     .hokm-seat:is([data-side='left'], [data-side='right']) .table-plate
     {
         flex-direction: row;
@@ -1324,9 +1369,28 @@ html:has(.site-drawer[open])
         align-items: flex-start;
     }
 
+    .hokm-seat:is([data-side='left'], [data-side='right']) .table-plate-name
+    {
+        position: static;
+        inline-size: auto;
+        block-size: auto;
+        margin: 0;
+        clip-path: none;
+    }
+
+    .hokm-seat:is([data-side='left'], [data-side='right']) .table-plate-facts
+    {
+        flex-direction: row;
+        gap: 0.5rem;
+    }
+}
+
+@container (min-aspect-ratio: 1 / 1) and (min-width: 44rem)
+{
     .hokm-seat:is([data-side='left'], [data-side='right']) .hokm-pile
     {
         display: block;
+        max-inline-size: 8.5rem;
     }
 }
 
@@ -1787,15 +1851,33 @@ html:has(.site-drawer[open])
 .hokm-seat[data-side='top'] > .hokm-clock
 {
     top: auto;
+    right: 0.5rem;
     bottom: calc(100% - 0.3rem);
+    left: auto;
+    translate: 0 0;
 }
 
-@container (min-width: 36rem)
+.hokm-seat[data-side='left'] > .hokm-clock
+{
+    left: 0;
+    translate: 0 0;
+}
+
+.hokm-seat[data-side='right'] > .hokm-clock
+{
+    right: 0;
+    left: auto;
+    translate: 0 0;
+}
+
+@container (min-aspect-ratio: 1 / 1) and (min-width: 32rem)
 {
     .hokm-seat:is([data-side='left'], [data-side='right']) > .hokm-clock
     {
         top: auto;
+        right: 0.5rem;
         bottom: calc(100% - 0.3rem);
+        left: auto;
     }
 }
 
@@ -1824,6 +1906,7 @@ html:has(.site-drawer[open])
     .hokm-seat[data-side='top'] > .hokm-clock
     {
         top: 50%;
+        right: auto;
         bottom: auto;
         left: calc(100% + 0.3rem);
         display: inline-flex;
@@ -1848,21 +1931,9 @@ html:has(.site-drawer[open])
 
 @container stage (max-height: 24rem)
 {
-    .hokm-felt-info,
-    .hokm-centre > :not(.hokm-needed),
-    .hokm-last-tile
+    .hokm-centre > :not(.hokm-needed)
     {
         display: none;
-    }
-
-    :is(.hokm-bar-trump, .hokm-bar-score)
-    {
-        display: flex;
-    }
-
-    .hokm-foot[data-tools] .hokm-rail-end
-    {
-        min-inline-size: 8.75rem;
     }
 }
 
@@ -1920,7 +1991,7 @@ html:has(.site-drawer[open])
     --card-w: var(--trick-w);
     --mid: calc(var(--top-room) + var(--trick-gap) + var(--band) / 2);
     --reach-y: clamp(var(--trick-h) / 2 + var(--trick-gap) / 2, clamp(2.9rem, 15cqmin, 7rem), var(--band) / 2 - var(--trick-h) / 2);
-    --reach-x: clamp(var(--trick-w) + 2 * var(--trick-gap), clamp(2.6rem, 13cqmin, 6.5rem), 46.5cqw - var(--side-w) - var(--trick-gap) - var(--trick-w) / 2);
+    --reach-x: clamp(var(--trick-w) * 1.12 + 2 * var(--trick-gap), clamp(2.6rem, 13cqmin, 6.5rem), 50cqw - var(--side-room) - var(--trick-gap) - var(--trick-w) * 0.56);
 
     position: absolute;
     z-index: 1;

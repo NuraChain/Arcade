@@ -4036,9 +4036,9 @@ that a defect.
 
 ## The table, and the cards on it
 
-Hokm is played on `hokm-table-wide` (16:10) or `hokm-table-tall` (5:6), chosen by the SHAPE of the
-fit cell (`@container fit (min-aspect-ratio: 15 / 13)`, where the wide table starts to be the larger
-of the two), and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
+Hokm is played on a table that takes the room it is given, between about half as wide as it is
+tall and three times as wide, drawn from `hokm-table-tall` or `hokm-table-wide` by which way the
+table lies, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
 
 **A table is two layers: a photograph of the object and a drawing of its ornament.** The felt, the
 bevelled walnut rim, the brass inlay and the dark groove are rendered by `tools/blender/surfaces.py`
@@ -4046,9 +4046,9 @@ in Cycles - real geometry, so the rim casts its shadow onto the edge of the clot
 CC0 `scuba_suede` (taken to grey and tinted baize green, with a procedural mottle and nap on top,
 because a flat fill reads as plastic) and `dark_wood`. The rim is a hand-built mesh with no UV map, so
 its wood is mapped in OBJECT space; mapped by UV it sampled one pixel and came out a flat orange. The
-gold lines, corner flourishes and medallion stay vector in `hokm-ornaments-*.svg` from
-`tools/art/boards.mjs`, laid over the render as a second background, because a thin gold line is the
-one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
+gold lines, corner flourishes and medallion stay vector, in `hokm-frame.svg` and
+`hokm-medallion.svg` from `tools/art/boards.mjs`, laid over the render, because a thin gold line is
+the one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
 smooth cloth compresses well.
 
 **Poker has a table of its own at the same standard**, because the owner asked for one: a stadium with
@@ -4064,10 +4064,50 @@ short side - are written in both files and have to agree. The deck comes from `t
 `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card and a spade in the
 hero art are one path.
 
-**Two tables, not one stretched.** A phone column is taller than it is wide and a desktop one is the
-other way round; a single image at `100% 100%` would squash the corner flourishes and the medallion
-into ovals on one of them. Everything on the felt is placed in percent and `cqmin`, so the seats and
-the trick follow whichever table is showing.
+**One table of any shape, cut in nine and never stretched.** For a long time there were two
+tables, 5:6 and 16:10, each drawn at `100% 100%` of a box of exactly its shape, because a single
+image stretched over another shape squashes the corner flourishes and the medallion into ovals.
+The price was the room: on a tall phone the table sat in the middle of the stage between bands of
+bare page (the table and the hand took 70% of the stage's height at 390 by 844), and on a phone
+turned over it was 48% of the stage's width. A photograph of a table does not have to be drawn
+whole. `.hokm-table::before` draws it as a `border-image` cut in nine: the four corners keep
+their shape, the four edges stretch along their own length, where a grain and an inlay run
+anyway, and the cloth fills the middle. `.hokm-table::after` lays the gold thread and the corner
+leaves over it from `hokm-frame.svg`, cut in nine the same way, and the medallion in the middle
+as a background of its own. So the table is as tall as a tall phone allows and as wide as a wide
+screen does, and its rim is as thick as it ever was.
+
+- **A thousand of the drawing is the table's shorter side.** The photograph is cut 110 from each
+  edge and drawn 11cqmin wide; the frame is a square of a thousand, cut at 330 and drawn at
+  33cqmin; the medallion is 360 across and drawn at 36cqmin. Those are three pairs of numbers
+  that have to agree, in a stylesheet and in three drawings, and
+  `backend/tests/hokm-table-art.spec.ts` reads both and holds them: the same scale for all three,
+  a cut that clears the corner leaves, every file the stylesheet asks for present, and none left
+  in `public/board` that nothing draws. It is a server spec because the browser's test runner
+  hands every stylesheet over as an empty string.
+- **A `cqmin` in a pseudo-element is the element's own.** The table is the size container, and
+  its `::before` and `::after` measure by it, which the table itself cannot.
+- **The seats and the trick are placed in percent and `cqmin`**, so they follow whatever shape
+  the table has. A played card is `16cqmin` wide, a sixth of the table's shorter side, where it
+  was an eighth and read as a stamp on a desktop. It is also no wider than the two side seats
+  leave for three of them (`--side-room`), and it keeps clear of its neighbours by its own
+  width and an eighth more (`--reach-x`): cards lie tilted, a tilted card's box is wider than
+  the card, and the fit pass found the bigger cards touching at every desktop size.
+- **On an upright table the two side seats are a face and two numbers**, and on any table under
+  32rem wide. On a phone a side plate with a name on it covered a block of felt 90 by 75 on both
+  sides of the trick; the name is for a screen reader there (the plate still has it) and the
+  plate is 44 wide. A table that lies wide gives its side seats their names, in a plate no wider
+  than 8.5rem, and from 44rem their piles. Beside an open chat on a tablet the table is 560 by
+  433, and a pile on each side left a card on the felt under its 15%.
+- **A side seat's clock is flush with the plate's outer edge**, not centred on it: "۲۴ ساعت" is
+  74 wide, a compact plate is 44, and centred the tab hung three pixels off the table in
+  Persian and in no other language. Over a named plate (the seat across, and a side seat on a
+  wide table) the tab stands at the plate's far end, away from the crown and the dealer's mark,
+  which sit on the face.
+- `fit-pass.mjs` holds the room: on an upright stage the table and the row under it take 85% of
+  the stage's height, on a wide one the table takes 70% of its width, and a card on the felt is
+  15% of the table's shorter side. All three with the chat shut, which is when the stage is the
+  table's.
 
 **The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending, so
 the column is `card % 13` and the row is `card / 13` and there is no packing for the client to know.
@@ -4141,8 +4181,8 @@ the table, and nowhere else*, under *Backgammon*). What is left, and where:
   stand beside the fan. On a phone they stand above the fan's two ends, and the cards' own room
   to rise is tucked under them, so the row costs the table 34px and not 44. The room is kept for a reader whether or not there is a tip (`data-tools`): a
   row that grew when the lamp came on would change the size of the table with every turn.
-- **The trump and the score join that row** when the felt cannot carry them (a short stage, the
-  open chat, a cramped felt): two chips, the trump's suit beside Sort and the score without its
+- **The trump and the score join that row** when the felt cannot carry them (the open chat, a
+  cramped felt): two chips, the trump's suit beside Sort and the score without its
   target beside the lamp. With the chat open, upright or sideways, Sort and the lamp are not
   drawn and the two chips are lifted over the two bottom corners of the table's cell, so the
   row is the cards alone: on a 740 by 360 phone a row of tools took the table under its usable
@@ -4441,11 +4481,14 @@ refuses quietly. Hokm keeps a real landscape layout, because a card table is wid
 
 **The felt carries the two numbers somebody glances at.** The trump, the round and the score are two
 chips in the felt's top corners at every size, and the last trick is a tile in its bottom-left; the
-full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
-24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
-the last trick would sit on top of the plates, so they leave the felt and the chips move into the
-row under the table (into the bar, while there was one). One line of the caption stays: what takes
-the hand. The caption is as wide as its words,
+full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. With the
+chat open the chips, the centre caption and the last trick would sit on top of the plates, so
+they leave the felt and the chips move into the row under the table (into the bar, while there
+was one). That was the rule for every stage 24rem tall or less too, a phone turned over, while
+the table there was 365 wide; it is 685 now, its top corners are clear of the seat across, and
+the chips and the last trick stay on it. A felt that still cannot carry its chips says so
+itself (`data-felt="cramped"`, measured). On a stage that short the caption keeps one line: what
+takes the hand. The caption is as wide as its words,
 up to the medallion's width or nine rem, and never wider than the room between the two side plates
 (`93cqw - 2 * --side-w - 1rem`), so no line of it can sit on one; and a table 17.5rem tall or less -
 where the plates have already given up their piles - drops the caption's crown and name, which pays
@@ -4519,8 +4562,8 @@ them. Poker's tall table is drawn only in a fit cell at least 19.5rem tall, its 
 just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
-or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt
-for the row under the table, and its caption keeps
+or `over`, on the arena), rules of its own where they were once a short stage's: hokm's trump and
+score leave the felt for the row under the table, and its caption keeps
 only the line that says what takes the hand,
 poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two plates share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the

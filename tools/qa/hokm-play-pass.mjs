@@ -135,7 +135,7 @@ const pressable = async (page, name) =>
 /**
  * How wide the image behind an element really is, once the browser has fetched it.
  *
- * `hokm-table-*.webp`, `hokm-ornaments-*.svg` and `deck.svg` are files that can 404 leaving a table with no
+ * `hokm-table-*.webp`, `hokm-frame.svg`, `hokm-medallion.svg` and `deck.svg` are files that can 404 leaving a table with no
  * cloth and a hand of blank rectangles, each with a perfect accessible name - which every other gate
  * in this repository passes. A missing background image is not an error in the DOM, so the only way
  * to know is to fetch it again and read what came back.
@@ -149,7 +149,13 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 
     if (node === null) { return -1; }
 
-    const urls = [...getComputedStyle(node).backgroundImage.matchAll(/url\("?([^")]+)"?\)/g)].map((match) => match[1]);
+    const drawn = [null, '::before', '::after'].flatMap((part) =>
+    {
+        const style = getComputedStyle(node, part);
+
+        return [style.backgroundImage, style.borderImageSource];
+    });
+    const urls = drawn.flatMap((value) => [...value.matchAll(/url\("?([^")]+)"?\)/g)].map((match) => match[1]));
 
     if (urls.length === 0) { return 0; }
 

@@ -51,6 +51,8 @@ const USABLE = {
     ludo: { wide: [208, 208], tall: [208, 208], card: 0 }
 };
 
+const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15 };
+
 const LANGUAGES = {
     en: { locale: 'en-US', show: englishPlay['play.table.chatShow'], hide: englishPlay['play.table.chatHide'], raise: [englishPlay['poker.raise'], englishPlay['poker.bet']] },
     fa: { locale: 'fa-IR', show: persianPlay['play.table.chatShow'], hide: persianPlay['play.table.chatHide'], raise: [persianPlay['poker.raise'], persianPlay['poker.bet']] }
@@ -596,6 +598,26 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         {
             found.push({ kind: 'small', what: `surface ${ size(drawn) } under its usable ${ wide }x${ high }` });
         }
+
+        const stage = document.querySelector('.table-stage');
+
+        if (surface.classList.contains('hokm-table') && stage !== null && !given.openChat)
+        {
+            const room = box(stage);
+            const foot = document.querySelector('.hokm-foot');
+            const tall = (drawn.height + (foot === null ? 0 : box(foot).height)) / room.height;
+            const across = drawn.width / room.width;
+
+            if (room.height > room.width && tall < given.fills.tall)
+            {
+                found.push({ kind: 'small', what: `the table and the hand take ${ Math.round(tall * 100) }% of an upright stage's height, under ${ given.fills.tall * 100 }%` });
+            }
+
+            if (room.width >= room.height && across < given.fills.wide)
+            {
+                found.push({ kind: 'small', what: `the table takes ${ Math.round(across * 100) }% of a wide stage's width, under ${ given.fills.wide * 100 }%` });
+            }
+        }
     }
 
     if (surface !== null)
@@ -912,6 +934,14 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             found.push({ kind: 'small', what: `trick card ${ name } ${ size(rect) } under ${ least.card }px wide` });
         }
 
+        const cloth = trick.closest('.hokm-table');
+        const short = cloth === null ? 0 : Math.min(box(cloth).width, box(cloth).height);
+
+        if (rect.width < short * given.fills.trick - 0.5)
+        {
+            found.push({ kind: 'small', what: `trick card ${ name } ${ size(rect) } under ${ given.fills.trick * 100 }% of the table's shorter side (${ Math.round(short) })` });
+        }
+
         for (const other of [...solids, ...tricks.filter((one) => one !== trick).map((one) => one.querySelector('.card-face') ?? one)])
         {
             if (meets(rect, box(other)))
@@ -1105,7 +1135,7 @@ const cell = async (label, spec, page, url, size, openChat, language, waits, las
         await page.waitForTimeout(300);
     }
 
-    const found = await measure(page, { least: USABLE[spec.game], openChat, half: size.half === true, waits, sides: spec.teams === true });
+    const found = await measure(page, { least: USABLE[spec.game], fills: FILLS, openChat, half: size.half === true, waits, sides: spec.teams === true });
 
     if (!openChat)
     {

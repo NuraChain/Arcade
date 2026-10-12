@@ -267,34 +267,43 @@ function flourish()
         + 'M22 8C44 10 60 18 70 30M8 22C10 44 18 60 30 70';
 }
 
-function hokmOrnaments(width, height)
-{
-    const rim = Math.round(Math.min(width, height) * 0.045);
-    const lip = Math.round(rim * 0.35);
-    const fx = rim + lip;
-    const fw = width - fx * 2;
-    const fh = height - fx * 2;
-    const inset = Math.round(Math.min(fw, fh) * 0.045);
-    const cx = width / 2;
-    const cy = height / 2;
-    const medal = Math.round(Math.min(fw, fh) * 0.2);
-    const corners = [
-        [fx + inset, fx + inset, 0],
-        [width - fx - inset, fx + inset, 90],
-        [width - fx - inset, height - fx - inset, 180],
-        [fx + inset, height - fx - inset, 270]
-    ];
-    const petals = Array.from({ length: 8 }, (_, index) =>
-        `<ellipse cx="0" cy="${ -medal * 0.52 }" rx="${ round(medal * 0.13) }" ry="${ round(medal * 0.36) }" transform="rotate(${ index * 45 })"/>`).join('');
+const HOKM_FRAME = 1000;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }">
+function hokmFelt()
+{
+    const rim = Math.round(HOKM_FRAME * 0.045);
+    const edge = rim + Math.round(rim * 0.35);
+    const felt = HOKM_FRAME - edge * 2;
+
+    return { rim, felt, at: edge + Math.round(felt * 0.045), medal: Math.round(felt * 0.2) };
+}
+
+function hokmFrame()
+{
+    const { rim, felt, at } = hokmFelt();
+    const far = HOKM_FRAME - at;
+    const corners = [[at, at, 0], [far, at, 90], [far, far, 180], [at, far, 270]];
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ HOKM_FRAME } ${ HOKM_FRAME }" width="${ HOKM_FRAME }" height="${ HOKM_FRAME }">
 <defs>
 <path id="flourish" d="${ flourish() }"/>
 </defs>
-<rect x="${ fx + inset }" y="${ fx + inset }" width="${ fw - inset * 2 }" height="${ fh - inset * 2 }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.34" stroke-width="2.5"/>
-<rect x="${ fx + inset + 8 }" y="${ fx + inset + 8 }" width="${ fw - inset * 2 - 16 }" height="${ fh - inset * 2 - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5"/>
-${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(Math.min(fw, fh) / 700) })" fill="#D9B45A" fill-opacity="0.3" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2"/>`).join('\n') }
-<g transform="translate(${ cx } ${ cy })">
+<rect x="${ at }" y="${ at }" width="${ far - at }" height="${ far - at }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.34" stroke-width="2.5"/>
+<rect x="${ at + 8 }" y="${ at + 8 }" width="${ far - at - 16 }" height="${ far - at - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5"/>
+${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(felt / 700) })" fill="#D9B45A" fill-opacity="0.3" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2"/>`).join('\n') }
+</svg>
+`;
+}
+
+function hokmMedallion()
+{
+    const { medal } = hokmFelt();
+    const side = medal * 2 + 8;
+    const petals = Array.from({ length: 8 }, (_, index) =>
+        `<ellipse cx="0" cy="${ round(-medal * 0.52) }" rx="${ round(medal * 0.13) }" ry="${ round(medal * 0.36) }" transform="rotate(${ index * 45 })"/>`).join('');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ side } ${ side }" width="${ side }" height="${ side }">
+<g transform="translate(${ side / 2 } ${ side / 2 })">
     <circle r="${ medal }" fill="#0B4227" fill-opacity="0.22" stroke="#D9B45A" stroke-opacity="0.3" stroke-width="3"/>
     <circle r="${ round(medal * 0.9) }" fill="none" stroke="#D9B45A" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="3 7"/>
     <g fill="#D9B45A" fill-opacity="0.06" stroke="#D9B45A" stroke-opacity="0.13" stroke-width="1.5">${ petals }</g>
@@ -308,10 +317,10 @@ if (RING_CELLS.length !== RING)
     throw new Error(`the ring has ${ RING_CELLS.length } cells`);
 }
 
-writeFileSync(join(OUT, 'hokm-ornaments-wide.svg'), hokmOrnaments(1600, 1000));
-console.log('board hokm-ornaments-wide.svg');
-writeFileSync(join(OUT, 'hokm-ornaments-tall.svg'), hokmOrnaments(1000, 1200));
-console.log('board hokm-ornaments-tall.svg');
+writeFileSync(join(OUT, 'hokm-frame.svg'), hokmFrame());
+console.log('board hokm-frame.svg');
+writeFileSync(join(OUT, 'hokm-medallion.svg'), hokmMedallion());
+console.log('board hokm-medallion.svg');
 
 writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
 console.log('board ludo-board.svg');
