@@ -28,7 +28,7 @@ const board = 'svg[viewBox="0 0 1000 820"]';
 
 mkdirSync(OUT, { recursive: true });
 
-const { record, finish } = recorder('motion pass');
+const { record, finish } = recorder('backgammon motion pass');
 const browser = await launch();
 const dana = await seat(browser, 'dana.w', { width: 1280, height: 800 });
 const mina = await seat(browser, 'mina', { width: 1280, height: 800 });

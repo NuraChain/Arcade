@@ -37,7 +37,7 @@ How to read it:
 | D6 | **Chips rest as numbers in pills and are discs only in flight.** | Bet spots are placed by measurement (`seatBets` in `frontend/src/game/chip-spot.ts`) and `tools/qa/fit-pass.mjs` holds their clearances on a 320 by 200 felt. Discs that exist only in flight leave that geometry alone. | Resting stacks, which change every bet spot's box. |
 | D7 | **"Total pot" keeps meaning every chip put in.** It ticks when a bet LANDS on its spot; gathering a street moves discs and changes no number. | The view's `pot` is every chip committed this hand, bets in front of the seats included. The felt labels it "Total pot" and the cost line and the pot presets are priced on it. | A pot that counts up at the gather, which either counts the bets twice or changes what the number means. |
 | D8 | **Lint runs once, at the end.** Each commit runs the three typechecks and the suites, on the commit itself. | The owner's standing rule. | `npm run check` with every commit. |
-| D9 | **The scratch probes leave the repository root.** The lab is rebuilt as `tools/qa/motion-lab.mjs` and runs against the dev server; the production pass is separate. | The probes were untracked, at the root of a public repository, and not ignored. The lab imports `/src/...` modules through the page, which only the dev server serves, so what it measured cannot move into a pass against the production build. | One tool for both servers. |
+| D9 | **The scratch probes leave the repository root.** The lab is rebuilt under `tools/qa/` and runs against the dev server; the production pass is separate. (They were `motion-lab.mjs` and `motion-pass.mjs` until Ludo had a part: each game now has a file of its own for each, `<game>-motion-lab.mjs` and `<game>-motion-pass.mjs`.) | The probes were untracked, at the root of a public repository, and not ignored. The lab imports `/src/...` modules through the page, which only the dev server serves, so what it measured cannot move into a pass against the production build. | One tool for both servers. |
 | D10 | **Moves are made on the table.** Every game action gets a direct gesture on the table and the HTML controls that offered it go. This row first kept a hidden path for a keyboard and a screen reader, the same moves as real buttons shown on focus; D12 withdrew it. Poker's action controls stay, because an action needs a choice and an amount, but they move onto the felt in front of the reader's seat and are drawn as part of the table. | The owner asked for it on 2026-10-11, after approving the rest: the buttons for the next move go, and everything is done on the table by touch or click. Poker keeping its controls is this design's default. | The recorded rule it replaces (quoted below the table): the board as an illustration with every move a button beside it. |
 | D11 | **No words take room from a board.** The sentences that spell a move out, the turn sentence, the match line and the tip are not drawn under or beside a board on an upright screen: the board has all the room the stage has. The sentences stay for a screen reader, the clock sits on the plate of whoever is on turn, and the tip is a lamp that opens over the board when it is pressed. | The owner, on 2026-10-11, in three messages: "description for movement is useless on games", "we can have more space of game", "game board is more important that descriptions". A bar of text under a board also moved the board as it grew and shrank. | A bar of sentences under every board, as each game had. Not hidden: the rules tip, which has a switch of its own and costs the board nothing as a lamp. |
 | D12 | **No list of moves in the page, not even a hidden one.** A move exists only as a touch or a click on the piece, the card, the die or the cube. No game keeps its moves as buttons for a keyboard or a screen reader, shown, hidden until focus, or on a wider screen. What may stay is what nothing can press: a live sentence and the position in words, both `sr-only`. A question the game itself asks (take or give up a double, the trump suit, an amount to raise) is still asked on the table. | The owner, on 2026-10-11, after seeing backgammon's hidden panel open on a desktop, which one press of Tab after a click on the board does: "also remove that dom helper paly the move 23 > 18 and etc.. on desktop delete these things on all of games game should be real player should tocuh or click on game things such as card dice and etc..". | D10's assistive path, built for backgammon in commit 1.3 as `.bg-keys` and removed again. Its cost is accepted and stated: a turn cannot be made from a keyboard or by a screen reader. The way back, if it is asked for, is play on the table itself: a cursor that walks the pieces. |
@@ -1450,8 +1450,8 @@ changed hands, and still 31 px with the buttons gone; with it out, the board doe
 
 **Limits.** §3.4.
 
-**Checklist.** "Lab" is `tools/qa/motion-lab.mjs` on the dev server; "pass" is
-`tools/qa/motion-pass.mjs` on the production build (§8). The last column is filled in at the final
+**Checklist.** "Lab" is the game's `tools/qa/<game>-motion-lab.mjs` on the dev server; "pass" is
+its `tools/qa/<game>-motion-pass.mjs` on the production build (§8). The last column is filled in at the final
 audit (commit 7.1).
 
 | Checklist line | Scene that answers it | Unit spec | Browser check | Seen |
@@ -2274,7 +2274,7 @@ units, and stubs rects where a flight needs them.
 | Each renderer | After a snap and after a rematch, everything it owns is still in the document. |
 | Each board | Nodes kept across a re-read. Echo, refusal, rematch. A ten-revision catch-up. Held surfaces unchanged until the landing and released at the cap. A silent source reconciles. A reader not in play gets no chime and no haptic. |
 
-**The lab** (`tools/qa/motion-lab.mjs`, on the dev server). Positions chance will not give on
+**The lab** (`tools/qa/<game>-motion-lab.mjs`, on the dev server). Positions chance will not give on
 demand: a hit, a bar entry, bearing off, an undo, the re-rack, a capture, a home entry, each die
 fate. It mounts the real renderer on a stage in the page and drives it directly, which only the
 dev server can serve.
@@ -2285,7 +2285,7 @@ empty layer, links the product's stylesheet and imports the renderer, the stage 
 as vite serves them. The table is driven THROUGH the presenter, with batches shaped like the
 store's, and the instrument is handed doctored frames that it has to fail.
 
-**The pass** (`tools/qa/motion-pass.mjs`, on the production build on port 5300 with the limiter
+**The pass** (`tools/qa/<game>-motion-pass.mjs`, on the production build on port 5300 with the limiter
 raised; two players and a watcher per game). It fast-forwards over the API until a predicate
 holds, waits for `data-presenting` to clear, makes that one move THROUGH THE TABLE and samples
 every keyed object in every browser. After D10 "through the table" is literal: it clicks the pawn,

@@ -145,12 +145,17 @@ It leaves every table and group it made, but not the two accounts, the garbage i
 names it gave its own device: run it where the other passes run, against a database that is
 disposable.
 
-## The motion lab and the motion pass
+## The motion labs and the motion passes
 
-`motion.mjs` is a frame sampler and what judges its frames; `motion-lab.mjs` and `motion-pass.mjs`
-are its two callers. Both ask what no other gate here can: when something on a table moved, did
-THAT object travel the way it should, or was the table drawn again with it somewhere else. The
-design is §8 of `docs/superpowers/specs/2026-10-11-table-presentation-design.md`.
+`motion.mjs` is a frame sampler and what judges its frames. A game that is played on the stage
+has a lab and a pass of its own that call it, named after the game: `backgammon-motion-lab.mjs`
+and `backgammon-motion-pass.mjs` were the first. Both ask what no other gate here can: when
+something on a table moved, did THAT object travel the way it should, or was the table drawn
+again with it somewhere else. The design is §8 of
+`docs/superpowers/specs/2026-10-11-table-presentation-design.md`, which speaks of one lab and one
+pass with a part for each game; they are a file a game because a lab is one page that holds one
+renderer and a pass is four minutes at one table, and neither should have to be run for a game
+nobody touched.
 
 **The sampler follows nodes by name.** `watch(page, { nodes, within, body, marks })` records, on
 every animation frame, the centre, width and opacity of each node that carries `data-key`, in units
@@ -189,7 +194,8 @@ WHICH node stands at each start by reading the page at rest. `differs` compares 
 with what is expected through the SVG's own screen matrix, to 1.5px.
 
 **The lab is the real table on a bare page of the DEV server.**
-`QA_LAB=http://127.0.0.1:<port> node tools/qa/motion-lab.mjs`. It needs vite and nothing else, no
+`QA_LAB=http://127.0.0.1:<port> node tools/qa/backgammon-motion-lab.mjs`. It needs vite and
+nothing else, no
 api and no database: `node ../node_modules/vite/bin/vite.js --port <port> --strictPort` from
 `frontend/`, on a port of its own so nobody's `npm run dev` on 3100 is touched. Playwright answers
 one address on that origin with a page that holds an SVG and an empty `.bg-layer` and links
@@ -203,7 +209,8 @@ elsewhere, hidden and back, cutting the corner, a bystander that drifts, a check
 off its place - and has to fail each. 80 checks.
 
 **The pass is two real browsers at one real match on the BUILT server, and a third that
-watches.** `QA_BASE=http://localhost:5300 node tools/qa/motion-pass.mjs`, limiter raised, about
+watches.** `QA_BASE=http://localhost:5300 node tools/qa/backgammon-motion-pass.mjs`, limiter
+raised, about
 four minutes. It plays forward over the api until the position it wants exists, waits until both
 boards are level with the server (`data-rev` at the revision, `data-presenting` gone), and makes
 the move ON THE TABLE with the mouse. At 360x640, 390x844, 844x390, 768x1024 and 1280x800, with

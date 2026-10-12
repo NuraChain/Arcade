@@ -28,7 +28,7 @@ const PAGE = [
 
 mkdirSync(OUT, { recursive: true });
 
-const { record, finish } = recorder('motion lab');
+const { record, finish } = recorder('backgammon motion lab');
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 800, height: 700 }, locale: 'en-US' });
 const page = await context.newPage();
