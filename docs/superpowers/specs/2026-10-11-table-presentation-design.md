@@ -1089,7 +1089,7 @@ constraints under the tables.
 | A piece in flight | 50 over the lowest row of its path, for the whole walk | 40, overwritten at once by the resting value | `moving`, 40, for the whole flight |
 | A knocked piece | 9000 | 41 | `airborne`, 41; the cube too while it travels |
 | Dice | 9500, with a glow at 9400 | 60 | `dice`, 60 |
-| Bursts and confetti | 9600 | none | no rung yet: it lands with Ludo's finish |
+| Bursts and confetti | 9600 | none | `burst`, 70, set in commit 3.1, where Ludo's rungs became bands (§5.2, as built) |
 
 Constraints:
 
@@ -1602,6 +1602,43 @@ scenes.
 | Home entry | `home` | `ludo-board.spec.ts` (the home run, then one flourish; the plate's dots after it) | Lab: a home entry | |
 | Winning movement | `home`, then `finish` | `ludo-board.spec.ts` (a winning move plays one home flourish and then the finish); `ludo-table.spec.ts` (confetti in the view's winners' colours) | Pass: the result arrives after the queue | |
 | Turn transition | The die picked up to the plate; the hand-off (§6) | The board spec (the turn mark follows the shown model); `ludo-board.spec.ts` (a rematch draws its first passed roll and plays no capture cue at its opening) | Pass | |
+
+**As built (commit 3.1).** The board is played from what happened. The die is thrown in 3.2 and the
+press is finished in 3.3, so what follows is where 3.1 differs from the section above.
+
+- **The model is `frontend/src/game/ludo-felt.ts`.** `Felt` is the model of a view and `Shown` what
+  the table has drawn, the names backgammon uses. Parity is asserted on the pawns, on `out` and on
+  the die's face and roller as well, which is more than the table above asks: a die the table shows
+  and the view does not hold is exactly the fault a wasted six would hide.
+- **A home slot is the first free one, not the piece's own.** With a slot for each piece a single
+  pawn home could stand at the far end of an empty triangle. The first free slot fills the triangle
+  in the order pawns arrive and moves nothing that is already there. The fallback has no memory and
+  fills in piece order, as `seatsFor` always did.
+- **Confetti is not ambient.** Rule 8 lists it with the rests that are outside the queue. The result
+  card waits only for the queue, and in a real browser it came down over the confetti in the frame
+  it was thrown. The scene of a `finish` throws it and then holds for 1.3 s, 0.7 s at the least,
+  and holds for nothing when nothing is thrown.
+- **The plates' tags follow the table, with the dots and the die.** The table tells the board
+  `{ home, out, die }` (`onFacts`). "Won" and "Lost" come with the result card. "Left", "Gave up" and
+  "Timed out" come when the seat has been shown going: after its pawns have slid home in a game
+  that goes on, at once when its going ends the game. The die of a seat that leaves goes from the
+  board and from the plate together.
+- **The board's layers are the ladder's, in bands.** §3.5 left a rung for bursts and confetti to
+  this commit: it is `burst`, above the dice. Ludo's pawns are ordered by depth, about a thousand
+  values, so the renderer gives each rung a band of two thousand and orders its pawns inside
+  `piece`. A walking pawn stays in that rung, fifty above the lowest row of its path, and does not
+  take `moving`: a tall pawn on `moving` would pass in front of pawns standing nearer the reader.
+- **The die of 3.1 is the sprite it was, driven by beats.** It tumbles in the middle, shows its
+  fate and is on the roller's plate once it has landed. The turn sentence, the lamp, the pawns'
+  glow and their taps still arrive with the view. Rule 7's hold lands with the throw.
+- **A refused move slides back in a straight line** (`settle`). The walk back along its path is 3.3.
+- **A resignation is folded in the store here.** The server answers one with no events, so the store
+  reads `since` from the revision it held. §3.3 has it, and it landed with the first board that
+  could not explain a finish without it.
+- **`components/games/seats.ts` stays**, for the fallback's tokens and the plates' initials, and
+  takes its arithmetic from `placeOf` in the model.
+- **The play pass** asks of every pawn it presses that it is walking when the press returns and
+  that the other browser sees it walk, and waits for each board to be level instead of sleeping.
 
 ### 5.3 Hokm
 

@@ -318,6 +318,66 @@ describe('what a board is told of a move', () =>
         return { asked, answers, fails };
     };
 
+    it('reads what its own resignation did from the revision it held, and hands that on as a live move', async () =>
+    {
+        const asked: string[] = [];
+
+        socket.deliver(pushed(3, 2, [rolled(2)]));
+        matches.resign = async () => ({ match: board(3, { turn: 1 }), applied: 'now', events: [] });
+        matches.since = async ({ query }: { query: { rev: string } }) =>
+        {
+            asked.push(query.rev);
+
+            return { match: board(3, { turn: 1 }), events: [rolled(3)] };
+        };
+
+        const before = useBoard().events().seq;
+
+        expect(await useBoard().resign()).toBe('now');
+        expect(asked, 'what the resignation did was not read from the revision in hand').toEqual(['2']);
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events()).toMatchObject({ seq: before + 1, id: 'match-1', live: true, jump: false });
+        expect(useBoard().events().events.map((event) => event.rev)).toEqual([3]);
+
+        delete matches.resign;
+    });
+
+    it('shows the board a resignation left when what it did cannot be read, and waits no longer than a mend does', async () =>
+    {
+        socket.deliver(pushed(3, 2, [rolled(2)]));
+        matches.resign = async () => ({ match: board(3, { turn: 1 }), applied: 'now', events: [] });
+        matches.since = async () => await new Promise<never>(() => undefined);
+
+        const before = useBoard().events().seq;
+        const asked = useBoard().resign();
+
+        await settle();
+
+        expect(useBoard().match()?.rev).toBe(2);
+
+        clock.advance(MEND_MS);
+
+        expect(await asked).toBe('now');
+        expect(useBoard().match()?.rev).toBe(3);
+        expect(useBoard().events().seq).toBe(before);
+
+        delete matches.resign;
+    });
+
+    it('asks nothing more of a resignation that was already made', async () =>
+    {
+        const since = vi.fn(async () => ({ match: board(2, { turn: 1 }), events: [] }));
+
+        socket.deliver(pushed(3, 2, [rolled(2)]));
+        matches.resign = async () => ({ match: board(2, { turn: 1 }), applied: 'already', events: [] });
+        matches.since = since;
+
+        expect(await useBoard().resign()).toBe('already');
+        expect(since).not.toHaveBeenCalled();
+
+        delete matches.resign;
+    });
+
     it('names the game it happened in, and says a pushed move is live', () =>
     {
         socket.deliver(pushed(3, 2, [rolled(2)]));

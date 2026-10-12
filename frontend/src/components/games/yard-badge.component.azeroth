@@ -12,6 +12,7 @@ const PIPS = [0, 1, 2, 3];
 export default component YardBadge(props: {
     player: MatchPlayer;
     seat: LudoSeat;
+    home?: number;
     corner: string;
     mine?: number;
     active: boolean;
@@ -33,6 +34,10 @@ export default component YardBadge(props: {
     derived mine = props.player.seat === props.mine;
 
     derived turn = props.active && !props.finished;
+
+    derived home = props.home ?? props.seat.home;
+
+    derived rolled = props.die !== undefined && !props.finished;
 
     derived name = mine
         ? locale.t('match.you')
@@ -160,9 +165,9 @@ export default component YardBadge(props: {
             marker={ <span class="grid place-items-center inline-[1.1rem] block-[1.1rem] rounded-[999px] bg-(--ink) text-white text-[0.625rem] font-extrabold leading-none [box-shadow:0_0_0_2px_var(--void)]" aria-hidden="true">{ INITIAL[props.seat.colour] }</span> }
             facts={
                 <span class="contents">
-                    <span class="flex flex-none items-center gap-[3px]" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+                    <span class="flex flex-none items-center gap-[3px]" role="img" aria-label={ locale.plural('match.tokens', home) }>
                         <For each={ PIPS } key={ (pip) => pip } let={ pip }>
-                            <span class="flex-none rounded-[999px] border-[color:color-mix(in_oklab,var(--ink)_75%,transparent)] data-[home=true]:border-[color:var(--ink)] data-[home=true]:bg-(--ink) data-[home=true]:[box-shadow:0_0_6px_-1px_var(--ink)] inline-[0.5rem] block-[0.5rem] border-[1.5px]" data-home={ pip < props.seat.home ? 'true' : 'false' } aria-hidden="true"></span>
+                            <span class="flex-none rounded-[999px] border-[color:color-mix(in_oklab,var(--ink)_75%,transparent)] data-[home=true]:border-[color:var(--ink)] data-[home=true]:bg-(--ink) data-[home=true]:[box-shadow:0_0_6px_-1px_var(--ink)] inline-[0.5rem] block-[0.5rem] border-[1.5px]" data-home={ pip < home ? 'true' : 'false' } aria-hidden="true"></span>
                         </For>
                     </span>
                     <Show when={ routine }>
@@ -170,7 +175,7 @@ export default component YardBadge(props: {
                     </Show>
                 </span>
             }
-            trail={ props.die !== undefined && turn
+            trail={ rolled
                 ? <span class="block flex-none inline-[1.75rem] block-[1.75rem] [filter:drop-shadow(0_4px_6px_rgb(0_0_0/0.55))]"><DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /></span>
                 : undefined }
         />

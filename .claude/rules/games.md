@@ -3155,8 +3155,99 @@ because being sent home is done TO a piece and must not look like a move its own
 white, arcs up and spins as it flies, and a ring bursts where it stood. A token that comes home walks
 the home run, slides into its triangle and a gold ring bursts. Each step of a walk is an arc - the
 pawn lifts off the square while its shadow stays on the ground - rather than the piece swelling in
-place. A second update landing mid-walk cancels the first rather than queueing behind it, because the
-newest state is always the one worth being on the way to.
+place. What it is asked to draw is what happened, in the order it happened, and no longer the
+difference between two positions: the next paragraph.
+
+**The ludo board is played from what happened, one action at a time.** Until this the renderer was
+handed a position, compared it with the last one and started every difference at once on
+`window.setTimeout`. A capture began with the attacker, so the victim was already flying home while
+the pawn that took it was squares away. A forfeit played as four captures. A pawn that had not
+moved changed nests when another left. A second position landing mid-walk cancelled the first. And
+somebody who asked for less motion lost the sounds with the motion. The board is on the stage now
+(*The stage*), as backgammon's is, and `MatchBoard` holds its presenter whether or not the renderer
+has arrived: with none, every batch is simply the board, and nothing is replayed when it does
+arrive.
+
+- **`game/ludo-felt.ts` is the model, and it is pure.** A pawn is `{ key, owner, piece, colour,
+  side, progress }` and its key is `owner-piece`, so at a team table the pawn that walks is its
+  owner's whoever pressed it. `feltOf` reads a view; `beatsOf` turns a batch into beats, one list
+  for each ACTION (`roll`, `move`, `forfeit`, `finish`); `step` applies one beat to what is
+  shown. A move's beat carries its victims and whether it came home, because the engine logs
+  `capture` and `home` after the step and the renderer has to know both before the pawn sets
+  off. `ludo-felt.spec.ts` plays whole games through the real engine at two, three and four
+  seats and in teams, with a forfeit by the seat that rolled and by one that had not, and
+  requires the model to equal the model of the engine's view after every action and for every
+  reader: the pawns, who is out, and the die's face and roller.
+- **The die is something the table shows, not something the log says**: `{ roller, face, fate }`,
+  and the fate is `pending` (a move follows), `no-move`, `three-sixes` or `wasted`. The last is a
+  six with nothing to move. The engine logs `roll` alone for it, clears the die and keeps the
+  turn, which are the same events as a six that is waiting for its move. `fateOf` tells them
+  apart by what follows in the batch (the same seat rolling again is a wasted six; a move, or
+  that seat's own forfeit, is not) and, when nothing follows, by whether the view that came with
+  the batch still holds a die.
+- **One scene for each action, in the order things happened.** The walk; the landing; then every
+  victim leaves together, which only an entry onto a held start can make more than one; then the
+  home flourish, or the pair forming. A victim's flight starts when the attacker has LANDED. A
+  forfeit the game survives slides that seat's pawns home with no spin and no sound, and one
+  that ends the game moves nothing, which is what the engine does. A swept turn of several rolls
+  and moves plays every one of them, with the hold on a roll nobody could play cut to its least
+  (`PASS_LEAST`) while more of the batch waits.
+- **A pawn keeps its place.** A nest seat and a home slot belong to a pawn until it leaves them
+  (`nest` and `slot` in the renderer: presentation state, never in the model, forgotten with the
+  match). A pawn that comes home takes the first free slot, so nothing already in the triangle
+  moves for it: the board this replaces filled the triangle in piece order, and a pawn that was
+  home stepped aside when a lower-numbered one arrived. A reader who taps a yard pawn other than
+  the one the server will move has the two swap seats first (`swap`), so the pawn that was
+  touched is the one that leaves.
+- **Two of one side on a ring square stand one on the other, and anything else that shares a
+  square stands side by side** (`BLOCK`, `stackSpot`). When a pair forms or breaks, the other
+  pawn slides to its spot in `PAIR_MS`.
+- **The reader's own pawn walks at the press and is `pending` until the server answers**
+  (`advance`, through `presenter.act`). A pending pawn stands at the middle of its square, is not
+  laid out with what is there and is not counted home, because a capture and a home are the
+  server's to say. The answer is played without the walk: a move whose pawn already stands
+  where it ends walks nothing, which also covers a push that beats the acknowledgement. A
+  refusal slides the pawn back and puts the die back (`settle`).
+- **The plates read what the table has shown** (`onFacts`: `{ home, out, die }`). The home dots
+  count a pawn when its flourish has played. The die is on its roller's plate from the moment it
+  has landed until it is used or picked up, and when the seat that rolled it leaves it goes from
+  the board and the plate together. A seat is called out when its pawns have slid home.
+  `MatchBoard` hands each plate the seat and the player as the table shows them (`seatAt`,
+  `playerAt`): "Won" and "Lost" come with the result card, and "Left", "Gave up" and "Timed out"
+  when the table has shown the seat going. The view is read only until the renderer has arrived,
+  and when it could not be drawn. Seen in the recording of a real game before it was written:
+  the plates named the winner while the confetti was in the air and the result had not come.
+- **The end is held for the table.** Confetti is thrown when the last pawn is home (the queue
+  says when; the view's winners say whether, and in which colours) and the scene then holds for
+  `WIN_MS`, 1.3 s (`WIN_LEAST`, 0.7 s, when something waits). The design called confetti
+  ambient, outside the queue. In a real browser the result card, which waits only for the
+  queue, came down over it in the frame it was thrown. Nothing is thrown and nothing is held for
+  somebody who asked for less motion, and a finished game opened again throws nothing.
+- **Less motion keeps every cue.** The stage turns each run into a short fade where the thing
+  ends up, and a walk plays one `token-step` at its end in place of one a square.
+- **A resignation is explained to the board like any other move.** `POST /matches/:id/resign`
+  answers the match and no events. The store then reads `since` from the revision it held, in
+  the time a gap is given (`MEND_MS`), and hands the board the forfeit and the finish. When that
+  read fails the board gets the answer as it came and settles quietly.
+- **The renderer owns no clock and no sound.** `BoardOptions` hands it the stage, a way to ask
+  for the page's sound and a way to tick the phone (`feel`, which `MatchBoard` leaves silent for
+  somebody watching). `BoardHandle` is the presenter's `Table` and a few verbs beside it: `lit`
+  (which pawns may be pressed, and whether to show it), `advance`, `swap`, `still`, and
+  `pause` and `resume` under a sheet that blocks the page.
+
+`ludo-felt.spec.ts` holds the model. `ludo-board.spec.ts` holds the renderer on a manual clock
+with the real engine's events: the order of a capture, an entry onto a held start, each fate of
+a roll, the pair, both forfeits, the end and its hold, less motion, the reader's own pawn, and a
+swept turn of six actions through the real presenter. `ludo-table.spec.ts` (*the ludo table,
+played from what happened*) holds the component: the result and the tags after the last scene,
+the plate's dots and die, the press and its refusal, nothing replayed before the board could
+draw, and the real board inside the real `WatchBoard` frame. Each was run against the fault it
+is there for.
+
+Two things still follow the view, and so run ahead of the table. The die is a sprite that spins in
+the middle of the board. And the turn sentence, the lamp, the glow on the pawns and their taps
+arrive with the answer, which gives a roll away while it is still tumbling. Both go when the die
+is thrown (3.2 in the design spec's order of work).
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
@@ -3330,10 +3421,11 @@ difference exists nowhere else, so it is on the reader.
 
 ## The stage
 
-One way for a table to play what happened, shared by every game as each moves onto it. Backgammon is
-the first; Ludo, Hokm and poker still run on what they had. The design, the audit behind it and each
-game's checklist are in `docs/superpowers/specs/2026-10-11-table-presentation-design.md`. Everything
-under `frontend/src/game/stage/` imports nothing from AzerothJS.
+One way for a table to play what happened, shared by every game as each moves onto it. Backgammon
+was the first and ludo the second; Hokm and poker still run on what they had. The design, the audit
+behind it and each game's checklist are in
+`docs/superpowers/specs/2026-10-11-table-presentation-design.md`. Everything under
+`frontend/src/game/stage/` imports nothing from AzerothJS.
 
 ```
 the store's batch and the board it arrives with
@@ -3399,7 +3491,7 @@ ask for the board as it should stand now (`sight`). In order:
   that showed the present. Weighing the newest action as well played an ordinary turn of two hops
   and a hit at double speed, for being exactly as long as it is. What was read to catch up is
   played only if the queue and all of it fit the game's own limit (four seconds of scene at
-  backgammon), and is otherwise the board.
+  backgammon and at ludo), and is otherwise the board.
 - A live move that finds the table already more than two of those limits behind goes straight to
   the board, and play goes on from there. Live play had no bound at first. A seat that moved faster
   than its moves could be shown - a script did, forty-four revisions in three seconds - left the
@@ -3429,11 +3521,18 @@ waits for it to clear instead of sleeping. The board hands the same word to whoe
 yet.
 
 **The layers of a table are one ladder** (`stage/layers.ts`): resting pieces, the count on a tall
-stack, a mark, the cube, a piece that is moving, one in the air, the dice. The renderer sets the
-numbers and
-hands the same ones to the stylesheet as `--layer-*`, so a number is written once. `.table-stage`
-isolates its stacking, and its two tokens are `--stage-flight` and `--stage-result`, named apart
-from the theme's `--z-*`: the result panel is above anything in flight.
+stack, a mark, the cube, a piece that is moving, one in the air, the dice, a burst, a banner. The
+renderer sets the numbers and hands the same ones to the stylesheet as `--layer-*`, so a number is
+written once. `.table-stage` isolates its stacking, and its two tokens are `--stage-flight` and
+`--stage-result`, named apart from the theme's `--z-*`: the result panel is above anything in
+flight.
+
+Ludo's pawns are tall and stand over the row above them, so its pieces are ordered by depth inside
+ONE rung: the renderer gives each rung a band of two thousand (`BAND`) and adds the row. A walking
+pawn stays in the pieces' rung, fifty above the lowest row of its path, so it passes behind a pawn
+standing nearer the reader instead of in front of it. A pawn knocked home takes `airborne`, the die
+`dice`, and confetti `burst`, the rung that arrived with it. `ludo-board.spec.ts` (*the layers of
+a ludo board*) holds the order, and that the die and the air are rungs of one ladder.
 
 `stage-kit.spec.ts` holds the stage, the director, the holds, the feed, the layers and the routes;
 `presenter.spec.ts` every branch above against a table that only records what it was asked.
@@ -3445,7 +3544,16 @@ against the built server. It seats two wallet fixtures at one table, presses Sta
 by CLICKING the die and the pawns on the board (it fails if a list of moves or a button for one
 is in the page beside them), plays the rest out over the api, and then asserts in
 BOTH browsers that the finished game is still on screen, says what it did to the ratings and offers
-another.
+another. Of every pawn it presses it asks two more things: that the pawn is walking when the
+press returns, and that the OTHER browser sees it walk rather than appear. And it does not sleep
+before it reads the end. It waits until each board has shown the game to its finish (`level`: the
+stage's `data-rev` at the server's revision and `data-presenting` gone), which is the only wait
+that is still right when a finish takes as long as its last walk and its confetti. Built with a
+board that is told nothing of what happened, that waits for the server before it moves the
+reader's pawn and that never stops saying it is playing, the pass failed those four lines. It
+failed the eight about the result card with them, for a reason of its own: a board that is told
+nothing slides to every position in turn, and after the rest of the game had been played over the
+api it was still far behind when the pass stopped waiting.
 
 It exists because of what the other gates cannot see. `ludo-pass.mjs` plays complete games over the
 api in seconds and never presses a button; `npm run qa` tours the play route in 680 cells and never
@@ -3819,19 +3927,17 @@ the vignette are CSS gradients over it, because the photo is cover-cropped to a 
 and a desktop's wide one and a baked pool would sit in the wrong place on both. A felt table like
 hokm's was tried here and taken back the same day: the user liked this tabletop and wanted the BOARD
 on it improved, which is a different thing.
-Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
-yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
-beside the avatar - so there is no row of cards above and below the board taking height from it, and
-the board is the full width of the phone. Whose turn it is is the whole yard breathing in its colour.
-The badges are `pointer-events: none`, so a tap on a token in the yard goes through to the token.
+Each player has a plate at their own corner, outside the board (`YardBadge`; *The players sit OUTSIDE
+the board*): the avatar, the name, four home dots and the die they rolled. The dots, the die and the
+plate's tag are what the table has shown rather than what the view says (*The ludo board is played
+from what happened*).
 
 The roll is a die in the MIDDLE of the board, a real `<button>` named "Roll the dice", shown only
 when the reader can roll: tap it, it shakes while the request is in flight, and it is gone; the tokens
-that can move then glow and a tap on one moves it. The strip on the table under the board carries the
-turn, the clock, a one-line hint ("Tap the die in the middle of the board.") and the move choices,
-which are the keyboard and screen-reader path to the same moves. On a 390x844 phone the roll used to be
-100px below the fold; now nothing scrolls. The table bleeds almost to the screen edge on a phone
-(`margin-inline` against `--page-pad`), and hokm's table does the same.
+that can move then glow and a tap on one moves it. Nothing sits under the board but the lamp and the
+clock at the two ends of the stage's foot (*The board IS the interface*). On a 390x844 phone the roll
+used to be 100px below the fold; now nothing scrolls. The table bleeds almost to the screen edge on a
+phone (`margin-inline` against `--page-pad`), and hokm's table does the same.
 
 Everything on the board is placed from `game/layout.ts`: the board stage sets `--cell-cq` and
 `--margin-cq` in `cqi` from `CELL` and `MARGIN`, so a badge sits in its yard at every size for the

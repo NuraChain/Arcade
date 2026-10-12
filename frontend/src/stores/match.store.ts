@@ -466,7 +466,11 @@ export const useBoard = createStore((): BoardApi =>
                     ? await client.matches.resign({ params: { id }, input: { key } })
                     : await client.matches.play({ params: { id }, input: { key, rev: current.rev, play } }));
 
-            heard(answer.match, answer.events, true);
+            const told = play === null && answer.events.length === 0 && answer.match.rev > current.rev
+                ? await inTime(client.matches.since({ params: { id }, query: { rev: String(current.rev) } }))
+                : null;
+
+            heard(told?.match ?? answer.match, told?.events ?? answer.events, true);
 
             return answer.applied;
         }

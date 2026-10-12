@@ -91,6 +91,47 @@ const record = (name, ok, detail) =>
     console.log(`  ${ ok ? 'PASS' : 'FAIL' }  ${ name }${ detail ? ' — ' + detail : '' }`);
 };
 
+const level = async (who, rev, within = 20000) =>
+{
+    const until = Date.now() + within;
+
+    while (Date.now() < until)
+    {
+        const there = await who.page.evaluate((least) =>
+        {
+            const table = document.querySelector('.table-stage');
+
+            return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
+        }, rev);
+
+        if (there)
+        {
+            return true;
+        }
+
+        await who.page.waitForTimeout(100);
+    }
+
+    return false;
+};
+
+const walking = async (who, forMs) =>
+{
+    const until = Date.now() + forMs;
+
+    while (Date.now() < until)
+    {
+        if (await who.page.evaluate(() => document.querySelector('.board-canvas .lp[data-moving]') !== null))
+        {
+            return true;
+        }
+
+        await who.page.waitForTimeout(30);
+    }
+
+    return false;
+};
+
 async function seat(handle)
 {
     const fixture = WALLET_FIXTURES.find((one) => one.handle === handle);
@@ -235,6 +276,8 @@ try
         let rolled = 0;
         let moved = 0;
         let listed = 0;
+        let answered = 0;
+        let followed = 0;
         /**
          * Every distinct sentence the WATCHER's live region showed while somebody else played.
          *
@@ -279,7 +322,11 @@ try
                 otherSaw.add(await watcher.page.evaluate(() =>
                     document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
 
+                const seen = walking(watcher, 2000);
+
                 await pawn.click();
+                answered += await actor.page.evaluate(() => document.querySelector('.board-canvas .lp[data-moving]') !== null) ? 1 : 0;
+                followed += await seen ? 1 : 0;
                 moved += 1;
                 clicked += 1;
                 await watcher.page.waitForTimeout(SETTLE_MS);
@@ -297,6 +344,8 @@ try
         record('a roll is takeable from the button', rolled > 0, `${ rolled } rolls clicked`);
         record('a move is made by pressing the pawn on the board', moved > 0, `${ moved } pawns pressed`);
         record('no list of moves and no button for one is in the page beside the board', listed === 0, `${ listed } found`);
+        record('a pressed pawn is walking when the press returns', moved > 0 && answered === moved, `${ answered } of ${ moved }`);
+        record('the other browser sees each of those pawns walk, not appear', moved > 0 && followed === moved, `${ followed } of ${ moved }`);
 
         /**
          * The defect this replaces an afternoon of: the panel updated every turn while the canvas
@@ -372,8 +421,10 @@ try
 
         record('the game reaches a real finish', done.finishedAt !== undefined, done.outcome);
 
-        await dana.page.waitForTimeout(SETTLE_MS * 2);
-        await mina.page.waitForTimeout(SETTLE_MS);
+        for (const who of [dana, mina])
+        {
+            record(`${ who.handle }'s board has shown the game to its end`, await level(who, done.rev), `revision ${ done.rev }`);
+        }
 
         for (const who of [dana, mina])
         {

@@ -6,6 +6,7 @@ export const LAYER = {
     moving: 40,
     airborne: 41,
     dice: 60,
+    burst: 70,
     banner: 80
 } as const;
 

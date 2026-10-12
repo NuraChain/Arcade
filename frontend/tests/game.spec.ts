@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BLOCK, CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
-import { createLudoBoard } from '../src/game/board/ludo-board.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
 import { unpack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../backend/src/domains/match/ludo/board.ts';
@@ -927,110 +926,5 @@ describe('a finished pawn stands in its own triangle', () =>
                 expect(Math.abs(spot.dy) + 0.205 * spot.scale).toBeLessThanOrEqual(0.4635);
             }
         }
-    });
-});
-
-describe('a roll that passes the turn is still seen', () =>
-{
-    const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-    const empty = { tokens: [], die: null, turn: null, yours: false, winners: [] };
-
-    const stood = async (tokens: { key: string; colour: string; side: number; at: number; col: number; row: number; playable: boolean }[]) =>
-    {
-        const host = document.createElement('div');
-
-        document.body.append(host);
-
-        const handle = await createLudoBoard({ host, plate: '', view: { ...empty, tokens }, reducedMotion: true, sound: false });
-
-        await tick(10);
-
-        const stacked = [...host.querySelectorAll<HTMLElement>('.lp')].filter((piece) => piece.hasAttribute('data-stacked')).map((piece) => piece.dataset.colour);
-
-        handle.dispose();
-        host.remove();
-
-        return stacked;
-    };
-
-    it('shows the spent die when the view has none but the log says it was rolled and passed', async () =>
-    {
-        const host = document.createElement('div');
-        document.body.append(host);
-        const handle = await createLudoBoard({ host, plate: '', view: empty, reducedMotion: true, sound: false });
-
-        handle.show({ ...empty, turn: 'red', beats: [{ rev: 4, e: 'roll', colour: 'yellow', die: 3 }, { rev: 4, e: 'pass', colour: 'yellow', why: 'no-move' }] });
-        await tick(10);
-
-        expect(host.querySelector('.lb')!.hasAttribute('data-rolled')).toBe(true);
-        expect(host.querySelector('.lb-die')!.getAttribute('data-spent')).toBe('no-move');
-        expect((host.querySelector('.lb-die') as HTMLElement).style.getPropertyValue('--face')).toBe('2');
-
-        handle.dispose();
-        host.remove();
-    });
-
-    it('stacks two tokens of one colour on a ring square, and keeps two colours side by side', async () =>
-    {
-        const token = (key: string, colour: string, side: number, col: number) => ({ key, colour, side, at: 10, col, row: 6, playable: false });
-
-        expect(await stood([token('0-0', 'red', 0, 4), token('0-1', 'red', 0, 4), token('1-0', 'green', 1, 8), token('2-0', 'yellow', 2, 8)])).toEqual(['red']);
-    });
-
-    it('stacks a token on its partner\'s as a block of two colours, and keeps two opponents side by side', async () =>
-    {
-        const token = (key: string, colour: string, side: number, at: number, col: number) => ({ key, colour, side, at, col, row: 6, playable: false });
-
-        expect(await stood([
-            token('0-0', 'red', 0, 30, 4),
-            token('2-0', 'yellow', 0, 4, 4),
-            token('1-0', 'green', 1, 17, 8),
-            token('2-1', 'yellow', 0, 4, 8)
-        ])).toEqual(['yellow']);
-    });
-
-    it('throws confetti in every winning colour', async () =>
-    {
-        const host = document.createElement('div');
-        const toneOf = (hex: string) =>
-        {
-            const probe = document.createElement('span');
-
-            probe.style.background = hex;
-
-            return probe.style.background;
-        };
-
-        document.body.append(host);
-
-        const handle = await createLudoBoard({ host, plate: '', view: empty, reducedMotion: false, sound: false });
-
-        handle.show({ ...empty, winners: ['red', 'yellow'] });
-
-        const flecks = new Set([...host.querySelectorAll<HTMLElement>('.lb > span')].map((fleck) => fleck.style.background));
-
-        expect(flecks.has(toneOf('#FF5A4E'))).toBe(true);
-        expect(flecks.has(toneOf('#FFC72C'))).toBe(true);
-        expect(flecks.has(toneOf('#2FC262')) || flecks.has(toneOf('#3F8CFF'))).toBe(false);
-
-        handle.dispose();
-        host.remove();
-    });
-
-    it('does not replay a batch it has already shown', async () =>
-    {
-        const host = document.createElement('div');
-        document.body.append(host);
-        const beats = [{ rev: 4, e: 'roll', colour: 'yellow', die: 3 }, { rev: 4, e: 'pass', colour: 'yellow', why: 'no-move' }];
-        const handle = await createLudoBoard({ host, plate: '', view: { ...empty, beats }, reducedMotion: true, sound: false });
-
-        handle.show({ ...empty, turn: 'red', beats });
-        await tick(10);
-
-        expect(host.querySelector('.lb')!.hasAttribute('data-rolled')).toBe(false);
-
-        handle.dispose();
-        host.remove();
     });
 });

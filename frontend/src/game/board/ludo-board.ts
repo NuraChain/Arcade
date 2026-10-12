@@ -1,23 +1,68 @@
 import { BLOCK, CELL, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
-import { createSound, type SoundHandle } from '../sound.ts';
-import { FINISHED, RING_STEPS, YARD, pathBetween, type LudoColour } from './path.ts';
-import type { BoardHandle, BoardOptions, BoardToken, BoardView } from '../bridge.ts';
+import { HISTORY, beatsOf, placeOf, sameAs, shownOf, step, type Beat, type Felt, type Pawn, type Rolled, type Shown } from '../ludo-felt.ts';
+import { celebrate } from '../stage/celebrate.ts';
+import { clamp } from '../stage/curves.ts';
+import type { Ctx } from '../stage/director.ts';
+import { LAYER } from '../stage/layers.ts';
+import type { Sight } from '../stage/presenter.ts';
+import { arc, walk, type Point } from '../stage/route.ts';
+import type { Run } from '../stage/stage.ts';
+import { FINISHED, RING_STEPS, YARD, pathBetween } from './path.ts';
+import type { BoardHandle, BoardOptions } from '../bridge.ts';
 
 const C = CELL * 100;
 
 const DROP = 0.10;
 
+const BAND = 2000;
+
 const FRONT = 30;
 
-const STEP_MS = 120;
+const AHEAD = 50;
 
-const FLIGHT_MS = 520;
+const Z_PIECE = LAYER.piece * BAND;
 
-const TUMBLE_MS = 520;
+const Z_AIR = LAYER.airborne * BAND;
 
-const DIE_HOLD_MS = 1100;
+const Z_DIE = LAYER.dice * BAND;
 
-const CONFETTI = 28;
+const Z_GLOW = Z_DIE - 1;
+
+const Z_BURST = LAYER.burst * BAND;
+
+export const STEP_MS = 120;
+
+export const STEP_LEAST = 95;
+
+export const ENTER_MS = 360;
+
+export const KNOCK_MS = 520;
+
+export const HOME_MS = 220;
+
+export const PAIR_MS = 160;
+
+export const SLIDE_MS = 420;
+
+export const TUMBLE_MS = 520;
+
+export const SPENT_MS = 280;
+
+export const PASS_MS = 900;
+
+export const PASS_LEAST = 300;
+
+export const DIE_REST_MS = 1100;
+
+export const DIE_FADE_MS = 260;
+
+export const WIN_MS = 1300;
+
+export const WIN_LEAST = 700;
+
+const SLIDE_MOST = 8;
+
+const SWAPS = 7;
 
 const TONE: Record<string, string> = {
     red: '#FF5A4E',
@@ -31,35 +76,41 @@ interface Spot
     x: number;
     y: number;
     scale: number;
-    front?: boolean;
+    front: boolean;
 }
 
 interface Piece
 {
-    token: BoardToken;
+    key: string;
     root: HTMLElement;
     lift: HTMLElement;
     pawn: HTMLImageElement;
     shadow: HTMLImageElement;
-    walk: number;
-    moving: boolean;
-    timers: number[];
+    at: Spot;
 }
 
-const EMPTY: BoardView = { tokens: [], die: null, turn: null, yours: false, winners: [] };
-
-const order = (key: string): [number, number] =>
+interface Moment
 {
-    const [seat, piece] = key.split('-').map(Number);
+    sight: Sight<Felt>;
+    ctx: Ctx;
+    more: boolean;
+}
 
-    return [seat ?? 0, piece ?? 0];
-};
+type Moved = Extract<Beat, { kind: 'move' }>;
+
+type Thrown = Extract<Beat, { kind: 'roll' }>;
+
+const NOBODY: Shown = { pawns: [], out: [], die: null };
+
+const WAITING: Felt = { pawns: [], out: [], die: { roller: 0, face: 6, fate: 'pending' }, winners: [] };
 
 const cq = (value: number) => `${ value.toFixed(3) }cqi`;
 
-const at = (spot: { x: number; y: number }) => `${ cq(spot.x) } ${ cq(spot.y) }`;
+const at = (spot: Point) => `${ cq(spot.x) } ${ cq(spot.y) }`;
 
-function foot(col: number, row: number): { x: number; y: number }
+const pan = (x: number) => clamp((x / 100 - 0.5) * 1.2, -0.6, 0.6);
+
+function foot(col: number, row: number): Point
 {
     return {
         x: (MARGIN * 100) + (col + 0.5) * C,
@@ -77,157 +128,290 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, name: string, pa
     return made;
 }
 
+const stepOf = (squares: number) => STEP_MS - (STEP_MS - STEP_LEAST) * clamp((squares - 1) / 5);
+
+const costOf = (beat: Beat) =>
+{
+    if (beat.kind === 'roll')
+    {
+        return beat.fate === 'pending' ? TUMBLE_MS : TUMBLE_MS + PASS_LEAST;
+    }
+
+    if (beat.kind === 'move')
+    {
+        const squares = Math.max(1, Math.min(beat.to, FINISHED - 1) - beat.from);
+        const travel = beat.from === YARD ? ENTER_MS : squares * stepOf(squares);
+
+        return travel + (beat.victims.length > 0 ? KNOCK_MS : 0) + (beat.home ? HOME_MS : 0);
+    }
+
+    if (beat.kind === 'forfeit')
+    {
+        return beat.survives ? SLIDE_MS : 0;
+    }
+
+    return WIN_LEAST;
+};
+
 const RING = '<svg viewBox="-60 -30 120 60" aria-hidden="true" class="block inline-full block-full overflow-visible"><ellipse class="fill-none stroke-[#0B1220] [stroke-opacity:0.55] stroke-[10]" rx="56" ry="28"/><ellipse class="fill-none stroke-[#FFFFFF] [stroke-opacity:0.95] stroke-[5.5] [stroke-dasharray:7.5_2.5] animate-[lp-dash_2400ms_linear_infinite] [.lp[data-movable]:hover_&]:[stroke-dasharray:none] [.lp[data-movable]:hover_&]:stroke-[7.5] [.lb[data-still]_&]:animate-none [.lb[data-still]_&]:[stroke-dasharray:none]" rx="56" ry="28" pathLength="120"/></svg>';
 
 const SPRITE = 'absolute max-inline-none select-none [-webkit-user-drag:none]';
 
 const STILL = '[.lb[data-still]_&]:animate-none';
 
+const PAWN_BOX = 'inset-s-[calc(var(--c)*-0.8435)] inset-bs-[calc(var(--c)*-1.3114)] inline-[calc(var(--c)*1.687)] block-[calc(var(--c)*1.687)]';
+
 const ROLLED = 'absolute inset-s-[50%] inset-bs-[50%] hidden [translate:-50%_-50%] [.lb[data-rolled]_&]:block';
 
 export async function createLudoBoard(options: BoardOptions): Promise<BoardHandle>
 {
-    const host = options.host;
+    const { host, stage } = options;
     const root = element('div', 'lb absolute inset-0 overflow-hidden isolate pointer-events-none [&[data-paused]_*]:[animation-play-state:paused]', host);
     const pieces = new Map<string, Piece>();
-    const timers = new Set<number>();
+    const nest = new Map<string, number>();
+    const slot = new Map<string, number>();
+    const pending = new Set<string>();
+    const flying = new Set<string>();
+    const transient = new Set<HTMLElement>();
 
-    let view: BoardView = EMPTY;
-    let motion = !options.reducedMotion;
-    let sound: SoundHandle | null = createSound(options.sound);
-    let dieFade = 0;
-    let heardRev = Math.max(0, ...(options.view.beats ?? []).map((beat) => beat.rev));
+    let shown: Shown = NOBODY;
+    let matchId = '';
+    let celebrated = '';
+    let movable: ReadonlySet<string> = new Set();
+    let hints = true;
+    let plateDie: Rolled | null = null;
+    let told = '';
+    let dieRuns: Run[] = [];
+    let dieStop: () => void = () => undefined;
 
     root.style.setProperty('--c', cq(C));
-    root.toggleAttribute('data-still', !motion);
+    root.toggleAttribute('data-still', stage.quiet());
 
-    const later = (ms: number, run: () => void) =>
+    const glow = element('div', `${ ROLLED } inline-[calc(var(--c)*3)] block-[calc(var(--c)*3)] rounded-[50%] [background:radial-gradient(closest-side,color-mix(in_oklab,var(--tone,transparent)_45%,transparent),color-mix(in_oklab,var(--tone,transparent)_22%,transparent)_60%,transparent)]`, root);
+    const die = element('div', `lb-die ${ ROLLED } inline-[19.12cqi] block-[19.12cqi] [background:url(/board/ludo-dice.svg)_calc(var(--face,0)*100%/7)_0/800%_100%_no-repeat] data-spent:opacity-[0.55] data-spent:[transition:opacity_200ms_var(--ease-ui)] data-[spent=three-sixes]:[filter:sepia(1)_saturate(4)_hue-rotate(-30deg)_brightness(0.95)]`, root);
+
+    glow.style.zIndex = String(Z_GLOW);
+    die.style.zIndex = String(Z_DIE);
+
+    const pawnOf = (state: Shown, key: string) => state.pawns.find((pawn) => pawn.key === key);
+
+    const colourOf = (seat: number) => shown.pawns.find((pawn) => pawn.owner === seat)?.colour;
+
+    const seatOf = (pawn: Pawn) => nest.get(pawn.key) ?? pawn.piece;
+
+    const slotOf = (pawn: Pawn) =>
     {
-        const id = window.setTimeout(() =>
+        const held = slot.get(pawn.key);
+
+        if (held !== undefined)
         {
-            timers.delete(id);
-            run();
-        }, ms);
+            return held;
+        }
 
-        timers.add(id);
+        const taken = new Set(shown.pawns.filter((one) => one.owner === pawn.owner).map((one) => slot.get(one.key)));
+        const free = [0, 1, 2, 3].find((one) => !taken.has(one)) ?? 0;
 
-        return id;
+        slot.set(pawn.key, free);
+
+        return free;
     };
 
-    const glow = element('div', `${ ROLLED } z-[9400] inline-[calc(var(--c)*3)] block-[calc(var(--c)*3)] rounded-[50%] [background:radial-gradient(closest-side,color-mix(in_oklab,var(--tone,transparent)_45%,transparent),color-mix(in_oklab,var(--tone,transparent)_22%,transparent)_60%,transparent)]`, root);
-    const die = element('div', `lb-die ${ ROLLED } z-[9500] inline-[19.12cqi] block-[19.12cqi] [background:url(/board/ludo-dice.svg)_calc(var(--face,0)*100%/7)_0/800%_100%_no-repeat] data-spent:opacity-[0.55] data-spent:[transition:opacity_200ms_var(--ease-ui)] data-[spent=three-sixes]:[filter:sepia(1)_saturate(4)_hue-rotate(-30deg)_brightness(0.95)]`, root);
+    const cellOf = (pawn: Pawn) => placeOf(pawn.colour, Math.min(pawn.progress, FINISHED - 1), 0, 0);
 
-    const spotOf = (token: BoardToken): Spot =>
+    const placeFor = (pawn: Pawn) =>
     {
-        const base = foot(token.col, token.row);
-
-        if (token.at === FINISHED)
+        if (pawn.progress === YARD)
         {
-            return { ...base, scale: HOME_SCALE };
+            return placeOf(pawn.colour, YARD, seatOf(pawn), 0);
         }
 
-        if (token.at === YARD)
+        return pawn.progress >= FINISHED && !pending.has(pawn.key) ? placeOf(pawn.colour, FINISHED, 0, slotOf(pawn)) : cellOf(pawn);
+    };
+
+    const spotOf = (state: Shown, pawn: Pawn): Spot =>
+    {
+        const place = placeFor(pawn);
+        const base = foot(place.col, place.row);
+
+        if (pawn.progress === YARD)
         {
-            return { ...base, scale: 1 };
+            return { ...base, scale: 1, front: false };
         }
 
-        const around = view.tokens.filter((one) => one.at !== YARD && one.at !== FINISHED && one.col === token.col && one.row === token.row);
-        const together = around
-            .map((one) => one.key)
-            .sort((a, b) =>
+        if (pending.has(pawn.key))
+        {
+            return { ...base, scale: 1, front: true };
+        }
+
+        if (pawn.progress >= FINISHED)
+        {
+            return { ...base, scale: HOME_SCALE, front: false };
+        }
+
+        const around = state.pawns
+            .filter((one) => one.progress !== YARD && one.progress < FINISHED && !pending.has(one.key))
+            .filter((one) =>
             {
-                const [seatA, pieceA] = order(a);
-                const [seatB, pieceB] = order(b);
+                const cell = cellOf(one);
 
-                return seatA - seatB || pieceA - pieceB;
-            });
-        const index = Math.max(0, together.indexOf(token.key));
-        const block = around.length === BLOCK.length && around.every((one) => one.side === token.side && one.at < RING_STEPS);
-        const place = block ? BLOCK[index] : stackSpot(index, together.length);
+                return cell.col === place.col && cell.row === place.row;
+            })
+            .sort((one, other) => one.owner - other.owner || one.piece - other.piece);
+        const index = Math.max(0, around.findIndex((one) => one.key === pawn.key));
+        const block = around.length === BLOCK.length && around.every((one) => one.side === pawn.side && one.progress < RING_STEPS);
+        const stood = block ? BLOCK[index] : stackSpot(index, around.length);
 
-        return { x: base.x + place.dx * C, y: base.y + place.dy * C, scale: place.scale, front: place.front === true };
+        return { x: base.x + stood.dx * C, y: base.y + stood.dy * C, scale: stood.scale, front: block && stood.front === true };
     };
+
+    const depthOf = (spot: Spot) => Z_PIECE + Math.round(spot.y * 10) + (spot.front ? FRONT : 0);
 
     const place = (piece: Piece, spot: Spot) =>
     {
+        piece.at = spot;
         piece.root.style.translate = at(spot);
         piece.root.style.scale = String(spot.scale);
-        piece.root.style.zIndex = String(Math.round(spot.y * 10) + (spot.front === true ? FRONT : 0));
-        piece.root.toggleAttribute('data-stacked', spot.front === true);
+        piece.root.style.zIndex = String(depthOf(spot));
+        piece.root.toggleAttribute('data-stacked', spot.front && !pending.has(piece.key));
     };
 
-    const dress = (piece: Piece) =>
+    const dress = (piece: Piece, pawn: Pawn) =>
     {
-        const token = piece.token;
-
-        piece.root.toggleAttribute('data-movable', token.playable && view.lit !== false);
-        piece.root.toggleAttribute('data-home', token.at === FINISHED);
-        piece.root.style.setProperty('--i', String(order(token.key)[1] % 4));
+        piece.root.toggleAttribute('data-movable', hints && movable.has(pawn.key) && !flying.has(pawn.key));
+        piece.root.toggleAttribute('data-home', pawn.progress >= FINISHED && !pending.has(pawn.key));
     };
 
-    const mint = (token: BoardToken) =>
+    const mint = (pawn: Pawn) =>
     {
         const node = element('div', 'lp absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
         const shadow = element('img', `lp-shadow ${ SPRITE } block [.lp[data-stacked]_&]:hidden inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
         const ring = element('span', `${ SPRITE } hidden inset-s-[calc(var(--c)*-0.6)] inset-bs-[calc(var(--c)*-0.3)] inline-[calc(var(--c)*1.2)] block-[calc(var(--c)*0.6)] bg-[radial-gradient(closest-side,rgb(255_255_255/0.3),rgb(255_255_255/0.3)_40%,transparent_42%)] [.lp[data-movable]_&]:block`, node);
         const lift = element('span', `lp-lift absolute inset-s-0 inset-bs-0 ${ STILL } [.lb[data-still]_.lp[data-movable]_&]:[translate:0_calc(var(--c)*-0.06)]`, node);
-        const pawn = element('img', `lp-pawn ${ SPRITE } block inset-s-[calc(var(--c)*-0.8435)] inset-bs-[calc(var(--c)*-1.3114)] inline-[calc(var(--c)*1.687)] block-[calc(var(--c)*1.687)] origin-[50%_77.73%] [.lp[data-movable]_&]:pointer-events-auto [.lp[data-movable]_&]:cursor-pointer [.lp[data-movable]:hover_&]:[filter:brightness(1.08)] ${ STILL }`, lift);
+        const body = element('img', `lp-pawn ${ SPRITE } block ${ PAWN_BOX } origin-[50%_77.73%] [.lp[data-movable]_&]:pointer-events-auto [.lp[data-movable]_&]:cursor-pointer [.lp[data-movable]:hover_&]:[filter:brightness(1.08)] ${ STILL }`, lift);
 
         shadow.src = '/board/pawn-shadow.svg';
         shadow.alt = '';
         shadow.decoding = 'async';
-        pawn.src = `/board/pawn-${ token.colour }.svg`;
-        pawn.alt = '';
-        pawn.decoding = 'async';
-        pawn.draggable = false;
+        body.src = `/board/pawn-${ pawn.colour }.svg`;
+        body.alt = '';
+        body.decoding = 'async';
+        body.draggable = false;
         ring.innerHTML = RING;
-        node.style.setProperty('--tone', TONE[token.colour] ?? '#FFFFFF');
-        node.dataset.colour = token.colour;
+        node.style.setProperty('--tone', TONE[pawn.colour] ?? '#FFFFFF');
+        node.style.setProperty('--i', String(pawn.piece % 4));
+        node.dataset.colour = pawn.colour;
+        node.dataset.key = pawn.key;
 
-        const piece: Piece = { token, root: node, lift, pawn, shadow, walk: 0, moving: false, timers: [] };
+        const piece: Piece = { key: pawn.key, root: node, lift, pawn: body, shadow, at: { x: 0, y: 0, scale: 1, front: false } };
 
-        dress(piece);
-        place(piece, spotOf(token));
+        pieces.set(pawn.key, piece);
 
         return piece;
     };
 
-    const halt = (piece: Piece) =>
+    const tell = (out: readonly number[] = shown.out) =>
     {
-        piece.walk += 1;
-        piece.moving = false;
-        piece.root.removeAttribute('data-moving');
+        const home: Record<number, number> = {};
 
-        for (const id of piece.timers)
+        for (const pawn of shown.pawns)
         {
-            window.clearTimeout(id);
-            timers.delete(id);
+            home[pawn.owner] = (home[pawn.owner] ?? 0) + (pawn.progress >= FINISHED && !pending.has(pawn.key) ? 1 : 0);
         }
-        piece.timers = [];
 
-        for (const target of [piece.root, piece.lift, piece.pawn, piece.shadow])
+        const facts = { home, out, die: plateDie };
+        const said = JSON.stringify(facts);
+
+        if (said !== told)
         {
-            for (const running of target.getAnimations())
+            told = said;
+            options.onFacts?.(facts);
+        }
+    };
+
+    const dressAll = () =>
+    {
+        for (const pawn of shown.pawns)
+        {
+            const piece = pieces.get(pawn.key);
+
+            if (piece !== undefined)
             {
-                running.cancel();
+                dress(piece, pawn);
             }
         }
     };
 
-    const layout = () =>
+    const rest = () =>
     {
-        for (const piece of pieces.values())
+        for (const pawn of shown.pawns)
         {
-            if (!piece.moving)
+            const piece = pieces.get(pawn.key) ?? mint(pawn);
+
+            if (!flying.has(pawn.key))
             {
-                place(piece, spotOf(piece.token));
+                piece.root.removeAttribute('data-moving');
+                place(piece, spotOf(shown, pawn));
             }
+
+            dress(piece, pawn);
         }
     };
 
-    const burst = (spot: { x: number; y: number }, colour: string) =>
+    const relayout = (ms: number, quiet: 'in' | 'skip') =>
     {
-        if (!motion)
+        const runs: Run[] = [];
+
+        for (const pawn of shown.pawns)
+        {
+            const piece = pieces.get(pawn.key);
+
+            if (piece === undefined || flying.has(pawn.key))
+            {
+                continue;
+            }
+
+            const from = piece.at;
+            const to = spotOf(shown, pawn);
+
+            dress(piece, pawn);
+
+            if (Math.abs(from.x - to.x) < 0.01 && Math.abs(from.y - to.y) < 0.01 && from.scale === to.scale)
+            {
+                place(piece, to);
+                continue;
+            }
+
+            place(piece, to);
+            piece.root.style.zIndex = String(Math.max(depthOf(from), depthOf(to)) + 1);
+            runs.push(stage.animate(piece.root, [
+                { translate: at(from), scale: String(from.scale) },
+                { translate: at(to), scale: String(to.scale) }
+            ], { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)', quiet }));
+            void runs[runs.length - 1].done.then(() =>
+            {
+                if (!flying.has(pawn.key))
+                {
+                    piece.root.style.zIndex = String(depthOf(piece.at));
+                }
+            });
+        }
+
+        return runs;
+    };
+
+    const fleeting = (node: HTMLElement, run: Run) =>
+    {
+        transient.add(node);
+        void run.done.then(() =>
+        {
+            transient.delete(node);
+            node.remove();
+        });
+    };
+
+    const burst = (spot: Point, colour: string) =>
+    {
+        if (stage.quiet())
         {
             return;
         }
@@ -236,175 +420,133 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
         ring.style.translate = at(spot);
         ring.style.setProperty('--tone', colour);
-        ring.style.zIndex = String(Math.round(spot.y * 10) + 5);
-        ring.animate(
-            [{ scale: '0.37', opacity: 0.9 }, { scale: '1', opacity: 0 }],
-            { duration: 280, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' }
-        ).finished.then(() => ring.remove(), () => ring.remove());
+        ring.style.zIndex = String(Z_PIECE + Math.round(spot.y * 10) + 5);
+        fleeting(ring, stage.animate(ring, [{ scale: '0.37', opacity: 0.9 }, { scale: '1', opacity: 0 }], { duration: 280, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', fill: 'both' }));
+    };
+
+    const flash = (piece: Piece, colour: string) =>
+    {
+        if (stage.quiet())
+        {
+            return;
+        }
+
+        const white = element('img', `${ SPRITE } block ${ PAWN_BOX } [filter:brightness(0)_invert(1)]`, piece.lift);
+
+        white.src = `/board/pawn-${ colour }.svg`;
+        white.alt = '';
+        fleeting(white, stage.animate(white, [{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0 }], { duration: 140, fill: 'both' }));
     };
 
     const land = (piece: Piece) =>
     {
-        piece.pawn.animate(
-            [{ scale: '1 1' }, { scale: '1.05 0.93' }, { scale: '1 1' }],
-            { duration: 180, easing: 'ease-out' }
-        );
+        stage.animate(piece.pawn, [{ scale: '1 1' }, { scale: '1.05 0.93' }, { scale: '1 1' }], { duration: 180, easing: 'ease-out', quiet: 'skip' });
     };
 
-    const walk = (piece: Piece, cells: readonly { col: number; row: number }[], from: { x: number; y: number }, done: () => void) =>
+    const travel = (piece: Piece, pawn: Pawn, from: number, to: number) =>
     {
-        halt(piece);
+        const start: Point = { x: piece.at.x, y: piece.at.y };
+        const scale = piece.at.scale;
+        const stops = pathBetween(pawn.colour, from, to).map((cell) => foot(cell.col, cell.row));
+        const end = stops[stops.length - 1];
+        const sound = options.sound;
 
-        const id = piece.walk;
-
-        if (cells.length === 0)
+        if (end === undefined)
         {
-            done();
-            return;
+            return null;
         }
 
-        piece.moving = true;
         piece.root.setAttribute('data-moving', '');
-
-        const stops = [from, ...cells.map((cell) => foot(cell.col, cell.row))];
-        const end = stops[stops.length - 1];
-        const duration = STEP_MS * cells.length;
-
-        piece.root.style.zIndex = String(Math.round(Math.max(...stops.map((stop) => stop.y)) * 10) + 50);
+        piece.root.removeAttribute('data-movable');
+        piece.root.removeAttribute('data-stacked');
+        piece.root.style.zIndex = String(Z_PIECE + Math.round(Math.max(start.y, ...stops.map((stop) => stop.y)) * 10) + AHEAD);
+        piece.at = { ...end, scale: 1, front: true };
         piece.root.style.translate = at(end);
         piece.root.style.scale = '1';
 
-        piece.root.animate(
-            stops.map((stop) => ({ translate: at(stop), easing: 'ease-in-out' })),
-            { duration }
-        );
-
-        piece.lift.animate(
-            [{ translate: '0 0' }, { translate: `0 ${ cq(-0.22 * C) }`, easing: 'ease-in' }, { translate: '0 0' }],
-            { duration: STEP_MS, iterations: cells.length, easing: 'ease-out' }
-        );
-
-        piece.shadow.animate(
-            [{ scale: '1' }, { scale: '0.8' }, { scale: '1' }],
-            { duration: STEP_MS, iterations: cells.length }
-        );
-
-        for (let step = 1; step <= cells.length; step += 1)
+        if (from === YARD)
         {
-            piece.timers.push(later(STEP_MS * step, () =>
-            {
-                if (piece.walk === id)
-                {
-                    sound?.play('token-step');
-                }
-            }));
+            const flight = arc(start, end, { duration: ENTER_MS, arch: 1 });
+            const run = stage.animate(piece.root, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: at(one), scale: String(scale + (1 - scale) * one.progress) })), { duration: ENTER_MS });
+
+            stage.animate(piece.lift, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: `0 ${ cq(-0.9 * C * one.lift) }` })), { duration: ENTER_MS, quiet: 'skip' });
+            stage.animate(piece.shadow, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), scale: String(1 - 0.3 * one.lift) })), { duration: ENTER_MS, quiet: 'skip' });
+            stage.after(run.length, () => sound()?.play('token-step', { pan: pan(end.x) }));
+
+            return run;
         }
 
-        piece.timers.push(later(duration, () =>
+        const each = stepOf(stops.length);
+        const walked = walk([start, ...stops], { hops: stops.map((_, leg) => each * (leg === stops.length - 1 ? 1.15 : 1)), lifts: stops.map(() => 1) });
+        const first = walked.lands[0];
+        const run = stage.animate(piece.root, walked.steps.map((one) => ({
+            offset: Math.min(1, one.at / walked.length),
+            translate: at(one),
+            scale: String(scale + (1 - scale) * Math.min(1, one.at / first))
+        })), { duration: walked.length });
+
+        stage.animate(piece.lift, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), translate: `0 ${ cq(-0.22 * C * one.lift) }` })), { duration: walked.length, quiet: 'skip' });
+        stage.animate(piece.shadow, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), scale: String(1 - 0.2 * one.lift) })), { duration: walked.length, quiet: 'skip' });
+
+        if (stage.quiet())
         {
-            if (piece.walk !== id)
+            stage.after(run.length, () => sound()?.play('token-step', { pan: pan(end.x) }));
+        }
+        else
+        {
+            for (const [leg, landed] of walked.lands.entries())
             {
-                return;
+                stage.after(landed, () => sound()?.play('token-step', { pan: pan(stops[leg].x), rate: 0.92 + leg * 0.03 }));
             }
+        }
 
-            done();
-        }));
+        return run;
     };
 
-    const arrive = (piece: Piece) =>
+    const knock = (key: string, colour: string) =>
     {
-        piece.moving = false;
-        piece.root.removeAttribute('data-moving');
-        place(piece, spotOf(piece.token));
-        land(piece);
-        layout();
-    };
+        const pawn = pawnOf(shown, key);
+        const piece = pieces.get(key);
 
-    const home = (piece: Piece) =>
-    {
-        const spot = spotOf(piece.token);
-        const from = piece.root.style.translate;
+        if (pawn === undefined || piece === undefined)
+        {
+            return null;
+        }
 
-        piece.moving = false;
-        piece.root.removeAttribute('data-moving');
-        place(piece, spot);
-        sound?.play('home');
+        const from: Point = { x: piece.at.x, y: piece.at.y };
+        const fromScale = piece.at.scale;
+        const home = spotOf(shown, pawn);
 
-        piece.root.animate(
-            [{ translate: from, scale: '1' }, { translate: at(spot), scale: String(HOME_SCALE) }],
-            { duration: 220, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
-        ).finished.then(() => burst(spot, '#E8C36A'), () => undefined);
-    };
-
-    const knock = (piece: Piece, from: { x: number; y: number }) =>
-    {
-        halt(piece);
-
-        const id = piece.walk;
-        const spot = spotOf(piece.token);
-
-        piece.moving = true;
-        piece.root.setAttribute('data-moving', '');
-        sound?.play('token-capture');
+        flying.add(key);
         burst(from, '#FFFFFF');
-
-        piece.root.style.zIndex = '9000';
-        piece.root.style.translate = at(spot);
+        flash(piece, colour);
+        piece.root.setAttribute('data-moving', '');
+        piece.root.removeAttribute('data-movable');
+        piece.root.removeAttribute('data-stacked');
+        piece.at = home;
+        piece.root.style.translate = at(home);
         piece.root.style.scale = '1';
+        piece.root.style.zIndex = String(Z_AIR);
 
-        piece.pawn.animate(
-            [{ filter: 'brightness(0) invert(1)' }, { filter: 'brightness(0) invert(1)', offset: 0.5 }, { filter: 'none' }],
-            { duration: 140 }
-        );
+        const flight = arc(from, home, { duration: KNOCK_MS, arch: 1 });
+        const run = stage.animate(piece.root, flight.map((one) => ({
+            offset: Math.min(1, one.at / KNOCK_MS),
+            translate: at(one),
+            rotate: `${ (one.progress * 360).toFixed(1) }deg`,
+            scale: String(fromScale + (1 - fromScale) * one.progress + 0.2 * one.lift)
+        })), { duration: KNOCK_MS });
 
-        piece.root.animate(
-            [
-                { translate: at(from), rotate: '0deg', scale: '1' },
-                { scale: '1.2', offset: 0.5 },
-                { translate: at(spot), rotate: '360deg', scale: '1' }
-            ],
-            { duration: FLIGHT_MS, easing: 'ease-in-out' }
-        );
-
-        piece.lift.animate(
-            [{ translate: '0 0' }, { translate: `0 ${ cq(-1.1 * C) }`, easing: 'ease-in' }, { translate: '0 0' }],
-            { duration: FLIGHT_MS, easing: 'ease-out' }
-        );
-
-        piece.shadow.animate(
-            [{ opacity: 1 }, { opacity: 0, offset: 0.23 }, { opacity: 0, offset: 0.77 }, { opacity: 1 }],
-            { duration: FLIGHT_MS }
-        );
-
-        piece.timers.push(later(FLIGHT_MS, () =>
+        stage.animate(piece.lift, flight.map((one) => ({ offset: Math.min(1, one.at / KNOCK_MS), translate: `0 ${ cq(-1.1 * C * one.lift) }` })), { duration: KNOCK_MS, quiet: 'skip' });
+        stage.animate(piece.shadow, [{ opacity: 0.6 }, { opacity: 0, offset: 0.23 }, { opacity: 0, offset: 0.77 }, { opacity: 0.6 }], { duration: KNOCK_MS, quiet: 'skip' });
+        void run.done.then(() =>
         {
-            if (piece.walk !== id)
-            {
-                return;
-            }
-
-            piece.moving = false;
+            flying.delete(key);
             piece.root.removeAttribute('data-moving');
-            place(piece, spotOf(piece.token));
-            piece.root.animate(
-                [{ scale: '0.9' }, { scale: '1' }],
-                { duration: 160, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
-            );
-        }));
-    };
+            place(piece, home);
+            stage.animate(piece.root, [{ scale: '0.9' }, { scale: '1' }], { duration: 160, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', quiet: 'skip' });
+        });
 
-    const retire = (piece: Piece) =>
-    {
-        halt(piece);
-
-        if (!motion)
-        {
-            piece.root.remove();
-            return;
-        }
-
-        piece.root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 })
-            .finished.then(() => piece.root.remove(), () => piece.root.remove());
+        return run;
     };
 
     const face = (value: number) =>
@@ -412,246 +554,390 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         die.style.setProperty('--face', String(Math.min(Math.max(value, 1), 6) - 1));
     };
 
+    const stopDie = () =>
+    {
+        dieStop();
+        dieStop = () => undefined;
+
+        for (const run of dieRuns)
+        {
+            run.cancel();
+        }
+
+        dieRuns = [];
+    };
+
     const hideDie = () =>
     {
-        window.clearTimeout(dieFade);
+        stopDie();
         root.removeAttribute('data-rolled');
         die.removeAttribute('data-spent');
-
-        for (const running of die.getAnimations())
-        {
-            running.cancel();
-        }
     };
 
     const fadeDie = () =>
     {
-        window.clearTimeout(dieFade);
-        dieFade = later(DIE_HOLD_MS, () =>
+        dieStop();
+        dieStop = stage.after(DIE_REST_MS, () =>
         {
-            const fading = [die, glow].map((one) => one.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }));
-
-            Promise.all(fading.map((one) => one.finished)).then(() =>
-            {
-                hideDie();
-                fading.forEach((one) => one.cancel());
-            }, () => undefined);
+            dieRuns = [die, glow].map((one) => stage.animate(one, [{ opacity: 1 }, { opacity: 0 }], { duration: DIE_FADE_MS, fill: 'both', quiet: 'out' }));
+            dieStop = stage.after(DIE_FADE_MS, hideDie);
         });
     };
 
-    const roll = (was: number | null, now: number | null, turn: string | null) =>
+    const layDie = (rolled: Rolled | null) =>
     {
-        if (was === now)
+        hideDie();
+
+        if (rolled === null)
         {
             return;
         }
 
-        for (const running of [...die.getAnimations(), ...glow.getAnimations()])
-        {
-            running.cancel();
-        }
-
-        if (now === null)
-        {
-            hideDie();
-            return;
-        }
-
-        sound?.play('die-land');
+        face(rolled.face);
+        glow.style.setProperty('--tone', TONE[colourOf(rolled.roller) ?? ''] ?? 'transparent');
         root.setAttribute('data-rolled', '');
-        glow.style.setProperty('--tone', turn === null ? 'transparent' : (TONE[turn] ?? '#FFFFFF'));
-
-        if (!motion)
-        {
-            face(now);
-            fadeDie();
-            return;
-        }
-
-        const swaps = 7;
-
-        face((now * 7) % 6 + 1);
-
-        for (let shown = 1; shown <= swaps; shown += 1)
-        {
-            later((TUMBLE_MS / swaps) * shown, () =>
-            {
-                face(shown >= swaps ? now : (now * 7 + shown * 3) % 6 + 1);
-
-                if (shown >= swaps)
-                {
-                    fadeDie();
-                }
-            });
-        }
-
-        die.animate(
-            [{ rotate: '0deg', scale: '1' }, { scale: '1.3', offset: 0.4 }, { rotate: '360deg', scale: '1' }],
-            { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
-        );
-        glow.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: TUMBLE_MS });
+        fadeDie();
     };
 
-    const spent = (value: number, colour: string | null, why: string | undefined) =>
+    const tumble = async (beat: Thrown, moment: Moment) =>
     {
-        for (const running of [...die.getAnimations(), ...glow.getAnimations()])
-        {
-            running.cancel();
-        }
+        const reader = moment.sight.seat !== null && moment.sight.seat === beat.seat;
+        const sound = options.sound;
 
-        sound?.play('die-land');
+        hideDie();
+        plateDie = null;
+        tell();
+        sound()?.play('die-land');
+        glow.style.setProperty('--tone', TONE[colourOf(beat.seat) ?? ''] ?? 'transparent');
         root.setAttribute('data-rolled', '');
-        glow.style.setProperty('--tone', colour === null ? 'transparent' : (TONE[colour] ?? '#FFFFFF'));
-        face(value);
 
-        const settle = motion ? TUMBLE_MS : 0;
-
-        if (motion)
+        if (stage.quiet())
         {
-            die.animate(
-                [{ rotate: '0deg', scale: '1' }, { scale: '1.3', offset: 0.4 }, { rotate: '360deg', scale: '1' }],
-                { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
-            );
-        }
-
-        later(settle, () =>
-        {
-            sound?.play(why === 'three-sixes' ? 'deny' : 'pass');
-            die.setAttribute('data-spent', why ?? 'no-move');
-            die.animate(
-                motion
-                    ? [{ rotate: '0deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '0deg' }]
-                    : [{ opacity: 1 }, { opacity: 0.55 }],
-                { duration: 280, fill: 'forwards' }
-            );
-            fadeDie();
-        });
-    };
-
-    const celebrate = (winners: readonly string[]) =>
-    {
-        sound?.play('win');
-
-        const tones = winners.map((winner) => TONE[winner] ?? '#FFFFFF');
-
-        if (!motion)
-        {
-            return;
-        }
-
-        for (let index = 0; index < CONFETTI; index += 1)
-        {
-            const angle = (index / CONFETTI) * Math.PI * 2 + (index % 5) * 0.11;
-            const reach = 26 + (index % 7) * 3.5;
-            const fleck = element('span', 'absolute inset-s-0 inset-bs-0 z-[9600] inline-[1.4cqi] block-[2.6cqi] mbs-[-1.3cqi] ms-[-0.7cqi] rounded-[1px]', root);
-
-            fleck.style.background = index % 3 === 0 ? tones[(index / 3) % tones.length] : (index % 3 === 1 ? '#F6F1E6' : '#FFFFFF');
-            fleck.animate(
-                [
-                    { translate: '50cqi 50cqi', rotate: `${ index * 37 }deg`, opacity: 1 },
-                    { translate: `${ cq(50 + Math.cos(angle) * reach) } ${ cq(58 + Math.sin(angle) * reach) }`, rotate: `${ index * 37 + 540 }deg`, opacity: 0 }
-                ],
-                { duration: 1100 + (index % 6) * 90, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
-            ).finished.then(() => fleck.remove(), () => fleck.remove());
-        }
-    };
-
-    const show = (next: BoardView) =>
-    {
-        const previous = view;
-
-        view = next;
-
-        const seen = new Set<string>();
-        const journeys: (() => void)[] = [];
-
-        for (const token of next.tokens)
-        {
-            seen.add(token.key);
-
-            const piece = pieces.get(token.key);
-
-            if (piece === undefined)
-            {
-                pieces.set(token.key, mint(token));
-                continue;
-            }
-
-            const was = piece.token;
-
-            piece.token = token;
-            dress(piece);
-
-            if (was.col === token.col && was.row === token.row && was.at === token.at)
-            {
-                continue;
-            }
-
-            if (was.at === token.at || !motion)
-            {
-                halt(piece);
-                continue;
-            }
-
-            const from = foot(was.col, was.row);
-
-            if (was.at >= 0 && token.at === YARD)
-            {
-                journeys.push(() => knock(piece, from));
-                continue;
-            }
-
-            const path = pathBetween(token.colour as LudoColour, was.at, token.at);
-
-            journeys.push(() => walk(piece, path, from, () => token.at === FINISHED ? home(piece) : arrive(piece)));
-        }
-
-        for (const [key, piece] of [...pieces])
-        {
-            if (!seen.has(key))
-            {
-                pieces.delete(key);
-                retire(piece);
-            }
-        }
-
-        layout();
-
-        for (const journey of journeys)
-        {
-            journey();
-        }
-
-        const fresh = (next.beats ?? []).filter((beat) => beat.rev > heardRev);
-
-        heardRev = Math.max(heardRev, ...fresh.map((beat) => beat.rev));
-
-        const passed = fresh.find((beat) => beat.e === 'pass');
-        const rolled = [...fresh].reverse().find((beat) => beat.e === 'roll' && beat.die !== undefined);
-
-        if (passed !== undefined && rolled !== undefined && next.die === null)
-        {
-            spent(rolled.die!, rolled.colour, passed.why);
+            face(beat.face);
         }
         else
         {
-            roll(previous.die, next.die, next.turn);
+            face((beat.face * 7) % 6 + 1);
+
+            for (let swap = 1; swap <= SWAPS; swap += 1)
+            {
+                stage.after((TUMBLE_MS / SWAPS) * swap, () => face(swap >= SWAPS ? beat.face : (beat.face * 7 + swap * 3) % 6 + 1));
+            }
         }
 
-        if (previous.winners.length === 0 && next.winners.length > 0)
+        const spin = stage.animate(die, [{ rotate: '0deg', scale: '1' }, { scale: '1.3', offset: 0.4 }, { rotate: '360deg', scale: '1' }], { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' });
+
+        dieRuns = [spin, stage.animate(glow, [{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: TUMBLE_MS, quiet: 'skip' })];
+        await spin.done;
+
+        if (!moment.ctx.live())
         {
-            celebrate(next.winners);
+            return;
         }
-        else if (!previous.yours && next.yours && previous.winners.length === 0)
+
+        face(beat.face);
+
+        if (beat.fate === 'pending')
         {
-            sound?.play('turn', { urgent: true });
+            if (beat.face === 6)
+            {
+                sound()?.play('bonus');
+            }
+
+            plateDie = shown.die;
+            tell();
+            fadeDie();
+
+            return;
         }
+
+        sound()?.play(beat.fate === 'three-sixes' ? 'deny' : (beat.fate === 'wasted' ? 'bonus' : 'pass'));
+
+        if (reader && beat.fate === 'three-sixes')
+        {
+            options.feel('deny');
+        }
+
+        die.setAttribute('data-spent', beat.fate);
+        dieRuns.push(stage.animate(die, [{ rotate: '0deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '0deg' }], { duration: SPENT_MS, quiet: 'skip' }));
+        await moment.ctx.linger(moment.more ? PASS_LEAST : PASS_MS, PASS_LEAST);
+
+        if (moment.ctx.live())
+        {
+            fadeDie();
+        }
+    };
+
+    const spend = () =>
+    {
+        if (plateDie !== null || root.hasAttribute('data-rolled'))
+        {
+            plateDie = null;
+            hideDie();
+        }
+    };
+
+    const homeIn = async (pawn: Pawn, piece: Piece, reader: boolean) =>
+    {
+        const from = piece.at;
+
+        pending.delete(pawn.key);
+
+        const to = spotOf(shown, pawn);
+
+        options.sound()?.play('home', { pan: pan(to.x) });
+
+        if (reader)
+        {
+            options.feel('select');
+        }
+
+        flying.add(pawn.key);
+        place(piece, to);
+        piece.root.style.zIndex = String(Math.max(depthOf(from), depthOf(to)) + AHEAD);
+
+        await stage.animate(piece.root, [
+            { translate: at(from), scale: String(from.scale) },
+            { translate: at(to), scale: String(to.scale) }
+        ], { duration: HOME_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }).done;
+
+        flying.delete(pawn.key);
+        place(piece, to);
+        dress(piece, pawn);
+        burst(to, '#E8C36A');
+    };
+
+    const journey = async (before: Shown, beat: Moved, moment: Moment) =>
+    {
+        const was = pawnOf(before, beat.key);
+        const piece = pieces.get(beat.key);
+        const after = step(before, beat);
+        const pawn = pawnOf(after, beat.key);
+        const seat = moment.sight.seat;
+        const reader = seat !== null && seat === beat.seat;
+
+        spend();
+
+        if (was === undefined || piece === undefined || pawn === undefined)
+        {
+            shown = after;
+            rest();
+            tell();
+
+            return;
+        }
+
+        shown = { ...before, die: null, pawns: before.pawns.map((one) => (one.key === beat.key ? pawn : one)) };
+
+        if (was.progress !== beat.to)
+        {
+            pending.add(beat.key);
+            flying.add(beat.key);
+            relayout(PAIR_MS, 'skip');
+            tell();
+
+            const walked = travel(piece, was, was.progress, beat.to);
+
+            if (walked !== null)
+            {
+                await walked.done;
+
+                if (!moment.ctx.live())
+                {
+                    return;
+                }
+
+                land(piece);
+
+                if (reader)
+                {
+                    options.feel('tick');
+                }
+            }
+
+            flying.delete(beat.key);
+            piece.root.removeAttribute('data-moving');
+        }
+
+        shown = after;
+
+        if (beat.victims.length > 0)
+        {
+            options.sound()?.play('token-capture', { pan: pan(piece.at.x) });
+
+            if (reader)
+            {
+                options.feel('capture');
+            }
+            else if (seat !== null && beat.victims.some((key) => pawnOf(after, key)?.owner === seat))
+            {
+                options.feel('hit');
+            }
+        }
+
+        const flights = beat.victims.map((key) => knock(key, pawnOf(after, key)?.colour ?? 'red')).filter((run) => run !== null);
+
+        if (beat.home)
+        {
+            await homeIn(pawn, piece, reader);
+        }
+        else
+        {
+            pending.delete(beat.key);
+            relayout(PAIR_MS, 'skip');
+        }
+
+        tell();
+
+        if (flights.length > 0)
+        {
+            await Promise.all(flights.map((run) => run.done));
+
+            if (moment.ctx.live())
+            {
+                options.sound()?.play('token-yard', { pan: pan(pieces.get(beat.victims[0])?.at.x ?? 50) });
+            }
+        }
+    };
+
+    const applaud = async (winners: readonly string[], ctx: Ctx) =>
+    {
+        const said = winners.join();
+
+        if (said === celebrated)
+        {
+            return;
+        }
+
+        celebrated = said;
+
+        if (winners.length === 0)
+        {
+            return;
+        }
+
+        options.sound()?.play('win');
+
+        const flecks = celebrate(stage, { host: root, tones: winners.map((winner) => TONE[winner] ?? '#FFFFFF'), layer: Z_BURST });
+
+        for (const fleck of flecks)
+        {
+            transient.add(fleck);
+        }
+
+        if (flecks.length > 0)
+        {
+            await ctx.linger(WIN_MS, WIN_LEAST);
+        }
+    };
+
+    const forget = (state: Shown) =>
+    {
+        for (const pawn of state.pawns)
+        {
+            if (pawn.progress < FINISHED)
+            {
+                slot.delete(pawn.key);
+            }
+        }
+    };
+
+    const perform = async (beat: Beat, moment: Moment) =>
+    {
+        const before = shown;
+
+        if (beat.kind === 'roll')
+        {
+            shown = step(before, beat);
+            await tumble(beat, moment);
+
+            return;
+        }
+
+        if (beat.kind === 'move')
+        {
+            await journey(before, beat, moment);
+
+            return;
+        }
+
+        shown = step(before, beat);
+
+        if (before.die !== null && shown.die === null)
+        {
+            spend();
+        }
+
+        if (beat.kind === 'forfeit')
+        {
+            forget(shown);
+            tell(before.out);
+
+            if (beat.survives)
+            {
+                await Promise.all(relayout(SLIDE_MS, 'in').map((run) => run.done));
+            }
+
+            tell();
+
+            return;
+        }
+
+        tell();
+        await applaud(moment.sight.view.winners, moment.ctx);
+    };
+
+    const mend = async (felt: Felt, ctx: Ctx) =>
+    {
+        const target = shownOf(felt);
+        const moved = target.pawns.filter((pawn) => pawnOf(shown, pawn.key)?.progress !== pawn.progress).length;
+        const died = (shown.die?.face ?? 0) !== (target.die?.face ?? 0) || (shown.die?.roller ?? -1) !== (target.die?.roller ?? -1);
+
+        pending.clear();
+        shown = target;
+        forget(shown);
+
+        if (died)
+        {
+            plateDie = shown.die;
+            layDie(shown.die);
+        }
+
+        tell();
+
+        if (moved > SLIDE_MOST)
+        {
+            rest();
+        }
+        else
+        {
+            await Promise.all(relayout(SLIDE_MS, 'in').map((run) => run.done));
+        }
+
+        if (ctx.live())
+        {
+            await applaud(felt.winners, ctx);
+        }
+    };
+
+    const strip = () =>
+    {
+        hideDie();
+
+        for (const node of transient)
+        {
+            node.remove();
+        }
+
+        transient.clear();
+        pending.clear();
+        flying.clear();
     };
 
     const pick = (event: PointerEvent) =>
     {
         const box = host.getBoundingClientRect();
-        const key = pickNear(view.tokens, event.clientX - box.left, event.clientY - box.top, box.width);
+        const key = pickNear(shown.pawns.map((pawn) => ({ key: pawn.key, ...placeFor(pawn), playable: movable.has(pawn.key) && !flying.has(pawn.key) })), event.clientX - box.left, event.clientY - box.top, box.width);
 
         if (key !== null)
         {
@@ -661,54 +947,142 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
     host.addEventListener('pointerup', pick);
 
-    show({ ...options.view, die: null });
-
-    if (options.view.die !== null)
-    {
-        view = options.view;
-        face(options.view.die);
-        root.setAttribute('data-rolled', '');
-        glow.style.setProperty('--tone', options.view.turn === null ? 'transparent' : (TONE[options.view.turn] ?? '#FFFFFF'));
-        fadeDie();
-    }
-
-    options.onReady?.();
-
     return {
-        show,
+        kind: 'ludo',
 
-        setReducedMotion: (on) =>
+        history: HISTORY,
+
+        reset(sight)
         {
-            motion = !on;
-            root.toggleAttribute('data-still', on);
+            strip();
+
+            if (sight.id !== matchId)
+            {
+                matchId = sight.id;
+                nest.clear();
+                slot.clear();
+            }
+
+            shown = shownOf(sight.view);
+            forget(shown);
+            celebrated = sight.view.winners.join();
+
+            const keys = new Set(shown.pawns.map((pawn) => pawn.key));
+
+            for (const [key, piece] of [...pieces])
+            {
+                if (!keys.has(key))
+                {
+                    piece.root.remove();
+                    pieces.delete(key);
+                }
+            }
+
+            rest();
+            plateDie = shown.die;
+            layDie(shown.die);
+            tell();
         },
 
-        setSound: (on) => sound?.setEnabled(on),
+        same: (sight) => sameAs(shown, sight.view) && pending.size === 0 && celebrated === sight.view.winners.join(),
 
-        resize: () => undefined,
+        settle: (sight, ctx) => mend(sight.view, ctx),
+
+        async play(acts, sight, ctx)
+        {
+            const beats = beatsOf(acts, sight.view);
+
+            for (const [index, act] of beats.entries())
+            {
+                for (const beat of act)
+                {
+                    if (!ctx.live())
+                    {
+                        return;
+                    }
+
+                    await perform(beat, { sight, ctx, more: index < beats.length - 1 });
+                }
+            }
+
+            if (ctx.live() && !(sameAs(shown, sight.view) && pending.size === 0))
+            {
+                await mend(sight.view, ctx);
+            }
+        },
+
+        estimate: (acts) => beatsOf(acts, WAITING).flat().reduce((sum, beat) => sum + costOf(beat), 0),
+
+        lit(keys, visible)
+        {
+            movable = keys;
+            hints = visible;
+            dressAll();
+        },
+
+        async advance(key, to)
+        {
+            const was = pawnOf(shown, key);
+            const piece = pieces.get(key);
+
+            if (was === undefined || piece === undefined || was.progress === to || flying.has(key))
+            {
+                return false;
+            }
+
+            spend();
+            shown = { ...shown, die: null, pawns: shown.pawns.map((pawn) => (pawn.key === key ? { ...pawn, progress: to } : pawn)) };
+            pending.add(key);
+            flying.add(key);
+            relayout(PAIR_MS, 'skip');
+            tell();
+
+            const walked = travel(piece, was, was.progress, to);
+
+            if (walked !== null)
+            {
+                await walked.done;
+                land(piece);
+                options.feel('tick');
+            }
+
+            flying.delete(key);
+            piece.root.removeAttribute('data-moving');
+
+            return true;
+        },
+
+        swap(tapped, moving)
+        {
+            const one = pawnOf(shown, tapped);
+            const other = pawnOf(shown, moving);
+
+            if (one === undefined || other === undefined || one.key === other.key || one.progress !== YARD || other.progress !== YARD || one.owner !== other.owner)
+            {
+                return;
+            }
+
+            const seat = seatOf(one);
+
+            nest.set(one.key, seatOf(other));
+            nest.set(other.key, seat);
+            rest();
+        },
+
+        still(on)
+        {
+            root.toggleAttribute('data-still', on);
+        },
 
         pause: () => root.setAttribute('data-paused', ''),
 
         resume: () => root.removeAttribute('data-paused'),
 
-        dispose: () =>
+        dispose()
         {
             host.removeEventListener('pointerup', pick);
-
-            for (const id of timers)
-            {
-                window.clearTimeout(id);
-            }
-            timers.clear();
-
-            for (const piece of pieces.values())
-            {
-                halt(piece);
-            }
+            strip();
             pieces.clear();
-
-            sound?.dispose();
-            sound = null;
             root.remove();
         }
     };

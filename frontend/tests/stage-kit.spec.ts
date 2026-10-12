@@ -840,6 +840,8 @@ describe('the layers of a table', () =>
         expect(LAYER.cube).toBeLessThan(LAYER.moving);
         expect(LAYER.moving).toBeLessThan(LAYER.airborne);
         expect(LAYER.airborne).toBeLessThan(LAYER.dice);
+        expect(LAYER.dice).toBeLessThan(LAYER.burst);
+        expect(LAYER.burst).toBeLessThan(LAYER.banner);
     });
 
     it('hands the same numbers to the stylesheet', () =>

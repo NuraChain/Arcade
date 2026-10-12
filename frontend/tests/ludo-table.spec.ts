@@ -1,19 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { createSignal } from 'azerothjs';
+import { batch, createSignal } from 'azerothjs';
 
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
+import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { seatsFor } from '../src/components/games/seats.ts';
 import { ludoOf } from '../src/data/match.ts';
 import { CELL, centreOf } from '../src/game/layout.ts';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard } from '../src/stores/match.store.ts';
+import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
+import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
-import { FINISHED } from '../../backend/src/domains/match/ludo/board.ts';
+import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
+import { FINISHED, YARD, cellAt, coloursFor } from '../../backend/src/domains/match/ludo/board.ts';
+import { apply } from '../../backend/src/domains/match/ludo/engine.ts';
+import type { EngineAction, LudoState } from '../../backend/src/domains/match/ludo/state.ts';
 import * as turns from '../../backend/src/domains/match/turns.ts';
 import { matchView } from '../../backend/src/schemas.ts';
 import { client } from './fake-api.ts';
@@ -90,7 +95,7 @@ const show = async (match: MatchView): Promise<HTMLElement> =>
     matches.view = async () => match;
     useBoard().open(match.id);
     await settle();
-    return renderTest(() => MatchBoard({ match }) as Rendered).container;
+    return renderTest(() => MatchBoard({ match, events: NO_EVENTS }) as Rendered).container;
 };
 
 beforeEach(() =>
@@ -520,6 +525,7 @@ describe('the ludo table, two against two', () =>
             return probe.style.background;
         };
         const finished = (results: MatchView['players'][number]['result'][], outcome: MatchView['outcome']) => pairs({
+            rev: 2,
             finishedAt: new Date(500_000).toISOString(),
             outcome,
             ...(outcome === 'won' ? { winner: 0 } : {}),
@@ -536,7 +542,8 @@ describe('the ludo table, two against two', () =>
                 get match()
                 {
                     return current();
-                }
+                },
+                events: NO_EVENTS
             };
 
             matches.view = async () => current();
@@ -559,5 +566,473 @@ describe('the ludo table, two against two', () =>
             cleanup();
             useBoard().close();
         }
+    });
+});
+
+describe('the ludo table, played from what happened', () =>
+{
+    type Told = Extract<MatchEvent['log'], { kind: 'ludo' }>['moves'];
+
+    const EMPTY = [YARD, YARD, YARD, YARD];
+
+    const standing = (pieces: number[][], die: number | null, turn = 0): LudoState =>
+    {
+        const colours = coloursFor(pieces.length);
+
+        return {
+            v: 1,
+            game: 'ludo',
+            players: pieces.map((row, seat) => ({ seat, colour: colours[seat], pieces: [...row], out: false, side: seat })),
+            turn,
+            die,
+            sixes: die === 6 ? 1 : 0,
+            rev: 1,
+            winner: null
+        };
+    };
+
+    const stepped = (state: LudoState, action: EngineAction) =>
+    {
+        const outcome = apply(state, action);
+
+        if (!outcome.ok)
+        {
+            throw new Error(outcome.reason);
+        }
+
+        return { state: outcome.state, moves: outcome.events as unknown as Told };
+    };
+
+    const seen = (state: LudoState, mine: number | null, rev: number, over: Partial<MatchView> = {}): MatchView => ({
+        id: 'match-9',
+        tableId: 'table-9',
+        game: 'ludo',
+        rev,
+        seats: state.players.length,
+        players: state.players.map((player) => ({ seat: player.seat, who: SEATED[player.seat], timeouts: 0 })) as MatchView['players'],
+        ...(state.winner === null ? { turn: state.players[state.turn].seat } : {}),
+        ...(mine === null ? {} : { mine }),
+        startedAt: new Date(400_000).toISOString(),
+        view: ludoEngine.view(state, mine) as MatchView['view'],
+        ...over
+    });
+
+    const happened = (rev: number, seat: number, moves: Told): MatchEvent => ({ rev, seat, at: '', log: { kind: 'ludo', moves } });
+
+    const flush = async () =>
+    {
+        for (let turn = 0; turn < 12; turn += 1)
+        {
+            await Promise.resolve();
+        }
+    };
+
+    const elapse = async (ms: number) =>
+    {
+        const clock = runtime().clock as ManualClock;
+
+        for (let left = ms; left > 0; left -= 10)
+        {
+            clock.advance(Math.min(10, left));
+            await flush();
+        }
+
+        await flush();
+    };
+
+    const drawn = async (container: HTMLElement) =>
+    {
+        for (let wait = 0; wait < 40 && container.querySelector('.lp') === null; wait += 1)
+        {
+            await settle();
+        }
+    };
+
+    const live = async (first: MatchView, wait = true, extra: { onPresenting?: (busy: boolean) => void } = {}) =>
+    {
+        const [current, setCurrent] = createSignal(first);
+        const [told, setTold] = createSignal<EventBatch>(NO_EVENTS);
+
+        matches.view = async () => current();
+        useBoard().open(first.id);
+        await settle();
+
+        const view = renderTest(() => MatchBoard({
+            get match()
+            {
+                return current();
+            },
+            get events()
+            {
+                return told();
+            },
+            ...extra
+        }) as Rendered);
+
+        if (wait)
+        {
+            await drawn(view.container);
+        }
+
+        return {
+            container: view.container,
+            tell: (next: MatchView, events: MatchEvent[]) => batch(() =>
+            {
+                setCurrent(next);
+                setTold((held) => ({ seq: held.seq + 1, id: next.id, events, live: true, jump: false }));
+            }),
+            move: (next: MatchView) => setCurrent(next)
+        };
+    };
+
+    const pawn = (container: HTMLElement, key: string) => container.querySelector<HTMLElement>(`.lp[data-key="${ key }"]`)!;
+
+    const stageOf = (container: HTMLElement) => container.querySelector('.table-stage') as HTMLElement;
+
+    const dots = (container: HTMLElement, plate: number) => container.querySelectorAll('.yard-badge')[plate].querySelectorAll('[data-home="true"]').length;
+
+    const tags = (container: HTMLElement) => [...container.querySelectorAll('.yard-badge')].map((badge) => badge.querySelector('.table-plate-tag')?.textContent ?? null);
+
+    const plateDie = (container: HTMLElement, plate: number) => container.querySelectorAll('.yard-badge')[plate].querySelector('.table-plate-trail [role="img"]');
+
+    const cq = (value: number) => `${ value.toFixed(3) }cqi`;
+
+    const onSquare = (colour: 'red' | 'yellow', progress: number) =>
+    {
+        const cell = cellAt(colour, progress)!;
+        const spot = centreOf(cell.col, cell.row + 0.1, 100);
+
+        return `${ cq(spot.x) } ${ cq(spot.y) }`;
+    };
+
+    const quiet = () =>
+    {
+        const animate = Element.prototype.animate;
+
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, ...args: Parameters<Element['animate']>)
+        {
+            const running = animate.apply(this, args);
+
+            running.finished.catch(() => undefined);
+
+            return running;
+        });
+    };
+
+    const wonBy = (state: LudoState, mine: number | null, rev: number) => seen(state, mine, rev, {
+        finishedAt: new Date(401_000).toISOString(),
+        outcome: 'won',
+        winner: 1,
+        players: [
+            { seat: 0, who: SEATED[0], timeouts: 0, result: 'lost' },
+            { seat: 1, who: SEATED[1], timeouts: 0, result: 'won' }
+        ] as MatchView['players']
+    });
+
+    const closing = () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], [FINISHED, FINISHED, FINISHED, 54]], 2, 1);
+
+        return { before, after: stepped(before, { kind: 'move', seat: 1, piece: 3 }) };
+    };
+
+    it('walks what the other seat did, counts a pawn home when it is home, and shows the result only then', async () =>
+    {
+        quiet();
+
+        const { before, after } = closing();
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        expect(after.moves.map((move) => move.e)).toEqual(['step', 'home', 'finish']);
+        expect(dots(container, 1)).toBe(3);
+
+        tell(wonBy(after.state, 0, 2), [happened(2, 1, after.moves)]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(pawn(container, '1-3').hasAttribute('data-moving')).toBe(true);
+        expect(container.querySelector('.table-result'), 'the result was shown over a pawn still walking').toBeNull();
+        expect(tags(container), 'a plate said who won while the last pawn was still walking').toEqual([null, null]);
+        expect(dots(container, 1), 'the pawn was counted home before it was').toBe(3);
+
+        await elapse(700);
+
+        expect(dots(container, 1)).toBe(4);
+        expect(container.querySelector('.table-result'), 'the result was shown over the celebration').toBeNull();
+        expect(tags(container), 'a plate said who won while the confetti was still in the air').toEqual([null, null]);
+
+        await elapse(2000);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(container.querySelector('.table-result')).not.toBeNull();
+        expect(tags(container)).toEqual([useLocale().t('card.lost'), useLocale().t('card.won')]);
+    });
+
+    it('says a seat has gone when its pawns have gone home, in a game that goes on', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, 20, YARD, YARD], [5, YARD, YARD, YARD], [7, 30, YARD, YARD]], null, 1);
+        const left = stepped(before, { kind: 'forfeit', seat: 0, reason: 'left' });
+        const gone = seen(left.state, 1, 2, {
+            players: [
+                { seat: 0, who: SEATED[0], timeouts: 0, result: 'abandoned', exit: 'left' },
+                { seat: 1, who: SEATED[1], timeouts: 0 },
+                { seat: 2, who: SEATED[2], timeouts: 0 }
+            ] as MatchView['players']
+        });
+        const { container, tell } = await live(seen(before, 1, 1));
+
+        tell(gone, [happened(2, 0, left.moves)]);
+        await flush();
+
+        expect(tags(container), 'a plate said a seat had left while its pawns still stood on the board').toEqual([null, null, null]);
+
+        await elapse(600);
+
+        expect(tags(container)).toEqual([useLocale().t('card.out'), null, null]);
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+    });
+
+    it('says who gave up when that ends the game, and who won only with the result', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, 20, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const left = stepped(before, { kind: 'forfeit', seat: 0, reason: 'resign' });
+        const ended = seen(left.state, 1, 2, {
+            finishedAt: new Date(401_000).toISOString(),
+            outcome: 'won',
+            winner: 1,
+            players: [
+                { seat: 0, who: SEATED[0], timeouts: 0, result: 'abandoned', exit: 'resign' },
+                { seat: 1, who: SEATED[1], timeouts: 0, result: 'won' }
+            ] as MatchView['players']
+        });
+        const { container, tell } = await live(seen(before, 1, 1));
+
+        expect(left.moves.map((move) => move.e)).toEqual(['forfeit', 'finish']);
+
+        tell(ended, [happened(2, 0, left.moves)]);
+        await flush();
+        await elapse(200);
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(tags(container), 'the winner was named while the table was still playing').toEqual([useLocale().t('card.gaveUp'), null]);
+
+        await elapse(2500);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(tags(container)).toEqual([useLocale().t('card.gaveUp'), useLocale().t('card.won')]);
+    });
+
+    it('puts a roll on the plate of whoever rolled it once it has landed, and takes it off when it is used', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+        const { container, tell } = await live(seen(before, 1, 1));
+
+        tell(seen(rolled.state, 1, 2), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(plateDie(container, 0), 'the plate told the roll while the die was still turning').toBeNull();
+
+        await elapse(700);
+
+        expect(plateDie(container, 0)).not.toBeNull();
+        expect(plateDie(container, 1)).toBeNull();
+
+        tell(seen(moved.state, 1, 3), [happened(3, 0, moved.moves)]);
+        await flush();
+
+        expect(plateDie(container, 0)).toBeNull();
+        expect(pawn(container, '0-0').hasAttribute('data-moving')).toBe(true);
+
+        await elapse(700);
+
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+    });
+
+    it('moves the reader\'s pawn at the press, walks nothing again for the answer, and takes it back when the server says no', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], 3, 0);
+        const moved = stepped(before, { kind: 'move', seat: 0, piece: 0 });
+        const first = seen(before, 0, 1);
+        const answers: ((outcome: 'now' | 'stale') => void)[] = [];
+        const move = vi.spyOn(useBoard(), 'move').mockImplementation(async () => await new Promise((resolve) =>
+        {
+            answers.push(resolve);
+        }));
+        const { container, tell } = await live(first);
+        const host = container.querySelector('.board-canvas') as HTMLElement;
+        const cell = cellAt('red', 10)!;
+        const spot = centreOf(cell.col, cell.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 300, bubbles: true }));
+        await flush();
+
+        expect(move).toHaveBeenCalledWith(0);
+        expect(pawn(container, '0-0').hasAttribute('data-moving'), 'the pawn waited for the server').toBe(true);
+
+        await elapse(600);
+
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+
+        tell(seen(moved.state, 0, 2), [happened(2, 0, moved.moves)]);
+        answers[0]('now');
+        await flush();
+
+        expect(pawn(container, '0-0').hasAttribute('data-moving'), 'the answer walked the pawn a second time').toBe(false);
+
+        await elapse(300);
+
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+
+        cleanup();
+        useBoard().close();
+        answers.length = 0;
+
+        const again = await live(first);
+        const board = again.container.querySelector('.board-canvas') as HTMLElement;
+
+        vi.spyOn(board, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        board.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 300, bubbles: true }));
+        await elapse(600);
+
+        expect(pawn(again.container, '0-0').style.translate).toBe(onSquare('red', 13));
+
+        answers[0]('stale');
+        await elapse(700);
+
+        expect(pawn(again.container, '0-0').style.translate, 'a refused move was left where the reader put it').toBe(onSquare('red', 10));
+        expect(stageOf(again.container).hasAttribute('data-presenting')).toBe(false);
+    });
+
+    it('plays nothing that happened before the board could be drawn', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], 3, 0);
+        const moved = stepped(before, { kind: 'move', seat: 0, piece: 0 });
+        const { container, tell } = await live(seen(before, 1, 1), false);
+
+        expect(container.querySelector('.lp')).toBeNull();
+
+        tell(seen(moved.state, 1, 2), [happened(2, 0, moved.moves)]);
+        await drawn(container);
+
+        expect(pawn(container, '0-0').hasAttribute('data-moving')).toBe(false);
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+    });
+
+    it('tells whoever drew it when it is playing, when it has finished, and when it is taken down', async () =>
+    {
+        quiet();
+
+        const heard: boolean[] = [];
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], 3, 0);
+        const moved = stepped(before, { kind: 'move', seat: 0, piece: 0 });
+        const { container, tell } = await live(seen(before, null, 1), true, {
+            onPresenting: (busy) =>
+            {
+                heard.push(busy);
+            }
+        });
+
+        expect(heard, 'a board at rest said it was playing').not.toContain(true);
+
+        tell(seen(moved.state, null, 2), [happened(2, 0, moved.moves)]);
+        await flush();
+
+        expect(heard.at(-1)).toBe(true);
+        expect(pawn(container, '0-0').hasAttribute('data-moving')).toBe(true);
+
+        const before2 = heard.length;
+
+        cleanup();
+
+        expect(heard.slice(before2), 'a board taken down in the middle of a move left whoever drew it waiting').toEqual([false]);
+    });
+
+    it('is not called over, for somebody watching, before the board has shown how it ended', async () =>
+    {
+        quiet();
+        vi.spyOn(usePeople(), 'want').mockImplementation(() => undefined);
+
+        const { before, after } = closing();
+        const [watch, setWatch] = createSignal<Watched>({ match: seen(before, null, 1), behind: 30, delay: 30, live: true });
+        const [told, setTold] = createSignal<EventBatch>(NO_EVENTS);
+        const { container } = renderTest(() => WatchBoard({
+            get watch()
+            {
+                return watch();
+            },
+            get events()
+            {
+                return told();
+            },
+            onDone: () => undefined
+        }) as Rendered);
+        const over = () => container.textContent?.includes(useLocale().t('watch.finished')) ?? false;
+        const back = () => [...container.querySelectorAll('button')].some((one) => one.textContent?.trim() === useLocale().t('watch.back'));
+
+        await drawn(container);
+        await flush();
+
+        batch(() =>
+        {
+            setWatch({ match: wonBy(after.state, null, 2), behind: 0, delay: 30, live: false });
+            setTold({ seq: 1, id: 'match-9', events: [happened(2, 1, after.moves)], live: true, jump: false });
+        });
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting'), 'the end of the game was not played').toBe('true');
+        expect(over(), 'the game was called over while its last pawn was still walking').toBe(false);
+        expect(back()).toBe(false);
+        expect(container.querySelector('.table-result')).toBeNull();
+
+        const clock = runtime().clock as ManualClock;
+        let early = 0;
+
+        for (let step = 0; step < 200; step += 1)
+        {
+            clock.advance(10);
+            await flush();
+
+            if ((over() || back()) && stageOf(container).hasAttribute('data-presenting'))
+            {
+                early += 1;
+            }
+        }
+
+        expect(early, 'the frame said the game was over under a board still showing it').toBe(0);
+        expect(over()).toBe(true);
+        expect(back()).toBe(true);
+        expect(container.querySelector('.table-result')).not.toBeNull();
+    });
+
+    it('draws a new game at the same board from its beginning', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, 20, YARD, YARD], [5, YARD, YARD, YARD]], null, 0);
+        const { container, move } = await live(seen(before, 0, 7));
+
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 10));
+
+        move(seen(standing([EMPTY, EMPTY], null, 0), 0, 1, { id: 'match-10' }));
+        await flush();
+
+        expect(container.querySelectorAll('.lp[data-moving]')).toHaveLength(0);
+        expect(container.querySelectorAll('.lp')).toHaveLength(8);
+        expect(pawn(container, '0-0').style.translate).not.toBe(onSquare('red', 10));
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
     });
 });

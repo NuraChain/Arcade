@@ -67,7 +67,7 @@ const show = async (match: MatchView): Promise<HTMLElement> =>
     matches.view = async () => match;
     useBoard().open(match.id);
     await settle();
-    return renderTest(() => MatchBoard({ match }) as HTMLElement).container;
+    return renderTest(() => MatchBoard({ match, events: NO_EVENTS }) as HTMLElement).container;
 };
 
 beforeEach(() =>
@@ -154,6 +154,10 @@ describe('the ludo helpers, and the switch for each', () =>
             get match()
             {
                 return current();
+            },
+            get events()
+            {
+                return batch();
             }
         };
 
@@ -166,7 +170,6 @@ describe('the ludo helpers, and the switch for each', () =>
             running.finished.catch(() => undefined);
             return running;
         });
-        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
         matches.view = async () => current();
         useBoard().open(current().id);
         await settle();
@@ -182,12 +185,12 @@ describe('the ludo helpers, and the switch for each', () =>
         expect(note()).toContain(locale.t('helpers.ludo.tip.star'));
 
         setCurrent({ ...ludo(position([10, -1, -1, -1], [3, -1, -1, -1], 6)), rev: 2, turn: 1, view: ludoEngine.view({ ...position([10, -1, -1, -1], [3, -1, -1, -1], 6), die: null, turn: 1 }, 0) as MatchView['view'] });
-        setBatch({ ...NO_EVENTS, seq: 1, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 1, id: 'match-1', live: true, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
         await settle();
 
         expect(note()).toContain(locale.t('helpers.ludo.tip.threeSixes'));
 
-        setBatch({ ...NO_EVENTS, seq: 2, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 2, id: 'match-1', live: true, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
         await settle();
 
         expect(note()).toBeNull();
