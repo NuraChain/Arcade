@@ -10,7 +10,7 @@ const round = (value) => Math.round(value * 10) / 10;
 
 export async function watch(page, options)
 {
-    await page.evaluate(({ name, nodes, within, stage, body, marks }) =>
+    await page.evaluate(({ name, nodes, within, stage, body, marks, point }) =>
     {
         window.__motion ??= {};
         cancelAnimationFrame(window.__motion[name]?.raf);
@@ -30,13 +30,6 @@ export async function watch(page, options)
                 for (const node of document.querySelectorAll(nodes))
                 {
                     const key = node.dataset.key;
-
-                    if (key === undefined || key === '')
-                    {
-                        unkeyed += 1;
-                        continue;
-                    }
-
                     const drawn = body === null ? node : node.querySelector(body) ?? node;
                     const box = drawn.getBoundingClientRect();
 
@@ -45,17 +38,25 @@ export async function watch(page, options)
                         continue;
                     }
 
+                    if (key === undefined || key === '')
+                    {
+                        unkeyed += 1;
+                        continue;
+                    }
+
                     const opacity = Number(getComputedStyle(node).opacity);
                     const held = items[key];
+                    const spot = point ? node.getBoundingClientRect() : box;
 
                     if (held === undefined || opacity > held[3])
                     {
                         items[key] = [
-                            (box.x + box.width / 2 - frame.x) / frame.width * 1000,
-                            (box.y + box.height / 2 - frame.y) / frame.width * 1000,
+                            (spot.x + spot.width / 2 - frame.x) / frame.width * 1000,
+                            (spot.y + spot.height / 2 - frame.y) / frame.width * 1000,
                             box.width / frame.width * 1000,
                             opacity,
-                            body === null ? '' : getComputedStyle(drawn).transform
+                            body === null ? '' : getComputedStyle(drawn).transform,
+                            (box.y + box.height / 2 - frame.y) / frame.width * 1000
                         ];
                     }
                 }
@@ -79,7 +80,8 @@ export async function watch(page, options)
         within: options.within,
         stage: options.stage ?? '.table-stage',
         body: options.body ?? null,
-        marks: Object.entries(options.marks ?? {})
+        marks: Object.entries(options.marks ?? {}),
+        point: options.point === true
     });
 }
 
@@ -110,7 +112,7 @@ export function seriesOf(frames, key)
 
         if (item !== undefined)
         {
-            out.push({ index, at: frame.at, x: item[0], y: item[1], w: item[2], o: item[3], m: item[4] ?? '' });
+            out.push({ index, at: frame.at, x: item[0], y: item[1], w: item[2], o: item[3], m: item[4] ?? '', h: item[5] ?? item[1] });
         }
     });
 
@@ -337,6 +339,41 @@ export function bystanders(frames, moving, tolerance = 3)
     }
 
     return out;
+}
+
+export function hopsOf(frames, key, least = 10)
+{
+    const seen = seriesOf(frames, key);
+    const rest = seen.at(-1);
+
+    if (rest === undefined)
+    {
+        return { count: 0, highest: 0 };
+    }
+
+    const stance = rest.w === 0 ? 0 : (rest.y - rest.h) / rest.w;
+    let up = false;
+    let count = 0;
+    let highest = 0;
+
+    for (const one of seen)
+    {
+        const lift = one.y - one.h - stance * one.w;
+
+        highest = Math.max(highest, lift);
+
+        if (!up && lift > least)
+        {
+            up = true;
+            count += 1;
+        }
+        else if (up && lift < least / 2)
+        {
+            up = false;
+        }
+    }
+
+    return { count, highest: round(highest) };
 }
 
 export function faceOf(transform)

@@ -164,6 +164,20 @@ each named mark is in the document. A node with no key is counted, never followe
 index renames every node behind one that is removed. Two nodes with one key in a frame are one
 object and the more opaque is taken, which is what a clone standing in for a hidden original
 needs. `body` measures a descendant instead (the cube inside a die) and keeps its computed matrix.
+`point` says the node itself is a point: its place is read from its own corner, and the descendant
+only says whether it is drawn and how wide. A ludo pawn is that. Its root is a box of no size at
+the foot of its square and the hop is on a child, so the root's path is the squares themselves in
+straight lines; following the picture would have added every hop to the length of the way. A node
+with no name is counted only while it is drawn: ludo's one die has no name until it is first laid.
+
+**A point also keeps how high its picture stands, and `hopsOf` counts the times it leaves the
+board**: once a square for a pawn that walks, once for one that is brought out, never for one that
+slides. The height is measured against the picture's own width, so a pawn drawn smaller in its
+home is not read as lifted. It is there because on a straight way a slide and a walk travel the
+same line. A build that drew the board again in place of the scene passed the route check on
+four straight walks of eleven, and a build with no squares on the way passed it wherever the way
+did not turn. A pawn that is sent home spins as it goes, so its picture circles its foot and its
+hops mean nothing: of that one only the height is asked.
 
 **What `judge(frames, key, route)` fails.**
 
@@ -193,11 +207,23 @@ where a blot goes (`knockOf`) and where thirty checkers stand (`expectedOf`). `p
 WHICH node stands at each start by reading the page at rest. `differs` compares what is drawn
 with what is expected through the SVG's own screen matrix, to 1.5px.
 
+`ludo-routes.mjs` does the same for ludo, from `game/layout.ts`, `ludo-felt.ts` and the server's
+own `ludo/board.ts`: where a pawn stands alone on a square, in a pair, side by side or in its home
+(`restsOf`, `differs`), and the feet of the squares a move passes (`planOf`, from the events of
+the move). A pawn in a yard may stand in any seat of its own yard, and no two in one: which seat
+is the board's to keep, because a tapped pawn takes the place of the one the server moves. A pawn
+that shifts because a pair was made or left is allowed only on a square the move touched, and
+anything else that stirs is named. The one number taken from the renderer is how far below a
+square's centre a foot stands (`DROP`), and `inside` holds that from the layout alone: a pawn
+alone on a square has its foot in the lower half of that square. The positions are the ENGINE's.
+`standing` builds a state, `stepped` applies a real action to it, and the board is handed the
+view and the events the engine answered, so the lab cannot play a move the game could not make.
+
 **The lab is the real table on a bare page of the DEV server.**
 `QA_LAB=http://127.0.0.1:<port> node tools/qa/backgammon-motion-lab.mjs`. It needs vite and
-nothing else, no
-api and no database: `node ../node_modules/vite/bin/vite.js --port <port> --strictPort` from
-`frontend/`, on a port of its own so nobody's `npm run dev` on 3100 is touched. Playwright answers
+nothing else, no api and no database: `node ../node_modules/vite/bin/vite.js --port <port>
+--strictPort` from `frontend/`, on a port of its own so nobody's `npm run dev` on 3100 is touched.
+Playwright answers
 one address on that origin with a page that holds an SVG and an empty `.bg-layer` and links
 `/src/styles.css`, and the page imports the renderer, the stage and the presenter as vite serves
 them. So it drives the product's own modules, through the presenter, with batches shaped like the
@@ -208,10 +234,23 @@ tab. And for the instrument itself, which is handed doctored frames - a checker 
 elsewhere, hidden and back, cutting the corner, a bystander that drifts, a checker three pixels
 off its place - and has to fail each. 80 checks.
 
+**Ludo's lab is the same thing for the ludo board**, `tools/qa/ludo-motion-lab.mjs`: the board's
+own picture behind an empty `.board-canvas`, the real renderer on a stage, driven through the
+presenter. 153 checks. A walk of six squares round a corner of the board, one hop and one sound a
+square. A pawn out of its yard in one arc. A capture, where the pawn stands until the striker is
+on its square, and an entry onto a square two others hold, who leave together. A home run and the
+home, counted once and last. A pair made, left and drawn, two opponents on a safe square,
+partners of two colours. Every face of the die thrown in over its roller's corner and read from
+the cube, six dice under six names, and the pick-up to the plate. A roll nobody can play, a third
+six and a wasted six, each marked only once it has landed. The reader's own die from the hand,
+the same die all the way. The reader's own pawn and its answer, and a refused move walked back.
+A seat that leaves, and one whose leaving ends the game. The last pawn home and the confetti
+after it. Less motion, and a hidden tab.
+
 **The pass is two real browsers at one real match on the BUILT server, and a third that
 watches.** `QA_BASE=http://localhost:5300 node tools/qa/backgammon-motion-pass.mjs`, limiter
-raised, about
-four minutes. It plays forward over the api until the position it wants exists, waits until both
+raised, about four minutes. It plays forward over the api until the position it wants exists,
+waits until both
 boards are level with the server (`data-rev` at the revision, `data-presenting` gone), and makes
 the move ON THE TABLE with the mouse. At 360x640, 390x844, 844x390, 768x1024 and 1280x800, with
 the chat shut and open:
@@ -244,7 +283,28 @@ the board is still playing. The watcher is then shown the finished game with its
 way back, no chair and no Play again, and is taken on to the next game when the players start
 one. The three waits are a minute and a half of the pass.
 
-Four things worth knowing before changing either:
+**Ludo's pass is `tools/qa/ludo-motion-pass.mjs`**, run the same way, about six minutes and 223
+checks (one fewer when the roll after the quiet move cannot be played, because a die nobody can
+use is taken away). A roll is made by pressing the die and read in both browsers: thrown from the
+middle of the board in the roller's, in over the roller's corner in the other, its face from the
+cube in both. A pawn with a clear walk (alone on its square, an empty square to land on, two
+squares or more) is pressed at the five sizes with the chat shut and open, and a pawn is brought
+out of its yard:
+
+- the pawn that was pressed has a script-made animation within two frames of the press;
+- it travels its way ONCE in the mover's browser, though its answer comes while it walks;
+- it travels its way in the other browser;
+- it leaves the board once for each square, in both;
+- nobody else moves in either;
+- before and after, every pawn rests in its place (at 320 wide too).
+
+Then less motion (no keyframe moves anything, and the roll that follows lies on its face having
+never been in the air), a hidden tab and a reload, the watcher half a minute behind, the last
+pawn home in front of the watcher (the confetti before the result, and no word that the game is
+over while the board is still playing it), and Play again. What chance will not give in bounded
+time is the lab's: a capture, a pair, a home that is not the last, each fate of the die.
+
+Seven things worth knowing before changing any of them:
 
 - **A die laid on the table is a new node with a new name** (`die-<n>`, counted for the table's
   life). Named by their place in the pair, dice kept one name across a pick-up and a throw, and
@@ -260,6 +320,18 @@ Four things worth knowing before changing either:
   presenter reads.
 - **A table's `matchId` is the LIVE game's and is absent between games.** Waiting for it to
   differ from the last game's is true the moment that game ends, with no new game anywhere.
+- **Ludo's die is one node, named again each time it is laid** (`die-<n>`): when it is put in
+  the reader's hand and when another seat's is thrown in. A die thrown from the hand keeps the
+  name it had there, because it is the same die, and that is how the pass knows the die that
+  landed is the one that was pressed.
+- **A pawn brought out is the lowest one in its yard.** The server moves the lowest piece
+  whichever was tapped, and the board swaps the two seats so that the pawn that leaves is the one
+  under the finger. The sampler calls that swap two pawns jumping, and it is right: nothing
+  travelled. The pass presses the pawn the server will move.
+- **The order of two sounds is the browser's to decide, not a manual clock's.** The lab's first
+  run heard a pawn's last step AFTER the capture it set off, which every spec had heard the other
+  way round (`.claude/rules/games.md`, *A run tells its own landing*). A lab line that reads cues
+  in order is reading something no unit test can.
 
 **Proved red first, on real code.** The lab against a renderer broken four ways on the dev server
 (no points on the way, the blot leaving at once, a die resting on the wrong face, less motion
@@ -269,6 +341,19 @@ motion ignored) failed 39 of 193: the press at all twelve turns, the route in bo
 dice after a hidden tab and after a reload, and the keyframes. Each file was restored from a
 copy, never from git.
 
-Not in the pass yet, each with the commit that makes it true: the chat opened, the screen turned
-and full screen entered in the middle of a flight (P6); a frame check under a throttled processor. Ludo, hokm
-and poker add a section each as they move onto the stage.
+Ludo's lab against a renderer, a die and a stage broken six ways on the dev server (no squares
+on the way, a pair never made, a die resting on the face after the one rolled, every die under
+one name, a refused pawn cutting straight back, less motion ignored) failed 27 checks of 150, and
+broken two more ways (a move that does not wait for its walk, every die thrown from red's corner)
+24 of 153. Its pass against a production build broken five ways (no squares on the way, the
+reader's own pawn held back 120ms, a die resting on the face after the one rolled, a die thrown
+from blue's corner whoever rolled, less motion ignored) failed 50 of 223: the press at every
+size and at the entry, the hops in both browsers at every size, the way wherever it turned a
+corner, the die's face and its corner, the keyframes, and the watcher's walk. Against a build
+that draws the board again in place of the scene it failed 27 of 223: the hops in the other
+browser at every size and at the entry, the way at five sizes of ten, a die that was never
+thrown, the watcher's walk, and a result that came with no confetti and no play before it.
+
+Not in a pass yet, each with the commit that makes it true: the chat opened, the screen turned
+and full screen entered in the middle of a flight (P6); a frame check under a throttled
+processor. Hokm and poker get a lab and a pass of their own as they move onto the stage.

@@ -993,6 +993,51 @@ describe('a ludo roll, played', () =>
         expect(host.querySelectorAll('.lb-die')).toHaveLength(1);
     });
 
+    it('gives every die it lays a name of its own, and the die thrown from the hand the name it had there', async () =>
+    {
+        const mine = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null);
+        const theirs = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const rolled = stepped(mine, { kind: 'roll', seat: 0, die: 5 });
+        const other = stepped(theirs, { kind: 'roll', seat: 1, die: 2 });
+
+        table.reset(sight(mine));
+
+        expect(cube().dataset.key, 'a die nobody has laid has a name').toBeUndefined();
+
+        table.offer(0);
+
+        const held = cube().dataset.key;
+
+        expect(held).toMatch(/^die-\d+$/);
+
+        table.rattle(true);
+        table.offer(null);
+        play([rolled.act], sight(rolled.state));
+        await flush();
+
+        expect(cube().dataset.key, 'the die thrown from the hand was called another die').toBe(held);
+
+        await elapse(thrown(rolled.act).duration + 40);
+
+        expect(cube().dataset.key).toBe(held);
+
+        table.reset(sight(theirs, 0, 'n'));
+        play([other.act], sight(other.state, 0, 'n'));
+        await flush();
+
+        const thrownIn = cube().dataset.key;
+
+        expect(thrownIn).toMatch(/^die-\d+$/);
+        expect(thrownIn, 'another seat\'s die came in under the name of the one before').not.toBe(held);
+
+        await elapse(thrown(other.act, 'n').duration + 40);
+        table.reset(sight(mine, 0, 'o'));
+        table.offer(0);
+
+        expect([held, thrownIn], 'a die laid in the hand again kept an old name').not.toContain(cube().dataset.key);
+        expect(host.querySelectorAll('.die3d')).toHaveLength(1);
+    });
+
     it('stops shaking once its roll has been thrown, so the hand it comes back to is a still one', async () =>
     {
         const before = standing([[10, YARD, YARD, YARD], EMPTY], null);

@@ -3989,6 +3989,16 @@ wrong product.
 Two of its assertions are deliberately made in the OTHER browser, because a move only the mover can
 see is the failure it exists to catch.
 
+**The motion itself is held by ludo's own lab and pass**: `tools/qa/ludo-motion-lab.mjs` on the
+dev server and `tools/qa/ludo-motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`, *The motion
+labs and the motion passes*). They follow each pawn by its name through every frame and fail one
+that jumps, cuts a corner, moves when nothing moved it or does not come to rest in its place. The
+lab plays the positions chance will not give, with the engine's own events; the pass presses the
+pawns at five sizes in two browsers with a third watching. So the die carries a name as the
+pawns do (`die-<n>`, `layDie`): a new one each time it is put in the reader's hand or another
+seat's is thrown in, and the one it had in the hand when it is thrown from there, because that
+is the same die. `ludo-board.spec.ts` (*a ludo roll, played*) holds the names.
+
 **`tools/qa/hokm-play-pass.mjs` is its sibling, and a separate file rather than a parameter.** The
 two games are different interfaces with different failure modes: ludo's is a canvas with a dice
 button beside it, and what goes wrong there is a board drawn twice or drawn once and never again;

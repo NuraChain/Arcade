@@ -13,7 +13,7 @@ import type { BoardGoal, BoardHandle, BoardOptions } from '../bridge.ts';
 
 const C = CELL * 100;
 
-const DROP = 0.10;
+export const DROP = 0.10;
 
 const BAND = 2000;
 
@@ -259,6 +259,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     let told = '';
     let dieRuns: Run[] = [];
     let dieStop: () => void = () => undefined;
+    let laid = 0;
 
     root.style.setProperty('--c', cq(C));
     root.toggleAttribute('data-still', stage.quiet());
@@ -824,6 +825,12 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         die.node.removeAttribute('data-spent');
     };
 
+    const layDie = () =>
+    {
+        laid += 1;
+        die.node.dataset.key = `die-${ laid }`;
+    };
+
     const putDie = (spot: Point, scale: number) =>
     {
         holder.style.translate = at(spot);
@@ -843,6 +850,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     {
         clearDie();
         where = 'hand';
+        layDie();
         die.show(HAND_FACE, HAND_SEED);
         putDie(CENTRE, HAND);
         holder.setAttribute('data-hand', '');
@@ -945,6 +953,11 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             : { x: (CENTRE.x - spot.x) / (DIE_SIZE * C), y: (CENTRE.y - spot.y) / (DIE_SIZE * C) };
 
         clearDie();
+
+        if (held === undefined)
+        {
+            layDie();
+        }
 
         if (reader)
         {
