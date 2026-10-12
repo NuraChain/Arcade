@@ -303,6 +303,19 @@ describe('ToastHost', () =>
         expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
     });
 
+    it('gives a toast\'s own button the same room for a finger as the one that dismisses it', async () =>
+    {
+        renderTest(() => ToastHost({}) as Rendered);
+        useToasts().show({ kind: 'live', text: 'Mina Sadeghi saved you a seat', action: { label: 'Go to the table', run: () => undefined } });
+        await settle();
+
+        const [action, dismiss] = [...document.body.querySelectorAll<HTMLElement>('[role="status"] button')];
+
+        expect(action.textContent?.trim()).toBe('Go to the table');
+        expect(action.classList.contains('coarse:min-h-11'), 'the button a notice is answered with is under a thumb\'s width on a phone').toBe(true);
+        expect(dismiss.classList.contains('coarse:h-11')).toBe(true);
+    });
+
     /**
      * The host keeps one drag recogniser per toast in a Map, and that Map was only ever written to -
      * toast ids come from a counter that only goes up, so it grew for as long as the tab was open.

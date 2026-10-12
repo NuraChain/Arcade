@@ -200,7 +200,7 @@ export default component ToastHost()
                         { () =>
                             <button
                                 type="button"
-                                class="shrink-0 cursor-pointer rounded-control px-2 py-1 text-ui-sm font-bold text-accent hover:bg-accent/10"
+                                class="flex shrink-0 cursor-pointer items-center rounded-control px-2 py-1 text-ui-sm font-bold text-accent hover:bg-accent/10 coarse:min-h-11 coarse:px-3"
                                 onClick={ () =>
                                 {
                                     toast.action?.run();
