@@ -4154,6 +4154,33 @@ a card in the hand, and one in which the stock, the drawn card or the card put f
 off the table or meets any of those. `hokm-board.spec.ts` (*the small things in the corner of the
 table*, *playing a card with a finger*, *the two-handed draw*) holds the rest.
 
+**The table is drawn once and stays.** Its felt, its hand and its corner each sat in a branch
+that read the board, and the board is a new object with every answer. So every move at the
+table, the reader's own press and Sort built every plate, card and chip again: 252 elements for
+an answer that changed nothing. Nothing looked different. A keyboard player lost their card with
+every move, and nothing on the table could carry a transition, which is why everything that
+moves there is a copy in the flight layer (`frontend/CLAUDE.md`, *A `<Show>` with a thunk child
+is rebuilt by anything its `when` READS*).
+
+- The branches read derived booleans (`dealt`, `handed`, `bare`) or take what they show through
+  `let=`: the trump's suit, the last trick, a hand's banner.
+- **The seats are a list of seat NUMBERS.** A row over the plates' own objects is handed a new
+  item by every new board, and whatever the row reads off its item runs again: the crown and the
+  counts are markup handed to the plate as a prop, and were built again at every read. A row
+  whose item is a number is handed nothing, and asks for what it shows by number (`plateAt`).
+- The crown and the dealer's hand are `HokmMark`, which chooses between them with booleans of
+  its own, so the crown is the same node until the Hâkem changes.
+- A pile is always in the page and says when it holds nothing (`data-empty`), so it is the same
+  pile when a deal fills it.
+- **A card is thrown from a pile only if the pile has a box** (`drawn`). The side piles are not
+  drawn on a table under 36rem, and no pile is on a short one; a pile with no box measures as
+  the corner of the page, which is where a side seat's card started from on a phone.
+
+`hokm-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
+the board the answer it had as a new object and wants all of them still in the page; then a
+move by another seat, the reader's own card, Sort and a change of Hâkem, each taking away only
+what it should.
+
 **Each board is its own chunk.** The play page loads `hokm-board` or `match-board` through a dynamic
 import once it knows which game the match is, and renders it through `<Dynamic>` with a props THUNK,
 so match updates flow into the loaded board the way direct markup props would. The route chunk fell

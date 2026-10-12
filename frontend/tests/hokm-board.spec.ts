@@ -1002,3 +1002,230 @@ describe('who dealt the hand, and what takes it', () =>
         }
     });
 });
+
+describe('a table that is read again', () =>
+{
+    const chairs = (held: number) => [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: seat === 3 ? held : 4, tricks: seat === 2 ? 1 : 0, out: false }));
+
+    const table = (view: Partial<Hokm> = {}, more: Partial<MatchView> = {}): MatchView => ({
+        ...match({
+            phase: 'tricks',
+            trump: 'spades',
+            turn: 0,
+            lead: 3,
+            trick: [12],
+            took: { lead: 1, cards: [1, 2, 3, 4], seat: 2 },
+            hand: [0, 14, 30, 45],
+            plays: [0, 14],
+            seats: chairs(3),
+            ...view
+        }, 0),
+        ...more
+    });
+
+    const shown = (first: MatchView) =>
+    {
+        const [current, setCurrent] = createSignal(first);
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
+
+        return { container, read: (next: MatchView) => setCurrent(structuredClone(next)) };
+    };
+
+    const under = (container: HTMLElement) => [...container.querySelectorAll<Element>('.hokm-stage *')];
+
+    const gone = (nodes: readonly Element[]) => nodes
+        .filter((one) => !document.contains(one))
+        .map((one) => `${ one.tagName.toLowerCase() }.${ (one.getAttribute('class') ?? '').split(' ')[0] }`);
+
+    it('draws nothing again for an answer it already had', () =>
+    {
+        const { container, read } = shown(table());
+        const before = under(container);
+
+        read(table());
+
+        expect(before.length, 'the table was not drawn at all').toBeGreaterThan(60);
+        expect(gone(before), 'these were drawn again though nothing had changed').toEqual([]);
+    });
+
+    it('draws nothing again on a felt with nothing lying on it', () =>
+    {
+        const bare = () => table({ trick: [], turn: 3, lead: 3, plays: [] });
+        const { container, read } = shown(bare());
+        const before = under(container);
+
+        read(bare());
+
+        expect(container.querySelector('.hokm-centre'), 'an empty felt has no caption').not.toBeNull();
+        expect(gone(before)).toEqual([]);
+    });
+
+    it('draws nothing again at a table for two with a card drawn and waiting', () =>
+    {
+        const drawing = (): MatchView => ({
+            ...match({
+                phase: 'draw',
+                trump: 'hearts',
+                hakem: 0,
+                dealer: 1,
+                turn: 0,
+                lead: 0,
+                hand: [0, 14, 30, 45, 50],
+                offer: 33,
+                glimpse: 21,
+                stock: 20,
+                seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false }))
+            }, 0),
+            seats: 2,
+            players: [0, 1].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+        });
+        const { container, read } = shown(drawing());
+        const before = under(container);
+
+        read(drawing());
+
+        expect(container.querySelector('.hokm-offer'), 'the drawn card is not on the felt').not.toBeNull();
+        expect(container.querySelector('.hokm-stock-press')).not.toBeNull();
+        expect(gone(before)).toEqual([]);
+    });
+
+    it('says which piles have nothing in them, the reader\'s own among them, and fills one a back at a time', () =>
+    {
+        const empty = (container: HTMLElement) => [0, 1, 2, 3].map((seat) => container.querySelector(`.hokm-seat[data-seat="${ seat }"] .hokm-pile`)?.getAttribute('data-empty') ?? null);
+        const held = (three: number) => [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: seat === 3 ? three : (seat === 1 ? 0 : 4), tricks: 0, out: false }));
+        const { container, read } = shown(table({ seats: held(0) }));
+        const pile = container.querySelector('.hokm-seat[data-seat="3"] .hokm-pile')!;
+
+        expect(empty(container)).toEqual(['true', 'true', null, 'true']);
+
+        read(table({ seats: held(2) }, { rev: 4 }));
+
+        expect(empty(container)).toEqual(['true', 'true', null, null]);
+        expect(container.querySelector('.hokm-seat[data-seat="3"] .hokm-pile'), 'the pile was made again to take its first card').toBe(pile);
+        expect(pile.querySelectorAll('.card-back').length).toBe(2);
+    });
+
+    it('keeps every card, plate and chip when somebody else plays, and takes one back off their pile', () =>
+    {
+        const { container, read } = shown(table({ turn: 3, lead: 2, plays: [] }));
+        const before = under(container);
+
+        read(table({ turn: 0, lead: 2, trick: [12, 20], seats: chairs(2) }, { rev: 4 }));
+
+        expect(container.querySelectorAll('.hokm-trick').length).toBe(2);
+        expect(container.querySelectorAll('.card-hold').length).toBe(4);
+        expect(gone(before), 'a card played by one seat took more off the table than the back it left with').toEqual(['span.card-back']);
+    });
+
+    it('leaves the reader on the card they were on', () =>
+    {
+        const { container, read } = shown(table({}, { remainingMs: 20_000 }));
+        const card = container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!;
+
+        card.focus();
+        expect(document.activeElement).toBe(card);
+
+        read(table({}, { remainingMs: 20_000 }));
+        expect(document.activeElement, 'a re-read took the card out from under the keyboard').toBe(card);
+
+        read(table({}, { remainingMs: 12_000 }));
+        expect(document.activeElement, 'the clock moving on took the card out from under the keyboard').toBe(card);
+    });
+
+    it('keeps the four suits under a Hâkem who is still choosing', () =>
+    {
+        const choosing = () => match({ phase: 'trump', hakem: 0, turn: 0, hand: [0, 14, 30, 45, 50] }, 0);
+        const { container, read } = shown(choosing());
+        const suits = [...container.querySelectorAll<HTMLButtonElement>('.hokm-choose button')];
+
+        suits[2].focus();
+        read(choosing());
+
+        expect(suits.length).toBe(4);
+        expect(gone(suits)).toEqual([]);
+        expect(document.activeElement).toBe(suits[2]);
+    });
+
+    it('moves the cards when the hand is sorted, and makes none of them again', () =>
+    {
+        const { container } = shown(table({ hand: [0, 2, 14, 16, 30, 45] }));
+        const hand = [...container.querySelectorAll<HTMLElement>('.card-hold')];
+        const order = () => [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card);
+        const dealt = order();
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-tools button[aria-label="Sort"]')!, 'click');
+
+        expect(order()).not.toEqual(dealt);
+        expect(gone(hand)).toEqual([]);
+    });
+
+    it('takes only the card that was played out of the hand, at the press and when the server says so', () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, read } = shown(table());
+        const hand = [...container.querySelectorAll<HTMLElement>('.card-hold')];
+        const plates = [...container.querySelectorAll<HTMLElement>('.table-plate')];
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+
+        expect(gone(hand)).toEqual(['button.card-hold']);
+
+        read(table({ turn: 1, lead: 3, trick: [12, 14], hand: [0, 30, 45], plays: [] }, { rev: 4 }));
+
+        expect(gone(hand)).toEqual(['button.card-hold']);
+        expect(gone(plates)).toEqual([]);
+    });
+
+    it('keeps the crown where it is while the Hâkem is the Hâkem, and moves it without drawing the plates again', () =>
+    {
+        const { container, read } = shown(table());
+        const crown = container.querySelector('.hokm-seat[data-seat="0"] .table-plate-marker svg');
+        const plates = [...container.querySelectorAll<HTMLElement>('.table-plate')];
+
+        read(table({}, { rev: 4 }));
+
+        expect(crown, 'the Hâkem wears no crown').not.toBeNull();
+        expect(document.contains(crown), 'the crown was drawn again for a move that left the Hâkem alone').toBe(true);
+
+        read(table({ hakem: 1, dealer: 0, round: 2 }, { rev: 5 }));
+
+        expect(container.querySelector('.hokm-seat[data-seat="1"] .table-plate-marker svg.text-gold')).not.toBeNull();
+        expect(container.querySelector('.hokm-seat[data-seat="0"] .table-plate-marker .hokm-dealer')).not.toBeNull();
+        expect(gone(plates)).toEqual([]);
+    });
+
+    it('throws a card from a plate when the pile beside it is not drawn', () =>
+    {
+        const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
+
+        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
+
+        const boxes = vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element)
+        {
+            return (this.classList.contains('hokm-pile') ? [] : [{}]) as unknown as DOMRectList;
+        });
+        const measured: Element[] = [];
+
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            measured.push(this);
+
+            return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) } as DOMRect;
+        });
+
+        const { container } = shown(table({ turn: 3, lead: 2, plays: [] }));
+
+        measured.length = 0;
+        setBatch({ ...NO_EVENTS, seq: 1, events: [{ rev: 4, seat: 3, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat: 3, card: 20 }] } }] });
+        (runtime().clock as ManualClock).advance(0);
+
+        expect(boxes).toHaveBeenCalled();
+        expect(measured.some((one) => one.classList.contains('hokm-pile')), 'a pile with no box was asked where it is').toBe(false);
+        expect(measured).toContain(container.querySelector('.hokm-seat[data-seat="3"] .table-plate'));
+    });
+});

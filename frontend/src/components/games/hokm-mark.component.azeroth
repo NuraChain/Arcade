@@ -1,0 +1,23 @@
+import Icon from '../../icons/icon.component.azeroth';
+
+export type SeatMark = 'hakem' | 'dealer' | null;
+
+export default component HokmMark(props: { mark: SeatMark; dealer: string })
+{
+    derived crowned = props.mark === 'hakem';
+
+    derived dealing = props.mark === 'dealer';
+
+    <span class="contents">
+        <Show when={ crowned }>
+            { () => <Icon name="crest-crown" size={ 14 } class="text-gold" /> }
+        </Show>
+        <Show when={ dealing }>
+            { () =>
+                <span class="hokm-dealer flex h-3.5 w-3.5 items-center justify-center rounded-full bg-text text-bright-ink shadow-1" title={ props.dealer }>
+                    <Icon name="hand" size={ 10 } />
+                </span>
+            }
+        </Show>
+    </span>
+}

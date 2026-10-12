@@ -5,6 +5,7 @@ import CoachLine from './coach-line.component.azeroth';
 import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
+import HokmMark, { type SeatMark } from './hokm-mark.component.azeroth';
 import { plateTag } from './plate-tag.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -59,6 +60,10 @@ const FAST_OVER = 1500;
 const BACK_W = 30;
 
 const tiltOf = (card: number) => ((card * 37) % 11) - 5;
+
+const markOf = (seat: number, hakem: number, dealer: number): SeatMark => (seat === hakem ? 'hakem' : (seat === dealer ? 'dealer' : null));
+
+const noPlate = (seat: number) => ({ row: { seat, side: 0, held: 0, tricks: 0, out: false }, side: 'top' as Side, mark: null, backs: [] as number[] });
 
 const cardNode = (card: number | null, width: number): HTMLElement =>
 {
@@ -199,10 +204,14 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return {
             row,
             side: sideOf(chair),
-            mark: row.seat === view!.hakem ? 'hakem' : (row.seat === view!.dealer ? 'dealer' : null),
+            mark: markOf(row.seat, view!.hakem, view!.dealer),
             backs: row.seat === mine ? [] : Array.from({ length: Math.min(row.held, BACKS_SHOWN) }, (_, index) => index)
         };
     });
+
+    derived seated = plates.map((plate) => plate.row.seat);
+
+    derived plateAt = (seat: number) => plates.find((plate) => plate.row.seat === seat) ?? noPlate(seat);
 
     derived teamed = view !== null && new Set(view.seats.map((row) => row.side)).size < view.seats.length;
 
@@ -261,6 +270,14 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived stocked = view?.stock !== undefined;
 
+    derived dealt = view !== null;
+
+    derived trump = view?.trump ?? null;
+
+    derived last = view?.took ?? null;
+
+    derived bare = felt.cards.length === 0 && !over && !choosing && !drawing;
+
     derived stockLive = putting || drawing;
 
     derived stockBacks = [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0));
@@ -283,6 +300,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     derived sortable = (view?.hand.length ?? 0) > 1;
 
     derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]).filter((card) => card !== sending);
+
+    derived handed = view !== null && !over && hand.length > 0;
 
     state room = { width: 0, height: 0 };
 
@@ -520,9 +539,16 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return rect === null || width === 0 ? 0 : Math.max(-0.5, Math.min(0.5, centreOf(rect).x / width - 0.5));
     };
 
+    const drawn = (selector: string) =>
+    {
+        const place = find(selector);
+
+        return place !== null && place.getClientRects().length > 0 ? place : null;
+    };
+
     const seatRect = (seat: number) =>
     {
-        const place = find(`.hokm-seat[data-seat="${ seat }"] .hokm-pile`) ?? find(`.hokm-seat[data-seat="${ seat }"] .table-plate`);
+        const place = drawn(`.hokm-seat[data-seat="${ seat }"] .hokm-pile`) ?? find(`.hokm-seat[data-seat="${ seat }"] .table-plate`);
 
         return place === null || layer === null ? null : rectIn(layer, place);
     };
@@ -1058,21 +1084,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     <div data-rev={ props.match.rev } data-felt={ cramped ? 'cramped' : undefined } class="table-stage hokm-stage" ref={ (element) => arena = element }>
         <div class="table-grid hokm-grid">
-            <Show when={ view !== null }>
+            <Show when={ dealt }>
                 { () =>
                     <div class="table-fit">
                         <div class="table-surface hokm-table">
                             <div class="hokm-felt-info" aria-hidden="true">
                                 <span class="hokm-chip">
                                     <Show
-                                        when={ view?.trump !== undefined }
+                                        when={ trump }
+                                        let={ suit }
                                         fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                     >
-                                        { () =>
-                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                            </span>
-                                        }
+                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                            <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                        </span>
                                     </Show>
                                     <span>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
                                 </span>
@@ -1087,49 +1112,41 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 </span>
                             </div>
 
-                            <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
-                                <div class="hokm-seat" data-side={ plate.side } data-seat={ plate.row.seat }>
+                            <For each={ seated } key={ (seat) => seat } let={ seat }>
+                                <div class="hokm-seat" data-side={ plateAt(seat).side } data-seat={ seat }>
                                     <TablePlate
-                                        who={ whoAt(plate.row.seat) }
-                                        name={ nameOf(plate.row.seat) }
-                                        turn={ !over && plate.row.seat === view!.turn }
+                                        who={ whoAt(seat) }
+                                        name={ nameOf(seat) }
+                                        turn={ !over && seat === view?.turn }
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
-                                        dim={ plate.row.out }
-                                        team={ teamOf(plate.row) }
-                                        tag={ tagOf(plate.row.seat)?.text }
-                                        tone={ tagOf(plate.row.seat)?.tone }
-                                        bubble={ props.speech?.[whoAt(plate.row.seat)] }
-                                        below={ plate.side !== 'bottom' }
-                                        anchor={ plate.side.endsWith('right') ? 'end' : (plate.side.endsWith('left') ? 'start' : 'centre') }
-                                        marker={ plate.mark === 'hakem'
-                                            ? <Icon name="crest-crown" size={ 14 } class="text-gold" />
-                                            : (plate.mark === 'dealer'
-                                                ? <span class="hokm-dealer flex h-3.5 w-3.5 items-center justify-center rounded-full bg-text text-bright-ink shadow-1" title={ locale.t('hokm.dealer') }><Icon name="hand" size={ 10 } /></span>
-                                                : undefined) }
+                                        dim={ plateAt(seat).row.out }
+                                        team={ teamOf(plateAt(seat).row) }
+                                        tag={ tagOf(seat)?.text }
+                                        tone={ tagOf(seat)?.tone }
+                                        bubble={ props.speech?.[whoAt(seat)] }
+                                        below={ plateAt(seat).side !== 'bottom' }
+                                        anchor={ plateAt(seat).side.endsWith('right') ? 'end' : (plateAt(seat).side.endsWith('left') ? 'start' : 'centre') }
+                                        marker={ <HokmMark mark={ plateAt(seat).mark } dealer={ locale.t('hokm.dealer') } /> }
                                         facts={
                                             <span class="contents">
                                                 <span class="flex items-center gap-0.5" aria-hidden="true">
-                                                    <Icon name="trophy" size={ 11 } class={ SIDE_TONE[plate.row.side % SIDE_TONE.length] } />
-                                                    <span class="tally">{ locale.n(plate.row.tricks) }</span>
+                                                    <Icon name="trophy" size={ 11 } class={ SIDE_TONE[plateAt(seat).row.side % SIDE_TONE.length] } />
+                                                    <span class="tally">{ locale.n(plateAt(seat).row.tricks) }</span>
                                                 </span>
                                                 <span class="flex items-center gap-0.5" aria-hidden="true">
                                                     <Icon name="cards" size={ 11 } />
-                                                    <span class="tally">{ locale.n(plate.row.held) }</span>
+                                                    <span class="tally">{ locale.n(plateAt(seat).row.held) }</span>
                                                 </span>
-                                                <span class="sr-only">{ locale.plural('hokm.tricks', plate.row.tricks) }, { locale.plural('hokm.held', plate.row.held) }{ plate.mark === 'dealer' ? `, ${ locale.t('hokm.dealer') }` : '' }</span>
+                                                <span class="sr-only">{ locale.plural('hokm.tricks', plateAt(seat).row.tricks) }, { locale.plural('hokm.held', plateAt(seat).row.held) }{ plateAt(seat).mark === 'dealer' ? `, ${ locale.t('hokm.dealer') }` : '' }</span>
                                             </span>
                                         }
                                     />
-                                    <Show when={ plate.backs.length > 0 }>
-                                        { () =>
-                                            <span class="hokm-pile" style={ `--n: ${ plate.backs.length }` } aria-hidden="true">
-                                                <For each={ plate.backs } key={ (back) => back } let={ back }>
-                                                    <span class="card-back" style={ `--i: ${ back }` }></span>
-                                                </For>
-                                            </span>
-                                        }
-                                    </Show>
+                                    <span class="hokm-pile" style={ `--n: ${ plateAt(seat).backs.length }` } data-empty={ plateAt(seat).backs.length === 0 ? 'true' : undefined } aria-hidden="true">
+                                        <For each={ plateAt(seat).backs } key={ (back) => back } let={ back }>
+                                            <span class="card-back" style={ `--i: ${ back }` }></span>
+                                        </For>
+                                    </span>
                                 </div>
                             </For>
 
@@ -1164,7 +1181,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 }
                             </Show>
 
-                            <Show when={ laid.cards.length === 0 && !over && !choosing && !drawing }>
+                            <Show when={ bare }>
                                 { () =>
                                     <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
                                         <Icon name="crest-crown" size={ 18 } class="hokm-crest text-gold" />
@@ -1173,13 +1190,11 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         <Show when={ needed !== undefined } fallback={ <span class="hokm-needed text-balance text-ui-2xs">{ locale.t('hokm.needed.triple') }</span> }>
                                             { () => <span class="hokm-needed text-balance text-ui-2xs"><span class="tally">{ locale.n(needed!) }</span> { locale.plural('hokm.needed', needed!) }</span> }
                                         </Show>
-                                        <Show when={ view?.trump !== undefined }>
-                                            { () =>
-                                                <span class="flex items-center gap-1 text-ui-2xs">
-                                                    <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger' : 'text-white' } />
-                                                    <span>{ locale.t(`hokm.suit.${ view!.trump! }` as never) }</span>
-                                                </span>
-                                            }
+                                        <Show when={ trump } let={ suit }>
+                                            <span class="flex items-center gap-1 text-ui-2xs">
+                                                <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger' : 'text-white' } />
+                                                <span>{ locale.t(`hokm.suit.${ suit }` as never) }</span>
+                                            </span>
                                         </Show>
                                         <span class="text-ui-2xs font-semibold text-white">{ says }</span>
                                     </div>
@@ -1240,27 +1255,23 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 </div>
                             </For>
 
-                            <Show when={ view?.took !== undefined }>
-                                { () =>
-                                    <div class="hokm-last-tile" aria-hidden="true">
-                                        <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
-                                        <ul class="hokm-last">
-                                            <For each={ view!.took!.cards } key={ (card) => card } let={ card }>
-                                                <li><CardFace card={ card } /></li>
-                                            </For>
-                                        </ul>
-                                    </div>
-                                }
+                            <Show when={ last } let={ taken }>
+                                <div class="hokm-last-tile" aria-hidden="true">
+                                    <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
+                                    <ul class="hokm-last">
+                                        <For each={ taken.cards } key={ (card) => card } let={ card }>
+                                            <li><CardFace card={ card } /></li>
+                                        </For>
+                                    </ul>
+                                </div>
                             </Show>
 
-                            <Show when={ banner !== null }>
-                                { () =>
-                                    <div class="hokm-banner" data-kot={ banner!.kot ? 'true' : 'false' } data-ours={ banner!.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
-                                        <Show when={ banner!.kot } fallback={ <span class="tally">+{ locale.n(banner!.points) }</span> }>
-                                            { () => <span>{ locale.t('hokm.kot') }</span> }
-                                        </Show>
-                                    </div>
-                                }
+                            <Show when={ banner } let={ called }>
+                                <div class="hokm-banner" data-kot={ called.kot ? 'true' : 'false' } data-ours={ called.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
+                                    <Show when={ called.kot } fallback={ <span class="tally">+{ locale.n(called.points) }</span> }>
+                                        { () => <span>{ locale.t('hokm.kot') }</span> }
+                                    </Show>
+                                </div>
                             </Show>
 
                             <ul class="sr-only">
@@ -1274,7 +1285,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                     <h3>{ locale.t('hokm.trump') }</h3>
                                     <p>{ view?.trump === undefined ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ view!.trump! }` as never) }</p>
                                     <p>{ view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</p>
-                                    <Show when={ view?.stock !== undefined }>
+                                    <Show when={ stocked }>
                                         { () => <p>{ locale.plural('hokm.stock', view?.stock ?? 0) }</p> }
                                     </Show>
                                 </section>
@@ -1316,14 +1327,13 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                     <span class="hokm-bar-facts" aria-hidden="true">
                                         <span class="hokm-chip hokm-bar-trump">
                                             <Show
-                                                when={ view?.trump !== undefined }
+                                                when={ trump }
+                                                let={ suit }
                                                 fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                             >
-                                                { () =>
-                                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                                        <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                                    </span>
-                                                }
+                                                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                                    <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                                </span>
                                             </Show>
                                         </span>
                                         <span class="hokm-chip hokm-bar-score">
@@ -1349,7 +1359,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 }
             </Show>
 
-            <Show when={ view !== null && !over && rows.length > 0 }>
+            <Show when={ handed }>
                 { () =>
                     <div class="table-hand hokm-hands" style={ `--rows: ${ rows.length }` }>
                         <For each={ rows } key={ (_, index) => index } let={ row }>

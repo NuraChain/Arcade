@@ -625,6 +625,12 @@ level in, on nine routes, in five shapes worth knowing by sight:
   that tests a slot and then draws it reads it ONCE, into a `derived` (`derived facts =
   props.facts`), and tests and draws that. `table-plate.spec.ts` counts the builds, and
   `turn-clock.spec.ts` the ticks of a clock that sits on a plate.
+- **A keyed list over OBJECTS hands every kept row a new item at every read**, and whatever the
+  row reads off its item runs again: a `when`, and equally a prop that is markup
+  (`marker={ item.crowned ? <Crown /> : undefined }`), which is built again. A list over the keys
+  themselves hands a kept row nothing. The hokm table's seats are seat numbers for that reason,
+  and a row asks for what it shows by number (`.claude/rules/games.md`, *The table is drawn once
+  and stays*).
 - **Two things rode on those rebuilds and had to be put right with them.** A `Link`'s `to` is read
   ONCE unless it is a function (`to={ () => ... }`): a click follows the prop, the `href` does not,
   so a link that is kept now and whose address can change (the other person's handle, at the head
