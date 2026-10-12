@@ -4,6 +4,7 @@ import { client, type Notification } from '../api.ts';
 import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
 import { createGuesses } from '../lib/guess.ts';
 import { useAccount } from './account.store.ts';
+import { usePeople } from './people.store.ts';
 import { useRealtime } from './realtime.store.ts';
 
 interface Held
@@ -67,6 +68,7 @@ export interface NotificationsApi
 export const useNotifications = createStore((): NotificationsApi =>
 {
     const account = useAccount();
+    const people = usePeople();
 
     const who = () => account.user()?.id ?? null;
 
@@ -82,15 +84,24 @@ export const useNotifications = createStore((): NotificationsApi =>
 
     const key = createMemo(() => (who() === null ? null : `${ who() }:${ notice() ?? '' }`));
 
+    const listed = async (query: { cursor?: string; notice?: Notice }) =>
+    {
+        const page = await client.notifications.list({ query });
+
+        void people.want(page.items.map((item) => item.actor ?? ''));
+
+        return page;
+    };
+
     const first = createResource(
         key,
-        () => client.notifications.list({ query: asked() }),
+        () => listed(asked()),
         { name: 'notifications.list' }
     );
 
     const everything = createResource(
         createMemo(() => (notice() === null ? null : who())),
-        () => client.notifications.list({ query: {} }),
+        () => listed({}),
         { name: 'notifications.latest' }
     );
 
@@ -187,7 +198,7 @@ export const useNotifications = createStore((): NotificationsApi =>
             {
                 return;
             }
-            const page = await client.notifications.list({ query: { cursor, ...asked() } });
+            const page = await listed({ cursor, ...asked() });
             setOlder([...untrack(older), ...page.items]);
             setTailCursor(page.hasMore ? page.cursor : undefined);
         }),

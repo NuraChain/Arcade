@@ -9,6 +9,7 @@ import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
@@ -885,5 +886,80 @@ describe('the push key', () =>
         expect(decoded.length).toBe(65);
         expect(decoded[0]).toBe(4);
         expect([...decoded]).toEqual([...point]);
+    });
+});
+
+describe('whoever a notification is about', () =>
+{
+    const render = (item: Notification) =>
+    {
+        const { container } = renderTest(() =>
+            NotificationRow({ item, onOpen: () => undefined, onDismiss: () => undefined }) as HTMLElement);
+
+        return container.textContent ?? '';
+    };
+
+    const seat = (actor: string) =>
+    {
+        server.notify({ kind: 'table-invite', actor, ref: { tableId: `t-${ actor }` }, dedupeKey: `table:t-${ actor }` });
+    };
+
+    beforeEach(() =>
+    {
+        usePeople().reset();
+    });
+
+    it('is asked about when the list lands, everybody in it in one request, so a stranger has a name in the row', async () =>
+    {
+        const notifications = useNotifications();
+
+        seat('peyman');
+        server.notify({ kind: 'group-added', actor: 'mina', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+        server.notify({ kind: 'turn', ref: { tableId: 't-2', game: 'ludo' }, dedupeKey: 'turn:t-2' });
+        server.calls = [];
+
+        await notifications.refresh();
+        await settle();
+
+        const invite = notifications.items().find((item) => item.kind === 'table-invite');
+
+        expect(server.calls.filter((call) => call === 'social.names'), 'the people in one list were asked about one at a time, or not at all').toHaveLength(1);
+        expect(invite === undefined ? '' : render(invite)).toContain('Peyman saved you a seat');
+        expect(usePeople().byHandle('mina')?.displayName).toBe('Mina Sadeghi');
+    });
+
+    it('is asked about on a later page as well', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (const actor of ['peyman', 'sara.k', 'reza.t', 'mina'])
+        {
+            seat(actor);
+        }
+
+        await notifications.refresh();
+        await settle();
+
+        expect(notifications.items().map((item) => item.actor), 'the oldest row was not left for the second page').not.toContain('peyman');
+        expect(usePeople().byHandle('peyman')).toBeNull();
+
+        await notifications.more();
+        await settle();
+
+        expect(usePeople().byHandle('peyman')?.displayName).toBe('Peyman Salehi');
+    });
+
+    it('is asked about for the newest rows too, which are read apart from a list that is filtered', async () =>
+    {
+        const notifications = useNotifications();
+
+        server.notify({ kind: 'group-added', actor: 'mina', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+        notifications.only('invites');
+        await settle();
+        await settle();
+
+        expect(notifications.items().map((item) => item.kind), 'the filtered list held the row of another kind').toEqual([]);
+        expect(notifications.latest().map((item) => item.actor)).toEqual(['mina']);
+        expect(usePeople().byHandle('mina')?.displayName).toBe('Mina Sadeghi');
     });
 });

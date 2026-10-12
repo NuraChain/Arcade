@@ -1002,6 +1002,14 @@ can no longer read the table to find out.
 anything that CHANGES the list drops the older pages and refetches the first, because stitching a
 fresh head onto a stale tail is how a list shows one row twice.
 
+**The list asks for the names of the people in it.** A row names its actor by handle, and an
+invitation can come from somebody this page has never loaded: the row and the activity rail read
+`people.byHandle`, so a stranger was a bare handle in both ("mina saved you a seat") until
+something else happened to describe them. `listed` in `notifications.store.ts` is the one read
+of the list - the first page, the newest rows read apart from a filtered list, a later page -
+and hands every actor to `people.want`, which asks once and in one request.
+`notifications.spec.ts` (*whoever a notification is about*) holds the three reads.
+
 **A push carries no payload at all**, and that is why `domains/notify/push.ts` is forty lines
 rather than four hundred. A payload would have to be encrypted to the subscription's
 `p256dh`/`auth` with HKDF and AES128GCM — and an encrypted payload of a message this server will
