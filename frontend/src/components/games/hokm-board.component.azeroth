@@ -109,9 +109,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     state sent: { id: string; card: number; rev: number; gone: boolean } | null = null;
 
-    state lifted: { card: number; at: number } | null = null;
+    state lifted: { card: number; at: number; keyed: boolean } | null = null;
 
     state sliding = false;
+
+    state kept: number | null = null;
 
     state presenting = false;
 
@@ -352,6 +354,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived rows = rowed(hand);
 
+    derived stop = kept !== null && hand.includes(kept) ? kept : (hand.find((card) => legal.has(card)) ?? hand[0] ?? null);
+
     derived handTricks = felt.points.map((_, side) =>
         felt.chairs.filter((row) => row.side === side).reduce((sum, row) => sum + row.tricks, 0));
 
@@ -388,7 +392,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         return says === null ? play : `${ play }. ${ says }`;
     };
 
-    const playCard = async (card: number) =>
+    const playCard = async (card: number, keyed: boolean) =>
     {
         if (!legal.has(card))
         {
@@ -411,7 +415,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         {
             let gone = false;
 
-            lifted = { card, at: hand.indexOf(card) };
+            lifted = { card, at: hand.indexOf(card), keyed };
             sent = { id, card, rev, gone };
             presenter.predict({ rev, covers: (moves) => (gone ? (moves[0]?.e === 'card' && moves[0].card === card ? 1 : null) : 0) });
             presenter.act((ctx) =>
@@ -438,16 +442,16 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         }
     };
 
-    const touchCard = (card: number) =>
+    const touchCard = (card: number, keyed: boolean) =>
     {
-        if (!legal.has(card))
+        if (!legal.has(card) || board.busy())
         {
             return;
         }
 
         if (!device.coarse() || chosen === card)
         {
-            void playCard(card);
+            void playCard(card, keyed);
             return;
         }
 
@@ -467,7 +471,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const toggleAway = (card: number) =>
     {
-        if (!discarding)
+        if (!discarding || board.busy())
         {
             return;
         }
@@ -615,11 +619,42 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const resort = () => rearrange(() => sorted = !sorted);
 
+    const stand = (card: number) => find(`.card-hold[data-card="${ card }"]`)?.focus({ preventScroll: true });
+
+    const walk = (event: KeyboardEvent, card: number) =>
+    {
+        const flat = rows.flat();
+        const at = flat.indexOf(card);
+        const row = rows.findIndex((one) => one.includes(card));
+        const across = rows[row]?.indexOf(card) ?? 0;
+        const facing = (line: number[] | undefined) => (line === undefined ? undefined : line[Math.min(across, line.length - 1)]);
+        const to = new Map([
+            ['ArrowRight', flat[(at + 1) % flat.length]],
+            ['ArrowLeft', flat[(at - 1 + flat.length) % flat.length]],
+            ['ArrowDown', facing(rows[row + 1])],
+            ['ArrowUp', facing(rows[row - 1])],
+            ['Home', flat[0]],
+            ['End', flat[flat.length - 1]]
+        ]).get(event.key);
+
+        if (to === undefined || event.altKey || event.ctrlKey || event.metaKey)
+        {
+            return;
+        }
+
+        event.preventDefault();
+        stand(to);
+    };
+
     const lay = (stage: Stage, seat: number, card: number, own: Rect | null) =>
     {
         if (seat === mine && lifted !== null && lifted.card === card)
         {
             const free = () => lifted = null;
+            const flat = rows.flat();
+            const next = flat[flat.indexOf(card) + 1] ?? flat[flat.indexOf(card) - 1];
+            const here = find(`.card-hold[data-card="${ card }"]`);
+            const stood = lifted.keyed && here !== null && document.activeElement === here;
 
             if (rowed(hand.filter((one) => one !== card)).length === rows.length)
             {
@@ -628,6 +663,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             else
             {
                 rearrange(free);
+            }
+
+            if (next !== undefined && stood)
+            {
+                stand(next);
             }
         }
 
@@ -1462,10 +1502,13 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                                     data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
                                                     data-picked={ chosen === card || picks.includes(card) || lifted?.card === card ? 'true' : undefined }
                                                     data-go={ chosen === card ? 'true' : undefined }
-                                                    disabled={ discarding ? board.busy() : (!legal.has(card) || board.busy()) }
+                                                    tabindex={ stop === card ? 0 : -1 }
+                                                    aria-disabled={ board.busy() || (!discarding && !legal.has(card)) ? 'true' : undefined }
                                                     aria-label={ discarding ? cardSays(card) : cardLabel(card) }
                                                     aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
-                                                    onClick={ () => (discarding ? toggleAway(card) : touchCard(card)) }
+                                                    onFocus={ () => kept = card }
+                                                    onKeyDown={ (event: KeyboardEvent) => walk(event, card) }
+                                                    onClick={ (event: MouseEvent) => (discarding ? toggleAway(card) : touchCard(card, event.detail === 0)) }
                                                 >
                                                     <CardFace card={ card } />
                                                 </button>

@@ -4295,6 +4295,53 @@ stylesheet cannot.**
   higher under a ring that is `::after` on the face. Both fade by opacity, and the face itself
   animates `translate` and nothing that has to be painted.
 
+**The hand is played from a keyboard, and a card that cannot be played is not taken off it.**
+
+- **A card is a button whether it may be played or not**, and says which with `aria-disabled`.
+  It was `disabled`, and a disabled button cannot be given the keyboard and loses it the moment
+  it is disabled: every card went dead while a play was with the server, so each press dropped
+  the keyboard on the page's body. The press is refused where it lands instead (`touchCard` and
+  `toggleAway` on `board.busy()`). That refusal is not a courtesy: the store answers a play
+  made while another is out with `failed`, and the board takes a failed play back off the
+  felt, so a second press let through would un-play the first.
+- **One card is in the order of the Tab key** (`stop`): the card the keyboard last stood on
+  (`kept`, written by the card's own `focus`) while it is still held, else the first that may
+  be played, else the first. A hand used to be a stop for every card that might be played. The
+  arrows walk EVERY card, the ones that cannot be played as well, because a hand is read
+  before it is played and the Hakem reads five cards nobody may play yet: right and left along
+  the hand, round and round, up and down between two rows to the card over or under, Home and
+  End. The fan does not mirror, so right is right in both languages. A chord with Control, Alt
+  or the Meta key is the browser's and is left to it.
+- **A card played with a key hands the keyboard to the next card** (the one before, when it
+  was the last) at the moment it is laid, and only if the keyboard is still on it. A card a
+  pointer played hands nothing on: `lifted.keyed`, read from the click's `detail`, which is 0
+  when no pointer made the click and is also how a screen reader presses (the ludo board's
+  `keyed` is the same rule). The first build handed the focus on after every press. The fan
+  draws a focused card over its neighbours (`li:focus-within`), so after a click of the mouse
+  the next card stood in front of the fan for good. Found by clicking in the built page:
+  happy-dom draws nothing, and `:focus-visible` said the card was not seen, which was true.
+- **The keyboard's place is drawn on the card.** The button's own outline would ring the box
+  the card has risen out of, so it goes, and the face carries a gap and a ring in the
+  product's focus colour 0.9rem up, over the veil as well. A lifted card's gold ring wins.
+- Not here yet: the keyboard going back to a card the server refused (4.6, with its flight
+  back). And the keyboard does not follow the turn: when the turn comes round it is where it
+  was left.
+
+`hokm-board.spec.ts` (*the hand under a keyboard*) holds the stop, every key, the hand-over
+and the refusals. A spec that means "pressed with a key" dispatches a `MouseEvent` with
+`detail: 0` itself, because the kit's `fire()` sends a plain `Event`, which has no `detail`.
+`hokm-table-art.spec.ts` holds that the stylesheet asks a card for no `:disabled` or `:enabled`
+and that a ring is drawn where the outline went. The passes read `aria-disabled` where they
+read `disabled` (`hokm-play-pass.mjs` `hand()`, the fit pass's `lift`).
+
+**The play pass asks the rules what a hand may play, on every turn.** Its follow-suit check
+counted the hands in which some card had gone quiet and wanted one in three tricks. A table
+that was right failed it: the pass puts each seat's lowest cards face down and calls clubs,
+the lowest suit, so a seat can come to the tricks with no trump at all and follow three leads
+of it with anything, and nothing goes quiet. It reads the mover's own `plays` from the api now
+and wants the page to let through exactly that many (`agreed`), and a quiet card wherever the
+rules narrowed the hand. Seen red on a build whose cards never say they cannot be played.
+
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.

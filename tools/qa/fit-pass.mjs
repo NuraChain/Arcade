@@ -1081,7 +1081,7 @@ const lift = async (page) => await page.evaluate(async () =>
 {
     const fold = document.querySelector('.poker-hand .poker-thing:has(> .poker-hole):enabled');
     const tapped = matchMedia('(pointer: coarse)').matches && document.querySelector('.hokm-stock-due') === null;
-    const thing = fold ?? (tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:enabled') : null);
+    const thing = fold ?? (tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:not([aria-disabled="true"])') : null);
     const rev = () => document.querySelector('.table-stage')?.getAttribute('data-rev') ?? null;
     const before = rev();
 

@@ -185,4 +185,17 @@ describe('the hand a hokm reader holds', () =>
         expect(ruleOf('.hokm-hand .card-hold[data-picked=\'true\'] .card-face::after')).toContain('opacity: 1;');
         expect(ruleOf('.card-hold[data-legal=\'true\'] .card-face')).toContain('translate: 0 -0.55rem;');
     });
+
+    it('never takes a card away from the keyboard, and draws the keyboard\'s place on the card itself', () =>
+    {
+        const held = (/<button\s+type="button"\s+class="card-hold"[\s\S]*?>\s*<CardFace/.exec(board) ?? [''])[0];
+
+        expect(held).toContain('aria-disabled={');
+        expect(/\sdisabled=/.test(held), 'a disabled button cannot be given the keyboard, and loses it when it is disabled').toBe(false);
+        expect(/\.card-hold[^\n{]*:(disabled|enabled)/.test(sheet), 'the stylesheet asks a card for a state it no longer has').toBe(false);
+        expect(ruleOf('.card-hold[aria-disabled=\'true\']')).toContain('cursor: default;');
+        expect(ruleOf('.card-hold:focus-visible')).toContain('outline: none;');
+        expect(ruleOf('.card-hold:focus-visible .card-face::after'), 'the outline went and nothing was drawn in its place').toMatch(/box-shadow: [^;]*var\(--accent\)[^;]*;\n\s+opacity: 1;/);
+        expect(ruleOf('.card-hold:focus-visible .card-face'), 'a card under the keyboard does not stand out of the fan').toMatch(/translate: 0 -[\d.]+rem;/);
+    });
 });

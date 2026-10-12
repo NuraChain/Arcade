@@ -2187,7 +2187,7 @@ html:has(.site-drawer[open])
     box-shadow: 0 0 0 2px var(--accent), 0 8px 18px -6px rgb(0 0 0 / 0.6);
 }
 
-.card-hold:disabled
+.card-hold[aria-disabled='true']
 {
     cursor: default;
 }
@@ -2202,14 +2202,25 @@ html:has(.site-drawer[open])
     opacity: 1;
 }
 
+.card-hold:focus-visible
+{
+    outline: none;
+}
+
 .card-hold:focus-visible .card-face
 {
     translate: 0 -0.9rem;
 }
 
+.card-hold:focus-visible .card-face::after
+{
+    box-shadow: 0 0 0 2px var(--color-void), 0 0 0 4px var(--accent), 0 10px 20px -6px rgb(0 0 0 / 0.7);
+    opacity: 1;
+}
+
 @media (hover: hover)
 {
-    .card-hold:enabled:hover .card-face,
+    .card-hold:not([aria-disabled='true']):hover .card-face,
     .card-hold[data-legal='hidden']:hover .card-face
     {
         translate: 0 -0.9rem;

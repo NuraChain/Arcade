@@ -484,7 +484,7 @@ describe('the table in motion', () =>
 
         expect(container.querySelector('.table-result'), 'the result covered a trick that had not been played out').toBeNull();
         expect(container.querySelector('.hokm-foot'), 'the table changed size under the cards in the air').not.toBeNull();
-        expect([...container.querySelectorAll<HTMLButtonElement>('.card-hold')].map((one) => one.disabled), 'the cards left over went, or could still be played, while the last trick was on the table').toEqual([true, true]);
+        expect([...container.querySelectorAll<HTMLButtonElement>('.card-hold')].map((one) => one.getAttribute('aria-disabled')), 'the cards left over went, or could still be played, while the last trick was on the table').toEqual(['true', 'true']);
         expect(container.querySelector('.table-plate-tag'), 'a plate said who had won before the last trick was played out').toBeNull();
         expect(onTurn(container), 'the turn was taken off the table before the game was over on it').toEqual(['2']);
         expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBe('true');
@@ -971,7 +971,7 @@ describe('playing ahead of the server', () =>
 
         expect(held(), 'the card left the hand when the server answered, with nothing yet flown from it').toEqual(['0', '14', '30']);
         expect(container.querySelector('.card-hold[data-card="14"]')?.getAttribute('data-picked')).toBe('true');
-        expect(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')?.disabled, 'a card on its way could be pressed again').toBe(true);
+        expect(container.querySelector('.card-hold[data-card="14"]')?.getAttribute('aria-disabled'), 'a card on its way could be pressed again').toBe('true');
         expect(container.querySelector('.hokm-trick[data-card="14"]')).toBeNull();
 
         await elapse(LONG, 5);
@@ -1119,7 +1119,7 @@ describe('the game helpers', () =>
         useSettings().update({ hintMoves: false });
 
         expect([38, 0, 40].map((card) => cardButton(container, card).dataset.legal)).toEqual(['hidden', 'hidden', 'hidden']);
-        expect(cardButton(container, 0).disabled).toBe(true);
+        expect(cardButton(container, 0).getAttribute('aria-disabled')).toBe('true');
 
         fire(cardButton(container, 0), 'click');
 
@@ -1279,7 +1279,7 @@ describe('the two-handed draw', () =>
         const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
         const due = () => container.querySelector('.hokm-stock-due');
 
-        expect(hold(3).disabled).toBe(false);
+        expect(hold(3).getAttribute('aria-disabled')).toBeNull();
         expect(hold(3).getAttribute('aria-pressed')).toBe('false');
         expect(due()?.textContent?.trim()).toBe('0/3');
         expect(stock(container)).toBeNull();
@@ -1314,7 +1314,7 @@ describe('the two-handed draw', () =>
     {
         const { container } = renderTest(() => HokmBoard({ events: NO_EVENTS, match: two({ phase: 'discard', turn: 0, stock: 42, hand: [3, 14, 27, 40, 51] }, 1) }) as Rendered);
 
-        expect([...container.querySelectorAll<HTMLButtonElement>('.card-hold')].every((button) => button.disabled)).toBe(true);
+        expect([...container.querySelectorAll('.card-hold')].every((button) => button.getAttribute('aria-disabled') === 'true')).toBe(true);
         expect(stock(container)).toBeNull();
         expect(container.querySelector('.hokm-stock-due')).toBeNull();
         expect(beside(container)).toEqual(['Sort']);
@@ -1969,6 +1969,36 @@ describe('a table that is read again', () =>
     });
 });
 
+const SEVENTEEN = [0, 1, 2, 3, 4, 13, 14, 15, 16, 26, 27, 28, 29, 39, 40, 41, 42];
+
+const roomOf = (width: number, height: number) => vi.stubGlobal('ResizeObserver', class
+{
+    private readonly told: ResizeObserverCallback;
+
+    constructor(told: ResizeObserverCallback)
+    {
+        this.told = told;
+    }
+
+    observe(target: Element)
+    {
+        if (target.classList.contains('hokm-stage'))
+        {
+            this.told([{ contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+        }
+    }
+
+    unobserve()
+    {
+        return undefined;
+    }
+
+    disconnect()
+    {
+        return undefined;
+    }
+});
+
 describe('the fan a hand is held in', () =>
 {
     const chairs = (seats: number, held: number) => Array.from({ length: seats }, (_, seat) => ({ seat, side: seats === 4 ? seat % 2 : seat, held, tricks: 0, out: false }));
@@ -1977,36 +2007,6 @@ describe('the fan a hand is held in', () =>
         ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand, plays: hand, seats: chairs(seats, hand.length), points: seats === 4 ? [0, 0] : chairs(seats, 0).map(() => 0) }, 0),
         seats,
         players: Array.from({ length: seats }, (_, seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
-    });
-
-    const SEVENTEEN = [0, 1, 2, 3, 4, 13, 14, 15, 16, 26, 27, 28, 29, 39, 40, 41, 42];
-
-    const roomOf = (width: number, height: number) => vi.stubGlobal('ResizeObserver', class
-    {
-        private readonly told: ResizeObserverCallback;
-
-        constructor(told: ResizeObserverCallback)
-        {
-            this.told = told;
-        }
-
-        observe(target: Element)
-        {
-            if (target.classList.contains('hokm-stage'))
-            {
-                this.told([{ contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
-            }
-        }
-
-        unobserve()
-        {
-            return undefined;
-        }
-
-        disconnect()
-        {
-            return undefined;
-        }
     });
 
     const rowsOf = (container: HTMLElement) => [...container.querySelectorAll('.hokm-hand')].map((row) => row.querySelectorAll('.card-hold').length);
@@ -2262,5 +2262,250 @@ describe('the fan a hand is held in', () =>
 
             expect(moved.get(card)?.[0], `card ${ card } was not brought up from the row it lay in`).toMatchObject({ translate: `${ (nth - now) * 30 }px 100px`, composite: 'add' });
         }
+    });
+});
+
+describe('the hand under a keyboard', () =>
+{
+    const chairs = (held: number) => [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held, tricks: 0, out: false }));
+
+    const turn = (view: Partial<Hokm> = {}): MatchView => ({
+        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 1, hand: [0, 14, 30, 45], plays: [14, 30], seats: chairs(4), ...view }, 0),
+        remainingMs: 20_000
+    });
+
+    const hold = (container: HTMLElement, card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+
+    const stops = (container: HTMLElement) => [...container.querySelectorAll<HTMLButtonElement>('.card-hold')].filter((one) => one.tabIndex === 0).map((one) => one.dataset.card);
+
+    const focused = () => (document.activeElement as HTMLElement | null)?.dataset.card;
+
+    const key = (target: Element, which: string, more: KeyboardEventInit = {}) =>
+    {
+        const event = new KeyboardEvent('keydown', { key: which, bubbles: true, cancelable: true, ...more });
+
+        target.dispatchEvent(event);
+
+        return event.defaultPrevented;
+    };
+
+    const enter = (target: Element) => target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+
+    const unanswered = () => vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+    beforeEach(() =>
+    {
+        useDevice().overrideCoarse(false);
+    });
+
+    afterEach(() =>
+    {
+        vi.unstubAllGlobals();
+    });
+
+    it('puts one card in the order of the Tab key: the first that may be played', async () =>
+    {
+        const { container } = await mounted(turn());
+
+        expect(stops(container)).toEqual(['14']);
+    });
+
+    it('keeps one card there when none may be played, so the hand can still be read', async () =>
+    {
+        const { container } = await mounted(turn({ turn: 1, plays: [] }));
+
+        expect(stops(container)).toEqual(['0']);
+    });
+
+    it('says a card cannot be played without taking it away from the keyboard', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = await mounted(turn());
+        const dead = hold(container, 0);
+
+        expect(dead.disabled, 'a disabled button cannot be given the keyboard, and loses it when it is disabled').toBe(false);
+        expect(dead.getAttribute('aria-disabled')).toBe('true');
+        expect(hold(container, 14).getAttribute('aria-disabled')).toBeNull();
+
+        dead.focus();
+        fire(dead, 'click');
+
+        expect(focused()).toBe('0');
+        expect(play).not.toHaveBeenCalled();
+    });
+
+    it('walks the hand with the arrows, round and round, and to its ends with Home and End', async () =>
+    {
+        const { container } = await mounted(turn());
+
+        hold(container, 14).focus();
+
+        expect(key(hold(container, 14), 'ArrowRight'), 'the page was left to scroll under the arrow').toBe(true);
+        expect(focused()).toBe('30');
+
+        key(hold(container, 30), 'ArrowRight');
+        expect(focused(), 'a card that cannot be played was stepped over, and cannot be read').toBe('45');
+
+        key(hold(container, 45), 'ArrowRight');
+        expect(focused(), 'the last card did not lead round to the first').toBe('0');
+
+        key(hold(container, 0), 'ArrowLeft');
+        expect(focused()).toBe('45');
+
+        key(hold(container, 45), 'Home');
+        expect(focused()).toBe('0');
+
+        key(hold(container, 0), 'End');
+        expect(focused()).toBe('45');
+    });
+
+    it('leaves a key it has no use for to the page', async () =>
+    {
+        const { container } = await mounted(turn());
+
+        hold(container, 14).focus();
+
+        expect(key(hold(container, 14), 'Tab')).toBe(false);
+        expect(key(hold(container, 14), 'a')).toBe(false);
+        expect(key(hold(container, 14), 'ArrowRight', { ctrlKey: true }), 'a chord that is the browser\'s was taken').toBe(false);
+        expect(key(hold(container, 14), 'ArrowLeft', { altKey: true }), 'a chord that is the browser\'s was taken').toBe(false);
+        expect(key(hold(container, 14), 'ArrowRight', { metaKey: true }), 'a chord that is the browser\'s was taken').toBe(false);
+        expect(key(hold(container, 14), 'ArrowUp'), 'one row has nothing over it').toBe(false);
+        expect(key(hold(container, 14), 'ArrowDown'), 'one row has nothing under it').toBe(false);
+        expect(focused()).toBe('14');
+    });
+
+    it('keeps the Tab key on the card the keyboard last stood on', async () =>
+    {
+        const { container } = await mounted(turn());
+
+        hold(container, 14).focus();
+        key(hold(container, 14), 'ArrowRight');
+
+        expect(stops(container)).toEqual(['30']);
+
+        hold(container, 0).focus();
+
+        expect(stops(container), 'a card focused by a pointer did not take the stop').toEqual(['0']);
+    });
+
+    it('goes between two rows with up and down, to the card over or under', async () =>
+    {
+        roomOf(358, 778);
+
+        const { container } = await mounted(turn({ hand: SEVENTEEN, plays: SEVENTEEN }));
+
+        expect([...container.querySelectorAll('.hokm-hand')].map((row) => row.querySelectorAll('.card-hold').length)).toEqual([9, 8]);
+
+        hold(container, 2).focus();
+        key(hold(container, 2), 'ArrowDown');
+        expect(focused()).toBe('28');
+
+        key(hold(container, 28), 'ArrowUp');
+        expect(focused()).toBe('2');
+
+        hold(container, 16).focus();
+        key(hold(container, 16), 'ArrowDown');
+        expect(focused(), 'the longer row\'s last card has none under it, and went nowhere').toBe('42');
+
+        expect(key(hold(container, 42), 'ArrowDown'), 'the lower row has nothing under it').toBe(false);
+        expect(focused()).toBe('42');
+
+        key(hold(container, 16), 'ArrowRight');
+        expect(focused(), 'the end of one row did not lead to the start of the next').toBe('26');
+    });
+
+    it('passes the keyboard to the next card when the one under it is played', async () =>
+    {
+        unanswered();
+
+        const { container } = await mounted(turn());
+
+        hold(container, 14).focus();
+        enter(hold(container, 14));
+
+        expect(container.querySelector('.card-hold[data-card="14"]')).toBeNull();
+        expect(focused(), 'the keyboard was left on nothing when its card flew').toBe('30');
+        expect(stops(container)).toEqual(['30']);
+    });
+
+    it('passes it to the card before when the one played was the last in the hand', async () =>
+    {
+        unanswered();
+
+        const { container } = await mounted(turn({ plays: [45] }));
+
+        hold(container, 45).focus();
+        enter(hold(container, 45));
+
+        expect(focused()).toBe('30');
+    });
+
+    it('gives a card a pointer played no keyboard to hand on, and brings no other card to the front of the fan for it', async () =>
+    {
+        unanswered();
+
+        const { container } = await mounted(turn());
+
+        hold(container, 14).focus();
+        hold(container, 14).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+        expect(container.querySelector('.card-hold[data-card="14"]')).toBeNull();
+        expect(focused(), 'a card nobody asked for was given the focus, and the fan draws a focused card over its neighbours').toBeUndefined();
+        expect(stops(container), 'the Tab key was left on a card that is gone').toEqual(['30']);
+    });
+
+    it('does not take the keyboard from wherever it is when a card it is not on is played', async () =>
+    {
+        unanswered();
+
+        const { container } = await mounted(turn());
+        const sort = container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!;
+
+        hold(container, 14).focus();
+        sort.focus();
+        enter(hold(container, 14));
+
+        expect(document.activeElement, 'the keyboard was pulled back into the hand').toBe(sort);
+        expect(stops(container), 'the Tab key was left on a card that is gone').toEqual(['30']);
+    });
+
+    it('finds the Tab key a card again when the one it was on leaves by another road', async () =>
+    {
+        const { container, read, match: shown } = await mounted(turn());
+
+        hold(container, 30).focus();
+        read({ ...shown(), view: { ...(shown().view as Hokm), hand: [0, 14, 45], plays: [14] } });
+        await flush();
+
+        expect(stops(container)).toEqual(['14']);
+    });
+
+    it('takes no second card while the first is still with the server, and says so on every card', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+
+        vi.spyOn(useBoard(), 'busy').mockReturnValue(true);
+
+        const { container } = await mounted(turn());
+
+        expect([...container.querySelectorAll('.card-hold')].map((one) => one.getAttribute('aria-disabled'))).toEqual(['true', 'true', 'true', 'true']);
+
+        fire(hold(container, 14), 'click');
+
+        expect(play, 'a second play went out, which the board refuses and the table would take back').not.toHaveBeenCalled();
+        expect(hold(container, 14).getAttribute('data-picked'), 'a card was lifted that could not be sent').toBeNull();
+    });
+
+    it('lifts no card for the stock while the board is busy either', async () =>
+    {
+        vi.spyOn(useBoard(), 'busy').mockReturnValue(true);
+
+        const { container } = await mounted(match({ phase: 'discard', turn: 0, discard: 2, stock: 42, hand: [3, 14, 27], plays: [] }, 0));
+
+        fire(hold(container, 14), 'click');
+
+        expect(hold(container, 14).getAttribute('aria-pressed')).toBe('false');
+        expect(hold(container, 14).getAttribute('aria-disabled')).toBe('true');
     });
 });

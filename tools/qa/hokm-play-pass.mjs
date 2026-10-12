@@ -174,7 +174,7 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 /** The cards this browser is showing in the hand, and whether each one can be pressed. */
 const hand = (page) => page.evaluate(() =>
     [...document.querySelectorAll('main ul[aria-label] button')]
-        .map((one) => ({ says: one.getAttribute('aria-label') ?? '', can: !one.disabled })));
+        .map((one) => ({ says: one.getAttribute('aria-label') ?? '', can: one.getAttribute('aria-disabled') !== 'true' })));
 
 /** What is lying on the felt, in the order the wire sent it. */
 const table = (page) => page.evaluate(() =>
@@ -406,6 +406,8 @@ try
     {
         let clicked = 0;
         let followed = 0;
+        let narrowed = 0;
+        let agreed = 0;
         let gathered = 0;
 
         for (let attempt = 0; attempt < CLICKED_CARDS * 4 && clicked < CLICKED_CARDS; attempt += 1)
@@ -430,12 +432,21 @@ try
             }
 
             /**
-             * The follow-suit rule, seen from the interface rather than from the engine.
+             * The follow-suit rule, as the interface shows it and as the engine holds it.
              *
-             * A hand that can play anything is somebody leading; a hand where some cards have gone
-             * quiet is somebody following, and BOTH have to be true at some point in three tricks
-             * or the interface is not enforcing anything it says it is.
+             * A hand that can play anything is somebody leading, or following a suit they do not
+             * hold; a hand where some cards have gone quiet is somebody following one they do. The
+             * page has to let through exactly the cards the rules do, on every turn.
+             *
+             * Counting the quiet hands alone was the whole check once, and it failed on a table
+             * that was right: this pass puts each seat's lowest cards face down and calls clubs,
+             * the lowest suit, so a seat can come to the tricks holding no trump at all and follow
+             * three leads of it with anything.
              */
+            const allowed = (await (await mover.request.get(`${ BASE }/api/matches/${ match }`)).json()).view;
+
+            if (playable.length === allowed.plays.length) { agreed += 1; }
+            if (allowed.plays.length < allowed.hand.length) { narrowed += 1; }
             if (playable.length < held.length) { followed += 1; }
 
             const before = await watcher.page.evaluate(() => document.querySelectorAll('main .hokm-trick').length);
@@ -470,7 +481,8 @@ try
         record('no button on the page plays a card but the card', beside.length === 0, beside.join(' | '));
         record('no bar of sentences is drawn under the table', !drawn);
         record('the other browser saw the table change', gathered > 0, `${ gathered } of ${ clicked }`);
-        record('an illegal card was quiet while a legal one was not', followed > 0, `${ followed } of ${ clicked } turns`);
+        record('every hand let through exactly the cards the rules allowed', agreed === clicked, `${ agreed } of ${ clicked } turns`);
+        record('an illegal card was quiet wherever the rules narrowed a hand', followed === narrowed, `${ followed } of the ${ narrowed } turns narrowed`);
 
         /**
          * The trick that was gathered, which is the one thing on this table that exists for a moment

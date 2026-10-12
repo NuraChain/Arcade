@@ -283,6 +283,16 @@ quality.
   0.55rem higher under a ring.
 - Sort, and a row that goes, are one slide of every card from where it lay.
 
+**As built (commit 4.4, the hand under a keyboard).** D14 for the hand.
+
+- Every card is a button, and says with `aria-disabled` when it cannot be played. One card is
+  in the order of the Tab key where every playable card was, the arrows walk all of them, and
+  Enter or the space bar plays.
+- A card played with a key hands the keyboard to the next card. One a pointer played hands
+  nothing on.
+- The keyboard's place is the card standing 0.9rem up under a gap and a ring in the focus
+  colour: `aim`, with its outer line.
+
 ### 3.5 Poker
 
 - Everything on the table is in `--u` (P1): plates, the board, the pot, the bets, the puck.
