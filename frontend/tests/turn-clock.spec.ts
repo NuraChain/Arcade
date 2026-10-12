@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import YardBadge from '../src/components/games/yard-badge.component.azeroth';
@@ -49,6 +50,41 @@ describe('the last seconds of a turn', () =>
         }
 
         expect(played).toEqual(['tick', 'tick', 'tick', 'tick-hi', 'tick-hi']);
+    });
+
+    it('are counted on one pill, which is not made again each second', async () =>
+    {
+        const { container } = renderTest(() => TurnClock({ remainingMs: 30_000, over: false, brief: true }) as Rendered);
+
+        await Promise.resolve();
+
+        const pill = container.querySelector('span')!;
+        const words = pill.querySelector('.sr-only')!;
+
+        clock().advance(1000);
+        clock().advance(1000);
+
+        expect(pill.textContent).toContain('28s');
+        expect(container.querySelector('span'), 'the pill was drawn again for a second that passed').toBe(pill);
+        expect(pill.querySelector('.sr-only')).toBe(words);
+    });
+
+    it('take the pill away when the game is over, and at no other time', async () =>
+    {
+        const [over, setOver] = createSignal(false);
+        const { container } = renderTest(() => TurnClock({ remainingMs: 30_000, get over()
+        {
+            return over();
+        } }) as Rendered);
+
+        await Promise.resolve();
+        clock().advance(1000);
+
+        expect(container.querySelector('span')).not.toBeNull();
+
+        setOver(true);
+
+        expect(container.querySelector('span')).toBeNull();
     });
 
     it('stay silent on somebody else\'s turn', async () =>

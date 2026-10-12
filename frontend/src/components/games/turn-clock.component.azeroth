@@ -167,6 +167,8 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
         return locale.t('match.deadline.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
     })();
 
+    derived running = says !== null;
+
     derived brief = props.brief === true;
 
     derived short = ((): string =>
@@ -189,7 +191,7 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
         return locale.t('match.deadline.brief.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
     })();
 
-    <Show when={ says !== null }>
+    <Show when={ running }>
         { () =>
             <span
                 class={ () => [
