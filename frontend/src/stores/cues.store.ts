@@ -4,6 +4,7 @@ import type { NotificationKind } from '../api.ts';
 import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
 import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
+import { CUE_KEYS, REQUEST_TAG, chatTag, keepWords, rowTag, wordsOf } from '../lib/notice-words.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
 import { clearSystem, onWent, tellSystem } from '../lib/system-notice.ts';
 import { useCatalogue } from './catalogue.store.ts';
@@ -126,13 +127,13 @@ export const useCues = createStore((): CuesApi =>
                 .catch(() => undefined);
         };
 
-        const system = (title: string, tag: string, target: string) =>
+        const system = (title: string, tag: string, target: string, pushed: boolean) =>
         {
             const to = untrack(() => (settings.settings().notify ? { lang: locale.locale(), dir: locale.dir() } : null));
 
             if (to !== null)
             {
-                void tellSystem({ title, tag, target, ...to }).catch(() => undefined);
+                void tellSystem({ title, tag, target, pushed, ...to }).catch(() => undefined);
             }
         };
 
@@ -141,7 +142,7 @@ export const useCues = createStore((): CuesApi =>
 
         const announceChat = (id: string, from: string) => named(from, (who) =>
         {
-            const text = locale.t('cue.chatBody', { who });
+            const text = locale.t(CUE_KEYS.message, { who });
 
             toasts.show({
                 kind: 'live',
@@ -150,7 +151,7 @@ export const useCues = createStore((): CuesApi =>
                 action: { label: locale.t('cue.open'), run: () => go.current?.(`/app/chats/${ id }`) },
                 dedupe: `cue.chat.${ id }`
             });
-            system(text, `chat:${ id }`, `/app/chats/${ id }`);
+            system(text, chatTag(id), `/app/chats/${ id }`, true);
             chime();
         });
 
@@ -233,7 +234,7 @@ export const useCues = createStore((): CuesApi =>
             {
                 named(arrived.from, (who) =>
                 {
-                    const text = locale.t('cue.requestBody', { who });
+                    const text = locale.t(CUE_KEYS['friend-request'], { who });
 
                     toasts.show({
                         kind: 'live',
@@ -242,7 +243,7 @@ export const useCues = createStore((): CuesApi =>
                         action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
                         dedupe: 'cue.request'
                     });
-                    system(text, 'request', '/app/friends?tab=requests');
+                    system(text, REQUEST_TAG, '/app/friends?tab=requests', true);
                     chime();
                 });
             }
@@ -282,8 +283,9 @@ export const useCues = createStore((): CuesApi =>
                     toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
                     system(
                         game === undefined ? told.text : gameSays('notify.system.turn', game),
-                        `${ item.kind }:${ item.ref.tableId ?? item.ref.groupId ?? item.ref.conversationId ?? item.actor ?? '' }`,
-                        targetOf(item) ?? '/app/notifications'
+                        rowTag(item),
+                        targetOf(item) ?? '/app/notifications',
+                        true
                     );
                     chime();
                 });
@@ -359,7 +361,7 @@ export const useCues = createStore((): CuesApi =>
             const text = gameSays('notify.system.turn', match.game);
             const target = `/app/play/${ match.tableId }`;
 
-            system(text, `turn:${ match.tableId }`, target);
+            system(text, `turn:${ match.tableId }`, target, false);
 
             if (lobby.openId() !== match.tableId && table?.mode !== 'turns')
             {
@@ -392,7 +394,7 @@ export const useCues = createStore((): CuesApi =>
             const text = gameSays('quickMatch.started', table.game);
             const target = `/app/play/${ table.id }`;
 
-            system(text, `table:${ table.id }`, target);
+            system(text, `table:${ table.id }`, target, false);
 
             if (lobby.openId() === table.id || lobby.finding().includes(table.game as GameId))
             {
@@ -429,7 +431,16 @@ export const useCues = createStore((): CuesApi =>
         if (typeof document !== 'undefined')
         {
             document.addEventListener('visibilitychange', back);
+            back();
         }
+
+        const trackWords = () => createEffect(() =>
+        {
+            if (settings.settings().notify)
+            {
+                void keepWords(wordsOf(locale.locale())).catch(() => undefined);
+            }
+        }, { name: 'cues.words' });
 
         const end = createRoot((dispose) =>
         {
@@ -437,6 +448,7 @@ export const useCues = createStore((): CuesApi =>
             trackRequests();
             trackNotices();
             trackTitle();
+            trackWords();
 
             return dispose;
         });

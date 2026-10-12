@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { allowNotices, clearSystem, noticesAllowed, noticesBlocked, noticesSupported, tellSystem } from '../src/lib/system-notice.ts';
 import { fakeNotices, type FakeNotices } from './fake-notices.ts';
 
-const NOTICE = { title: 'Sara sent a message', tag: 'chat:c-sara', target: '/app/chats/c-sara', lang: 'en', dir: 'ltr' as const };
+const NOTICE = { title: 'Sara sent a message', tag: 'chat:c-sara', target: '/app/chats/c-sara', lang: 'en', dir: 'ltr' as const, pushed: false };
 
 const WORKER = Object.values(import.meta.glob('../public/push-worker.js', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)[0];
 
@@ -74,6 +74,33 @@ describe('a notice shown by the system', () =>
         expect(SERVED, 'the spec no longer finds the pictures in public/').toContain('/favicon-32.png');
         expect(pictures).toHaveLength(4);
         expect(pictures.filter((one) => one === undefined || !SERVED.includes(one)), 'a notice pointed at a picture that is not in public/').toEqual([]);
+    });
+
+    it('leaves what the server pushes to the push, on a device a push reaches, and says the rest itself', async () =>
+    {
+        browser = fakeNotices('granted', { subscribed: true });
+        browser.hide(true);
+
+        await expect(tellSystem({ ...NOTICE, pushed: true })).resolves.toBe(false);
+        expect(browser.shown, 'the page spoke of something the push will say').toEqual([]);
+
+        await expect(tellSystem(NOTICE)).resolves.toBe(true);
+        expect(browser.shown.map((one) => one.options.tag)).toEqual(['chat:c-sara']);
+    });
+
+    it('says what the server pushes itself, on a device no push reaches', async () =>
+    {
+        browser = fakeNotices('granted', { push: true });
+        browser.hide(true);
+
+        await expect(tellSystem({ ...NOTICE, pushed: true })).resolves.toBe(true);
+        expect(browser.shown.map((one) => one.options.tag)).toEqual(['chat:c-sara']);
+
+        browser.restore();
+        browser = fakeNotices('granted');
+        browser.hide(true);
+
+        await expect(tellSystem({ ...NOTICE, pushed: true }), 'a browser with no push at all was taken for one a push reaches').resolves.toBe(true);
     });
 
     it('is one notice for one subject, however often it is told', async () =>

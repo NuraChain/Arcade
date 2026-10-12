@@ -841,11 +841,17 @@ and the two voices a turn can have at a table played a move a day land on one no
 have a notice and no toast, because the table they are about is the page that is open and
 hidden: the reader's turn there, and the game starting for somebody waiting on that table's own
 page, which is the case the whole thing exists for. When the document is seen again every notice
-of ours is taken down (`clearSystem`): the page has the truth now. `system-notice.spec.ts` holds
+of ours is taken down (`clearSystem`): the page has the truth now. The same is done when the
+app opens on a page that is being looked at, since a notice a push raised is stale the moment
+the reader is in the app, whichever way they came in. `system-notice.spec.ts` holds
 the outlet, `cues.spec.ts` (*what the browser is told when nobody is looking at the page*) what
-is said through it, and `device-notices.spec.ts` the switch. Pressing a notice is the worker's
-(`.claude/rules/chat-and-keys.md`, *A pressed notice goes to the thing itself*): this store
-only listens for where it led (`onWent`) and hands the path to the shell's `navigate`.
+is said through it, and `device-notices.spec.ts` the switch. The tags and the sentence for each
+kind are `lib/notice-words.ts`'s (`rowTag`, `chatTag`, `REQUEST_TAG`, `CUE_KEYS`), because the
+worker repeats them for a push and the two must be one notice; `system`'s last argument says
+whether the server pushes that subject, and a hidden page on a device a push reaches leaves
+those to the worker (`.claude/rules/chat-and-keys.md`, *One speaker for one thing*). Pressing a
+notice is the worker's too (the same file, *A pressed notice goes to the thing itself*): this
+store only listens for where it led (`onWent`) and hands the path to the shell's `navigate`.
 
 **A cue waits for the name of whoever it is about.** A toast and a notice are said once and are
 not redrawn, so every cue with a person in it goes through `named`, which asks the people store

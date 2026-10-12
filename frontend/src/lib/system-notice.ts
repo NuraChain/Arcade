@@ -1,4 +1,4 @@
-import { WORKER } from './push.ts';
+import { WORKER, currentSubscription } from './push.ts';
 
 export interface SystemNotice
 {
@@ -7,6 +7,7 @@ export interface SystemNotice
     target: string;
     lang: string;
     dir: 'ltr' | 'rtl';
+    pushed: boolean;
 }
 
 const ICON = '/apple-touch-icon.png';
@@ -46,7 +47,7 @@ export async function tellSystem(notice: SystemNotice)
 
     const registration = await navigator.serviceWorker.getRegistration(WORKER);
 
-    if (registration === undefined)
+    if (registration === undefined || (notice.pushed && await currentSubscription() !== null))
     {
         return false;
     }

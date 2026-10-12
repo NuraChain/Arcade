@@ -86,8 +86,8 @@ export async function currentSubscription(): Promise<PushSubscription | null>
  * Registers the worker and subscribes, asking for permission on the way.
  *
  * `userVisibleOnly` is not optional in any browser that ships this, and it is the right promise
- * anyway: every push this product sends results in a visible notice, because a silent push is a
- * wake-up nobody asked for.
+ * anyway: a push this product sends results in a visible notice unless the app is on the screen,
+ * where the page says it instead. A silent push is a wake-up nobody asked for.
  *
  * Returns null when the person says no. That is an answer, and the caller stores nothing.
  */

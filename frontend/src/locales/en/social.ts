@@ -311,6 +311,7 @@ export const social = {
     'notify.turn': 'It is your go',
     'notify.message': { one: '{who} sent you a message', other: '{count} new messages from {who}' },
     'notify.system.turn': 'Your turn at {game}',
+    'notify.system.general': 'Something new in Nura Games',
 
     'notify.device.title': 'Notifications on this device',
     'notify.device.lead': 'When something happens while you are not looking at Nura Games, this browser tells you what it was. It never shows what a message says.',

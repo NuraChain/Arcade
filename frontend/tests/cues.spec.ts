@@ -3,6 +3,7 @@ import { cleanup } from '@azerothjs/testing';
 
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { WORDS, wordsOf } from '../src/lib/notice-words.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useCues } from '../src/stores/cues.store.ts';
@@ -15,9 +16,11 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import { ApiError, client, type MatchView } from '../src/api.ts';
+import { ApiError, client, type MatchView, type Notification } from '../src/api.ts';
 import { server } from './fake-api.ts';
 import { fakeNotices, type FakeNotices } from './fake-notices.ts';
+import { fakeWorker, tabAt } from './fake-worker.ts';
+import { PEOPLE_FIXTURES } from './fixtures.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -1833,4 +1836,265 @@ describe('a notice that was pressed', () =>
 
         expect(went).toEqual([]);
     });
+});
+
+describe('notices left over from before the app was opened', () =>
+{
+    let browser: FakeNotices;
+
+    const LEFT = { tag: 'table-invite:t-1', renotify: true, data: { target: '/app/play/t-1' } };
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+        browser.shown.push({ title: 'Sara Kamali saved you a seat', options: LEFT });
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+    });
+
+    it('are taken down when the app opens on a page that is being looked at, whoever raised them', async () =>
+    {
+        useCues().start();
+        await settle();
+
+        expect(browser.closed).toEqual(['table-invite:t-1']);
+    });
+
+    it('are left where they are when the app opens in a tab nobody is looking at', async () =>
+    {
+        browser.hide(true);
+        browser.closed.length = 0;
+        useCues().start();
+        await settle();
+
+        expect(browser.closed).toEqual([]);
+    });
+});
+
+describe('the words kept for the worker', () =>
+{
+    let browser: FakeNotices;
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+        useSettings().reset();
+    });
+
+    const kept = () =>
+    {
+        const text = browser.kept.get(WORDS);
+
+        return text === undefined ? null : JSON.parse(text) as unknown;
+    };
+
+    it('are kept when the store starts on a device that is switched on, in the reader\'s language', async () =>
+    {
+        useSettings().update({ notify: true });
+        useCues().start();
+        await settle();
+
+        expect(kept()).toEqual(JSON.parse(JSON.stringify(wordsOf('en'))));
+        expect(wordsOf('en').says.message, 'the words for a message were not what the page says of one').toBe('{who} sent a message');
+        expect(wordsOf('en').games.ludo).toBe('Ludo');
+    });
+
+    it('are kept again in the new language when the reader changes it', async () =>
+    {
+        useSettings().update({ notify: true });
+        useCues().start();
+        await settle();
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(kept()).toEqual(JSON.parse(JSON.stringify(wordsOf('fa'))));
+        expect(wordsOf('fa')).toMatchObject({ lang: 'fa', tag: 'fa-IR', dir: 'rtl' });
+    });
+
+    it('are not kept while the switch is off, and are from the moment it is turned on', async () =>
+    {
+        useCues().start();
+        await settle();
+
+        expect(kept()).toBeNull();
+
+        useSettings().update({ notify: true });
+        await settle();
+
+        expect(kept()).toEqual(JSON.parse(JSON.stringify(wordsOf('en'))));
+    });
+});
+
+describe('a device a push reaches', () =>
+{
+    let browser: FakeNotices;
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted', { subscribed: true });
+        useSettings().update({ notify: true });
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+        useSettings().reset();
+    });
+
+    const armed = async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+        browser.hide(true);
+    };
+
+    it('leaves a message, a friend request and an invitation to the push, and still draws a toast for each', async () =>
+    {
+        await armed();
+
+        laterMessageIn('c-reza');
+        await useChat().refresh();
+        knock('maya.c');
+        await useSocial().refresh();
+        server.notify({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 't-1' }, dedupeKey: 'table:t-1' });
+        await useNotifications().refresh();
+        await settle();
+        await settle();
+
+        expect(browser.shown, 'the page and the push would both have spoken').toEqual([]);
+        expect(useToasts().items().map((toast) => toast.dedupe).sort()).toEqual(['cue.chat.c-reza', 'cue.notice', 'cue.request']);
+    });
+
+    it('still says a game has started and a turn has come, which no push will', async () =>
+    {
+        await armed();
+
+        const waiting = await seatedAt();
+        const playing = await playingAt();
+
+        await frame(boardOf(waiting));
+        await frame(boardOf(playing, { rev: 4, turn: 1 }));
+        await frame(boardOf(playing, { rev: 5, turn: 0 }));
+        await settle();
+
+        expect(browser.shown.map((one) => one.options.tag).sort()).toEqual([`table:${ waiting }`, `turn:${ playing }`].sort());
+    });
+});
+
+describe('the worker and the page, of the same thing', () =>
+{
+    let browser: FakeNotices;
+
+    const SOURCE = Object.values(import.meta.glob('../public/push-worker.js', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)[0];
+
+    beforeEach(() =>
+    {
+        browser = fakeNotices('granted');
+        useSettings().update({ notify: true });
+    });
+
+    afterEach(() =>
+    {
+        browser.restore();
+        useSettings().reset();
+    });
+
+    const armed = async (lang: 'en' | 'fa') =>
+    {
+        useLocale().setLocale(lang);
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+        browser.hide(true);
+    };
+
+    const face = (notice: { title: string; options: { tag?: string; lang?: string; dir?: string; data?: unknown } }) => ({
+        title: notice.title,
+        tag: notice.options.tag,
+        lang: notice.options.lang,
+        dir: notice.options.dir,
+        data: notice.options.data
+    });
+
+    const pushed = async (row: Omit<Notification, 'id' | 'count' | 'at' | 'read'>) =>
+    {
+        const item: Notification = { id: 'n-1', count: 1, at: new Date(clock.now()).toISOString(), read: false, ...row };
+
+        browser.kept.delete('/notice-mark.json');
+
+        const worker = fakeWorker(SOURCE, [tabAt('/app', { hidden: true })], {
+            kept: browser.kept,
+
+            answer: (url) => (url === '/api/notifications/'
+                ? { items: [item], hasMore: false, unread: 1 }
+                : { people: PEOPLE_FIXTURES.filter((one) => url.endsWith(`=${ one.handle }`)) })
+        });
+
+        return (await worker.push()).map(face);
+    };
+
+    const ROWS: Omit<Notification, 'id' | 'count' | 'at' | 'read'>[] = [
+        { kind: 'table-invite', actor: 'sara.k', ref: { tableId: 't-1' } },
+        { kind: 'table-removed', actor: 'sara.k', ref: { tableId: 't-1', game: 'backgammon' } },
+        { kind: 'group-added', actor: 'sara.k', ref: { groupId: 'g-1' } },
+        { kind: 'friend-accepted', actor: 'sara.k', ref: {} },
+        { kind: 'turn', ref: { tableId: 't-2' } }
+    ];
+
+    for (const lang of ['en', 'fa'] as const)
+    {
+        it(`say one sentence under one tag and lead to one place, for every row the server writes, in ${ lang }`, async () =>
+        {
+            await armed(lang);
+
+            for (const row of ROWS)
+            {
+                browser.shown.length = 0;
+                server.notify({ kind: row.kind, ...(row.actor === undefined ? {} : { actor: row.actor }), ref: row.ref, dedupeKey: `${ row.kind }:one` });
+                await useNotifications().refresh();
+                await settle();
+                await settle();
+
+                expect(browser.shown.map(face), `the page said nothing of a ${ row.kind }`).toHaveLength(1);
+                expect(await pushed(row), `of a ${ row.kind }`).toEqual(browser.shown.map(face));
+            }
+        });
+
+        it(`say one sentence of a message and of a friend request, which the page hears from its own lists, in ${ lang }`, async () =>
+        {
+            await armed(lang);
+
+            laterMessageIn('c-reza');
+            await useChat().refresh();
+            await settle();
+            await settle();
+
+            const from = server.conversations.find((one) => one.id === 'c-reza')?.last?.from ?? '';
+
+            expect(browser.shown.map(face)).toHaveLength(1);
+            expect(await pushed({ kind: 'message', actor: from, ref: { conversationId: 'c-reza' } })).toEqual(browser.shown.map(face));
+
+            browser.shown.length = 0;
+            knock('maya.c');
+            await useSocial().refresh();
+            await settle();
+            await settle();
+
+            expect(browser.shown.map(face)).toHaveLength(1);
+            expect(await pushed({ kind: 'friend-request', actor: 'maya.c', ref: {} })).toEqual(browser.shown.map(face));
+        });
+    }
 });

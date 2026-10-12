@@ -1015,9 +1015,9 @@ rather than four hundred. A payload would have to be encrypted to the subscripti
 `p256dh`/`auth` with HKDF and AES128GCM — and an encrypted payload of a message this server will
 not be able to read under `nura-e2ee/v1` is a contradiction. What is left is the VAPID half: an
 ES256 JWT naming the endpoint's ORIGIN (never its path, which identifies the subscription) and
-expiring within the hour. The browser wakes the worker with an empty event, the worker shows one
-generic notice, and the content comes from the api when the app is opened — over a session the
-reader is already authorised on.
+expiring within the hour. The browser wakes the worker with an empty event, and the worker asks
+the api what happened over the session the browser already holds (*The worker says what
+happened*, below): nothing about who did what to whom crosses a push service.
 
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are all three optional and all
 three needed TOGETHER. With none set, `GET /notifications/push` answers with no key and the
@@ -1038,6 +1038,47 @@ the cues store's (`frontend/CLAUDE.md`, *What a cue says is also told to the sys
 **`public/push-worker.js` is plain JavaScript served as-is, never bundled.** A service worker's
 url is its identity, so a hashed filename would register a new worker on every deploy while the
 old one kept running.
+
+**The worker says what happened.** It used to show one sentence for every push, "Something
+happened. Open Nura Games to see.", in English. On a push it now reads `GET /api/notifications/`
+with the reader's own cookie and shows a notice for each unread row newer than the last it saw:
+the page's sentence for that kind, the actor's name (one `GET /api/social/names` for all of
+them, the handle when that fails), the page's tag and the page's target, so a push and a hidden
+page are one notice. It keeps the newest row's time in a cache (`/notice-mark.json` in
+`nura-notices`), says only the newest row the first time and three at most after that, oldest
+first. The words are not in the worker: the cues store keeps them in the same cache
+(`/notice-words.json`, `wordsOf` in `lib/notice-words.ts`: the language, its tag and direction,
+one message for each kind with its plural forms, the game names) while the device switch is on,
+at start and whenever the language changes, and the worker repeats `interpolate` and
+`selectForm` over them. With no words kept it says "Something new in Nura Games" in English;
+when it cannot read the list (signed out, offline) it says that sentence in the kept language,
+aloud; when it can read it and nothing is new it says it quietly (`silent`, no `renotify`),
+because a push that shows nothing is answered by the browser's own "this site has been updated
+in the background". For the same reason nothing inside the push may end it empty-handed: what
+the page kept is laid over the plain words, so a cache written by another build with a part
+missing still has the rest, and anything that throws ends in the plain sentence, aloud.
+
+**One speaker for one thing.** While a tab inside the app is VISIBLE the worker shows nothing,
+the page has a toast, and the mark still moves so what the page showed is not said later. While
+the page is hidden and a push reaches this device (`pushManager.getSubscription()`), the page
+says nothing of what the server pushes (a message, a friend request, a row: `pushed` in
+`tellSystem`) and leaves it to the worker; it still says the two things no push carries, a turn
+at a live table and a game starting. With no subscription the page says all of it. Without this
+a server with push keys alerted twice for one message, once from the socket and once from the
+push, for everybody with the tab in the background. One difference is left: a `turn` row has no
+game in its `ref`, so the worker says "It is your go" where the page, which has the lobby, says
+"Your turn at Ludo", under one tag and to one target.
+
+`push-worker.spec.ts` (*a push*) runs the worker's real source against a fake scope with a
+cache and an api. `cues.spec.ts` holds the contract between the two files (*the worker and the
+page, of the same thing*: the real store raises its notice for an event, the real worker is
+pushed with the row the server writes for it, and the sentence, tag, target, language and
+direction must be equal, in English and in Persian), the words (*the words kept for the
+worker*) and the one speaker (*a device a push reaches*).
+
+Not verified: Safari is said to end a subscription after a few pushes that show no notice, and
+this worker shows none while the app is on the screen. This server has no push keys and no
+Safari was at hand; when keys are set, look at it on one.
 
 **A pressed notice goes to the thing itself.** Every notice carries `data.target`, the page's
 and the worker's alike, and the worker's `notificationclick` is the one place either is pressed.

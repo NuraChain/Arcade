@@ -54,6 +54,11 @@ export async function loadCatalogue(locale: Locale)
     registerCatalogue({ en: {}, fa: landing });
 }
 
+export function messageOf(at: Locale, key: MessageKey): Message
+{
+    return CATALOG[at][key] ?? CATALOG.en[key] ?? key;
+}
+
 function isLocale(value: string | null | undefined): value is Locale
 {
     return value !== undefined && value !== null && (LOCALES as string[]).includes(value);
@@ -123,8 +128,7 @@ export const useLocale = createStore((): LocaleApi =>
 
     const say = (key: MessageKey, vars: MessageVars | undefined, by: Intl.PluralRules) =>
     {
-        const message = CATALOG[locale()][key] ?? CATALOG.en[key] ?? key;
-        return interpolate(resolveMessage(message, vars, by), vars, (value) => n(value));
+        return interpolate(resolveMessage(messageOf(locale(), key), vars, by), vars, (value) => n(value));
     };
 
     const t = (key: MessageKey, vars?: MessageVars) => say(key, vars, rules());

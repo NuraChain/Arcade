@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 
+import { fakeCaches } from './fake-worker.ts';
+
 export interface Shown
 {
     title: string;
@@ -11,6 +13,7 @@ export interface FakeNotices
     shown: Shown[];
     closed: string[];
     registered: string[];
+    kept: Map<string, string>;
     subscribed(): boolean;
     hide(hidden: boolean): void;
     fromWorker(data: unknown): void;
@@ -23,6 +26,7 @@ export interface FakeNoticesOptions
     registered?: boolean;
     push?: boolean;
     pushFails?: boolean;
+    subscribed?: boolean;
 }
 
 export function fakeNotices(permission: NotificationPermission, options: FakeNoticesOptions = {}): FakeNotices
@@ -34,9 +38,31 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
     const worker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
     const seen = Object.getOwnPropertyDescriptor(document, 'visibilityState');
     const listening = new Set<(event: MessageEvent) => void>();
+    const kept = new Map<string, string>();
     let allowed = permission;
     let hidden = false;
     let subscription: { endpoint: string; getKey: () => ArrayBuffer; unsubscribe: () => Promise<boolean> } | null = null;
+
+    const subscribed = () =>
+    {
+        subscription = {
+            endpoint: 'https://push.example/one',
+            getKey: () => new ArrayBuffer(4),
+            unsubscribe: async () =>
+            {
+                subscription = null;
+
+                return true;
+            }
+        };
+
+        return subscription;
+    };
+
+    if (options.subscribed === true)
+    {
+        subscribed();
+    }
 
     const registration = {
         showNotification: async (title: string, given: Shown['options']) =>
@@ -70,18 +96,7 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
                     throw new Error('the push service is not answering');
                 }
 
-                subscription = {
-                    endpoint: 'https://push.example/one',
-                    getKey: () => new ArrayBuffer(4),
-                    unsubscribe: async () =>
-                    {
-                        subscription = null;
-
-                        return true;
-                    }
-                };
-
-                return subscription;
+                return subscribed();
             }
         }
     };
@@ -99,7 +114,9 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
         }
     });
 
-    if (options.push === true)
+    vi.stubGlobal('caches', fakeCaches(kept));
+
+    if (options.push === true || options.subscribed === true)
     {
         vi.stubGlobal('PushManager', class PushManager {});
     }
@@ -136,6 +153,7 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
         shown,
         closed,
         registered: urls,
+        kept,
         subscribed: () => subscription !== null,
 
         hide(next)
