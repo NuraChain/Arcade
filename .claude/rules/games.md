@@ -4615,6 +4615,14 @@ the board" when the five shared cards alone make the hand, because "a pair" is t
 nobody's. `namedHand` reads the ranks out of the evaluator's own score, whose digits after the
 category are the ranks in the order that decides a tie.
 
+**The lamp is one node for as long as there is something to say.** `CoachLine` asked
+`props.tip !== null && ...` in its own `when`, and a tip is a new object with every answer a
+board is handed, so the lamp was taken down and built again by every move at every table.
+Nothing looked different. Somebody reading a tip from the keyboard was put back on the page body
+by the next move, at all four games. It reads `lit`, a derived boolean, and its words change where
+they stand; `coach-line.spec.ts` hands it the tip it had as a new object and wants the same node,
+still open and still under the keyboard.
+
 ## The game page splits on its container
 
 `lg:grid-cols-[minmax(0,1fr)_22rem]` fires at 1024px of SCREEN, and that column is nothing like the
