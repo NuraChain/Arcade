@@ -3224,7 +3224,8 @@ arrive.
   laid out with what is there and is not counted home, because a capture and a home are the
   server's to say. The answer is played without the walk: a move whose pawn already stands
   where it ends walks nothing, which also covers a push that beats the acknowledgement. A
-  refusal slides the pawn back and puts the die back (`settle`).
+  refusal walks the pawn back over its squares and puts the die back (*A press the server will
+  not take*, below).
 - **The plates read what the table has shown** (`onFacts`: `{ home, out, die, plate }`). The home
   dots count a pawn when its flourish has played. The die is on its roller's plate once it has
   been picked up from the board (`plate`) and until it is used, and when the seat that rolled it
@@ -3335,9 +3336,25 @@ in the hand and under the press, the hold and each thing it holds, the three sen
 languages, the plate's die and its two names, and the die handed over only when the table has
 shown the turn. Each was run against the fault it is there for.
 
-Two things are left for the press (3.3 in the design spec's order of work). A move the server
-refuses slides back in a straight line. And a roll pressed while the table is still showing the
-seat before plays in its turn behind them, at their pace.
+**A press the server will not take is walked back, and a pressed roll hurries the table.** The
+reader's pawn walks at the press, so a refusal finds it somewhere it never was. It used to slide
+home in a straight line, as a board put right quietly does. The renderer keeps where each pressed
+pawn stood (`pressed`), and when the board it is settled to has that pawn back where it started,
+the pawn walks back over the squares it crossed, last square first, or goes back into its own seat
+in the one arc it came out by (`retreat`), with the refusal's sound and its haptic, once. The roll
+is on its roller's plate again and the pawn can be pressed again. A press is forgotten when its
+answer is played and when the board is settled for any other reason, so a pawn sent home later by
+a board that says nothing is slid there and is refused nothing.
+
+A roll pressed while the table is still showing somebody else's move makes that move play at four
+times its pace: an urgent scene with nothing in it (`presenter.act`). Measured on the production
+build, three squares took a tenth of a second where they take a third. A roll pressed at a still
+table starts no scene, so nobody is told the table is playing.
+
+`ludo-board.spec.ts` (*a move the server would not take*) holds the walk back, its order, the arc
+of a refused entry and the two ways a press is forgotten; `ludo-table.spec.ts` the hurried walk
+and the still table. Seen in a real browser by rewriting the revision in the reader's own play
+frame on its way to the server, which answers that the board has moved on.
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is

@@ -1070,6 +1070,50 @@ describe('the ludo table, played from what happened', () =>
         expect(hand(container).hasAttribute('data-hand')).toBe(false);
     });
 
+    it('hurries what the table is still showing when the roll is pressed, and leaves it alone when it is not', async () =>
+    {
+        quiet();
+
+        const before = standing([EMPTY, [10, YARD, YARD, YARD]], 5, 1);
+        const moved = stepped(before, { kind: 'move', seat: 1, piece: 0 });
+        const [theirs, setTheirs] = createSignal(false);
+
+        vi.spyOn(useBoard(), 'canRoll').mockImplementation(() => theirs());
+        vi.spyOn(useBoard(), 'roll').mockReturnValue(new Promise(() => undefined));
+
+        const slow = await live(seen(before, 0, 1));
+
+        slow.tell(seen(moved.state, 0, 2), [happened(2, 1, moved.moves)]);
+        setTheirs(true);
+        await elapse(240);
+
+        expect(pawn(slow.container, '1-0').hasAttribute('data-moving'), 'five squares were walked in a quarter of a second with nobody pressing').toBe(true);
+
+        cleanup();
+        useBoard().close();
+        setTheirs(false);
+
+        const told = vi.fn();
+        const pressed = await live(seen(before, 0, 1), true, { onPresenting: told });
+
+        pressed.tell(seen(moved.state, 0, 2), [happened(2, 1, moved.moves)]);
+        setTheirs(true);
+        await flush();
+        fire(pressed.container.querySelector('.board-roll')!, 'click');
+        await elapse(240);
+
+        expect(pawn(pressed.container, '1-0').hasAttribute('data-moving'), 'a pressed roll waited out the whole of somebody else\'s walk').toBe(false);
+        expect(pawn(pressed.container, '1-0').style.translate).toBe(onSquare('yellow', 15));
+        expect(hand(pressed.container).hasAttribute('data-rattle')).toBe(true);
+        expect(stageOf(pressed.container).hasAttribute('data-presenting')).toBe(false);
+
+        told.mockClear();
+        fire(pressed.container.querySelector('.board-roll')!, 'click');
+        await flush();
+
+        expect(told, 'a roll pressed at a still table said the table was playing').not.toHaveBeenCalled();
+    });
+
     it('holds nothing for a board that opens on a roll, for one that has not arrived, or with little of the turn left', async () =>
     {
         quiet();

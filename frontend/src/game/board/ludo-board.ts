@@ -210,6 +210,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     const nest = new Map<string, number>();
     const slot = new Map<string, number>();
     const pending = new Set<string>();
+    const pressed = new Map<string, number>();
     const flying = new Set<string>();
     const transient = new Set<HTMLElement>();
 
@@ -849,6 +850,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         const seat = moment.sight.seat;
         const reader = seat !== null && seat === beat.seat;
 
+        pressed.delete(beat.key);
         spend();
 
         if (was === undefined || piece === undefined || pawn === undefined)
@@ -1020,12 +1022,72 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         await applaud(moment.sight.view.winners, moment.ctx);
     };
 
+    const retreat = (key: string, stood: number) =>
+    {
+        const pawn = pawnOf(shown, key);
+        const piece = pieces.get(key);
+
+        if (pawn === undefined || piece === undefined)
+        {
+            return null;
+        }
+
+        const start: Point = { x: piece.at.x, y: piece.at.y };
+        const scale = piece.at.scale;
+        const home = spotOf(shown, pawn);
+        const way = pawn.progress === YARD ? [] : pathBetween(pawn.colour, pawn.progress, stood).map((cell) => foot(cell.col, cell.row)).slice(0, -1).reverse();
+        const stops: Point[] = [...way, home];
+
+        flying.add(key);
+        piece.root.setAttribute('data-moving', '');
+        piece.root.removeAttribute('data-movable');
+        piece.root.removeAttribute('data-stacked');
+        piece.root.style.zIndex = String(Z_PIECE + Math.round(Math.max(start.y, ...stops.map((stop) => stop.y)) * 10) + AHEAD);
+        piece.at = home;
+        piece.root.style.translate = at(home);
+        piece.root.style.scale = String(home.scale);
+
+        let run: Run;
+
+        if (pawn.progress === YARD)
+        {
+            const flight = arc(start, home, { duration: ENTER_MS, arch: 1 });
+
+            stage.animate(piece.lift, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: `0 ${ cq(-0.9 * C * one.lift) }` })), { duration: ENTER_MS, quiet: 'skip' });
+            run = stage.animate(piece.root, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: at(one), scale: String(scale + (home.scale - scale) * one.progress) })), { duration: ENTER_MS });
+        }
+        else
+        {
+            const walked = walk([start, ...stops], { hops: stops.map(() => STEP_LEAST), lifts: stops.map(() => 1) });
+
+            stage.animate(piece.lift, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), translate: `0 ${ cq(-0.22 * C * one.lift) }` })), { duration: walked.length, quiet: 'skip' });
+            run = stage.animate(piece.root, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), translate: at(one), scale: String(scale + (home.scale - scale) * Math.min(1, one.at / walked.length)) })), { duration: walked.length });
+        }
+
+        stage.after(run.length, () =>
+        {
+            flying.delete(key);
+            piece.root.removeAttribute('data-moving');
+            place(piece, spotOf(shown, pawn));
+            dress(piece, pawn);
+        });
+
+        return run;
+    };
+
     const mend = async (felt: Felt, ctx: Ctx) =>
     {
         const target = shownOf(felt);
         const moved = target.pawns.filter((pawn) => pawnOf(shown, pawn.key)?.progress !== pawn.progress).length;
         const died = (shown.die?.face ?? 0) !== (target.die?.face ?? 0) || (shown.die?.roller ?? -1) !== (target.die?.roller ?? -1);
+        const refused = [...pressed].flatMap(([key, from]) =>
+        {
+            const stood = pawnOf(shown, key)?.progress;
 
+            return stood !== undefined && stood !== from && pawnOf(target, key)?.progress === from && !flying.has(key) ? [[key, stood] as const] : [];
+        });
+
+        pressed.clear();
         pending.clear();
         shown = target;
         forget(shown);
@@ -1043,7 +1105,15 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
         else
         {
-            await Promise.all(relayout(SLIDE_MS, 'in').map((run) => run.done));
+            const back = refused.map(([key, stood]) => retreat(key, stood)).filter((run) => run !== null);
+
+            if (back.length > 0)
+            {
+                options.sound()?.play('deny');
+                options.feel('deny');
+            }
+
+            await Promise.all([...relayout(SLIDE_MS, 'in'), ...back].map((run) => run.done));
         }
 
         if (ctx.live())
@@ -1057,6 +1127,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         clearDie();
         where = 'none';
         rattling = false;
+        pressed.clear();
 
         for (const node of transient)
         {
@@ -1208,6 +1279,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             }
 
             spend();
+            pressed.set(key, was.progress);
             shown = { ...shown, die: null, pawns: shown.pawns.map((pawn) => (pawn.key === key ? { ...pawn, progress: to } : pawn)) };
             pending.add(key);
             flying.add(key);

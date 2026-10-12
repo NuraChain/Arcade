@@ -1383,6 +1383,129 @@ describe('the reader\'s own pawn', () =>
     });
 });
 
+describe('a move the server would not take', () =>
+{
+    it('walks the pawn back over the squares it crossed, says no once, and puts the roll back on its plate', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 4);
+
+        table.reset(sight(before));
+        table.lit(new Set(['0-0']), true);
+        void table.advance('0-0', 14);
+        await elapse(700);
+
+        expect(pawn('0-0').style.translate).toBe(onSquare('red', 14));
+        expect(lastFacts().die).toBeNull();
+
+        drawn.length = 0;
+        cues.length = 0;
+        felt.length = 0;
+        director.enqueue((ctx) => table.settle(sight(before), ctx), { estimate: 600 });
+        await flush();
+
+        const back = routed(pawn('0-0'));
+
+        expect(back, 'a refused pawn slid home in a straight line').toHaveLength(1);
+        expect(back[0].frames[0].translate).toBe(onSquare('red', 14));
+
+        for (const progress of [13, 12, 11])
+        {
+            expect(back[0].frames.some((frame) => frame.translate === onSquare('red', progress)), `square ${ progress } is not on the way back`).toBe(true);
+        }
+
+        const order = [13, 12, 11].map((progress) => back[0].frames.findIndex((frame) => frame.translate === onSquare('red', progress)));
+
+        expect(order, 'the pawn went back the wrong way round').toEqual([...order].sort((one, other) => one - other));
+        expect(back[0].frames[back[0].frames.length - 1].translate).toBe(onSquare('red', 10));
+        expect(pawn('0-0').hasAttribute('data-moving')).toBe(true);
+        expect(cues).toEqual(['deny']);
+        expect(felt).toEqual(['deny']);
+        expect(others('0-0'), 'somebody else moved for a move that was never made').toHaveLength(0);
+
+        await elapse(STEP_LEAST * 4 + 60);
+
+        expect(pawn('0-0').style.translate).toBe(onSquare('red', 10));
+        expect(pawn('0-0').hasAttribute('data-moving')).toBe(false);
+        expect(pawn('0-0').hasAttribute('data-movable'), 'the pawn that was put back could not be pressed again').toBe(true);
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 4, fate: 'pending' }, plate: true });
+        expect(table.same(sight(before))).toBe(true);
+        expect(cues).toEqual(['deny']);
+    });
+
+    it('arcs a pawn that had come out back into the seat it left', async () =>
+    {
+        const before = standing([EMPTY, [5, YARD, YARD, YARD]], 6);
+
+        table.reset(sight(before));
+        void table.advance('0-0', 0);
+        await elapse(ENTER_MS + 60);
+
+        expect(pawn('0-0').style.translate).toBe(onSquare('red', 0));
+
+        drawn.length = 0;
+        director.enqueue((ctx) => table.settle(sight(before), ctx), { estimate: 600 });
+        await flush();
+
+        const back = routed(pawn('0-0'));
+
+        expect(back).toHaveLength(1);
+        expect(back[0].frames[0].translate).toBe(onSquare('red', 0));
+        expect(back[0].frames[back[0].frames.length - 1].translate).toBe(inNest('red', 0));
+        expect(Number(back[0].options.duration)).toBe(ENTER_MS);
+
+        await elapse(ENTER_MS + 40);
+
+        expect(pawn('0-0').style.translate).toBe(inNest('red', 0));
+        expect(table.same(sight(before))).toBe(true);
+    });
+
+    it('says no to nobody about a pawn whose move the server took, whatever the board is told later', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 4);
+        const { state, act } = stepped(before, { kind: 'move', seat: 0, piece: 0 });
+
+        table.reset(sight(before));
+        void table.advance('0-0', 14);
+        await elapse(700);
+        play([act], sight(state));
+        await elapse(300);
+
+        expect(pawn('0-0').style.translate).toBe(onSquare('red', 14));
+
+        cues.length = 0;
+        felt.length = 0;
+        director.enqueue((ctx) => table.settle(sight(before), ctx), { estimate: 600 });
+        await elapse(SLIDE_MS + 60);
+
+        expect(pawn('0-0').style.translate).toBe(onSquare('red', 10));
+        expect(cues, 'a board that was only put right said no to a move the server had taken').toEqual([]);
+        expect(felt).not.toContain('deny');
+    });
+
+    it('forgets a press the board was told of with nothing said, so a pawn sent home later is not refused a move', async () =>
+    {
+        const before = standing([EMPTY, [5, YARD, YARD, YARD]], 6);
+        const { state } = stepped(before, { kind: 'move', seat: 0, piece: 0 });
+
+        table.reset(sight(before));
+        void table.advance('0-0', 0);
+        await elapse(ENTER_MS + 60);
+        director.enqueue((ctx) => table.settle(sight(state), ctx), { estimate: 600 });
+        await elapse(SLIDE_MS + 60);
+
+        expect(table.same(sight(state))).toBe(true);
+
+        cues.length = 0;
+        felt.length = 0;
+        director.enqueue((ctx) => table.settle(sight(before), ctx), { estimate: 600 });
+        await elapse(SLIDE_MS + 60);
+
+        expect(pawn('0-0').style.translate).toBe(inNest('red', 0));
+        expect(cues, 'a pawn sent home quietly was refused a move it had made long before').toEqual([]);
+        expect(felt).not.toContain('deny');
+    });
+});
+
 describe('a ludo turn the server played all at once', () =>
 {
     it('is played through, compressed and not skipped, and the roll that follows it is thrown', async () =>

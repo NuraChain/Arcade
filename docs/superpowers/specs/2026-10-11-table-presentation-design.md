@@ -1693,6 +1693,19 @@ above, and what a real browser changed after the specs were green.
   of a pressed roll are 3.3. `die-shake` is still a one-second recording that may run over the
   first landing.
 
+**As built (commit 3.3).** The two things 3.2 left for the press.
+
+- **A refused or stale move walks back along its squares**, last square first, and an entry goes
+  back into its seat in one arc. The table above leaves its sound unspecified: it is `deny`, with
+  its haptic, once, as at hokm. Focus is returned to nothing, because a pawn is not a control.
+  The renderer knows a refusal as "a pawn the reader pressed is back where it started in the
+  board I am settled to"; a board put right for any other reason slides and says nothing.
+- **A pressed roll hastens everything in front of it**, the reader's own walk included. The
+  Limits line above says only other seats' scenes; the director's urgent entry rushes whatever is
+  running, and a roll can only be pressed early on the bare middle of the board, since the die is
+  drawn in the hand when the table is level (3.2). Nothing is hastened by a roll pressed at a
+  still table.
+
 ### 5.3 Hokm
 
 **Engine facts** (`backend/src/domains/match/hokm/`). A card is a number, 0 to 51. Play runs

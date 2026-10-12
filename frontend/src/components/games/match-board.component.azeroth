@@ -391,6 +391,11 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
     {
         table?.rattle(true);
 
+        if (presenter.presenting())
+        {
+            presenter.act(() => undefined);
+        }
+
         const outcome = await board.roll();
 
         if (outcome === 'stale' || outcome === 'failed')
