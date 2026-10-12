@@ -1,7 +1,8 @@
-import { BLOCK, CELL, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
+import { BLOCK, CELL, GRID, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
 import { HISTORY, beatsOf, placeOf, sameAs, shownOf, step, type Beat, type Felt, type Pawn, type Rolled, type Shown } from '../ludo-felt.ts';
 import { celebrate } from '../stage/celebrate.ts';
-import { clamp } from '../stage/curves.ts';
+import { clamp, hashOf } from '../stage/curves.ts';
+import { createDie } from '../stage/die.ts';
 import type { Ctx } from '../stage/director.ts';
 import { LAYER } from '../stage/layers.ts';
 import type { Sight } from '../stage/presenter.ts';
@@ -26,8 +27,6 @@ const Z_AIR = LAYER.airborne * BAND;
 
 const Z_DIE = LAYER.dice * BAND;
 
-const Z_GLOW = Z_DIE - 1;
-
 const Z_BURST = LAYER.burst * BAND;
 
 export const STEP_MS = 120;
@@ -44,7 +43,7 @@ export const PAIR_MS = 160;
 
 export const SLIDE_MS = 420;
 
-export const TUMBLE_MS = 520;
+const THROW_MS = 950;
 
 export const SPENT_MS = 280;
 
@@ -54,15 +53,35 @@ export const PASS_LEAST = 300;
 
 export const DIE_REST_MS = 1100;
 
-export const DIE_FADE_MS = 260;
+export const PICKUP_MS = 260;
+
+export const GONE_MS = 160;
+
+const HAND_MS = 180;
+
+const LIFT_MS = 120;
+
+export const DIE_SIZE = 1.2;
+
+const DIE_INSET = 1.01;
+
+export const HAND = 1.67;
+
+export const LIFTED = 1.85;
+
+const DIE_OUT = 2.6;
+
+const DIE_LEAVE = 2.2;
+
+const HAND_FACE = 5;
+
+const HAND_SEED = 5;
 
 export const WIN_MS = 1300;
 
 export const WIN_LEAST = 700;
 
 const SLIDE_MOST = 8;
-
-const SWAPS = 7;
 
 const TONE: Record<string, string> = {
     red: '#FF5A4E',
@@ -94,7 +113,10 @@ interface Moment
     sight: Sight<Felt>;
     ctx: Ctx;
     more: boolean;
+    seed: number;
 }
+
+type Where = 'none' | 'hand' | 'air' | 'board' | 'leaving' | 'plate';
 
 type Moved = Extract<Beat, { kind: 'move' }>;
 
@@ -109,6 +131,25 @@ const cq = (value: number) => `${ value.toFixed(3) }cqi`;
 const at = (spot: Point) => `${ cq(spot.x) } ${ cq(spot.y) }`;
 
 const pan = (x: number) => clamp((x / 100 - 0.5) * 1.2, -0.6, 0.6);
+
+const INWARD: Readonly<Record<string, readonly [number, number]>> = {
+    red: [1, 1],
+    green: [-1, 1],
+    yellow: [-1, -1],
+    blue: [1, -1]
+};
+
+const CENTRE: Point = { x: (MARGIN * 100) + (GRID / 2) * C, y: (MARGIN * 100) + (GRID / 2) * C };
+
+export function dieRest(colour: string): Point
+{
+    const inward = INWARD[colour] ?? INWARD.red;
+
+    return {
+        x: (MARGIN * 100) + (inward[0] > 0 ? DIE_INSET : GRID - DIE_INSET) * C,
+        y: (MARGIN * 100) + (inward[1] > 0 ? DIE_INSET : GRID - DIE_INSET) * C
+    };
+}
 
 function foot(col: number, row: number): Point
 {
@@ -134,7 +175,7 @@ const costOf = (beat: Beat) =>
 {
     if (beat.kind === 'roll')
     {
-        return beat.fate === 'pending' ? TUMBLE_MS : TUMBLE_MS + PASS_LEAST;
+        return beat.fate === 'pending' ? THROW_MS : THROW_MS + PASS_LEAST;
     }
 
     if (beat.kind === 'move')
@@ -161,8 +202,6 @@ const STILL = '[.lb[data-still]_&]:animate-none';
 
 const PAWN_BOX = 'inset-s-[calc(var(--c)*-0.8435)] inset-bs-[calc(var(--c)*-1.3114)] inline-[calc(var(--c)*1.687)] block-[calc(var(--c)*1.687)]';
 
-const ROLLED = 'absolute inset-s-[50%] inset-bs-[50%] hidden [translate:-50%_-50%] [.lb[data-rolled]_&]:block';
-
 export async function createLudoBoard(options: BoardOptions): Promise<BoardHandle>
 {
     const { host, stage } = options;
@@ -180,6 +219,11 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     let movable: ReadonlySet<string> = new Set();
     let hints = true;
     let plateDie: Rolled | null = null;
+    let where: Where = 'none';
+    let offered: number | null = null;
+    let rattling = false;
+    let resting: Point = CENTRE;
+    let outward: readonly [number, number] = [0, 0];
     let told = '';
     let dieRuns: Run[] = [];
     let dieStop: () => void = () => undefined;
@@ -187,11 +231,13 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     root.style.setProperty('--c', cq(C));
     root.toggleAttribute('data-still', stage.quiet());
 
-    const glow = element('div', `${ ROLLED } inline-[calc(var(--c)*3)] block-[calc(var(--c)*3)] rounded-[50%] [background:radial-gradient(closest-side,color-mix(in_oklab,var(--tone,transparent)_45%,transparent),color-mix(in_oklab,var(--tone,transparent)_22%,transparent)_60%,transparent)]`, root);
-    const die = element('div', `lb-die ${ ROLLED } inline-[19.12cqi] block-[19.12cqi] [background:url(/board/ludo-dice.svg)_calc(var(--face,0)*100%/7)_0/800%_100%_no-repeat] data-spent:opacity-[0.55] data-spent:[transition:opacity_200ms_var(--ease-ui)] data-[spent=three-sixes]:[filter:sepia(1)_saturate(4)_hue-rotate(-30deg)_brightness(0.95)]`, root);
+    const holder = element('div', 'lb-die absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
+    const die = createDie({ flat: true });
 
-    glow.style.zIndex = String(Z_GLOW);
-    die.style.zIndex = String(Z_DIE);
+    holder.hidden = true;
+    holder.style.zIndex = String(Z_DIE);
+    die.node.style.setProperty('--die', `calc(var(--c) * ${ DIE_SIZE })`);
+    holder.append(die.node);
 
     const pawnOf = (state: Shown, key: string) => state.pawns.find((pawn) => pawn.key === key);
 
@@ -318,7 +364,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             home[pawn.owner] = (home[pawn.owner] ?? 0) + (pawn.progress >= FINISHED && !pending.has(pawn.key) ? 1 : 0);
         }
 
-        const facts = { home, out, die: plateDie };
+        const facts = { home, out, die: plateDie, plate: where === 'plate' };
         const said = JSON.stringify(facts);
 
         if (said !== told)
@@ -549,11 +595,6 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         return run;
     };
 
-    const face = (value: number) =>
-    {
-        die.style.setProperty('--face', String(Math.min(Math.max(value, 1), 6) - 1));
-    };
-
     const stopDie = () =>
     {
         dieStop();
@@ -567,75 +608,163 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         dieRuns = [];
     };
 
-    const hideDie = () =>
+    const clearDie = () =>
     {
         stopDie();
-        root.removeAttribute('data-rolled');
-        die.removeAttribute('data-spent');
+        holder.hidden = true;
+        holder.removeAttribute('data-hand');
+        holder.removeAttribute('data-rattle');
+        die.node.removeAttribute('data-spent');
     };
 
-    const fadeDie = () =>
+    const putDie = (spot: Point, scale: number) =>
     {
-        dieStop();
-        dieStop = stage.after(DIE_REST_MS, () =>
+        holder.style.translate = at(spot);
+        holder.style.scale = String(scale);
+        holder.hidden = false;
+    };
+
+    const shake = () =>
+    {
+        holder.setAttribute('data-rattle', '');
+        holder.style.scale = String(LIFTED);
+        dieRuns.push(stage.animate(holder, [{ scale: String(HAND) }, { scale: String(LIFTED) }], { duration: LIFT_MS, easing: 'ease-out', quiet: 'skip' }));
+        options.sound()?.play('die-shake');
+    };
+
+    const toHand = () =>
+    {
+        clearDie();
+        where = 'hand';
+        die.show(HAND_FACE, HAND_SEED);
+        putDie(CENTRE, HAND);
+        holder.setAttribute('data-hand', '');
+        dieRuns = [stage.animate(holder, [{ opacity: 0, scale: String(HAND * 0.8), offset: 0 }], { duration: HAND_MS, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' })];
+
+        if (rattling)
         {
-            dieRuns = [die, glow].map((one) => stage.animate(one, [{ opacity: 1 }, { opacity: 0 }], { duration: DIE_FADE_MS, fill: 'both', quiet: 'out' }));
-            dieStop = stage.after(DIE_FADE_MS, hideDie);
-        });
+            shake();
+        }
     };
 
-    const layDie = (rolled: Rolled | null) =>
+    const rehome = () =>
     {
-        hideDie();
+        if (where === 'none' && (offered !== null || rattling))
+        {
+            toHand();
+        }
+    };
 
-        if (rolled === null)
+    const seatDie = () =>
+    {
+        clearDie();
+        plateDie = shown.die;
+        where = plateDie === null ? 'none' : 'plate';
+
+        if (plateDie !== null)
+        {
+            rattling = false;
+        }
+
+        rehome();
+    };
+
+    const pickUp = () =>
+    {
+        if (where !== 'board')
         {
             return;
         }
 
-        face(rolled.face);
-        glow.style.setProperty('--tone', TONE[colourOf(rolled.roller) ?? ''] ?? 'transparent');
-        root.setAttribute('data-rolled', '');
-        fadeDie();
+        const gone = { x: resting.x + outward[0] * DIE_LEAVE * C, y: resting.y + outward[1] * DIE_LEAVE * C };
+        const run = stage.animate(holder, [
+            { translate: at(resting), scale: '1', opacity: 1 },
+            { translate: at(gone), scale: '0.7', opacity: 0 }
+        ], { duration: PICKUP_MS, easing: 'cubic-bezier(0.5, 0, 0.9, 0.5)', fill: 'both', quiet: 'out' });
+
+        where = 'leaving';
+        dieRuns = [run];
+        dieStop = stage.after(run.length, () =>
+        {
+            clearDie();
+            where = plateDie === null ? 'none' : 'plate';
+            tell();
+            rehome();
+        });
+    };
+
+    const dropDie = () =>
+    {
+        if (where === 'leaving')
+        {
+            return;
+        }
+
+        const lying = where === 'board';
+
+        stopDie();
+
+        if (!lying)
+        {
+            clearDie();
+            where = 'none';
+            rehome();
+
+            return;
+        }
+
+        const run = stage.animate(holder, [{ opacity: 1, scale: '1' }, { opacity: 0, scale: '0.8' }], { duration: GONE_MS, fill: 'both', quiet: 'out' });
+
+        where = 'leaving';
+        dieRuns = [run];
+        dieStop = stage.after(run.length, () =>
+        {
+            clearDie();
+            where = 'none';
+            rehome();
+        });
     };
 
     const tumble = async (beat: Thrown, moment: Moment) =>
     {
         const reader = moment.sight.seat !== null && moment.sight.seat === beat.seat;
         const sound = options.sound;
+        const colour = colourOf(beat.seat) ?? 'red';
+        const inward = INWARD[colour] ?? INWARD.red;
+        const spot = dieRest(colour);
+        const held = reader && where === 'hand' ? (rattling ? LIFTED : HAND) : undefined;
+        const release = held === undefined
+            ? { x: -inward[0] * DIE_OUT / DIE_SIZE, y: -inward[1] * DIE_OUT / DIE_SIZE }
+            : { x: (CENTRE.x - spot.x) / (DIE_SIZE * C), y: (CENTRE.y - spot.y) / (DIE_SIZE * C) };
 
-        hideDie();
+        clearDie();
+
+        if (reader)
+        {
+            rattling = false;
+        }
+
         plateDie = null;
+        where = 'air';
+        resting = spot;
+        outward = [-inward[0], -inward[1]];
+        putDie(spot, 1);
         tell();
-        sound()?.play('die-land');
-        glow.style.setProperty('--tone', TONE[colourOf(beat.seat) ?? ''] ?? 'transparent');
-        root.setAttribute('data-rolled', '');
 
-        if (stage.quiet())
-        {
-            face(beat.face);
-        }
-        else
-        {
-            face((beat.face * 7) % 6 + 1);
+        const toss = die.toss(stage, moment.seed, beat.face, release, {
+            held,
+            impact: (power) => sound()?.play('die-land', { gain: 0.35 + 0.65 * power, pan: pan(spot.x) })
+        });
 
-            for (let swap = 1; swap <= SWAPS; swap += 1)
-            {
-                stage.after((TUMBLE_MS / SWAPS) * swap, () => face(swap >= SWAPS ? beat.face : (beat.face * 7 + swap * 3) % 6 + 1));
-            }
-        }
-
-        const spin = stage.animate(die, [{ rotate: '0deg', scale: '1' }, { scale: '1.3', offset: 0.4 }, { rotate: '360deg', scale: '1' }], { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' });
-
-        dieRuns = [spin, stage.animate(glow, [{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: TUMBLE_MS, quiet: 'skip' })];
-        await spin.done;
+        dieRuns = [toss];
+        await toss.done;
 
         if (!moment.ctx.live())
         {
             return;
         }
 
-        face(beat.face);
+        where = 'board';
 
         if (beat.fate === 'pending')
         {
@@ -646,7 +775,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
             plateDie = shown.die;
             tell();
-            fadeDie();
+            dieStop = stage.after(DIE_REST_MS, pickUp);
 
             return;
         }
@@ -658,23 +787,27 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             options.feel('deny');
         }
 
-        die.setAttribute('data-spent', beat.fate);
-        dieRuns.push(stage.animate(die, [{ rotate: '0deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '0deg' }], { duration: SPENT_MS, quiet: 'skip' }));
+        die.node.dataset.spent = beat.fate;
+        dieRuns = [stage.animate(holder, [{ rotate: '0deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '0deg' }], { duration: SPENT_MS, quiet: 'skip' })];
+        tell();
+        options.onPass?.(beat.seat, beat.face, beat.fate);
         await moment.ctx.linger(moment.more ? PASS_LEAST : PASS_MS, PASS_LEAST);
 
         if (moment.ctx.live())
         {
-            fadeDie();
+            dropDie();
         }
     };
 
     const spend = () =>
     {
-        if (plateDie !== null || root.hasAttribute('data-rolled'))
+        if (plateDie === null && where !== 'board' && where !== 'plate')
         {
-            plateDie = null;
-            hideDie();
+            return;
         }
+
+        plateDie = null;
+        dropDie();
     };
 
     const homeIn = async (pawn: Pawn, piece: Piece, reader: boolean) =>
@@ -899,8 +1032,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
         if (died)
         {
-            plateDie = shown.die;
-            layDie(shown.die);
+            seatDie();
         }
 
         tell();
@@ -922,7 +1054,9 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
     const strip = () =>
     {
-        hideDie();
+        clearDie();
+        where = 'none';
+        rattling = false;
 
         for (const node of transient)
         {
@@ -979,8 +1113,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             }
 
             rest();
-            plateDie = shown.die;
-            layDie(shown.die);
+            seatDie();
             tell();
         },
 
@@ -1001,7 +1134,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
                         return;
                     }
 
-                    await perform(beat, { sight, ctx, more: index < beats.length - 1 });
+                    await perform(beat, { sight, ctx, more: index < beats.length - 1, seed: hashOf(sight.id, acts[index].rev) });
                 }
             }
 
@@ -1012,6 +1145,50 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         },
 
         estimate: (acts) => beatsOf(acts, WAITING).flat().reduce((sum, beat) => sum + costOf(beat), 0),
+
+        offer(seat)
+        {
+            offered = seat;
+
+            if (seat !== null)
+            {
+                rehome();
+            }
+            else if (where === 'hand' && !rattling)
+            {
+                clearDie();
+                where = 'none';
+            }
+        },
+
+        rattle(on)
+        {
+            if (rattling === on)
+            {
+                return;
+            }
+
+            rattling = on;
+
+            if (where !== 'hand')
+            {
+                rehome();
+            }
+            else if (on)
+            {
+                shake();
+            }
+            else if (offered === null)
+            {
+                clearDie();
+                where = 'none';
+            }
+            else
+            {
+                holder.removeAttribute('data-rattle');
+                holder.style.scale = String(HAND);
+            }
+        },
 
         lit(keys, visible)
         {

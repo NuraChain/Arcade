@@ -1,4 +1,4 @@
-import type { Felt, Rolled, Told } from './ludo-felt.ts';
+import type { Fate, Felt, Rolled, Told } from './ludo-felt.ts';
 import type { SoundHandle } from './sound.ts';
 import type { Table } from './stage/presenter.ts';
 import type { Stage } from './stage/stage.ts';
@@ -25,6 +25,7 @@ export interface Facts
     home: Readonly<Record<number, number>>;
     out: readonly number[];
     die: Rolled | null;
+    plate: boolean;
 }
 
 export interface BoardOptions
@@ -42,6 +43,8 @@ export interface BoardOptions
     onPick?: (key: string) => void;
 
     onFacts?: (facts: Facts) => void;
+
+    onPass?: (roller: number, face: number, fate: Exclude<Fate, 'pending'>) => void;
 }
 
 export interface BoardHandle extends Table<Felt, Told>
@@ -51,6 +54,10 @@ export interface BoardHandle extends Table<Felt, Told>
     advance(key: string, to: number): Promise<boolean>;
 
     swap(tapped: string, moving: string): void;
+
+    offer(seat: number | null): void;
+
+    rattle(on: boolean): void;
 
     still(on: boolean): void;
 

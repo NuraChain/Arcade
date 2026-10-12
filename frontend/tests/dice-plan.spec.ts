@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
+import { manualClock } from '../src/lib/clock.ts';
 import { FACE_PLACE, NORMALS, faceUp, matrixOf, planThrow, restOf, restTurn, times, turnX, turnY, turnZ, yawOf, type Turn } from '../src/game/stage/dice.ts';
-import { createDie } from '../src/game/stage/die.ts';
+import { createDie, nearness } from '../src/game/stage/die.ts';
+import { createStage } from '../src/game/stage/stage.ts';
 
 const SEEDS = Array.from({ length: 160 }, (_, index) => (index + 1) * 977);
 
@@ -219,5 +221,166 @@ describe('a thrown die', () =>
 
             expect(Math.hypot(left.x - right.x, left.y - right.y)).toBeGreaterThan(1.3);
         }
+    });
+});
+
+describe('the die, drawn flat', () =>
+{
+    interface Drawn
+    {
+        el: Element;
+        frames: Keyframe[];
+    }
+
+    const seenOf = (transform: string): Turn =>
+    {
+        const cells = /matrix3d\(([^)]+)\)/.exec(transform)![1].split(',').map(Number);
+
+        return [cells[0], cells[4], cells[8], cells[1], cells[5], cells[9], cells[2], cells[6], cells[10]];
+    };
+
+    const posed = (transform: unknown) =>
+    {
+        const found = /^translate\((-?[\d.]+)em, (-?[\d.]+)em\) scale\(([\d.]+)\) matrix3d/.exec(String(transform));
+
+        return found === null ? null : { x: Number(found[1]), y: Number(found[2]), scale: Number(found[3]) };
+    };
+
+    const recorded = () =>
+    {
+        const drawn: Drawn[] = [];
+        const animate = Element.prototype.animate;
+
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, frames, options)
+        {
+            drawn.push({ el: this, frames: frames as Keyframe[] });
+
+            const running = animate.call(this, frames, options);
+
+            running.finished.catch(() => undefined);
+
+            return running;
+        });
+
+        return drawn;
+    };
+
+    afterEach(() =>
+    {
+        vi.restoreAllMocks();
+    });
+
+    it('rests with the rolled face towards whoever looks, with no perspective on it, tipped just enough to show its near side', () =>
+    {
+        const die = createDie({ flat: true });
+        const body = die.node.querySelector<HTMLElement>('.die3d-body')!;
+
+        expect(die.node.hasAttribute('data-flat')).toBe(true);
+        expect(createDie().node.hasAttribute('data-flat')).toBe(false);
+
+        for (let face = 1; face <= 6; face += 1)
+        {
+            die.show(face, 4242 + face);
+
+            const seen = seenOf(body.style.transform);
+            const [x, y, z] = NORMALS[face];
+            const towards = seen[6] * x + seen[7] * y + seen[8] * z;
+
+            expect(body.style.transform, `face ${ face }`).not.toContain('perspective');
+            expect(faceUp(seen), `face ${ face }`).toBe(face);
+            expect(towards, `face ${ face } is turned away`).toBeGreaterThan(0.99);
+            expect(towards, `face ${ face } shows no side at all`).toBeLessThan(1);
+        }
+    });
+
+    it('leaves the face that looks at the reader white and readable, and shades and blanks the ones seen edge on', () =>
+    {
+        const die = createDie({ flat: true });
+        const faces = [...die.node.querySelectorAll<HTMLElement>('.die3d-face')];
+        const tone = (face: number) => Number(faces[face - 1].querySelector<HTMLElement>('.die3d-tone')!.style.opacity);
+        const veil = (face: number) => Number(faces[face - 1].querySelector<HTMLElement>('.die3d-veil')!.style.opacity);
+
+        die.show(3, 19);
+
+        expect([tone(3), veil(3)]).toEqual([0, 0]);
+
+        for (const side of [1, 2, 5, 6])
+        {
+            expect([tone(side), veil(side)], `side ${ side }`).toEqual([1, 1]);
+        }
+
+        for (const side of faces)
+        {
+            const parts = [...side.children].map((part) => part.className);
+
+            expect(parts[0], 'the shade lies over the pips').toBe('die3d-tone');
+            expect(parts[parts.length - 1], 'the pips lie over what blanks them').toBe('die3d-veil');
+        }
+
+        expect(createDie().node.querySelector('.die3d-tone, .die3d-veil'), 'the lit die grew a flat one\'s shading').toBeNull();
+    });
+
+    it('is thrown with no perspective: its height is drawn as its size, and it lands at its own size on the face that was rolled', () =>
+    {
+        const drawn = recorded();
+        const stage = createStage({ clock: manualClock(0), quiet: () => false });
+        const die = createDie({ flat: true });
+        const plan = planThrow(4242, 4, { x: 3, y: -2 });
+
+        die.toss(stage, 4242, 4, { x: 3, y: -2 });
+
+        const body = drawn.find((one) => one.el.classList.contains('die3d-body'))!;
+        const first = posed(body.frames[0].transform)!;
+        const last = posed(body.frames[body.frames.length - 1].transform)!;
+
+        expect(body.frames.every((frame) => posed(frame.transform) !== null), 'a frame was drawn some other way').toBe(true);
+        expect([first.x, first.y]).toEqual([3, -2]);
+        expect(first.scale).toBeCloseTo(nearness(plan.frames[0].lift), 3);
+        expect(first.scale).toBeGreaterThan(1.1);
+        expect([last.x, last.y, last.scale]).toEqual([0, 0, 1]);
+        expect(faceUp(seenOf(String(body.frames[body.frames.length - 1].transform)))).toBe(4);
+        expect(Math.max(...body.frames.map((frame) => posed(frame.transform)!.scale))).toBeCloseTo(nearness(Math.max(...plan.frames.map((frame) => frame.lift))), 3);
+
+        const shaded = drawn.filter((one) => one.el.classList.contains('die3d-tone') || one.el.classList.contains('die3d-veil'));
+
+        expect(shaded).toHaveLength(12);
+        expect(shaded.every((one) => one.frames.length === plan.frames.length && one.frames.every((frame) => Number(frame.opacity) >= 0 && Number(frame.opacity) <= 1))).toBe(true);
+        expect(shaded.some((one) => one.frames.some((frame) => Number(frame.opacity) > 0 && Number(frame.opacity) < 1)), 'no face was ever part shaded').toBe(true);
+    });
+
+    it('leaves the hand at the size it was held and is its own size by the time it lands', () =>
+    {
+        const drawn = recorded();
+        const stage = createStage({ clock: manualClock(0), quiet: () => false });
+        const die = createDie({ flat: true });
+
+        die.toss(stage, 977, 2, { x: 5, y: 5 }, { held: 1.85 });
+
+        const scales = drawn.find((one) => one.el.classList.contains('die3d-body'))!.frames.map((frame) => posed(frame.transform)!.scale);
+
+        expect(scales[0]).toBeCloseTo(1.85, 3);
+        expect(scales[scales.length - 1]).toBe(1);
+
+        drawn.length = 0;
+        createDie().toss(stage, 977, 2, { x: 5, y: 5 }, { held: 1.85 });
+
+        const lit = drawn.find((one) => one.el.classList.contains('die3d-body'))!;
+
+        expect(String(lit.frames[0].transform)).toMatch(/^perspective\(7em\) translate3d\(/);
+        expect(drawn.filter((one) => one.el.classList.contains('die3d-tone'))).toHaveLength(0);
+    });
+
+    it('fades in whole where it comes to rest for somebody who asked for less motion', () =>
+    {
+        const drawn = recorded();
+        const stage = createStage({ clock: manualClock(0), quiet: () => true });
+        const die = createDie({ flat: true });
+
+        die.toss(stage, 4242, 6, { x: 3, y: -2 });
+
+        expect(drawn).toHaveLength(1);
+        expect(drawn[0].el).toBe(die.node);
+        expect(drawn[0].frames).toEqual([{ opacity: 0, offset: 0 }]);
+        expect(die.face()).toBe(6);
     });
 });

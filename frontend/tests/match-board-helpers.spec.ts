@@ -3,8 +3,8 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch } from '../src/stores/match.store.ts';
@@ -58,6 +58,23 @@ const settle = async () =>
         await Promise.resolve();
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
+};
+
+const elapse = async (ms: number) =>
+{
+    const clock = runtime().clock as ManualClock;
+
+    for (let left = ms; left > 0; left -= 10)
+    {
+        clock.advance(Math.min(10, left));
+
+        for (let turn = 0; turn < 12; turn += 1)
+        {
+            await Promise.resolve();
+        }
+    }
+
+    await settle();
 };
 
 const matches = client.matches as unknown as Record<string, unknown>;
@@ -177,6 +194,12 @@ describe('the ludo helpers, and the switch for each', () =>
         const container = renderTest(() => MatchBoard(props) as HTMLElement).container;
         const note = () => container.querySelector('[role="note"]')?.textContent ?? null;
 
+        for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
+        {
+            await settle();
+        }
+
+        expect(container.querySelectorAll('.lp')).toHaveLength(8);
         expect(note()).toContain(locale.t('helpers.ludo.tip.six'));
 
         setCurrent(ludo(position([5, -1, -1, -1], [34, -1, -1, -1], 3)));
@@ -187,6 +210,10 @@ describe('the ludo helpers, and the switch for each', () =>
         setCurrent({ ...ludo(position([10, -1, -1, -1], [3, -1, -1, -1], 6)), rev: 2, turn: 1, view: ludoEngine.view({ ...position([10, -1, -1, -1], [3, -1, -1, -1], 6), die: null, turn: 1 }, 0) as MatchView['view'] });
         setBatch({ ...NO_EVENTS, seq: 1, id: 'match-1', live: true, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
         await settle();
+
+        expect(note(), 'the tip explained a third six while its die was in the air').toBeNull();
+
+        await elapse(3200);
 
         expect(note()).toContain(locale.t('helpers.ludo.tip.threeSixes'));
 

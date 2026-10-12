@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
+import DieFace from '../src/components/games/die-face.component.azeroth';
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { seatsFor } from '../src/components/games/seats.ts';
@@ -838,9 +839,9 @@ describe('the ludo table, played from what happened', () =>
         tell(seen(rolled.state, 1, 2), [happened(2, 0, rolled.moves)]);
         await flush();
 
-        expect(plateDie(container, 0), 'the plate told the roll while the die was still turning').toBeNull();
+        expect(plateDie(container, 0), 'the plate told the roll while the die was still in the air').toBeNull();
 
-        await elapse(700);
+        await elapse(2700);
 
         expect(plateDie(container, 0)).not.toBeNull();
         expect(plateDie(container, 1)).toBeNull();
@@ -854,6 +855,447 @@ describe('the ludo table, played from what happened', () =>
         await elapse(700);
 
         expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+    });
+
+    const seated = async (first: MatchView) =>
+    {
+        matches.view = async () => first;
+        useBoard().open(first.id);
+        await settle();
+
+        const view = renderTest(() => MatchBoard({
+            get match()
+            {
+                return useBoard().match() ?? first;
+            },
+            get events()
+            {
+                return useBoard().events();
+            }
+        }) as Rendered);
+
+        await drawn(view.container);
+
+        return view.container;
+    };
+
+    const hand = (container: HTMLElement) => container.querySelector<HTMLElement>('.lb-die')!;
+
+    const saying = (container: HTMLElement) => container.querySelector('p[aria-live="polite"]')?.textContent ?? null;
+
+    const lit = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.lp[data-movable]')].map((one) => one.dataset.key);
+
+    const tap = (container: HTMLElement, colour: 'red' | 'yellow', progress: number) =>
+    {
+        const host = container.querySelector('.board-canvas') as HTMLElement;
+        const cell = cellAt(colour, progress)!;
+        const spot = centreOf(cell.col, cell.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 300, bubbles: true }));
+    };
+
+    it('keeps the die in the middle for the reader, lifts it at the press, and holds the roll\'s words, its lit pawns and their taps until it has landed', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const answers: (() => void)[] = [];
+        const move = vi.spyOn(useBoard(), 'move').mockResolvedValue('now');
+
+        matches.play = async () =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                answers.push(resolve);
+            });
+
+            return { applied: 'now', match: seen(rolled.state, 0, 2), events: [happened(2, 0, rolled.moves)] };
+        };
+
+        const container = await seated(seen(before, 0, 1));
+        const yours = useLocale().t('match.turn.yours');
+
+        expect(hand(container).hasAttribute('data-hand'), 'no die waited in the middle for the reader').toBe(true);
+        expect(hand(container).hidden).toBe(false);
+        expect(container.querySelector('.board-roll .die3d'), 'the button drew a second die over the table\'s own').toBeNull();
+        expect(container.querySelectorAll('.board-stage .die3d')).toHaveLength(1);
+        expect(saying(container)).toBe(yours);
+
+        fire(container.querySelector('.board-roll')!, 'click');
+        await flush();
+
+        expect(hand(container).hasAttribute('data-rattle'), 'the die lay still while the roll was being asked for').toBe(true);
+
+        answers[0]();
+        await flush();
+        await flush();
+
+        expect(container.querySelector('.board-roll')).toBeNull();
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(saying(container), 'the roll was said while its die was in the air').toBe(yours);
+        expect(lit(container), 'a pawn lit up before the die had landed').toEqual([]);
+        expect(plateDie(container, 0)).toBeNull();
+
+        tap(container, 'red', 10);
+        await flush();
+
+        expect(move, 'a pawn was moved on a roll nobody had seen land').not.toHaveBeenCalled();
+
+        await elapse(1250);
+
+        expect(saying(container)).toBe(useLocale().t('match.turn.rolled', { die: useLocale().n(3) }));
+        expect(lit(container)).toEqual(['0-0']);
+        expect(hand(container).hasAttribute('data-rattle')).toBe(false);
+        expect(container.querySelectorAll('.board-stage .die3d')).toHaveLength(1);
+
+        tap(container, 'red', 10);
+        await flush();
+
+        expect(move).toHaveBeenCalledWith(0);
+
+        delete matches.play;
+    });
+
+    it('puts the die down again when the roll is refused', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const answers: ((error: Error) => void)[] = [];
+
+        matches.play = async () => await new Promise((_resolve, reject) =>
+        {
+            answers.push(reject);
+        });
+
+        const container = await seated(seen(before, 0, 1, { id: 'match-refused', tableId: 'table-refused' }));
+
+        fire(container.querySelector('.board-roll')!, 'click');
+        await flush();
+
+        expect(hand(container).hasAttribute('data-rattle')).toBe(true);
+
+        answers[0](new Error('offline'));
+        await settle();
+
+        expect(hand(container).hasAttribute('data-rattle'), 'a roll that was refused left the die shaking for good').toBe(false);
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+        expect(container.querySelector('.board-roll')).not.toBeNull();
+
+        delete matches.play;
+    });
+
+    it('hands the reader the die when the table has shown the turn is theirs, and not while the seat before them is still moving', async () =>
+    {
+        quiet();
+
+        const before = standing([EMPTY, [10, YARD, YARD, YARD]], 3, 1);
+        const moved = stepped(before, { kind: 'move', seat: 1, piece: 0 });
+        const [theirs, setTheirs] = createSignal(false);
+
+        vi.spyOn(useBoard(), 'canRoll').mockImplementation(() => theirs());
+
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        expect(hand(container).hidden).toBe(true);
+
+        tell(seen(moved.state, 0, 2), [happened(2, 1, moved.moves)]);
+        setTheirs(true);
+        await flush();
+
+        expect(container.querySelector('.board-roll'), 'a reader whose turn it is was kept from rolling').not.toBeNull();
+        expect(pawn(container, '1-0').hasAttribute('data-moving')).toBe(true);
+        expect(hand(container).hasAttribute('data-hand'), 'the reader was handed the die while the seat before them was still moving').toBe(false);
+
+        await elapse(1200);
+
+        expect(pawn(container, '1-0').hasAttribute('data-moving')).toBe(false);
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+        expect(hand(container).hidden).toBe(false);
+    });
+
+    it('leaves the die in the reader\'s hand while the table shows a seat that left on their turn', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD], [7, 30, YARD, YARD]], null, 0);
+        const left = stepped(before, { kind: 'forfeit', seat: 2, reason: 'resign' });
+
+        vi.spyOn(useBoard(), 'canRoll').mockReturnValue(true);
+
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        expect(left.moves.map((move) => move.e)).toEqual(['forfeit']);
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+
+        tell(seen(left.state, 0, 2), [happened(2, 2, left.moves)]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(hand(container).hidden, 'the die was taken out of the reader\'s hand to show somebody else leaving').toBe(false);
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+
+        await elapse(1200);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+    });
+
+    it('takes the die out of the reader\'s hand for good once the roll is no longer theirs', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+        const [theirs, setTheirs] = createSignal(true);
+
+        vi.spyOn(useBoard(), 'canRoll').mockImplementation(() => theirs());
+
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        expect(hand(container).hasAttribute('data-hand')).toBe(true);
+
+        setTheirs(false);
+        tell(seen(rolled.state, 0, 2), [happened(2, 0, rolled.moves)]);
+        await elapse(1300);
+        tell(seen(moved.state, 0, 3), [happened(3, 0, moved.moves)]);
+        await elapse(1500);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
+        expect(hand(container).hidden, 'a die came back to a hand whose roll had gone').toBe(true);
+        expect(hand(container).hasAttribute('data-hand')).toBe(false);
+    });
+
+    it('holds nothing for a board that opens on a roll, for one that has not arrived, or with little of the turn left', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const said = useLocale().t('match.turn.rolled', { die: useLocale().n(3) });
+        const opened = await live(seen(rolled.state, 0, 2));
+
+        expect(saying(opened.container)).toBe(said);
+        expect(lit(opened.container)).toEqual(['0-0']);
+        expect(hand(opened.container).hidden, 'a board that opened on a roll threw it again').toBe(true);
+        expect(plateDie(opened.container, 0)?.getAttribute('aria-label')).toBe(said);
+
+        useLocale().setLocale('fa');
+        await flush();
+
+        expect(plateDie(opened.container, 0)?.getAttribute('aria-label'), 'the reader\'s own plate spoke of them as of somebody else').toBe(useLocale().t('match.turn.rolled', { die: useLocale().n(3) }));
+
+        useLocale().setLocale('en');
+        await flush();
+
+        opened.tell(seen(rolled.state, 0, 3), []);
+        await flush();
+
+        expect(stageOf(opened.container).hasAttribute('data-presenting')).toBe(false);
+        expect(lit(opened.container), 'a board that moved with nothing to show went on holding its reader').toEqual(['0-0']);
+
+        cleanup();
+        useBoard().close();
+
+        const late = await live(seen(before, 0, 1), false);
+
+        late.tell(seen(rolled.state, 0, 2), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(late.container.querySelector('.lp')).toBeNull();
+        expect(saying(late.container), 'a board that could not be drawn yet kept its reader waiting').toBe(said);
+
+        cleanup();
+        useBoard().close();
+
+        const hurried = await live(seen(before, 0, 1));
+
+        hurried.tell(seen(rolled.state, 0, 2, { remainingMs: 5000 }), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(stageOf(hurried.container).getAttribute('data-presenting')).toBe('true');
+        expect(saying(hurried.container), 'a turn with five seconds left waited for a die').toBe(said);
+        expect(lit(hurried.container)).toEqual(['0-0']);
+    });
+
+    it('keeps the tip about a roll to itself until the die has landed', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const six = stepped(before, { kind: 'roll', seat: 0, die: 6 });
+        const tipOf = (container: HTMLElement) => container.querySelector('.table-bar [role="note"]')?.textContent ?? null;
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        expect(tipOf(container)).toBeNull();
+
+        tell(seen(six.state, 0, 2), [happened(2, 0, six.moves)]);
+        await flush();
+
+        expect(tipOf(container), 'the tip gave the six away while the die was in the air').toBeNull();
+
+        await elapse(1250);
+
+        expect(tipOf(container)).toContain(useLocale().t('helpers.ludo.tip.six'));
+    });
+
+    it('says a roll nobody could play when its die has landed, in the words for whoever rolled, and then whose turn it is', async () =>
+    {
+        quiet();
+
+        const stuckFrom = standing([[10, YARD, YARD, YARD], EMPTY], null, 1);
+        const stuck = stepped(stuckFrom, { kind: 'roll', seat: 1, die: 3 });
+        const locale = useLocale();
+        const theirs = locale.t('match.turn.theirs', { name: nameOf(SEATED[1]) });
+        const { container, tell } = await live(seen(stuckFrom, 0, 1));
+
+        expect(stuck.moves.map((move) => move.e)).toEqual(['roll', 'pass']);
+        expect(saying(container)).toBe(theirs);
+
+        tell(seen(stuck.state, 0, 2), [happened(2, 1, stuck.moves)]);
+        await flush();
+
+        expect(saying(container), 'the turn was said to have passed while the die was in the air').toBe(theirs);
+
+        await elapse(1250);
+
+        expect(saying(container)).toBe(locale.t('match.stuck.them', { name: nameOf(SEATED[1]), die: locale.n(3) }));
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+
+        await elapse(1400);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(saying(container)).toBe(locale.t('match.turn.yours'));
+
+        cleanup();
+        useBoard().close();
+
+        const mineFrom = standing([EMPTY, [10, YARD, YARD, YARD]], null, 0);
+        const mine = stepped(mineFrom, { kind: 'roll', seat: 0, die: 2 });
+        const own = await live(seen(mineFrom, 0, 1));
+
+        own.tell(seen(mine.state, 0, 2), [happened(2, 0, mine.moves)]);
+        await elapse(1250);
+
+        expect(saying(own.container)).toBe(locale.t('match.stuck.you', { die: locale.n(2) }));
+
+        cleanup();
+        useBoard().close();
+
+        const sixFrom = standing([[52, FINISHED, FINISHED, FINISHED], EMPTY], null, 0);
+        const six = stepped(sixFrom, { kind: 'roll', seat: 0, die: 6 });
+        const wasted = await live(seen(sixFrom, 1, 1));
+
+        wasted.tell(seen(six.state, 1, 2), [happened(2, 0, six.moves)]);
+        await elapse(1250);
+
+        expect(saying(wasted.container)).toBe(locale.t('match.wasted.them', { name: nameOf(SEATED[0]) }));
+
+        cleanup();
+        useBoard().close();
+
+        const thirdFrom: LudoState = { ...standing([[10, YARD, YARD, YARD], EMPTY], null, 0), sixes: 2 };
+        const third = stepped(thirdFrom, { kind: 'roll', seat: 0, die: 6 });
+        const sixes = await live(seen(thirdFrom, 0, 1));
+
+        expect(third.moves.map((move) => move.e)).toEqual(['roll', 'pass']);
+
+        sixes.tell(seen(third.state, 0, 2), [happened(2, 0, third.moves)]);
+        await elapse(1250);
+
+        expect(saying(sixes.container)).toBe(locale.t('match.sixes.you'));
+    });
+
+    it('says every one of those sentences in Persian too', () =>
+    {
+        const locale = useLocale();
+        const english = (['match.stuck.you', 'match.stuck.them', 'match.sixes.you', 'match.sixes.them', 'match.wasted.you', 'match.wasted.them', 'match.rolled.them'] as const)
+            .map((key) => locale.t(key, { name: 'Sara', die: '3' }));
+
+        locale.setLocale('fa');
+
+        const persian = (['match.stuck.you', 'match.stuck.them', 'match.sixes.you', 'match.sixes.them', 'match.wasted.you', 'match.wasted.them', 'match.rolled.them'] as const)
+            .map((key) => locale.t(key, { name: 'Sara', die: '3' }));
+
+        expect(persian.every((line, index) => line !== english[index] && /[؀-ۿ]/.test(line))).toBe(true);
+        expect(persian.filter((line) => line.includes('{'))).toEqual([]);
+        expect(english.filter((line) => line.includes('{'))).toEqual([]);
+    });
+
+    it('shows the die on its roller\'s plate once it has been picked up from the board, and names whoever rolled it', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const rolled = stepped(before, { kind: 'roll', seat: 1, die: 4 });
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        tell(seen(rolled.state, 0, 2), [happened(2, 1, rolled.moves)]);
+        await elapse(1300);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(hand(container).hidden).toBe(false);
+        expect(plateDie(container, 1), 'the plate showed a die that was still lying on the board').toBeNull();
+
+        await elapse(1500);
+
+        expect(hand(container).hidden).toBe(true);
+        expect(plateDie(container, 1)?.getAttribute('aria-label')).toBe(useLocale().t('match.rolled.them', { name: nameOf(SEATED[1]), die: useLocale().n(4) }));
+        expect(plateDie(container, 0)).toBeNull();
+        expect(plateDie(container, 1)!.querySelector('.die3d')?.getAttribute('data-face')).toBe('4');
+    });
+
+    it('draws a die face that follows its number, and keeps the last one when it is handed none', async () =>
+    {
+        const [value, setValue] = createSignal<number | undefined>(4);
+        const { container } = renderTest(() => DieFace({
+            get value()
+            {
+                return value() as number;
+            },
+            label: 'a die'
+        }) as Rendered);
+
+        await flush();
+
+        const face = () => container.querySelector<HTMLElement>('[role="img"] .die3d')?.dataset.face;
+
+        expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('a die');
+        expect(container.querySelector('.die3d')?.hasAttribute('data-flat')).toBe(true);
+        expect(face()).toBe('4');
+
+        setValue(2);
+        await flush();
+
+        expect(face()).toBe('2');
+
+        setValue(undefined);
+        await flush();
+
+        expect(face(), 'a die face handed nothing took the page down').toBe('2');
+    });
+
+    it('offers no die to somebody watching, nor to a seat that is not on turn', async () =>
+    {
+        quiet();
+
+        const position = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 0);
+        const watching = await live(seen(position, null, 1));
+
+        expect(hand(watching.container).hidden).toBe(true);
+        expect(watching.container.querySelector('.board-roll')).toBeNull();
+
+        cleanup();
+        useBoard().close();
+
+        const waiting = await live(seen(position, 1, 1));
+
+        expect(hand(waiting.container).hidden).toBe(true);
+        expect(waiting.container.querySelector('.board-roll')).toBeNull();
     });
 
     it('moves the reader\'s pawn at the press, walks nothing again for the answer, and takes it back when the server says no', async () =>

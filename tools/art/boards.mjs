@@ -270,43 +270,6 @@ function pawnShadow()
 `;
 }
 
-const PIP_GRID = {
-    1: [[0, 0]],
-    2: [[-1, -1], [1, 1]],
-    3: [[-1, -1], [0, 0], [1, 1]],
-    4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
-    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
-    6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]
-};
-
-function dice()
-{
-    const size = 180;
-    const faces = [1, 2, 3, 4, 5, 6].map((value, index) =>
-    {
-        const x = index * 256 + (256 - size) / 2;
-        const y = (256 - size) / 2 - 6;
-        const cx = x + size / 2;
-        const cy = y + size / 2;
-        const pips = PIP_GRID[value]
-            .map(([u, v]) => `<circle cx="${ round(cx + u * size * 0.27) }" cy="${ round(cy + v * size * 0.27) }" r="${ round(size * 0.085) }" fill="${ INK }"/>`)
-            .join('');
-
-        return `<g>
-    <rect x="${ x }" y="${ y + 12 }" width="${ size }" height="${ size }" rx="40" fill="#E6D6B4" stroke="${ INK }" stroke-width="8"/>
-    <rect x="${ x }" y="${ y }" width="${ size }" height="${ size }" rx="40" fill="#FFFFFF" stroke="${ INK }" stroke-width="8"/>
-    <rect x="${ x + 16 }" y="${ y + 14 }" width="${ size - 32 }" height="30" rx="15" fill="#FFF4DC"/>
-    ${ pips }
-    <ellipse cx="${ x + 40 }" cy="${ y + 30 }" rx="12" ry="7" fill="#FFFFFF" transform="rotate(-30 ${ x + 40 } ${ y + 30 })"/>
-</g>`;
-    }).join('\n');
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 256" width="2048" height="256">
-${ faces }
-</svg>
-`;
-}
-
 function flourish()
 {
     return 'M0 0C38 0 64 10 84 30C66 22 48 20 30 24C44 34 50 48 48 64C40 50 28 42 12 40C22 58 22 76 12 92C8 70 4 46 0 0Z'
@@ -370,6 +333,3 @@ for (const colour of COLOURS)
 
 writeFileSync(join(OUT, 'pawn-shadow.svg'), pawnShadow());
 console.log('board pawn-shadow.svg');
-
-writeFileSync(join(OUT, 'ludo-dice.svg'), dice());
-console.log('board ludo-dice.svg');

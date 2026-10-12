@@ -3010,8 +3010,8 @@ can come round.
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
 `tools/art/boards.mjs` (`npm run art`). It imports `frontend/src/game/layout.ts` for where the
 grid sits and `backend/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the
-safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg`, `pawn-shadow.svg` and
-`ludo-dice.svg` into `frontend/public/board/`. So a start square, a star or an arrow cannot sit
+safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg` and `pawn-shadow.svg` into
+`frontend/public/board/`. So a start square, a star or an arrow cannot sit
 anywhere the rules do not put one, and the generator throws if the ring stops being 52 cells.
 
 The board has been a Blender photograph, a glossy vector board, a satin render and the vector board
@@ -3033,10 +3033,11 @@ a 2D cartoon board do not belong together however well either is lit.
 stripe on the lit side, the dark side, a white glint) under the board's indigo line, drawn in a
 256-square sprite whose foot is at 199 so it keeps the geometry the renderer places by - 170 pixels
 to the square, drawn at 1.687 squares so it fills its square like a toy piece, sitting `DROP` below the
-cell centre. Depth is y, as for any standing piece. The die is a flat sticker face with indigo pips,
-eight slots of 256 in one sheet. Nothing is printed on a pawn's head: the letter that used to be there
-was a smudge at phone size and a sticker at desktop size, and the yard, the plates and the move list's
-words already say whose piece it is.
+cell centre. Depth is y, as for any standing piece. The die is not a picture any more. The table
+draws it and throws it (*The die is thrown*, below), in the colours the sheet of sticker faces had,
+and that sheet and its generator are gone. Nothing is printed on a pawn's head: the letter that
+used to be there was a smudge at phone size and a sticker at desktop size, and the yard and the
+plates already say whose piece it is.
 
 **A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
 to vanish from the view entirely. Two pawns of one colour on a ring square are a block and are drawn
@@ -3208,10 +3209,11 @@ arrive.
   server's to say. The answer is played without the walk: a move whose pawn already stands
   where it ends walks nothing, which also covers a push that beats the acknowledgement. A
   refusal slides the pawn back and puts the die back (`settle`).
-- **The plates read what the table has shown** (`onFacts`: `{ home, out, die }`). The home dots
-  count a pawn when its flourish has played. The die is on its roller's plate from the moment it
-  has landed until it is used or picked up, and when the seat that rolled it leaves it goes from
-  the board and the plate together. A seat is called out when its pawns have slid home.
+- **The plates read what the table has shown** (`onFacts`: `{ home, out, die, plate }`). The home
+  dots count a pawn when its flourish has played. The die is on its roller's plate once it has
+  been picked up from the board (`plate`) and until it is used, and when the seat that rolled it
+  leaves it goes from the board and the plate together. A seat is called out when its pawns have
+  slid home.
   `MatchBoard` hands each plate the seat and the player as the table shows them (`seatAt`,
   `playerAt`): "Won" and "Lost" come with the result card, and "Left", "Gave up" and "Timed out"
   when the table has shown the seat going. The view is read only until the renderer has arrived,
@@ -3232,8 +3234,9 @@ arrive.
 - **The renderer owns no clock and no sound.** `BoardOptions` hands it the stage, a way to ask
   for the page's sound and a way to tick the phone (`feel`, which `MatchBoard` leaves silent for
   somebody watching). `BoardHandle` is the presenter's `Table` and a few verbs beside it: `lit`
-  (which pawns may be pressed, and whether to show it), `advance`, `swap`, `still`, and
-  `pause` and `resume` under a sheet that blocks the page.
+  (which pawns may be pressed, and whether to show it), `advance`, `swap`, `still`, `offer` and
+  `rattle` (the die in the reader's hand, and under the press), and `pause` and `resume` under a
+  sheet that blocks the page.
 
 `ludo-felt.spec.ts` holds the model. `ludo-board.spec.ts` holds the renderer on a manual clock
 with the real engine's events: the order of a capture, an entry onto a held start, each fate of
@@ -3244,10 +3247,81 @@ the plate's dots and die, the press and its refusal, nothing replayed before the
 draw, and the real board inside the real `WatchBoard` frame. Each was run against the fault it
 is there for.
 
-Two things still follow the view, and so run ahead of the table. The die is a sprite that spins in
-the middle of the board. And the turn sentence, the lamp, the glow on the pawns and their taps
-arrive with the answer, which gives a roll away while it is still tumbling. Both go when the die
-is thrown (3.2 in the design spec's order of work).
+**The die is thrown, and a roll is told when it has landed.** Until this the die was a sprite
+that spun in the middle of the board through seven swaps of its face, and the turn sentence, the
+tip, the glow on the pawns and their taps came with the answer: a roll was given away a second
+before its die had stopped. The table has one die now. It is the stage's own (`stage/die.ts`),
+the die backgammon throws, and the renderer keeps where it is: nowhere, in the reader's hand, in
+the air, on the board, leaving it, or on a plate.
+
+- **It is drawn flat (D1).** `createDie({ flat: true })` keeps the throw's plan (the path, the
+  bounces, the turning, the face it lands on) and drops the perspective. The body is a translate,
+  a scale and the cube's own turning, tipped a tenth of a radian so a die at rest shows a lip. A
+  die in the air is drawn larger for being nearer whoever looks (`nearness`), where the other die
+  moves toward the eye. The faces are white with the board's ink line and ink pips. Each face
+  carries a tone, the lip colour of a white piece, by how far it has turned away, and a veil that
+  hides its pips before it is edge-on, where they would be a smear. The shadow is a hard offset
+  one that shrinks as the die rises. `dice-plan.spec.ts` (*the die, drawn flat*) holds the pose,
+  the tones and the sizes.
+- **It waits in the reader's hand, in the middle of the board.** While the roll is the reader's
+  the die lies there two squares across (`HAND`), bobbing, under the roll button, which draws
+  nothing of its own once the renderer has arrived: the button is the die. The press lifts it and
+  shakes it (`rattle`, `die-shake`) for as long as the request is out, and a roll that is refused
+  puts it down again.
+- **The reader's own die is thrown from the hand, and anybody else's comes in over its roller's
+  corner**, from outside the frame. From the hand it leaves at the size it was held and comes
+  down to its own as it travels. Both land in one place: the outer corner of the roller's own
+  yard (`dieRest`), 1.2 squares across (`DIE_SIZE`), where it meets no seat of the nest, no home
+  slot and not the hand. The plan is seeded by the match and the revision, so both players and
+  somebody watching see one throw. `die-land` sounds at every bounce, softer each time, and
+  `bonus` for a six that keeps the turn.
+- **A roll that waits for its move lies where it fell for 1.1 s** (`DIE_REST_MS`, outside the
+  queue: rule 8), is picked up outward over its corner, and is then on its roller's plate. The
+  plate's die is the same drawing at rest (`DieFace`), named "You rolled 3." on the reader's own
+  plate and "Omid rolled 3." on anybody else's. The move takes it away: off the board it fades
+  where it lies, off the plate it is gone, and one that is being picked up finishes leaving.
+- **A roll nobody could play says so.** The die turns grey, or red for a third six, wobbles and
+  is held for 0.9 s (`PASS_MS`; 0.3 when more waits), and a sentence is said to a screen reader in
+  the words for whoever rolled: "You rolled 3 and cannot move.", "A third six in a row. Your turn
+  passes.", "You rolled a six with nothing to move. Roll again." (`onPass`, `passed`). Then it
+  fades where it lies, and only then is the die handed to whoever rolls next.
+- **What a roll gives away waits for the table (rule 7).** `landed` is one value: the table has
+  shown the revision the view is at (`shownRev`, written by `level()` when the presenter has
+  nothing left to play), or under eight seconds of the turn are left (`HURRY_MS`). The turn
+  sentence, the tip, the lit pawns and with them their taps, and the die in the reader's hand all
+  read it, and the plate's die waits by the table's own word (`plate`). Nothing is remembered per
+  element, and a board read again at a later revision with nothing to play holds nobody. There
+  is no timer: the hold ends when the table is level, as backgammon's does when its dice land.
+- **The roll button is never held, and its face is.** The button is there the moment the view
+  says the roll is the reader's, so a press is always taken. The die it is drawn as arrives when
+  the table has shown the turn passing. The first build handed the die over with the view. In a
+  burst of another seat's rolls and moves it blinked into the middle between their rolls, and
+  their next die was then thrown out of the reader's hand: found in the recording of a real
+  browser, by no spec. A throw starts from the hand only when the roller is the reader, and a
+  press the reader made is kept through somebody else's throw. Once the die is in the reader's
+  hand it stays there while the roll is theirs (`handed`), whatever else the table has to show: a
+  seat that leaves on the reader's turn does not take the die out of their hand and put it back.
+- **The die is sized on the die itself.** The stylesheet gives every `.die3d` a size of its own
+  (`--die: 2rem`), and that replaces one inherited from above. Set on the holder, the size the
+  renderer asked for never applied. The die was 32px on every screen, 1.5 squares on a phone and
+  too big for its corner, and every throw was a quarter longer than its path, so a die left the
+  hand towards the wrong side before it turned for its corner. No spec could see it: happy-dom
+  reads no stylesheet. A probe of the first frames of a throw in a real browser did.
+  `ludo-board.spec.ts` holds where the size is set, and the play pass measures the die in both
+  browsers.
+- **Less motion keeps the roll.** Nothing bobs or shakes, and the press still lifts the die. The
+  throw is a fade where the die rests, with one `die-land`, and the sentence, the lit pawns and
+  the plate come after it as they do after a throw.
+
+`ludo-board.spec.ts` (*a ludo roll, played*; *where a ludo die comes to rest*) holds the renderer
+on a manual clock with the real engine's events, and `ludo-table.spec.ts` the component: the die
+in the hand and under the press, the hold and each thing it holds, the three sentences in both
+languages, the plate's die and its two names, and the die handed over only when the table has
+shown the turn. Each was run against the fault it is there for.
+
+Two things are left for the press (3.3 in the design spec's order of work). A move the server
+refuses slides back in a straight line. And a roll pressed while the table is still showing the
+seat before plays in its turn behind them, at their pace.
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
@@ -3451,6 +3525,14 @@ the dice, the cube and the stack counts off the page for the rest of the board's
 gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now;
 the layer for clones that fly between places lands with the first game that flies one.
 
+**A run that has ended can still be taken back.** A run made with a fill goes on holding its last
+frame after its time is up, and the fade the stage plays for something that ends in nothing is
+always one. `run.cancel()` after the end cancels the animation the run still holds, once. It used
+to do nothing, because the end is done once. Ludo's die leaves the board in a fade with a fill
+and is shown again by cancelling that fade, so for one commit every die after the first was
+thrown at opacity 0: measured on that commit's production build, where the first roll of a game
+was drawn and every later one flashed only as its own fade began. `stage-kit.spec.ts` holds it.
+
 **Less motion is the stage's decision, so a renderer has one path.** With the reader's setting on,
 `animate` swaps a run's frames for a 140 ms fade where the thing ends up (`quiet: 'out'` fades out
 something that ends in nothing and leaves it gone; `quiet: 'skip'` drops a flourish altogether) and
@@ -3554,6 +3636,25 @@ reader's pawn and that never stops saying it is playing, the pass failed those f
 failed the eight about the result card with them, for a reason of its own: a board that is told
 nothing slides to every position in turn, and after the rest of the game had been played over the
 api it was still far behind when the pass stopped waiting.
+
+Of every roll it presses it follows the die in BOTH browsers, frame by frame (`throwOf`), and
+asks seven things. The roller's own die leaves the middle of the board, where it was pressed. The
+other browser sees it come in over the roller's corner. It comes to rest where the renderer's own
+`dieRest` puts that seat's die, in both. No pawn is lit while it is in the air. It shows the face
+the server rolled, in both. There is one die on the board, never two. And it is `DIE_SIZE`
+squares across in both, measured against the board. The resting place and the size are the
+renderer's own numbers, imported, so the pass holds the browser to the code and not to a copy of
+it. Built with six faults (the size set above the die, every seat's die thrown from the hand,
+every die resting in green's yard, the face after the one rolled, the pawns lit with the answer,
+and a die of the button's own under the table's), the pass failed those seven lines and no other.
+
+It presses a pawn where it is, with the mouse (`press`), and not through a locator. A pawn that may
+be moved hops, and a locator's click waits for its element to hold still for two frames in a row and
+looks again after a growing pause. Pressed three tenths of a second after its die had landed, that
+wait fell in step with the hop: 1.8 seconds every time and more for the first pawn of a game, so the
+line about the other browser failed on a board that had answered the press in under a tenth of a
+second. Whether a pawn walks is asked inside the page, of every frame, and a failure says what the
+other board did instead: never heard of the move, heard and slid to it, or was busy.
 
 It exists because of what the other gates cannot see. `ludo-pass.mjs` plays complete games over the
 api in seconds and never presses a button; `npm run qa` tours the play route in 680 cells and never
@@ -3933,11 +4034,12 @@ plate's tag are what the table has shown rather than what the view says (*The lu
 from what happened*).
 
 The roll is a die in the MIDDLE of the board, a real `<button>` named "Roll the dice", shown only
-when the reader can roll: tap it, it shakes while the request is in flight, and it is gone; the tokens
-that can move then glow and a tap on one moves it. Nothing sits under the board but the lamp and the
-clock at the two ends of the stage's foot (*The board IS the interface*). On a 390x844 phone the roll
-used to be 100px below the fold; now nothing scrolls. The table bleeds almost to the screen edge on a
-phone (`margin-inline` against `--page-pad`), and hokm's table does the same.
+when the reader can roll: tap it, it is lifted and shakes while the request is in flight, and it is
+thrown from there to the corner of the reader's own yard (*The die is thrown*). When it has landed
+the tokens that can move glow and a tap on one moves it. Nothing sits under the board but the lamp
+and the clock at the two ends of the stage's foot (*The board IS the interface*). On a 390x844
+phone the roll used to be 100px below the fold; now nothing scrolls. The table bleeds almost to the
+screen edge on a phone (`margin-inline` against `--page-pad`), and hokm's table does the same.
 
 Everything on the board is placed from `game/layout.ts`: the board stage sets `--cell-cq` and
 `--margin-cq` in `cqi` from `CELL` and `MARGIN`, so a badge sits in its yard at every size for the

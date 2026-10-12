@@ -3,14 +3,16 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import type { Haptic } from '../src/lib/haptics.ts';
 import type { LudoBoard } from '../src/data/match.ts';
-import { ENTER_MS, HOME_MS, KNOCK_MS, PASS_LEAST, PASS_MS, SLIDE_MS, STEP_LEAST, STEP_MS, TUMBLE_MS, WIN_LEAST, WIN_MS, createLudoBoard } from '../src/game/board/ludo-board.ts';
+import { DIE_REST_MS, DIE_SIZE, ENTER_MS, GONE_MS, HAND, HOME_MS, KNOCK_MS, LIFTED, PASS_LEAST, PASS_MS, PICKUP_MS, SLIDE_MS, STEP_LEAST, STEP_MS, WIN_LEAST, WIN_MS, createLudoBoard, dieRest } from '../src/game/board/ludo-board.ts';
 import type { BoardHandle, Facts } from '../src/game/bridge.ts';
 import { BLOCK, CELL, HOME_SCALE, MARGIN, centreOf } from '../src/game/layout.ts';
 import { HISTORY, feltOf, homeAt, nestAt, type Felt, type Told } from '../src/game/ludo-felt.ts';
+import { hashOf } from '../src/game/stage/curves.ts';
+import { planThrow } from '../src/game/stage/dice.ts';
 import { createDirector, type Director } from '../src/game/stage/director.ts';
 import { LAYER } from '../src/game/stage/layers.ts';
 import type { Act, Batch } from '../src/game/stage/feed.ts';
-import { createPresenter, type Sight } from '../src/game/stage/presenter.ts';
+import { LIVE_OVER, createPresenter, type Sight } from '../src/game/stage/presenter.ts';
 import { createStage, type Stage } from '../src/game/stage/stage.ts';
 import type { Cue, SoundHandle } from '../src/game/sound.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
@@ -98,6 +100,7 @@ let still: boolean;
 let broke: unknown[];
 let picked: string[];
 let facts: Facts[];
+let passes: [number, number, string][];
 
 const elapse = async (ms: number) =>
 {
@@ -116,8 +119,6 @@ const pawn = (key: string) => host.querySelector<HTMLElement>(`.lp[data-key="${ 
 
 const pawns = () => [...host.querySelectorAll<HTMLElement>('.lp')];
 
-const board = () => host.querySelector<HTMLElement>('.lb')!;
-
 const die = () => host.querySelector<HTMLElement>('.lb-die')!;
 
 const of = (el: Element) => drawn.filter((one) => one.el === el);
@@ -128,7 +129,13 @@ const others = (key: string) => drawn.filter((one) => one.el.classList.contains(
 
 const flecks = () => [...host.querySelectorAll<HTMLElement>('.lb > span')].filter((one) => one.style.background !== '');
 
-const facing = () => die().style.getPropertyValue('--face');
+const cube = () => host.querySelector<HTMLElement>('.lb-die .die3d')!;
+
+const thrown = (act: Act<Told>, id = 'm') => planThrow(hashOf(id, act.rev), 1, { x: 0, y: 0 });
+
+const spotOf = (colour: LudoColour) => `${ cq(dieRest(colour).x) } ${ cq(dieRest(colour).y) }`;
+
+const MIDDLE = `${ cq(50) } ${ cq(50) }`;
 
 const lastFacts = () => facts[facts.length - 1];
 
@@ -151,6 +158,7 @@ beforeEach(async () =>
     broke = [];
     picked = [];
     facts = [];
+    passes = [];
     still = false;
     host = document.createElement('div');
     document.body.append(host);
@@ -175,7 +183,8 @@ beforeEach(async () =>
         sound: () => sound,
         feel: (kind) => felt.push(kind),
         onPick: (key) => picked.push(key),
-        onFacts: (next) => facts.push(next)
+        onFacts: (next) => facts.push(next),
+        onPass: (roller, face, fate) => passes.push([roller, face, fate])
     });
 });
 
@@ -534,14 +543,12 @@ describe('a ludo move, played', () =>
 
         table.reset(sight(three));
 
-        expect(board().hasAttribute('data-rolled')).toBe(true);
-        expect(lastFacts().die).toEqual({ roller: 0, face: 3, fate: 'pending' });
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 3, fate: 'pending' }, plate: true });
 
         play([gone.act], sight(gone.state));
         await flush();
 
-        expect(board().hasAttribute('data-rolled')).toBe(false);
-        expect(lastFacts().die, 'the plate kept a roll the board had already picked up').toBeNull();
+        expect(lastFacts(), 'the plate kept a roll whose seat had gone').toMatchObject({ die: null, plate: false });
         expect(lastFacts().out).toEqual([]);
 
         await elapse(SLIDE_MS + 20);
@@ -679,25 +686,281 @@ describe('the layers of a ludo board', () =>
 
 describe('a ludo roll, played', () =>
 {
-    it('shows a roll that waits for its move, and hands it to the plate only when it has landed', async () =>
+    const frameOf = (transform: unknown) =>
+    {
+        const found = /translate\((-?[\d.]+)em, (-?[\d.]+)em\) scale\(([\d.]+)\)/.exec(String(transform));
+
+        return found === null ? null : { x: Number(found[1]), y: Number(found[2]), scale: Number(found[3]) };
+    };
+
+    const flightOf = () => [...drawn].reverse().find((one) => one.el.classList.contains('die3d-body'))!;
+
+    it('throws the die in over the roller\'s own corner, sounds every bounce, and says what was rolled only when it has landed', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const { state, act } = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const plan = thrown(act);
+
+        table.reset(sight(before));
+
+        expect(die().hidden).toBe(true);
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+
+        drawn.length = 0;
+        play([act], sight(state));
+        await flush();
+
+        const flight = flightOf();
+        const first = frameOf(flight.frames[0].transform)!;
+        const last = frameOf(flight.frames[flight.frames.length - 1].transform)!;
+
+        expect(die().hidden).toBe(false);
+        expect(die().style.translate).toBe(spotOf('red'));
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+        expect(first.x, 'a throw began inside the board').toBeLessThan(-1.5);
+        expect(first.y).toBeLessThan(-1.5);
+        expect(first.scale, 'a die in the air is nearer whoever looks').toBeGreaterThan(1.1);
+        expect([last.x, last.y, last.scale]).toEqual([0, 0, 1]);
+        expect(flight.options.duration).toBe(plan.duration);
+        expect(String(flight.frames[0].transform)).not.toContain('perspective');
+
+        await elapse(plan.duration - 30);
+
+        expect(cues).toEqual(plan.impacts.map(() => 'die-land'));
+        expect(lastFacts().die, 'a roll was told while its die was still in the air').toBeNull();
+        expect(director.busy(), 'the table was done before its die had landed').toBe(true);
+
+        await elapse(40);
+
+        expect(cube().dataset.face).toBe('3');
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 3, fate: 'pending' }, plate: false });
+        expect(director.busy()).toBe(false);
+        expect(table.same(sight(state))).toBe(true);
+        expect(plan.duration).toBeLessThan(1200);
+    });
+
+    it('sizes the die on the die itself, because the stylesheet gives every die a size of its own', () =>
+    {
+        table.reset(sight(standing([[10, YARD, YARD, YARD], EMPTY], null)));
+
+        expect(cube().style.getPropertyValue('--die')).toBe(`calc(var(--c) * ${ DIE_SIZE })`);
+        expect(die().style.getPropertyValue('--die'), 'a size set above the die is the one the stylesheet replaces').toBe('');
+    });
+
+    it('throws for the other seat from that seat\'s corner, and rests the die in that seat\'s yard', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const { state, act } = stepped(before, { kind: 'roll', seat: 1, die: 2 });
+
+        table.reset(sight(before));
+        drawn.length = 0;
+        play([act], sight(state));
+        await flush();
+
+        const first = frameOf(flightOf().frames[0].transform)!;
+
+        expect(die().style.translate).toBe(spotOf('yellow'));
+        expect(first.x, 'a throw for the far corner came from the near one').toBeGreaterThan(1.5);
+        expect(first.y).toBeGreaterThan(1.5);
+
+        await elapse(1300);
+
+        expect(lastFacts().die).toEqual({ roller: 1, face: 2, fate: 'pending' });
+    });
+
+    it('throws another seat\'s die from that seat\'s corner though one lies in the reader\'s hand, and keeps the press the reader made', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const rolled = stepped(before, { kind: 'roll', seat: 1, die: 2 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 1, piece: 0 });
+
+        table.reset(sight(before));
+        table.offer(0);
+        table.rattle(true);
+        drawn.length = 0;
+        play([rolled.act], sight(rolled.state));
+        await flush();
+
+        const first = frameOf(flightOf().frames[0].transform)!;
+
+        expect(die().style.translate).toBe(spotOf('yellow'));
+        expect(die().hasAttribute('data-hand')).toBe(false);
+        expect(first.x, 'somebody else\'s die was thrown out of the reader\'s hand').toBeGreaterThan(1.5);
+        expect(first.y).toBeGreaterThan(1.5);
+
+        await elapse(thrown(rolled.act).duration + DIE_REST_MS + PICKUP_MS + 40);
+
+        expect(die().hidden).toBe(true);
+
+        play([moved.act], sight(moved.state));
+        await flush();
+
+        expect(die().style.translate).toBe(MIDDLE);
+        expect(die().hasAttribute('data-rattle'), 'the press the reader made was forgotten when somebody else threw').toBe(true);
+        expect(cues.filter((cue) => cue === 'die-shake')).toHaveLength(2);
+    });
+
+    it('lets the die lie where it fell, then takes it out over its corner to the roller\'s plate', async () =>
     {
         const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
         const { state, act } = stepped(before, { kind: 'roll', seat: 0, die: 3 });
 
         table.reset(sight(before));
         play([act], sight(state));
-        await elapse(TUMBLE_MS - 40);
+        await elapse(thrown(act).duration + 10);
+        drawn.length = 0;
+        await elapse(DIE_REST_MS - 40);
 
-        expect(board().hasAttribute('data-rolled')).toBe(true);
-        expect(lastFacts().die).toBeNull();
+        expect(die().hidden).toBe(false);
+        expect(lastFacts().plate, 'the plate showed a die that was still lying on the board').toBe(false);
+        expect(of(die())).toHaveLength(0);
 
         await elapse(60);
 
-        expect(facing()).toBe('2');
-        expect(lastFacts().die).toEqual({ roller: 0, face: 3, fate: 'pending' });
-        expect(cues).toEqual(['die-land']);
-        expect(director.busy()).toBe(false);
-        expect(table.same(sight(state))).toBe(true);
+        const leaving = of(die());
+        const from = String(leaving[0].frames[0].translate).split(' ').map(Number.parseFloat);
+        const to = String(leaving[0].frames[1].translate).split(' ').map(Number.parseFloat);
+
+        expect(leaving).toHaveLength(1);
+        expect(leaving[0].frames[0].translate).toBe(spotOf('red'));
+        expect(to[0], 'the die left towards the middle of the board').toBeLessThan(from[0]);
+        expect(to[1]).toBeLessThan(from[1]);
+        expect(leaving[0].frames[1].opacity).toBe(0);
+        expect(lastFacts().plate).toBe(false);
+
+        await elapse(PICKUP_MS);
+
+        expect(die().hidden).toBe(true);
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 3, fate: 'pending' }, plate: true });
+    });
+
+    it('waits in the middle for the reader, is lifted while the roll is asked for, and is thrown from there at the size it was held', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const { state, act } = stepped(before, { kind: 'roll', seat: 0, die: 5 });
+
+        table.reset(sight(before));
+        table.offer(0);
+
+        expect(die().hidden).toBe(false);
+        expect(die().style.translate).toBe(MIDDLE);
+        expect(die().style.scale).toBe(String(HAND));
+        expect(die().hasAttribute('data-hand')).toBe(true);
+        expect(cues).toEqual([]);
+
+        table.rattle(true);
+
+        expect(die().hasAttribute('data-rattle')).toBe(true);
+        expect(die().style.scale).toBe(String(LIFTED));
+        expect(cues).toEqual(['die-shake']);
+
+        table.rattle(true);
+
+        expect(cues, 'one press shook the die twice').toEqual(['die-shake']);
+
+        table.offer(null);
+
+        expect(die().hidden, 'the die left the hand while its roll was still being asked for').toBe(false);
+
+        drawn.length = 0;
+        play([act], sight(state));
+        await flush();
+
+        const first = frameOf(flightOf().frames[0].transform)!;
+        const rest = dieRest('red');
+
+        expect(die().hasAttribute('data-hand')).toBe(false);
+        expect(die().hasAttribute('data-rattle')).toBe(false);
+        expect(die().style.translate).toBe(spotOf('red'));
+        expect(die().style.scale).toBe('1');
+        expect(first.x).toBeCloseTo((50 - rest.x) / (DIE_SIZE * C), 2);
+        expect(first.y).toBeCloseTo((50 - rest.y) / (DIE_SIZE * C), 2);
+        expect(first.scale, 'the die changed size as it left the hand').toBeCloseTo(LIFTED, 2);
+
+        await elapse(1300);
+
+        expect(lastFacts().die).toEqual({ roller: 0, face: 5, fate: 'pending' });
+        expect(host.querySelectorAll('.lb-die')).toHaveLength(1);
+    });
+
+    it('stops shaking once its roll has been thrown, so the hand it comes back to is a still one', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 6 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+
+        table.reset(sight(before));
+        table.offer(0);
+        table.rattle(true);
+        play([rolled.act], sight(rolled.state));
+        await elapse(thrown(rolled.act).duration + 20);
+        table.offer(null);
+        play([moved.act], sight(moved.state));
+        await elapse(1100);
+        table.offer(0);
+
+        expect(die().hasAttribute('data-hand')).toBe(true);
+        expect(die().hasAttribute('data-rattle'), 'a die went on shaking after its roll had been thrown').toBe(false);
+        expect(die().style.scale).toBe(String(HAND));
+        expect(cues.filter((cue) => cue === 'die-shake')).toHaveLength(1);
+    });
+
+    it('puts the die down again when the roll was refused, and takes it away when the roll is no longer the reader\'s', () =>
+    {
+        table.reset(sight(standing([[10, YARD, YARD, YARD], EMPTY], null)));
+        table.offer(0);
+        table.rattle(true);
+        table.rattle(false);
+
+        expect(die().hidden).toBe(false);
+        expect(die().hasAttribute('data-rattle')).toBe(false);
+        expect(die().style.scale).toBe(String(HAND));
+
+        table.offer(null);
+
+        expect(die().hidden).toBe(true);
+
+        table.rattle(true);
+        table.offer(null);
+        table.rattle(false);
+
+        expect(die().hidden, 'a refused roll left a die in the middle for nobody').toBe(true);
+    });
+
+    it('keeps a die that is in the air out of the hand, and brings it back to the middle when the table is done with it', async () =>
+    {
+        const from = standing([[52, FINISHED, FINISHED, FINISHED], EMPTY], null);
+        const wasted = stepped(from, { kind: 'roll', seat: 0, die: 6 });
+
+        table.reset(sight(from));
+        table.offer(0);
+        play([wasted.act], sight(wasted.state));
+        await flush();
+        table.offer(0);
+        table.rattle(true);
+
+        expect(die().style.translate, 'a die in the air jumped back to the middle').toBe(spotOf('red'));
+        expect(die().hasAttribute('data-hand')).toBe(false);
+        expect(cues).not.toContain('die-shake');
+
+        await elapse(thrown(wasted.act).duration + 10);
+
+        expect(cube().dataset.spent).toBe('wasted');
+        expect(die().style.translate).toBe(spotOf('red'));
+
+        await elapse(PASS_MS + 20);
+
+        expect(die().style.translate, 'the die on the board was snatched to the middle before it had gone').toBe(spotOf('red'));
+        expect(die().hasAttribute('data-hand')).toBe(false);
+        expect(cues).not.toContain('die-shake');
+
+        await elapse(GONE_MS + 20);
+
+        expect(die().hidden).toBe(false);
+        expect(die().style.translate).toBe(MIDDLE);
+        expect(die().hasAttribute('data-rattle'), 'the press made while the die was away was forgotten').toBe(true);
+        expect(cube().hasAttribute('data-spent')).toBe(false);
+        expect(cues.filter((cue) => cue === 'die-shake')).toHaveLength(1);
     });
 
     it('rings for a six that keeps the turn', async () =>
@@ -707,53 +970,71 @@ describe('a ludo roll, played', () =>
 
         table.reset(sight(before));
         play([act], sight(state));
-        await elapse(TUMBLE_MS + 20);
+        await elapse(thrown(act).duration + 20);
 
-        expect(cues).toEqual(['die-land', 'bonus']);
-        expect(die().hasAttribute('data-spent')).toBe(false);
+        expect(cues).toEqual([...thrown(act).impacts.map(() => 'die-land'), 'bonus']);
+        expect(cube().hasAttribute('data-spent')).toBe(false);
+        expect(passes).toEqual([]);
     });
 
-    it('dims a roll nobody could play and holds it, a third six with its own sound, and a wasted six as a six', async () =>
+    it('greys a roll nobody could play, says so, holds it and takes it away; a third six and a wasted six each in their own way', async () =>
     {
-        const stuck = stepped(standing([EMPTY, EMPTY], null), { kind: 'roll', seat: 0, die: 3 });
+        const stuckFrom = standing([EMPTY, EMPTY], null);
+        const stuck = stepped(stuckFrom, { kind: 'roll', seat: 0, die: 3 });
+        const lands = (act: Act<Told>) => thrown(act).impacts.map(() => 'die-land');
 
-        table.reset(sight(standing([EMPTY, EMPTY], null)));
+        table.reset(sight(stuckFrom));
         play([stuck.act], sight(stuck.state));
-        await elapse(TUMBLE_MS + 20);
+        await elapse(thrown(stuck.act).duration - 30);
 
-        expect(die().getAttribute('data-spent')).toBe('no-move');
-        expect(cues).toEqual(['die-land', 'pass']);
-        expect(lastFacts().die).toBeNull();
+        expect(passes, 'a roll was called unplayable while its die was still in the air').toEqual([]);
+
+        await elapse(50);
+
+        expect(cube().dataset.spent).toBe('no-move');
+        expect(cues).toEqual([...lands(stuck.act), 'pass']);
+        expect(passes).toEqual([[0, 3, 'no-move']]);
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
         expect(director.busy()).toBe(true);
 
         await elapse(PASS_MS);
 
         expect(director.busy()).toBe(false);
+        expect(die().hidden, 'a spent die was whisked away with no time to see it go').toBe(false);
+
+        await elapse(GONE_MS + 20);
+
+        expect(die().hidden).toBe(true);
+        expect(lastFacts().plate).toBe(false);
 
         const thirdFrom = standing([[10, YARD, YARD, YARD], EMPTY], null, 0, 2);
         const third = stepped(thirdFrom, { kind: 'roll', seat: 0, die: 6 });
 
         cues.length = 0;
+        passes.length = 0;
         table.reset(sight(thirdFrom));
         play([third.act], sight(third.state));
-        await elapse(TUMBLE_MS + 20);
+        await elapse(thrown(third.act).duration + 20);
 
-        expect(die().getAttribute('data-spent')).toBe('three-sixes');
-        expect(cues).toEqual(['die-land', 'deny']);
+        expect(cube().dataset.spent).toBe('three-sixes');
+        expect(cues).toEqual([...lands(third.act), 'deny']);
         expect(felt).toEqual(['deny']);
+        expect(passes).toEqual([[0, 6, 'three-sixes']]);
 
-        await elapse(PASS_MS);
+        await elapse(PASS_MS + GONE_MS + 20);
 
         const wastedFrom = standing([[52, FINISHED, FINISHED, FINISHED], EMPTY], null);
         const wasted = stepped(wastedFrom, { kind: 'roll', seat: 0, die: 6 });
 
         cues.length = 0;
+        passes.length = 0;
         table.reset(sight(wastedFrom));
         play([wasted.act], sight(wasted.state));
-        await elapse(TUMBLE_MS + 20);
+        await elapse(thrown(wasted.act).duration + 20);
 
-        expect(die().getAttribute('data-spent')).toBe('wasted');
-        expect(cues).toEqual(['die-land', 'bonus']);
+        expect(cube().dataset.spent).toBe('wasted');
+        expect(cues).toEqual([...lands(wasted.act), 'bonus']);
+        expect(passes).toEqual([[0, 6, 'wasted']]);
     });
 
     it('cuts the hold on a spent roll to its least when more of the same batch waits', async () =>
@@ -764,12 +1045,14 @@ describe('a ludo roll, played', () =>
 
         table.reset(sight(from));
         play([first.act, second.act], sight(second.state));
-        await elapse(TUMBLE_MS + PASS_LEAST + 60);
+        await elapse(thrown(first.act).duration + PASS_LEAST + 60);
 
-        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(2);
+        expect(die().style.translate, 'the next roll waited out the whole hold').toBe(spotOf('yellow'));
+        expect(cube().hasAttribute('data-spent')).toBe(false);
+        expect(director.busy()).toBe(true);
     });
 
-    it('takes the die away when the move it was for is made', async () =>
+    it('takes the die away when the move it was for is made, from the board or from the plate', async () =>
     {
         const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
         const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
@@ -777,15 +1060,136 @@ describe('a ludo roll, played', () =>
 
         table.reset(sight(before));
         play([rolled.act], sight(rolled.state));
-        await elapse(TUMBLE_MS + 20);
+        await elapse(thrown(rolled.act).duration + 20);
 
         expect(lastFacts().die).not.toBeNull();
+        expect(die().hidden).toBe(false);
 
         play([moved.act], sight(moved.state));
         await flush();
 
-        expect(lastFacts().die).toBeNull();
-        expect(board().hasAttribute('data-rolled')).toBe(false);
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+
+        await elapse(GONE_MS + 20);
+
+        expect(die().hidden).toBe(true);
+
+        await elapse(600);
+        table.reset(sight(rolled.state));
+
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 3, fate: 'pending' }, plate: true });
+        expect(die().hidden, 'a board opened on a roll that waits threw it again').toBe(true);
+
+        play([moved.act], sight(moved.state));
+        await flush();
+
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+        expect(die().hidden).toBe(true);
+    });
+
+    it('lets a die that is being picked up finish leaving when its move is made, and puts it on no plate', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+
+        table.reset(sight(before));
+        play([rolled.act], sight(rolled.state));
+        await elapse(thrown(rolled.act).duration + DIE_REST_MS + 60);
+        play([moved.act], sight(moved.state));
+        await flush();
+
+        expect(die().hidden, 'a die on its way off the board vanished when its move was made').toBe(false);
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+
+        await elapse(PICKUP_MS);
+
+        expect(die().hidden).toBe(true);
+        expect(lastFacts(), 'a roll that had been used was put on its roller\'s plate').toMatchObject({ die: null, plate: false });
+    });
+
+    it('hands the die to the reader the moment the roll before theirs is used, though it lay on its roller\'s plate', async () =>
+    {
+        const before = standing([EMPTY, [10, YARD, YARD, YARD]], null, 1);
+        const rolled = stepped(before, { kind: 'roll', seat: 1, die: 3 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 1, piece: 0 });
+
+        table.reset(sight(before));
+        play([rolled.act], sight(rolled.state));
+        await elapse(thrown(rolled.act).duration + DIE_REST_MS + PICKUP_MS + 40);
+
+        expect(lastFacts()).toMatchObject({ die: { roller: 1, face: 3 }, plate: true });
+
+        table.offer(0);
+
+        expect(die().hidden, 'the reader was handed a die that still lies on another plate').toBe(true);
+
+        play([moved.act], sight(moved.state));
+        await flush();
+
+        expect(lastFacts()).toMatchObject({ die: null, plate: false });
+        expect(die().hidden, 'nobody was handed the die when the roll before theirs had been used').toBe(false);
+        expect(die().style.translate).toBe(MIDDLE);
+        expect(die().hasAttribute('data-hand')).toBe(true);
+    });
+
+    it('makes no second throw of a roll it was told of again, and one die is all there ever is', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const { state, act } = stepped(before, { kind: 'roll', seat: 0, die: 4 });
+
+        table.reset(sight(before));
+        play([act], sight(state));
+        await elapse(thrown(act).duration + DIE_REST_MS + PICKUP_MS + 40);
+        drawn.length = 0;
+        void director.enqueue((ctx) => table.settle(sight(state), ctx), { estimate: 400 });
+        await elapse(600);
+
+        expect(drawn.filter((one) => one.el.classList.contains('die3d-body'))).toHaveLength(0);
+        expect(lastFacts()).toMatchObject({ die: { roller: 0, face: 4, fate: 'pending' }, plate: true });
+        expect(host.querySelectorAll('.lb-die')).toHaveLength(1);
+        expect(host.querySelectorAll('.die3d')).toHaveLength(1);
+    });
+});
+
+describe('where a ludo die comes to rest', () =>
+{
+    const centreOfDie = (colour: LudoColour) => ({ col: (dieRest(colour).x - MARGIN * 100) / C, row: (dieRest(colour).y - MARGIN * 100) / C });
+
+    const reach = DIE_SIZE / Math.SQRT2;
+
+    it('is inside its roller\'s own yard, whichever way it turned as it stopped', () =>
+    {
+        const yards: Record<LudoColour, readonly [number, number]> = { red: [0, 0], green: [9, 0], yellow: [9, 9], blue: [0, 9] };
+
+        for (const colour of ['red', 'green', 'yellow', 'blue'] as const)
+        {
+            const { col, row } = centreOfDie(colour);
+
+            expect(col - reach, colour).toBeGreaterThan(yards[colour][0]);
+            expect(col + reach, colour).toBeLessThan(yards[colour][0] + 6);
+            expect(row - reach, colour).toBeGreaterThan(yards[colour][1]);
+            expect(row + reach, colour).toBeLessThan(yards[colour][1] + 6);
+        }
+    });
+
+    it('is clear of every seat a pawn waits in, of every place a pawn comes home to, and of the die in the middle', () =>
+    {
+        for (const colour of ['red', 'green', 'yellow', 'blue'] as const)
+        {
+            const { col, row } = centreOfDie(colour);
+
+            for (let seat = 0; seat < 4; seat += 1)
+            {
+                const nest = nestAt(colour, seat);
+                const home = homeAt(colour, seat);
+
+                expect(Math.hypot(nest.col + 0.5 - col, nest.row + 0.5 - row), `${ colour } seat ${ seat }`).toBeGreaterThan(reach + 0.36);
+                expect(Math.hypot(home.col + 0.5 - col, home.row + 0.5 - row), `${ colour } home ${ seat }`).toBeGreaterThan(reach + 0.5);
+            }
+
+            expect(Math.max(Math.abs(col - 7.5), Math.abs(row - 7.5)) - reach, `${ colour } and the middle`).toBeGreaterThan(1.6 + (HAND * DIE_SIZE) / 2);
+        }
     });
 });
 
@@ -808,6 +1212,24 @@ describe('the ludo board, when it is asked for less motion', () =>
         expect(pawn('1-0').style.translate).toBe(inNest('yellow', 0));
         expect(felt).toEqual(['tick', 'capture']);
         expect(host.querySelectorAll('.lb > span')).toHaveLength(0);
+    });
+
+    it('shows a roll where it comes to rest, with one sound, and throws nothing', async () =>
+    {
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null);
+        const { state, act } = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+
+        still = true;
+        table.reset(sight(before));
+        table.offer(0);
+        drawn.length = 0;
+        play([act], sight(state));
+        await elapse(400);
+
+        expect(drawn.filter((one) => one.frames.some((frame) => 'translate' in frame || 'rotate' in frame || 'transform' in frame || 'scale' in frame))).toHaveLength(0);
+        expect(die().style.translate).toBe(spotOf('red'));
+        expect(cues).toEqual(['die-land']);
+        expect(lastFacts().die).toEqual({ roller: 0, face: 3, fate: 'pending' });
     });
 });
 
@@ -1006,7 +1428,7 @@ describe('a ludo turn the server played all at once', () =>
         await flush();
 
         expect(presenter.presenting()).toBe(true);
-        expect(table.estimate(acts)).toBeLessThan(HISTORY);
+        expect(table.estimate(acts)).toBeLessThan(HISTORY * LIVE_OVER);
 
         await elapse(400);
 
@@ -1015,7 +1437,7 @@ describe('a ludo turn the server played all at once', () =>
         await elapse(4000);
 
         expect(resets).toHaveBeenCalledTimes(1);
-        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(4);
+        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength([...acts, after.act].filter((one) => one.moves[0].e === 'roll').reduce((sum, one) => sum + thrown(one).impacts.length, 0));
         expect(cues.filter((cue) => cue === 'token-step').length).toBeGreaterThanOrEqual(1 + 6 + 2);
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 8));
         expect(lastFacts().die).toEqual({ roller: 1, face: 4, fate: 'pending' });

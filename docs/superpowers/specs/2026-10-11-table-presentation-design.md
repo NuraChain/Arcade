@@ -675,6 +675,9 @@ Ten rules hold for every table. Each is followed by why.
    thirty-second clock, which controls reading the view never could.
    *As built for backgammon (commit 1.4a).* The cap is not a timer and nothing in front is
    hastened; §4.2 says why. The hold ends at the landing, and at once with little of the turn left.
+   *As built for Ludo (commit 3.2).* The same: no timer, and nothing in front is hastened. The
+   hold is one value, "the table has shown the revision the view is at", which for a roll is its
+   landing. §4.2 and §5.2 say what reads it.
 8. **A hold on the felt is `linger(ms, least)`.** It ends at `least` when a follower that may cut it
    exists or arrives, and at `ms` otherwise. Ambient rests (a resting die, a glow, a "+1",
    confetti) are not in the queue.
@@ -1221,6 +1224,18 @@ The caps are design choices. What the table means in practice:
   and `landed` is "the dice of this roll are at rest", or, with nothing being played, "dice with
   the view's faces are at rest", which is what lets a board read again at a later revision with
   the same dice go on. Hokm's and poker's caps are decided when those holds are built.
+- **Ludo as built (commit 3.2): the table being level, and no cap.** Ludo has no strip and no move
+  list any more, so what is held is the turn sentence, the tip, the lit pawns and with them their
+  taps, the plate's die, and one thing the table above does not name: the die in the reader's own
+  hand. All but the plate's die read one value, `landed`: the table has shown the revision the
+  view is at, or under 8 s of the turn are left (`HURRY_MS`). The plate's die waits by the table's
+  own word, because it appears when the die has been picked up from the board and not when it
+  lands. "Level" and not "this roll's die has landed", because a Ludo answer is as often a move,
+  and the same things give that away: read from the view, the turn sentence named the next player
+  while the pawn was still walking. The roll BUTTON is not held, so a press is always taken; the
+  die it is drawn as arrives with the table. There is no timer, for backgammon's reason. The
+  reader's own wait for a roll is its throw, and `dice-plan.spec.ts` holds every throw between
+  650 and 1200 ms.
 - **Hokm's chooser has a bound because the turn does.** At a hand boundary the batch is card,
   trick, hand, deal: 360 + 120 + 900 + 525 + 1400 + 450 + 4 x 110 + 260 = 4455 ms on today's
   timings before the new Hâkem could press anything, out of a 30 s deadline that the trump call
@@ -1639,6 +1654,44 @@ press is finished in 3.3, so what follows is where 3.1 differs from the section 
   takes its arithmetic from `placeOf` in the model.
 - **The play pass** asks of every pawn it presses that it is walking when the press returns and
   that the other browser sees it walk, and waits for each board to be level instead of sleeping.
+
+**As built (commit 3.2).** The die is thrown. What follows is where it differs from the scenes
+above, and what a real browser changed after the specs were green.
+
+- **There is one die object, and it has a place.** The renderer keeps where the die is (nowhere,
+  the reader's hand, the air, the board, leaving it, a plate) and every verb asks that first. The
+  board's die and the plate's are the kit's die drawn flat (`createDie({ flat: true })`); the
+  plate's is the same drawing at rest, in a component (`DieFace`), and the button draws one of
+  its own only until the renderer has arrived.
+- **How it is drawn (D1), as built.** No perspective term: a translate, a scale and the cube's own
+  turning, tipped a tenth of a radian. Height is a scale (`nearness`). The sides are not painted
+  sides: every face is white, and carries a tone in the lip colour by how far it has turned from
+  whoever looks, and a veil over its pips before it is edge-on. No lighting model, no gradient.
+  The sticker sheet (`ludo-dice.svg`) and its generator are gone.
+- **The die comes to the reader's hand when the table is level, not when the view says so.** The
+  section above hands it over with the view. In a real browser, a burst of another seat's rolls
+  and moves made it blink into the middle between their rolls, and the next of their dice was
+  thrown out of the reader's hand. So the hand is one of the things `landed` holds (§4.2), a
+  throw starts from the hand only when the roller is the reader, and the roll button, which is
+  not held, keeps a press made before the die has arrived: the die is lifted the moment it is
+  free, and thrown from the hand when the answer's turn comes. Once handed over, the die stays
+  in the reader's hand while the roll is theirs, whatever else the table then has to show.
+- **A die that lies on the board leaves before it is handed on.** Used or unplayable, it fades
+  where it lies in 160 ms and the hand has it after that; a die that is being picked up for its
+  plate finishes leaving though its move has been made, and is then on no plate.
+- **The plate's die appears when the die has been picked up**, 1.1 s after it landed and 260 ms
+  more, not at the landing as §4.2's table has it: for that second the die lies on the board in
+  its roller's corner, and a second one on the plate would be two dice for one roll.
+- **The die's size is set on the die.** The stylesheet gives every die a size of its own, which
+  replaces one inherited from its holder. The first build was 32px on every screen: 1.5 squares
+  on a phone, too big for the corner the geometry spec had cleared for 1.2, and with every throw
+  a quarter too long. A probe of a throw's first frames found it; no spec reads a stylesheet.
+- **Risk 7 is answered in part.** The flat die was looked at by hand on the production build at
+  390 in English and at 1280 in Persian: in the hand, lifted, in the air, at rest, spent, on the
+  plate, for a watcher, and with less motion asked for. The hinged alternative was not drawn.
+- **Not built here.** The walk back of a refused move and the hastening of what stands in front
+  of a pressed roll are 3.3. `die-shake` is still a one-second recording that may run over the
+  first landing.
 
 ### 5.3 Hokm
 

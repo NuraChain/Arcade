@@ -43,6 +43,12 @@ export default component YardBadge(props: {
         ? locale.t('match.you')
         : (person === null ? props.player.who : locale.text(person.displayName));
 
+    derived thrown = props.die === undefined
+        ? ''
+        : (mine
+            ? locale.t('match.turn.rolled', { die: locale.n(props.die) })
+            : locale.t('match.rolled.them', { name, die: locale.n(props.die) }));
+
     derived missed = props.player.timeouts ?? 0;
 
     derived warned = nextMissForfeits(missed) && !props.finished;
@@ -176,7 +182,7 @@ export default component YardBadge(props: {
                 </span>
             }
             trail={ rolled
-                ? <span class="block flex-none inline-[1.75rem] block-[1.75rem] [filter:drop-shadow(0_4px_6px_rgb(0_0_0/0.55))]"><DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /></span>
+                ? <span class="block flex-none inline-[1.75rem] block-[1.75rem] [filter:drop-shadow(0_4px_6px_rgb(0_0_0/0.55))]"><DieFace value={ props.die! } size="fill" label={ thrown } /></span>
                 : undefined }
         />
     </div>
