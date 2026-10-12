@@ -180,6 +180,37 @@ describe('the stage', () =>
         expect(clock.pending()).toBe(0);
     });
 
+    it('takes back what a run still holds when it is cancelled after it has ended', async () =>
+    {
+        const { stage, elapse } = rig();
+        const cancelled = vi.fn();
+        const finished = vi.fn();
+
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(() => ({
+            cancel: cancelled,
+            finish: finished,
+            finished: Promise.resolve(),
+            updatePlaybackRate: () => undefined
+        }) as unknown as Animation);
+
+        const run = stage.animate(document.createElement('div'), [{ opacity: 1 }, { opacity: 0 }], { duration: 50, fill: 'both' });
+
+        await elapse(50);
+
+        expect(finished).toHaveBeenCalledTimes(1);
+        expect(cancelled, 'ending is not cancelling: what fills stays until somebody asks').not.toHaveBeenCalled();
+
+        run.cancel();
+
+        expect(cancelled, 'a thing that had faded out stayed out for good').toHaveBeenCalledTimes(1);
+
+        run.cancel();
+        run.finish();
+
+        expect(cancelled).toHaveBeenCalledTimes(1);
+        expect(finished).toHaveBeenCalledTimes(1);
+    });
+
     it('drops every run, wait and timer when it is cleared, and none of them comes back', async () =>
     {
         const { stage, clock, elapse } = rig();

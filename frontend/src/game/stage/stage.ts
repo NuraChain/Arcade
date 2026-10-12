@@ -208,6 +208,7 @@ export function createStage(options: StageOptions): Stage
                         if (cancelled)
                         {
                             animation?.cancel();
+                            animation = null;
                         }
                         else
                         {
@@ -233,7 +234,28 @@ export function createStage(options: StageOptions): Stage
             return {
                 done,
                 length: delay + duration,
-                cancel: () => live.end(true, false),
+                cancel()
+                {
+                    if (!ended)
+                    {
+                        live.end(true, false);
+
+                        return;
+                    }
+
+                    const held = animation;
+
+                    animation = null;
+
+                    try
+                    {
+                        held?.cancel();
+                    }
+                    catch (error)
+                    {
+                        options.report?.(error);
+                    }
+                },
                 finish: () => live.end(false, false)
             };
         },
