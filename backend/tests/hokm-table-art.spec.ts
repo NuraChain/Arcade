@@ -186,6 +186,30 @@ describe('the hand a hokm reader holds', () =>
         expect(ruleOf('.card-hold[data-legal=\'true\'] .card-face')).toContain('translate: 0 -0.55rem;');
     });
 
+    it('keeps the room a hand will be dealt into, one row or two, and hides a card until it has been dealt', () =>
+    {
+        const kept = /min-block-size: calc\(var\(--keep, 1\) \* \(var\(--hand-card\) \* 288 \/ 204 \+ ([\d.]+)rem\) - \(var\(--keep, 1\) - 1\) \* var\(--hand-card\) \* 144 \/ 204\);/.exec(width);
+        const row = /block-size: calc\(var\(--card-h\) \+ ([\d.]+)rem\);/.exec(ruleOf('.hokm-hand'));
+
+        expect(kept, 'the room kept is not a whole row, or a second row does not lie half over the first').not.toBeNull();
+        expect(Number(kept?.[1]), 'the room kept for a row is not the height of a row').toBe(Number(row?.[1]));
+        expect(ruleOf('.hokm-hand + .hokm-hand')).toContain('margin-block-start: calc(var(--card-h) * -0.5);');
+        expect(board).toContain('--keep: ${ roomy }');
+        expect(ruleOf('.hokm-hand > li[data-dealt=\'false\']')).toContain('visibility: hidden;');
+        expect(board).toContain('data-dealt={ unseen.has(card) ? \'false\' : undefined }');
+    });
+
+    it('rests the deck where a card of the dealer\'s would lie, and stacks a packet and a turning card in one box', () =>
+    {
+        const placed = ruleOf('.hokm-trick,\n.hokm-deck');
+
+        expect(placed).toContain('left: calc(50% + var(--dx) * var(--reach-x));');
+        expect(placed).toContain('top: calc(var(--mid) + var(--dy) * var(--reach-y));');
+        expect(ruleOf('.hokm-trick'), 'the deck is tilted like a played card').toContain('rotate: var(--tilt);');
+        expect(/rotate/.test(ruleOf('.hokm-deck'))).toBe(false);
+        expect(ruleOf('.board-flight > .flight:is(.stack, .turning) > :is(.card-face, .card-back)')).toContain('inset: 0;');
+    });
+
     it('never takes a card away from the keyboard, and draws the keyboard\'s place on the card itself', () =>
     {
         const held = (/<button\s+type="button"\s+class="card-hold"[\s\S]*?>\s*<CardFace/.exec(board) ?? [''])[0];

@@ -3893,6 +3893,14 @@ its piles on a small table, and a hidden pile measures as the top corner of the 
 where a side seat's card used to start at four players on a phone. `stage-flight.spec.ts` holds
 both modules. Hokm is their first caller.
 
+**A card that turns over on its way is `turn`, and it is one copy with both faces.** `turnNode`
+is a back with the face under it; `turn` flies it from one place to another, edge on half way
+(`EDGE`), and the back and the face change places at that moment by opacity, on the same clock
+and the same easing as the turn, so a spring that overshoots cannot show a face early. It is
+transform and opacity only. A reader who asked for less motion is flown nothing and is still
+told it landed. `stackNode` is a packet: as many backs as it has cards, three at most, one on
+another. The deal is their first caller; another seat's played card is to be the second (4.6).
+
 **A run that has ended can still be taken back.** A run made with a fill goes on holding its last
 frame after its time is up, and the fade the stage plays for something that ends in nothing is
 always one. `run.cancel()` after the end cancels the animation the run still holds, once. It used
@@ -4341,6 +4349,69 @@ the lowest suit, so a seat can come to the tricks with no trump at all and follo
 of it with anything, and nothing goes quiet. It reads the mover's own `plays` from the api now
 and wants the page to let through exactly that many (`agreed`), and a quiet card wherever the
 rules narrowed the hand. Seen red on a build whose cards never say they cannot be played.
+
+**A hand is dealt in packets from a deck that is on the table, and nothing is told before it is
+dealt.**
+
+- **The deal's in-between is the board's, not the model's.** `step` still deals a hand in two
+  moves, as the engine does: five to the Hâkem on `deal`, everybody full on `trump`. What a
+  table shows between those is ritual with no information in it, so it lives where `lying`
+  lives: `dealing` holds the count each plate shows while the packets fly (and where the deck
+  is, and at two seats what is left in the stock), and goes when the scene does. The parity
+  spec is untouched.
+- **The packets are the ones a dealer deals** (`openingPackets`, `restPackets`): five to the
+  Hâkem; then five to every other seat and fours all round from the Hâkem, eleven packets at
+  three seats and at four, with `dealGap` holding them inside 1.3 s. At two, five each from the
+  stock, whose count falls 52, 47, 42 as each five leaves it. A plate counts a packet when it
+  LANDS. The cue spec's one slide a seat became one slide a packet.
+- **The deck is on the felt in front of the dealer** (`.hokm-deck`, placed by the trick card's
+  own rule at the dealer's `REACH`), from the first card to the last packet's leaving, the
+  whole trump pause included: `deckAt` reads the shown model's phase, so a reader who comes to
+  the table in the pause sees it too. A table for two has none, because what is not dealt
+  there is the stock. The dealer's pile slot was the first idea, and it is not always drawn
+  (side seats on a phone, any compact table): rule 3 wants a flight to start and end on
+  something that is.
+- **A reader's cards are in their slots before they are dealt, and not to be seen.** `seen` is
+  the reader's cards the felt has dealt, with the round they were dealt in. A card of the hand
+  that is not in it is `data-dealt="false"`: laid out and `visibility: hidden`, so it takes
+  its place, cannot be focused and is not read out. A reader's packet lands in the middle of
+  the row, and each card of it leaves as a back, goes edge on half way and arrives as a face
+  (`turn` in the kit: one clone with both faces), 35 ms after the one before. The card is in
+  the hand when its clone lands.
+- **Which cards a packet holds is nobody's knowledge**: the view gives a hand, not the order
+  it was dealt in. `dealtIn` splits the cards not yet seen with a shuffle seeded by the match
+  and the round, so the same hand is dealt the same way each time it is shown, and never in
+  the order it is held, which would say where every suit lies. A packet takes its own count
+  and no more: the last one once took whatever was left, and a deal and a trump that came in
+  one answer gave the Hâkem all thirteen in the first five. A fault that no spec caught said
+  so.
+- **The round is in `seen`** because the cards a hand leaves unplayed are often among the
+  first five of the next, and without it they were shown before their packet.
+- **At rest the hand shows the view's hand.** `rest`, `reset` and the cap each write `seen`
+  whole, so a card can be hidden only while something is still to be played. A reset to the
+  table before the opening, where the reader holds nothing, hides them all.
+- **The row a hand is dealt into is there from the first** (`handed`, for any seated reader),
+  with the room the whole hand will need: `--keep` is two where seventeen cards will make two
+  rows, from the moment the deck is out. The table had one size while a reader waited for
+  trump and another when the cards came, and at three seats on a phone it moved once more, by
+  66 px, when the hand turned out to need a second row. It keeps one size now from the deal
+  until a row goes, and across the end of a hand. Somebody watching is dealt nothing and has
+  no row.
+- **The Hâkem is asked nothing until the five are up** (rule 7): the chooser, the sentence a
+  screen reader is given, the tip, the chime and its haptic all wait on `veiled`, and so does
+  Sort. A hold on a decision is capped: 2000 ms after cards arrived unseen they are shown,
+  whatever the felt is doing (`DEALT_CAP`, on the runtime clock, armed once and not at every
+  card). Before the hold, a Hâkem who was at the table for the opening heard no chime at all,
+  since the turn was theirs from the first frame.
+- Left for 4.5b: the cards a hand leaves unplayed still vanish, the reader's when the view
+  drops them and everybody's count at the next deal's first frame. Left for 4.6: at four seats
+  the chooser lies over the deck for the Hâkem, the one seat with the dealer on its left.
+
+`hokm-beats.spec.ts` holds the packets, the seeded split and the time a deal takes;
+`stage-flight.spec.ts` holds the packet's stack and the turn; `hokm-board.spec.ts` (*a hand
+dealt in packets*) holds the deck, the counts, the hidden cards and their turning up, the row,
+the hold and its cap, a jump and reduced motion; `hokm-cues.spec.ts` holds the eleven slides
+and the chime that waits.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the

@@ -26,6 +26,40 @@ export function cardNode(card: number | null, width: number): HTMLElement
     return box;
 }
 
+export const STACK = 3;
+
+export function stackNode(count: number, width: number): HTMLElement
+{
+    const box = cardNode(null, width);
+
+    box.classList.add('stack');
+
+    for (let nth = 1; nth < Math.min(STACK, count); nth += 1)
+    {
+        box.append(document.createElement('span'));
+    }
+
+    [...box.children].forEach((back, nth) =>
+    {
+        back.className = 'card-back';
+        (back as HTMLElement).style.setProperty('--i', String(nth));
+    });
+
+    return box;
+}
+
+export function turnNode(card: number, width: number): HTMLElement
+{
+    const box = cardNode(null, width);
+    const face = cardNode(card, width).firstElementChild as HTMLElement;
+
+    face.style.opacity = '0';
+    box.classList.add('turning');
+    box.append(face);
+
+    return box;
+}
+
 export const drawn = (element: Element | null): element is Element => element !== null && element.getClientRects().length > 0;
 
 export function anchor(layer: Element, places: readonly (Element | null)[]): Rect | null

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { manualClock } from '../src/lib/clock.ts';
 import { POP_LINEAR, SNAP_LINEAR, TIMING, easings, flightFrames, outside, type Rect } from '../src/game/motion.ts';
-import { CARD_RATIO, anchor, cardAt, cardNode, drawn } from '../src/game/stage/cards.ts';
-import { launch } from '../src/game/stage/flight.ts';
+import { CARD_RATIO, anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../src/game/stage/cards.ts';
+import { EDGE, launch, turn } from '../src/game/stage/flight.ts';
 import { createStage } from '../src/game/stage/stage.ts';
 
 const FROM: Rect = { x: 10, y: 20, width: 30, height: 40 };
@@ -250,5 +250,104 @@ describe('a card to fly', () =>
         expect(card.height).toBeCloseTo(30 * CARD_RATIO, 6);
         expect(card.x).toBe(125);
         expect(card.y).toBeCloseTo(120 - 15 * CARD_RATIO, 6);
+    });
+});
+
+describe('a packet of cards, and a card turned over on its way', () =>
+{
+    const frames = (animate: ReturnType<typeof vi.spyOn>, target: Element) =>
+    {
+        const at = animate.mock.contexts.lastIndexOf(target);
+
+        return at === -1 ? null : { frames: animate.mock.calls[at][0] as Keyframe[], timing: animate.mock.calls[at][1] as KeyframeAnimationOptions };
+    };
+
+    it('is as many backs as it holds cards, one on another, and never more than three thick', () =>
+    {
+        const five = stackNode(5, 30);
+        const two = stackNode(2, 30);
+        const none = stackNode(0, 30);
+
+        expect(five.style.getPropertyValue('--back-w')).toBe('30px');
+        expect(five.classList.contains('stack')).toBe(true);
+        expect([...five.children].map((one) => one.className)).toEqual(['card-back', 'card-back', 'card-back']);
+        expect([...five.children].map((one) => (one as HTMLElement).style.getPropertyValue('--i'))).toEqual(['0', '1', '2']);
+        expect(two.children.length).toBe(2);
+        expect(none.children.length, 'a packet of nothing was drawn as nothing at all').toBe(1);
+    });
+
+    it('is a back with the face under it, the face not yet to be seen', () =>
+    {
+        const node = turnNode(27, 48);
+        const [back, face] = [...node.children] as HTMLElement[];
+
+        expect(node.classList.contains('turning')).toBe(true);
+        expect(back.className).toBe('card-back');
+        expect(face.className).toBe('card-face');
+        expect(face.style.getPropertyValue('--at-rank')).toBe('1');
+        expect(face.style.getPropertyValue('--at-suit')).toBe('2');
+        expect(face.style.opacity).toBe('0');
+    });
+
+    it('goes edge on halfway there, a back until then and a face from then on, all three on one clock', () =>
+    {
+        const { stage, layer } = rig();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const node = turnNode(27, 60);
+        const [back, face] = [...node.children];
+
+        turn(stage, layer, node, FROM, TO, { duration: 240, delay: 60, easing: 'ease-out' });
+
+        const box = frames(animate, node);
+        const under = frames(animate, face);
+        const over = frames(animate, back);
+
+        expect(layer.contains(node)).toBe(true);
+        expect(node.classList.contains('flight')).toBe(true);
+        expect(placed(node)).toEqual(boxed(TO));
+        expect(box?.frames.map((one) => one.translate)).toEqual(['-205px -120px', '-102.5px -60px', '0px 0px']);
+        expect(box?.frames.map((one) => one.scale)).toEqual(['0.5 0.5', `${ EDGE } 0.75`, '1 1']);
+        expect(box?.frames[1].offset).toBe(0.5);
+        expect(over?.frames.map((one) => [one.opacity, one.offset])).toEqual([[1, undefined], [1, 0.5], [0, 0.5], [0, undefined]]);
+        expect(under?.frames.map((one) => [one.opacity, one.offset])).toEqual([[0, undefined], [0, 0.5], [1, 0.5], [1, undefined]]);
+
+        for (const one of [box, under, over])
+        {
+            expect([one?.timing.duration, one?.timing.delay, one?.timing.easing, one?.timing.fill]).toEqual([240, 60, 'ease-out', 'both']);
+        }
+    });
+
+    it('is taken out when it has landed, and says so once', async () =>
+    {
+        const { stage, layer, elapse } = rig();
+        const told: string[] = [];
+        const node = turnNode(3, 60);
+        const run = turn(stage, layer, node, FROM, TO, { duration: 200, easing: 'linear', landed: () => told.push(layer.contains(node) ? 'landed in the layer' : 'landed') });
+
+        void run.done.then(() => told.push('done'));
+
+        expect(run.length).toBe(200);
+
+        await elapse(195);
+        expect(layer.contains(node)).toBe(true);
+        expect(told).toEqual([]);
+
+        await elapse(5);
+        expect(layer.children.length).toBe(0);
+        expect(told).toEqual(['landed', 'done']);
+    });
+
+    it('is not flown for a reader who asked for less motion, and still says it landed', async () =>
+    {
+        const { stage, layer, elapse } = rig(true);
+        const told: string[] = [];
+        const run = turn(stage, layer, turnNode(3, 60), FROM, TO, { duration: 200, easing: 'linear', landed: () => told.push('landed') });
+
+        void run.done.then(() => told.push('done'));
+
+        expect(layer.children.length).toBe(0);
+
+        await elapse(5);
+        expect(told).toEqual(['landed', 'done']);
     });
 });

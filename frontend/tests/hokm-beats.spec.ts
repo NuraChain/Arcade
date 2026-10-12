@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { SHUFFLE, dealGap, dealLength, gatherLength, gatherOrder, holdBefore, spanOf } from '../src/game/hokm-beats.ts';
+import { ROUND, SHUFFLE, TURN, TURN_GAP, dealGap, dealLength, dealtIn, gatherLength, gatherOrder, holdBefore, openLength, openingPackets, restPackets, spanOf } from '../src/game/hokm-beats.ts';
 import type { Told } from '../src/game/hokm-felt.ts';
 import { TIMING } from '../src/game/motion.ts';
 
@@ -49,13 +49,21 @@ describe('how long a felt takes to show what happened', () =>
     {
         expect(spanOf([{ e: 'deal', hakem: 1 }], 4, 0)).toBe(SHUFFLE + TIMING.DEAL_FLY);
         expect(spanOf([{ e: 'deal', hakem: 1 }], 3, 0)).toBe(SHUFFLE + TIMING.DEAL_FLY);
-        expect(spanOf([{ e: 'deal', hakem: 1 }], 2, 0)).toBe(SHUFFLE + dealGap(2) + TIMING.DEAL_FLY);
+        expect(spanOf([{ e: 'deal', hakem: 1 }], 2, null)).toBe(SHUFFLE + dealGap(2) + TIMING.DEAL_FLY);
     });
 
-    it('gives trump the rest of the deal going round to every seat, and nothing more at a table for two', () =>
+    it('gives a reader who is dealt five the time those five take to turn face up', () =>
     {
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, 0)).toBe(TIMING.FADE + dealLength(4, false));
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 3, 0)).toBe(TIMING.FADE + dealLength(3, false));
+        expect(spanOf([{ e: 'deal', hakem: 0 }], 4, 0)).toBe(SHUFFLE + TIMING.DEAL_FLY + openLength(5));
+        expect(spanOf([{ e: 'deal', hakem: 1 }], 2, 0), 'both seats are dealt five at a table for two').toBe(SHUFFLE + dealGap(2) + TIMING.DEAL_FLY + openLength(5));
+        expect(spanOf([{ e: 'deal', hakem: 0 }], 4, null), 'somebody watching is dealt nothing').toBe(SHUFFLE + TIMING.DEAL_FLY);
+    });
+
+    it('gives trump the rest of the deal in its eleven packets, the reader\'s last four turning up, and nothing more at a table for two', () =>
+    {
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, 0)).toBe(TIMING.FADE + dealLength(11, false) + openLength(ROUND));
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 3, 0)).toBe(TIMING.FADE + dealLength(11, false) + openLength(ROUND));
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, null)).toBe(TIMING.FADE + dealLength(11, false));
         expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 2, 0)).toBe(TIMING.FADE);
     });
 
@@ -71,7 +79,8 @@ describe('how long a felt takes to show what happened', () =>
     {
         const ending: Told[] = [...TRICK, { e: 'hand', side: 0, points: 1, kot: false }, { e: 'deal', hakem: 0 }];
 
-        expect(spanOf(ending, 4, 0)).toBe(TAKEN + TIMING.HOLD + gatherLength(4) + TIMING.BANNER + SHUFFLE + TIMING.DEAL_FLY);
+        expect(spanOf(ending, 4, null)).toBe(3 * TIMING.SEQ_GAP + TIMING.FLY_THEIRS + TIMING.SETTLE + TIMING.HOLD + gatherLength(4) + TIMING.BANNER + SHUFFLE + TIMING.DEAL_FLY);
+        expect(spanOf(ending, 4, 0), 'the new Hâkem\'s five turn up at the end of it').toBe(TAKEN + TIMING.HOLD + gatherLength(4) + TIMING.BANNER + SHUFFLE + TIMING.DEAL_FLY + openLength(5));
         expect(spanOf([], 4, 0)).toBe(0);
     });
 });
@@ -123,5 +132,77 @@ describe('a deal going round', () =>
 
         expect(dealLength(4, false)).toBe(3 * TIMING.DEAL_GAP_MAX + TIMING.DEAL_FLY);
         expect(dealLength(1, true)).toBe(SHUFFLE + TIMING.DEAL_FLY);
+    });
+
+    it('opens with five to the Hâkem alone, and with five to each at a table for two', () =>
+    {
+        expect(openingPackets(4, 2)).toEqual([{ seat: 2, count: 5 }]);
+        expect(openingPackets(3, 0)).toEqual([{ seat: 0, count: 5 }]);
+        expect(openingPackets(2, 1)).toEqual([{ seat: 1, count: 5 }, { seat: 0, count: 5 }]);
+    });
+
+    it('goes on, once trump is named, with five to every other seat and then fours all round from the Hâkem', () =>
+    {
+        const four = restPackets(4, 13, 2);
+        const three = restPackets(3, 17, 1);
+        const dealtTo = (packets: { seat: number; count: number }[], seat: number) => packets.filter((one) => one.seat === seat).reduce((sum, one) => sum + one.count, 0);
+
+        expect(four.slice(0, 3)).toEqual([{ seat: 3, count: 5 }, { seat: 0, count: 5 }, { seat: 1, count: 5 }]);
+        expect(four.slice(3).map((one) => one.seat)).toEqual([2, 3, 0, 1, 2, 3, 0, 1]);
+        expect(four.slice(3).every((one) => one.count === ROUND)).toBe(true);
+        expect([0, 1, 2, 3].map((seat) => dealtTo(four, seat)), 'the Hâkem already holds five').toEqual([13, 13, 8, 13]);
+
+        expect(three.length).toBe(11);
+        expect(three.slice(0, 2)).toEqual([{ seat: 2, count: 5 }, { seat: 0, count: 5 }]);
+        expect([0, 1, 2].map((seat) => dealtTo(three, seat))).toEqual([17, 12, 17]);
+
+        expect(restPackets(2, 13, 0), 'at a table for two the rest is drawn, not dealt').toEqual([]);
+    });
+
+    it('gives each card of a packet its turn to come face up, one a little after another', () =>
+    {
+        expect(openLength(0)).toBe(0);
+        expect(openLength(1)).toBe(TURN);
+        expect(openLength(5)).toBe(TURN + 4 * TURN_GAP);
+        expect(TURN_GAP).toBeLessThan(TURN);
+    });
+
+    it('never takes the rest of the deal past what a deal is allowed', () =>
+    {
+        expect(dealLength(restPackets(4, 13, 0).length, false)).toBeLessThanOrEqual(TIMING.DEAL_TOTAL_MAX);
+        expect(dealLength(restPackets(3, 17, 0).length, false)).toBeLessThanOrEqual(TIMING.DEAL_TOTAL_MAX);
+    });
+});
+
+describe('the cards a reader is dealt, packet by packet', () =>
+{
+    const HAND = [0, 3, 9, 14, 17, 21, 26, 30, 33, 40, 44, 47, 51];
+
+    it('puts every card in one packet and no card in two', () =>
+    {
+        const packets = dealtIn(HAND, [5, 4, 4], 7);
+
+        expect(packets.map((one) => one.length)).toEqual([5, 4, 4]);
+        expect(packets.flat().sort((a, b) => a - b)).toEqual(HAND);
+    });
+
+    it('deals the same hand the same way to the same seed, and another way to another', () =>
+    {
+        expect(dealtIn(HAND, [5, 4, 4], 7)).toEqual(dealtIn(HAND, [5, 4, 4], 7));
+        expect(dealtIn(HAND, [5, 4, 4], 7)).not.toEqual(dealtIn(HAND, [5, 4, 4], 8));
+    });
+
+    it('does not deal a hand in the order it is held, which would say where every suit lies', () =>
+    {
+        expect(dealtIn(HAND, [5, 4, 4], 7).flat()).not.toEqual(HAND);
+    });
+
+    it('puts in a packet only as many cards as it holds, and deals what there is when the hand is shorter', () =>
+    {
+        expect(dealtIn(HAND, [4, 4], 3).map((one) => one.length), 'a packet of four took the cards that a later round will deal').toEqual([4, 4]);
+        expect(dealtIn(HAND, [5], 3).map((one) => one.length), 'the Hâkem\'s first five took the whole hand with them').toEqual([5]);
+        expect(dealtIn(HAND.slice(0, 6), [5, 4, 4], 3).map((one) => one.length)).toEqual([5, 1, 0]);
+        expect(dealtIn([], [5], 3)).toEqual([[]]);
+        expect(dealtIn(HAND, [], 3), 'with no packet to put them in the cards are nobody\'s').toEqual([]);
     });
 });

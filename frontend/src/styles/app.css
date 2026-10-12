@@ -1985,7 +1985,8 @@ html:has(.site-drawer[open])
     line-height: 1;
 }
 
-.hokm-trick
+.hokm-trick,
+.hokm-deck
 {
     --card-w: var(--trick-w);
     --mid: calc(var(--top-room) + var(--trick-gap) + var(--band) / 2);
@@ -1997,8 +1998,28 @@ html:has(.site-drawer[open])
     left: calc(50% + var(--dx) * var(--reach-x));
     top: calc(var(--mid) + var(--dy) * var(--reach-y));
     translate: -50% -50%;
-    rotate: var(--tilt);
     filter: drop-shadow(0 3px 5px rgb(0 0 0 / 0.45));
+}
+
+.hokm-trick
+{
+    rotate: var(--tilt);
+}
+
+.hokm-deck
+{
+    --back-w: calc(var(--trick-w) * 0.8);
+
+    display: block;
+    inline-size: calc(var(--back-w) + 4px);
+    block-size: calc(var(--back-w) * 288 / 204 + 4px);
+}
+
+.hokm-deck > .card-back
+{
+    position: absolute;
+    left: calc(var(--i) * 2px);
+    top: calc(4px - var(--i) * 2px);
 }
 
 .hokm-trick[data-landing='true']
@@ -2034,6 +2055,17 @@ html:has(.site-drawer[open])
 {
     inline-size: 100%;
     block-size: 100%;
+}
+
+.board-flight > .flight:is(.stack, .turning) > :is(.card-face, .card-back)
+{
+    position: absolute;
+    inset: 0;
+}
+
+.board-flight > .flight.stack > .card-back
+{
+    translate: calc(var(--i) * 1.5px) calc(var(--i) * -1.5px);
 }
 
 .hokm-banner
@@ -2107,6 +2139,13 @@ html:has(.site-drawer[open])
 .hokm-hands
 {
     --hand-card: clamp(max(2.4rem, min(3.5rem, 12cqb)), min(12.5cqi, 10cqb / var(--rows, 1)), 5.25rem);
+
+    min-block-size: calc(var(--keep, 1) * (var(--hand-card) * 288 / 204 + 1.6rem) - (var(--keep, 1) - 1) * var(--hand-card) * 144 / 204);
+}
+
+.hokm-hand > li[data-dealt='false']
+{
+    visibility: hidden;
 }
 
 .hokm-hand

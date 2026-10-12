@@ -4,9 +4,10 @@ import { createSignal } from 'azerothjs';
 
 import { dealerOf } from '../../backend/src/domains/match/hokm/scoring.ts';
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
-import { PLUS, gatherLength } from '../src/game/hokm-beats.ts';
+import { PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
 import { TIMING } from '../src/game/motion.ts';
-import { HASTE } from '../src/game/stage/director.ts';
+import { FAST, HASTE } from '../src/game/stage/director.ts';
+import { EDGE } from '../src/game/stage/flight.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -1476,11 +1477,12 @@ describe('the clock on a plate, and the two things beside the hand', () =>
         expect(container.querySelector('.hokm-clock')).toBeNull();
     });
 
-    it('keeps the row, and what a screen reader is told, for a reader who holds nothing yet', () =>
+    it('keeps the row a hand will be dealt into, and what a screen reader is told, for a reader who holds nothing yet', () =>
     {
         const { container } = renderTest(() => HokmBoard({ events: NO_EVENTS, match: turn({}, { phase: 'trump', trump: undefined, hakem: 2, turn: 2, lead: 2, hand: [], plays: [] }) }) as Rendered);
 
-        expect(container.querySelector('.hokm-hands')).toBeNull();
+        expect(container.querySelector('.hokm-hands'), 'with no row kept the table moves when the cards come').not.toBeNull();
+        expect(container.querySelector('.hokm-hands .card-hold')).toBeNull();
         expect(container.querySelector('.hokm-foot > .hokm-rail [aria-live="polite"]')?.textContent).toContain('is choosing trump');
         expect(container.querySelector('.hokm-foot')!.getAttribute('data-tools')).toBe('true');
     });
@@ -2507,5 +2509,431 @@ describe('the hand under a keyboard', () =>
 
         expect(hold(container, 14).getAttribute('aria-pressed')).toBe('false');
         expect(hold(container, 14).getAttribute('aria-disabled')).toBe('true');
+    });
+});
+
+describe('a hand dealt in packets', () =>
+{
+    const THIRTEEN = [1, 4, 9, 14, 17, 22, 27, 30, 35, 40, 43, 47, 50];
+
+    const FIVE = [1, 14, 27, 40, 50];
+
+    const GAP = dealGap(11);
+
+    const DEALT = 2000;
+
+    const naming = (mine: number, view: Partial<Hokm> = {}): MatchView => ({
+        ...match({ phase: 'trump', trump: undefined, turn: 0, lead: 0, ...view }, mine),
+        remainingMs: 20_000
+    });
+
+    const named = () => [act(4, 0, { e: 'trump', seat: 0, suit: 'spades' })];
+
+    const dealt = (hand: number[]): Partial<Hokm> => ({ hand, plays: [] });
+
+    const heldOn = (container: HTMLElement) => [0, 1, 2, 3].map((seat) =>
+        Number([...container.querySelectorAll(`.hokm-seat[data-seat="${ seat }"] .table-plate-facts .tally`)][1]?.textContent));
+
+    const hidden = (container: HTMLElement) => container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length;
+
+    const up = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.hokm-hand > li:not([data-dealt="false"]) .card-hold')].map((one) => Number(one.dataset.card));
+
+    beforeEach(() =>
+    {
+        useDevice().overrideCoarse(false);
+    });
+
+    it('rests the deck on the felt in front of the dealer while trump is being named', async () =>
+    {
+        const { container } = await mounted(naming(1));
+        const deck = container.querySelector<HTMLElement>('.hokm-table > .hokm-deck');
+
+        expect(deck, 'the cards a deal is dealt from are nowhere on the table').not.toBeNull();
+        expect(deck?.getAttribute('aria-hidden')).toBe('true');
+        expect(deck?.querySelectorAll('.card-back').length).toBe(3);
+        expect([deck?.style.getPropertyValue('--dx'), deck?.style.getPropertyValue('--dy')], 'the deck is not in front of seat 3, who dealt').toEqual(['0', '-1']);
+    });
+
+    it('has no deck of its own at a table for two, where what is not dealt is the stock', async () =>
+    {
+        const two: MatchView = { ...naming(0, { stock: 42, seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false })), points: [0, 0] }), seats: 2, players: [0, 1].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players'] };
+        const { container } = await mounted(two);
+
+        expect(container.querySelector('.hokm-deck')).toBeNull();
+        expect(container.querySelector('.hokm-stock')).not.toBeNull();
+    });
+
+    it('counts the stock down as each five leaves it at a table for two, and the two hands up as each lands', async () =>
+    {
+        const two: MatchView = {
+            ...naming(0, { hand: FIVE, stock: 42, seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false })), points: [0, 0] }),
+            seats: 2,
+            rev: 1,
+            players: [0, 1].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+        };
+        const { container } = await mounted(two, { seq: 1, id: 'match-1', events: [act(1, 0, { e: 'deal', hakem: 0 })], live: true, jump: false, opens: () => true });
+        const stock = () => container.querySelector('.hokm-stock-count .tally')?.textContent;
+        const held = () => [0, 1].map((seat) => Number([...container.querySelectorAll(`.hokm-seat[data-seat="${ seat }"] .table-plate-facts .tally`)][1]?.textContent));
+
+        expect(stock(), 'ten cards were gone from the stock before one had left it').toBe('52');
+        expect(held()).toEqual([0, 0]);
+
+        await elapse(SHUFFLE + 5);
+        expect(stock()).toBe('47');
+
+        await elapse(dealGap(2));
+        expect(stock()).toBe('42');
+        expect(held(), 'a hand was counted while its cards were in the air').toEqual([0, 0]);
+
+        await elapse(LONG, 5);
+        expect([stock(), ...held()]).toEqual(['42', 5, 5]);
+    });
+
+    it('keeps the deck there until its last packet has left, and no longer', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await elapse(TIMING.FADE + 10 * GAP - 5);
+
+        expect(container.querySelector('.hokm-deck'), 'the deck went while there were cards still to deal from it').not.toBeNull();
+
+        await elapse(10);
+
+        expect(container.querySelector('.hokm-deck'), 'an empty deck was left lying on the felt').toBeNull();
+    });
+
+    it('counts a seat\'s cards up as each packet lands on it, five to the others and then fours all round', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await flush();
+
+        expect(heldOn(container), 'the whole deal was counted before a card had left the deck').toEqual([5, 0, 0, 0]);
+
+        await elapse(TIMING.FADE + TIMING.DEAL_FLY - 5);
+        expect(heldOn(container)).toEqual([5, 0, 0, 0]);
+
+        await elapse(10);
+        expect(heldOn(container), 'the first packet did not land on the seat after the Hâkem').toEqual([5, 5, 0, 0]);
+
+        await elapse(2 * GAP);
+        expect(heldOn(container)).toEqual([5, 5, 5, 5]);
+
+        await elapse(4 * GAP);
+        expect(heldOn(container)).toEqual([9, 9, 9, 9]);
+
+        await elapse(LONG, 5);
+        expect(heldOn(container)).toEqual([13, 13, 13, 13]);
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBeNull();
+
+        send([card(5, 0, 2)], { plays: [] });
+        await elapse(LONG, 5);
+
+        expect(heldOn(container), 'the counts the deal left were still on the plates when a card was played').toEqual([12, 13, 13, 13]);
+    });
+
+    it('hides the cards a reader has been dealt until their packet has landed, and then turns each one face up in its place', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await flush();
+
+        expect(container.querySelectorAll('.hokm-hand .card-hold').length, 'the row was not laid out for the whole hand').toBe(13);
+        expect(hidden(container), 'a card was shown before it had been dealt').toBe(13);
+
+        await elapse(TIMING.FADE + TIMING.DEAL_FLY + 5);
+
+        const turning = [...container.querySelectorAll('.board-flight > .flight.turning')];
+
+        expect(turning.length, 'the packet landed and none of its cards was turned over').toBe(5);
+        expect(turning.every((one) => one.querySelector('.card-back') !== null && one.querySelector('.card-face') !== null)).toBe(true);
+        expect(hidden(container), 'a card stood in the hand while it was still turning over on its way there').toBe(13);
+        expect(animate.mock.calls.some(([frames]) => (frames as Keyframe[]).some((frame) => String(frame.scale).startsWith(`${ EDGE } `))), 'nothing went edge on').toBe(true);
+
+        await elapse(TURN);
+
+        expect(up(container).length, 'the five were turned up together, not one after another').toBe(1);
+
+        await elapse(4 * TURN_GAP);
+
+        expect(hidden(container)).toBe(8);
+        expect(up(container).length).toBe(5);
+
+        await elapse(4 * GAP);
+
+        expect(hidden(container), 'the second packet turned up the cards of the first again, or none').toBe(4);
+
+        await elapse(LONG, 5);
+
+        expect(hidden(container)).toBe(0);
+        expect(up(container)).toEqual(THIRTEEN);
+        expect(container.querySelectorAll('.board-flight > *').length).toBe(0);
+    });
+
+    it('shows every card the reader holds once the felt has caught up, whether a packet brought it or not', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt([...THIRTEEN, 51]));
+        await elapse(TIMING.FADE + 2 * GAP);
+
+        expect(hidden(container)).toBe(14);
+
+        await elapse(DEALT - TIMING.FADE - 2 * GAP - 200);
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'this deal was not over inside the two seconds a hold may last').toBeNull();
+        expect(hidden(container), 'a card no packet carried was left face down when the felt had nothing more to show').toBe(0);
+    });
+
+    it('goes on counting from the felt when cards are played straight after a deal, in the same answer', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'spades' }), card(5, 0, 2)], dealt(THIRTEEN));
+        await elapse((TIMING.FADE + 8 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP) / FAST + TIMING.FLY_THEIRS / FAST / 2);
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'the card after the deal was not still to land').toBe('true');
+        expect(heldOn(container), 'the counts the deal left stood on the plates over the card that was played').toEqual([12, 13, 13, 13]);
+    });
+
+    it('starts every plate from nothing when a new hand is dealt, whatever the last hand left it holding', async () =>
+    {
+        const left = [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 3, tricks: seat % 2 === 0 ? 4 : 2, out: false }));
+        const { container, send } = await mounted({ ...match({ phase: 'tricks', trump: 'spades', turn: 3, lead: 0, trick: [10, 11, 12], hand: [20], plays: [], seats: left }, 1), remainingMs: 20_000 });
+
+        send([act(4, 3, { e: 'card', seat: 3, card: 13 }, { e: 'trick', seat: 0 }, { e: 'hand', side: 0, points: 1, kot: false }, { e: 'deal', hakem: 0 })], { phase: 'trump', trump: undefined, hand: [], plays: [], round: 2 });
+        await elapse(TIMING.FLY_THEIRS + TIMING.SETTLE + TIMING.HOLD + gatherLength(4) + TIMING.BANNER + SHUFFLE / 2);
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBe('true');
+        expect(container.querySelector('.hokm-deck'), 'the new hand was not yet being dealt').not.toBeNull();
+        expect(heldOn(container), 'the cards the last hand left unplayed were counted into the new one').toEqual([0, 0, 0, 0]);
+
+        await elapse(LONG, 5);
+
+        expect(heldOn(container)).toEqual([5, 0, 0, 0]);
+    });
+
+    it('deals a reader the same cards in the same packets every time a hand is shown', async () =>
+    {
+        const first = await mounted(naming(1));
+
+        first.send(named(), dealt(THIRTEEN));
+        await elapse(TIMING.FADE + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
+
+        const once = up(first.container);
+
+        cleanup();
+
+        const second = await mounted(naming(1));
+
+        second.send(named(), dealt(THIRTEEN));
+        await elapse(TIMING.FADE + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
+
+        expect(once.length).toBe(5);
+        expect(up(second.container)).toEqual(once);
+        expect(once, 'the first five dealt were the first five of the hand as it is held').not.toEqual(THIRTEEN.slice(0, 5));
+    });
+
+    it('gives the Hâkem the eight that were not dealt before, in two fours, and leaves the five in the hand alone', async () =>
+    {
+        const { container, send } = await mounted(naming(0, { hand: FIVE }));
+
+        expect(hidden(container)).toBe(0);
+
+        send(named(), dealt(THIRTEEN));
+        await flush();
+
+        expect(up(container), 'the five the Hâkem named trump from were taken away to be dealt again').toEqual(FIVE);
+        expect(hidden(container)).toBe(8);
+
+        await elapse(TIMING.FADE + 3 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP + 5);
+
+        expect(hidden(container)).toBe(4);
+
+        await elapse(LONG, 5);
+
+        expect(up(container)).toEqual(THIRTEEN);
+    });
+
+    it('deals the Hâkem five and then the eight when the deal and the trump come in one answer', async () =>
+    {
+        const both = { ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: THIRTEEN, plays: THIRTEEN, seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 13, tricks: 0, out: false })) }, 0), rev: 2, remainingMs: 20_000 };
+        const { container } = await mounted(both, { seq: 1, id: 'match-1', events: [act(1, 0, { e: 'deal', hakem: 0 }), act(2, 0, { e: 'trump', seat: 0, suit: 'spades' })], live: true, jump: false, opens: () => true });
+
+        expect(hidden(container)).toBe(13);
+
+        await elapse(SHUFFLE + TIMING.DEAL_FLY + TURN + 12 * TURN_GAP + 5);
+
+        expect(up(container).length, 'the first five took the whole hand with them').toBe(5);
+
+        await elapse(LONG, 5);
+
+        expect(up(container)).toEqual(THIRTEEN);
+    });
+
+    it('keeps the row a hand will be dealt into under the table from the first, so the table does not move when the cards come', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+        const row = container.querySelector('.hokm-hands');
+
+        expect(row, 'there was no row before the cards').not.toBeNull();
+        expect(row?.querySelector('.card-hold')).toBeNull();
+
+        send(named(), dealt(THIRTEEN));
+        await flush();
+
+        expect(container.querySelector('.hokm-hands'), 'the row was made again when the hand arrived').toBe(row);
+    });
+
+    it('keeps the room of two rows from the moment the deck is out, where a hand of seventeen will need it', async () =>
+    {
+        roomOf(358, 778);
+
+        const three: MatchView = {
+            ...naming(1, { full: 17, seats: [0, 1, 2].map((seat) => ({ seat, side: seat, held: seat === 0 ? 5 : 0, tricks: 0, out: false })), points: [0, 0, 0] }),
+            seats: 3,
+            players: [0, 1, 2].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+        };
+        const kept = (container: HTMLElement) => container.querySelector<HTMLElement>('.hokm-hands')?.style.getPropertyValue('--keep');
+        const waiting = await mounted(three);
+
+        expect(kept(waiting.container), 'the table moves when seventeen cards come to a row kept for thirteen').toBe('2');
+
+        cleanup();
+
+        const four = await mounted(naming(1));
+
+        expect(kept(four.container)).toBe('1');
+
+        vi.unstubAllGlobals();
+    });
+
+    it('keeps no row for somebody watching, who is dealt nothing', async () =>
+    {
+        const watching = { ...naming(1), mine: undefined } as unknown as MatchView;
+        const { container } = await mounted(watching);
+
+        expect(container.querySelector('.hokm-hands')).toBeNull();
+        expect(container.querySelector('.hokm-deck'), 'somebody watching sees the same table').not.toBeNull();
+    });
+
+    it('holds the chooser, its sentence and the chime back from the Hâkem until the five cards are up', async () =>
+    {
+        const opening = { ...naming(0, { hand: FIVE }), rev: 1 };
+        const { container } = await mounted(opening, { seq: 1, id: 'match-1', events: [act(1, 0, { e: 'deal', hakem: 0 })], live: true, jump: false, opens: () => true });
+        const said = () => container.querySelector('.hokm-foot > .hokm-rail [aria-live="polite"]')?.textContent ?? '';
+
+        expect(hidden(container)).toBe(5);
+        expect(container.querySelector('.hokm-choose'), 'trump was asked for before a card had been dealt').toBeNull();
+        expect(said()).toBe('');
+        expect(container.querySelector('.hokm-rail .coach-line'), 'a tip about cards nobody has seen yet').toBeNull();
+        expect(container.querySelector('.hokm-deck'), 'the opening was dealt from nothing').not.toBeNull();
+
+        await elapse(SHUFFLE + TIMING.DEAL_FLY + 20);
+
+        expect(container.querySelector('.hokm-deck'), 'the deck went with the first five, and the rest of the hand is still in it').not.toBeNull();
+
+        await elapse(TURN + 4 * TURN_GAP - 30);
+
+        expect(container.querySelector('.hokm-choose'), 'trump was asked for with the fifth card still on its way').toBeNull();
+
+        await elapse(15);
+
+        expect(hidden(container)).toBe(0);
+        expect(container.querySelector('.hokm-choose')).not.toBeNull();
+        expect(said()).not.toBe('');
+        expect(container.querySelector('.hokm-deck')).not.toBeNull();
+    });
+
+    it('lets the Hâkem see the five and choose after two seconds however far behind the felt is', async () =>
+    {
+        const five = [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 3, tricks: seat % 2 === 0 ? 4 : 2, out: false }));
+        const { container, send } = await mounted({ ...match({ phase: 'tricks', trump: 'spades', turn: 3, lead: 0, trick: [10, 11, 12], hand: [20], plays: [], seats: five }, 0), remainingMs: 20_000 });
+
+        send([act(4, 3, { e: 'card', seat: 3, card: 13 }, { e: 'trick', seat: 0 }, { e: 'hand', side: 0, points: 1, kot: false }, { e: 'deal', hakem: 0 })], { phase: 'trump', trump: undefined, hand: FIVE, plays: [], round: 2 });
+        await elapse(DEALT - 5);
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'this felt was not behind').toBe('true');
+        expect(hidden(container)).toBe(5);
+        expect(container.querySelector('.hokm-choose')).toBeNull();
+
+        await elapse(10);
+
+        expect(hidden(container), 'the hold on a hand outlasted its two seconds').toBe(0);
+        expect(container.querySelector('.hokm-choose')).not.toBeNull();
+    });
+
+    it('does not show a card of the new hand early because the last hand held it too', async () =>
+    {
+        const five = [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 3, tricks: seat % 2 === 0 ? 4 : 2, out: false }));
+        const { container, send } = await mounted({ ...match({ phase: 'tricks', trump: 'spades', turn: 3, lead: 0, trick: [10, 11, 12], hand: [1, 14, 20], plays: [], seats: five }, 0), remainingMs: 20_000 });
+
+        send([act(4, 3, { e: 'card', seat: 3, card: 13 }, { e: 'trick', seat: 0 }, { e: 'hand', side: 0, points: 1, kot: false }, { e: 'deal', hakem: 0 })], { phase: 'trump', trump: undefined, hand: FIVE, plays: [], round: 2 });
+        await flush();
+
+        expect(hidden(container), 'cards 1 and 14 were in the last hand and so were shown before the new deal reached them').toBe(5);
+    });
+
+    it('asks Sort to wait until the hand it would sort has been dealt', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await flush();
+
+        expect(container.querySelector('.hokm-rail .hokm-sort')).toBeNull();
+
+        await elapse(LONG, 5);
+
+        expect(container.querySelector('.hokm-rail .hokm-sort')).not.toBeNull();
+    });
+
+    it('shows a hand as it is, with nothing dealt, to a reader who comes to the table later', async () =>
+    {
+        const { container } = await mounted({ ...match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: THIRTEEN, plays: THIRTEEN, seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 13, tricks: 0, out: false })) }, 1), remainingMs: 20_000 });
+
+        expect(hidden(container)).toBe(0);
+        expect(container.querySelector('.hokm-deck')).toBeNull();
+        expect(container.querySelectorAll('.board-flight > *').length).toBe(0);
+    });
+
+    it('shows the whole hand at once when the board has to jump to where the game is', async () =>
+    {
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await elapse(TIMING.FADE + 2 * GAP);
+
+        expect(hidden(container)).toBeGreaterThan(0);
+
+        send([act(9, 1, { e: 'card', seat: 1, card: 1 })], { hand: THIRTEEN.slice(1), plays: [] });
+        await flush();
+
+        expect(hidden(container), 'a card was left hidden with no deal coming to show it').toBe(0);
+        expect(heldOn(container).slice(2), 'a count was left where the deal had got to').toEqual([13, 13]);
+        expect(container.querySelector('.hokm-deck')).toBeNull();
+    });
+
+    it('turns no card over for a reader who asked for less motion, and still shows each packet when it would have landed', async () =>
+    {
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const { container, send } = await mounted(naming(1));
+
+        send(named(), dealt(THIRTEEN));
+        await elapse(TIMING.FADE + 5);
+
+        expect(container.querySelectorAll('.board-flight > *').length, 'something was flown for a reader who asked for less motion').toBe(0);
+        expect(hidden(container)).toBe(8);
+        expect(heldOn(container)[1]).toBe(5);
+
+        await elapse(LONG, 5);
+
+        expect(hidden(container)).toBe(0);
+        expect(heldOn(container)).toEqual([13, 13, 13, 13]);
     });
 });

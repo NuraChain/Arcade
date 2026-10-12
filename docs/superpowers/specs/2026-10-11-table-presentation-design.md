@@ -1941,6 +1941,24 @@ unchanged. Where it differs from what this section said:
 - **Still to come**: the turn-over of another seat's card (it fades in from its seat as before),
   trump travelling to the medal, the crown's travel and the fan's FLIP.
 
+**As built (commit 4.5, the deal).** The deal row of the table above, without the hand's end.
+
+- **The packets, the deck and the counts are the board's** (`dealing`), not the model's: `step`
+  deals in the engine's two moves and the parity spec is as it was.
+- **The deck rests on the felt at the dealer's trick spot**, not in the dealer's pile slot, which
+  a side seat on a phone and any compact table do not draw.
+- **A reader's packet lands on the row and its cards turn face up in their own slots**, by one
+  clone a card that is a back for the first half of its way and a face for the second (`turn`).
+  Which cards a packet holds is a seeded split of the hand.
+- **The row is kept from the first, at the height the whole hand will need**, so the table has
+  one size from the deal on. Measured on the built server at 390 by 844: 627 px through a
+  four-handed deal and across the end of a hand, 561 px through a three-handed one.
+- **Rule 7's first Hokm row holds as written**, capped at 2000 ms. The second holds the cards
+  only. A whole deal after trump takes 1.5 s at four seats and 1.8 s at three, the last of the
+  reader's cards turning up after the last packet has landed.
+- **Measured, the opening**: 450 ms of shuffle, 260 ms for the Hâkem's packet, the five up
+  360 ms later, and the chooser with the fifth.
+
 ### 5.4 Poker
 
 **Engine facts** (`backend/src/domains/match/poker/`). The table passes to the left (clockwise).

@@ -1,5 +1,7 @@
-import { flightFrames, type FlightShape, type Rect } from '../motion.ts';
+import { centreOf, flightFrames, type FlightShape, type Rect } from '../motion.ts';
 import type { Quiet, Run, Stage } from './stage.ts';
+
+export const EDGE = 0.04;
 
 export interface Launch extends FlightShape
 {
@@ -8,6 +10,64 @@ export interface Launch extends FlightShape
     delay?: number;
     quiet?: Quiet;
     landed?: () => void;
+}
+
+export interface Turn
+{
+    duration: number;
+    easing: string;
+    delay?: number;
+    landed?: () => void;
+}
+
+function put(layer: HTMLElement, clone: HTMLElement, at: Rect)
+{
+    clone.classList.add('flight');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.style.left = `${ at.x }px`;
+    clone.style.top = `${ at.y }px`;
+    clone.style.width = `${ at.width }px`;
+    clone.style.height = `${ at.height }px`;
+    layer.append(clone);
+}
+
+export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Turn): Run
+{
+    if (stage.quiet())
+    {
+        return stage.animate(clone, [], { duration: 0, quiet: 'skip', landed: flight.landed });
+    }
+
+    const start = centreOf(from);
+    const end = centreOf(to);
+    const scale = to.width > 0 ? from.width / to.width : 1;
+    const timing = { duration: flight.duration, delay: flight.delay, easing: flight.easing, fill: 'both' as const };
+    const [back, face] = [...clone.children];
+
+    put(layer, clone, to);
+
+    if (back !== undefined)
+    {
+        stage.animate(back, [{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], timing);
+    }
+
+    if (face !== undefined)
+    {
+        stage.animate(face, [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1, offset: 0.5 }, { opacity: 1 }], timing);
+    }
+
+    return stage.animate(clone, [
+        { translate: `${ start.x - end.x }px ${ start.y - end.y }px`, scale: `${ scale } ${ scale }` },
+        { translate: `${ (start.x - end.x) / 2 }px ${ (start.y - end.y) / 2 }px`, scale: `${ EDGE } ${ (scale + 1) / 2 }`, offset: 0.5 },
+        { translate: '0px 0px', scale: '1 1' }
+    ], {
+        ...timing,
+        landed: () =>
+        {
+            clone.remove();
+            flight.landed?.();
+        }
+    });
 }
 
 export function launch(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Launch): Run
@@ -19,15 +79,7 @@ export function launch(stage: Stage, layer: HTMLElement, clone: HTMLElement, fro
         return stage.animate(clone, [], { duration: 0, quiet: 'skip', landed: flight.landed });
     }
 
-    const at = stage.quiet() && mode === 'out' ? from : to;
-
-    clone.classList.add('flight');
-    clone.setAttribute('aria-hidden', 'true');
-    clone.style.left = `${ at.x }px`;
-    clone.style.top = `${ at.y }px`;
-    clone.style.width = `${ at.width }px`;
-    clone.style.height = `${ at.height }px`;
-    layer.append(clone);
+    put(layer, clone, stage.quiet() && mode === 'out' ? from : to);
 
     return stage.animate(clone, flightFrames(from, to, flight), {
         duration: flight.duration,

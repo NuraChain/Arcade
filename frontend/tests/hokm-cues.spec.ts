@@ -243,7 +243,7 @@ describe('what a hokm table is heard to do', () =>
         expect(told.felt).toContain('kot');
     });
 
-    it('lets trump be heard when it is named, and at four the rest of the deal going round to every seat', async () =>
+    it('lets trump be heard when it is named, and at four the rest of the deal leaving the deck packet by packet', async () =>
     {
         const { send } = await mounted(match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }));
 
@@ -252,7 +252,7 @@ describe('what a hokm table is heard to do', () =>
 
         expect(count('trump')).toBe(1);
         expect(order('trump', 'card-slide')).toBe(true);
-        expect(count('card-slide'), 'the rest of the deal did not go round to all four').toBe(4);
+        expect(count('card-slide'), 'the rest of the deal is five to three seats and two rounds of four to all of them').toBe(11);
     });
 
     it('lets a card drawn from the stock and a card put down be heard at a table for two', async () =>
@@ -412,6 +412,24 @@ describe('what a hokm table is heard to do', () =>
         await elapse(LONG, 5);
 
         expect([count('card-shuffle'), count('card-slide')]).toEqual([1, 2]);
+    });
+
+    it('keeps the chime that calls the Hâkem to name trump until the five cards are up', async () =>
+    {
+        const opening = {
+            ...match({ phase: 'trump', trump: undefined, turn: 0, lead: 0, hand: [1, 14, 27, 40, 50], seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: seat === 0 ? 5 : 0, tricks: 0, out: false })) }, 0),
+            rev: 1
+        };
+
+        await mounted(opening, { seq: 1, id: 'match-1', events: [act(1, 0, { e: 'deal', hakem: 0 })], live: true, jump: false, opens: () => true });
+        await elapse(SHUFFLE + TIMING.DEAL_FLY);
+
+        expect(count('turn'), 'the Hâkem was called to choose from cards that had not been turned up').toBe(0);
+
+        await elapse(LONG, 5);
+
+        expect(count('turn')).toBe(1);
+        expect(told.felt).toContain('ready');
     });
 
     it('deals nothing more when trump is named at a table for two, where the rest is drawn', async () =>
