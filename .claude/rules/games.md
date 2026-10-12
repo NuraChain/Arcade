@@ -3580,7 +3580,7 @@ holds the empty foot, the clock on the plate that is to play in both languages a
 at a table that keeps no time, the strip with a partner's tag and the clock in it and no tag in
 the pill, and the lamp in the frame with the advice and the direction. `turn-clock.spec.ts`
 holds the ticks on the reader's own plate and the silence on anybody else's. The fit pass holds
-the rest for the ludo cells, at one more size than the other games are yet held to (360x560
+the rest for the ludo cells, at one more size than poker and backgammon are yet held to (360x560
 with the chat shut: a phone inside a browser with its bars up) and in one more position than it
 had: `ludo-4-rolled` plays over the api until a seat on the right of the board holds a roll
 with a move on offer, so every size is looked at with a die on a plate, a clock beside it and
@@ -4216,8 +4216,84 @@ indices are large: they are what shows of a card overlapped in a hand.
 their place round the table - bottom, then right, top and left at four; top-right and top-left at
 three; top at two - and the trick lies between each seat and the centre. The stage is the table and
 under it the hand, at every size, and the trump, the score and the last trick are on the felt. The
-hand fans with a step that shrinks to fit, and breaks into two rows past thirteen, because the
-seventeen cards of the three-handed game in one row on a phone is a strip too narrow to read.
+hand fans with a step that shrinks to fit, and breaks into two rows past thirteen where one row
+would show too little of each card, because the seventeen cards of the three-handed game in one
+row on a phone is a strip too narrow to read.
+
+**The hand is a fan the stylesheet lays out and moves, and the board slides it only where the
+stylesheet cannot.**
+
+- **A card is moved, not placed.** Each `li` stands at `left: 50%` and is carried to its slot by
+  `translate`, on a step that is a LENGTH: `100cqi` of the fan, which is an inline-size container.
+  A percentage in `translate` is a percentage of the card itself, so the step the fan used to have
+  in `left` would have stacked every card on one point. A card that stays when another is played
+  slides to its new place by a transition on `translate` and `rotate`, which is all that closing a
+  gap needs: nothing is taken out of the page and put back.
+- **The card's width is worked out once.** `--hand-card` is registered with `@property` and
+  declared on `.hokm-hands`, so it is a length by the time the fan inherits it. Unregistered it is
+  text, worked out again wherever it is used, which is inside the fan and so against the fan's
+  width instead of the row's. A registered property's `initial-value` may not depend on anything a
+  rule can move, and `3.5rem` does: that registers nothing and says nothing. The tablet's card going
+  from 81 px to 68 under the first prototype is how it was found. It is `56px`.
+- **On a phone a card is 56 by 79**, where it was 41 to 45 wide, and the fit pass holds that with
+  the sliver each card shows: 25 px of thirteen at 390, 23.9 at 375, 22.7 at 360. The design asked
+  for 24. Thirteen 56 px cards fanned at six degrees need 367 px to show 24 each and a 360 px
+  phone has 348 between its gutters; a second row there would take 65 px from the table. So
+  thirteen are one row at any width and the pass holds 22.5. A wide phone keeps its 38 px card,
+  because the stage is 330 px tall there and the table needs it, and any stage under 467 px
+  tall gives up some of the 56 the same way: `12cqb` is the card giving way before the table
+  does. A 360 by 560 phone with another table's notice over the stage has 433 px of it, a 52 px
+  card and a table 288 px tall. The pass's floor is the lesser of 56 px and those twelve
+  hundredths (`FILLS.short`), or it would fail the design; it holds `hokm-2-draw`, `hokm-3` and
+  `hokm-4-trick` to that phone as well as to the sizes every cell has.
+- **More than thirteen make two rows where one would show less than that** (`rowed`, from the
+  stage's measured size, with the stylesheet's own clamp mirrored in it): seventeen, sixteen and
+  fifteen on a 390 px phone, one row from fourteen down, and one row for seventeen on anything
+  wide. Before the size is known a hand is never broken, or a wide table would draw two rows for
+  a frame. **A stage under 480 px tall never gets a second row** (`TWO_ROWS_FROM`): under an
+  open chat a 390 by 844 phone has a stage 373 px tall, and a second row there left the table
+  219. That rule was here before the fan and no spec held it, so the fan's rewrite of `rowed`
+  dropped it and every gate stayed green; reading the diff against the last commit found it.
+  **Both rows are of the same 56 px card.** The floor gave way in a second row at first
+  (`15cqb / rows`), which dealt the three-handed game 43 px cards on a 360 by 640 phone: the
+  size this section exists to end. The fit pass said so the first time it ran on that cell.
+  Seventeen there are two rows showing 34 px each over a table 357 px tall; inside a browser's
+  own bars (360 by 560) the table is 277 px tall and takes its compact arrangement for the
+  three tricks the hand is two rows.
+- **The hand is pulled up under Sort and the lamp by the room a card that may be played leaves
+  over itself, and no further**: `top: 0.9rem` less the `0.55rem` such a card stands higher is
+  the `-0.35rem` of `.hokm-foot > .hokm-hands`. It was `-0.6rem`, fitted to a 41 px card in a
+  fan that kept 10 px clear at each end. With wider cards across the whole row the third card
+  from each end lies under a control, and lifted it stood 2 px into the control's box on every
+  phone. `hokm-table-art.spec.ts` holds the sum; the fit pass's corner check holds the picture.
+- **Where Sort and the lamp stand BESIDE the hand** (a foot of 34rem or more) **the fan keeps
+  the swing of its end cards to itself**: `padding-inline` of the card's height times 1.4 times
+  `sin(6deg)`, the pivot and the tilt once more. Without it the fan fills its column and the top
+  corner of an end card turns 17 px outward, across the 8 px between the two and into the
+  control: on a tablet the card and the button really crossed. On a phone the swing goes into
+  the page's gutter, where it costs no card a sliver, so the padding is not there. It costs the
+  three-handed game on a stage 544 to 566 px wide a pixel of each of seventeen cards (21.5 to
+  22.5 shown); one row is still right there, since a second would take 60 px from the table.
+- **Sort is slid by hand, and so is a row that goes.** A keyed list re-inserts every node it
+  cannot leave in place, and a node that was taken out and put back starts no transition: it
+  jumps. `rearrange` reads where every card lies, makes the change, and `follow` plays each card
+  from where it lay to where it lies with an ADDITIVE animation on `translate` and `rotate`, so
+  the slot stays the stylesheet's and a resize in the middle of it still lands right.
+- **While the board slides the cards the stylesheet lets go of them** (`data-sliding` on
+  `.hokm-hands`, for the length of the slide, and an earlier slide's end does not cut a later one
+  short). The list leaves two or three cards in place on any sort, and those got the stylesheet's
+  transition AND the board's slide: in the browser they jumped to their place while the others
+  slid. No spec could see it, since a page with no stylesheet has no transition to collide with.
+- **A tilted card is reckoned by where it stands.** It turns about a point below it
+  (`transform-origin: 50% 140%`), so the middle of its box is swung aside by its tilt, up to 7 px
+  at the ends of the fan. `places` takes the swing out. `FAN_TILT`, `FAN_PIVOT` and `FAN_MS` in
+  the board are the stylesheet's `6deg`, `140%` and `320ms`; `hokm-table-art.spec.ts` reads both
+  files and fails when they part, with the width's clamp and the registration.
+- **A card that cannot be played is veiled, not drained.** It was `saturate(0.3) brightness(0.6)`,
+  which made twelve of thirteen cards one grey. It is a `::before` on the face at 45% of the
+  page's dark now, under which a red card is still red. A card that can be played stands 0.55rem
+  higher under a ring that is `::after` on the face. Both fade by opacity, and the face itself
+  animates `translate` and nothing that has to be painted.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
@@ -4428,7 +4504,8 @@ the moment anything a player needs is below the fold.
   follow. A watcher is sent no `remainingMs`, so a watcher sees no ring, and no `timeouts` while the
   game is live, so no plate of theirs says a turn was missed.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
-  only worth their height when one row would squeeze each card below a readable strip.
+  only worth their height when one row would squeeze each card below a readable strip (*The hand
+  is a fan*, above, has the numbers).
 - `MatchResult` overlays the stage rather than pushing it down. The overlay dims and blurs the
   board, and the standings stand on a card of their own (`.table-result-card`), the `lifted`
   surface every sheet, toast and popover in the product floats on. The panel's own background is a

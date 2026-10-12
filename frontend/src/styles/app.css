@@ -1788,7 +1788,7 @@ html:has(.site-drawer[open])
 {
     grid-row: 2;
     grid-column: 1 / -1;
-    margin-block-start: -0.6rem;
+    margin-block-start: -0.35rem;
 }
 
 @container foot (min-width: 34rem)
@@ -1798,6 +1798,7 @@ html:has(.site-drawer[open])
         grid-row: 1;
         grid-column: 2;
         margin-block-start: 0;
+        padding-inline: calc(var(--hand-card) * 288 / 204 * 1.4 * sin(6deg));
     }
 }
 
@@ -2096,12 +2097,24 @@ html:has(.site-drawer[open])
     gap: 0.15rem;
 }
 
+@property --hand-card
+{
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 56px;
+}
+
+.hokm-hands
+{
+    --hand-card: clamp(max(2.4rem, min(3.5rem, 12cqb)), min(12.5cqi, 10cqb / var(--rows, 1)), 5.25rem);
+}
+
 .hokm-hand
 {
+    container: fan / inline-size;
     isolation: isolate;
-    --card-w: clamp(2.4rem, min(12.5cqi, 10cqb / var(--rows, 1)), 5.25rem);
+    --card-w: var(--hand-card);
     --card-h: calc(var(--card-w) * 288 / 204);
-    --step: min(calc(var(--card-w) * 0.62), calc((100% - var(--card-w) - 1.25rem) / max(1, var(--n) - 1)));
 
     position: relative;
     block-size: calc(var(--card-h) + 1.6rem);
@@ -2116,13 +2129,21 @@ html:has(.site-drawer[open])
 
 .hokm-hand > li
 {
+    --step: min(calc(var(--card-w) * 0.62), calc((100cqi - var(--card-w)) / max(1, var(--n) - 1)));
+
     position: absolute;
     top: 0.9rem;
-    left: calc(50% - var(--card-w) / 2 + (var(--i) - (var(--n) - 1) / 2) * var(--step));
+    left: 50%;
     z-index: calc(var(--i) + 1);
     rotate: calc(var(--t) * 6deg);
-    translate: 0 calc(var(--t) * var(--t) * 0.5rem);
+    translate: calc((var(--i) - (var(--n) - 1) / 2) * var(--step) - var(--card-w) / 2) calc(var(--t) * var(--t) * 0.5rem);
     transform-origin: 50% 140%;
+    transition: translate 320ms var(--ease-snap, cubic-bezier(0.2, 0, 0, 1)), rotate 320ms var(--ease-snap, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.hokm-hands[data-sliding='true'] .hokm-hand > li
+{
+    transition: none;
 }
 
 .hokm-hand > li:hover,
@@ -2140,7 +2161,30 @@ html:has(.site-drawer[open])
 
 .card-hold .card-face
 {
-    transition: translate 160ms var(--ease-ui, ease), filter 160ms ease, box-shadow 160ms ease;
+    position: relative;
+    transition: translate 160ms var(--ease-ui, ease);
+}
+
+.card-hold .card-face::before,
+.card-hold .card-face::after
+{
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 160ms ease;
+    pointer-events: none;
+}
+
+.card-hold .card-face::before
+{
+    background: rgb(8 13 25 / 0.45);
+}
+
+.card-hold .card-face::after
+{
+    box-shadow: 0 0 0 2px var(--accent), 0 8px 18px -6px rgb(0 0 0 / 0.6);
 }
 
 .card-hold:disabled
@@ -2151,7 +2195,11 @@ html:has(.site-drawer[open])
 .card-hold[data-legal='true'] .card-face
 {
     translate: 0 -0.55rem;
-    box-shadow: 0 0 0 2px var(--accent), 0 8px 18px -6px rgb(0 0 0 / 0.6);
+}
+
+.card-hold[data-legal='true'] .card-face::after
+{
+    opacity: 1;
 }
 
 .card-hold:focus-visible .card-face
@@ -2176,7 +2224,12 @@ html:has(.site-drawer[open])
 .hokm-hand .card-hold[data-picked='true'] .card-face
 {
     translate: 0 -1.6rem;
+}
+
+.hokm-hand .card-hold[data-picked='true'] .card-face::after
+{
     box-shadow: 0 0 0 3px var(--gold), 0 14px 26px -8px rgb(0 0 0 / 0.75);
+    opacity: 1;
 }
 
 .card-hold[data-go]::before
@@ -2191,9 +2244,9 @@ html:has(.site-drawer[open])
     pointer-events: none;
 }
 
-.card-hold[data-legal='false'] .card-face
+.card-hold[data-legal='false'] .card-face::before
 {
-    filter: saturate(0.3) brightness(0.6);
+    opacity: 1;
 }
 
 .card-hold[data-legal='hidden']
@@ -2208,7 +2261,10 @@ html:has(.site-drawer[open])
         animation: none;
     }
 
-    .card-hold .card-face
+    .hokm-hand > li,
+    .card-hold .card-face,
+    .card-hold .card-face::before,
+    .card-hold .card-face::after
     {
         transition: none;
     }

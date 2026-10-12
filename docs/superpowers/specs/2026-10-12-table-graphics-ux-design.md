@@ -252,6 +252,37 @@ quality.
   the table (H5). The middle of the felt holds the trump medallion and nothing written (H7).
 - A card dragged or flicked onto the felt is played; let go short of it, it goes back (D18).
 
+**As built (commit 4.4, the fan).** H1 and H6.
+
+| Stage | Card before | Card now | Each shows |
+|---|---|---|---|
+| 390x844 | 45 by 63 | 56 by 79 | 25.2 px of thirteen |
+| 375x667 | 43 by 61 | 56 by 79 | 23.9 |
+| 360x740 and 360x640 | 41 by 58 | 56 by 79 | 22.7 |
+| 844x390 | 38 by 54 | 38 by 54 | 23.8 |
+| 768x1024 | 81 by 114 | 81 by 114 | 35.8 |
+| 1280x800 | 67 by 94 | 67 by 94 | 41.2 |
+
+- The size floor holds on every upright phone with a stage 467 px tall or more. The sliver does
+  not reach 24 px below 390 and cannot: thirteen 56 px cards fanned at six degrees need 367 px
+  to show 24 each, and a 360 px phone has 348 between its gutters. A second row there would
+  take 65 px from the table, so thirteen stay one row and the pass holds 22.5 px.
+- A wide phone keeps its 38 px card: the stage is 330 px tall there and the table needs it. Any
+  stage under 467 px tall gives up some of the 56 the same way: a 360 by 560 phone with another
+  table's notice over the stage shows a 52 px card and keeps a table 288 px tall.
+- More than thirteen cards make two rows only where one row would show less than 22.5 px of
+  each and the stage is at least 480 px tall: seventeen, sixteen and fifteen on a 390 px phone;
+  one row from fourteen down, one row for seventeen on anything wide, and one row under an open
+  chat. Both rows are of the same 56 by 79 card: seventeen on a 360 by 640 phone show 34 px
+  each, over a table 357 px tall.
+- Sort and the lamp stand clear of the hand at every size: over its corners on a phone, where a
+  card that may be played stops 2 px short of them, and beside it from 34rem, where the fan
+  keeps the 17 px its end cards turn outward inside its own box. That is why a tablet shows
+  35.8 px of each card and not the 38.6 its column would allow.
+- A card that cannot be played lies under a veil and keeps its colour. One that can stands
+  0.55rem higher under a ring.
+- Sort, and a row that goes, are one slide of every card from where it lay.
+
 ### 3.5 Poker
 
 - Everything on the table is in `--u` (P1): plates, the board, the pot, the bets, the puck.

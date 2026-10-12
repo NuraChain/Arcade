@@ -27,11 +27,11 @@ const BROWSER_BARS = { width: 360, height: 560, touch: true, shut: true };
 
 const GAMES = [
     { id: 'hokm-2', game: 'hokm', seats: 2, mode: 'turns', target: 7 },
-    { id: 'hokm-2-draw', game: 'hokm', seats: 2, mode: 'turns', target: 7, stop: 'draw' },
+    { id: 'hokm-2-draw', game: 'hokm', seats: 2, mode: 'turns', target: 7, stop: 'draw', also: [BROWSER_BARS] },
     { id: 'hokm-2-follow', game: 'hokm', seats: 2, mode: 'turns', target: 7, tricks: 1 },
-    { id: 'hokm-3', game: 'hokm', seats: 3, mode: 'turns', target: 7, guests: ['Alexander Reeves', 'امیرحسین محمدزاده', 'Maximilian Stone'], viewers: ['turn', 'waiting'] },
+    { id: 'hokm-3', game: 'hokm', seats: 3, mode: 'turns', target: 7, guests: ['Alexander Reeves', 'امیرحسین محمدزاده', 'Maximilian Stone'], viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
     { id: 'hokm-4', game: 'hokm', seats: 4, mode: 'turns', target: 7 },
-    { id: 'hokm-4-trick', game: 'hokm', seats: 4, mode: 'turns', target: 7, tricks: 3, viewers: ['turn', 'lead'] },
+    { id: 'hokm-4-trick', game: 'hokm', seats: 4, mode: 'turns', target: 7, tricks: 3, viewers: ['turn', 'lead'], also: [BROWSER_BARS] },
     { id: 'poker-2', game: 'poker', seats: 2, mode: 'live', target: 0 },
     { id: 'poker-6', game: 'poker', seats: 6, mode: 'live', target: 0 },
     { id: 'poker-6-folded', game: 'poker', seats: 6, mode: 'live', target: 0, viewers: ['folded'] },
@@ -51,7 +51,7 @@ const USABLE = {
     ludo: { wide: [208, 208], tall: [208, 208], card: 0 }
 };
 
-const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15 };
+const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5 };
 
 const LANGUAGES = {
     en: { locale: 'en-US', show: englishPlay['play.table.chatShow'], hide: englishPlay['play.table.chatHide'], raise: [englishPlay['poker.raise'], englishPlay['poker.bet']] },
@@ -616,6 +616,26 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             if (room.width >= room.height && across < given.fills.wide)
             {
                 found.push({ kind: 'small', what: `the table takes ${ Math.round(across * 100) }% of a wide stage's width, under ${ given.fills.wide * 100 }%` });
+            }
+
+            const yields = Math.min(1, room.height * given.fills.short / given.fills.card[0]);
+            const floor = given.fills.card.map((side) => Math.floor(side * yields));
+
+            for (const row of room.height > room.width && room.width < given.fills.phone ? document.querySelectorAll('.hokm-hand') : [])
+            {
+                const face = row.querySelector('.card-face');
+                const lefts = [...row.querySelectorAll('li')].map((slot) => slot.offsetLeft + (Number.parseFloat(getComputedStyle(slot).translate) || 0));
+                const shows = Math.min(...lefts.slice(1).map((left, nth) => left - lefts[nth]));
+
+                if (face !== null && (face.offsetWidth < floor[0] || face.offsetHeight < floor[1]))
+                {
+                    found.push({ kind: 'small', what: `a card in the hand is ${ face.offsetWidth }x${ face.offsetHeight } on a phone, under ${ floor.join('x') }` });
+                }
+
+                if (lefts.length > 1 && shows < given.fills.shows)
+                {
+                    found.push({ kind: 'small', what: `a card in the hand shows ${ shows.toFixed(1) }px of itself on a phone, under ${ given.fills.shows }` });
+                }
             }
         }
     }

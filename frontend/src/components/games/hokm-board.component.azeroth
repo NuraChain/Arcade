@@ -53,7 +53,17 @@ const TWO_ROWS_FROM = 480;
 
 const CARD_MIN = 38.4;
 
+const CARD_FLOOR = 56;
+
 const CARD_MAX = 84;
+
+const SHOWS = 22.5;
+
+const FAN_TILT = 6;
+
+const FAN_PIVOT = 0.9;
+
+const FAN_MS = 320;
 
 const BACKS_SHOWN = 10;
 
@@ -100,6 +110,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     state sent: { id: string; card: number; rev: number; gone: boolean } | null = null;
 
     state lifted: { card: number; at: number } | null = null;
+
+    state sliding = false;
 
     state presenting = false;
 
@@ -322,23 +334,23 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     state room = { width: 0, height: 0 };
 
-    derived rows = ((): number[][] =>
+    derived rowed = (cards: readonly number[]): number[][] =>
     {
-        if (hand.length === 0)
+        if (cards.length === 0)
         {
             return [];
         }
 
-        if (hand.length <= ROW_LIMIT || room.height < TWO_ROWS_FROM)
-        {
-            return [hand];
-        }
+        const least = Math.max(CARD_MIN, Math.min(CARD_FLOOR, room.height * 0.12));
+        const card = Math.min(CARD_MAX, Math.max(least, Math.min(room.width * 0.125, room.height * 0.1)));
+        const shows = (room.width - card) / Math.max(1, cards.length - 1);
 
-        const card = Math.min(CARD_MAX, Math.max(CARD_MIN, Math.min(room.width * 0.125, room.height * 0.1)));
-        const step = (room.width - card - 20) / (hand.length - 1);
+        return cards.length <= ROW_LIMIT || room.height < TWO_ROWS_FROM || shows >= SHOWS
+            ? [[...cards]]
+            : [cards.slice(0, Math.ceil(cards.length / 2)), cards.slice(Math.ceil(cards.length / 2))];
+    };
 
-        return step >= card * 0.42 ? [hand] : [hand.slice(0, Math.ceil(hand.length / 2)), hand.slice(Math.ceil(hand.length / 2))];
-    })();
+    derived rows = rowed(hand);
 
     derived handTricks = felt.points.map((_, side) =>
         felt.chairs.filter((row) => row.side === side).reduce((sum, row) => sum + row.tricks, 0));
@@ -500,6 +512,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     let layer: HTMLElement | null = null;
     let sound: SoundHandle | null = null;
     let presenter: Presenter<Told> | null = null;
+    let rig: Stage | null = null;
+    let steady: () => void = () => undefined;
     let held: Felt = EMPTY;
     let wasActing = untrack(() => acting);
     let chimedDraw = -1;
@@ -559,11 +573,62 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         return from ?? null;
     };
 
+    const places = () => new Map([...(arena?.querySelectorAll<HTMLElement>('.hokm-hand > li') ?? [])].map((slot) =>
+    {
+        const box = slot.getBoundingClientRect();
+        const tilt = Number(slot.style.getPropertyValue('--t'));
+        const swung = Math.sin(tilt * FAN_TILT * Math.PI / 180) * FAN_PIVOT * slot.offsetHeight;
+
+        return [slot.querySelector<HTMLElement>('.card-hold')?.dataset.card ?? '', { slot, tilt, x: box.left + box.width / 2 - swung, y: box.top + box.height / 2 }] as const;
+    }));
+
+    const follow = (before: ReturnType<typeof places>) =>
+    {
+        for (const [card, now] of places())
+        {
+            const was = before.get(card);
+            const dx = (was?.x ?? now.x) - now.x;
+            const dy = (was?.y ?? now.y) - now.y;
+
+            if (rig === null || was === undefined || (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5))
+            {
+                continue;
+            }
+
+            rig.animate(now.slot, [
+                { translate: `${ dx }px ${ dy }px`, rotate: `${ (was.tilt - now.tilt) * FAN_TILT }deg`, composite: 'add' },
+                { translate: '0px 0px', rotate: '0deg', composite: 'add' }
+            ], { duration: FAN_MS, easing: EASE.snap, quiet: 'skip' });
+        }
+    };
+
+    const rearrange = (change: () => void) =>
+    {
+        const before = places();
+
+        steady();
+        sliding = true;
+        steady = runtime().clock.after(FAN_MS, () => sliding = false);
+        change();
+        follow(before);
+    };
+
+    const resort = () => rearrange(() => sorted = !sorted);
+
     const lay = (stage: Stage, seat: number, card: number, own: Rect | null) =>
     {
         if (seat === mine && lifted !== null && lifted.card === card)
         {
-            lifted = null;
+            const free = () => lifted = null;
+
+            if (rowed(hand.filter((one) => one !== card)).length === rows.length)
+            {
+                free();
+            }
+            else
+            {
+                rearrange(free);
+            }
         }
 
         held = step(held, { e: 'card', seat, card });
@@ -1077,9 +1142,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         {
             const clock = runtime().clock;
             const report = (error: unknown) => console.error(error);
-            const stage = createStage({ clock, quiet: () => device.reducedMotion(), report });
-
-            presenter = createPresenter<Felt, Told>({ stage, clock, table: staging, sight: () => untrack(sightNow), report });
+            rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;
@@ -1129,6 +1193,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             props.onPresenting?.(false);
             presenter?.dispose();
             presenter = null;
+            rig = null;
+            steady();
             sound?.dispose();
             sound = null;
         };
@@ -1354,7 +1420,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                             </Show>
                             <span class="hokm-rail-end">
                                 <Show when={ sortable }>
-                                    { () => <IconButton icon="sort" label={ locale.t('hokm.sort') } variant="secondary" pressed={ sorted } class="hokm-sort" onClick={ () => sorted = !sorted } /> }
+                                    { () => <IconButton icon="sort" label={ locale.t('hokm.sort') } variant="secondary" pressed={ sorted } class="hokm-sort" onClick={ resort } /> }
                                 </Show>
                                 <span class="hokm-chip hokm-bar-trump" aria-hidden="true">
                                     <Show
@@ -1384,7 +1450,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                         </section>
                         <Show when={ handed }>
                             { () =>
-                                <div class="hokm-hands" style={ `--rows: ${ rows.length }` }>
+                                <div class="hokm-hands" data-sliding={ sliding ? 'true' : undefined } style={ `--rows: ${ rows.length }` }>
                                 <For each={ rows } key={ (_, index) => index } let={ row }>
                                     <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
                                         <For each={ row } key={ (card) => card } let={ card } index={ index }>

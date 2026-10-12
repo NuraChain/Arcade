@@ -1968,3 +1968,299 @@ describe('a table that is read again', () =>
         expect(container.querySelector('.hokm-trick[data-card="20"]')?.getAttribute('data-landing')).toBe('true');
     });
 });
+
+describe('the fan a hand is held in', () =>
+{
+    const chairs = (seats: number, held: number) => Array.from({ length: seats }, (_, seat) => ({ seat, side: seats === 4 ? seat % 2 : seat, held, tricks: 0, out: false }));
+
+    const holding = (hand: number[], seats = 4): MatchView => ({
+        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand, plays: hand, seats: chairs(seats, hand.length), points: seats === 4 ? [0, 0] : chairs(seats, 0).map(() => 0) }, 0),
+        seats,
+        players: Array.from({ length: seats }, (_, seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+    });
+
+    const SEVENTEEN = [0, 1, 2, 3, 4, 13, 14, 15, 16, 26, 27, 28, 29, 39, 40, 41, 42];
+
+    const roomOf = (width: number, height: number) => vi.stubGlobal('ResizeObserver', class
+    {
+        private readonly told: ResizeObserverCallback;
+
+        constructor(told: ResizeObserverCallback)
+        {
+            this.told = told;
+        }
+
+        observe(target: Element)
+        {
+            if (target.classList.contains('hokm-stage'))
+            {
+                this.told([{ contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+            }
+        }
+
+        unobserve()
+        {
+            return undefined;
+        }
+
+        disconnect()
+        {
+            return undefined;
+        }
+    });
+
+    const rowsOf = (container: HTMLElement) => [...container.querySelectorAll('.hokm-hand')].map((row) => row.querySelectorAll('.card-hold').length);
+
+    const lie = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+    {
+        const row = this.closest('.hokm-hand');
+        const across = this.tagName === 'LI' && this.parentElement !== null ? [...this.parentElement.children].indexOf(this) : 0;
+        const down = row === null ? 0 : [...document.querySelectorAll('.hokm-hand')].indexOf(row);
+        const left = this.tagName === 'LI' ? across * 30 : 0;
+        const top = this.tagName === 'LI' ? down * 100 : 0;
+        const width = this.tagName === 'LI' ? 20 : 0;
+        const height = this.tagName === 'LI' ? 28 : 0;
+
+        return { x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) } as DOMRect;
+    });
+
+    const slid = (animate: ReturnType<typeof vi.spyOn>, container: HTMLElement) => new Map([...container.querySelectorAll<HTMLElement>('.hokm-hand > li')].flatMap((slot) =>
+    {
+        const at = animate.mock.contexts.lastIndexOf(slot);
+        const frames = at === -1 ? null : animate.mock.calls[at][0] as Keyframe[];
+
+        return frames === null ? [] : [[slot.querySelector<HTMLElement>('.card-hold')?.dataset.card ?? '', frames] as const];
+    }));
+
+    afterEach(() =>
+    {
+        vi.unstubAllGlobals();
+    });
+
+    it('keeps thirteen cards in one row on a phone, and breaks seventeen into two', async () =>
+    {
+        roomOf(358, 778);
+
+        const thirteen = await mounted(holding([0, 1, 2, 3, 13, 14, 15, 26, 27, 28, 39, 40, 41]));
+
+        expect(rowsOf(thirteen.container)).toEqual([13]);
+        expect(thirteen.container.querySelector<HTMLElement>('.hokm-hands')?.style.getPropertyValue('--rows')).toBe('1');
+
+        cleanup();
+
+        const seventeen = await mounted(holding(SEVENTEEN, 3));
+
+        expect(rowsOf(seventeen.container)).toEqual([9, 8]);
+        expect(seventeen.container.querySelector<HTMLElement>('.hokm-hands')?.style.getPropertyValue('--rows')).toBe('2');
+    });
+
+    it('keeps thirteen in one row however narrow the phone, where a second row would cost the table more than it gives the cards', async () =>
+    {
+        roomOf(300, 520);
+
+        const { container } = await mounted(holding([0, 1, 2, 3, 13, 14, 15, 26, 27, 28, 39, 40, 41]));
+
+        expect(rowsOf(container)).toEqual([13]);
+    });
+
+    it('keeps seventeen in one row where each card still shows enough of itself', async () =>
+    {
+        roomOf(1144, 657);
+
+        const { container } = await mounted(holding(SEVENTEEN, 3));
+
+        expect(rowsOf(container)).toEqual([17]);
+    });
+
+    it('keeps seventeen in one row on a stage too short to spare a second row, such as a phone with the chat open over its lower half', async () =>
+    {
+        roomOf(358, 479);
+
+        const short = await mounted(holding(SEVENTEEN, 3));
+
+        expect(rowsOf(short.container)).toEqual([17]);
+
+        cleanup();
+        roomOf(358, 480);
+
+        const tall = await mounted(holding(SEVENTEEN, 3));
+
+        expect(rowsOf(tall.container)).toEqual([9, 8]);
+    });
+
+    it('does not break a hand in two before it knows how much room there is', async () =>
+    {
+        const { container } = await mounted(holding(SEVENTEEN, 3));
+
+        expect(rowsOf(container)).toEqual([17]);
+    });
+
+    it('slides each card from where it lay to where it lies when the hand is sorted, and leaves a card that did not move alone', async () =>
+    {
+        lie();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+        const dealt = [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card ?? '');
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!, 'click');
+
+        const sorted = [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card ?? '');
+        const moved = slid(animate, container);
+
+        expect(sorted).not.toEqual(dealt);
+
+        for (const card of sorted)
+        {
+            const from = (dealt.indexOf(card) - sorted.indexOf(card)) * 30;
+            const frames = moved.get(card);
+
+            if (from === 0)
+            {
+                expect(frames, `card ${ card } did not move and was slid all the same`).toBeUndefined();
+                continue;
+            }
+
+            expect(frames?.[0], `card ${ card } did not start where it lay`).toMatchObject({ translate: `${ from }px 0px`, composite: 'add' });
+            expect(frames?.at(-1), `card ${ card } did not end where it lies`).toMatchObject({ translate: '0px 0px', rotate: '0deg', composite: 'add' });
+        }
+
+        expect([...moved.keys()].length, 'no card was slid').toBeGreaterThan(1);
+        expect(container.querySelector('.hokm-hands')?.getAttribute('data-sliding'), 'the stylesheet was left to move the cards under the slide as well').toBe('true');
+
+        await elapse(319);
+
+        expect(container.querySelector('.hokm-hands')?.getAttribute('data-sliding')).toBe('true');
+
+        await elapse(1);
+
+        expect(container.querySelector('.hokm-hands')?.hasAttribute('data-sliding'), 'the stylesheet was never given the cards back').toBe(false);
+    });
+
+    it('keeps the cards for the whole of the last slide when the hand is sorted twice in a row', async () =>
+    {
+        lie();
+
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+        const sort = container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!;
+
+        fire(sort, 'click');
+        await elapse(200);
+        fire(sort, 'click');
+        await elapse(200);
+
+        expect(container.querySelector('.hokm-hands')?.getAttribute('data-sliding'), 'the first slide\'s end gave the cards back in the middle of the second').toBe('true');
+
+        await elapse(120);
+
+        expect(container.querySelector('.hokm-hands')?.hasAttribute('data-sliding')).toBe(false);
+    });
+
+    it('turns each card from the tilt it had to the tilt of its new place', async () =>
+    {
+        lie();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+        const tilted = () => new Map([...container.querySelectorAll<HTMLElement>('.hokm-hand > li')].map((slot) => [slot.querySelector<HTMLElement>('.card-hold')?.dataset.card ?? '', Number(slot.style.getPropertyValue('--t'))] as const));
+        const before = tilted();
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!, 'click');
+
+        const after = tilted();
+
+        for (const [card, frames] of slid(animate, container))
+        {
+            expect(Number.parseFloat(String(frames[0].rotate)), `card ${ card }`).toBeCloseTo(((before.get(card) ?? 0) - (after.get(card) ?? 0)) * 6, 6);
+        }
+    });
+
+    it('reckons a tilted card by where it stands, not by the corner its tilt swings out', async () =>
+    {
+        lie();
+        vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(100);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+        const standing = () => new Map([...container.querySelectorAll<HTMLElement>('.hokm-hand > li')].map((slot, nth) => [slot.querySelector<HTMLElement>('.card-hold')?.dataset.card ?? '', { nth, tilt: Number(slot.style.getPropertyValue('--t')) }] as const));
+        const swing = (tilt: number) => Math.sin(tilt * 6 * Math.PI / 180) * 0.9 * 100;
+        const before = standing();
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!, 'click');
+
+        const after = standing();
+        const moved = slid(animate, container);
+
+        expect(moved.size).toBeGreaterThan(1);
+
+        for (const [card, frames] of moved)
+        {
+            const was = before.get(card) ?? { nth: 0, tilt: 0 };
+            const now = after.get(card) ?? { nth: 0, tilt: 0 };
+
+            expect(Number.parseFloat(String(frames[0].translate)), `card ${ card }`).toBeCloseTo((was.nth - now.nth) * 30 - swing(was.tilt) + swing(now.tilt), 6);
+        }
+    });
+
+    it('leaves the cards that stay to close the gap by themselves when one is played and no row goes', async () =>
+    {
+        lie();
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="0"]')!, 'click');
+
+        expect(rowsOf(container)).toEqual([5]);
+        expect(animate.mock.contexts.filter((one) => (one as Element).tagName === 'LI'), 'a card that only had to close up was slid by hand').toEqual([]);
+        expect(container.querySelector('.hokm-hands')?.hasAttribute('data-sliding'), 'the stylesheet was stopped from closing the gap').toBe(false);
+    });
+
+    it('moves the cards in one step, with nothing slid, for a reader who asked for less motion', async () =>
+    {
+        lie();
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding([0, 2, 14, 16, 30, 45]));
+        const dealt = [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card);
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-rail .hokm-sort')!, 'click');
+
+        expect([...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card)).not.toEqual(dealt);
+        expect(animate).not.toHaveBeenCalled();
+    });
+
+    it('brings the second row up beside the first when a card played leaves room for one row', async () =>
+    {
+        roomOf(358, 778);
+        lie();
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const fifteen = [0, 1, 2, 3, 4, 13, 14, 15, 16, 26, 27, 28, 39, 40, 41];
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(holding(fifteen, 3));
+
+        expect(rowsOf(container)).toEqual([8, 7]);
+
+        const lower = [...container.querySelectorAll<HTMLElement>('.hokm-hand')][1];
+        const below = [...lower.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card ?? '');
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="0"]')!, 'click');
+
+        expect(rowsOf(container)).toEqual([14]);
+        expect(container.querySelector('.hokm-hands')?.getAttribute('data-sliding')).toBe('true');
+
+        const moved = slid(animate, container);
+
+        for (const [nth, card] of below.entries())
+        {
+            const now = [...container.querySelectorAll<HTMLElement>('.card-hold')].map((one) => one.dataset.card).indexOf(card);
+
+            expect(moved.get(card)?.[0], `card ${ card } was not brought up from the row it lay in`).toMatchObject({ translate: `${ (nth - now) * 30 }px 100px`, composite: 'add' });
+        }
+    });
+});
