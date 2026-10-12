@@ -175,6 +175,20 @@ playing surface where something is played; on poker's rail and Hokm's frame it m
 - Marks wait for the die to land (motion spec, rule 7), follow the `hintMoves` switch, and are
   drawn for the reader on turn alone.
 
+**As built (commit 3.6).** The second.
+
+- The thing in focus is a 44px box over the pawn (`.lp-hit`), not the pawn's own node, which
+  has no size. It takes no pointer; a press is still read by where it lands.
+- A pawn is a button whether or not the hints are on, and focus draws the pawn's ring in the
+  product's focus colour either way.
+- The keyboard is carried for a reader who is using it: from the die to a pawn that may move
+  when the die has landed, and back to the die when the roll returns and the die can be
+  pressed. It is never taken from anywhere but the page's body or the board.
+- The board became a group with a label, where it was a picture, so that what is in it can be
+  reached at all.
+- Not built here: a shorter way to the board than the page's own tab order, which is 25 stops
+  on a desktop. The hand-off above means it is walked once a game.
+
 ### 3.3 Backgammon
 
 - **Upright** (B1): the board keeps its shape and its width; the bands become the two seats. Each

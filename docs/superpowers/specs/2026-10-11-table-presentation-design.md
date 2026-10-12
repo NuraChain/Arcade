@@ -1262,7 +1262,7 @@ The caps are design choices. What the table means in practice:
 | The flight layer is `inert` and `aria-hidden`, and so are the boards' pieces: nothing drawn there is read. | What matters is said in words, in the live region, with new copy in English and Persian: backgammon's game-end banner (single, gammon, backgammon; for the reader, the opponent and a watcher), a roll that cannot be played, and Ludo's three sentences. Each is said when its scene lands. |
 | Hokm reserves the hand row before a deal. | An undealt slot is laid out and `visibility: hidden`: out of the tab order and out of the accessibility tree until its card lands. |
 | Poker's board list would name the flop before it turns. | Its labels read the model. |
-| D10 and D12 remove every way a keyboard and a screen reader had to play. | Accepted by the owner in D12, and said in the notes rather than hidden. Nothing stands in for it; play from a keyboard would be a cursor on the table itself, and is the owner's to ask for. |
+| D10 and D12 remove every way a keyboard and a screen reader had to play. | Accepted by the owner in D12, and said in the notes rather than hidden. Nothing stands in for it; play from a keyboard would be a cursor on the table itself, and is the owner's to ask for. Asked for on 2026-10-12 and built on the table, one game at a time, from Ludo in commit 3.6 (`2026-10-12-table-graphics-ux-design.md`, D14). |
 | A card the browser does not know must not get a face. | Unknown cards are back-only nodes. The two-faced turn-over node is built only for a card that is known. |
 | Under reduced motion the turn's ring reads as expired. | It is drawn still and stepped (§6). |
 

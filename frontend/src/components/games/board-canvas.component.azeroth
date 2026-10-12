@@ -104,11 +104,11 @@ export default component BoardCanvas(props: { game: string; tokens: readonly Boa
 
     <div
         class="board-plate [direction:ltr] relative isolate @container inline-full block-full bg-[url('/board/ludo-board.svg')] bg-[length:100%_100%] bg-no-repeat overflow-hidden"
-        role="img"
+        role="group"
         aria-label={ locale.t('match.board') }
         style={ `--rim:${ (MARGIN * 100).toFixed(4) }cqi; --cell:${ (CELL * 100).toFixed(4) }cqi; border-radius:${ (FRAME_ROUND * 100).toFixed(3) }%` }
     >
-        <div class="board-canvas absolute inset-0" aria-hidden="true" ref={ (element) => host = element }></div>
+        <div class="board-canvas absolute inset-0" ref={ (element) => host = element }></div>
 
         <Show when={ failed }>
             { () =>

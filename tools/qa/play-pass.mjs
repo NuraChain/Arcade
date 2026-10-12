@@ -529,6 +529,76 @@ try
             }
         }
 
+        /**
+         * One turn made with the keyboard and nothing else: Enter on the die, and Enter on the pawn
+         * the keyboard is then found on. A roll that lights no pawn is rolled again by whoever is
+         * next, still with the keyboard, until one does.
+         */
+        const keys = { rolls: 0, moves: 0, named: 0, ringed: 0, walked: 0, back: 0, backSeen: 0 };
+
+        for (let turn = 0; turn < ROLL_CAP && keys.moves < 1; turn += 1)
+        {
+            const state = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
+
+            if (state.finishedAt !== undefined)
+            {
+                break;
+            }
+
+            const actor = state.turn === 0 ? dana : mina;
+            const roll = await pressable(actor.page, /Roll the dice/i);
+
+            if (roll === null)
+            {
+                await actor.page.waitForTimeout(600);
+                continue;
+            }
+
+            await roll.focus();
+            await actor.page.keyboard.press('Enter');
+            keys.rolls += await level(actor, state.rev + 1) ? 1 : 0;
+            await actor.page.waitForTimeout(300);
+
+            const on = await actor.page.evaluate(() =>
+            {
+                const active = document.activeElement;
+                const ring = active?.parentElement?.querySelector('.lp-ring') ?? null;
+
+                return {
+                    lit: document.querySelectorAll('.board-canvas .lp-hit[role="button"]').length,
+                    pawn: active?.classList.contains('lp-hit') === true,
+                    name: active?.getAttribute('aria-label') ?? '',
+                    ring: ring !== null && getComputedStyle(ring).display !== 'none' && getComputedStyle(ring.querySelector('ellipse')).stroke
+                };
+            });
+
+            if (on.lit === 0)
+            {
+                await actor.page.waitForTimeout(400);
+                continue;
+            }
+
+            keys.named += on.pawn && on.name !== '' ? 1 : 0;
+            keys.ringed += on.ring === 'rgb(59, 130, 246)' ? 1 : 0;
+
+            const seen = walking(actor, 1500);
+
+            await actor.page.keyboard.press('Enter');
+            keys.walked += (await seen).seen ? 1 : 0;
+            keys.moves += 1;
+            await actor.page.waitForTimeout(SETTLE_MS);
+
+            const again = await actor.page.evaluate(() =>
+            {
+                const die = document.querySelector('.board-roll');
+
+                return die === null ? null : document.activeElement === die;
+            });
+
+            keys.backSeen += again === null ? 0 : 1;
+            keys.back += again === true ? 1 : 0;
+        }
+
         record('a roll is takeable from the button', rolled > 0, `${ rolled } rolls clicked`);
 
         /**
@@ -560,6 +630,11 @@ try
         record('a move is made by pressing the marked square as well', onMarks > 0, `${ onMarks } marks pressed`);
         record('a pawn comes to rest on the square that was marked for it', landings.length > 0 && landings.every((far) => far < 0.6), landings.map((far) => far.toFixed(2)).join(', '));
         record('a pressed pawn is walking when the press returns', moved > 0 && answered === moved, `${ answered } of ${ moved }`);
+        record('a roll is made with the keyboard alone', keys.rolls > 0, `${ keys.rolls } rolls`);
+        record('when its die has landed the keyboard is on a pawn that may move, and the pawn has a name', keys.moves > 0 && keys.named === keys.moves, `${ keys.named } of ${ keys.moves }`);
+        record('that pawn wears a ring in the colour the product gives focus', keys.moves > 0 && keys.ringed === keys.moves, `${ keys.ringed } of ${ keys.moves }`);
+        record('Enter moves it', keys.moves > 0 && keys.walked === keys.moves, `${ keys.walked } of ${ keys.moves }`);
+        record('the keyboard is back on the die when the roll comes back to whoever used it', keys.back === keys.backSeen, keys.backSeen === 0 ? 'no six in this run' : `${ keys.back } of ${ keys.backSeen }`);
         record('the other browser sees each of those pawns walk, not appear', moved > 0 && followed === moved, `${ followed } of ${ moved }${ unseen.length === 0 ? '' : `; not seen: ${ unseen.join('; ') }` }`);
 
         /**

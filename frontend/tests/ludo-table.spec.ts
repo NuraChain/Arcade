@@ -14,6 +14,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
@@ -23,6 +24,7 @@ import type { EngineAction, LudoState } from '../../backend/src/domains/match/lu
 import * as turns from '../../backend/src/domains/match/turns.ts';
 import { matchView } from '../../backend/src/schemas.ts';
 import { client } from './fake-api.ts';
+import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
 
@@ -1427,6 +1429,220 @@ describe('the ludo table, played from what happened', () =>
 
         expect(move).toHaveBeenCalledWith(0);
         expect(pawn(container, '0-0').hasAttribute('data-moving')).toBe(true);
+    });
+
+    const named = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.lp-hit[role="button"]')].map((one) => one.getAttribute('aria-label'));
+
+    const rollWith = (container: HTMLElement, detail: number) => container.querySelector('.board-roll')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
+
+    it('names every pawn that may move for somebody who cannot see the board, in both languages, on a board that is a group and not a picture', async () =>
+    {
+        quiet();
+
+        const { container } = await live(seen(standing([[10, FINISHED - 2, YARD, YARD], [38, YARD, YARD, YARD]], 2, 0), 0, 1));
+
+        expect(named(container)).toEqual(['Token 1: move 2 squares and send a token home', 'Token 2: move 2 squares and reach home']);
+        expect(container.querySelector('.board-plate')!.getAttribute('role')).toBe('group');
+        expect(container.querySelector('.board-plate')!.getAttribute('aria-label')).toBe(useLocale().t('match.board'));
+        expect(container.querySelector('.board-canvas')!.hasAttribute('aria-hidden'), 'the pawns that can be pressed are hidden from a screen reader').toBe(false);
+
+        useLocale().setLocale('fa');
+        await flush();
+
+        const persian = named(container);
+
+        expect(persian).toHaveLength(2);
+        expect(persian.every((line) => line !== null && /[؀-ۿ]/.test(line) && !line.includes('{')), persian.join(' | ')).toBe(true);
+        expect(persian[0]).not.toBe(persian[1]);
+    });
+
+    it('names a single square as one, and every pawn of a yard that may come out by the one way out', async () =>
+    {
+        quiet();
+
+        const one = await live(seen(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 1, 0), 0, 1));
+
+        expect(named(one.container)).toEqual(['Token 1: move 1 square']);
+
+        cleanup();
+        useBoard().close();
+
+        const out = await live(seen(standing([EMPTY, [26, YARD, YARD, YARD]], 6, 0), 0, 1));
+
+        expect(named(out.container)).toEqual(Array.from({ length: 4 }, () => 'Bring a token out of the yard and send a token home'));
+
+        cleanup();
+        useBoard().close();
+
+        const free = await live(seen(standing([EMPTY, [5, YARD, YARD, YARD]], 6, 0), 0, 1));
+
+        expect(named(free.container)).toEqual(Array.from({ length: 4 }, () => 'Bring a token out of the yard'));
+    });
+
+    it('hands the keyboard from the die to a pawn that may move and back to the die, for a reader who rolled with a key', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 6 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+        const here = { id: 'match-keys', tableId: 'table-keys' };
+
+        matches.play = async (request: { input: { play: { verb: string } } }) => (request.input.play.verb === 'roll'
+            ? { applied: 'now', match: seen(rolled.state, 0, 2, here), events: [happened(2, 0, rolled.moves)] }
+            : { applied: 'now', match: seen(moved.state, 0, 3, here), events: [happened(3, 0, moved.moves)] });
+
+        const container = await seated(seen(before, 0, 1, here));
+
+        rollWith(container, 0);
+        await elapse(1400);
+
+        const on = document.activeElement as HTMLElement;
+
+        expect(on.classList.contains('lp-hit'), 'the keyboard was left on nothing when the pawns lit up').toBe(true);
+        expect(on.parentElement!.dataset.key).toBe('0-0');
+        expect(on.getAttribute('aria-label')).toBe('Token 1: move 6 squares');
+
+        on.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await elapse(1500);
+
+        expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 16));
+        expect(document.activeElement, 'the keyboard was not handed back to the die').toBe(container.querySelector('.board-roll'));
+
+        delete matches.play;
+    });
+
+    it('leaves the keyboard alone after a roll made with a pointer, and wherever the reader has put it off the table', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const elsewhere = document.createElement('input');
+        const first = { id: 'match-mouse', tableId: 'table-mouse' };
+        const second = { id: 'match-away', tableId: 'table-away' };
+
+        matches.play = async (request: { params: { id: string } }) => ({ applied: 'now', match: seen(rolled.state, 0, 2, request.params.id === first.id ? first : second), events: [happened(2, 0, rolled.moves)] });
+        document.body.append(elsewhere);
+
+        const container = await seated(seen(before, 0, 1, first));
+
+        await flush();
+
+        expect(document.activeElement, 'the die took the keyboard from a reader who had not touched it').toBe(document.body);
+
+        rollWith(container, 1);
+        await elapse(1400);
+
+        expect(lit(container)).toEqual(['0-0']);
+        expect(document.activeElement?.classList.contains('lp-hit') ?? false, 'a roll made with a mouse moved the keyboard onto a pawn').toBe(false);
+
+        cleanup();
+        useBoard().close();
+
+        const again = await seated(seen(before, 0, 1, second));
+
+        rollWith(again, 0);
+        elsewhere.focus();
+        await elapse(1400);
+
+        expect(lit(again)).toEqual(['0-0']);
+        expect(document.activeElement, 'the keyboard was taken from where the reader had put it').toBe(elsewhere);
+
+        elsewhere.remove();
+        delete matches.play;
+    });
+
+    it('does not bring the keyboard back to the die from where the reader has since put it', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 6 });
+        const moved = stepped(rolled.state, { kind: 'move', seat: 0, piece: 0 });
+        const here = { id: 'match-gone', tableId: 'table-gone' };
+        const elsewhere = document.createElement('input');
+
+        matches.play = async (request: { input: { play: { verb: string } } }) => (request.input.play.verb === 'roll'
+            ? { applied: 'now', match: seen(rolled.state, 0, 2, here), events: [happened(2, 0, rolled.moves)] }
+            : { applied: 'now', match: seen(moved.state, 0, 3, here), events: [happened(3, 0, moved.moves)] });
+        document.body.append(elsewhere);
+
+        const container = await seated(seen(before, 0, 1, here));
+
+        rollWith(container, 0);
+        await elapse(1400);
+        (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        elsewhere.focus();
+        await elapse(1500);
+
+        expect(container.querySelector('.board-roll'), 'the roll did not come back').not.toBeNull();
+        expect(document.activeElement).toBe(elsewhere);
+
+        elsewhere.remove();
+        delete matches.play;
+    });
+
+    it('gives the die the keyboard once it can be pressed, when the board came back before the answer to the move', async () =>
+    {
+        quiet();
+
+        const focus = HTMLElement.prototype.focus;
+
+        vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (this: HTMLElement, ...args: Parameters<HTMLElement['focus']>)
+        {
+            if (!(this instanceof HTMLButtonElement && this.disabled))
+            {
+                focus.apply(this, args);
+            }
+        });
+
+        const rolled = standing([[10, YARD, YARD, YARD], EMPTY], 6, 0);
+        const moved = stepped(rolled, { kind: 'move', seat: 0, piece: 0 });
+        const here = { id: 'match-push', tableId: 'table-push' };
+
+        socket.reset();
+        matches.since = async () => ({ match: seen(rolled, 0, 1, here), events: [] });
+
+        const stops = [useRealtime().start(), useBoard().start()];
+
+        socket.accept();
+
+        try
+        {
+            const container = await seated(seen(rolled, 0, 1, here));
+            const under = container.querySelector<HTMLElement>('.lp[data-key="0-0"] .lp-hit')!;
+
+            under.focus();
+            under.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            await flush();
+
+            const sent = socket.sent.filter((frame) => frame.t === 'play').at(-1)!;
+
+            expect(sent, 'the move did not go over the socket').toBeDefined();
+
+            socket.deliver({ v: 1, t: 'game', n: 3, at: 400_000, match: seen(moved.state, 0, 2, here), events: [happened(2, 0, moved.moves)] });
+            await elapse(1200);
+
+            expect(container.querySelector<HTMLButtonElement>('.board-roll')?.disabled, 'the die was not held while the move was still being answered').toBe(true);
+
+            socket.deliver({ v: 1, t: 'ack', n: 4, key: sent.key, match: seen(moved.state, 0, 2, here), applied: 'now', events: [happened(2, 0, moved.moves)] });
+            await elapse(200);
+
+            expect(document.activeElement, 'the keyboard was not handed back to the die').toBe(container.querySelector('.board-roll'));
+        }
+        finally
+        {
+            for (const stop of stops.reverse())
+            {
+                stop();
+            }
+
+            useBoard().reset();
+            useRealtime().reset();
+            socket.reset();
+            delete matches.since;
+        }
     });
 
     it('plays nothing that happened before the board could be drawn', async () =>

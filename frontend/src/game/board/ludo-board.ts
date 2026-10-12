@@ -109,6 +109,7 @@ interface Piece
     lift: HTMLElement;
     pawn: HTMLImageElement;
     shadow: HTMLImageElement;
+    hit: HTMLElement;
     at: Spot;
 }
 
@@ -248,6 +249,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     let goals: readonly BoardGoal[] = [];
     let marked = '';
     let aimed: string | null = null;
+    let roving: string | null = null;
     let plateDie: Rolled | null = null;
     let where: Where = 'none';
     let offered: number | null = null;
@@ -265,6 +267,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     const die = createDie({ flat: true });
 
     holder.hidden = true;
+    holder.setAttribute('aria-hidden', 'true');
     holder.style.zIndex = String(Z_DIE);
     die.node.style.setProperty('--die', `calc(var(--c) * ${ DIE_SIZE })`);
     holder.append(die.node);
@@ -357,17 +360,62 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         piece.root.toggleAttribute('data-stacked', spot.front && !pending.has(piece.key));
     };
 
+    const usable = (key: string) => movable.has(key) && !flying.has(key);
+
+    const rover = () =>
+    {
+        if (roving === null || !usable(roving))
+        {
+            roving = shown.pawns.find((pawn) => usable(pawn.key))?.key ?? null;
+        }
+
+        return roving;
+    };
+
+    const goalFor = (key: string) =>
+    {
+        const own = goals.find((goal) => goal.key === key);
+        const pawn = pawnOf(shown, key);
+
+        if (own !== undefined || pawn === undefined || pawn.progress !== YARD || !movable.has(key))
+        {
+            return own;
+        }
+
+        return goals.find((goal) =>
+        {
+            const one = pawnOf(shown, goal.key);
+
+            return one !== undefined && one.owner === pawn.owner && one.progress === YARD;
+        });
+    };
+
     const dress = (piece: Piece, pawn: Pawn) =>
     {
-        piece.root.toggleAttribute('data-movable', hints && movable.has(pawn.key) && !flying.has(pawn.key));
+        const pressable = usable(pawn.key);
+
+        piece.root.toggleAttribute('data-movable', hints && pressable);
         piece.root.toggleAttribute('data-home', pawn.progress >= FINISHED && !pending.has(pawn.key));
+
+        if (pressable)
+        {
+            piece.hit.setAttribute('role', 'button');
+            piece.hit.setAttribute('aria-label', goalFor(pawn.key)?.says ?? '');
+            piece.hit.tabIndex = rover() === pawn.key ? 0 : -1;
+        }
+        else
+        {
+            piece.hit.removeAttribute('role');
+            piece.hit.removeAttribute('aria-label');
+            piece.hit.removeAttribute('tabindex');
+        }
     };
 
     const mint = (pawn: Pawn) =>
     {
         const node = element('div', 'lp absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
         const shadow = element('img', `lp-shadow ${ SPRITE } block [.lp[data-stacked]_&]:hidden inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
-        const ring = element('span', `${ SPRITE } hidden inset-s-[calc(var(--c)*-0.6)] inset-bs-[calc(var(--c)*-0.3)] inline-[calc(var(--c)*1.2)] block-[calc(var(--c)*0.6)] bg-[radial-gradient(closest-side,rgb(255_255_255/0.3),rgb(255_255_255/0.3)_40%,transparent_42%)] [.lp[data-movable]_&]:block`, node);
+        const ring = element('span', `lp-ring ${ SPRITE } hidden inset-s-[calc(var(--c)*-0.6)] inset-bs-[calc(var(--c)*-0.3)] inline-[calc(var(--c)*1.2)] block-[calc(var(--c)*0.6)] bg-[radial-gradient(closest-side,rgb(255_255_255/0.3),rgb(255_255_255/0.3)_40%,transparent_42%)] [.lp[data-movable]_&]:block`, node);
         const lift = element('span', `lp-lift absolute inset-s-0 inset-bs-0 ${ STILL } [.lb[data-still]_.lp[data-movable]_&]:[translate:0_calc(var(--c)*-0.06)]`, node);
         const body = element('img', `lp-pawn ${ SPRITE } block ${ PAWN_BOX } origin-[50%_77.73%] [.lp[data-movable]_&]:pointer-events-auto [.lp[data-movable]_&]:cursor-pointer [.lp[data-movable]:hover_&]:[filter:brightness(1.08)] ${ STILL }`, lift);
 
@@ -384,7 +432,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         node.dataset.colour = pawn.colour;
         node.dataset.key = pawn.key;
 
-        const piece: Piece = { key: pawn.key, root: node, lift, pawn: body, shadow, at: { x: 0, y: 0, scale: 1, front: false } };
+        const piece: Piece = { key: pawn.key, root: node, lift, pawn: body, shadow, hit: element('span', 'lp-hit absolute', node), at: { x: 0, y: 0, scale: 1, front: false } };
 
         pieces.set(pawn.key, piece);
 
@@ -423,28 +471,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const markFor = (key: string) =>
-    {
-        const own = marks.get(key);
-        const pawn = pawnOf(shown, key);
-
-        if (own !== undefined || pawn === undefined || pawn.progress !== YARD || !movable.has(key))
-        {
-            return own;
-        }
-
-        for (const [other, drawn] of marks)
-        {
-            const one = pawnOf(shown, other);
-
-            if (one !== undefined && one.owner === pawn.owner && one.progress === YARD)
-            {
-                return drawn;
-            }
-        }
-
-        return undefined;
-    };
+    const markFor = (key: string) => marks.get(goalFor(key)?.key ?? '');
 
     const aimAt = (key: string | null) =>
     {
@@ -1337,7 +1364,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
         if (key !== null)
         {
-            options.onPick?.(key);
+            options.onPick?.(key, false);
         }
     };
 
@@ -1347,6 +1374,87 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     };
 
     const leave = () => aimAt(null);
+
+    const keyAt = (target: EventTarget | null) => (target instanceof HTMLElement && target.classList.contains('lp-hit') ? target.parentElement?.dataset.key ?? null : null);
+
+    const hop = (from: string, pressed: string) =>
+    {
+        const keys = shown.pawns.filter((pawn) => usable(pawn.key)).map((pawn) => pawn.key);
+        const at = keys.indexOf(from);
+
+        if (pressed === 'Home')
+        {
+            return keys[0];
+        }
+
+        if (pressed === 'End')
+        {
+            return keys[keys.length - 1];
+        }
+
+        if (pressed === 'ArrowRight' || pressed === 'ArrowDown')
+        {
+            return keys[(at + 1) % keys.length];
+        }
+
+        return pressed === 'ArrowLeft' || pressed === 'ArrowUp' ? keys[(at - 1 + keys.length) % keys.length] : undefined;
+    };
+
+    root.addEventListener('focusin', (event) =>
+    {
+        const key = keyAt(event.target);
+
+        if (key !== null)
+        {
+            roving = key;
+            dressAll();
+            aimAt(key);
+        }
+    });
+
+    root.addEventListener('focusout', (event) =>
+    {
+        if (keyAt(event.target) !== null)
+        {
+            aimAt(null);
+        }
+    });
+
+    root.addEventListener('keydown', (event) =>
+    {
+        const key = keyAt(event.target);
+
+        if (key === null)
+        {
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ')
+        {
+            event.preventDefault();
+            options.onPick?.(key, true);
+
+            return;
+        }
+
+        const next = hop(key, event.key);
+
+        if (next !== undefined)
+        {
+            event.preventDefault();
+            pieces.get(next)?.hit.focus({ preventScroll: true });
+        }
+    });
+
+    root.addEventListener('click', (event) =>
+    {
+        const key = keyAt(event.target);
+
+        if (key !== null && event.detail === 0)
+        {
+            options.onPick?.(key, true);
+        }
+    });
 
     host.addEventListener('pointerup', pick);
     host.addEventListener('pointermove', hover);
@@ -1433,6 +1541,15 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             }
         },
 
+        focus()
+        {
+            const key = rover();
+
+            pieces.get(key ?? '')?.hit.focus({ preventScroll: true });
+
+            return key !== null;
+        },
+
         rattle(on)
         {
             if (rattling === on)
@@ -1493,6 +1610,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             shown = { ...shown, die: null, pawns: shown.pawns.map((pawn) => (pawn.key === key ? { ...pawn, progress: to } : pawn)) };
             pending.add(key);
             flying.add(key);
+            dress(piece, was);
             relayout(PAIR_MS, 'skip');
             tell();
 

@@ -2532,6 +2532,37 @@ html:has(.site-drawer[open])
     stroke-width: 7.5;
 }
 
+.lp-hit
+{
+    --hit: max(2.75rem, calc(var(--c) * 1.2));
+
+    inset-inline-start: calc(var(--hit) / -2);
+    inset-block-start: calc(var(--c) * -0.45 - var(--hit) / 2);
+    inline-size: var(--hit);
+    block-size: var(--hit);
+    border-radius: 50%;
+    pointer-events: none;
+    outline: none;
+}
+
+.lp:has(.lp-hit:focus-visible) > .lp-ring
+{
+    display: block;
+}
+
+.lp:has(.lp-hit:focus-visible) > .lp-ring ellipse:first-child
+{
+    stroke: var(--accent);
+    stroke-opacity: 1;
+    stroke-width: 16;
+}
+
+.lp:has(.lp-hit:focus-visible) > .lp-ring ellipse:last-child
+{
+    stroke-dasharray: none;
+    stroke-width: 7.5;
+}
+
 .lg
 {
     pointer-events: auto;

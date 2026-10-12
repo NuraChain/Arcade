@@ -21,6 +21,8 @@ const standingOn = (board: LudoBoard, side: number, square: number) =>
         .filter((other) => other.side !== side)
         .flatMap((other) => Array.from({ length: onSquare(other, square) }, () => other.seat));
 
+const landsAt = (at: number, die: number) => (at === YARD ? 0 : at + die);
+
 const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
 {
     const token = seat.tokens.find((one) => one.piece === piece);
@@ -30,7 +32,7 @@ const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
         return null;
     }
 
-    return token.at === YARD ? 0 : token.at + die;
+    return landsAt(token.at, die);
 };
 
 const movedBy = (board: LudoBoard) => board.seats.find((one) => one.seat === board.controls);
@@ -106,16 +108,17 @@ export function goalsOf(board: LudoBoard)
 
     return board.moves.flatMap((piece) =>
     {
-        const to = landing(mover, piece, die);
+        const from = mover.tokens.find((one) => one.piece === piece)?.at;
 
-        if (to === null)
+        if (from === undefined)
         {
             return [];
         }
 
+        const to = landsAt(from, die);
         const takes = capturesAt(mover.colour as LudoColour, to) ? standingOn(board, mover.side, squareOf(mover, to)).length : 0;
 
-        return [{ piece, to, takes }];
+        return [{ piece, from, to, takes }];
     });
 }
 

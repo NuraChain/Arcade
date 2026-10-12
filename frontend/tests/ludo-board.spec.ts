@@ -99,6 +99,7 @@ let drawn: Drawn[];
 let still: boolean;
 let broke: unknown[];
 let picked: string[];
+let byKey: boolean[];
 let facts: Facts[];
 let passes: [number, number, string][];
 
@@ -157,6 +158,7 @@ beforeEach(async () =>
     drawn = [];
     broke = [];
     picked = [];
+    byKey = [];
     facts = [];
     passes = [];
     still = false;
@@ -182,7 +184,11 @@ beforeEach(async () =>
         stage,
         sound: () => sound,
         feel: (kind) => felt.push(kind),
-        onPick: (key) => picked.push(key),
+        onPick: (key, keyed) =>
+        {
+            picked.push(key);
+            byKey.push(keyed);
+        },
         onFacts: (next) => facts.push(next),
         onPass: (roller, face, fate) => passes.push([roller, face, fate])
     });
@@ -1593,7 +1599,7 @@ describe('where a lit pawn would land', () =>
     it('marks the square each lit pawn would reach, under the pawns, with the squares on the way', () =>
     {
         table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }]);
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }, { key: '0-1', to: 33, takes: 0, says: '' }]);
 
         expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0', '0-1']);
         expect(mark('0-0').style.translate).toBe(onSquare('red', 13));
@@ -1614,13 +1620,13 @@ describe('where a lit pawn would land', () =>
     it('draws a landing that sends somebody home as another shape, and a landing at home in the home', () =>
     {
         table.reset(sight(standing([[10, FINISHED - 3, YARD, YARD], [38, YARD, YARD, YARD]], 2)));
-        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 1 }]);
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 1, says: '' }]);
 
         expect(mark('0-0').hasAttribute('data-takes')).toBe(true);
         expect(mark('0-0').querySelector('.lg-burst')).not.toBeNull();
         expect(pawns().filter((one) => one.hasAttribute('data-threat')).map((one) => one.dataset.key), 'the pawn that would be sent home, and only that one, shows it').toEqual(['1-0']);
 
-        table.lit(new Set(['0-1']), true, [{ key: '0-1', to: FINISHED, takes: 0 }]);
+        table.lit(new Set(['0-1']), true, [{ key: '0-1', to: FINISHED, takes: 0, says: '' }]);
 
         expect(marks().map((one) => one.dataset.goal)).toEqual(['0-1']);
         expect(pawn('1-0').hasAttribute('data-threat'), 'a pawn went on showing a threat that is no longer made').toBe(false);
@@ -1636,7 +1642,7 @@ describe('where a lit pawn would land', () =>
         const home = stepped(before, { kind: 'move', seat: 0, piece: 1 });
 
         table.reset(sight(before));
-        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: FINISHED, takes: 0 }, { key: '0-1', to: FINISHED, takes: 0 }]);
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: FINISHED, takes: 0, says: '' }, { key: '0-1', to: FINISHED, takes: 0, says: '' }]);
 
         expect(mark('0-0').style.translate).toBe(atHome('red', 0));
         expect(mark('0-1').style.translate).toBe(atHome('red', 0));
@@ -1655,7 +1661,7 @@ describe('where a lit pawn would land', () =>
         const on = (colour: LudoColour) => Array.from({ length: RING_STEPS }, (_, progress) => progress).find((progress) => ringIndex(colour, progress) === start)!;
 
         table.reset(sight(standing([EMPTY, [on(green), YARD, YARD, YARD], [on(yellow), YARD, YARD, YARD], EMPTY], 6, 0, 1, [0, 1, 0, 1])));
-        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 1 }]);
+        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 1, says: '' }]);
 
         expect(pawns().filter((one) => one.hasAttribute('data-threat')).map((one) => one.dataset.key)).toEqual(['1-0']);
 
@@ -1663,7 +1669,7 @@ describe('where a lit pawn would land', () =>
         const star = Array.from({ length: RING_STEPS }, (_, progress) => progress).find((progress) => ringIndex(theirs, progress) === ringIndex(mine, 13))!;
 
         table.reset(sight(standing([[10, YARD, YARD, YARD], [star, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }]);
 
         expect(pawn('1-0').style.translate, 'the other pawn does not stand on the square that is marked').toBe(mark('0-0').style.translate);
         expect(pawns().filter((one) => one.hasAttribute('data-threat')), 'a pawn safe on a star was shown a threat').toHaveLength(0);
@@ -1672,7 +1678,7 @@ describe('where a lit pawn would land', () =>
     it('marks one start square for a yard that may come out, and no square on the way', () =>
     {
         table.reset(sight(standing([EMPTY, [5, YARD, YARD, YARD]], 6)));
-        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 0 }]);
+        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), true, [{ key: '0-0', to: 0, takes: 0, says: '' }]);
 
         expect(marks()).toHaveLength(1);
         expect(mark('0-0').style.translate).toBe(onSquare('red', 0));
@@ -1692,15 +1698,15 @@ describe('where a lit pawn would land', () =>
     it('draws nothing while hints are off, for a pawn it was not told may move, or for a square behind the pawn', () =>
     {
         table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 13, takes: 0 }]);
+        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 13, takes: 0, says: '' }]);
 
         expect(marks()).toHaveLength(0);
 
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }, { key: '9-9', to: 3, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }, { key: '0-1', to: 33, takes: 0, says: '' }, { key: '9-9', to: 3, takes: 0, says: '' }]);
 
         expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0']);
 
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 10, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 10, takes: 0, says: '' }]);
 
         expect(marks()).toHaveLength(0);
     });
@@ -1708,7 +1714,7 @@ describe('where a lit pawn would land', () =>
     it('marks no square on the way to a landing further off than a die reaches', () =>
     {
         table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 30, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 30, takes: 0, says: '' }]);
 
         expect(marks()).toHaveLength(1);
         expect(steps('0-0')).toHaveLength(0);
@@ -1755,11 +1761,11 @@ describe('where a lit pawn would land', () =>
     it('keeps the marks it has drawn when it is told the same thing again', () =>
     {
         table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }]);
 
         const first = mark('0-0');
 
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }]);
 
         expect(first.isConnected).toBe(true);
         expect(mark('0-0')).toBe(first);
@@ -1769,7 +1775,7 @@ describe('where a lit pawn would land', () =>
     {
         sized();
         table.reset(sight(standing([[10, 12, YARD, YARD], [5, YARD, YARD, YARD]], 2)));
-        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 0 }, { key: '0-1', to: 14, takes: 0 }]);
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 12, takes: 0, says: '' }, { key: '0-1', to: 14, takes: 0, says: '' }]);
 
         point('pointerup', middleOf('red', 14));
 
@@ -1780,13 +1786,13 @@ describe('where a lit pawn would land', () =>
         expect(picked, 'a press on a pawn moved the pawn whose mark lies under it').toEqual(['0-1', '0-1']);
 
         table.reset(sight(standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 1)));
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 11, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 11, takes: 0, says: '' }]);
         picked.length = 0;
         point('pointerup', middleOf('red', 11));
 
         expect(picked).toEqual(['0-0']);
 
-        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 11, takes: 0 }]);
+        table.lit(new Set(['0-0']), false, [{ key: '0-0', to: 11, takes: 0, says: '' }]);
         picked.length = 0;
         point('pointerup', middleOf('red', 15));
 
@@ -1797,7 +1803,7 @@ describe('where a lit pawn would land', () =>
     {
         sized();
         table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
-        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0 }, { key: '0-1', to: 33, takes: 0 }]);
+        table.lit(new Set(['0-0', '0-1']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }, { key: '0-1', to: 33, takes: 0, says: '' }]);
 
         const board = host.querySelector<HTMLElement>('.lb')!;
 
@@ -1829,7 +1835,7 @@ describe('where a lit pawn would land', () =>
     it('takes the marks away at the press, and puts them back when the move is refused', async () =>
     {
         const before = standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 4);
-        const goals = [{ key: '0-0', to: 14, takes: 0 }, { key: '0-1', to: 34, takes: 0 }];
+        const goals = [{ key: '0-0', to: 14, takes: 0, says: '' }, { key: '0-1', to: 34, takes: 0, says: '' }];
 
         table.reset(sight(before));
         table.lit(new Set(['0-0', '0-1']), true, goals);
@@ -1854,7 +1860,7 @@ describe('where a lit pawn would land', () =>
         const state = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 3);
 
         table.reset(sight(state));
-        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0 }]);
+        table.lit(new Set(['0-0']), true, [{ key: '0-0', to: 13, takes: 0, says: '' }]);
 
         const first = mark('0-0');
 
@@ -1865,5 +1871,173 @@ describe('where a lit pawn would land', () =>
         expect(marks().map((one) => one.dataset.goal)).toEqual(['0-0']);
         expect(mark('0-0').style.translate).toBe(onSquare('red', 13));
         expect(steps('0-0')).toHaveLength(2);
+    });
+});
+
+describe('the ludo board, played from a keyboard', () =>
+{
+    const GOALS = [{ key: '0-0', to: 13, takes: 0, says: 'first' }, { key: '0-1', to: 33, takes: 0, says: 'second' }];
+
+    const hit = (key: string) => pawn(key).querySelector<HTMLElement>('.lp-hit')!;
+
+    const buttons = () => [...host.querySelectorAll<HTMLElement>('.lp-hit[role="button"]')].map((one) => one.parentElement!.dataset.key);
+
+    const press = (key: string, which: string) => hit(key).dispatchEvent(new KeyboardEvent('keydown', { key: which, bubbles: true, cancelable: true }));
+
+    const two = () =>
+    {
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0', '0-1']), true, GOALS);
+    };
+
+    it('makes a button of every pawn that may move and of nothing else, under the name it was given, with one of them in the tab order', () =>
+    {
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+
+        expect(buttons()).toEqual([]);
+        expect(host.querySelectorAll('[tabindex], [aria-label]')).toHaveLength(0);
+        expect(host.querySelector('.lb-die')!.getAttribute('aria-hidden'), 'the die on the board is read beside the plate that says it').toBe('true');
+
+        table.lit(new Set(['0-0', '0-1']), true, GOALS);
+
+        expect(buttons()).toEqual(['0-0', '0-1']);
+        expect([hit('0-0').getAttribute('aria-label'), hit('0-1').getAttribute('aria-label')]).toEqual(['first', 'second']);
+        expect([hit('0-0').tabIndex, hit('0-1').tabIndex]).toEqual([0, -1]);
+
+        table.lit(new Set(), true, []);
+
+        expect(buttons()).toEqual([]);
+        expect(host.querySelectorAll('[tabindex], [aria-label]')).toHaveLength(0);
+    });
+
+    it('names every pawn of a yard that may come out by the one way out, and keeps them buttons while the hints are off', () =>
+    {
+        table.reset(sight(standing([EMPTY, [5, YARD, YARD, YARD]], 6)));
+        table.lit(new Set(['0-0', '0-1', '0-2', '0-3']), false, [{ key: '0-0', to: 0, takes: 0, says: 'out' }]);
+
+        expect(buttons()).toEqual(['0-0', '0-1', '0-2', '0-3']);
+        expect(['0-0', '0-1', '0-2', '0-3'].map((key) => hit(key).getAttribute('aria-label'))).toEqual(['out', 'out', 'out', 'out']);
+        expect(pawns().filter((one) => one.hasAttribute('data-movable')), 'a pawn was lit with the hints off').toHaveLength(0);
+    });
+
+    it('puts the keyboard on the pawn in the tab order when it is asked to, and says when there is none', () =>
+    {
+        table.reset(sight(standing([[10, 30, YARD, YARD], [5, YARD, YARD, YARD]], 3)));
+
+        expect(table.focus()).toBe(false);
+
+        table.lit(new Set(['0-0', '0-1']), true, GOALS);
+
+        expect(table.focus()).toBe(true);
+        expect(document.activeElement).toBe(hit('0-0'));
+    });
+
+    it('walks the pawns that may move with the arrows, round and round, and keeps the last one in the tab order', () =>
+    {
+        table.reset(sight(standing([[10, 30, 40, YARD], [5, YARD, YARD, YARD]], 3)));
+        table.lit(new Set(['0-0', '0-1', '0-2']), true, [...GOALS, { key: '0-2', to: 43, takes: 0, says: 'third' }]);
+        table.focus();
+
+        const arrow = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+
+        hit('0-0').dispatchEvent(arrow);
+
+        expect(document.activeElement).toBe(hit('0-1'));
+        expect(arrow.defaultPrevented, 'an arrow that walked the pawns also scrolled the page').toBe(true);
+        expect([hit('0-0').tabIndex, hit('0-1').tabIndex, hit('0-2').tabIndex]).toEqual([-1, 0, -1]);
+
+        press('0-1', 'ArrowDown');
+
+        expect(document.activeElement).toBe(hit('0-2'));
+
+        press('0-2', 'ArrowRight');
+
+        expect(document.activeElement, 'the walk stopped at the last pawn').toBe(hit('0-0'));
+
+        press('0-0', 'ArrowLeft');
+
+        expect(document.activeElement, 'the walk stopped at the first pawn').toBe(hit('0-2'));
+
+        press('0-2', 'ArrowUp');
+
+        expect(document.activeElement).toBe(hit('0-1'));
+
+        press('0-1', 'Home');
+
+        expect(document.activeElement).toBe(hit('0-0'));
+
+        press('0-0', 'End');
+
+        expect(document.activeElement).toBe(hit('0-2'));
+        expect(table.focus()).toBe(true);
+        expect(document.activeElement, 'the tab order went back to the first pawn').toBe(hit('0-2'));
+    });
+
+    it('moves the pawn the keyboard is on at Enter or the space bar, and at no other key', () =>
+    {
+        two();
+
+        const typed = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+        const entered = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+
+        hit('0-1').dispatchEvent(typed);
+        press('0-1', 'Tab');
+
+        expect(picked).toEqual([]);
+        expect(typed.defaultPrevented, 'a key the board has no use for was taken from the page').toBe(false);
+
+        hit('0-1').dispatchEvent(entered);
+        press('0-0', ' ');
+
+        expect(picked).toEqual(['0-1', '0-0']);
+        expect(byKey).toEqual([true, true]);
+        expect(entered.defaultPrevented).toBe(true);
+    });
+
+    it('takes a press that comes with no pointer as a press, and leaves a pointer\'s own to the board', () =>
+    {
+        const body = centreOf(cellAt('red', 10)!.col, cellAt('red', 10)!.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        two();
+        hit('0-0').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+
+        expect(picked).toEqual(['0-0']);
+        expect(byKey).toEqual([true]);
+
+        hit('0-0').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+
+        expect(picked, 'one press of a mouse moved the pawn twice').toEqual(['0-0']);
+
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: body.x, clientY: body.y - CELL * 300, bubbles: true }));
+
+        expect(picked).toEqual(['0-0', '0-0']);
+        expect(byKey).toEqual([true, false]);
+    });
+
+    it('shows where the pawn under the keyboard would land, and lets go when the keyboard leaves it', () =>
+    {
+        two();
+        hit('0-1').focus();
+
+        expect(pawn('0-1').hasAttribute('data-aim')).toBe(true);
+        expect(host.querySelector('.lg[data-goal="0-1"]')!.hasAttribute('data-aim')).toBe(true);
+        expect(host.querySelector('.lb')!.hasAttribute('data-aiming')).toBe(true);
+        expect(hit('0-1').tabIndex).toBe(0);
+
+        hit('0-1').blur();
+
+        expect(host.querySelectorAll('[data-aim]')).toHaveLength(0);
+    });
+
+    it('is no button from the moment it sets off, and hands the tab order to a pawn that still is', () =>
+    {
+        two();
+        table.focus();
+        void table.advance('0-0', 13);
+
+        expect(buttons()).toEqual(['0-1']);
+        expect(hit('0-0').hasAttribute('tabindex')).toBe(false);
+        expect(hit('0-1').tabIndex).toBe(0);
     });
 });

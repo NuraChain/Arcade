@@ -449,7 +449,7 @@ describe('where each move on offer would end', () =>
     {
         const rolled = position([[10, 20, -1, -1], [5, -1, -1, -1]], 3);
 
-        expect(goalsOf(boardOf(rolled))).toEqual([{ piece: 0, to: 13, takes: 0 }, { piece: 1, to: 23, takes: 0 }]);
+        expect(goalsOf(boardOf(rolled))).toEqual([{ piece: 0, from: 10, to: 13, takes: 0 }, { piece: 1, from: 20, to: 23, takes: 0 }]);
         expect(goalsOf(boardOf(position([[10, 20, -1, -1], [5, -1, -1, -1]], null)))).toEqual([]);
         expect(goalsOf(boardOf(rolled, null))).toEqual([]);
         expect(goalsOf(boardOf(rolled, 1))).toEqual([]);
@@ -461,8 +461,8 @@ describe('where each move on offer would end', () =>
         const open = ringIndex(mine, 12);
         const star = ringIndex(mine, 13);
 
-        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, open), -1, -1, -1]], 2)))).toEqual([{ piece: 0, to: 12, takes: 1 }]);
-        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, star), -1, -1, -1]], 3)))).toEqual([{ piece: 0, to: 13, takes: 0 }]);
+        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, open), -1, -1, -1]], 2)))).toEqual([{ piece: 0, from: 10, to: 12, takes: 1 }]);
+        expect(goalsOf(boardOf(position([[10, -1, -1, -1], [standsOn(theirs, star), -1, -1, -1]], 3)))).toEqual([{ piece: 0, from: 10, to: 13, takes: 0 }]);
     });
 
     it('sends home whoever stands on the start a token comes out onto, and ends a home run at home', () =>
@@ -471,8 +471,8 @@ describe('where each move on offer would end', () =>
         const out = goalsOf(boardOf(position([YARD, [standsOn(theirs, ringIndex(mine, 0)), -1, -1, -1]], 6)));
 
         expect(out).toHaveLength(1);
-        expect(out[0]).toMatchObject({ to: 0, takes: 1 });
-        expect(goalsOf(boardOf(position([[FINISHED - 2, FINISHED, FINISHED, FINISHED], [5, -1, -1, -1]], 2)))).toEqual([{ piece: 0, to: FINISHED, takes: 0 }]);
+        expect(out[0]).toMatchObject({ from: -1, to: 0, takes: 1 });
+        expect(goalsOf(boardOf(position([[FINISHED - 2, FINISHED, FINISHED, FINISHED], [5, -1, -1, -1]], 2)))).toEqual([{ piece: 0, from: FINISHED - 2, to: FINISHED, takes: 0 }]);
     });
 
     it('agrees with the engine about every move of whole games, alone and two against two', () =>
@@ -519,7 +519,10 @@ describe('where each move on offer would end', () =>
 
                     for (const goal of goals)
                     {
+                        const before = board.seats.find((one) => one.seat === board.controls)!.tokens.find((one) => one.piece === goal.piece)!;
                         const after = moved(state, goal.piece);
+
+                        expect(goal.from).toBe(before.at);
                         const token = boardOf(after.state, seat).seats.find((one) => one.seat === board.controls)!.tokens.find((one) => one.piece === goal.piece)!;
 
                         expect(token.at).toBe(goal.to);

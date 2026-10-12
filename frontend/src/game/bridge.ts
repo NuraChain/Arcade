@@ -27,6 +27,8 @@ export interface BoardGoal
     to: number;
 
     takes: number;
+
+    says: string;
 }
 
 export interface Facts
@@ -49,7 +51,7 @@ export interface BoardOptions
 
     feel: (kind: Haptic) => void;
 
-    onPick?: (key: string) => void;
+    onPick?: (key: string, keyed: boolean) => void;
 
     onFacts?: (facts: Facts) => void;
 
@@ -65,6 +67,8 @@ export interface BoardHandle extends Table<Felt, Told>
     swap(tapped: string, moving: string): void;
 
     offer(seat: number | null): void;
+
+    focus(): boolean;
 
     rattle(on: boolean): void;
 

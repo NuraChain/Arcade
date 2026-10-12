@@ -18,6 +18,7 @@ import type { BoardGoal, BoardHandle, BoardOptions, Facts } from '../../game/bri
 import { chairsOf, ludoOf, type LudoSeat, type MatchPlayer } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { turnChime } from './table-cues.ts';
+import { FINISHED, YARD } from '../../game/board/path.ts';
 import { CELL, FRAME_ROUND, MARGIN } from '../../game/layout.ts';
 import { HISTORY, feltOf, keyOf, type Felt, type Told } from '../../game/ludo-felt.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
@@ -128,7 +129,25 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     derived movable = new Set(tokens.filter((token) => token.playable).map((token) => token.key));
 
-    derived goals = movable.size === 0 ? NO_GOALS : goalsOf(drawn).map((goal) => ({ key: keyOf(drawn.controls, goal.piece), to: goal.to, takes: goal.takes }));
+    const tokenSays = (goal: ReturnType<typeof goalsOf>[number]) =>
+    {
+        if (goal.from === YARD)
+        {
+            return locale.t(goal.takes > 0 ? 'match.token.out.takes' : 'match.token.out');
+        }
+
+        const vars = { n: locale.n(goal.piece + 1) };
+        const squares = goal.to - goal.from;
+
+        if (goal.to === FINISHED)
+        {
+            return locale.plural('match.token.move.home', squares, vars);
+        }
+
+        return locale.plural(goal.takes > 0 ? 'match.token.move.takes' : 'match.token.move', squares, vars);
+    };
+
+    derived goals = movable.size === 0 ? NO_GOALS : goalsOf(drawn).map((goal) => ({ key: keyOf(drawn.controls, goal.piece), to: goal.to, takes: goal.takes, says: tokenSays(goal) }));
 
     derived result = over && !presenting;
 
@@ -190,6 +209,16 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     let table: BoardHandle | null = null;
     let sound: SoundHandle | null = null;
+    let keyed = false;
+    let rollButton: HTMLButtonElement | null = null;
+    let boardNode: HTMLElement | null = null;
+
+    const inReach = () =>
+    {
+        const on = document.activeElement;
+
+        return on === null || on === document.body || boardNode?.contains(on) === true;
+    };
 
     const report = (error: unknown) => console.error(error);
 
@@ -271,7 +300,28 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         const marks = goals;
         const hints = help.hintMoves;
 
-        untrack(() => table?.lit(keys, hints, marks));
+        untrack(() =>
+        {
+            table?.lit(keys, hints, marks);
+
+            if (keyed && keys.size > 0 && inReach())
+            {
+                table?.focus();
+            }
+        });
+    }
+
+    effect
+    {
+        const pressable = board.canRoll() && !board.busy();
+
+        untrack(() =>
+        {
+            if (pressable && keyed && inReach())
+            {
+                queueMicrotask(() => rollButton?.focus({ preventScroll: true }));
+            }
+        });
     }
 
     effect
@@ -392,6 +442,12 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         }
     };
 
+    const rollBy = (event: MouseEvent) =>
+    {
+        keyed = event.detail === 0;
+        void roll();
+    };
+
     const roll = async () =>
     {
         table?.rattle(true);
@@ -419,7 +475,11 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
                 haptic(kind);
             }
         },
-        onPick: (key) => void pick(key),
+        onPick: (key, byKey) =>
+        {
+            keyed = byKey;
+            void pick(key);
+        },
         onFacts: (next) =>
         {
             facts = next;
@@ -457,7 +517,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
                         </div>
                     </For>
 
-                    <div class="board-stage table-surface isolate @container [box-shadow:0_26px_40px_-20px_rgb(0_0_0/0.85),0_3px_8px_rgb(0_0_0/0.45)] [grid-area:board]" style={ STAGE }>
+                    <div class="board-stage table-surface isolate @container [box-shadow:0_26px_40px_-20px_rgb(0_0_0/0.85),0_3px_8px_rgb(0_0_0/0.45)] [grid-area:board]" style={ STAGE } ref={ (element) => boardNode = element }>
                         <BoardCanvas game={ game.game } tokens={ tokens } rig={ gear } onTable={ attach } />
 
                         <Show when={ board.canRoll() }>
@@ -467,7 +527,8 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
                                     class="board-roll group/roll absolute z-[6] left-[50%] top-[50%] grid place-items-center inline-[max(3.5rem,calc(var(--cell-cq)*3.2))] block-[max(3.5rem,calc(var(--cell-cq)*3.2))] [translate:-50%_-50%] rounded-[calc(var(--cell-cq)*0.8)] cursor-pointer [-webkit-tap-highlight-color:transparent] disabled:cursor-progress focus-visible:[outline:3px_solid_var(--accent)] focus-visible:outline-offset-2"
                                     aria-label={ locale.t('match.roll') }
                                     disabled={ board.busy() }
-                                    onClick={ () => void roll() }
+                                    onClick={ rollBy }
+                                    ref={ (element) => rollButton = element }
                                 >
                                     <Show when={ !rigged }>
                                         { () =>

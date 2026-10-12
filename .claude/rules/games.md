@@ -3145,14 +3145,16 @@ saying the same of the buttons and of the sentences earlier that day. So:
 - The die in the middle of the board is the roll. It is the one real button a ludo table has,
   because it is drawn as the thing it is.
 - There is no list of moves in the page, shown or hidden, and no sentence under or beside the
-  board. The turn sentence is an `sr-only` live region; the pieces are `aria-hidden` inside a
-  labelled host. The tip is a lamp at the foot of the stage (`<CoachLine lamp>`), the clock a pill
-  at the other end of the foot, and "turn your phone upright" a small note between them on a phone
-  held sideways. The stage's grid is the board alone at every size: the 18rem column a wide screen
-  gave the panel is the board's now.
-- What that costs is said, as it is for backgammon: a ludo turn can be rolled from a keyboard and
-  cannot be moved from one. `outcomeOf`, which worked out what a move would do for the words on
-  those buttons, went with them, and its sixteen cases with it; the engine-parity runs of
+  board. The turn sentence is an `sr-only` live region. The board is a labelled group, and in it
+  only what can be pressed is anything to a screen reader: the pawns that may move, each a
+  button with a name. The tip is a lamp at the foot of the stage (`<CoachLine lamp>`), the clock
+  a pill at the other end of the foot, and "turn your phone upright" a small note between them
+  on a phone held sideways. The stage's grid is the board alone at every size: the 18rem column
+  a wide screen gave the panel is the board's now.
+- For a while that cost a keyboard its moves: a ludo turn could be rolled from one and not
+  moved. It is played from a keyboard now, on the board (*The board is played from a keyboard*,
+  below). `outcomeOf`, which worked out what a move would do for the words on those buttons,
+  went with them, and its sixteen cases with it; the engine-parity runs of
   `helpers-ludo.spec.ts` still hold `movedTo`, which the board draws from.
 
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
@@ -3410,6 +3412,63 @@ the line about where a pawn comes to rest and the two about a pressed pawn walki
 no mark drawn at all, it failed the three lines about the marks. Forty-three faults put into the
 code one at a time were each caught by a spec, and six guards that no fault could tell from
 their absence were taken out.
+
+**The board is played from a keyboard, and the keyboard is on the board.** The owner's second
+brief asks for keyboard play and a focus that can be seen, and the decision that took the list
+of moves out of the page named the way back: play on the table itself (D14 of the graphics
+spec). No panel and no list came back.
+
+- **A pawn that may move is a button.** Each pawn carries a `.lp-hit`, a box of 44px over its
+  body (`max(2.75rem, 1.2 squares)`), and while the pawn may move that box has `role="button"`,
+  a name and a place in the tab order. A pawn that may not move has none of the three, so a
+  screen reader finds on the board exactly what can be pressed. The box takes no pointer: a
+  press is still read off the board by where it lands (`aimNear`), and a 44px box on a 22px
+  square would otherwise swallow its neighbours' presses. It is there for the keyboard, for a
+  screen reader that explores by touch, and so that the matrix's 44px rule has something to
+  measure. A pawn stays a button with the hints off: turning a helper off never removes a way
+  to play.
+- **One pawn is in the tab order, and the arrows walk the rest** (`roving`): right and down to
+  the next pawn that may move, left and up to the one before, round and round, Home and End to
+  the first and the last. The pawn the keyboard last stood on keeps the tab stop. Enter or the
+  space bar moves it. A click that comes with no pointer (`detail` 0, which is how a screen
+  reader presses) moves it too; a click a pointer made is left to the board, which has already
+  taken the press.
+- **The name says what the move does**, in the reader's language (`match.token.*`): "Token 2:
+  move 3 squares", "... and send a token home", "... and reach home", "Bring a token out of the
+  yard". The words are the component's, handed over with each landing (`BoardGoal.says`), and
+  every pawn of a yard that may come out says the one way out. `goalsOf` gained `from` for the
+  count of squares.
+- **Focus is drawn as the pawn's own ring**, in the product's focus colour, with the hints off
+  as well (`.lp:has(.lp-hit:focus-visible) > .lp-ring`). The pawn under the keyboard shows
+  where it would land exactly as one under a mouse does (`data-aim`).
+- **The keyboard follows the turn, for a reader who is using it.** A roll made with a key
+  (`detail` 0 on the die's click) or a pawn moved with one sets `keyed`, and a press by pointer
+  clears it. While it is set, the keyboard is put on a pawn that may move when the die has
+  landed (`table.focus()`), and back on the die when the roll comes back. Both only while the
+  keyboard is on the page's body or on the board (`inReach`): a reader who has gone to the chat
+  to type is left there.
+- **The die takes the keyboard when it can be pressed, not when it appears.** The first build
+  asked only whether the roll was the reader's. Over a socket the board that brings the roll
+  back arrives before the answer to the move that earned it, the button is still disabled for
+  that moment, and a browser will not focus a disabled button: after a six the keyboard was
+  left on nothing. Found by playing with the keyboard on the production build. happy-dom
+  focuses a disabled button without complaint, so the spec that holds this installs the real
+  rule first and delivers the board before the answer, as a socket does.
+- **The board is a group, not a picture.** `.board-plate` was `role="img"` over a canvas hidden
+  from a screen reader, which made every pawn in it unreachable by definition. It is
+  `role="group"` with the same label, the canvas is no longer hidden, and the die that lies on
+  the board is: the plate and the live sentence already say what was rolled.
+
+`ludo-board.spec.ts` (*the ludo board, played from a keyboard*) holds the buttons, the names,
+the tab order, every key and the press with no pointer. `ludo-table.spec.ts` holds the names in
+both languages, the keyboard handed from the die to a pawn and back, a pointer's roll and a
+reader who has gone elsewhere left alone, and the board that arrives before the answer. The
+play pass makes one turn with the keyboard and nothing else: Enter on the die, and Enter on the
+pawn the keyboard is then found on, which has to have a name and wear its ring in the focus
+colour. Built with that ring in the board's own ink and Enter on a pawn doing nothing, the pass
+failed the lines about the ring and about Enter; built with the keyboard never put on a pawn,
+it failed those two and the line that finds it there. Forty-nine faults put into the code one
+at a time were each caught by a spec.
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
