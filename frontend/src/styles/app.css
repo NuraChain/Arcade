@@ -1459,19 +1459,6 @@ html:has(.site-drawer[open])
     {
         line-height: 1.05;
     }
-
-    .hokm-centre > .hokm-crest
-    {
-        display: none;
-    }
-}
-
-@container (max-height: 21.5rem) and (max-aspect-ratio: 1 / 1)
-{
-    .hokm-table:has(> .hokm-seat[data-side^='top-']) .hokm-centre > .hokm-crest
-    {
-        display: none;
-    }
 }
 
 @container (max-height: 19rem) and (max-aspect-ratio: 1 / 1)
@@ -1482,23 +1469,42 @@ html:has(.site-drawer[open])
     }
 }
 
-.hokm-centre
+.hokm-medal
 {
     position: absolute;
     inset: 0;
+    z-index: 0;
+    display: grid;
+    place-items: center;
+    inline-size: clamp(2.25rem, 15cqmin, 6rem);
+    block-size: clamp(2.25rem, 15cqmin, 6rem);
     margin: auto;
-    inline-size: fit-content;
-    block-size: fit-content;
-    max-inline-size: min(93cqw - 2 * var(--side-w) - 1rem, max(40cqmin, 9rem));
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.1rem;
-    color: #F5E6B8;
-    text-align: center;
-    text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+    border-radius: 999px;
+    background: radial-gradient(circle at 35% 28%, #F7E9BE 0%, #D9B45A 42%, #9A7524 78%, #6E5217 100%);
+    box-shadow: 0 2px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.25);
     pointer-events: none;
+}
+
+.hokm-medal::before
+{
+    content: '';
+    position: absolute;
+    inset: 14%;
+    border-radius: inherit;
+    background: #0E3B25;
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.45);
+}
+
+.hokm-medal[data-set]::before
+{
+    background: #FBF6E6;
+}
+
+.hokm-medal > svg
+{
+    position: relative;
+    inline-size: 46%;
+    block-size: 46%;
 }
 
 .hokm-choose
@@ -1929,15 +1935,7 @@ html:has(.site-drawer[open])
     padding-inline: 0.5rem;
 }
 
-@container stage (max-height: 24rem)
-{
-    .hokm-centre > :not(.hokm-needed)
-    {
-        display: none;
-    }
-}
-
-[data-sheet] :is(.hokm-felt-info, .hokm-centre > :not(.hokm-needed), .hokm-last-tile)
+[data-sheet] :is(.hokm-felt-info, .hokm-last-tile)
 {
     display: none;
 }

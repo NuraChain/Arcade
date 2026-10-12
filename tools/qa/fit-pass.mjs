@@ -656,23 +656,29 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             }
         }
 
-        for (const line of surface.querySelectorAll('.hokm-centre > *'))
+        const medal = surface.querySelector('.hokm-medal');
+
+        if (surface.classList.contains('hokm-table') && (medal === null || !shown(medal) || beyond(box(medal), box(surface))))
         {
-            for (const solid of surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-stock'))
+            found.push({ kind: 'felt', what: 'a hokm felt with no medal in the middle of it' });
+        }
+
+        for (const solid of medal === null ? [] : surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-stock, .hokm-felt-info .hokm-chip, .hokm-last-tile, .hokm-seat > .hokm-clock'))
+        {
+            if (shown(solid) && meets(box(medal), box(solid)))
             {
-                if (shown(line) && shown(solid) && meets(box(line), box(solid)))
-                {
-                    found.push({ kind: 'felt', what: `caption line ${ describe(line) } ${ where(box(line)) } sits on ${ describe(solid) } ${ where(box(solid)) }` });
-                }
+                found.push({ kind: 'felt', what: `the medal ${ where(box(medal)) } lies under ${ describe(solid) } ${ where(box(solid)) }` });
             }
         }
 
-        const caption = surface.querySelector('.hokm-centre');
-        const takes = caption?.querySelector(':scope > .hokm-needed') ?? null;
+        const written = [...surface.querySelectorAll('.hokm-table *')]
+            .filter((one) => one.children.length === 0 && shown(one) && one.closest('.table-plate, .hokm-chip, .hokm-clock, .hokm-stock, .hokm-last-tile, .hokm-choose, .hokm-banner') === null)
+            .map((one) => (one.textContent ?? '').trim())
+            .filter((said) => said !== '');
 
-        if (caption !== null && (takes === null || !shown(takes) || beyond(box(takes), box(surface))))
+        if (written.length > 0)
         {
-            found.push({ kind: 'felt', what: 'an empty hokm felt that does not say what takes the hand' });
+            found.push({ kind: 'felt', what: `words drawn on a hokm felt: ${ written.join(' | ').slice(0, 120) }` });
         }
 
         const laid = [...surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-last-tile, .hokm-trick:not([data-landing="true"]) .card-face, .poker-bet, .poker-backs, .poker-centre > *')].filter(shown);

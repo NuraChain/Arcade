@@ -273,8 +273,6 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived last = view?.took ?? null;
 
-    derived bare = felt.cards.length === 0 && !over && !choosing && !drawing;
-
     derived stockLive = putting || drawing;
 
     derived stockBacks = [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0));
@@ -1087,6 +1085,12 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 { () =>
                     <div class="table-fit">
                         <div class="table-surface hokm-table">
+                            <div class="hokm-medal" data-set={ trump === null ? undefined : 'true' } aria-hidden="true">
+                                <Show when={ trump } let={ suit } fallback={ <Icon name="crest-crown" size={ 20 } class="text-gold" /> }>
+                                    <Icon name={ SUIT_ICON[suit] } size={ 20 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                </Show>
+                            </div>
+
                             <div class="hokm-felt-info" aria-hidden="true">
                                 <span class="hokm-chip">
                                     <Show
@@ -1162,26 +1166,6 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                                 ></button>
                                             }
                                         </Show>
-                                    </div>
-                                }
-                            </Show>
-
-                            <Show when={ bare }>
-                                { () =>
-                                    <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
-                                        <Icon name="crest-crown" size={ 18 } class="hokm-crest text-gold" />
-                                        <span class="hokm-crest font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
-                                        <span class="text-ui-2xs font-semibold text-gold">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
-                                        <Show when={ needed !== undefined } fallback={ <span class="hokm-needed text-balance text-ui-2xs">{ locale.t('hokm.needed.triple') }</span> }>
-                                            { () => <span class="hokm-needed text-balance text-ui-2xs"><span class="tally">{ locale.n(needed!) }</span> { locale.plural('hokm.needed', needed!) }</span> }
-                                        </Show>
-                                        <Show when={ trump } let={ suit }>
-                                            <span class="flex items-center gap-1 text-ui-2xs">
-                                                <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger' : 'text-white' } />
-                                                <span>{ locale.t(`hokm.suit.${ suit }` as never) }</span>
-                                            </span>
-                                        </Show>
-                                        <span class="text-ui-2xs font-semibold text-white">{ says }</span>
                                     </div>
                                 }
                             </Show>

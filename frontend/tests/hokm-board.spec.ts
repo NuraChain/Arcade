@@ -18,6 +18,11 @@ type Rendered = HTMLElement;
 
 type Hokm = Extract<MatchView['view'], { kind: 'hokm' }>;
 
+const written = (container: HTMLElement) => [...container.querySelectorAll('.hokm-table *')]
+    .filter((one) => one.children.length === 0 && one.closest('.sr-only, .table-plate, .hokm-chip, .hokm-clock, .hokm-stock, .hokm-last-tile, .hokm-choose, .hokm-banner') === null)
+    .map((one) => (one.textContent ?? '').trim())
+    .filter((said) => said !== '');
+
 const match = (view: Partial<Hokm>, mine = 1): MatchView => ({
     id: 'match-1',
     tableId: 'table-1',
@@ -128,16 +133,18 @@ describe('HokmBoard', () =>
         expect(container.querySelector('.hokm-side')?.textContent).toContain('Hand 4');
     });
 
-    it('gives the sentence in the middle of the table the page direction, because the table itself is forced left to right', () =>
+    it('writes nothing in the middle of the felt, in either language', () =>
     {
-        useLocale().setLocale('fa');
-        const persian = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        expect(persian.container.querySelector('.hokm-centre')!.getAttribute('dir')).toBe('rtl');
-        persian.unmount();
+        for (const language of ['fa', 'en'] as const)
+        {
+            useLocale().setLocale(language);
 
-        useLocale().setLocale('en');
-        const english = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        expect(english.container.querySelector('.hokm-centre')!.getAttribute('dir')).toBe('ltr');
+            const { container, unmount } = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
+
+            expect(container.querySelector('.hokm-centre'), language).toBeNull();
+            expect(written(container), `${ language }: these words are drawn on the felt`).toEqual([]);
+            unmount();
+        }
     });
 
     it('lets a sentence with a name in it follow the page, and only a bare name follow its own script', () =>
@@ -822,7 +829,7 @@ describe('the clock on a plate, and the two things beside the hand', () =>
         expect(clocks(container)).toEqual(['2']);
     });
 
-    it('speaks the turn to a screen reader alone, and still prints it on an empty felt', () =>
+    it('speaks the turn to a screen reader alone, and prints it nowhere', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
         const live = container.querySelector('[aria-live="polite"]')!;
@@ -830,7 +837,7 @@ describe('the clock on a plate, and the two things beside the hand', () =>
         expect(live.textContent).toBe('Your turn.');
         expect(live.classList.contains('sr-only')).toBe(true);
         expect(live.closest('.hokm-rail')).not.toBeNull();
-        expect(container.querySelector('.hokm-centre')?.textContent).toContain('Your turn.');
+        expect(written(container)).toEqual([]);
     });
 
     it('sorts the hand when Sort is pressed, trump first, and says so on the button', () =>
@@ -1004,15 +1011,16 @@ describe('who dealt the hand, and what takes it', () =>
         expect(facts(persian.container, 3)).toContain('دیلر');
     });
 
-    it('says in the middle of the table that seven tricks take the hand, at two players and at four', () =>
+    it('says to a screen reader that seven tricks take the hand, at two players and at four, and writes it nowhere', () =>
     {
         for (const seats of [2, 4])
         {
             const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, {}, 0) }) as Rendered);
-            const line = container.querySelector('.hokm-centre .hokm-needed');
+            const summary = container.querySelector('.hokm-side')!;
 
-            expect(line?.querySelector('.tally')?.textContent, `${ seats } players`).toBe('7');
-            expect(line?.textContent, `${ seats } players`).toBe('7 tricks take the hand');
+            expect(summary.classList.contains('sr-only'), `${ seats } players`).toBe(true);
+            expect(summary.textContent, `${ seats } players`).toContain('7 tricks take the hand');
+            expect(written(container), `${ seats } players`).toEqual([]);
             unmount();
         }
     });
@@ -1020,11 +1028,11 @@ describe('who dealt the hand, and what takes it', () =>
     it('says at three players that a lead nobody can catch takes the hand, and puts no number on it', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: seated(3, {}, 0) }) as Rendered);
-        const line = container.querySelector('.hokm-centre .hokm-needed');
+        const summary = container.querySelector('.hokm-side')!;
 
-        expect(line?.textContent).toBe('A lead nobody can catch takes the hand');
-        expect(line?.querySelector('.tally')).toBeNull();
-        expect(container.querySelector('.hokm-side')?.textContent).not.toContain('tricks take');
+        expect(summary.textContent).toContain('A lead nobody can catch takes the hand');
+        expect(summary.textContent).not.toContain('tricks take');
+        expect(written(container)).toEqual([]);
     });
 
     it('counts the tricks in the reader\'s own digits', () =>
@@ -1032,28 +1040,64 @@ describe('who dealt the hand, and what takes it', () =>
         useLocale().setLocale('fa');
 
         const { container } = renderTest(() => HokmBoard({ match: seated(4, {}, 0) }) as Rendered);
-        const line = container.querySelector('.hokm-centre .hokm-needed');
+        const summary = container.querySelector('.hokm-side')!;
 
-        expect(line?.querySelector('.tally')?.textContent).toBe('۷');
-        expect(line?.textContent).toContain('دور را');
-        expect(line?.textContent).not.toContain('tricks');
+        expect(summary.textContent).toContain('۷');
+        expect(summary.textContent).toContain('دور را');
+        expect(summary.textContent).not.toContain('tricks');
     });
 
-    it('keeps the line and the crest children of the caption itself, so a short table can drop the crest and a short stage all but the line', () =>
+    it('sets the suit that is trump in a medal in the middle of the felt, red or black as the suit is', () =>
     {
-        for (const seats of [2, 3, 4])
+        for (const [suit, ink] of [['hearts', 'text-danger-fill'], ['diamonds', 'text-danger-fill'], ['spades', 'text-bright-ink'], ['clubs', 'text-bright-ink']] as const)
         {
-            const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, {}, 0) }) as Rendered);
-            const caption = container.querySelector('.hokm-centre');
+            const { container, unmount } = renderTest(() => HokmBoard({ match: seated(4, { trump: suit }, 0) }) as Rendered);
+            const medal = container.querySelector('.hokm-table > .hokm-medal')!;
 
-            expect(caption?.querySelectorAll(':scope > .hokm-needed').length, `${ seats } players`).toBe(1);
-            expect(caption?.querySelectorAll(':scope > .hokm-crest').length, `${ seats } players`).toBe(2);
-            expect(caption?.children.length, `${ seats } players`).toBeGreaterThan(4);
+            expect(medal.getAttribute('aria-hidden'), suit).toBe('true');
+            expect(medal.getAttribute('data-set'), suit).toBe('true');
+            expect(medal.querySelectorAll('svg').length, suit).toBe(1);
+            expect(medal.querySelector('svg')?.getAttribute('class'), suit).toBe(ink);
+            expect(medal.textContent?.trim(), suit).toBe('');
             unmount();
         }
     });
 
-    it('seats two plates in the top corners at three players and at no other count, each over its own pile, so an upright table can tell when the crest and those piles have to go', () =>
+    it('wears a crown there while the Hâkem has not named one, for the Hâkem and for everybody else', () =>
+    {
+        for (const mine of [0, 1, undefined])
+        {
+            const { container, unmount } = renderTest(() => HokmBoard({ match: seated(4, { phase: 'trump', trump: undefined, hand: mine === 0 ? [0, 14, 30, 45, 50] : [] }, mine) }) as Rendered);
+            const medal = container.querySelector('.hokm-table > .hokm-medal')!;
+
+            expect(medal.hasAttribute('data-set'), `read by ${ mine }`).toBe(false);
+            expect(medal.querySelector('svg')?.getAttribute('class'), `read by ${ mine }`).toBe('text-gold');
+            unmount();
+        }
+    });
+
+    it('keeps the medal the node it is when trump is named and when a card is played over it', () =>
+    {
+        const [current, setCurrent] = createSignal(seated(4, { phase: 'trump', trump: undefined }, 1));
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
+        const medal = container.querySelector('.hokm-medal')!;
+
+        setCurrent({ ...seated(4, { trump: 'hearts' }, 1), rev: 4 });
+
+        expect(container.querySelector('.hokm-medal')).toBe(medal);
+        expect(medal.getAttribute('data-set')).toBe('true');
+
+        setCurrent({ ...seated(4, { trump: 'hearts', trick: [12], turn: 1 }, 1), rev: 5 });
+
+        expect(container.querySelector('.hokm-medal')).toBe(medal);
+        expect(container.querySelectorAll('.hokm-trick').length).toBe(1);
+        expect(medal.hasAttribute('hidden'), 'the medal left the felt when a card was played').toBe(false);
+    });
+
+    it('seats two plates in the top corners at three players and at no other count, each over its own pile, so an upright table can tell when those piles have to go', () =>
     {
         for (const seats of [2, 3, 4])
         {
@@ -1065,7 +1109,6 @@ describe('who dealt the hand, and what takes it', () =>
 
                 expect(corners.map((seat) => seat.dataset.side).sort(), told).toEqual(seats === 3 ? ['top-left', 'top-right'] : []);
                 expect(corners.filter((seat) => seat.querySelector(':scope > .hokm-pile') === null), told).toEqual([]);
-                expect(container.querySelectorAll('.hokm-table .hokm-centre > .hokm-crest').length, told).toBe(2);
                 unmount();
             }
         }
@@ -1088,7 +1131,7 @@ describe('who dealt the hand, and what takes it', () =>
                     const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, { trick }, mine) }) as Rendered);
                     const told = `${ seats } players read by ${ mine } with ${ trick.length } on the table`;
 
-                    expect(container.querySelector('.hokm-centre') === null, told).toBe(trick.length > 0);
+                    expect(container.querySelector('.hokm-medal'), told).not.toBeNull();
                     expect(container.querySelector('.hokm-side')?.textContent, told).toContain(says);
                     unmount();
                 }
@@ -1153,7 +1196,7 @@ describe('a table that is read again', () =>
 
         read(bare());
 
-        expect(container.querySelector('.hokm-centre'), 'an empty felt has no caption').not.toBeNull();
+        expect(container.querySelector('.hokm-medal'), 'an empty felt has no medal').not.toBeNull();
         expect(gone(before)).toEqual([]);
     });
 
