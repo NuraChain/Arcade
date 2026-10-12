@@ -2527,9 +2527,9 @@ middle of the felt as well; nothing is written there now (*The middle of the fel
 
 **The dealer has a mark, and the browser keeps no copy of who deals.** `dealer` was on every board
 and nothing read it, while `hokm-beats.ts` carried a `dealerOf` of its own to throw the deal from the
-right seat. The beats import the server's from `hokm/scoring.ts` now - they cannot read
+right seat. The model imports the server's from `hokm/scoring.ts` now (`hokm-felt.ts`) - it cannot read
 `view.dealer`, because a batch can span a hand change and each `deal` event names its own Hâkem - and
-the plate reads the view: the crown on the Hâkem, a hand in a disc on the dealer, never both on one
+the plate reads the model: the crown on the Hâkem, a hand in a disc on the dealer, never both on one
 plate, and the word "Dealer" in the facts a screen reader gets. At two players that is the seat that
 puts two cards down and draws second, and the mark stays there through the trump call, both discards
 and all twenty-one draws.
@@ -3698,7 +3698,7 @@ switching tables never has to unlock audio again. The spec is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
-- **Every table sounds like its own pieces, from the server's log.** Hokm has its own queue (below);
+- **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);
   backgammon's sounds are made by the table itself, each at the moment the thing it belongs to
   lands (*The stage*, below); poker goes through `components/games/table-cues.ts`, which maps a
   batch of its events to timed cues and haptics and plays nothing for a batch that was on screen at
@@ -3709,43 +3709,105 @@ switching tables never has to unlock audio again. The spec is
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
 
-**Hokm is played in motion, and the table runs a little behind the server on purpose.** The spec is
-`docs/superpowers/specs/2026-09-23-table-motion-sound-design.md` §3.2. A card flies from the seat that
-played it - from the exact spot in the reader's own hand, recorded before the request - and the real
-card on the felt stays hidden (`data-landing`) until its copy lands; a finished trick is held 900ms
-(450 when the next lead is already queued), the winning card glows, and the four are gathered to the
-winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs from the dealer.
-`game/hokm-beats.ts` turns log events into that timeline and is pure, so every timing is a test in
-`hokm-beats.spec.ts`; `game/motion.ts` flies copies with the Web Animations API in a clipped
-`.board-flight` layer, so nothing in flight can widen a page the matrix measures.
+**Hokm is played in motion, on the stage every table shares, and the table runs a little behind the
+server on purpose.** The spec is `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`
+§3.2 and the kit is *The stage*, below. A card flies from the seat that played it - from the exact
+spot in the reader's own hand, measured as it leaves - and the real card on the felt stays hidden
+(`data-landing`) until its copy lands; a finished trick is held 900ms (450 when the next lead is
+already known), the winning card glows, and the four are gathered to the winner's plate, where the
+trick is counted when they get there and a "+1" floats off the plate; a hand ends on a "+n" banner
+or a kot; the deal throws backs from the dealer. Copies fly in the clipped `.board-flight` layer, so
+nothing in flight can widen a page the matrix measures.
 
-- **The felt reads the queue; everything else reads the view.** While beats are playing, `laid` comes
-  from `shown`, which the queue owns; the controls, the live region, the hand and the turn read the
-  current view, so nobody waits for an animation to be allowed to act. When the queue drains, `shown`
-  goes back to null and the felt follows the view again, which is also what reconciles it.
+- **The "+1" leaves the plate towards the middle of the felt** (`outside` in `game/motion.ts`: the
+  point a gap beyond the edge of a box that faces where it is going, and which way that is). The box
+  is the whole seat, its plate and the pile under it. So the one is under the pile of the seat across,
+  over the reader's plate, beside a side seat's. It was first made to rise
+  from the middle of whichever plate, which for the seat across is over the name on the plate and
+  into the clock that hangs above it: seen in the first picture taken of it, at 1280 in Persian. It
+  is written in the reader's digits in a run that reads left to right, so the sign leads the number.
+
+- **The felt is a model of what has been shown, and the board draws from nothing else.**
+  `game/hokm-felt.ts`: `feltOf` reads a view, `step` applies one logged move, `before` is the table
+  as it stood before the first deal, `unplay` takes a card back. `hokm-felt.spec.ts` plays whole
+  matches through the real engine at two, three and four seats, from every seat and for somebody
+  watching, with seats walking out, and requires the model to be the model of the engine's own view
+  after every revision. Plates, piles, the turn's ring, the medal, the chips, the last trick, the
+  stock and the summary read the model. Legality, the hand, the controls and the live sentence read
+  the view, so nobody waits for an animation to be allowed to act.
+- **The model is written by a scene, by a reset, and when the queue drains.** At the drain it is set
+  to the view, which is what would mend it if a scene ever left it wrong, and `mend` does the same
+  for a board that was read again and found different with nothing to play. It is NOT read from the
+  view while the table is idle, which is how the first draft of this was written and what the plan
+  said: a match and its events arrive in one write, so the felt drew the newest board for one round
+  of that flush and was then set back to the board before the events, and a `<Show let>` that the
+  first round had built threw in the second (the register's 39, with its reproduction). A value only
+  scenes write cannot move in the flush that brings the match.
+- **A scene is an `async` function on the stage, one for each batch** (`play`). A card steps the
+  model as it leaves and the next card waits `SEQ_GAP`; anything else waits for every card to be
+  down first. A trick lies there for its hold (`lying`, which the felt draws over the model), its
+  copies leave for the winner, and only then is the model stepped, so the count on the plate and the
+  last-trick tile move when the cards get there. The turn's ring follows the LANDING: `turnAt` is
+  whoever took the trick that is lying there, else the seat whose card is still in the air, else
+  the model's turn. A pile loses its back when the card leaves it.
+- **`game/hokm-beats.ts` holds the lengths and nothing else**: the order and length of a gather, the
+  gap between packets, the hold before what follows a trick, and `spanOf`, the estimate the
+  presenter is given. It counts a trick that ends a batch to the moment it is taken and never the
+  time it lies there: counted, a table showing a trick would be a table that has fallen behind, and
+  the next lead would be played at double speed. `hokm-beats.spec.ts` holds each of them.
 - **A finished trick no longer sits on the felt until the next lead.** It is gathered, and the
   last-trick tile keeps it readable. A table opened mid-hand shows only the trick in progress.
-- **Pacing is the clock's, never an animation's `finished`**, so a throttled tab cannot strand the
-  queue. More than 1.5s behind plays at double speed - flights included, or the real card lands
-  while its copy is only halfway - and more than 3s behind, a gap in the log, a hidden tab, or a
-  catch-up of more than twelve actions or more than one hand jumps straight to the board, because a
-  reconnect replaying half a hand at full pace is a table showing the past beside controls showing
-  the present. Under reduced motion every flight is a 140ms fade at its destination, the real card
-  shows after the fade rather than after the flight it no longer has, and the sound and the haptics
-  stay - the gather and the deal play their foley with no copies flying.
-- **A trick that ends a batch is HELD, not scheduled away.** The timeline leaves it on the felt and
-  the board gathers it after 900ms itself; a next lead arriving in a later batch cancels that and
-  gathers after 450ms counted from when the trick was taken. Scheduled up front, the gather sat in
-  the queue and every lead waited the full hold behind it.
-- **The watermark belongs to a MATCH.** A rematch at the same table can reuse the board instance,
-  so the board resets its revision, its felt and its event cursor when `props.match.id` changes, and
-  `table-cues` resets the same way - otherwise every event of the new match sits below the old one's
-  last revision and the whole rematch plays in silence. `hokm-board.spec.ts` fails without it.
+- **Pacing is the stage's clock, and what is played at all is the presenter's.** More than 1.5s
+  behind plays at double speed, flights included. More than the felt's `HISTORY`, six seconds of
+  scenes, jumps to the board, and so do a gap in the log, a hidden tab and the first sight of a
+  match: a reconnect replaying half a hand at full pace is a table showing the past beside controls
+  showing the present. Under reduced motion a card is a 140ms fade where it lands and is shown after
+  the fade; the gather, the deal and the draw are `quiet: 'skip'`, so their foley is heard and no
+  copy is made; the "+1" is not made at all.
+- **A trick that ends a batch is a `linger`, not a wait.** `ctx.linger(HOLD, HOLD_MIN)` ends at
+  900ms with nothing behind it and at 450ms, counted from when the trick was taken, when a later
+  batch arrives. A trick with something after it in the same batch waits `holdBefore(next)`: the
+  whole hold before a hand is called or the match ends, the short one before anything else.
+- **A press is answered at once, and hurries what is in front of it.** `playCard` records `sent`
+  (the match, the card, the revision), tells the presenter what its echo will cover and queues an
+  urgent scene. On an idle felt the scene runs in the same tick. On a busy one what is in front
+  runs at four times the pace with its holds at their least, and the card waits in the hand, lifted
+  (`data-picked`). `lifted` is what keeps it there: the card and where it lay in the hand, held
+  until a scene lays that card, or a reset or a refusal lets it go. The hand reads the view, and a
+  server that answers before the felt has caught up takes the card out of the view: without
+  `lifted` it left the hand a quarter of a second before anything flew. No spec had that order of
+  events; it was seen on the production build, with three seats played over the api, where the
+  answer took 20ms and the hurried cards in front 270. The old executor predicted only on an idle
+  felt, because it could not reorder
+  what it had scheduled. `sending` is that record while the view is still at that revision of that
+  match, so an answer of any kind ends it and nobody has to clear it. The hand hides the card only
+  once it has left (`gone`), and `covers` answers 0 for a card that has not, so an echo that
+  arrives first plays the card whole and the queued scene finds nothing to do. A snap keeps a card
+  that has left on the felt, because `sightNow` adds it to the view it describes.
+- **A refusal takes the card back off the model, and does not reset to the view.** `stale` and
+  `failed` queue an urgent scene that gives the card back to the hand as `unplay` takes it off the
+  felt. Resetting to the view there is wrong in one order of events: the refusal, then a batch that
+  queues behind the scene. The view the reset would read is already past that batch, and the batch
+  would then be played on top of it. `failed` also means the answer was lost, not that the card was
+  refused, so the presenter is told to expect no echo: if the server took the card after all, it is
+  played from what the server says. Flying the card back is 4.6.
+- **The result waits for the table.** `result` is a state that the drain and `mend` write, not
+  `over`. The row under the table, the cards left in the reader's hand, the turn's ring, the tags
+  that say who won and the result panel read it, so the last trick is played out on a table that
+  does not change size under it. A match that ends is not dealt again, so its last view still
+  carries the hand and the plays it listed: `legal` is empty once the game is over, or the cards
+  that stay could be pressed. A derived
+  `over && !presenting` is true for one round of the flush that brings the final batch, which draws
+  the result and takes the row away before the scene that shows the last card has begun.
+- **The watermark belongs to a MATCH, and it is the presenter's.** A rematch at the same table can
+  reuse the board instance; the first sight of a match id is a reset, and a batch after it plays
+  from its first card. `table-cues` resets the same way for poker. `sent` names its match for the
+  same reason: the next match comes to the same revision.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
 - **The two-handed draw is played on the felt, by the card and the stock, and rings once.** A stock
   pile with its count sits at the felt's edge; a draw flies one card back from it to the drawer
-  (`draw` beat) and a discard is a sound with nothing flying. The seat putting cards down lifts
+  (`drawOne`) and a discard is a sound with nothing flying. The seat putting cards down lifts
   them in the hand. The stock counts them ("2/3") and, at the exact count, lights up and takes
   them when it is pressed; a lift past the count is refused with the deny cue, so the count never
   reads "4/3". The drawer alone is shown the drawn card, face up in the middle of the felt:
@@ -3756,6 +3818,12 @@ winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs fro
   FIRST draw of the hand and the draw's card-slide is the cue after that.
 - **`mount` runs in a microtask**, so a spec that renders a component and advances the manual clock
   in the same tick advances it before the component's timers exist. `turn-clock.spec.ts` awaits one.
+  A scene's awaits run in microtasks too, and its presenter is made in `mount`, so a Hokm spec seats
+  its board through `tests/hokm-mounted.ts`: `mounted` waits for the mount, `elapse` steps the manual
+  clock and lets the promises run between steps, and `send` writes a match and its events in ONE
+  `batch`, as the store does, with the view the model says those events lead to. Written apart, the
+  presenter sees a board that moved with nothing said about how and follows it quietly, and a test
+  of a card in flight passes on a card that never flew.
 
 **The board does not mirror, and `.board-plate` and `.ludo-frame` declare `direction: ltr` to say
 so.** Everything else in this product is authored in logical properties precisely so it flips with
@@ -3784,7 +3852,7 @@ difference exists nowhere else, so it is on the reader.
 ## The stage
 
 One way for a table to play what happened, shared by every game as each moves onto it. Backgammon
-was the first and ludo the second; Hokm and poker still run on what they had. The design, the audit
+was the first, ludo the second and Hokm the third; poker still runs on what it had. The design, the audit
 behind it and each game's checklist are in
 `docs/superpowers/specs/2026-10-11-table-presentation-design.md`. Everything under
 `frontend/src/game/stage/` imports nothing from AzerothJS.
@@ -3810,8 +3878,20 @@ never fires two cues in one tick. `stage.clear()` cancels every run and timer an
 the first kit ended `clear()` with `layer.replaceChildren()` while backgammon handed one element to
 the stage as its layer and to the renderer as its home, so the first hidden tab, gap or rematch took
 the dice, the cube and the stack counts off the page for the rest of the board's life, with every
-gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now;
-the layer for clones that fly between places lands with the first game that flies one.
+gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now.
+
+**A copy that flies between two places is `launch`, in a layer the game names.**
+`stage/flight.ts` puts the copy where it ENDS and runs it there with a fill, so a clock that is late
+never shows it landed and gone back; it takes the copy out when it lands and then tells whoever
+asked. `quiet: 'out'` leaves a thing that ends in nothing where it began, and `quiet: 'skip'` puts
+nothing in the layer and still says it landed. A run that is cleared is not told it landed and its
+copy stays, so a table's reset empties its own layer: that is the one place a layer is emptied, and
+it is the table's, never the stage's. `stage/cards.ts` makes a card to fly (`cardNode`), cuts a
+card's shape round the middle of a place (`cardAt`) and finds where a card leaves from (`anchor`):
+the first place it is given that is really drawn, and the last one given when none is. Hokm hides
+its piles on a small table, and a hidden pile measures as the top corner of the page, which is
+where a side seat's card used to start at four players on a phone. `stage-flight.spec.ts` holds
+both modules. Hokm is their first caller.
 
 **A run that has ended can still be taken back.** A run made with a fill goes on holding its last
 frame after its time is up, and the fade the stage plays for something that ends in nothing is
@@ -4020,6 +4100,12 @@ pressing them and presses the stock, which takes them only at the exact count; p
 and the stock by turns for four draws, with the card on the felt of the drawer's browser and absent
 from the other; finishes the draw over the api before it clicks cards; and fails if a button on the
 page plays a card other than the card, or a bar of sentences is drawn under the table.
+
+**It waits for the table to say it has caught up before it reads how the match ended.** The result
+waits for the queue, and after a match played out over the api the table is still showing its last
+few seconds when the server finished long ago, so the two sleeps that used to stand there were a
+guess at how long that is. It waits for `data-presenting` to leave the stage at the finished
+revision, in each browser, and records whether it did.
 
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out

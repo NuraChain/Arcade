@@ -542,11 +542,23 @@ try
 
         record('the match reaches a real finish', done.finishedAt !== undefined && done.finishedAt !== null, done.outcome);
 
-        await dana.page.waitForTimeout(SETTLE_MS);
-        await mina.page.waitForTimeout(SETTLE_MS);
-
         for (const who of [dana, mina])
         {
+            /**
+             * The result waits for the table. The last trick is played out, gathered and called
+             * before the panel arrives, and after a match played over the api the table is still
+             * showing its last few seconds when the server finished long ago. So this waits for the
+             * table to say it has caught up: a sleep of any length would be a guess at that.
+             */
+            const caught = await who.page.waitForFunction((least) =>
+            {
+                const table = document.querySelector('main .table-stage');
+
+                return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
+            }, done.rev, { timeout: 45_000 }).then(() => true, () => false);
+
+            record(`${ who.handle }'s table catches up with the finish`, caught);
+
             const said = await who.page.evaluate(() =>
                 document.querySelector('main [aria-live]')?.textContent?.trim() ?? '');
 

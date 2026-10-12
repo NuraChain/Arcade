@@ -1904,6 +1904,43 @@ pressable no later than 2 s after the batch.
 | Trick collection | The gather; the count's "+1" | `hokm-board.spec.ts` (the count moves when the cards arrive; the foley of a gather under reduced motion) | Pass | |
 | Round transition | `hand`; a hand ends and another begins | Parity across a hand boundary at two, three and four seats; `hokm-board.spec.ts` (the banner as a scene; the crown and the marks follow the shown model) | Pass | |
 
+**As built (commit 4.3).** The executor runs on the stage and the presenter, with the numbers above
+unchanged. Where it differs from what this section said:
+
+- **The felt reads the model at all times, not the view when it is idle** (rule 1 as written).
+  A match and its events are one write, so a felt that read the view while idle drew the newest
+  board for one round of that flush before a scene set it back, and a `<Show let>` built in that
+  round threw in the next (the framework register's 39). The model is set to the view when the
+  queue drains and when a board is read again and found different, which keeps the safety the rule
+  was after.
+- **The model is `frontend/src/game/hokm-felt.ts`**, with the parity spec beside it.
+  `hokm-beats.ts` holds only lengths: the gather, the gap between packets, the hold before what
+  follows a trick, and the estimate. The stock's sequence is held by parity, not pinned by hand.
+- **The stage and the presenter are made in `mount`**, as backgammon's are, not at first use. A
+  batch that arrives in the tick of the render is the first sight of its match, which is a reset,
+  or the opening when the store marked it delivered.
+- **The idle gate on prediction went.** A press on a busy felt is an urgent scene: what is in front
+  runs at four times the pace with a trick's hold at its least, and the card waits in the hand,
+  lifted. A winner who leads quickly still sees the trick they took for 450 ms.
+- **`overflows` went.** The presenter's own limits decide: double speed past 1.5 s, and a jump when
+  what was missed is more than the felt's six seconds of scenes. A hand's end is about four and a
+  half, so more than one hand still jumps.
+- **A refusal takes the card back off the model** (`unplay`) and gives it to the hand in one scene;
+  it does not fly yet (4.6). `failed` is a lost answer, so an echo that comes after it is played.
+- **The result waits for the queue here**, ahead of §6: the panel, the tags that say who won, the
+  turn's ring and the row under the table, which would otherwise change the table's size under the
+  last trick.
+- **The opening is played**: the first deal, as any deal is played today, one back to the Hâkem
+  after the shuffle. The packets, the deck at rest and the hand dealt into its slots are 4.5.
+- **The trick's "+1"** is a mark in the flight layer that leaves the winner's plate towards the
+  middle of the felt, so it never lies over the name or the clock on that plate. It is written in
+  the reader's digits and is not made under reduced motion.
+- **A pressed card stays in the hand, lifted, until the felt lays it**, whether or not the server
+  has answered by then (`lifted`). The hand reads the view, and on a busy felt the answer arrives
+  before the hurried scenes in front have finished.
+- **Still to come**: the turn-over of another seat's card (it fades in from its seat as before),
+  trump travelling to the medal, the crown's travel and the fan's FLIP.
+
 ### 5.4 Poker
 
 **Engine facts** (`backend/src/domains/match/poker/`). The table passes to the left (clockwise).

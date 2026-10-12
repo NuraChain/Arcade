@@ -1,15 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { createSignal } from 'azerothjs';
+import { cleanup, fire } from '@azerothjs/testing';
 
-import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
+import { SHUFFLE } from '../src/game/hokm-beats.ts';
+import { TIMING } from '../src/game/motion.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
+import { useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
+import { act, card, elapse, mounted, type Hokm } from './hokm-mounted.ts';
 
 const told = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[] }));
 
@@ -45,12 +46,6 @@ vi.mock('../src/lib/haptics.ts', async (original) =>
     };
 });
 
-type Rendered = HTMLElement;
-
-type Hokm = Extract<MatchView['view'], { kind: 'hokm' }>;
-
-type Move = Extract<MatchEvent['log'], { kind: 'hokm' }>['moves'][number];
-
 const LONG = 20_000;
 
 const match = (view: Partial<Hokm>, mine: number | null = 0, seats = 4): MatchView => ({
@@ -84,28 +79,7 @@ const match = (view: Partial<Hokm>, mine: number | null = 0, seats = 4): MatchVi
     }
 });
 
-const act = (rev: number, seat: number, ...moves: Move[]): MatchEvent => ({ rev, seat, at: '', log: { kind: 'hokm', moves } });
-
-const card = (rev: number, seat: number, at: number) => act(rev, seat, { e: 'card', seat, card: at });
-
 const clock = () => runtime().clock as ManualClock;
-
-const drive = (): ((events: MatchEvent[]) => void) =>
-{
-    const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
-
-    vi.spyOn(useBoard(), 'events').mockImplementation(batch);
-
-    return (events) => setBatch((held) => ({ ...NO_EVENTS, seq: held.seq + 1, events }));
-};
-
-const settle = async () =>
-{
-    for (let turn = 0; turn < 6; turn += 1)
-    {
-        await Promise.resolve();
-    }
-};
 
 const count = (cue: string) => told.heard.filter((one) => one === cue).length;
 
@@ -156,12 +130,10 @@ describe('what a hokm table is heard to do', () =>
 {
     it('lets every card be heard leaving and landing, then the trick taken and gathered, each once and in that order', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
         send(TRICK(2));
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place'), count('trick'), count('card-gather')]).toEqual([4, 4, 1, 1]);
         expect(told.heard.indexOf('card-slide'), 'a card was heard landing before any had left').toBeLessThan(told.heard.indexOf('card-place'));
@@ -172,12 +144,10 @@ describe('what a hokm table is heard to do', () =>
 
     it('keeps the sound of taking a trick for the side that took it', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
         send(TRICK(1));
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place'), count('trick'), count('card-gather')]).toEqual([4, 4, 0, 1]);
         expect(told.felt).toEqual([]);
@@ -185,12 +155,10 @@ describe('what a hokm table is heard to do', () =>
 
     it('gives somebody watching the cards and the gather, and none of what is said to a player', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}, null));
 
-        renderTest(() => HokmBoard({ match: match({}, null) }) as Rendered);
-        await settle();
         send(TRICK(2));
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place'), count('trick'), count('card-gather')]).toEqual([4, 4, 0, 1]);
         expect(told.felt).toEqual([]);
@@ -198,22 +166,19 @@ describe('what a hokm table is heard to do', () =>
 
     it('is heard in full by somebody who asked for less motion', async () =>
     {
-        const send = drive();
-
         vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
+
+        const { send } = await mounted(match({}));
+
         send(TRICK(2));
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place'), count('trick'), count('card-gather')]).toEqual([4, 4, 1, 1]);
     });
 
     it('says a hand was won after its last trick is gathered, shows what it paid for a while, then shuffles and deals the next', async () =>
     {
-        const send = drive();
-        const { container } = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
+        const { container, send } = await mounted(match({}));
 
         send([
             card(4, 1, 1),
@@ -226,7 +191,7 @@ describe('what a hokm table is heard to do', () =>
 
         for (let passed = 0; passed < LONG; passed += 50)
         {
-            clock().advance(50);
+            await elapse(50, 5);
             shown = shown || container.querySelector('.hokm-banner') !== null;
         }
 
@@ -239,10 +204,8 @@ describe('what a hokm table is heard to do', () =>
 
     it('does not call a hand the other side won, and still shows what it paid them', async () =>
     {
-        const send = drive();
-        const { container } = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
+        const { container, send } = await mounted(match({}));
 
-        await settle();
         send([
             card(4, 1, 1),
             card(5, 2, 2),
@@ -254,7 +217,7 @@ describe('what a hokm table is heard to do', () =>
 
         for (let passed = 0; passed < LONG; passed += 50)
         {
-            clock().advance(50);
+            await elapse(50, 5);
             shown = shown || container.querySelector('.hokm-banner') !== null;
         }
 
@@ -266,17 +229,15 @@ describe('what a hokm table is heard to do', () =>
 
     it('marks a hand won without the other side taking a trick with the sound of a win', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
         send([
             card(4, 1, 1),
             card(5, 2, 2),
             card(6, 3, 3),
             act(7, 0, { e: 'card', seat: 0, card: 4 }, { e: 'trick', seat: 2 }, { e: 'hand', side: 0, points: 2, kot: true }, { e: 'deal', hakem: 0 })
         ]);
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('win'), count('hand-won')]).toEqual([1, 0]);
         expect(told.felt).toContain('kot');
@@ -284,12 +245,10 @@ describe('what a hokm table is heard to do', () =>
 
     it('lets trump be heard when it is named, and at four the rest of the deal going round to every seat', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }));
 
-        renderTest(() => HokmBoard({ match: match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }) }) as Rendered);
-        await settle();
         send([act(4, 0, { e: 'trump', seat: 0, suit: 'spades' })]);
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect(count('trump')).toBe(1);
         expect(order('trump', 'card-slide')).toBe(true);
@@ -298,37 +257,31 @@ describe('what a hokm table is heard to do', () =>
 
     it('lets a card drawn from the stock and a card put down be heard at a table for two', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({ phase: 'draw', turn: 1, lead: 0, stock: 20 }, 0, 2));
 
-        renderTest(() => HokmBoard({ match: match({ phase: 'draw', turn: 1, lead: 0, stock: 20 }, 0, 2) }) as Rendered);
-        await settle();
         send([act(4, 1, { e: 'draw', seat: 1 }), act(5, 0, { e: 'discard', seat: 0 })]);
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place')]).toEqual([1, 1]);
     });
 
     it('is silent when the board has to jump to where the game is', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
         send([card(9, 1, 12)]);
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect(told.heard).toEqual([]);
     });
 
     it('is silent in a tab nobody is looking at', async () =>
     {
-        const send = drive();
+        const { send } = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
         send(TRICK(2));
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect(told.heard).toEqual([]);
         expect(told.felt).toEqual([]);
@@ -336,25 +289,17 @@ describe('what a hokm table is heard to do', () =>
 
     it('lets the reader\'s own card be heard leaving at the press and landing once, whatever the server says after', async () =>
     {
-        const send = drive();
-        const [current, setCurrent] = createSignal(match({ turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }));
-
         useDevice().overrideCoarse(false);
         vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
 
-        const { container } = renderTest(() => HokmBoard({ get match()
-        {
-            return current();
-        } }) as Rendered);
+        const { container, send } = await mounted(match({ turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }));
 
-        await settle();
         fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
 
         expect([count('card-slide'), count('card-place')], 'the card was not heard leaving at the press').toEqual([1, 0]);
 
-        setCurrent({ ...match({ turn: 1, lead: 0, trick: [14], hand: [0, 30], plays: [] }), rev: 4 });
         send([card(4, 0, 14)]);
-        clock().advance(LONG);
+        await elapse(LONG, 5);
 
         expect([count('card-slide'), count('card-place')], 'the server\'s word for the same card was played as another').toEqual([1, 1]);
         expect(told.felt).toEqual(['select']);
@@ -363,16 +308,10 @@ describe('what a hokm table is heard to do', () =>
     it('chimes once when the turn comes round to the reader, and never for somebody watching', async () =>
     {
         const turned = (mine: number | null) => ({ ...match({ turn: 0, lead: 1, trick: [1, 2, 3], hand: mine === null ? [] : [40, 41], plays: mine === null ? [] : [40, 41] }, mine), rev: 6 });
-        const [current, setCurrent] = createSignal(match({}));
+        const playing = await mounted(match({}));
 
-        drive();
-        renderTest(() => HokmBoard({ get match()
-        {
-            return current();
-        } }) as Rendered);
-        await settle();
-        setCurrent(turned(0));
-        clock().advance(LONG);
+        playing.read(turned(0));
+        await elapse(LONG, 5);
 
         expect(count('turn')).toBe(1);
         expect(told.felt).toEqual(['ready']);
@@ -381,16 +320,10 @@ describe('what a hokm table is heard to do', () =>
         told.heard.length = 0;
         told.felt.length = 0;
 
-        const [watched, setWatched] = createSignal(match({}, null));
+        const watching = await mounted(match({}, null));
 
-        drive();
-        renderTest(() => HokmBoard({ get match()
-        {
-            return watched();
-        } }) as Rendered);
-        await settle();
-        setWatched(turned(null));
-        clock().advance(LONG);
+        watching.read(turned(null));
+        await elapse(LONG, 5);
 
         expect(count('turn')).toBe(0);
         expect(told.felt).toEqual([]);
@@ -400,9 +333,7 @@ describe('what a hokm table is heard to do', () =>
     {
         const ticks = () => count('tick') + count('tick-hi');
 
-        drive();
-        renderTest(() => HokmBoard({ match: { ...match({ turn: 0, lead: 0, plays: [40, 41] }), remainingMs: 7000 } }) as Rendered);
-        await settle();
+        await mounted({ ...match({ turn: 0, lead: 0, plays: [40, 41] }), remainingMs: 7000 });
 
         for (let second = 0; second < 7; second += 1)
         {
@@ -413,9 +344,7 @@ describe('what a hokm table is heard to do', () =>
 
         cleanup();
         told.heard.length = 0;
-        drive();
-        renderTest(() => HokmBoard({ match: { ...match({ turn: 1, lead: 1 }), remainingMs: 7000 } }) as Rendered);
-        await settle();
+        await mounted({ ...match({ turn: 1, lead: 1 }), remainingMs: 7000 });
 
         for (let second = 0; second < 7; second += 1)
         {
@@ -427,25 +356,129 @@ describe('what a hokm table is heard to do', () =>
 
     it('ends on the sound of a win for the side that won the match, and on nothing for the side that lost', async () =>
     {
-        const won = drive();
+        const won = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
-        won([act(4, 1, { e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 })]);
-        clock().advance(LONG);
+        won.send([act(4, 1, { e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 })]);
+        await elapse(LONG, 5);
 
         expect(count('win')).toBe(1);
 
         cleanup();
         told.heard.length = 0;
 
-        const lost = drive();
+        const lost = await mounted(match({}));
 
-        renderTest(() => HokmBoard({ match: match({}) }) as Rendered);
-        await settle();
-        lost([act(4, 0, { e: 'forfeit', seat: 0 }, { e: 'finish', side: 1 })]);
-        clock().advance(LONG);
+        lost.send([act(4, 0, { e: 'forfeit', seat: 0 }, { e: 'finish', side: 1 })]);
+        await elapse(LONG, 5);
 
         expect(count('win')).toBe(0);
+    });
+
+    it('ends on nothing for somebody watching, whichever side won', async () =>
+    {
+        const { send } = await mounted(match({}, null));
+
+        send([act(4, 1, { e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 })]);
+        await elapse(LONG, 5);
+
+        expect(told.heard).toEqual([]);
+        expect(told.felt).toEqual([]);
+    });
+
+    it('shuffles, then deals the first five to the Hâkem alone at four, and to both players at a table for two', async () =>
+    {
+        const four = await mounted(match({}));
+
+        four.send([act(4, 0, { e: 'hand', side: 1, points: 1, kot: false }, { e: 'deal', hakem: 1 })]);
+        await elapse(TIMING.BANNER - 1);
+
+        expect(count('card-shuffle'), 'the next hand was shuffled while the last was still being called').toBe(0);
+
+        await elapse(SHUFFLE);
+
+        expect([count('card-shuffle'), count('card-slide')], 'a card left the dealer while the deck was still being shuffled').toEqual([1, 0]);
+
+        await elapse(LONG, 5);
+
+        expect([count('card-shuffle'), count('card-slide')]).toEqual([1, 1]);
+        expect(order('card-shuffle', 'card-slide'), 'a card left the dealer before the deck was shuffled').toBe(true);
+
+        cleanup();
+        told.heard.length = 0;
+
+        const two = await mounted(match({}, 0, 2));
+
+        two.send([act(4, 0, { e: 'hand', side: 1, points: 1, kot: false }, { e: 'deal', hakem: 1 })]);
+        await elapse(LONG, 5);
+
+        expect([count('card-shuffle'), count('card-slide')]).toEqual([1, 2]);
+    });
+
+    it('deals nothing more when trump is named at a table for two, where the rest is drawn', async () =>
+    {
+        const { send } = await mounted(match({ phase: 'trump', trump: undefined, turn: 0, lead: 0, stock: 42 }, 0, 2));
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'hearts' })]);
+        await elapse(LONG, 5);
+
+        expect([count('trump'), count('card-slide')]).toEqual([1, 0]);
+    });
+
+    it('deals the opening hand in front of a reader who was sent it as it happened, and not for one who came to it later', async () =>
+    {
+        const opening = (): MatchView => ({ ...match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }), rev: 1 });
+        const dealt = [act(1, 0, { e: 'deal', hakem: 0 })];
+
+        await mounted(opening(), { seq: 1, id: 'match-1', events: dealt, live: true, jump: false, opens: () => true });
+        await elapse(LONG, 5);
+
+        expect([count('card-shuffle'), count('card-slide')]).toEqual([1, 1]);
+
+        cleanup();
+        told.heard.length = 0;
+
+        await mounted(opening(), { seq: 1, id: 'match-1', events: dealt, live: false, jump: false });
+        await elapse(LONG, 5);
+
+        expect(told.heard, 'a deal that was over was dealt again').toEqual([]);
+    });
+
+    it('is silent when more was missed than a felt replays, and plays a single hand that was', async () =>
+    {
+        const hand = (rev: number) => act(rev, 0, { e: 'hand', side: 1, points: 1, kot: false }, { e: 'deal', hakem: 1 });
+        const long = await mounted(match({}));
+
+        long.send([hand(4), hand(5), hand(6)]);
+        await elapse(LONG, 5);
+
+        expect(told.heard).toEqual([]);
+
+        cleanup();
+        told.heard.length = 0;
+
+        const short = await mounted(match({}));
+
+        short.send([hand(4)]);
+        await elapse(LONG, 5);
+
+        expect(count('card-shuffle')).toBe(1);
+    });
+
+    it('lets a card that hurried what was in front of it be heard after it, never before', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(match({ turn: 3, lead: 1, trick: [1, 2], hand: [0, 14, 30], plays: [] }));
+
+        send([card(4, 3, 3)], { plays: [0, 14] });
+        await elapse(10);
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+
+        expect([count('card-slide'), count('card-place')], 'the reader\'s card left before the card in front of it was down').toEqual([1, 0]);
+
+        await elapse(LONG, 5);
+
+        expect(told.heard.filter((cue) => cue.startsWith('card-'))).toEqual(['card-slide', 'card-place', 'card-slide', 'card-place']);
     });
 });

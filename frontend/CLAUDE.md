@@ -1347,8 +1347,9 @@ The client half of the same audits, each a thing that outlived what it belonged 
   which otherwise held a detached anchor and a closure over a page that no longer existed.
 - **An error that would never leave gives its slot up.** Error toasts do not expire, so three of them
   used to fill every slot and queue everything after them for good; a new toast now retires the oldest.
-- **A timer that fires takes its own stop-handle with it** in the hokm board and the table cues, which
-  otherwise kept one per beat for the whole match.
+- **A timer that fires takes its own stop-handle with it** in the stage and the table cues, which
+  otherwise kept one per beat for the whole match. The hokm board has no timers of its own now: its
+  scenes wait on the stage's.
 - **The plaintext archive is capped** at five thousand messages, oldest first, and **epoch key bytes
   are zeroed** once a page of history or a list preview has been opened with them - the thread shares
   one copy per epoch across a page, so it is zeroed after the page, not after each message.
