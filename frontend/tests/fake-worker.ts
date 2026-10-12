@@ -44,7 +44,7 @@ export class Refused extends Error
     }
 }
 
-export function tabAt(place: string, options: { hidden?: boolean; gone?: boolean } = {}): FakeTab
+export function tabAt(place: string, options: { hidden?: boolean; gone?: boolean } = {})
 {
     const tab: FakeTab = {
         url: ORIGIN + place,

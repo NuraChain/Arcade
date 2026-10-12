@@ -134,7 +134,7 @@ export function fakeNotices(permission: NotificationPermission, options: FakeNot
 
     if (options.push === true || options.subscribed === true)
     {
-        vi.stubGlobal('PushManager', class PushManager {});
+        vi.stubGlobal('PushManager', () => undefined);
     }
 
     Object.defineProperty(navigator, 'serviceWorker', {

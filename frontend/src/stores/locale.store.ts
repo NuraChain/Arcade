@@ -54,7 +54,7 @@ export async function loadCatalogue(locale: Locale)
     registerCatalogue({ en: {}, fa: landing });
 }
 
-export function messageOf(at: Locale, key: MessageKey): Message
+export function messageOf(at: Locale, key: MessageKey)
 {
     return CATALOG[at][key] ?? CATALOG.en[key] ?? key;
 }
