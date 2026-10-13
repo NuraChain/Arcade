@@ -221,6 +221,16 @@ export function unturned(air: Air, cards: number): Air
     return { ...air, board: Math.max(0, air.board + cards) };
 }
 
+export function turning(air: Air, felt: Felt, seat: number): Air
+{
+    return { ...air, cards: felt.chairs.map((chair) => (chair.seat === seat ? HOLE : (air.cards[chair.seat] ?? 0))) };
+}
+
+export function turned(air: Air, seat: number): Air
+{
+    return { ...air, cards: air.cards.map((cards, at) => (at === seat ? 0 : cards)) };
+}
+
 export function drawnOf(felt: Felt, air: Air): Felt
 {
     const coming = air.bets.reduce((sum, chips) => sum + chips, 0);
@@ -239,6 +249,51 @@ export function drawnOf(felt: Felt, air: Air): Felt
         hole: felt.hole.slice(0, Math.max(0, felt.hole.length - owed))
     };
 }
+
+export function staged(moves: readonly Told[])
+{
+    const out: Told[] = [];
+    let at = 0;
+
+    while (at < moves.length)
+    {
+        let streets = at;
+
+        while (streets < moves.length && moves[streets].e === 'board')
+        {
+            streets += 1;
+        }
+
+        let after = streets;
+
+        while (after < moves.length && (moves[after].e === 'refund' || moves[after].e === 'show'))
+        {
+            after += 1;
+        }
+
+        const tail = moves.slice(streets, after);
+
+        if (streets > at && tail.some((move) => move.e === 'show'))
+        {
+            out.push(...tail.filter((move) => move.e === 'refund'), ...tail.filter((move) => move.e === 'show'), ...moves.slice(at, streets));
+            at = after;
+        }
+        else
+        {
+            out.push(moves[at]);
+            at += 1;
+        }
+    }
+
+    return out;
+}
+
+export function sharesOf(felt: Felt, move: Told)
+{
+    return split(move.amount ?? 0, [...(move.winners ?? [])], leftOf(felt.button, felt.chairs.length));
+}
+
+export const winnersOf = (felt: Felt) => [...new Set(felt.paid.flatMap((pot) => pot.winners))];
 
 export function dealOrder(felt: Felt)
 {
@@ -324,7 +379,7 @@ export function step(felt: Felt, move: Told, hole: readonly number[] = NO_CARDS)
     if (move.e === 'pot')
     {
         const winners = [...(move.winners ?? [])];
-        const shares = split(amount, winners, leftOf(felt.button, felt.chairs.length));
+        const shares = sharesOf(felt, move);
 
         return sealed({
             ...felt,

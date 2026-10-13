@@ -38,9 +38,21 @@ export const PUCK = 320;
 
 export const CARD_GAP = 90;
 
-export const POT_WON = 120;
+export const POT_FLY = 180;
+
+export const POT_GAP = 20;
 
 export const POT_SPAN = 300;
+
+export const SHOW_LINGER = 2200;
+
+export const SHOW_LEAST = 900;
+
+export const RUN_OUT = 500;
+
+export const RUN_OUT_LEAST = 150;
+
+export const RACK = 320;
 
 export const WIN_AFTER = 400;
 
@@ -56,6 +68,28 @@ export interface Beat
 {
     e: string;
     cards?: readonly number[];
+}
+
+export interface Hold
+{
+    ms: number;
+    least: number;
+}
+
+const BEFORE_STREET: Hold = { ms: RUN_OUT, least: RUN_OUT_LEAST };
+
+const BEFORE_POT: Hold = { ms: SHOW_LINGER, least: SHOW_LEAST };
+
+export const tabling = (shown: boolean, move: Beat) => move.e === 'show' || (shown && move.e === 'board');
+
+export function heldBefore(shown: boolean, move: Beat)
+{
+    if (!shown || (move.e !== 'board' && move.e !== 'pot'))
+    {
+        return null;
+    }
+
+    return move.e === 'board' ? BEFORE_STREET : BEFORE_POT;
 }
 
 export const dealGap = (cards: number) => (cards <= 1 ? 0 : Math.min(CARD_OUT, (DEAL_MOST - CARD_FLY) / (cards - 1)));
@@ -74,6 +108,8 @@ export function slides(at: number, cards: number)
 }
 
 const pouring = CHIP_FLY + (MOST_DISCS - 1) * DISC_GAP;
+
+const racking = RACK + (MOST_DISCS - 1) * DISC_GAP;
 
 const gathering = (seats: number) => GATHER + Math.max(0, seats - 1) * GATHER_GAP;
 
@@ -94,14 +130,19 @@ function spanOne(move: Beat, seats: number)
         return KNOCK;
     }
 
-    if (move.e === 'fold' || move.e === 'forfeit' || move.e === 'bust')
+    if (move.e === 'fold' || move.e === 'bust')
     {
         return TURN + MUCK + MUCK_GAP;
     }
 
+    if (move.e === 'forfeit')
+    {
+        return racking + TURN + MUCK + MUCK_GAP;
+    }
+
     if (move.e === 'show')
     {
-        return CARD_GAP;
+        return CARD_GAP + TURN;
     }
 
     if (move.e === 'board')
@@ -119,5 +160,14 @@ function spanOne(move: Beat, seats: number)
 
 export function spanOf(moves: readonly Beat[], seats: number)
 {
-    return moves.reduce((span, move) => span + spanOne(move, seats), 0);
+    let shown = false;
+    let span = 0;
+
+    for (const move of moves)
+    {
+        span += (heldBefore(shown, move)?.least ?? 0) + spanOne(move, seats);
+        shown = tabling(shown, move);
+    }
+
+    return span;
 }

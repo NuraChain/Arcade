@@ -2380,6 +2380,49 @@ model's table.
   the river, less motion (no card in the air at any frame, the cards arriving 73 ms apart all
   the same), and a phone in Persian with the reader's own fold pressed.
 
+**As built (commit 5.5, a hand ends in front of the table).** The rows `show`, `pot`, `refund`
+in a run-out, `forfeit` and "Hand boundary" of the table of scenes.
+
+- **Shown hands are not clones held by the stage** beside each plate, as the row said. They
+  are the seat's own two cards (`.poker-backs.poker-shown`), drawn from `felt.tabled` in the
+  backs' place, so a table read afresh shows what a table played to shows, and the solver has
+  them to seat round. A clone turns each over (`turn`, growing from the back's box to the
+  face's, with `fromRotate` so it starts at the back's tilt) and the face is drawn when its
+  clone lands.
+- **Half as large again as a back.** At a back's own size a face could not be read: 21 px on
+  a phone. `--shown-w` is 9.5 hundredths of the shorter side: 36 px on a phone held upright,
+  52 on a desk. Looked at with the page's clock stopped at 1440, 1280, 1024, 844x390, 768,
+  430, 390, 360 and 320 wide: a hand and its name lay on nothing at any of them.
+- **The name is a pill and not a plate tag.** A tag takes the line the stack is written on,
+  and the stack is what counts the pot. The pill is seated by `seatBets` in the place of the
+  bet a shown hand does not have.
+- **`staged` is a pure reorder** of one run: streets, then chips given back, then hands
+  becomes chips given back, hands, streets. The three kinds commute in the reducer (a street
+  and a show both gather the bets; a refund lowers a bet that a street would have gathered),
+  which the model's spec holds over every action of the seven seeded games.
+- **Two holds, both `ctx.linger`**: 500/150 before each street of a run-out, 2200/900 before
+  the first pot after a show. A reader who is to act gets the least from the start: the
+  2500 ms cap would otherwise ask them over a table that had not reached its hands.
+- **A pot keeps its 300 ms.** The first shape flew the chips, counted them and then told the
+  winner 90 ms later, which put the win on top of the next hand's shuffle and made the scene
+  longest for the one reader the cap is tightest for. Now the win is told as the pot leaves
+  for the reader, the chips are heard when they land (180 ms and 20 a disc), and the scene
+  ends at 300 whatever the discs.
+- **`Air` did not grow.** A hand turning over is two cards in the air at that seat
+  (`turning`, then `landed` for each, `turned` to be sure): the list the deal already has. A
+  first draft kept a list of seats being shown and hid `tabled` from the drawn table; with
+  the faces drawn hidden under their clones it was not needed.
+- **A pot is said as it is pushed.** The table had one polite line, for whose turn it is. A
+  second one beside it says who won each pot and with what (`paidSays`, the words of the
+  last-hand panel), because a showdown that is only drawn is not told to everybody.
+- **A walk-out's chips go before its plate does** by playing the flight before the step, so
+  the number on the plate stands for the 320 ms its discs take to leave.
+- **Under less motion** nothing is turned and nothing flies; the hands, their names and the
+  pot arrive in the same order, and the holds are as long: they are time to read, not motion.
+- **No fit cell.** A table that is shown down cannot be opened at rest, so the play pass
+  measures it in flight (the name of a hand lies on nothing, at 1280 and at 390), and 5.6's
+  motion pass is where a held table is measured at every size.
+
 **As built (commit 5.3b, chips travel).** The rows `blind` to `allin`, `check`, "A street
 closes", `refund`, "The reader acts" and "A refused or stale action" of the table of scenes.
 

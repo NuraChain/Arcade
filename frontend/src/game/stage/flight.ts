@@ -19,6 +19,7 @@ export interface Turn
     flip?: string;
     delay?: number;
     down?: boolean;
+    fromRotate?: number;
     toRotate?: number;
     landed?: () => void;
 }
@@ -72,7 +73,7 @@ export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from:
     ], flip);
 
     return stage.animate(clone, [
-        { translate: `${ start.x - end.x }px ${ start.y - end.y }px`, rotate: '0deg' },
+        { translate: `${ start.x - end.x }px ${ start.y - end.y }px`, rotate: `${ flight.fromRotate ?? 0 }deg` },
         { translate: '0px 0px', rotate: `${ flight.toRotate ?? 0 }deg` }
     ], {
         ...travel,

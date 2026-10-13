@@ -119,6 +119,11 @@ export const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect')
         return at(30 + seat * 60 + nth(this) * 8, 660 - seat * 100, 12, 17);
     }
 
+    if (this.classList.contains('poker-face'))
+    {
+        return at(26 + seat * 60 + nth(this) * 14, 650 - seat * 100, 20, 28);
+    }
+
     return at(0, 0, 0, 0);
 });
 
@@ -179,6 +184,17 @@ export const backs = (container: HTMLElement, seat: number) =>
     [...container.querySelectorAll(`.poker-seat[data-seat="${ seat }"] .poker-backs > .card-back`)].filter((one) => !one.hasAttribute('data-coming')).length;
 
 export const pocketed = (container: HTMLElement) => container.querySelectorAll('.poker-pocket .card-face').length;
+
+export const shownAt = (container: HTMLElement, seat: number) =>
+    [...container.querySelectorAll<HTMLElement>(`.poker-seat[data-seat="${ seat }"] .poker-shown > .poker-face:not([data-coming]) > .card-face`)]
+        .map((face) => Number(face.style.getPropertyValue('--at-suit')) * 13 + Number(face.style.getPropertyValue('--at-rank')));
+
+export const namedAt = (container: HTMLElement, seat: number) =>
+{
+    const pill = container.querySelector<HTMLElement>(`.poker-seat[data-seat="${ seat }"] .poker-named`);
+
+    return pill === null ? '' : `${ pill.textContent ?? '' }${ pill.dataset.won === 'true' ? ' (won)' : '' }`;
+};
 
 export const faced = (container: HTMLElement) => container.querySelectorAll('.poker-board .card-face').length;
 

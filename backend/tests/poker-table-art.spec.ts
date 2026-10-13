@@ -120,7 +120,7 @@ describe('what lies on a poker table', () =>
         expect(sheet).toContain('@property --u\n{\n    syntax: \'<length>\';\n    inherits: true;\n    initial-value: 0px;\n}');
         expect(things).toContain('--u: 1cqmin;');
 
-        for (const name of ['face', 'type', 'pill-w', 'col-w', 'back-w'])
+        for (const name of ['face', 'type', 'pill-w', 'col-w', 'back-w', 'shown-w'])
         {
             const [floor, share, ceiling] = numberOf(name, things);
 
@@ -153,7 +153,39 @@ describe('what lies on a poker table', () =>
         expect(cards).toContain('left: calc(50% + var(--ux) * (50% + var(--gap)));');
         expect(cards).toContain('top: calc(50% + var(--uy) * (50% + var(--gap)));');
         expect(cards).toContain('translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);');
-        expect(ruleOf('.poker-bet:not([data-placed]),\n.poker-bet[data-landing],\n.poker-backs > .card-back[data-coming],\n.poker-puck:not([data-placed])'), 'a bet whose chips are coming, a card that is being dealt or a mark that has not been laid is on show').toContain('visibility: hidden;');
+        expect(
+            ruleOf('.poker-bet:not([data-placed]),\n.poker-bet[data-landing],\n.poker-named:not([data-placed]),\n.poker-backs > [data-coming],\n.poker-puck:not([data-placed])'),
+            'a bet whose chips are coming, the name of a hand that has not been seated, a card that is being dealt or turned over, or a mark that has not been laid is on show'
+        ).toContain('visibility: hidden;');
+    });
+
+    it('draws a hand that is shown half as large again as the backs it was, in their place, and lays it from the left in either language', () =>
+    {
+        const [, back] = numberOf('back-w', things);
+        const [floor, shown] = numberOf('shown-w', things);
+        const hand = ruleOf('.poker-shown');
+
+        expect(shown, 'a hand that is shown is hardly larger than the backs it was, and cannot be read').toBeGreaterThanOrEqual(back * 1.5);
+        expect(floor * 16, 'a card that is shown is narrower than twenty pixels on the smallest table').toBeGreaterThanOrEqual(20);
+        expect(hand).toContain('--card-w: var(--shown-w);');
+        expect(hand, 'a shown hand is laid from the right in Persian, where its second card covers the corner the first is read by').toContain('direction: ltr;');
+        expect(hand, 'a shown hand has a place of its own and not the place of the backs, which the bets are seated round').not.toMatch(/\n    (?:position|left|top|translate):/);
+        expect(ruleOf('.poker-shown > .poker-face + .poker-face')).toContain('margin-inline-start: calc(var(--shown-w) * -0.3);');
+    });
+
+    it('names a hand that is shown in a pill of its own, laid where a bet would be until it is seated, and gold when it has won', () =>
+    {
+        const name = ruleOf('.poker-named');
+        const bet = ruleOf('.poker-bet');
+
+        for (const line of ['left: calc(50% + var(--ux) * (50% + var(--gap)));', 'top: calc(50% + var(--uy) * (50% + var(--gap)));', 'translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);', 'font-size: var(--type);', 'white-space: nowrap;'])
+        {
+            expect(name, line).toContain(line);
+            expect(bet, line).toContain(line);
+        }
+
+        expect(ruleOf('.poker-named[data-won]')).toContain('background: var(--gold);');
+        expect(ruleOf('.poker-named::first-letter'), 'a hand is named in the lower case of a sentence it is not in').toContain('text-transform: uppercase;');
     });
 
     it('lays a plate along its rail: a row where the rail runs across, a column where it runs down', () =>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { discsFor, pour, type Pour } from '../src/game/stage/chips.ts';
 import { createStage } from '../src/game/stage/stage.ts';
@@ -145,6 +145,31 @@ describe('discs poured from one place to another', () =>
 
         expect(landed()).toBe(false);
         expect(discs(), 'the kit emptied a layer it does not own').toHaveLength(3);
+    });
+
+    afterEach(() =>
+    {
+        vi.restoreAllMocks();
+    });
+
+    it('fade away as they arrive when they are poured into nothing, and are in full view to the end when they are not', () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const framesOf = (disc: Element) => animate.mock.calls[animate.mock.contexts.lastIndexOf(disc)][0] as Keyframe[];
+        const [going] = poured(false, { gone: true }).discs();
+        const [landing] = poured(false).discs();
+
+        expect(framesOf(going).map((one) => [one.opacity, one.offset]), 'a disc that goes to nothing lands in full view, or fades from the moment it leaves').toEqual([[1, undefined], [1, 0.5], [0, undefined]]);
+        expect(framesOf(landing).map((one) => one.opacity)).toEqual([1, 1]);
+    });
+
+    it('fade out where they stood, for somebody who asked for less motion, when they are poured into nothing', () =>
+    {
+        const gone = poured(true, { gone: true }).discs();
+        const kept = poured(true).discs();
+
+        expect(gone.map((one) => [one.style.left, one.style.top]), 'a disc that goes to nothing was shown arriving somewhere').toEqual(Array.from({ length: 3 }, () => ['73.25px', '313.25px']));
+        expect(kept.map((one) => [one.style.left, one.style.top])).toEqual(Array.from({ length: 3 }, () => ['200px', '100px']));
     });
 
     it('still land when the reader asked for less motion, in the time of a fade and in the same order', async () =>

@@ -9,9 +9,12 @@ export interface Pour
     gap: number;
     easing: string;
     delay?: number;
+    gone?: boolean;
 }
 
 const OVER = [1, 2.5, 6, 15];
+
+const GONE_FROM = 0.5;
 
 const DISC = 0.85;
 
@@ -41,7 +44,12 @@ export function pour(stage: Stage, layer: HTMLElement, from: Rect, to: Rect, fli
         disc.dataset.chips = '1';
         disc.style.fontSize = `${ to.width / DISC }px`;
 
-        return launch(stage, layer, disc, leaving, to, { duration: flight.duration, delay: (flight.delay ?? 0) + at * flight.gap, easing: flight.easing });
+        return launch(stage, layer, disc, leaving, to, {
+            duration: flight.duration,
+            delay: (flight.delay ?? 0) + at * flight.gap,
+            easing: flight.easing,
+            ...(flight.gone === true ? { toOpacity: 0, fadeFrom: GONE_FROM, quiet: 'out' as const } : {})
+        });
     });
     const last = runs[runs.length - 1];
 

@@ -12,12 +12,12 @@ const says = async (player) => await player.page.evaluate(() => document.querySe
 
 const drawn = async (player) => `${ await says(player) }|${ await player.page.locator('[aria-label="Poker table"]').innerHTML().catch(() => '') }`;
 
-const level = async (player, rev) => await waitFor(async () => await player.page.evaluate((least) =>
+const level = async (player, rev, most = 12000) => await waitFor(async () => await player.page.evaluate((least) =>
 {
     const table = document.querySelector('.table-stage');
 
     return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
-}, rev), 12000);
+}, rev), most);
 
 try
 {
@@ -260,6 +260,109 @@ try
         }
     }
 
+    console.log('\n[5] both go all in: the hands are turned over, the board is run out and the pot is pushed');
+
+    const facing = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+    if (facing.finishedAt === undefined)
+    {
+        const shover = seats.get(facing.turn);
+        const caller = [dana, mina].find((one) => one !== shover);
+
+        await level(dana, facing.rev);
+        await level(mina, facing.rev);
+
+        for (const player of [dana, mina])
+        {
+            await player.page.evaluate(() =>
+            {
+                const frames = [];
+                const box = (one) =>
+                {
+                    const rect = one.getBoundingClientRect();
+
+                    return [rect.left, rect.top, rect.right, rect.bottom];
+                };
+                const shared = (one, two) => Math.max(0, Math.min(one[2], two[2]) - Math.max(one[0], two[0])) * Math.max(0, Math.min(one[3], two[3]) - Math.max(one[1], two[1]));
+                const sample = () =>
+                {
+                    const flights = [...document.querySelectorAll('.board-flight > .flight')];
+                    const names = [...document.querySelectorAll('.poker-named[data-placed]')];
+                    const solids = [...document.querySelectorAll('.table-plate, .poker-backs, .poker-board, .poker-tally > *')].map(box);
+
+                    frames.push({
+                        at: performance.now(),
+                        shown: document.querySelectorAll('.poker-shown > .poker-face:not([data-coming])').length,
+                        named: names.length,
+                        won: names.filter((one) => one.dataset.won === 'true').length,
+                        board: document.querySelectorAll('.poker-board .card-face').length,
+                        discs: flights.filter((one) => one.classList.contains('chip-stack')).length,
+                        turning: flights.filter((one) => one.classList.contains('turning')).length,
+                        clash: Math.max(0, ...names.flatMap((name) => solids.map((solid) => shared(box(name), solid))))
+                    });
+
+                    if (window.__shown === frames)
+                    {
+                        requestAnimationFrame(sample);
+                    }
+                };
+
+                window.__shown = frames;
+                sample();
+            });
+        }
+
+        const shove = await shover.api('POST', `/matches/${ matchId }/play`, { key: `shove-${ facing.rev }`, rev: facing.rev, play: { kind: 'poker', verb: 'allin' } });
+        const call = await caller.api('POST', `/matches/${ matchId }/play`, { key: `call-${ facing.rev }`, rev: facing.rev + 1, play: { kind: 'poker', verb: 'call' } });
+
+        record(`${ shover.handle } goes all in and ${ caller.handle } calls`, shove.ok && call.ok, `${ shove.status } ${ call.status }`);
+        record('both tables play the showdown out and come to rest', await level(dana, facing.rev + 2, 25000) && await level(mina, facing.rev + 2, 25000));
+
+        for (const player of [dana, mina])
+        {
+            const frames = await player.page.evaluate(() =>
+            {
+                const seen = window.__shown;
+
+                window.__shown = null;
+
+                return seen;
+            });
+            const first = (met) => frames.findIndex(met);
+            const up = first((frame) => frame.shown === 2);
+            const street = first((frame) => frame.board > facing.view.board.length);
+            const river = first((frame) => frame.board === 5 && frame.turning === 0);
+            const paid = first((frame) => frame.won > 0);
+            const worst = Math.max(0, ...frames.map((frame) => frame.clash));
+
+            record(
+                `${ player.handle } sees the other hand turned over where it lay, and both hands named`,
+                up !== -1 && frames.slice(0, up).some((frame) => frame.turning > 0) && frames.some((frame) => frame.named === 2),
+                `${ frames.length } frames, the hand was up at ${ up }`
+            );
+            record(
+                `${ player.handle } is shown the hands before the first card of the run-out`,
+                facing.view.board.length === 5 || (up !== -1 && street !== -1 && up < street),
+                `the hand was up at frame ${ up }, the board grew at ${ street }`
+            );
+            record(
+                `${ player.handle } has the whole board and time to read it before the pot is pushed, and sees it go in chips`,
+                river !== -1 && paid > river && frames[paid].at - frames[river].at >= 800 && frames.slice(paid).some((frame) => frame.discs > 0),
+                paid === -1 || river === -1 ? `the board was whole at ${ river }, the pot was pushed at ${ paid }` : `${ Math.round(frames[paid].at - frames[river].at) } ms between them`
+            );
+            record(`${ player.handle } sees the name of a hand lie on nothing`, worst <= 1, `${ Math.round(worst) } square pixels shared`);
+        }
+
+        const after = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+        if (after.finishedAt === undefined)
+        {
+            const lying = await Promise.all([dana, mina].map(async (player) => await player.page.locator('.poker-shown, .poker-named').count()));
+
+            record('no hand is left face up when the next has been dealt', lying.every((count) => count === 0), `${ lying.join(' and ') } left`);
+        }
+    }
+
     const beside = await dana.page.evaluate(() => ({
         bar: document.querySelector('main .table-grid > .table-bar') !== null,
         said: [...document.querySelectorAll('main .table-fit > p')].filter((one) => !one.classList.contains('sr-only')).length,
@@ -271,7 +374,7 @@ try
     record('nothing stands in a corner of the table', beside.corner === 0, `${ beside.corner } things`);
     record('every control is the reader’s own cards and chips, or the chooser they opened', beside.strays === 0, `${ beside.strays } elsewhere`);
 
-    console.log('\n[4] the rest over the api, all in');
+    console.log('\n[6] the rest over the api, all in');
 
     for (let step = 0; step < 400; step += 1)
     {
@@ -294,6 +397,7 @@ try
     const final = (await dana.api('GET', `/matches/${ matchId }`)).body;
 
     record('the Sit & Go ends', final.finishedAt !== undefined);
+    record('both tables play the last hand out, its showdown and its pot, before anything is said of the result', await level(dana, final.rev, 30000) && await level(mina, final.rev, 30000));
 
     for (const player of [dana, mina])
     {

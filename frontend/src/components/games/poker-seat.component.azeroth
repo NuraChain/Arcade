@@ -1,3 +1,4 @@
+import CardFace from './card-face.component.azeroth';
 import type { PlateTone } from './plate-tag.ts';
 import TablePlate from './table-plate.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
@@ -20,6 +21,10 @@ export default component PokerSeat(props: {
     stack: string;
     holds: boolean;
     cards: number;
+    shown: readonly number[];
+    shownSays: string;
+    named: string;
+    won: boolean;
     bet: string;
     discs: number;
     landing: boolean;
@@ -31,7 +36,13 @@ export default component PokerSeat(props: {
 
     derived timed = props.turn;
 
-    derived holding = props.holds;
+    derived tabled = props.shown.length > 0;
+
+    derived leading = props.shown[0] ?? 0;
+
+    derived trailing = props.shown[1] ?? 0;
+
+    derived holding = props.holds && !tabled;
 
     derived first = props.cards < 1;
 
@@ -44,6 +55,12 @@ export default component PokerSeat(props: {
     derived landing = props.landing;
 
     derived betting = bet !== '';
+
+    derived named = props.named;
+
+    derived naming = named !== '' && !betting && !second;
+
+    derived won = props.won;
 
     <>
         <TablePlate
@@ -81,6 +98,17 @@ export default component PokerSeat(props: {
                     <span class="card-back" data-coming={ second ? 'true' : undefined }></span>
                 </span>
             }
+        </Show>
+        <Show when={ tabled }>
+            { () =>
+                <span class="poker-backs poker-shown" role="img" aria-label={ props.shownSays }>
+                    <span class="poker-face" data-coming={ first ? 'true' : undefined }><CardFace card={ leading } /></span>
+                    <span class="poker-face" data-coming={ second ? 'true' : undefined }><CardFace card={ trailing } /></span>
+                </span>
+            }
+        </Show>
+        <Show when={ naming }>
+            { () => <span class="poker-named" data-won={ won ? 'true' : undefined }>{ named }</span> }
         </Show>
         <Show when={ betting }>
             { () =>

@@ -3252,12 +3252,11 @@ land.
   `deny`) and then sets the table to what the server says.
 - **The cues are the scenes'.** `pokerBeats` and `tableCues` are gone, and poker was their only
   caller: a chip is heard when it lands, the shuffle and the slides inside the deal's scene,
-  a pot's chips as it is paid and the reader's own win a beat after them (`POT_WON`), never on
-  top of them. Everything is heard in the order it is seen,
+  the reader's own win as a pot leaves for them and its chips when they land, never one on
+  top of the other. Everything is heard in the order it is seen,
   by somebody watching too, and with less motion every cue still fires in its place, because
   the kit turns a flight into a fade and leaves the timers alone. A table set down as it
   stands (a jump, a hidden tab) is silent.
-- **Still drawn at once**, until 5.5: a hand shown down, and a pot paid to its winners.
 - **Two gaps, two names.** `CHIP_GAP` in the board is the 4 pixels between a bet and whatever
   it stands beside. The 45 ms between two discs is `DISC_GAP` in `game/poker-beats.ts`. They
   were one name for an hour: the import was shadowed without a word from the bundler, three
@@ -3321,7 +3320,8 @@ with a disc in the air, and the pot to count the chips only once they have lande
   deal" for a reader who is dealt first and acts first is about 2400 ms: that is why a fold
   does not hold the next move, `POT_SPAN` is 300, `DEAL_LEAD` 150, and the reader's old hand
   is not turned over before it is swept at a deal. A hand that ends in a showdown is longer
-  and the cap ends its wait (5.5 cuts the linger for a reader who is to act).
+  and the cap ends its wait: its holds are at their least for a reader who is to act, and
+  that reader is asked while the hands are still being paid.
 - **A batch that holds two deals or more** is set down as it stood just before the newest and
   played from there (`latest`), and its length is counted from there.
 - **A refused fold** brings the two cards back from the dealer to the hand, turning up, with
@@ -3340,6 +3340,62 @@ somebody watching. `poker-felt.spec.ts` holds the cards in the air, the order of
 what a deal and a street sound like, and that only the newest of two hands is played.
 `poker-play-pass.mjs` folds a hand and wants each player to give up the old one and be dealt
 two cards with cards seen in the air between, and to be asked nothing meanwhile.
+
+**A hand ends in front of the table.** The scenes are `tableHand`, `payOut` and `rackOff`, and
+the order they are played in is `staged`'s.
+
+- **A run-out is played the way a table plays it** (`staged` in `poker-felt.ts`): the log has
+  the streets, then the chips nobody called, then the hands; the table gives the chips back,
+  turns the hands over, and only then brings the streets. Only a run of `board` moves that is
+  followed at once by a `show` is moved, so a street that is bet on stays where it was. The
+  reducer ends on the same table either way, and a spec folds both orders over every action
+  of the seeded games.
+- **`show`**: the seat's two backs are turned over where they lie, each growing from its back
+  to a face half as large again (`--shown-w`, 9.5 hundredths of the table's shorter side),
+  the second a beat after the first. A card is up when its own turn lands (`landed`), and the
+  hand is named when both are. The faces are a `.poker-backs.poker-shown` in the backs' own
+  place, laid from the left in either language, so the bets' solver seats round them as it
+  does round backs. The reader's own hand is not turned: it lies face up in their row
+  already, and is only named.
+- **The name of a hand is a pill** (`.poker-named`, the words of `poker.category.*`), seated
+  by the solver that seats a bet, in the place a bet would have: a hand that is shown has no
+  bet. It is NOT a plate tag: a plate with a tag hides its stack, and the winner's stack is
+  the thing to watch when the pot lands. It turns gold when its seat has been paid
+  (`winnersOf`).
+- **The table is held to be read** (`heldBefore`, `tabling` in `poker-beats.ts`): 500 ms
+  before each street of a run-out and 2200 ms before the first pot of a hand that was shown
+  down, as `ctx.linger`, so a batch that follows cuts them to 150 and 900. For a reader who
+  is to act they are at their least from the start. Nothing is held when a fold ended the
+  hand. With less motion they are as long: they are time to read, not motion.
+- **`pot`**: its discs leave the middle for each winner's plate (`POT_FLY` 180, 20 ms apart),
+  a split pot to each of its winners at once, side pots one after another. The total drops
+  as they leave and each stack counts its share when they land (`air.stacks`, `sharesOf`,
+  which is the engine's own split). A reader who won hears `hand-won` as the pot leaves for
+  them, everybody hears `chips-stack` when it lands, and the scene lasts the 300 ms a pot
+  always had (`POT_SPAN`), so the shuffle of the next hand is never on top of the chips.
+- **`forfeit`**: the stack is racked off the felt first, discs leaving the plate for the rail
+  behind it and fading (`rackOff`, `pour` with `gone`), and the plate goes dark when they
+  have gone. A `bust` is told after `end`, so its plate goes dark when the pots are paid.
+- **A pot is said as it is pushed**, for somebody who cannot see the table: a second polite
+  line under the table (`paidSays`) says who won how much and with what, in the words of
+  the last-hand panel (`wonLines`), and is empty between hands.
+- **What was shown is swept face up** at the next deal, with the board, at the size it had.
+  Nobody who is out has a hand on the table, so a table opened after the game is over shows
+  the winner's last hand and its name, in gold, and nobody else's.
+- **Not built:** a shown hand that lost is not dimmed, and the five cards that make the
+  winning hand are not picked out.
+
+`poker-showdown.spec.ts` holds the turn of a hand card by card and where each clone lies, the
+reader's own hand, the two holds and their least, a pot in chips to one winner and to two, a
+run-out's order, the sweep of shown hands, a walk-out, less motion and a finished table.
+`poker-felt.spec.ts` holds `staged`, `sharesOf`, `winnersOf` and the cards of a hand in the
+air; `poker-beats.spec.ts` the holds and the pot's beat; `poker-cues.spec.ts` what a pot
+sounds like. `poker-play-pass.mjs` sends two players all in and wants each to see the other
+hand turned over and both named before the run-out, the whole board and time to read it
+before the pot goes in chips, and the name of a hand lying on nothing. The fit pass has no
+cell for a table that is shown down: it stands for two seconds and cannot be opened at rest,
+so its layout is measured by that pass at its two sizes, and was looked at with the page's
+clock stopped at nine sizes from 320 to 1440 wide, in English and Persian.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same

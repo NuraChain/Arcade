@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    EMPTY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, step, swept, through, unturned, type Board, type Felt, type Told
+    EMPTY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, sharesOf, staged, step, swept, through, turned, turning, unturned, winnersOf,
+    type Board, type Felt, type Told
 } from '../src/game/poker-felt.ts';
 import { pokerEngine } from '../../backend/src/domains/match/engines/poker.ts';
 import { apply, create, legalMoves } from '../../backend/src/domains/match/poker/engine.ts';
@@ -407,6 +408,116 @@ describe('the poker table as it has been shown', () =>
         expect([inHand(folded, 4), inHand(folded, 3)]).toEqual([false, true]);
         expect(inHand(step(table, { e: 'forfeit', seat: 1 }), 1)).toBe(false);
         expect(inHand(table, -1), 'a seat that is not at the table held cards').toBe(false);
+    });
+
+    it('counts the two cards of a hand that is being turned over as cards in the air, until each is face up', () =>
+    {
+        const frames = played(6, 13);
+        const at = frames.findIndex((frame) => frame.moves.filter((move) => move.e === 'show').length > 1);
+        const moves = frames[at].moves;
+        const table = moves.slice(0, moves.map((move) => move.e).lastIndexOf('show') + 1).reduce((felt, move) => step(felt, move), followed(frames, null)[at - 1]);
+        const [first, second] = table.tabled.map((one) => one.seat);
+        const air = turning(STILL, table, first);
+
+        expect(table.tabled.length, 'the game never came to a showdown of two hands').toBeGreaterThan(1);
+        expect(air.cards).toEqual(table.chairs.map((chair) => (chair.seat === first ? 2 : 0)));
+        expect(drawnOf(table, air), 'a hand turning over in front of somebody else changed the table that is drawn').toBe(table);
+        expect(turning(air, table, first), 'a hand was turned twice').toEqual(air);
+        expect(turning(air, table, second).cards).toEqual(table.chairs.map((chair) => (chair.seat === first || chair.seat === second ? 2 : 0)));
+        expect(turning(landed(dealing(STILL, table), second), table, first).cards[second], 'the card still coming to another seat was dropped').toBe(1);
+        expect(turning(flying(STILL, table.chairs.length, second, 40, 0), table, first).bets[second], 'the chips in the air were dropped when a hand was turned over').toBe(40);
+        expect(landed(air, first).cards[first], 'a hand was up when its first card was').toBe(1);
+        expect(turned(landed(air, first), first).cards).toEqual(table.chairs.map(() => 0));
+        expect(turned(turning(air, table, second), first).cards, 'one hand coming up brought another up with it').toEqual(table.chairs.map((chair) => (chair.seat === second ? 2 : 0)));
+    });
+
+    it('shows a run-out the way a table plays it: the chips nobody called go back, the hands are turned over, and then the streets come', () =>
+    {
+        const called: Told = { e: 'call', seat: 0, amount: 80 };
+        const refund: Told = { e: 'refund', seat: 1, amount: 40 };
+        const shows: Told[] = [{ e: 'show', seat: 1, cards: [1, 2], category: 'pair' }, { e: 'show', seat: 0, cards: [3, 4], category: 'high-card' }];
+        const flop: Told = { e: 'board', street: 'flop', cards: [5, 6, 7] };
+        const fourth: Told = { e: 'board', street: 'turn', cards: [8] };
+        const river: Told = { e: 'board', street: 'river', cards: [9] };
+        const tail: Told[] = [{ e: 'pot', amount: 200, winners: [1] }, { e: 'end', hand: 1 }, { e: 'deal', hand: 2, button: 1, small: 10, big: 20 }];
+
+        expect(staged([called, flop, fourth, river, refund, ...shows, ...tail])).toEqual([called, refund, ...shows, flop, fourth, river, ...tail]);
+        expect(staged([called, fourth, river, ...shows, ...tail])).toEqual([called, ...shows, fourth, river, ...tail]);
+        expect(staged([called, river, refund, ...shows, ...tail])).toEqual([called, refund, ...shows, river, ...tail]);
+        expect(staged([flop, { e: 'check', seat: 1 }, fourth, refund, ...shows, ...tail]), 'a street that was bet on was moved with the one that was run out').toEqual([flop, { e: 'check', seat: 1 }, refund, ...shows, fourth, ...tail]);
+    });
+
+    it('leaves alone a street that comes with betting to do, a showdown with no street before it, and a hand nobody shows', () =>
+    {
+        const flop: Told = { e: 'board', street: 'flop', cards: [5, 6, 7] };
+        const refund: Told = { e: 'refund', seat: 1, amount: 40 };
+        const shows: Told[] = [{ e: 'show', seat: 1, cards: [1, 2], category: 'pair' }, { e: 'show', seat: 0, cards: [3, 4], category: 'high-card' }];
+        const tail: Told[] = [{ e: 'pot', amount: 200, winners: [1] }, { e: 'end', hand: 1 }];
+        const street: Told[] = [{ e: 'call', seat: 0, amount: 20 }, flop];
+        const shown: Told[] = [{ e: 'call', seat: 0, amount: 20 }, refund, ...shows, ...tail];
+        const folded: Told[] = [flop, { e: 'fold', seat: 0 }, refund, ...tail];
+        const paid: Told[] = [flop, refund, ...tail];
+
+        expect(staged([])).toEqual([]);
+        expect(staged(street)).toEqual(street);
+        expect(staged(shown)).toEqual(shown);
+        expect(staged(folded)).toEqual(folded);
+        expect(staged(paid), 'a street was moved behind chips that went back with no hand shown').toEqual(paid);
+    });
+
+    it('ends on the same table whichever way a run-out is told, at every action of every game', () =>
+    {
+        let moved = 0;
+
+        for (const [seats, seed] of GAMES)
+        {
+            const frames = played(seats, seed);
+
+            for (const reader of [null, 0])
+            {
+                const shown = followed(frames, reader);
+
+                for (const [at, frame] of frames.entries())
+                {
+                    const order = staged(frame.moves);
+
+                    if (at === 0 || alike(order, frame.moves))
+                    {
+                        continue;
+                    }
+
+                    const retold = drawn(told(shown[at - 1], order, feltAt(frame.state, reader)));
+
+                    moved += 1;
+
+                    if (!alike(retold, drawn(shown[at])))
+                    {
+                        expect(retold, `${ seats } seats (${ seed }), action ${ at }, read by ${ String(reader) }`).toEqual(drawn(shown[at]));
+                    }
+                }
+            }
+        }
+
+        expect(moved, 'no game ran a board out, so nothing was proved').toBeGreaterThan(10);
+    });
+
+    it('pays each winner of a pot what the engine pays, the odd chips to the first seats left of the button, and knows who has been paid', () =>
+    {
+        const table = { ...feltAt(played(6, 13)[0].state), button: 2, pot: 801 };
+        const paid = (move: Told) => [...sharesOf(table, move)];
+        const stacks = (felt: Felt) => felt.chairs.map((chair) => chair.stack);
+        const split = step(table, { e: 'pot', amount: 301, winners: [1, 4] });
+        const twice = step(split, { e: 'pot', amount: 500, winners: [4] });
+
+        expect(paid({ e: 'pot', amount: 300, winners: [4] })).toEqual([[4, 300]]);
+        expect(paid({ e: 'pot', amount: 301, winners: [1, 4] })).toEqual([[4, 151], [1, 150]]);
+        expect(paid({ e: 'pot', amount: 100, winners: [0, 3, 5] })).toEqual([[3, 34], [5, 33], [0, 33]]);
+        expect(paid({ e: 'pot' })).toEqual([]);
+        expect(stacks(split).map((stack, seat) => stack - stacks(table)[seat]), 'the table was paid something other than its shares').toEqual([0, 150, 0, 0, 151, 0]);
+        expect(winnersOf(table)).toEqual([]);
+        expect(winnersOf(split)).toEqual([1, 4]);
+        expect(winnersOf(twice), 'a seat that won two pots was named twice').toEqual([1, 4]);
+        expect(winnersOf(step(twice, { e: 'deal', hand: 2, button: 3, small: 10, big: 20 })), 'the winners of a hand were still its winners when the next was dealt').toEqual([]);
     });
 
     it('plays a batch from its newest deal when two or more were dealt in it, and from its start otherwise', () =>

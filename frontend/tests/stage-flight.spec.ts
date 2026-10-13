@@ -378,6 +378,20 @@ describe('a packet of cards, and a card turned over on its way', () =>
         expect(flip.frames.some((one) => 'rotate' in one || 'translate' in one), 'the turn moves the card as well as turning it').toBe(false);
     });
 
+    it('starts at the tilt of the thing it is turned from when it is told one, and at none otherwise', () =>
+    {
+        const { stage, layer } = rig();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const tilted = turnNode(27, 60);
+        const flat = turnNode(28, 60);
+
+        turn(stage, layer, tilted, FROM, TO, { duration: 240, easing: 'linear', fromRotate: -5, toRotate: 6 });
+        turn(stage, layer, flat, FROM, TO, { duration: 240, easing: 'linear', toRotate: 6 });
+
+        expect(every(animate, tilted)[1].frames.map((one) => one.rotate), 'a card that lay tilted was straightened before it was turned').toEqual(['-5deg', '6deg']);
+        expect(every(animate, flat)[1].frames.map((one) => one.rotate)).toEqual(['0deg', '6deg']);
+    });
+
     it('is turned the other way when it is asked to go face down: the face until halfway, the back from then on', () =>
     {
         const { stage, layer } = rig();
