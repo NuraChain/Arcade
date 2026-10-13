@@ -8,7 +8,7 @@ import { manifestOf } from '@azerothjs/http/api';
 import type { PageRenderer, PageRoute } from '@azerothjs/kit';
 
 import { buildApi } from './api.ts';
-import { buildApp } from './app.ts';
+import { buildApp, requestLog } from './app.ts';
 import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
@@ -183,7 +183,7 @@ const app = buildApp({
     config,
     log,
     ports,
-    observe: logRequests(log),
+    observe: logRequests(requestLog(log)),
     pages: ssr === undefined
         ? undefined
         : {

@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { BASE, clearTables, launch, recorder, seat, walletSeat } from './seats.mjs';
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const { record, finish } = recorder('tour-pass');
 
@@ -70,6 +71,11 @@ const listen = (page, who, errors) =>
 {
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, who))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             const where = event.text().startsWith('Failed to load resource') ? ` @ ${ event.location().url ?? '' }` : '';

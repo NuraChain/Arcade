@@ -1,7 +1,7 @@
 import { encodeFunctionData, isAddress, parseAbi, type Address } from 'viem';
 
 import type { ChainCall, ChainProfile, PersonRecord } from '../schemas.ts';
-import { boundedClient } from './rpc.ts';
+import { boundedClient, reached } from './rpc.ts';
 
 export const RECORD_KEY = 'games.nura.record';
 
@@ -166,12 +166,12 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
             }
 
             const chain = boundedClient(settings.rpcUrl);
-            const view = await chain.readContract({
+            const view = await reached(chain.readContract({
                 address: lens,
                 abi: LENS_ABI,
                 functionName: 'getProfile',
                 args: [address, lang]
-            });
+            }));
 
             // The lens answers an empty view rather than reverting for an address that has never
             // created one, so id zero IS the answer and not an error to translate.
@@ -180,12 +180,12 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return null;
             }
 
-            const record = await chain.readContract({
+            const record = await reached(chain.readContract({
                 address: registry,
                 abi: REGISTRY_ABI,
                 functionName: 'getField',
                 args: [view.id, RECORD_KEY]
-            });
+            }));
 
             return {
                 id: view.id.toString(),
@@ -210,12 +210,12 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return [];
             }
 
-            const profileId = await boundedClient(settings.rpcUrl).readContract({
+            const profileId = await reached(boundedClient(settings.rpcUrl).readContract({
                 address: registry,
                 abi: REGISTRY_ABI,
                 functionName: 'profileIdOf',
                 args: [input.address]
-            });
+            }));
 
             return callsFor(registry, profileId, input);
         }

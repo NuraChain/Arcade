@@ -1,3 +1,4 @@
+import { HttpError } from '@azerothjs/http';
 import { decodeFunctionData, encodeFunctionResult, toFunctionSelector, type Address } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -316,6 +317,29 @@ describe('reading a registry that may not answer', () =>
         expect(fake.asked).toEqual(['eth_call', 'eth_call']);
         expect(performance.now() - started).toBeLessThan(6_000);
     }, 12_000);
+
+    it('says the network could not be reached, on purpose, for a read it could not make and a write it could not compose', async () =>
+    {
+        const silent = createChainProfiles({ rpcUrl: await silentChain(), registry: REGISTRY, lens: LENS });
+        const halfway = await fakeChain((rpc) => callOf(rpc).data.startsWith(GET_PROFILE)
+            ? { result: encodeFunctionResult({ abi: LENS_ABI, functionName: 'getProfile', result: viewOf(7n) }) }
+            : { status: 502 });
+        const second = createChainProfiles({ rpcUrl: halfway.url, registry: REGISTRY, lens: LENS });
+        const settled = await Promise.allSettled([silent.profile(OWNER, 'en'), silent.publish({ address: OWNER, ...fieldsOf('Dana', '') }), second.profile(OWNER, 'en')]);
+
+        expect(settled.map((one) => (one.status === 'rejected' && one.reason instanceof HttpError ? `${ one.reason.status } ${ one.reason.code }` : 'something else')))
+            .toEqual(['503 chain-unreachable', '503 chain-unreachable', '503 chain-unreachable']);
+    }, 12_000);
+
+    it('leaves a registry that answered no as the fault it is, not as a chain it could not ask', async () =>
+    {
+        const refusing = await fakeChain(() => ({ error: { code: 3, message: 'execution reverted' } }));
+        const chain = createChainProfiles({ rpcUrl: refusing.url, registry: REGISTRY, lens: LENS });
+        const refused = await chain.profile(OWNER, 'en').then(() => null, (error: unknown) => error);
+
+        expect(refused).not.toBeNull();
+        expect(refused instanceof HttpError, 'a contract that said no was reported as a chain that could not be asked').toBe(false);
+    });
 
     it('never follows an offchain lookup the lens answers with, and fails the read instead', async () =>
     {

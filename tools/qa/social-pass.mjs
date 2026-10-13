@@ -24,6 +24,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { sql } from './db.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:3200';
 
@@ -223,6 +224,11 @@ async function asPerson(person)
     const errors = [];
     page.on('console', (e) =>
     {
+        if (chainUnreached(e, 'the browser'))
+        {
+            return;
+        }
+
         if (e.type() === 'error' && !e.text().includes('favicon'))
         {
             errors.push(e.text().slice(0, 180));

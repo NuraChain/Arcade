@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, 'out', 'matrix');
@@ -372,6 +373,11 @@ async function main()
                 const noise = [];
                 page.on('console', (message) =>
                 {
+                    if (chainUnreached(message, locale))
+                    {
+                        return;
+                    }
+
                     if (message.type() === 'error' || message.type() === 'warning')
                     {
                         noise.push(`${ message.type() }: ${ message.text().slice(0, 140) }`);

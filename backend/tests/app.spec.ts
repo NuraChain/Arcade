@@ -6,7 +6,8 @@ import type { DataSource } from 'typeorm';
 
 import { NotFoundError } from '@azerothjs/http';
 
-import { buildApp } from '../src/app.ts';
+import { buildApp, requestLog } from '../src/app.ts';
+import { Unanswered, reached } from '../src/chain/rpc.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { partyRefusal, partyRefused } from '../src/domains/party/refusal.ts';
 import { PARTY_REFUSALS, type PartyRefusal } from '../src/domains/party/rules.ts';
@@ -139,6 +140,74 @@ describe('api surface', () =>
     {
         const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         expect((await call(app, '/api/nothing-here')).status).toBe(404);
+    });
+});
+
+describe('a chain that cannot be reached', () =>
+{
+    const heard = () =>
+    {
+        const lines: string[] = [];
+        const log = {
+            ...silent,
+            info: (said: string) => lines.push(`info: ${ said }`),
+            warn: (said: string) => lines.push(`warn: ${ said }`),
+            error: (said: string) => lines.push(`error: ${ said }`)
+        } as unknown as Parameters<typeof buildApp>[0]['log'];
+
+        return { lines, log };
+    };
+
+    const asking = (person: () => Promise<unknown>, log: Parameters<typeof buildApp>[0]['log']) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            chain: { configured: true, registry: '', chainId: '1020', person }
+        } as unknown as Ports
+    });
+
+    it('is answered as that, in a sentence, and written down as a warning and not as a fault of ours', async () =>
+    {
+        const { lines, log } = heard();
+        const response = await call(asking(() => reached(Promise.reject(new Unanswered('the explorer answered 502'))), log), '/api/chain/people/dana.w');
+
+        expect(response.status).toBe(503);
+        expect(await response.json()).toEqual({ error: { code: 'chain-unreachable', message: 'We could not reach the network. Try again in a moment.' } });
+        expect(lines).toEqual(['warn: request could not be served']);
+    });
+
+    it('has its request written down as a warning too, where a fault of ours and an ordinary request are written as they were', () =>
+    {
+        const { lines, log } = heard();
+        const written = requestLog(log);
+
+        written.error('request failed', { status: 503, path: '/api/chain/nfts' });
+        written.error('request failed', { status: 500, path: '/api/chain/nfts' });
+        written.error('request failed');
+        written.info('request', { status: 200, path: '/api/chain/nfts' });
+
+        expect(lines).toEqual(['warn: request failed', 'error: request failed', 'error: request failed', 'info: request']);
+    });
+
+    it('is the log the server is started with, or none of this reaches a running one', () =>
+    {
+        const main = readFileSync(fileURLToPath(new URL('../src/main.ts', import.meta.url)), 'utf8');
+
+        expect(main).toContain('observe: logRequests(requestLog(log)),');
+    });
+
+    it('is not what a fault of our own is answered as, or written down as', async () =>
+    {
+        const { lines, log } = heard();
+        const response = await call(asking(() => Promise.reject(new TypeError('held.slice is not a function')), log), '/api/chain/people/dana.w');
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).toMatchObject({ error: { code: 'internal' } });
+        expect(lines).toEqual(['error: request threw']);
     });
 });
 

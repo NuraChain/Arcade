@@ -19,6 +19,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -94,6 +95,11 @@ async function open({ width = 1280, height = 900, locale = 'en' } = {})
     const apiFailures = [];
     page.on('console', (e) =>
     {
+        if (chainUnreached(e, 'the browser'))
+        {
+            return;
+        }
+
         if (e.type() === 'error' && !e.text().includes('favicon'))
         {
             errors.push(e.text().slice(0, 160));

@@ -29,6 +29,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -116,6 +117,11 @@ async function seat(handle)
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, handle))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);

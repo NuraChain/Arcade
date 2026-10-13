@@ -1,4 +1,4 @@
-import { App, json, type ErrorObserver, type RequestObserver } from '@azerothjs/http';
+import { App, HttpError, json, type ErrorObserver, type RequestLogger, type RequestObserver } from '@azerothjs/http';
 import { manifestOf, register } from '@azerothjs/http/api';
 import { mountPages, type KitOptions } from '@azerothjs/kit';
 import type { Logger } from '@azerothjs/logger';
@@ -77,7 +77,21 @@ function watchErrors(log: Logger): ErrorObserver
             return;
         }
 
+        if (error instanceof HttpError)
+        {
+            log.warn('request could not be served', seen);
+            return;
+        }
+
         log.error('request threw', seen);
+    };
+}
+
+export function requestLog(log: Logger): RequestLogger
+{
+    return {
+        info: (said, fields) => log.info(said, fields),
+        error: (said, fields) => (fields?.status === 503 ? log.warn(said, fields) : log.error(said, fields))
     };
 }
 

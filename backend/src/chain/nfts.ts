@@ -3,7 +3,7 @@ import { request } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { isAddress, parseAbi, type Address } from 'viem';
 
-import { ONE_USE, boundedClient, refusedByContract } from './rpc.ts';
+import { ONE_USE, Unanswered, boundedClient, reached, refusedByContract } from './rpc.ts';
 
 export type NftStandard = 'erc721' | 'erc1155';
 
@@ -318,12 +318,12 @@ export function createNftReader(settings: NftSettings): NftReader
             const response = await fetch(url, { headers: ONE_USE, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
             if (!response.ok)
             {
-                throw new Error(`the explorer answered ${ response.status }`);
+                throw new Unanswered(`the explorer answered ${ response.status }`);
             }
             const body = await response.json() as { status?: string; message?: string; result?: unknown };
             if (!Array.isArray(body.result))
             {
-                throw new Error(`the explorer refused: ${ String(body.message ?? 'no result') }`);
+                throw new Unanswered(`the explorer refused: ${ String(body.message ?? 'no result') }`);
             }
             all.push(...body.result as NftTransfer[]);
             if (body.result.length < EXPLORER_PAGE)
@@ -413,7 +413,7 @@ export function createNftReader(settings: NftSettings): NftReader
             {
                 return cached.value;
             }
-            const [erc721, erc1155] = await Promise.all([transfers('tokennfttx', key), transfers('token1155tx', key)]);
+            const [erc721, erc1155] = await reached(Promise.all([transfers('tokennfttx', key), transfers('token1155tx', key)]));
             const value = holdingsFrom(key, erc721, erc1155);
             held.set(key, { at: Date.now(), value });
             return value;

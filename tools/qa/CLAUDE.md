@@ -57,6 +57,19 @@ filled, because `fill` sets the value without driving MetaMask's own handler and
 expands into word fields; and the extension tab must stay OPEN, because closing it invalidates the
 content script in every other tab at once.
 
+**A chain that cannot be reached is not a finding about a page.** The profile pages read the
+NuraProfile registry and the explorer through the server, and the server reads them from nodes
+this repository does not run. When they are slow the server answers `503 chain-unreachable` on
+purpose, the page shows that with a way to ask again, and the browser logs the failed request,
+which every pass counts as noise. `chainUnreached(event, who)` in `unreached.mjs` knows that one
+line (an error, from `/api/chain/`, with status 503), says it where it happens
+(`NOTE  dana.w could not reach the chain's network (/api/chain/nfts): not this pass's to judge`)
+and leaves it out of the count. The shared seat (`seats.mjs`) and the passes that open a profile
+with a listener of their own ask it first: `play-pass`, `hokm-play-pass`, `tour-pass`,
+`regression-pass`, `social-pass` and the matrix. Anything else those routes answer with is still
+counted: a 500 from `/api/chain/` is a fault of ours. The chain's own pass (`chain-pass.mjs`) runs
+against a chain it starts and does not use it.
+
 ## The responsive matrix
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both

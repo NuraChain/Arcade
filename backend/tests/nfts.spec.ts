@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type RequestOptions, type ServerResponse } from 'node:http';
 import type * as Https from 'node:https';
 
+import { HttpError } from '@azerothjs/http';
 import { decodeFunctionData, encodeFunctionResult, parseAbi, toFunctionSelector } from 'viem';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -222,6 +223,23 @@ describe('what a wallet holds, asked of an explorer that sits on a connection it
         await expect(reader.holdings(THEM)).resolves.toEqual([]);
         expect(explorer.sockets()).toBe(4);
         expect(performance.now() - started).toBeLessThan(3_000);
+    }, 30_000);
+
+    it('says the network could not be reached when the explorer answers badly, refuses, or cannot be asked at all', async () =>
+    {
+        const failing = createServer((_request, response) => response.writeHead(502).end());
+        const refusing = await tiredHost(() => ({ status: '0', message: 'Max rate limit reached', result: 'Max rate limit reached' }));
+        const readers = [
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: `${ await listen(failing) }api` }),
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: `${ refusing.url }api` }),
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: 'http://127.0.0.1:1/api' })
+        ];
+        const settled = await Promise.allSettled(readers.map((reader) => reader.holdings(ME)));
+
+        failing.close();
+
+        expect(settled.map((one) => (one.status === 'rejected' && one.reason instanceof HttpError ? `${ one.reason.status } ${ one.reason.code }` : 'something else')))
+            .toEqual(['503 chain-unreachable', '503 chain-unreachable', '503 chain-unreachable']);
     }, 30_000);
 });
 

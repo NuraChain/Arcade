@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { chainUnreached } from './unreached.mjs';
 import { signInWallet } from './wallets.mjs';
 
 export const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
@@ -108,6 +109,11 @@ export async function seat(browser, handle, viewport = { width: 1280, height: 90
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, handle))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
@@ -140,6 +146,11 @@ async function open(browser, viewport, signIn)
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, signedIn))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ signedIn }: ${ event.text().slice(0, 160) }`);

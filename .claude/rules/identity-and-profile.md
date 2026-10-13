@@ -57,6 +57,33 @@ cases in `chain-profile.spec.ts`, `nfts.spec.ts` and `identity.spec.ts` must fin
 so a regression to 8 fails them. Failing fast does not change what failing means: the profile still
 throws, and the page still has to render that failure.
 
+**A chain that could not be reached is answered as that, on purpose.** Those throws used to reach
+the browser as `500 internal`, and the log wrote each one down as a fault of this server, at error
+level, with a stack (`request threw`), twice for one visit to a profile. The page showed its
+failure either way (`ChainFaceFailed` has a retry), but a slow node at somebody else's address is
+not a fault here, and it read as one everywhere it was written: on 2026-10-13 the Ludo play pass
+failed its "nothing was logged" line twice running, with `/api/chain/people/dana.w` given up on at
+4021 ms and `/api/chain/nfts` at 8026 ms. `unreached(error)` in `rpc.ts` tells a read that could
+not be MADE from everything else: viem's `TimeoutError`, `HttpRequestError` and `RpcRequestError`
+when the contract did not refuse (the same line sign-in draws for `unreachable-chain`); a `fetch`
+that timed out, was aborted or never left; and `Unanswered`, which is what the explorer's bad
+status and its "no result" are thrown as now. It is a list of what the network does, not "anything
+that is not a refusal": a `TypeError` of ours inside a read stays a 500, or a real fault would be
+answered as weather. `reached` turns the first kind into `503 chain-unreachable` with a sentence a
+person can read and the cause kept for the log, and the three registry reads in `profile.ts` and
+the explorer read in `nfts.ts` go through it, which is where fake chains can test it without a
+database. `watchErrors` writes a failure this server CHOSE (an `HttpError` of 500 or more) as a
+warning, `request could not be served`, and keeps `request threw` for the ones it did not. The
+request line needed the same: the framework's `logRequests` writes every 5xx as an error through
+whatever logger it is handed, and says an application may hand it an adapter, so `requestLog` in
+`app.ts` writes a 503 as a warning and `main.ts` starts the server with it. Every 503 here is
+chosen: this one, and the health check when the database does not answer. Seen on the built
+server with the node and the explorer pointed at a port nothing answers on: the three reads
+answer 503 with the sentence, each leaves two `warn` lines and no `error` line, and `/app/me`
+shows its failure with the way to ask again. `chain-rpc.spec.ts`, `chain-profile.spec.ts`,
+`nfts.spec.ts` and `app.spec.ts` hold it, the last one down to the line of `main.ts` that wires
+the log.
+
 **Every chain read and every explorer read is made on a connection of its own** (`ONE_USE`, a
 `connection: close` header, in `boundedClient` and on the explorer's `fetch`). Node keeps a
 connection it has used and asks the next question on it, and the front end of `rpc.nurachain.net`

@@ -30,6 +30,7 @@ import { DIE_SIZE, dieRest } from '../../frontend/src/game/board/ludo-board.ts';
 import { CELL } from '../../frontend/src/game/layout.ts';
 import { solid } from './seats.mjs';
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -330,6 +331,11 @@ async function seat(handle)
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, handle))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
