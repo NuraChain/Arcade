@@ -2513,6 +2513,12 @@ In scope by D5. These land in P6, after the four boards.
 | The stage changes size | A flight lands, or a lingering clone rests, where its target used to be. | Chat sheet, rotation, full screen, a hand row appearing: what is in flight settles and what lingers is re-placed. | The flight layer is inside the stage, so it survives full screen, where nothing outside the arena is painted. |
 | A sheet covers the board | `pause()` sets an attribute that pauses CSS keyframes; script motion and timers run on. | Under a blocking sheet the queue and its sounds keep running; only the CSS loops pause. | |
 
+**As built (6.1), a game starts.** The stage arrives over 240 ms by opacity and `translate`,
+never by scale: a flight's two ends are measured on the screen, a table that moves carries both
+alike, and a table that is scaled on the way is a different measure from the one the flight
+lands on. Measured before: the waiting room gone, 25 ms of the placeholder, the whole board,
+inside three frames. The opening already played under it (rule 9) and still does.
+
 **As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
 moved one game a commit, and each takes the turn from what its own log can say:
 

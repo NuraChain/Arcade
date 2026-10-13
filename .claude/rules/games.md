@@ -5446,6 +5446,18 @@ game is open. `match-store.spec.ts` (*the game in hand while the next one is on 
 And behind with the store saying the game could not be fetched (`unfetched`), the complaint takes
 the board's place, with a Try again that asks for the game.
 
+**A table arrives** (6.1). Pressing Start took the waiting room away and put a whole board in
+its place within three frames: measured on the production build, the room gone, 25 ms of the
+placeholder, the board. The stage comes in over 240 ms now, fading in as it rises half a rem
+into its place (`stage-in` on `.table-stage`), whichever game it is and whoever is looking,
+somebody watching too. It is opacity and `translate` and nothing else, on purpose: what flies
+over a table is measured in rectangles on the screen, a table that moves moves both ends of a
+flight alike, and a table that is SCALED on its way is a different measure from the one the
+flight lands on. The animation holds no last frame, so a table that has arrived is not one that
+is moving, and somebody who asked for less motion gets a table that simply stands there. A
+game that starts again at the same table is the same board, so it does not arrive twice.
+`backend/tests/table-stage-art.spec.ts` holds the rule.
+
 **`board.lost()` is a latch, not the resource's error,** because the store asks again by itself - at
 every `game` doorbell, and every three seconds while the socket is down - and a resource clears its
 error while a request is in flight: read directly, the complaint was taken away and drawn again each

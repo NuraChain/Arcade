@@ -632,6 +632,16 @@ html:has(.site-drawer[open])
     flex: 1 1 0;
     min-block-size: 0;
     min-inline-size: 0;
+    animation: stage-in 240ms var(--ease-ui, ease);
+}
+
+@keyframes stage-in
+{
+    from
+    {
+        opacity: 0;
+        translate: 0 0.5rem;
+    }
 }
 
 .table-grid
@@ -1149,7 +1159,8 @@ html:has(.site-drawer[open])
 @media (prefers-reduced-motion: reduce)
 {
     .table-plate-bubble,
-    .table-result
+    .table-result,
+    .table-stage
     {
         animation: none;
     }
