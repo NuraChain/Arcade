@@ -60,6 +60,20 @@ describe('chips that travel on a poker table', () =>
         expect(presenting(container)).toBeNull();
     });
 
+    it('take their own time when they ask the reader over a table that is not behind', async () =>
+    {
+        const { container, read } = await seated(match());
+
+        await read(called(1, 60, 0), heard(1, told(8, 1, { e: 'raise', seat: 1, amount: 60 })));
+        await elapse(CHIP_FLY + 2 * DISC_GAP - 10);
+
+        expect([bet(container, 1), pot(container)], 'a bet was hurried in front of a reader whose table was not behind').toEqual(['60 (landing)', 'Total pot 30']);
+
+        await elapse(10);
+
+        expect([bet(container, 1), pot(container)]).toEqual(['60', 'Total pot 90']);
+    });
+
     it('keep a bet saying what it said while more chips are on their way to it', async () =>
     {
         const { container, read } = await seated(match({ turn: 4 }, { turn: 4 }));

@@ -153,6 +153,21 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     }
 
     let uncap: () => void = () => undefined;
+    let presenter: Presenter<Told> | null = null;
+
+    const hurry = () =>
+    {
+        if (untrack(() => acting && between))
+        {
+            presenter?.act(() => undefined);
+        }
+    };
+
+    const asked = () =>
+    {
+        lifted = true;
+        hurry();
+    };
 
     effect
     {
@@ -162,7 +177,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         {
             uncap();
             lifted = false;
-            uncap = behind ? runtime().clock.after(BETWEEN_CAP, () => lifted = true) : () => undefined;
+            uncap = behind ? runtime().clock.after(BETWEEN_CAP, asked) : () => undefined;
         });
     }
 
@@ -175,7 +190,6 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     let root: HTMLElement | null = null;
     let layer: HTMLElement | null = null;
-    let presenter: Presenter<Told> | null = null;
     let held: Felt = EMPTY;
     let air: Air = STILL;
     let sent: { id: string; rev: number; move: Told } | null = null;
@@ -1126,6 +1140,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         {
             presenter?.see(batch);
             mend();
+            hurry();
         });
     }
 

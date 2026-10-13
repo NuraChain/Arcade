@@ -3320,16 +3320,26 @@ with a disc in the air, and the pot to count the chips only once they have lande
   deal" for a reader who is dealt first and acts first is about 2400 ms: that is why a fold
   does not hold the next move, `POT_SPAN` is 300, `DEAL_LEAD` 150, and the reader's old hand
   is not turned over before it is swept at a deal. A hand that ends in a showdown is longer
-  and the cap ends its wait: its holds are at their least for a reader who is to act, and
-  that reader is asked while the hands are still being paid.
+  and the cap ends its wait: its holds are at their least for a reader who is to act, that
+  reader is asked while the hands are still being paid, and the table then catches up.
 - **A batch that holds two deals or more** is set down as it stood just before the newest and
   played from there (`latest`), and its length is counted from there.
 - **A refused fold** brings the two cards back from the dealer to the hand, turning up, with
   `deny`.
-- **Not built:** rule 7's "everything in front runs fast when the view says it is the
-  reader's turn" (an urgent entry would run every other deal of a heads-up game at four
-  times its pace), and a hold that ends "when little of the turn is left" (the cap is 2.5 s
-  of a 30 s turn).
+- **The table catches up when the reader is asked over one that is behind** (`hurry`): an
+  urgent entry with nothing in it runs what is still to be played at four times its pace,
+  so a reader who is asked in the middle of a showdown has the table they are asked about
+  half a second later. There are two ways to be asked over a table that is behind and both
+  hurry it: the cap fires for a reader who is to act, or it has fired already while
+  somebody else was to act and the reader's own turn comes with the table still a hand
+  behind (two folds are quicker than a called all-in is shown). It is rule 7's "everything
+  in front runs fast when the view says it is the reader's turn", built for a reader who
+  has been ASKED and not for one who is still waiting: from the start it would run every
+  other deal of a heads-up game at four times its pace. An ordinary hand ends and the next
+  is dealt inside the cap, at its own pace, and a table nobody is waiting on is not
+  hurried.
+- **Not built:** a hold that ends "when little of the turn is left" (the cap is 2.5 s of a
+  30 s turn).
 
 `poker-cards.spec.ts` (with the page's boxes given sizes) holds the order and the pace of a
 deal, where each card flies from and to, the sweep and the mark's slide, the cap, a fold by

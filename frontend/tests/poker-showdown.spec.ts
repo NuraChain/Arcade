@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup } from '@azerothjs/testing';
 
-import { CARD_FLY, CARD_GAP, CHIP_FLY, DISC_GAP, GATHER, GATHER_GAP, POT_FLY, POT_GAP, RACK, RUN_OUT, SHOW_LEAST, SHOW_LINGER, TURN } from '../src/game/poker-beats.ts';
+import { BETWEEN_CAP, CARD_FLY, CARD_GAP, CHIP_FLY, DISC_GAP, GATHER, GATHER_GAP, POT_FLY, POT_GAP, RACK, RUN_OUT, SHOW_LEAST, SHOW_LINGER, TURN } from '../src/game/poker-beats.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { BLINDS, EVERYBODY, backs, discs, elapse, faced, flown, heard, match, namedAt, places, pocketed, pot, rows, seated, shownAt, stack, told } from './poker-mounted.ts';
+import { BLINDS, EVERYBODY, acts, backs, discs, elapse, faced, flown, heard, match, namedAt, places, pocketed, pot, presenting, rows, seated, shownAt, stack, told } from './poker-mounted.ts';
 
 const LONG = 12000;
 
@@ -52,7 +52,7 @@ const tabled = (winners: number[]) => heard(1, told(
     ...dealt
 ));
 
-const second = (turn: number, stacks: Record<number, number> = { 2: 1670 }, gone: readonly number[] = []) => match(
+const second = (turn: number, stacks: Record<number, number> = { 2: 1670 }, gone: readonly number[] = [], after: { rev: number; folded: readonly number[] } = { rev: 8, folded: [] }) => match(
     {
         hand: 2,
         button: 3,
@@ -61,7 +61,7 @@ const second = (turn: number, stacks: Record<number, number> = { 2: 1670 }, gone
         blinds: { small: 10, big: 20, level: 1, next: 9 },
         seats: rows({
             0: { stack: stacks[0] ?? 1500 },
-            1: { stack: stacks[1] ?? 1360, out: gone.includes(1) },
+            1: { stack: stacks[1] ?? 1360, out: gone.includes(1), folded: after.folded.includes(1) },
             2: { stack: stacks[2] ?? 1360 },
             3: { stack: 1490 },
             4: { stack: 1470, bet: 10 },
@@ -69,7 +69,7 @@ const second = (turn: number, stacks: Record<number, number> = { 2: 1670 }, gone
         }),
         ...(turn === 0 ? { toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500 } : {})
     },
-    { rev: 8, turn }
+    { rev: after.rev, turn }
 );
 
 const placed = (clone: HTMLElement) => [clone.style.left, clone.style.top, clone.style.width];
@@ -286,12 +286,64 @@ describe('a hand of poker that ends in front of the table', () =>
         expect(pot(container), 'a reader who is to act waited as long as one who is not').toBe('Total pot 0');
     });
 
-    it('pays a pot in chips: the total drops as they leave, the winner’s stack counts them when they land, and the hand that won is marked', async () =>
+    it('lets the table catch up at four times its pace when a reader who is to act has waited as long as they may', async () =>
     {
         const { container, read } = await seated(river());
 
         await read(second(0), tabled([2]));
-        await elapse(CALLED + GATHERED + 2 * HAND + SHOW_LEAST - 10);
+        await elapse(BETWEEN_CAP - 10);
+
+        expect([acts(container), presenting(container)], 'the reader was asked before the wait was over').toEqual([[], 'true']);
+
+        await elapse(10);
+
+        expect(acts(container), 'the reader was not asked when the wait was over').toEqual(['Fold', 'Call 20', 'Raise']);
+
+        const rest = await until(() => presenting(container) === null);
+
+        expect(rest, 'the table took its own time over the hand that was finished, in front of a reader who had been asked about the next').toBeLessThanOrEqual(700);
+        expect(rest, 'the table was set down as it stands and not played').toBeGreaterThan(300);
+        expect([pocketed(container), [1, 2, 3, 4, 5].map((seat) => backs(container, seat)), stack(container, 2)]).toEqual([2, [2, 2, 2, 2, 2], '1,670']);
+    });
+
+    it('takes its own time when the reader is not the one to act', async () =>
+    {
+        const { container, read } = await seated(river());
+
+        await read(second(1), tabled([2]));
+        await elapse(BETWEEN_CAP);
+
+        const rest = await until(() => presenting(container) === null);
+
+        expect(rest, 'a table nobody is waiting on was hurried').toBeGreaterThan(2000);
+    });
+
+    it('lets it catch up as well when the reader’s turn comes after the wait was over, over a table that is still behind', async () =>
+    {
+        const { container, read } = await seated(river());
+
+        await read(second(1), tabled([2]));
+        await elapse(BETWEEN_CAP);
+
+        expect([acts(container), presenting(container)], 'somebody who is not to act was asked, or the table had finished').toEqual([[], 'true']);
+
+        await read(second(0, { 2: 1670 }, [], { rev: 9, folded: [1] }), heard(2, told(9, 1, { e: 'fold', seat: 1 })));
+
+        expect(acts(container), 'the reader was not asked when their turn came').toEqual(['Fold', 'Call 20', 'Raise']);
+
+        const rest = await until(() => presenting(container) === null);
+
+        expect(rest, 'the table took its own time in front of a reader who had been asked about the hand after').toBeLessThanOrEqual(700);
+        expect(rest, 'the table was set down as it stands and not played').toBeGreaterThan(300);
+        expect([pocketed(container), [1, 2, 3, 4, 5].map((seat) => backs(container, seat)), stack(container, 2)]).toEqual([2, [0, 2, 2, 2, 2], '1,670']);
+    });
+
+    it('pays a pot in chips: the total drops as they leave, the winner’s stack counts them when they land, and the hand that won is marked', async () =>
+    {
+        const { container, read } = await seated(river());
+
+        await read(second(1), tabled([2]));
+        await elapse(CALLED + GATHERED + 2 * HAND + SHOW_LINGER - 10);
 
         expect([namedAt(container, 1), namedAt(container, 2)], 'a hand was marked as the winner before the pot was pushed').toEqual(['a pair', 'two pair']);
         expect(said(container)[1], 'somebody who cannot see the table was told who won before the pot was pushed').toBe('');

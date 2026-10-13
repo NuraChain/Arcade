@@ -2407,6 +2407,14 @@ in a run-out, `forfeit` and "Hand boundary" of the table of scenes.
 - **Two holds, both `ctx.linger`**: 500/150 before each street of a run-out, 2200/900 before
   the first pot after a show. A reader who is to act gets the least from the start: the
   2500 ms cap would otherwise ask them over a table that had not reached its hands.
+- **A reader who is asked over a table that is behind has it catch up** (the second commit
+  after 5.5). A showdown is longer than 2500 ms even at its least, so a reader who is first
+  to act next was always asked in the middle of it, and stood for up to four seconds with
+  their new cards under the old board. Being asked now also enqueues an urgent entry with
+  nothing in it, which is the kit's way of running what is in front at four times its pace:
+  at the cap for a reader who is to act, and when the turn comes to the reader after the
+  cap has fired during somebody else's. This is §4.2's last sentence, left unbuilt by 5.4
+  for a reason that holds only for a reader who is still waiting.
 - **A pot keeps its 300 ms.** The first shape flew the chips, counted them and then told the
   winner 90 ms later, which put the win on top of the next hand's shuffle and made the scene
   longest for the one reader the cap is tightest for. Now the win is told as the pot leaves
