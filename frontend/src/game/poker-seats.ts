@@ -64,7 +64,7 @@ export function aroundStadium(seats: number, ratio: number, inset = RAIL / 2): S
     ];
     const round = legs.reduce((sum, leg) => sum + leg.length, 0);
 
-    const pointAt = (walked: number): Point =>
+    const pointAt = (walked: number) =>
     {
         let left = walked;
 
