@@ -96,6 +96,14 @@ const level = async (player, rev) => await waitFor(async () => await player.page
     return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
 }, rev), 25000);
 
+const settled = async (player) => await waitFor(async () => await player.page.evaluate(() =>
+{
+    const stage = document.querySelector('.hokm-stage');
+
+    return stage !== null && document.getAnimations().every((one) =>
+        one.constructor.name !== 'Animation' || one.playState !== 'running' || !stage.contains(one.effect?.target ?? null));
+}), 6000);
+
 const watchCards = async (page) => await page.evaluate((chosen) =>
 {
     cancelAnimationFrame(window.__cards?.raf);
@@ -619,6 +627,7 @@ try
         else
         {
             await level(dana, calm.current.rev);
+            await settled(dana);
             await dana.page.emulateMedia({ reducedMotion: 'reduce' });
             await dana.page.waitForTimeout(300);
             await watchKeyframes(dana.page, '.hokm-stage');
