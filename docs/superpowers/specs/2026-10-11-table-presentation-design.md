@@ -2435,6 +2435,23 @@ in a run-out, `forfeit` and "Hand boundary" of the table of scenes.
   measures it in flight (the name of a hand lies on nothing, at 1280 and at 390), and 5.6's
   motion pass is where a held table is measured at every size.
 
+**As built (commit 5.6, the poker motion pass).** `tools/qa/poker-motion-pass.mjs`, on the
+production build.
+
+- **Six seats and a seventh person made for the run.** Poker has two, six or nine chairs and
+  the wallet fixtures are six, so all six play and the watcher is a new account.
+- **The clones are named by the pass**, as Hokm's are (a `WeakMap`, with what each is: a disc,
+  a back, a packet, a face, a card that turns). Poker's flights carry no `data-key`.
+- **The ledger is asked at every frame**: the stacks drawn plus the pot are the chips in play,
+  less the one bet in the air and only while its discs are.
+- **A table that is shown down is held by stopping the page's clock** (Playwright's
+  `page.clock`, installed before the table is opened) and measured at nine sizes. The stage's
+  runs and its lingers are on the product clock, so nothing ends while it is stopped; the
+  browser's own animations are not on it and have finished.
+- **The watcher is never the live table** in a live game, so the pass asks only that one bet
+  comes no sooner than the delay, with its chips in the air.
+- **No lab.** Nothing poker shows needs chance to be asked for it.
+
 **As built (commit 5.3b, chips travel).** The rows `blind` to `allin`, `check`, "A street
 closes", `refund`, "The reader acts" and "A refused or stale action" of the table of scenes.
 

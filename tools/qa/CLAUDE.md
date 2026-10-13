@@ -334,7 +334,42 @@ after it sets off. A browser that paints faster than that hides a curve that jum
 check on single steps, so this one is counted in time. It is what holds `EASE.fly` in a
 browser; `stage-flight.spec.ts` holds its arithmetic.
 
-Seven things worth knowing before changing any of them:
+**Poker's pass is `tools/qa/poker-motion-pass.mjs`**, run the same way, about two minutes and
+72 checks: six seats, five of them played over the api, and a seventh person, made for the run,
+who comes to watch (the six wallet fixtures are all at the table, and a poker table has two, six
+or nine chairs). Poker has no lab either: every position it shows is a few actions over the api
+away.
+
+What flies has no name in the page, as at Hokm: a disc, a back, a packet of two backs, a face,
+or a card that turns, followed from the frame it appears to the frame it is gone. Beside them
+every frame carries the numbers on the table (each stack, the pot), whether the reader is asked
+anything, and how many cards lie face up and where.
+
+- The opening, started with the button: twelve cards leave the dealer's mark one after another,
+  the reader's two are turned face up in their hand, the blinds go in among the cards, and the
+  reader is asked nothing before their second card is up.
+- At the five sizes: the chips of a call go from the plate to the place of the bet, and at
+  every frame the stacks and the pot are the chips in play, less the one bet that is in the air
+  and only while it is; the reader's own press has something moving within two frames.
+- A fold goes towards the dealer's mark face down. A flop: the bets are gathered first, three
+  cards come out face down and are turned where they lie, in the order they came, and the
+  board shows a card only when it has been turned.
+- Two seats all in: both hands are turned over, card by card, before the first card of the
+  run-out is up. Then the page's clock is stopped with the whole board up, and at nine sizes
+  from 320 to 1440 wide the hands that are shown and their names lie on nothing, on the table,
+  and a shown card is at least 20 pixels wide unless the board has drawn its hand at the size
+  of its backs for want of room. **This is the only place a table that is shown down is
+  measured at every size**: it lasts two seconds and cannot be opened at rest, so the fit
+  pass has no cell for it. Then the clock runs again: the pot is pushed after the whole board
+  is up, and the winner's stack counts it when its chips have landed and not while they fly.
+- A reload, a hidden tab, less motion; the watcher half a minute behind, shown a bet with its
+  chips in the air.
+- A table for nine, three of its chairs taken by more people made for the run: two seats all
+  in again, and the table held at six sizes, the phones' among them. It is the tightest table
+  a shown hand and its name have to lie on, and the one that found a hand lying on the pot's
+  row at 320 wide.
+
+Eleven things worth knowing before changing any of them:
 
 - **A die laid on the table is a new node with a new name** (`die-<n>`, counted for the table's
   life). Named by their place in the pair, dice kept one name across a pick-up and a throw, and
@@ -362,6 +397,24 @@ Seven things worth knowing before changing any of them:
   run heard a pawn's last step AFTER the capture it set off, which every spec had heard the other
   way round (`.claude/rules/games.md`, *A run tells its own landing*). A lab line that reads cues
   in order is reading something no unit test can.
+- **A stopped clock stops Playwright's own waiting.** `page.clock.install()` goes before the
+  table is opened. `waitForFunction` polls on the page's frames, which do not come while the
+  clock is stopped, so the pass asks with `evaluate` and waits in Node (`waitFor`). A resize
+  needs `clock.runFor(20)` after it, or the frame that seats the names never fires.
+  `pauseAt` wants a time a little ahead (400 ms): one already past throws AND leaves the clock
+  stopped, and only `resume()` starts it again.
+- **A live turn is thirty seconds, and so is the watcher's delay.** The seat on turn would be
+  folded by the server while the pass waited for the watcher, so the pass acts for it at twenty
+  seconds and asks only that the bet it is waiting for comes no sooner than the delay. A
+  watcher of a live game is never the live table: something always happens within thirty
+  seconds.
+- **The hand that is shown down is one the reader is the big blind of.** They fold, are the
+  small blind of the next hand, and so are not the one to act. A reader who is to act next is
+  asked at the cap and the table then catches up at four times its pace, which leaves a
+  showdown too short to hold and flights too fast to judge.
+- **Folding round is the quiet way to another hand.** `forward` folds where there is something
+  to call and checks where there is not, so no hand it plays to pass the time comes to a
+  showdown, which the table then takes eight seconds to show.
 
 **Proved red first, on real code.** The lab against a renderer broken four ways on the dev server
 (no points on the way, the blot leaving at once, a die resting on the wrong face, less motion
@@ -393,9 +446,21 @@ the first frame of every card that flew, the turn-over in the reader's browser a
 watcher's, the dropped card at both sizes, the keyframes, and at both tables for two the cards
 put down, the draw and the lift.
 
+Poker's pass against a production build broken ten ways (the reader's own press held back
+120ms, cards coming from the middle of the table and not from the dealer's mark, a stack
+counting its pot as the chips leave, a bet counted in the pot while its chips are in the air,
+the chips of a bet coming from the middle of the table, a hand shown without being turned over,
+less motion ignored, a run-out played as it was logged with its streets before its hands, a
+street on the board before it is turned, a shown card at the size of its back) failed 27 of
+72: the cards of the deal, which left from somewhere else; at all five sizes the chips of a
+call, the count of the chips in play and the press; a fold's way to the dealer and a card on
+the board before it was turned; a shown hand too small to read at three sizes of nine, and at
+three of six at the table of nine; the hands turned over after the run-out had begun; a stack
+that never counted its pot; and the keyframes under less motion.
+
 Not in a pass yet, each with the commit that makes it true: the chat opened, the screen turned
 and full screen entered in the middle of a flight (P6); a frame check under a throttled
-processor. Hokm and poker get a lab and a pass of their own as they move onto the stage.
+processor.
 
 ## The notifications pass
 

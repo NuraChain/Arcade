@@ -3410,9 +3410,16 @@ air; `poker-beats.spec.ts` the holds and the pot's beat; `poker-cues.spec.ts` wh
 sounds like. `poker-play-pass.mjs` sends two players all in and wants each to see the other
 hand turned over and both named before the run-out, the whole board and time to read it
 before the pot goes in chips, and the name of a hand lying on nothing. The fit pass has no
-cell for a table that is shown down: it stands for two seconds and cannot be opened at rest,
-so its layout is measured by that pass at its two sizes, and was looked at with the page's
-clock stopped at nine sizes from 320 to 1440 wide, in English and Persian.
+cell for a table that is shown down: it stands for two seconds and cannot be opened at rest.
+`poker-motion-pass.mjs` holds one with the page's clock stopped and measures it at nine
+sizes from 320 to 1440 wide, and a table of nine at six.
+
+**What moves on the table has a pass of its own**, `tools/qa/poker-motion-pass.mjs`, six seats
+and somebody watching, then a table of nine: where every disc and card set off from and came
+to rest, the chips in play at every frame, the press answered within two frames, a flop
+turned in order, the showdown before its run-out, a held table at nine sizes, the pot
+counted when it lands, a reload, a hidden tab, less motion and the watcher's delay.
+`tools/qa/CLAUDE.md` has what it asks and the build it was proved red against.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
