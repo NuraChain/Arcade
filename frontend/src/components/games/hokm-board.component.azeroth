@@ -2,7 +2,7 @@ import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import HokmSeat, { SIDE_TONE } from './hokm-seat.component.azeroth';
 import type { SeatMark } from './hokm-mark.component.azeroth';
 import { plateTag } from './plate-tag.ts';
@@ -2272,7 +2272,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             const clock = runtime().clock;
             const report = (error: unknown) => console.error(error);
             rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
-            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0) });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;

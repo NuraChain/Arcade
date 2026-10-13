@@ -3,11 +3,11 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
 import PokerBoard from '../src/components/games/poker-board.component.azeroth';
-import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
+import { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetHaptics, setHaptics } from '../src/lib/haptics.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
@@ -1262,6 +1262,36 @@ describe('a table that shows what has happened on it', () =>
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(container.querySelector('.poker-hand'), 'the reader’s row was still under the result').toBeNull();
         expect(stack(container, 0)).toBe('4,520');
+    });
+
+    it('gives the table only so long to show how the game ended', async () =>
+    {
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const alone = { 2: { stack: 0, out: true }, 3: { stack: 0, out: true }, 4: { stack: 0, out: true }, 5: { stack: 0, out: true } };
+        const two = waiting({ button: 0, pots: [{ amount: 30, eligible: [0, 1] }], seats: rows({ ...alone, 0: { stack: 4490, bet: 10 }, 1: { stack: 4480, bet: 20 } }) });
+        const { container, write } = await seated(two);
+        const won = waiting(
+            { button: 0, turn: undefined, pot: 0, pots: [], hole: [0, 13], winner: 0, seats: rows({ ...alone, 0: { stack: 4520 }, 1: { stack: 0, out: true } }), last: { board: [], shown: [], pots: [{ amount: 30, winners: [0] }] } },
+            { rev: 8, turn: undefined, finishedAt: new Date(401_000).toISOString(), players: two.players.map((one) => (one.seat === 0 ? { ...one, result: 'won' as const } : one)) }
+        );
+
+        write(won, heard(1, told(8, 1, { e: 'forfeit', seat: 1, reason: 'left', place: 2 }, { e: 'pot', amount: 30, winners: [0] }, { e: 'end', hand: 1, dealt: [0, 1] }, { e: 'finish', seat: 0 })));
+
+        expect(presenting(container)).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'the table was given as long as it liked to show how the game ended').toHaveLength(1);
+    });
+
+    it('gives the table as long as it likes to show a game that is going on', async () =>
+    {
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const { container } = await seated(waiting({}, { id: 'match-next', rev: 1 }), {
+            ...heard(1, told(1, 0, { e: 'deal', hand: 1, button: 2, small: 10, big: 20 }, { e: 'blind', seat: 3, amount: 10 }, { e: 'blind', seat: 4, amount: 20 })),
+            id: 'match-next',
+            opens: () => true
+        });
+
+        expect(presenting(container)).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'a game that is going on was given only so long to be shown').toHaveLength(0);
     });
 
     it('is not called over, for somebody watching, before the table has shown how it ended', async () =>

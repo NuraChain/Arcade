@@ -3,7 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
 import BackgammonBoard from '../src/components/games/backgammon-board.component.azeroth';
-import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
+import { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import {
     BAR_LEFT,
@@ -561,6 +561,47 @@ describe('the backgammon table on the page', () =>
 
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(dice(container)).toEqual([]);
+    });
+
+    it('is given only so long to show how the game ended', async () =>
+    {
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const ending = match({ turn: 1, dice: [1, 4], seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }, 0, { turn: 1 });
+        const ended = match({ turn: 1, dice: [], phase: 'roll', seats: position({ 6: 15 }, { 0: 15 }) }, 0, {
+            rev: 5,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result: 'lost' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'won' }
+            ] as MatchView['players']
+        });
+        const { container, tell } = await live(ending);
+
+        tell(ended, [happened(5, 1, [
+            { e: 'move', seat: 1, from: 1, to: 0, die: 1, hit: false },
+            { e: 'game', seat: 1, how: 'single', points: 1, cube: 1 },
+            { e: 'finish', seat: 1 }
+        ])]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'the table was given as long as it liked to show how the game ended').toHaveLength(1);
+    });
+
+    it('is given as long as it likes to show a game that is going on', async () =>
+    {
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const { container } = await live(match({ dice: [6, 1] }, 0, { rev: 1 }), {
+            seq: 1,
+            id: 'match-bg',
+            events: [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])],
+            live: true,
+            jump: false,
+            opens: () => true
+        });
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'a game that is going on was given only so long to be shown').toHaveLength(0);
     });
 
     it('slides to a board that moved with nothing said, as somebody watching sees it', async () =>

@@ -4,7 +4,7 @@ import { batch, createSignal } from 'azerothjs';
 
 import DieFace from '../src/components/games/die-face.component.azeroth';
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
-import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
+import { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { seatsFor } from '../src/components/games/seats.ts';
 import { ludoOf } from '../src/data/match.ts';
@@ -907,6 +907,37 @@ describe('the ludo table, played from what happened', () =>
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(tags(container)).toEqual([useLocale().t('card.lost'), useLocale().t('card.won')]);
+    });
+
+    it('gives the board only so long to show how the game ended', async () =>
+    {
+        quiet();
+
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const { before, after } = closing();
+        const { container, tell } = await live(seen(before, 0, 1));
+
+        tell(wonBy(after.state, 0, 2), [happened(2, 1, after.moves)]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'the board was given as long as it liked to show how the game ended').toHaveLength(1);
+    });
+
+    it('gives the board as long as it likes to show a game that is going on', async () =>
+    {
+        quiet();
+
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const from = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(from, { kind: 'roll', seat: 0, die: 3 });
+        const { container, tell } = await live(seen(from, 0, 1));
+
+        tell(seen(rolled.state, 0, 2), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT), 'a game that is going on was given only so long to be shown').toHaveLength(0);
     });
 
     it('lets the result leave when another game starts at the table, over a board already set for that game', async () =>

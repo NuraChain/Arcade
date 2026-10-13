@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { manualClock } from '../src/lib/clock.ts';
-import { FAST } from '../src/game/stage/director.ts';
+import { FAST, HASTE } from '../src/game/stage/director.ts';
 import type { Batch } from '../src/game/stage/feed.ts';
 import { createPresenter, SETTLE, type Sight, type Table } from '../src/game/stage/presenter.ts';
 import { createStage } from '../src/game/stage/stage.ts';
@@ -25,7 +25,7 @@ const flush = async () =>
 
 const cost = (acts: readonly { moves: readonly Move[] }[]) => acts.reduce((sum, act) => sum + act.moves.length * ACT_MS, 0);
 
-const setup = (hooked = true, lead?: () => number) =>
+const setup = (hooked = true, lead?: () => number, due?: () => number | null) =>
 {
     const clock = manualClock(1000);
     const stage = createStage({ clock, quiet: () => false });
@@ -73,7 +73,15 @@ const setup = (hooked = true, lead?: () => number) =>
         ...(hooked ? { before: (seen: Sight<null>) => ({ ...seen, rev: 0 }) } : {})
     };
 
-    const presenter = createPresenter<null, Move>({ stage, clock, table, sight: () => sight, report: (error) => reported.push(error), ...(lead === undefined ? {} : { lead }) });
+    const presenter = createPresenter<null, Move>({
+        stage,
+        clock,
+        table,
+        sight: () => sight,
+        report: (error) => reported.push(error),
+        ...(lead === undefined ? {} : { lead }),
+        ...(due === undefined ? {} : { due })
+    });
 
     presenter.watch((busy) => told.push(busy));
 
@@ -588,6 +596,147 @@ describe('what the reader did before the server said so', () =>
         presenter.see(batch([6], {}, 0, mine));
 
         expect(calls).toEqual(['play 6:mine+theirs']);
+    });
+});
+
+describe('a table that is given only so long', () =>
+{
+    const LONG = [6, 7, 8, 9];
+
+    const HASTENED = (ACT_MS * 2) / HASTE;
+
+    it('hastens what it still has to show when its time is up', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened, reported } = setup(true, undefined, () => 1000);
+
+        opened();
+        at(9);
+        presenter.see(batch(LONG));
+        await elapse(1000 + HASTENED - 10);
+
+        expect(calls, 'the rest was shown faster than a table in haste shows it').toEqual(['play 6:e6 7:e7 8:e8 9:e9']);
+
+        await elapse(15);
+
+        expect(calls[calls.length - 1], 'the table went on at its own pace when its time was up').toBe('played 9');
+        expect(presenter.presenting()).toBe(false);
+        expect(reported).toEqual([]);
+    });
+
+    it('is hastened once, when the time first given is up, however often it hears something more', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened, told, clock } = setup(true, undefined, () => 1000);
+
+        opened();
+        at(9);
+        presenter.see(batch(LONG));
+        await elapse(300);
+        presenter.see(batch([]));
+        await elapse(300);
+        presenter.see(batch([]));
+        await elapse(400 + HASTENED - 10);
+
+        expect(calls, 'hearing more gave the table more time, or less').toEqual(['play 6:e6 7:e7 8:e8 9:e9']);
+
+        await elapse(15);
+
+        expect(calls[calls.length - 1]).toBe('played 9');
+
+        await elapse(2000);
+
+        expect(told, 'a count nobody was keeping ran out on a table with nothing to show').toEqual([true, false]);
+        expect(clock.pending()).toBe(0);
+    });
+
+    it('leaves a table alone that shows what it has in time, and keeps no count running for it', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened, clock } = setup(true, undefined, () => 1000);
+
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['play 6:e6', 'played 6']);
+        expect(clock.pending(), 'a count was left running for a table with nothing left to show').toBe(0);
+    });
+
+    it('counts afresh for what arrives once it has caught up', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup(true, undefined, () => 1000);
+
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(600);
+        at(10);
+        presenter.see(batch([7, 8, 9, 10]));
+        await elapse(1000 + HASTENED - 10);
+
+        expect(calls[calls.length - 1], 'the count of a table that had caught up was still running, and cut the next thing short').toBe('play 7:e7 8:e8 9:e9 10:e10');
+
+        await elapse(15);
+
+        expect(calls[calls.length - 1]).toBe('played 10');
+    });
+
+    it('asks how long only when it has heard something and has something to show', async () =>
+    {
+        let asked = 0;
+
+        const { presenter, batch, at, elapse, opened } = setup(true, undefined, () =>
+        {
+            asked += 1;
+
+            return 1000;
+        });
+
+        opened();
+
+        expect(asked, 'a table with nothing to show was asked how long it had').toBe(0);
+
+        at(6);
+        presenter.see(batch([6]));
+
+        expect(asked).toBe(1);
+
+        await elapse(ACT_MS + 2000);
+
+        expect(asked, 'the table went on asking with nothing heard').toBe(1);
+    });
+
+    it('lets a table take as long as it likes once nothing says otherwise', async () =>
+    {
+        let limit: number | null = 1000;
+
+        const { presenter, calls, batch, at, elapse, opened } = setup(true, undefined, () => limit);
+
+        opened();
+        at(9);
+        presenter.see(batch(LONG));
+        await elapse(500);
+
+        limit = null;
+        presenter.see(batch([]));
+        await elapse(ACT_MS * 4 - 500 - 10);
+
+        expect(calls, 'a count that had been taken back still ran out').toEqual(['play 6:e6 7:e7 8:e8 9:e9']);
+
+        await elapse(15);
+
+        expect(calls[calls.length - 1]).toBe('played 9');
+    });
+
+    it('is never hastened where nobody said how long it has', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        opened();
+        at(9);
+        presenter.see(batch(LONG));
+        await elapse(ACT_MS * 4 - 10);
+
+        expect(calls).toEqual(['play 6:e6 7:e7 8:e8 9:e9']);
     });
 });
 

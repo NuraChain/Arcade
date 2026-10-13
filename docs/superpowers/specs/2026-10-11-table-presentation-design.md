@@ -2531,6 +2531,15 @@ quietly under the card, as this section's table says. Found on the way and fixed
 kept the result of the game before over the next deal until that deal had been played, because
 the one place that drops its held result returned early while anything was playing.
 
+**As built (6.1), the result's bound.** The bound this section left open is 12 000 ms from the
+moment the table hears that its game is over, and it is a haste and not a cut: when the time is
+up, what the table still has to show runs at the pace a press gives it (four times, lingers at
+their least). It is NOT under the eight seconds this section named. Measured from the final
+revision to the result, poker's last hand takes 8400 ms with two players all in before the flop
+and 9400 ms with six, and a bound under those hurries the showdown that ends a match. The eight
+seconds of the play passes are counted from a table that has caught up. The presenter keeps the
+count (`due`), one for each stretch it is busy; the boards only say whether the game is over.
+
 **As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
 moved one game a commit, and each takes the turn from what its own log can say:
 

@@ -37,6 +37,7 @@ export interface PresenterOptions<V, M>
     sight: () => Sight<V> | null;
     report: (error: unknown) => void;
     lead?: () => number;
+    due?: () => number | null;
 }
 
 export interface Presenter<M>
@@ -204,48 +205,79 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         document.addEventListener('visibilitychange', away);
     }
 
+    const take = (batch: Batch) =>
+    {
+        const sight = options.sight();
+
+        if (sight === null)
+        {
+            return;
+        }
+
+        const first = batch.id === sight.id && batch.opens !== undefined && batch.opens();
+
+        if (sight.id !== matchId)
+        {
+            matchId = sight.id;
+            heard = batch.seq;
+            prediction = null;
+
+            if (first && opened(sight, batch))
+            {
+                return;
+            }
+
+            cursor = sight.rev;
+            snap(sight);
+
+            return;
+        }
+
+        const unheard = batch.seq > heard;
+
+        heard = Math.max(heard, batch.seq);
+
+        if (unheard && batch.id === sight.id && told(sight, batch))
+        {
+            return;
+        }
+
+        if (sight.rev > cursor)
+        {
+            moved(sight);
+        }
+    };
+
+    let late: (() => void) | null = null;
+
+    const bound = () =>
+    {
+        const most = director.busy() ? (options.due?.() ?? null) : null;
+
+        if (most === null)
+        {
+            late?.();
+            late = null;
+        }
+        else
+        {
+            late ??= options.clock.after(most, () => director.enqueue(() => undefined, { urgent: true }));
+        }
+    };
+
+    director.watch((busy) =>
+    {
+        if (!busy)
+        {
+            bound();
+        }
+    });
+
     return {
         see(batch)
         {
-            const sight = options.sight();
-
-            if (sight === null)
-            {
-                return;
-            }
-
-            const first = batch.id === sight.id && batch.opens !== undefined && batch.opens();
-
-            if (sight.id !== matchId)
-            {
-                matchId = sight.id;
-                heard = batch.seq;
-                prediction = null;
-
-                if (first && opened(sight, batch))
-                {
-                    return;
-                }
-
-                cursor = sight.rev;
-                snap(sight);
-
-                return;
-            }
-
-            const unheard = batch.seq > heard;
-
-            heard = Math.max(heard, batch.seq);
-
-            if (unheard && batch.id === sight.id && told(sight, batch))
-            {
-                return;
-            }
-
-            if (sight.rev > cursor)
-            {
-                moved(sight);
-            }
+            take(batch);
+            bound();
         },
 
         act(scene, estimate = 0)

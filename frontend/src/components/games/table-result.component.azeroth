@@ -9,6 +9,8 @@ import type { Rematch } from './boards.ts';
 
 export const RESULT_OUT = 240;
 
+export const RESULT_WAIT = 12_000;
+
 export default component TableResult(props: { match: MatchView; shown: boolean; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch; onStand?: (stands: boolean) => void })
 {
     const locale = useLocale();

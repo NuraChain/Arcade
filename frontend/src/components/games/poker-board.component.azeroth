@@ -3,7 +3,7 @@ import { batch, untrack } from 'azerothjs';
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import PokerSeat from './poker-seat.component.azeroth';
-import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import { plateTag, type PlateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
@@ -1161,7 +1161,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             table: staging,
             sight: () => untrack(sightNow),
             report,
-            lead: () => (resultStands ? RESULT_OUT : 0)
+            lead: () => (resultStands ? RESULT_OUT : 0),
+            due: () => (over ? RESULT_WAIT : null)
         });
         const unwatch = made.watch((busy) =>
         {

@@ -2,7 +2,7 @@ import { untrack } from 'azerothjs';
 
 import BoardCanvas from './board-canvas.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_WAIT } from './table-result.component.azeroth';
 import DieFace from './die-face.component.azeroth';
 import YardBadge from './yard-badge.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -241,7 +241,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         estimate: (acts) => table?.estimate(acts) ?? 0
     };
 
-    const presenter = createPresenter<Felt, Told>({ stage, clock: runtime().clock, table: proxy, sight: () => untrack(sightNow), report });
+    const presenter = createPresenter<Felt, Told>({ stage, clock: runtime().clock, table: proxy, sight: () => untrack(sightNow), report, due: () => (over ? RESULT_WAIT : null) });
 
     const level = () =>
     {

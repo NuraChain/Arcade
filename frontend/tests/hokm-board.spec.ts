@@ -4,7 +4,7 @@ import { createSignal } from 'azerothjs';
 
 import { dealerOf } from '../../backend/src/domains/match/hokm/scoring.ts';
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
-import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
+import { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import { DRAW_GAP, LIFT, NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
 import { EASE, TIMING } from '../src/game/motion.ts';
 import { FAST, HASTE } from '../src/game/stage/director.ts';
@@ -506,6 +506,32 @@ describe('the table in motion', () =>
         expect(container.querySelectorAll('.table-plate-tag').length).toBe(4);
         expect(onTurn(container)).toEqual([]);
         expect(container.querySelector('.hokm-stage')?.hasAttribute('data-presenting')).toBe(false);
+    });
+
+    it('gives the table only so long to show how the game ended, and as long as it likes while the game goes on', async () =>
+    {
+        const counts = vi.spyOn(runtime().clock, 'after');
+        const bounds = () => counts.mock.calls.filter(([ms]) => ms === RESULT_WAIT).length;
+        const { container, send } = await mounted(playing());
+        const ended: Partial<MatchView> = {
+            finishedAt: new Date(900_000).toISOString(),
+            outcome: 'won',
+            winner: 0,
+            players: [0, 1, 2, 3].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0, result: seat % 2 === 0 ? 'won' : 'lost' })) as MatchView['players']
+        };
+
+        send([TRICK[0]]);
+        await flush();
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBe('true');
+        expect(bounds(), 'a game that is going on was given only so long to be shown').toBe(0);
+
+        await elapse(LONG, 5);
+        send([TRICK[1], TRICK[2], act(7, 0, { e: 'card', seat: 0, card: 4 }, { e: 'trick', seat: 2 }, { e: 'hand', side: 0, points: 1, kot: false }, { e: 'finish', side: 0 })], { plays: [40, 41] }, ended);
+        await flush();
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBe('true');
+        expect(bounds(), 'the table was given as long as it liked to show how the game ended').toBe(1);
     });
 
     it('shows the result at once when the board has to jump to the end of the game', async () =>

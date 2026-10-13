@@ -1,6 +1,6 @@
 import { untrack } from 'azerothjs';
 
-import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
@@ -659,7 +659,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                         : locale.t('backgammon.passed.them', { name: nameOf(side === 'near' ? viewer : 1 - viewer), dice });
                 }
             });
-            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0) });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;

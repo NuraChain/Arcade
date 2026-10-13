@@ -3,7 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchResult from '../src/components/games/match-result.component.azeroth';
-import TableResult, { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import { rematchOf, type Rematch } from '../src/components/games/boards.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
@@ -556,6 +556,17 @@ describe('the result, laid over a board', () =>
 
         expect(container.querySelector('.table-result .table-result-card')!.textContent).toContain('You won.');
         expect(container.querySelector('.table-result-tab')).toBeNull();
+    });
+});
+
+describe('how long a table may keep a result waiting', () =>
+{
+    it('is longer than the longest ending a table plays at its own pace, and is still a bound', () =>
+    {
+        const SIX_ALL_IN_BEFORE_THE_FLOP = 9400;
+
+        expect(RESULT_WAIT).toBeGreaterThanOrEqual(SIX_ALL_IN_BEFORE_THE_FLOP + 2000);
+        expect(RESULT_WAIT).toBeLessThanOrEqual(15_000);
     });
 });
 

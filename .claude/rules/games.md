@@ -5517,6 +5517,35 @@ Less motion: `base.css` gives every transition no time there, so the card is sim
 simply gone, and `.table-result` left the list that stills animations, having none. The table
 still waits its quarter second, because rule 4 leaves timers alone.
 
+**The result waits for the table, but only so long** (6.1). `over && !presenting` holds the
+result back until the table has shown how the game ended, and nothing said how long that may
+take. The presenter takes `due`, asked whenever it hears something while it has something to
+show, and the four boards answer `RESULT_WAIT` once the game on the table is over and null
+before. When that time is up whatever is still in front is hastened by the urgent empty entry a
+press uses: runs and timers at four times their pace, lingers at their least, every cue in its
+order. Nothing is cut. There is ONE count for each stretch the table is busy: hearing more
+neither restarts it nor adds to it, and a table that has caught up keeps none (the count is
+dropped at idle, or it would run out on a table with nothing to show and say it was busy for a
+moment).
+
+**The count is 12 000 ms, and it is a net, not a pace.** The longest endings are poker's, and
+they were measured on the production build from the revision that ended the match to the
+result: 8400 ms with two players all in before the flop, and 9400 ms with six, each action
+given time to be shown (the chips, the hands tabled, three streets run, 2200 ms for the hands
+to be read, the pot pushed, five seats racked). The first draft said 6000, "under the eight
+seconds the play passes give a finished game to appear". Against the heads-up ending it would
+have cut the reading of the last hand to 900 ms and pushed its pot at four times the pace, the
+one moment of a match nobody wants hurried, and the passes' eight seconds turned out to be
+counted from a table that has caught up, not from the end of the game. So the count stands
+above every ending a table plays at its own pace and bounds what is not one. (Six all in
+within a quarter of a second, as a script does it, is shown in 6900 ms: the table is behind
+by then and plays the last action at twice the pace, by rule 5.)
+
+Held by `presenter.spec.ts` (*a table that is given only so long*) and by `match-result.spec.ts`,
+which keeps the count above the endings measured. An ordinary ending is shorter than the count
+and shows nothing either way, so each board spec has a pair that reads the clock instead: one
+count of that length once the game is over, and none while it goes on.
+
 Held by `match-result.spec.ts` (*the result, leaving the table it stood over*), a rematch in each
 of the four board specs, `presenter.spec.ts` (*the opening of a game*), and
 `backend/tests/table-result-art.spec.ts`, which also holds the sheet's 240 ms and `RESULT_OUT` to
