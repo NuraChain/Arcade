@@ -1,8 +1,9 @@
-import { untrack, type Child } from 'azerothjs';
+import { onCleanup, untrack, type Child } from 'azerothjs';
 
 import Avatar from '../ui/avatar.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { PlateTone } from './plate-tag.ts';
@@ -34,23 +35,48 @@ export default component TablePlate(props: {
 {
     const people = usePeople();
     const voice = useVoice();
+    const device = useDevice();
 
     const STILL_OVER_MS = 10 * 60 * 1000;
 
-    state minute = runtime().clock.now();
+    const STEP_MS = 1000;
+
+    const SLOW_STEP_MS = 60_000;
+
+    state beat = runtime().clock.now();
 
     let heardAt = untrack(() => runtime().clock.now());
+
+    let stop: () => void = () => undefined;
 
     effect
     {
         void props.remainingMs;
-        heardAt = runtime().clock.now();
+
+        const at = runtime().clock.now();
+
+        heardAt = at;
+        beat = at;
     }
 
-    mount
+    derived quiet = device.reducedMotion();
+
+    derived long = props.remainingMs !== undefined && props.remainingMs > STILL_OVER_MS;
+
+    derived step = props.turn === true && quiet && !long ? STEP_MS : SLOW_STEP_MS;
+
+    effect
     {
-        return runtime().clock.every(60_000, () => minute = runtime().clock.now());
+        const every = step;
+
+        untrack(() =>
+        {
+            stop();
+            stop = runtime().clock.every(every, () => beat = runtime().clock.now());
+        });
     }
+
+    onCleanup(() => stop());
 
     derived speaking = voice.speaking(props.who);
 
@@ -79,12 +105,12 @@ export default component TablePlate(props: {
             return [];
         }
 
-        if (props.remainingMs <= STILL_OVER_MS)
+        if (!long && !quiet)
         {
             return [{ key: `${ props.who }-${ props.remainingMs }`, style: `--from: ${ Math.min(1, props.remainingMs / props.turnMs).toFixed(4) }; --ms: ${ Math.round(props.remainingMs) }ms`, still: false }];
         }
 
-        const left = Math.max(0, props.remainingMs - (minute - heardAt));
+        const left = Math.max(0, props.remainingMs - (beat - heardAt));
 
         return [{ key: `${ props.who }-still`, style: `--from: ${ Math.min(1, left / props.turnMs).toFixed(4) }`, still: true }];
     })();

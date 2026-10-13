@@ -2540,6 +2540,12 @@ and 9400 ms with six, and a bound under those hurries the showdown that ends a m
 seconds of the play passes are counted from a table that has caught up. The presenter keeps the
 count (`due`), one for each stretch it is busy; the boards only say whether the game is over.
 
+**As built, the turn's ring under reduced motion.** The reading was right: the ring was drawn
+empty for the whole of every turn. It is the still ring now, the one a turn of more than ten
+minutes already had, stepped once a second on the product clock while its seat is on turn. The
+step this section left "to be set in commit 6.2" is the second, the beat the clock beside the
+ring already counts on.
+
 **As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
 moved one game a commit, and each takes the turn from what its own log can say:
 

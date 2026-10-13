@@ -5,7 +5,10 @@ import { createSignal } from 'azerothjs';
 import TablePlate from '../src/components/games/table-plate.component.azeroth';
 import { plateTag } from '../src/components/games/plate-tag.ts';
 import * as turns from '../../backend/src/domains/match/turns.ts';
+import { manualClock } from '../src/lib/clock.ts';
+import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
@@ -18,6 +21,7 @@ type Rendered = HTMLElement;
 afterEach(() =>
 {
     cleanup();
+    resetRuntime();
     vi.restoreAllMocks();
 });
 
@@ -54,6 +58,116 @@ describe('the seat plate every table draws', () =>
         expect(clock.dataset.still).toBe('true');
         expect(clock.getAttribute('style')).toContain('--from: 0.5000');
         expect(clock.getAttribute('style')).not.toContain('--ms');
+    });
+
+    it('draws the turn still and steps it once a second for somebody who asked for less motion, whose browser ends an animation as it starts', () =>
+    {
+        const clock = manualClock(400_000);
+
+        setRuntime({ clock, seed: 1 });
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const [left, setLeft] = createSignal(15_000);
+        const { container } = renderTest(() => TablePlate({
+            who: 'omid.k',
+            name: 'Omid',
+            turn: true,
+            get remainingMs()
+            {
+                return left();
+            },
+            turnMs: 30_000
+        }) as Rendered);
+        const ring = container.querySelector<SVGElement>('.table-plate-clock')!;
+        const drawn = () => container.querySelector<SVGElement>('.table-plate-clock')?.getAttribute('style') ?? '';
+
+        expect([ring.dataset.still, drawn()], 'the ring was left to an animation that less motion ends at once, which draws the turn as spent').toEqual(['true', '--from: 0.5000']);
+
+        clock.advance(1000);
+
+        expect(drawn()).toBe('--from: 0.4667');
+
+        clock.advance(4000);
+
+        expect(drawn()).toBe('--from: 0.3333');
+
+        clock.advance(20_000);
+
+        expect(drawn(), 'the ring ran on past empty').toBe('--from: 0.0000');
+
+        setLeft(30_000);
+
+        expect(drawn(), 'a new count was drawn from where the old one had got to').toBe('--from: 1.0000');
+        expect(container.querySelector('.table-plate-clock'), 'the ring was made again for a count it only had to be told').toBe(ring);
+
+        clock.advance(500);
+        setLeft(29_000);
+
+        expect(drawn()).toBe('--from: 0.9667');
+
+        clock.advance(500);
+
+        expect(drawn(), 'the step after a count heard between two beats was not measured from when it was heard').toBe('--from: 0.9500');
+    });
+
+    it('steps once a second only where it has to: a turn that moves by itself, a turn that is somebody else\'s and a turn of a day are left to the minute', () =>
+    {
+        const clock = manualClock(400_000);
+        const every = vi.spyOn(clock, 'every');
+        const day = 24 * 60 * 60 * 1000;
+
+        setRuntime({ clock, seed: 1 });
+
+        const paced = (quiet: boolean, turn: boolean, remainingMs: number) =>
+        {
+            vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(quiet);
+            every.mockClear();
+
+            const drawn = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid', turn, remainingMs, turnMs: remainingMs * 2 }) as Rendered);
+            const paces = every.mock.calls.map(([ms]) => ms);
+
+            drawn.unmount();
+
+            return paces;
+        };
+
+        expect(paced(true, true, 15_000)).toEqual([1000]);
+        expect(paced(false, true, 15_000)).toEqual([60_000]);
+        expect(paced(true, false, 15_000)).toEqual([60_000]);
+        expect(paced(true, true, day / 2)).toEqual([60_000]);
+        expect(clock.pending(), 'a plate that was taken away went on counting').toBe(0);
+    });
+
+    it('changes its step when the turn comes to its seat, and keeps one count running, not two', () =>
+    {
+        const clock = manualClock(400_000);
+        const every = vi.spyOn(clock, 'every');
+
+        setRuntime({ clock, seed: 1 });
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const [turn, setTurn] = createSignal(false);
+
+        renderTest(() => TablePlate({
+            who: 'omid.k',
+            name: 'Omid',
+            get turn()
+            {
+                return turn();
+            },
+            remainingMs: 15_000,
+            turnMs: 30_000
+        }) as Rendered);
+
+        setTurn(true);
+
+        expect(every.mock.calls.map(([ms]) => ms)).toEqual([60_000, 1000]);
+        expect(clock.pending()).toBe(1);
+
+        setTurn(false);
+
+        expect(every.mock.calls.map(([ms]) => ms)).toEqual([60_000, 1000, 60_000]);
+        expect(clock.pending()).toBe(1);
     });
 
     it('marks the side a seat plays for, and says it to somebody who cannot see the colour', () =>

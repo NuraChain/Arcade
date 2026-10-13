@@ -1394,6 +1394,16 @@ The client half of the same audits, each a thing that outlived what it belonged 
   compositor cannot run, so a twenty-four hour one repainted the plate every frame for a day while the
   ring moved one pixel every quarter hour. Over ten minutes the ring is drawn still and moved once a
   minute; a live turn keeps its smooth animation.
+- **With less motion asked for, a live turn's ring is drawn still too, and stepped once a second.**
+  `base.css` gives every animation no time there, and `plate-clock` holds its last frame, so the ring
+  was drawn EMPTY from the first instant of every turn: a seat with twenty-five seconds left looked
+  as if its time had run out. The plate draws the still ring (`data-still`) for a reader who asked
+  for less motion and steps it on the product clock, once a second while its seat is on turn, which
+  is the beat `TurnClock` counts its seconds on. A ring that drops a notch a second is a clock hand,
+  not travel. One ticker serves both cases and changes its pace with the turn (a minute for a turn
+  of a day, for a seat that is not on turn, and for a reader whose ring animates by itself), and it
+  is released with the scope (`onCleanup`). A new count sets the beat to the moment it was heard,
+  or the first step after it would be measured from the old beat. `table-plate.spec.ts` holds it.
 - **The toast bar is CSS**: a `transform` animation paused with `animation-play-state`, where a 120ms
   timer rewrote a width - a layout - for every toast on screen.
 - **The landing preloads its poster** with the same media queries the stage's CSS chooses by, so the
