@@ -518,6 +518,30 @@ describe('the table in motion', () =>
         expect(container.querySelector('.hokm-foot')).toBeNull();
     });
 
+    it('takes the result of the game before away the moment another game is dealt at the table', async () =>
+    {
+        const ended = { ...playing(), finishedAt: new Date(900_000).toISOString(), outcome: 'won', winner: 0 } as MatchView;
+        const { container, seat } = await mounted(ended);
+        const next = { ...match({ hand: [1, 14, 27, 40, 50] }, 0), id: 'match-2', rev: 1, remainingMs: 20_000 };
+
+        expect(container.querySelector('.table-result')).not.toBeNull();
+        expect(container.querySelector('.hokm-foot')).toBeNull();
+
+        seat(next, { seq: 1, id: 'match-2', events: [act(1, 0, { e: 'deal', hakem: 0 })], live: true, jump: false, opens: () => true });
+        await flush();
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'the first cards of the next game were not being dealt').toBe('true');
+        expect(container.querySelector('.table-result'), 'the result of the game before stood over the cards being dealt for this one').toBeNull();
+        expect(container.querySelector('.hokm-foot'), 'the next game was dealt at a table still laid out for a game that is over').not.toBeNull();
+        expect(container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length, 'the five had no places to be dealt into').toBe(5);
+
+        await elapse(LONG, 5);
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(container.querySelector('.hokm-choose'), 'the Hâkem was not asked for trump when the five were up').not.toBeNull();
+        expect(container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length).toBe(0);
+    });
+
     it('tells whoever seated the board while it is still showing what happened, and when it has caught up', async () =>
     {
         const told: boolean[] = [];

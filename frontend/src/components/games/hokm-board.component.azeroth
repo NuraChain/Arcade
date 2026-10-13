@@ -1991,6 +1991,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     {
         const sight = sightNow();
 
+        if (!over)
+        {
+            result = false;
+        }
+
         if (presenter?.presenting() === true)
         {
             return;

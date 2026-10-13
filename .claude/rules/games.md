@@ -4380,6 +4380,13 @@ nothing in flight can widen a page the matrix measures.
   that stay could be pressed. A derived
   `over && !presenting` is true for one round of the flush that brings the final batch, which draws
   the result and takes the row away before the scene that shows the last card has begun.
+  **And it does not outstay its game.** `mend` drops it the moment the game on the table is not
+  over, whatever is playing. It used to return first whenever something was playing, and at a
+  rematch something always is: the next game arrives with its opening deal. Measured on the
+  production build at a table for two, the result of the game before stood over the next one
+  for 720 ms and went in one frame when the five had been dealt, and for all of that the row
+  the five are dealt into was not on the page. `hokm-board.spec.ts` (*takes the result of the
+  game before away the moment another game is dealt at the table*) holds it.
 - **The watermark belongs to a MATCH, and it is the presenter's.** A rematch at the same table can
   reuse the board instance; the first sight of a match id is a reset, and a batch after it plays
   from its first card. `sent` names its match for the same reason: the next match comes to the
