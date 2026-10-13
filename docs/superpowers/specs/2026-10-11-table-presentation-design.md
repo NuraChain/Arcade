@@ -2324,6 +2324,32 @@ motion of 5.3b and 5.4 will carry.
   The count a pill shows at rest is the count that flies to it. The pot wears the same stack.
   D6 stands: the pill's box is what it was, so *The bet spot* is unchanged.
 
+**As built (commit 5.3b, chips travel).** The rows `blind` to `allin`, `check`, "A street
+closes", `refund`, "The reader acts" and "A refused or stale action" of the table of scenes.
+
+- **The ledger is two lists** (`Air` in `poker-felt.ts`): chips on their way to each seat's bet
+  and to each seat's stack. `drawnOf(felt, air)` is what a plate, a pill and the pot draw. A
+  gather needs no entry: the pot had counted the bets when they landed.
+- **The bet spot**, as built: the pill is rendered while the drawn bet is over nothing OR chips
+  are coming to it; with nothing landed yet it is hidden (`data-landing`) and says the number
+  it will have (step 2). The seat pass is called by the scene before it measures (step 3). A
+  resting pill is not yet handed its previous spot (step 4): a bet that grows keeps its pill
+  and has not been seen to move.
+- **A flying disc** is the bet's own drawing, one disc, 1.35 times the size of the place it
+  lands on and shrinking into it: 300 ms, 45 ms apart, as many discs as the bet will show.
+- **A batch waits one microtask before its first scene**, as hokm's does (§3.4): the scene is
+  called from inside the effect that read the batch, and the page is not drawn until that
+  effect ends.
+- **The press** is `presenter.act`, with the same scene another seat's move gets. A refusal is
+  a second `act`: the chips fly from the bet to the plate, then the table is reset to the view.
+- **Every cue comes from a scene now**, the ones for moves that do not move yet included
+  (the deal's shuffle and slides, a fold, the board's cards, a show, a pot), paced as
+  `pokerBeats` paced them, with one exception: a pot's chips were heard 200 ms after nothing,
+  and are heard as the pot is paid, the reader's win 120 ms after. `pokerBeats` and
+  `tableCues` are deleted; `turnChime` stays.
+- **Not in this commit:** the pot's payment still lands at once (5.5 flies it, with the
+  ledger's second list), and the cards and the puck do not move (5.4).
+
 **Limits.** §3.4, and §4.2 for the 2500 ms bound.
 
 **Checklist.** The owner's list was written for card games in general. In Hold'em, "draw" is the

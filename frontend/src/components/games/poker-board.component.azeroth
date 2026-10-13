@@ -13,8 +13,13 @@ import { seatBets, type Box } from '../../game/chip-spot.ts';
 import { aroundStadium, type Spot } from '../../game/poker-seats.ts';
 import { pokerOf } from '../../data/match.ts';
 import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/helpers/poker.ts';
-import { EMPTY, HISTORY, before, feltOf, sameAs, step, told, type Felt, type Told } from '../../game/poker-felt.ts';
-import { discsFor } from '../../game/stage/chips.ts';
+import { EASE, centreOf, rectIn, type Rect } from '../../game/motion.ts';
+import { BOARD_GAP, CARD_GAP, CHIP_FLY, DEAL_LEAD, DEAL_SLIDE, DISC_GAP, GATHER, GATHER_GAP, KNOCK, POT_SPAN, POT_WON, WIN_AFTER, slidesFor, spanOf } from '../../game/poker-beats.ts';
+import { EMPTY, HISTORY, STILL, before, drawnOf, feltOf, flying, sameAs, step, swept, through, type Air, type Felt, type Told } from '../../game/poker-felt.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { discsFor, pour } from '../../game/stage/chips.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import type { Act } from '../../game/stage/feed.ts';
 import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
 import { createStage } from '../../game/stage/stage.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
@@ -22,7 +27,7 @@ import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { pokerBeats, tableCues } from './table-cues.ts';
+import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
@@ -101,38 +106,32 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     const settings = useSettings();
 
-    const cues = tableCues({
-        enabled: untrack(() => settings.settings().sound),
-        seq: untrack(() => props.events.seq),
-        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
-        beats: (events) => pokerBeats(events.flatMap((one) => (one.log.kind === 'poker' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
-    });
+    let sound: SoundHandle | null = null;
 
-    effect
-    {
-        const batch = props.events;
-
-        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
-    }
+    const chime = turnChime(() => sound);
 
     effect
     {
         const yours = myTurn;
 
-        untrack(() => cues.turn(yours && props.match.mine !== undefined));
+        untrack(() => chime(yours && props.match.mine !== undefined));
     }
 
     effect
     {
         const on = settings.settings().sound;
 
-        untrack(() => cues.setEnabled(on));
+        untrack(() => sound?.setEnabled(on));
     }
 
     let root: HTMLElement | null = null;
+    let layer: HTMLElement | null = null;
     let presenter: Presenter<Told> | null = null;
     let held: Felt = EMPTY;
+    let air: Air = STILL;
     let sent: { id: string; rev: number; move: Told } | null = null;
+
+    state coming: readonly number[] = STILL.bets;
 
     state ratio = ROUND;
 
@@ -268,7 +267,6 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         reseat();
     };
 
-
     const sending = () => (sent !== null && sent.id === game.id && sent.rev === game.rev ? sent : null);
 
     const sightNow = (): Sight<Felt> | null =>
@@ -284,10 +282,273 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         return { id: game.id, rev: game.rev, seat: mine ?? null, view: ahead === null ? now : step(now, ahead.move) };
     };
 
+    const show = () =>
+    {
+        shown = drawnOf(held, air);
+        coming = air.bets;
+    };
+
     const reset = (sight: Sight<Felt>) =>
     {
+        layer?.replaceChildren();
+        air = STILL;
         held = sameAs(held, sight.view) ? held : sight.view;
-        shown = held;
+        show();
+    };
+
+    const find = (selector: string) => root?.querySelector<HTMLElement>(selector) ?? null;
+
+    const boxOf = (element: Element | null) =>
+    {
+        const box = layer === null || element === null ? null : rectIn(layer, element);
+
+        return box !== null && box.width > 0 && box.height > 0 ? box : null;
+    };
+
+    const plateOf = (seat: number) => find(`.poker-seat[data-seat="${ seat }"] .table-plate`);
+
+    const spotOf = (seat: number) => boxOf(find(`.poker-seat[data-seat="${ seat }"] > .poker-bet > .chip-stack`));
+
+    const potSpot = () => boxOf(find('.poker-pot > .chip-stack'));
+
+    const discAt = (place: Rect, like: Rect): Rect =>
+    {
+        const middle = centreOf(place);
+
+        return { x: middle.x - like.width / 2, y: middle.y - like.height / 2, width: like.width, height: like.height };
+    };
+
+    const stackAt = (felt: Felt, seat: number) => felt.chairs.find((chair) => chair.seat === seat)?.stack ?? 0;
+
+    const lift = (seat: number, toBet: number, toStack: number) =>
+    {
+        air = flying(air, held.chairs.length, seat, toBet, toStack);
+        show();
+    };
+
+    const pause = async (ms: number, ctx: Ctx) =>
+    {
+        await ctx.stage.wait(ms);
+
+        return ctx.live();
+    };
+
+    const chipsIn = async (seat: number, next: Felt, heavy: boolean, ctx: Ctx) =>
+    {
+        const chips = stackAt(held, seat) - stackAt(next, seat);
+        const from = boxOf(plateOf(seat));
+
+        held = next;
+        lift(seat, chips, 0);
+        seatChips();
+
+        const to = spotOf(seat);
+
+        if (layer !== null && from !== null && to !== null && chips > 0)
+        {
+            await pour(ctx.stage, layer, from, to, { discs: discsFor(chips, held.blinds.big), duration: CHIP_FLY, gap: DISC_GAP, easing: EASE.fly }).done;
+        }
+
+        if (ctx.live())
+        {
+            lift(seat, 0 - chips, 0);
+            sound?.play(heavy ? 'chips-stack' : 'chip-lay');
+        }
+    };
+
+    const chipsBack = async (seat: number, next: Felt, ctx: Ctx) =>
+    {
+        const chips = stackAt(next, seat) - stackAt(held, seat);
+        const from = spotOf(seat) ?? potSpot();
+        const plate = boxOf(plateOf(seat));
+
+        held = next;
+        lift(seat, 0, chips);
+
+        if (layer !== null && from !== null && plate !== null && chips > 0)
+        {
+            await pour(ctx.stage, layer, from, discAt(plate, from), { discs: discsFor(chips, held.blinds.big), duration: CHIP_FLY, gap: DISC_GAP, easing: EASE.fly }).done;
+        }
+
+        if (ctx.live())
+        {
+            lift(seat, 0, 0 - chips);
+        }
+    };
+
+    const gather = async (ctx: Ctx) =>
+    {
+        const to = potSpot();
+        const piles = held.chairs.filter((chair) => chair.bet > 0).map((chair) => ({ from: spotOf(chair.seat), discs: discsFor(chair.bet, held.blinds.big) }));
+        const over = layer;
+
+        if (piles.length === 0)
+        {
+            return;
+        }
+
+        held = swept(held);
+        show();
+
+        if (over !== null && to !== null)
+        {
+            await Promise.all(piles.flatMap((pile, at) => (pile.from === null
+                ? []
+                : [pour(ctx.stage, over, pile.from, to, { discs: pile.discs, duration: GATHER, gap: DISC_GAP, easing: EASE.gather, delay: at * GATHER_GAP }).done])));
+        }
+    };
+
+    const knock = async (seat: number, ctx: Ctx) =>
+    {
+        const plate = plateOf(seat);
+
+        sound?.play('tick');
+
+        if (plate !== null)
+        {
+            await ctx.stage.animate(plate, [{ translate: '0 0' }, { translate: '0 0.2rem', offset: 0.35 }, { translate: '0 0' }], { duration: KNOCK, quiet: 'skip' }).done;
+        }
+    };
+
+    const scene = async (move: Told, next: Felt, ctx: Ctx) =>
+    {
+        const seat = move.seat ?? -1;
+        const mineToo = seat === mine;
+
+        if (move.e === 'blind' || move.e === 'call' || move.e === 'raise' || move.e === 'allin')
+        {
+            await chipsIn(seat, next, move.e === 'allin', ctx);
+
+            return;
+        }
+
+        if (move.e === 'refund')
+        {
+            await chipsBack(seat, next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'board' || move.e === 'show' || move.e === 'pot')
+        {
+            await gather(ctx);
+
+            if (!ctx.live())
+            {
+                return;
+            }
+        }
+
+        held = next;
+        show();
+
+        if (move.e === 'check')
+        {
+            await knock(seat, ctx);
+        }
+        else if (move.e === 'deal')
+        {
+            const slides = slidesFor(held.chairs.length);
+
+            sound?.play('card-shuffle', { gain: 0.6 });
+
+            for (let card = 0; card < slides; card += 1)
+            {
+                ctx.stage.after(DEAL_LEAD + card * DEAL_SLIDE, () => sound?.play('card-slide', { gain: 0.7, rate: 0.97 + (card % 3) * 0.04 }));
+            }
+
+            await pause(DEAL_LEAD + slides * DEAL_SLIDE, ctx);
+        }
+        else if (move.e === 'fold')
+        {
+            sound?.play('card-gather', { gain: 0.6 });
+            await pause(CARD_GAP, ctx);
+        }
+        else if (move.e === 'board')
+        {
+            for (let card = 0; card < (move.cards?.length ?? 0); card += 1)
+            {
+                sound?.play('card-place');
+
+                if (!await pause(BOARD_GAP, ctx))
+                {
+                    return;
+                }
+            }
+        }
+        else if (move.e === 'show')
+        {
+            sound?.play('card-fan', { gain: 0.6 });
+            await pause(CARD_GAP, ctx);
+        }
+        else if (move.e === 'pot')
+        {
+            const won = mine !== undefined && (move.winners ?? []).includes(mine);
+
+            sound?.play('chips-stack');
+
+            if (won)
+            {
+                haptic('hand');
+                ctx.stage.after(POT_WON, () => sound?.play('hand-won'));
+            }
+
+            await pause(POT_SPAN, ctx);
+        }
+        else if (move.e === 'bust' && mineToo)
+        {
+            sound?.play('pass');
+            haptic('hit');
+        }
+        else if (move.e === 'finish' && mineToo)
+        {
+            if (await pause(WIN_AFTER, ctx))
+            {
+                sound?.play('win');
+                haptic('win');
+            }
+        }
+    };
+
+    const play = async (acts: readonly Act<Told>[], sight: Sight<Felt>, ctx: Ctx) =>
+    {
+        const moves = acts.flatMap((act) => act.moves);
+
+        await Promise.resolve();
+
+        const tables = ctx.live() ? through(held, moves, sight.view) : [];
+
+        for (const [at, move] of moves.slice(0, tables.length).entries())
+        {
+            await scene(move, tables[at], ctx);
+
+            if (!ctx.live())
+            {
+                return;
+            }
+        }
+    };
+
+    const takeBack = async (ctx: Ctx) =>
+    {
+        const sight = sightNow();
+        const seat = sight?.seat ?? -1;
+
+        if (sight === null)
+        {
+            return;
+        }
+
+        if (stackAt(sight.view, seat) > stackAt(held, seat))
+        {
+            sound?.play('deny');
+            await chipsBack(seat, sight.view, ctx);
+        }
+
+        if (ctx.live())
+        {
+            reset(sight);
+        }
     };
 
     const mend = () =>
@@ -307,12 +568,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         reset,
         same: (sight) => sameAs(held, sight.view),
         settle: reset,
-        play: (acts, sight) =>
-        {
-            held = told(held, acts.flatMap((act) => act.moves), sight.view);
-            shown = held;
-        },
-        estimate: () => 0
+        play,
+        estimate: (acts) => spanOf(acts.flatMap((act) => act.moves), untrack(() => count))
     };
 
     effect
@@ -335,6 +592,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         const cloth = feltNode();
         const clock = runtime().clock;
         const report = (error: unknown) => console.error(error);
+        sound = createSound(untrack(() => settings.settings().sound));
+
         const made = createPresenter<Felt, Told>({
             stage: createStage({ clock, quiet: () => device.reducedMotion(), report }),
             clock,
@@ -382,7 +641,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             props.onPresenting?.(false);
             made.dispose();
             presenter = null;
-            cues.dispose();
+            sound?.dispose();
+            sound = null;
         };
     }
 
@@ -508,6 +768,13 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     const plateAt = (seat: number) => plates.get(seat) ?? UNSEATED;
 
+    derived betOn = (seat: number) =>
+    {
+        const lying = plateAt(seat).row.bet;
+
+        return lying > 0 ? lying : (coming[seat] ?? 0);
+    };
+
     const placed = (seat: number) =>
     {
         const { x, y, ux, uy } = plateAt(seat);
@@ -623,7 +890,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
         sent = null;
         presenter?.predict(null);
-        untrack(mend);
+        presenter?.act((ctx) => takeBack(ctx));
     };
 
     const send = async (verb: PokerVerb, amount?: number) =>
@@ -639,8 +906,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
             sent = { id, rev, move };
             presenter.predict({ rev, covers: (moves) => (moves[0]?.e === move.e && moves[0].seat === seat && moves[0].amount === move.amount ? 1 : null) });
-            held = step(held, move);
-            shown = held;
+            presenter.act((ctx) => scene(move, step(held, move), ctx), spanOf([move], untrack(() => count)));
         }
 
         const outcome = await board.play(verb === 'raise' ? { kind: 'poker', verb, amount: amount ?? 0 } : { kind: 'poker', verb });
@@ -797,8 +1063,9 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                                         button={ button === seat }
                                         stack={ chips(plateAt(seat).row.stack) }
                                         holds={ plateAt(seat).live && seat !== mine }
-                                        bet={ plateAt(seat).row.bet > 0 ? chips(plateAt(seat).row.bet) : '' }
-                                        discs={ discsFor(plateAt(seat).row.bet, felt.blinds.big) }
+                                        bet={ betOn(seat) > 0 ? chips(betOn(seat)) : '' }
+                                        discs={ discsFor(betOn(seat), felt.blinds.big) }
+                                        landing={ plateAt(seat).row.bet === 0 }
                                     />
                                 </div>
                             </For>
@@ -931,5 +1198,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                 <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
         </Show>
+
+        <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>
 }

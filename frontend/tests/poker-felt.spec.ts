@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMPTY, before, feltOf, sameAs, step, through, told, type Board, type Felt, type Told } from '../src/game/poker-felt.ts';
+import { EMPTY, STILL, before, drawnOf, feltOf, flying, sameAs, step, swept, through, type Board, type Felt, type Told } from '../src/game/poker-felt.ts';
 import { pokerEngine } from '../../backend/src/domains/match/engines/poker.ts';
 import { apply, create, legalMoves } from '../../backend/src/domains/match/poker/engine.ts';
 import { STACK, type PokerAction, type PokerState } from '../../backend/src/domains/match/poker/state.ts';
@@ -29,6 +29,8 @@ const randomOf = (seed: number) =>
     };
 };
 
+const told = (felt: Felt, moves: readonly Told[], sight: Felt) => through(felt, moves, sight).at(-1) ?? felt;
+
 const movesOf = (events: readonly unknown[]) => pokerEngine.log(events, null).moves as readonly Told[];
 
 const feltAt = (state: PokerState, reader: number | null = null) => feltOf(pokerEngine.view(state, reader) as Board, reader);
@@ -36,6 +38,8 @@ const feltAt = (state: PokerState, reader: number | null = null) => feltOf(poker
 const readersOf = (seats: number) => [null, ...Array.from({ length: seats }, (_, seat) => seat)];
 
 const drawn = (felt: Felt) => ({ ...felt, put: null });
+
+const alike = (one: unknown, other: unknown) => JSON.stringify(one) === JSON.stringify(other);
 
 const chipsOn = (felt: Felt) => felt.pot + felt.chairs.reduce((sum, chair) => sum + chair.stack, 0);
 
@@ -166,12 +170,16 @@ describe('the poker table as it has been shown', () =>
                     for (const [offset, felt] of shown.entries())
                     {
                         const frame = frames[from + offset];
+                        const wanted = drawn(feltAt(frame.state, reader));
 
-                        expect(drawn(felt), `${ seats } seats, game ${ seed }, picked up at ${ from }, action ${ from + offset }`).toEqual(drawn(feltAt(frame.state, reader)));
+                        if (!alike(drawn(felt), wanted))
+                        {
+                            expect(drawn(felt), `${ seats } seats, game ${ seed }, picked up at ${ from }, action ${ from + offset }`).toEqual(wanted);
+                        }
 
                         dealt ||= frame.moves.some((move) => move.e === 'deal');
 
-                        if (dealt)
+                        if (dealt && !alike(felt.put, frame.state.put))
                         {
                             expect(felt.put, 'a hand dealt in front of the table was not counted chip for chip').toEqual(frame.state.put);
                         }
@@ -294,6 +302,67 @@ describe('the poker table as it has been shown', () =>
                 }
             }
         }
+    });
+
+    it('counts the chips in the air: what is drawn and what is flying are together what the table holds', () =>
+    {
+        const frames = played(6, 13);
+        const stackOf = (felt: Felt, seat: number) => felt.chairs.find((chair) => chair.seat === seat)?.stack ?? 0;
+        const betOf = (felt: Felt, seat: number) => felt.chairs.find((chair) => chair.seat === seat)?.bet ?? 0;
+        let held = before(feltAt(frames[0].state));
+        let bets = 0;
+        let refunds = 0;
+
+        for (const move of frames.flatMap((frame) => frame.moves))
+        {
+            const next = step(held, move);
+            const seat = move.seat ?? -1;
+
+            if (move.e === 'blind' || move.e === 'call' || move.e === 'raise' || move.e === 'allin')
+            {
+                const chips = stackOf(held, seat) - stackOf(next, seat);
+                const drawn = drawnOf(next, flying(STILL, 6, seat, chips, 0));
+
+                bets += 1;
+                expect(chips, `a ${ move.e } moved no chips`).toBeGreaterThan(0);
+                expect(chipsOn(drawn) + chips, 'chips in the air were lost or made').toBe(chipsOn(next));
+                expect(stackOf(drawn, seat), 'the stack had not dropped when the chips left it').toBe(stackOf(next, seat));
+                expect(betOf(drawn, seat), 'the bet counted chips that had not landed').toBe(betOf(held, seat));
+                expect(drawn.pot, 'the pot counted chips that had not landed').toBe(held.pot);
+            }
+
+            if (move.e === 'refund')
+            {
+                const chips = move.amount ?? 0;
+                const drawn = drawnOf(next, flying(STILL, 6, seat, 0, chips));
+
+                refunds += 1;
+                expect(chipsOn(drawn) + chips).toBe(chipsOn(next));
+                expect(stackOf(drawn, seat), 'the stack counted chips that had not come back').toBe(stackOf(held, seat));
+                expect(drawn.pot, 'the chips were still in the pot after they left it').toBe(held.pot - chips);
+            }
+
+            held = next;
+        }
+
+        expect(bets).toBeGreaterThan(100);
+        expect(refunds).toBeGreaterThan(3);
+        expect(drawnOf(held, STILL), 'a table with nothing in the air was drawn as another').toBe(held);
+        expect(drawnOf(held, flying(flying(STILL, 6, 2, 40, 0), 6, 2, -40, 0))).toBe(held);
+        expect(flying(flying(STILL, 6, 2, 40, 0), 6, 4, 0, 15)).toEqual({ bets: [0, 0, 40, 0, 0, 0], stacks: [0, 0, 0, 0, 15, 0] });
+    });
+
+    it('sweeps the bets to the middle and changes nothing else', () =>
+    {
+        const frames = played(6, 13);
+        const betting = frames.find((frame) => frame.state.bets.filter((chips) => chips > 0).length > 2) as Frame;
+        const felt = feltAt(betting.state, 2);
+        const tidy = swept(felt);
+
+        expect(tidy.chairs.map((chair) => chair.bet)).toEqual([0, 0, 0, 0, 0, 0]);
+        expect({ ...tidy, chairs: felt.chairs }).toEqual(felt);
+        expect(tidy.chairs.map((chair) => chair.stack)).toEqual(felt.chairs.map((chair) => chair.stack));
+        expect(chipsOn(tidy)).toBe(chipsOn(felt));
     });
 
     it('lays a hand out as it ends: the cards shown, each pot paid to whoever won it, and nothing left in the middle', () =>

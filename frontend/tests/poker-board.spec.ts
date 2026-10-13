@@ -13,6 +13,7 @@ import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/st
 import { usePeople } from '../src/stores/people.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
+import { elapse } from './poker-mounted.ts';
 import type { MatchView } from '../src/api.ts';
 import { seatBets, type Box } from '../src/game/chip-spot.ts';
 
@@ -1107,7 +1108,7 @@ describe('a table that shows what has happened on it', () =>
         await read(called(), heard(1, told(8, 0, { e: 'call', seat: 0, amount: 20 })));
         await answer('now');
 
-        expect(busy, 'the answer was not played as the rest of the reader’s own action').toEqual([true, false]);
+        expect(busy, 'the press and the rest of the reader’s own action were not played in one go').toEqual([true, false]);
         expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['20', '1,480', 'Total pot 50']);
         expect(presenting(container)).toBeNull();
     });
@@ -1144,7 +1145,7 @@ describe('a table that shows what has happened on it', () =>
         fire(button(container, 'Call 20')!, 'click');
         await read(called(40), heard(1, told(8, 0, { e: 'call', seat: 0, amount: 40 })));
 
-        expect(busy, 'a move the table had not put down was played over the one it had').toEqual([]);
+        expect(busy, 'a move the table had not put down was played over the one it had').toEqual([true, false]);
         expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['40', '1,460', 'Total pot 70']);
     });
 
@@ -1199,6 +1200,10 @@ describe('a table that shows what has happened on it', () =>
         };
         const { container, busy } = await seated(waiting({}, { rev: 1 }), opening);
 
+        expect(busy, 'the opening was over before it could have been heard').toEqual([true]);
+
+        await elapse(1500);
+
         expect(busy).toEqual([true, false]);
         expect([bet(container, 3), bet(container, 4), stack(container, 3), stack(container, 4), pot(container)]).toEqual(['10', '20', '1,490', '1,480', 'Total pot 30']);
         expect(container.querySelectorAll('.poker-hole .card-face')).toHaveLength(2);
@@ -1246,7 +1251,7 @@ describe('a table that shows what has happened on it', () =>
         expect(container.querySelector('.table-result'), 'the result stood over a table that was still showing how the game ended').toBeNull();
         expect(tagOf(0), 'a plate called the game before the table had shown it').toBe('');
 
-        await turns();
+        await elapse(1200);
 
         expect(busy).toEqual([true, false]);
         expect(presenting(container)).toBeNull();
@@ -1316,8 +1321,7 @@ describe('a table that shows what has happened on it', () =>
         expect(back()).toBe(false);
         expect(container.querySelector('.table-result')).toBeNull();
 
-        await turns();
-        await turns();
+        await elapse(1200);
 
         expect(presenting(container)).toBeNull();
         expect(over()).toBe(true);
@@ -1340,6 +1344,9 @@ describe('a table that shows what has happened on it', () =>
 
         expect(container.querySelector('.table-result'), 'the result of the game before stood over this one').toBeNull();
         expect(container.querySelector('.poker-hand')).not.toBeNull();
+
+        await elapse(1500);
+
         expect([bet(container, 3), bet(container, 4), pot(container)]).toEqual(['10', '20', 'Total pot 30']);
     });
 
@@ -1374,7 +1381,7 @@ describe('a table that shows what has happened on it', () =>
             expect(useBoard().events().events, 'the store of the reader’s own game was what was heard').toEqual([]);
             expect(vibrate).not.toHaveBeenCalled();
 
-            clock.advance(400);
+            await elapse(400);
 
             expect(vibrate).toHaveBeenCalledWith([16, 40, 24]);
         }

@@ -2869,6 +2869,7 @@ html:has(.site-drawer[open])
 }
 
 .poker-bet:not([data-placed]),
+.poker-bet[data-landing],
 .poker-puck:not([data-placed])
 {
     visibility: hidden;

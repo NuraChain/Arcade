@@ -182,6 +182,43 @@ export function sameAs(shown: Felt, felt: Felt)
     return JSON.stringify({ ...shown, put: null }) === JSON.stringify({ ...felt, put: null });
 }
 
+export interface Air
+{
+    bets: readonly number[];
+    stacks: readonly number[];
+}
+
+export const STILL: Air = { bets: [], stacks: [] };
+
+export function flying(air: Air, seats: number, seat: number, toBet: number, toStack: number): Air
+{
+    return {
+        bets: Array.from({ length: seats }, (_, at) => (air.bets[at] ?? 0) + (at === seat ? toBet : 0)),
+        stacks: Array.from({ length: seats }, (_, at) => (air.stacks[at] ?? 0) + (at === seat ? toStack : 0))
+    };
+}
+
+export function drawnOf(felt: Felt, air: Air): Felt
+{
+    const coming = air.bets.reduce((sum, chips) => sum + chips, 0);
+
+    if (coming === 0 && air.stacks.every((chips) => chips === 0))
+    {
+        return felt;
+    }
+
+    return {
+        ...felt,
+        chairs: felt.chairs.map((chair) => ({ ...chair, stack: chair.stack - (air.stacks[chair.seat] ?? 0), bet: chair.bet - (air.bets[chair.seat] ?? 0) })),
+        pot: felt.pot - coming
+    };
+}
+
+export function swept(felt: Felt)
+{
+    return sealed({ ...felt, chairs: gathered(felt) });
+}
+
 export function before(felt: Felt): Felt
 {
     return {
@@ -327,9 +364,4 @@ export function through(felt: Felt, moves: readonly Told[], sight: Felt)
     }
 
     return tables;
-}
-
-export function told(felt: Felt, moves: readonly Told[], sight: Felt)
-{
-    return through(felt, moves, sight).at(-1) ?? felt;
 }

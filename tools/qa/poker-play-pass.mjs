@@ -12,6 +12,13 @@ const says = async (player) => await player.page.evaluate(() => document.querySe
 
 const drawn = async (player) => `${ await says(player) }|${ await player.page.locator('[aria-label="Poker table"]').innerHTML().catch(() => '') }`;
 
+const level = async (player, rev) => await waitFor(async () => await player.page.evaluate((least) =>
+{
+    const table = document.querySelector('.table-stage');
+
+    return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
+}, rev), 12000);
+
 try
 {
     console.log('\n[1] a heads-up poker table');
@@ -87,10 +94,14 @@ try
 
         const mover = seats.get(current.turn);
         const other = mover === dana ? mina : dana;
+        const rested = await level(mover, current.rev) && await level(other, current.rev);
         const before = await drawn(other);
         let verb = '';
 
-        await mover.page.waitForTimeout(400);
+        if (!rested)
+        {
+            record(`both tables have shown revision ${ current.rev } and are still`, false);
+        }
 
         const toggle = raised ? null : await pressable(mover.page, /^(Raise|Bet)$/);
 
@@ -107,18 +118,37 @@ try
 
             record(`${ mover.handle } is offered a raise with the slider's presets`, raise !== null);
 
-            const press = await mover.page.evaluate(() =>
+            const press = await mover.page.evaluate(async () =>
             {
                 const stage = document.querySelector('.poker-stage');
-                const seen = () => ({ rev: stage?.dataset.rev ?? '', pot: document.querySelector('.poker-pot')?.textContent?.trim() ?? '' });
+                const own = [...document.querySelectorAll('.poker-seat')].find((seat) => seat.querySelector('.poker-clock') !== null);
+                const seen = () => ({
+                    rev: stage?.dataset.rev ?? '',
+                    pot: document.querySelector('.poker-pot')?.textContent?.trim() ?? '',
+                    stack: own?.querySelector('.table-plate-facts .tally')?.textContent ?? '',
+                    flying: document.querySelectorAll('.board-flight > .flight').length
+                });
                 const was = seen();
 
                 [...document.querySelectorAll('.poker-raise button')].find((one) => /^(Raise to|Bet) /.test(one.textContent?.trim() ?? ''))?.click();
 
-                return { was, now: seen() };
+                const now = seen();
+
+                await new Promise((done) => setTimeout(done, 900));
+
+                return { was, now, landed: seen() };
             });
 
-            record(`${ mover.handle }'s chips are on the table at the press, before the server has answered`, press.now.rev === press.was.rev && press.now.pot !== press.was.pot, `${ press.was.pot } became ${ press.now.pot } at revision ${ press.now.rev }`);
+            record(
+                `${ mover.handle }'s chips leave the stack at the press, before the server has answered`,
+                press.now.rev === press.was.rev && press.now.stack !== press.was.stack && press.now.flying > 0,
+                `the stack said ${ press.was.stack }, then ${ press.now.stack } with ${ press.now.flying } in the air at revision ${ press.now.rev }`
+            );
+            record(
+                'and the pot counts them when they have landed, not before',
+                press.now.pot === press.was.pot && press.landed.pot !== press.was.pot && press.landed.flying === 0,
+                `${ press.was.pot }, ${ press.now.pot } at the press, ${ press.landed.pot } after`
+            );
             raised = true;
             verb = 'raise';
         }

@@ -3160,15 +3160,15 @@ hand was dealt. The board keeps ONE model from batch to batch and steps it with 
   read the model. The turn's ring, the clock, what a call costs, the raise's bounds, the tip
   and the turn's sentence read the view, so nobody waits to be allowed to act. The result is
   `over && !presenting`, and a plate does not say "Won" before it.
-- **A press steps the model** with the move `pressed` names (`game/helpers/poker.ts`), and the
-  presenter is told (`predict`): the first move of the answer is dropped from the batch when it
-  is that event, seat and amount, and anything else is a snap to the view. The move still out
-  is part of the table the presenter is shown (`sightNow`), so reading the same revision again
-  takes nothing back. `stale` or `failed` does.
-- **Nothing moves yet.** A batch is applied whole, in one scene of no length, which is why the
-  stage says `data-presenting` for a turn of the event loop. The board hears the events it is
-  HANDED (`tableCues` on `props.events`): it listened to the store of the reader's own game,
-  and somebody watching heard nothing.
+- **A press is a scene of its own**, played at once and ahead of nothing (`presenter.act`):
+  it steps the model with the move `pressed` names (`game/helpers/poker.ts`), and the
+  presenter is told (`predict`). The first move of the answer is dropped from the batch when
+  it is that event, seat and amount, and anything else is a snap to the view. The move still
+  out is part of the table the presenter is shown (`sightNow`), so reading the same revision
+  again takes nothing back. `stale` or `failed` does, by a scene that flies the chips home.
+- **A batch is played a move at a time** (*Chips travel*, below), from the events the board is
+  HANDED. It listened to the store of the reader's own game for its sounds, and somebody
+  watching heard nothing.
 
 `poker-felt.spec.ts` plays whole games through the real engine with a seeded die, at two, six
 and nine seats. For every seat and for nobody, the model stepped from `before` is the model of
@@ -3181,6 +3181,55 @@ move the engine logs for every action of three games. `poker-board.spec.ts` (*a 
 shows what has happened on it*) holds the press, its answer, the second read, the refusal,
 somebody else's action reaching the table first, the opening, the result's wait, the game
 after it, and the events handed in.
+
+**Chips travel, and a number counts them when they land.** One scene a move, in the order of the
+log (`play` in the board). A batch that arrives through the events effect waits one microtask
+before its first scene, as hokm's does: a scene started inside an effect cannot measure a page
+the effect has not finished drawing, and every flight would be skipped for want of a place to
+land.
+
+- **`blind`, `call`, `raise`, `allin`**: one to five discs, the count the bet will show, leave
+  the plate and land on the bet's own stack of discs (`pour` in `game/stage/chips.ts`, 300 ms,
+  45 ms apart). The seat's stack drops when they leave. The bet and "Total pot" count them when
+  the last one lands, so D7 holds as it was written: the total is every chip put in.
+- **The ledger** is `drawnOf(felt, air)` in `poker-felt.ts`. The model is stepped at the
+  launch, and what is drawn is the model less the chips in the air: `air.bets` on their way to
+  a seat's bet, `air.stacks` on their way to a seat's stack. Drawn stacks, the drawn pot and
+  the air are together what the table holds at every step, and `poker-felt.spec.ts` holds
+  that over a whole game.
+- **A first bet has its pill before its chips**: there, hidden (`data-landing`), and saying the
+  number it will have, so the disc the chips fly to is measured where it will stand
+  (`seatChips` is run before the measuring, not a frame later). A bet that grows keeps saying
+  what it said until the rest lands, and is the pill it was.
+- **A street closes**: before a `board`, a `show` or a `pot`, the bets in front are swept to
+  the middle (`swept`). The pills go as their discs leave, the discs fly to the pot's own
+  stack 40 ms apart, and no number changes, because the pot had counted them already.
+- **`refund`**: from the bet's discs, or the pot's when the bets are in, back to the plate.
+  The stack counts them when they are home.
+- **`check`**: the plate knocks. It is the real plate, moved by `translate`.
+- **A refused press** flies its chips back from the bet to the plate (`takeBack`, with
+  `deny`) and then sets the table to what the server says.
+- **The cues are the scenes'.** `pokerBeats` and `tableCues` are gone, and poker was their only
+  caller: a chip is heard when it lands, the shuffle and the slides inside the deal's scene,
+  a pot's chips as it is paid and the reader's own win a beat after them (`POT_WON`), never on
+  top of them. Everything is heard in the order it is seen,
+  by somebody watching too, and with less motion every cue still fires in its place, because
+  the kit turns a flight into a fade and leaves the timers alone. A table set down as it
+  stands (a jump, a hidden tab) is silent.
+- **Still drawn at once**, until 5.4 and 5.5: the cards (dealt, turned, mucked), the puck, and
+  a pot paid to its winners.
+- **Two gaps, two names.** `CHIP_GAP` in the board is the 4 pixels between a bet and whatever
+  it stands beside. The 45 ms between two discs is `DISC_GAP` in `game/poker-beats.ts`. They
+  were one name for an hour: the import was shadowed without a word from the bundler, three
+  discs landed 4 ms apart, and it was the stepped clock of the spec that said so.
+
+`poker-motion.spec.ts` (the page's boxes given sizes, as hokm's specs give them) holds the
+launch and the landing of a raise, a bet that grows, the gather before the flop, the press, a
+refusal flown home, a table read afresh in the middle of a flight, and less motion.
+`poker-cues.spec.ts` holds the order of what is heard, for a player, with less motion and for
+a watcher, a press laid once, and the silence of a table that is set down. `chips.spec.ts`
+holds the pour. `poker-play-pass.mjs` wants the reader's stack to have dropped at the press
+with a disc in the air, and the pot to count the chips only once they have landed.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
@@ -3862,10 +3911,10 @@ switching tables never has to unlock audio again. The spec is
   tap, and the dock and the table menu turn it off in one press.
 - **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);
   backgammon's sounds are made by the table itself, each at the moment the thing it belongs to
-  lands (*The stage*, below); poker goes through `components/games/table-cues.ts`, which maps a
-  batch of its events to timed cues and haptics and plays nothing for a batch that was on screen at
-  mount, that has a gap in it, or that arrives in a hidden tab. The chime for a turn that becomes
-  the reader's is `turnChime` in the same file, handed whichever sound handle the board holds, so a
+  lands (*The stage*, below); poker's by its scenes as well (*Chips travel*, under *Poker*). It
+  went through a table of timed cues worked out from a batch (`pokerBeats`), tied to nothing on
+  the felt, until its chips flew. The chime for a turn that becomes the reader's is `turnChime`
+  in `components/games/table-cues.ts`, handed whichever sound handle the board holds, so a
   board has one handle. Poker's chips are two more Kenney recordings,
   `chip-lay` for a bet and `chips-stack` for a pot, which is why the pack is 20 takes of 14 cues.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
@@ -3963,8 +4012,8 @@ nothing in flight can widen a page the matrix measures.
   the result and takes the row away before the scene that shows the last card has begun.
 - **The watermark belongs to a MATCH, and it is the presenter's.** A rematch at the same table can
   reuse the board instance; the first sight of a match id is a reset, and a batch after it plays
-  from its first card. `table-cues` resets the same way for poker. `sent` names its match for the
-  same reason: the next match comes to the same revision.
+  from its first card. `sent` names its match for the same reason: the next match comes to the
+  same revision.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
 - **The two-handed draw is played on the felt, by the card and the stock, and rings once.** A stock
@@ -4285,8 +4334,9 @@ point with the mouse held down and taps the points of the board for the other ho
 point is taken from the layout module the board is drawn from - and fails if a button for a move
 is on show under the board. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
-wants the raise in the pot in the turn of the press and at the revision it was pressed on (the
-press and the read are one evaluation in the page, so no answer can have come between them),
+wants the raise out of the reader's stack and in the air in the turn of the press, at the
+revision it was pressed on (the press and the read are one evaluation in the page, so no
+answer can have come between them), and in the pot only once it has landed,
 and both finish over the api and assert the result in both browsers. What "the other browser saw it"
 means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,
 so the opponent's "Dana is playing" is rightly unchanged, and the first version of the pass called
