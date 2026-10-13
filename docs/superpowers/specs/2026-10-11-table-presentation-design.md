@@ -2324,6 +2324,15 @@ motion of 5.3b and 5.4 will carry.
   The count a pill shows at rest is the count that flies to it. The pot wears the same stack.
   D6 stands: the pill's box is what it was, so *The bet spot* is unchanged.
 
+**As built (the reader's row, between 5.3b and 5.4).** A flight needs the place it lands on to
+stay where it was measured, and the reader's two cards did not: the row centred the cards, the
+things to press and the lamp as one group, so the cards moved about 110px whenever the things
+to press came or went. The row is three columns now, with the cards in the middle one and the
+things to press and the lamp after them, and the third column is as wide whatever stands in
+it. The lamp is still the last thing in the row, after the room of three things whether they
+are there or not; its bubble is no wider than that room and the lamp, so it opens over them
+and not over the cards.
+
 **As built (commit 5.3b, chips travel).** The rows `blind` to `allin`, `check`, "A street
 closes", `refund`, "The reader acts" and "A refused or stale action" of the table of scenes.
 

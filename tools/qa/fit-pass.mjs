@@ -806,7 +806,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
         const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc, .poker-hand .poker-muck')].filter(shown);
 
-        for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .poker-hand > .coach-line')].filter(shown))
+        for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .poker-side > .coach-line')].filter(shown))
         {
             const seat = one.closest('.hokm-seat');
 

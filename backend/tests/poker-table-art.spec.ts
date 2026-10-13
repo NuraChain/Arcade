@@ -177,11 +177,62 @@ describe('what the reader holds and presses at a poker table', () =>
     {
         const row = rem(ruleOf('.poker-hand'), 'min-block-size');
         const disc = rem(ruleOf('.poker-disc'), 'block-size');
-        const lamp = rem(ruleOf('.poker-hand > .coach-line[data-lamp]'), 'margin-block-end');
+        const lamp = rem(ruleOf('.poker-side > .coach-line[data-lamp]'), 'margin-block-end');
 
         expect(disc).toBe(2.75);
         expect(row, 'the row is not as tall as the lamp that stands in it on the reader\'s turn').toBeCloseTo(disc + lamp, 5);
         expect(rem(ruleOf('.poker-muck'), 'block-size'), 'the fold is not the size of the chips beside it').toBe(disc);
+    });
+
+    it('keeps the reader\'s cards where they are when the things to press come and go: the cards have the middle column, and the column after them is as wide whatever stands in it', () =>
+    {
+        const row = ruleOf('.poker-hand');
+        const side = ruleOf('.poker-side');
+        const floor = /\n    grid-template-columns: minmax\(0, 1fr\) auto minmax\(min\(([0-9.]+)rem, 100% - 2 \* var\(--card-w\) - ([0-9.]+)rem\), 1fr\);/.exec(row);
+        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp]'), 'inline-size');
+        const needed = rem(side, 'margin-inline-start') + rem(ruleOf('.poker-acts'), 'min-inline-size') + rem(side, 'gap') + lamp;
+
+        expect(row).toContain('display: grid;');
+        expect(floor, 'the cards are not between two columns that share what is left, the second with a floor that does not depend on what is in it').not.toBeNull();
+        expect(row, 'the row is one centred group again, and the cards move over when the things to press come').not.toContain('justify-content: center;');
+        expect(row, 'a gap is kept before the cards on a narrow row, where there is nothing before them').not.toMatch(/\n    (column-)?gap:/);
+        expect(Number(floor?.[1]), 'the column is not kept wide enough for three things, the lamp and a longer word under one of them').toBeGreaterThan(needed);
+        expect(Number(floor?.[2]), 'on a narrow row the column is not all that the two cards leave').toBe(rem(ruleOf('.poker-hole'), 'gap'));
+        expect(ruleOf('.poker-own')).toContain('grid-area: 1 / 2;');
+        expect([side, side]).toEqual([expect.stringContaining('grid-area: 1 / 3;'), expect.stringContaining('justify-self: start;')]);
+        expect(sheet, 'on a narrow stage the table reaches into the page\'s padding and the reader\'s row does not, so three things and the lamp run off a small phone').toContain(
+            '    .poker-stage .table-fit,\n    .poker-stage .table-hand\n    {\n        margin-inline: calc(0.375rem - var(--page-pad, 1rem));\n    }'
+        );
+    });
+
+    it('writes the name of the reader\'s hand without moving their cards: over them it takes no room of its own, and beside them on a low stage it has the column before theirs', () =>
+    {
+        const name = ruleOf('.poker-hand-name');
+        const low = sheet.slice(sheet.indexOf('\n@container stage (max-height: 24rem)\n{\n    .poker-hand\n'));
+        const beside = sheet.slice(sheet.indexOf('\n@container stage (max-height: 24rem)\n{\n    .poker-hand-name\n'));
+
+        expect(name, 'a long name puts the reader\'s cards further from the edge than a short one').toContain('\n    inline-size: 0;\n    min-inline-size: 100%;');
+        expect(name).toContain('text-align: center;');
+        expect(name, 'the name is cut short at the width of two cards').not.toMatch(/overflow: hidden|text-overflow: ellipsis/);
+        expect(ruleOf('.poker-hole')).toContain('grid-area: 1 / 2;');
+        expect(low.slice(0, low.indexOf('\n}\n')), 'on a low stage the name and the cards are one box again, and the name moves the cards').toContain('    .poker-own\n    {\n        display: contents;\n    }');
+        expect(beside.slice(0, beside.indexOf('\n}\n'))).toContain('grid-area: 1 / 1;\n        justify-self: end;');
+        expect(beside.slice(0, beside.indexOf('\n}\n')), 'a long name on a low stage runs under the cards').toContain('max-inline-size: calc(100% - 0.5rem);\n        margin-inline-end: 0.5rem;\n        text-overflow: ellipsis;');
+    });
+
+    it('keeps the room of three things to press before the lamp, whether they are there or not, and opens the tip back over that room and never over the cards', () =>
+    {
+        const thing = rem(ruleOf('.poker-thing'), 'min-inline-size');
+        const three = 3 * thing + 2 * rem(ruleOf('.poker-acts'), 'gap');
+        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp]'), 'inline-size');
+        const bubble = ruleOf('.poker-side > .coach-line[data-lamp][data-open] > span:last-child');
+        const wide = Number(/\n    inline-size: min\(([0-9.]+)rem, 100cqw - 2rem\);/.exec(bubble)?.[1]);
+
+        expect(rem(ruleOf('.poker-acts'), 'min-inline-size'), 'two things to press take less room than three, and the lamp moves').toBeCloseTo(three, 5);
+        expect(rem(ruleOf('.poker-side::before'), 'inline-size'), 'the room kept while there is nothing to press is not the room of three things').toBeCloseTo(three, 5);
+        expect(ruleOf('.poker-side:has(> .poker-acts)::before'), 'the room is kept beside the things it was kept for').toContain('display: none;');
+        expect(ruleOf('.poker-side > .coach-line[data-lamp] > span:last-child'), 'the tip opens away from the things to press').toContain('inset-inline-end: 0;');
+        expect(wide, 'the tip is wider than the things to press and the lamp, and lies over the reader\'s cards').toBeLessThanOrEqual(three + rem(ruleOf('.poker-side'), 'gap') + lamp);
     });
 
     it('draws the discs of a bet inside the box its dot had, one edge under the top disc for each disc more', () =>

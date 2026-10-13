@@ -82,6 +82,13 @@ try
     console.log('\n[3] actions taken by pressing the controls');
 
     let raised = false;
+    const places = new Map();
+    const pocketAt = async (player) => await player.page.evaluate(() =>
+    {
+        const pocket = document.querySelector('.poker-pocket');
+
+        return pocket === null ? null : Math.round(pocket.getBoundingClientRect().left);
+    });
 
     for (let action = 0; action < CLICKED_ACTIONS; action += 1)
     {
@@ -101,6 +108,16 @@ try
         if (!rested)
         {
             record(`both tables have shown revision ${ current.rev } and are still`, false);
+        }
+
+        for (const player of [mover, other])
+        {
+            const at = await pocketAt(player);
+
+            if (at !== null)
+            {
+                places.set(player.handle, new Set([...(places.get(player.handle) ?? []), at]));
+            }
         }
 
         const toggle = raised ? null : await pressable(mover.page, /^(Raise|Bet)$/);
@@ -167,6 +184,12 @@ try
         record(`${ mover.handle }'s ${ verb } reaches the server`, moved);
         record(`${ other.handle } sees it without reloading`, await waitFor(async () => (await drawn(other)) !== before, 8000), verb);
     }
+
+    record(
+        'nobody\'s cards moved when the things to press came and went',
+        places.size === 2 && [...places.values()].every((seen) => seen.size === 1),
+        [...places].map(([handle, seen]) => `${ handle }'s first card stood at ${ [...seen].join(' and at ') }`).join(', ')
+    );
 
     const beside = await dana.page.evaluate(() => ({
         bar: document.querySelector('main .table-grid > .table-bar') !== null,

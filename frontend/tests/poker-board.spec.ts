@@ -171,8 +171,10 @@ describe('PokerBoard', () =>
         expect(live.textContent).toBe('Your turn. 20 to call.');
         expect(container.querySelectorAll('.poker-clock')).toHaveLength(1);
         expect([...mine.querySelectorAll('.table-plate-trail .poker-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
-        expect(hand.lastElementChild?.getAttribute('role'), 'the tip is not the last thing in the hand').toBe('note');
-        expect(hand.lastElementChild?.getAttribute('data-lamp')).toBe('true');
+        expect(hand.lastElementChild?.classList.contains('poker-side'), 'the things to press and the tip are not kept together after the cards').toBe(true);
+        expect([...hand.lastElementChild!.children].map((one) => one.className.split(' ')[0]), 'the things to press do not come before the tip').toEqual(['poker-acts', 'coach-line']);
+        expect(hand.lastElementChild?.lastElementChild?.getAttribute('role'), 'the tip is not the last thing in the hand').toBe('note');
+        expect(hand.lastElementChild?.lastElementChild?.getAttribute('data-lamp')).toBe('true');
         expect(container.querySelectorAll('[role="note"]'), 'the tip is drawn in two places').toHaveLength(1);
         expect([...container.querySelectorAll('.poker-hand button')].map((one) => one.textContent?.trim())).toEqual(['Fold', 'Call 20', 'Raise']);
         expect([...container.querySelectorAll('button')].every((one) => one.closest('.poker-hand') !== null)).toBe(true);

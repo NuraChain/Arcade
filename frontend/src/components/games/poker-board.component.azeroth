@@ -1137,57 +1137,59 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                             </ul>
                         </div>
 
-                        <Show when={ myTurn }>
-                            { () =>
-                                <div class="poker-acts">
-                                    <Show when={ owing }>
-                                        { () =>
-                                            <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('fold') }>
-                                                <span class="poker-muck" aria-hidden="true">
-                                                    <span class="card-back"></span>
-                                                    <span class="card-back"></span>
-                                                </span>
-                                                <span class="poker-thing-says">{ locale.t('poker.fold') }</span>
-                                            </button>
-                                        }
-                                    </Show>
-                                    <Show
-                                        when={ owing }
-                                        fallback={
-                                            <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('check') }>
-                                                <span class="poker-disc" data-act="check" aria-hidden="true"><Icon name="hand" size={ 18 } /></span>
-                                                <span class="poker-thing-says">{ locale.t('poker.check') }</span>
-                                            </button>
-                                        }
-                                    >
-                                        { () =>
-                                            <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('call') }>
-                                                <span class="poker-disc" data-act="call" aria-hidden="true"></span>
-                                                <span class="poker-thing-says">{ callSays }</span>
-                                            </button>
-                                        }
-                                    </Show>
-                                    <Show when={ raisable }>
-                                        { () =>
-                                            <button type="button" class="poker-thing" aria-pressed={ raising } disabled={ board.busy() } onClick={ openRaise }>
-                                                <span class="poker-disc" data-act="raise" aria-hidden="true"><Icon name="add" size={ 18 } /></span>
-                                                <span class="poker-thing-says">{ opening ? locale.t('poker.bet') : locale.t('poker.raise') }</span>
-                                            </button>
-                                        }
-                                    </Show>
-                                    <Show when={ shoving }>
-                                        { () =>
-                                            <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void raise() }>
-                                                <span class="poker-disc" data-act="allin" aria-hidden="true"></span>
-                                                <span class="poker-thing-says">{ locale.t('poker.allin', { chips: chips(high) }) }</span>
-                                            </button>
-                                        }
-                                    </Show>
-                                </div>
-                            }
-                        </Show>
+                        <div class="poker-side">
+                            <Show when={ myTurn }>
+                                { () =>
+                                    <div class="poker-acts">
+                                        <Show when={ owing }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('fold') }>
+                                                    <span class="poker-muck" aria-hidden="true">
+                                                        <span class="card-back"></span>
+                                                        <span class="card-back"></span>
+                                                    </span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.fold') }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show
+                                            when={ owing }
+                                            fallback={
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('check') }>
+                                                    <span class="poker-disc" data-act="check" aria-hidden="true"><Icon name="hand" size={ 18 } /></span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.check') }</span>
+                                                </button>
+                                            }
+                                        >
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('call') }>
+                                                    <span class="poker-disc" data-act="call" aria-hidden="true"></span>
+                                                    <span class="poker-thing-says">{ callSays }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show when={ raisable }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" aria-pressed={ raising } disabled={ board.busy() } onClick={ openRaise }>
+                                                    <span class="poker-disc" data-act="raise" aria-hidden="true"><Icon name="add" size={ 18 } /></span>
+                                                    <span class="poker-thing-says">{ opening ? locale.t('poker.bet') : locale.t('poker.raise') }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show when={ shoving }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void raise() }>
+                                                    <span class="poker-disc" data-act="allin" aria-hidden="true"></span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.allin', { chips: chips(high) }) }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                    </div>
+                                }
+                            </Show>
 
-                        <CoachLine tip={ tip } lamp />
+                            <CoachLine tip={ tip } lamp />
+                        </div>
                     </div>
                 }
             </Show>

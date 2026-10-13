@@ -3017,7 +3017,8 @@ their hand under the table:
     the plate's `trail`). Another seat on turn wears the ring round its face and no number, and
     its time is said to a screen reader from the same plate;
   - **the tip's lamp is the last thing in the reader's hand**, as hokm's is in its row, and its
-    bubble opens over the table from the lamp's own end;
+    bubble opens from the lamp's own end, back over the things to press and no wider than
+    they are, so it never lies on the reader's cards;
   - **"Last hand" and the blinds are beside the pot** (`.poker-tally`): a round button with the
     history mark, the pot, and "10/20". The street, the hands until the blinds rise and the
     level are said in the same place to a screen reader: the cards on the board already show
@@ -3122,6 +3123,46 @@ and on a large screen a table 1,480 wide with plates 100 wide and a board 280 wi
   empty places now, as the board shows its slots. It goes when the reader is out, and a
   watcher has none. On a stage under 24rem tall the reader's cards are 36px wide, which is
   what lets the table be 70% of a turned phone's width.
+- **The reader's cards keep their place when the things to press come and go.** The row was
+  one centred group of cards, things to press and lamp, so the cards stood about 110px
+  further along whenever it was not the reader's turn, and moved over when it was: every
+  turn, and under a card that was being dealt to them. The row is a grid of three columns
+  now, with the cards in the middle one and the things to press and the lamp in
+  `.poker-side`, from the start of the third. The outer two are `1fr`, and the third has a
+  floor that does not depend on what stands in it: 16rem, or on a narrow row whatever the
+  two cards leave. So on a wide stage the two share what is left evenly and the cards are
+  under the reader's plate; on a phone the third takes all there is, the cards stand at the
+  start of the row, and a longer word under a chip ("All in, 1,480") has room without
+  moving them. No query does it: the row can be narrower than the stage a query would ask
+  about (`data-beside`). The columns have NO gap: the space after the cards is
+  `.poker-side`'s own margin, because a column gap is kept before the cards as well, where
+  a phone has nothing, and those twelve pixels are what three things and a lamp need at
+  320px. On a stage under 36rem wide the row reaches into the page's padding as the table
+  does, for the same reason. The matrix has cells 320px wide and the fit pass has none: for
+  anything that changes this row, run the matrix first.
+- **The lamp keeps its place too, after the room of three things.** `.poker-acts` is never
+  narrower than three things and the two gaps between them, and while there is nothing to
+  press an empty `::before` of `.poker-side` keeps the same room (`:has()` takes it away
+  when the things come): a reader who is all in has a tip and nothing to press. The tip is
+  no wider than that room and the lamp, and opens from the lamp's own end, so it lies over
+  the things to press and never over the cards. Two versions were tried and dropped. The
+  lamp BEFORE the cards: its bubble opened over the corners of both cards, where their
+  ranks are. Room kept by what was in the column: check and raise are two things, a thing
+  narrower than fold, call and raise, and the play pass found a phone's cards 54px along.
+  `poker-table-art.spec.ts` holds the columns, the floor, the room kept and the bubble's
+  width, and `poker-play-pass.mjs` wants each player's first card at ONE place through
+  eight turns, on a desk and on a phone.
+- **The name of the hand does not move the cards either.** Over the cards it widened their
+  box whenever it was longer than two cards ("Full house, aces over kings" on a phone), and
+  on a stage under 24rem tall, where it stands beside them, it shared their box and every
+  change of name moved them by half of it. Over the cards it has `inline-size: 0;
+  min-inline-size: 100%` now: it takes no room of its own and is as wide as the cards,
+  centred when it fits and running on past their end when it does not (a line too long for
+  `text-align: center` is start-aligned, which is what is wanted). It is no longer cut
+  with an ellipsis. On a low stage `.poker-own` is `display: contents`, the cards have the
+  middle column to themselves and the name the column before it, ending against them and
+  cut if that column is too narrow. Seen in the browser by writing four names, from none to
+  36 letters, into the caption at five sizes: no card and no thing to press moved.
 
 `poker-seats.spec.ts` holds the rail (every seat the same way in from the edge, at two, six and
 nine seats and eight shapes), the mirror, the even steps and the facing; `poker-board.spec.ts`
