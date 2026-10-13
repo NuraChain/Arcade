@@ -3546,6 +3546,31 @@ cell for a table that is shown down: it stands for two seconds and cannot be ope
 `poker-motion-pass.mjs` holds one with the page's clock stopped and measures it at nine
 sizes from 320 to 1440 wide, and a table of nine at six.
 
+**The turn is passed when the table has shown it passing** (6.2). The ring round a face read
+`view.turn`, and the view is the hand the server is in: a raise's chips were still in the air
+and the next seat already wore the ring, and after a fold that ended a hand the ring went to
+whoever opens the NEXT hand while the felt still showed the old one, on a plate that said
+Folded. The turn is part of the felt now (`Felt.turn`), and the plates read `felt.turn`.
+
+- **A seat that checks, calls, raises or goes all-in is on turn while that is shown**, and
+  nobody is while the table does anything else: a fold, a blind, a deal, a street, a refund,
+  a hand shown, a pot paid, a hand ended, a seat put out. `step` says so for every move.
+- **Nothing told says who is next**, so the turn is put right from the view when the table is
+  level with it: `reset`, which `mend` runs whenever nothing is playing, keeps the felt it
+  holds and takes the view's turn. That is when the chips have landed.
+- **`sameAs` does not count the turn**, as it does not count `put`: two tables are the same
+  table whoever is to act at them, and the parity with the engine is chip for chip. The
+  board's own `same` is `level`, which does count it, so a table that differs from the view
+  only in its turn is still put right.
+- A press that is out is part of the view the board asks for (`sightNow` steps it), so the
+  ring stays on the reader through their own call or raise until the server has answered,
+  and leaves them at once when they fold.
+
+`poker-felt.spec.ts` holds the step for every kind of move and that the model never has a seat
+on turn that did nothing in the action, over whole games; `poker-motion.spec.ts` holds the
+ring on a raiser until the chips have landed and on nobody through a fold and the deal after
+it. Sixteen faults put into the code one at a time were each caught by a spec.
+
 **What moves on the table has a pass of its own**, `tools/qa/poker-motion-pass.mjs`, six seats
 and somebody watching, then a table of nine: where every disc and card set off from and came
 to rest, the chips in play at every frame, the press answered within two frames, a flop

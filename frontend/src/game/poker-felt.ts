@@ -64,10 +64,12 @@ export interface Felt
     last: Last | null;
     winner: number | null;
     dealt: boolean;
+    turn: number | null;
 }
 
 export interface Board
 {
+    turn?: number;
     street: Street;
     hand: number;
     button: number;
@@ -114,10 +116,13 @@ export const EMPTY: Felt = {
     paid: [],
     last: null,
     winner: null,
-    dealt: false
+    dealt: false,
+    turn: null
 };
 
 const NO_CARDS: readonly number[] = [];
+
+const ACTS: ReadonlySet<Told['e']> = new Set(['check', 'call', 'raise', 'allin']);
 
 const HOLE = 2;
 
@@ -178,13 +183,14 @@ export function feltOf(board: Board, reader: number | null): Felt
         paid: ended ? last.pots : [],
         last,
         winner: board.winner ?? null,
-        dealt: true
+        dealt: true,
+        turn: board.winner === undefined ? (board.turn ?? null) : null
     };
 }
 
 export function sameAs(shown: Felt, felt: Felt)
 {
-    return JSON.stringify({ ...shown, put: null }) === JSON.stringify({ ...felt, put: null });
+    return JSON.stringify({ ...shown, put: null, turn: null }) === JSON.stringify({ ...felt, put: null, turn: null });
 }
 
 export interface Air
@@ -334,11 +340,20 @@ export function before(felt: Felt): Felt
         paid: [],
         last: null,
         winner: null,
-        dealt: false
+        dealt: false,
+        turn: null
     };
 }
 
 export function step(felt: Felt, move: Told, hole: readonly number[] = NO_CARDS): Felt
+{
+    const next = moved(felt, move, hole);
+    const turn = ACTS.has(move.e) && move.seat !== undefined ? move.seat : null;
+
+    return next.turn === turn ? next : { ...next, turn };
+}
+
+function moved(felt: Felt, move: Told, hole: readonly number[]): Felt
 {
     const { seat, amount = 0 } = move;
 

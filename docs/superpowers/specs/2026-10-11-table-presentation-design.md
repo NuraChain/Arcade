@@ -2527,6 +2527,12 @@ moved one game a commit, and each takes the turn from what its own log can say:
   a capture and a pawn come home keep the turn and only the engine knows; a seat that leaves
   while it is theirs loses it, and a finished game has nobody on turn. The view puts it right
   when the pawn has landed.
+- **Poker.** The turn is a field of the felt, a seat or nobody. A seat that checks, calls,
+  raises or goes all-in has it while that is shown, and nobody has it while the table folds a
+  hand, deals, turns a street, shows down or pays. The view puts it right when the table is
+  level with it, which is when the chips have landed; the comparison with the engine does not
+  count it. Seen before the change: the ring on the next seat while a raise was in the air, and
+  on a plate that said Folded while a finished hand was still being paid.
 
 ## 7. Spectators
 

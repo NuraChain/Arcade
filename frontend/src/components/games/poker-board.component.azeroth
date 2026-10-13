@@ -369,11 +369,13 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         arriving = air.cards;
     });
 
+    const level = (sight: Sight<Felt>) => sameAs(held, sight.view) && held.turn === sight.view.turn;
+
     const reset = (sight: Sight<Felt>) =>
     {
         layer?.replaceChildren();
         air = STILL;
-        held = sameAs(held, sight.view) ? held : sight.view;
+        held = sameAs(held, sight.view) ? (level(sight) ? held : { ...held, turn: sight.view.turn }) : sight.view;
         show();
     };
 
@@ -1118,7 +1120,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         history: HISTORY,
         before: (sight) => ({ ...sight, view: before(sight.view) }),
         reset,
-        same: (sight) => sameAs(held, sight.view),
+        same: level,
         settle: reset,
         play,
         estimate: (acts) =>
@@ -1272,7 +1274,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         return Math.min(high, Math.max(low, target));
     };
 
-    derived turnSeat = view?.turn;
+    derived turnSeat = felt.turn;
 
     derived button = felt.button;
 

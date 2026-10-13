@@ -60,6 +60,53 @@ describe('chips that travel on a poker table', () =>
         expect(presenting(container)).toBeNull();
     });
 
+    it('keep the turn on whoever put them in until they have landed, and pass it then', async () =>
+    {
+        const { container, read } = await seated(match());
+        const worn = () => [...container.querySelectorAll('.poker-seat')]
+            .filter((seat) => seat.querySelector('.table-plate')?.hasAttribute('data-turn') === true)
+            .map((seat) => Number(seat.getAttribute('data-seat')));
+
+        expect(worn()).toEqual([1]);
+
+        await read(called(1, 60, 2), heard(1, told(8, 1, { e: 'raise', seat: 1, amount: 60 })));
+
+        expect(worn(), 'the turn was passed while the chips that end it were in the air').toEqual([1]);
+
+        await elapse(CHIP_FLY + 2 * DISC_GAP);
+
+        expect(worn()).toEqual([2]);
+    });
+
+    it('take the turn off a seat that folds, and give it to nobody while the table deals the next hand', async () =>
+    {
+        const { container, read } = await seated(match());
+        const worn = () => [...container.querySelectorAll('.poker-seat')]
+            .filter((seat) => seat.querySelector('.table-plate')?.hasAttribute('data-turn') === true)
+            .map((seat) => Number(seat.getAttribute('data-seat')));
+        const dealt = match(
+            { hand: 2, button: 3, turn: 0, pot: 30, pots: [{ amount: 30, eligible: EVERYBODY }], seats: rows({ 1: { folded: false }, 4: { stack: 1490, bet: 10 }, 5: { stack: 1480, bet: 20 } }), hole: [5, 18] },
+            { rev: 8, turn: 0 }
+        );
+
+        await read(dealt, heard(1, told(8, 1,
+            { e: 'fold', seat: 1, amount: 0 },
+            { e: 'pot', amount: 30, winners: [4] },
+            { e: 'end', hand: 1 },
+            { e: 'deal', hand: 2, button: 3, small: 10, big: 20 },
+            { e: 'blind', seat: 4, amount: 10 },
+            { e: 'blind', seat: 5, amount: 20 }
+        )));
+        await elapse(200);
+
+        expect(presenting(container)).toBe('true');
+        expect(worn(), 'somebody wore the turn while a fold was shown and the next hand was dealt').toEqual([]);
+
+        await elapse(9000);
+
+        expect([presenting(container), worn()]).toEqual([null, [0]]);
+    });
+
     it('take their own time when they ask the reader over a table that is not behind', async () =>
     {
         const { container, read } = await seated(match());

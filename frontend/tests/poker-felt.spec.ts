@@ -40,7 +40,7 @@ const feltAt = (state: PokerState, reader: number | null = null) => feltOf(poker
 
 const readersOf = (seats: number) => [null, ...Array.from({ length: seats }, (_, seat) => seat)];
 
-const drawn = (felt: Felt) => ({ ...felt, put: null });
+const drawn = (felt: Felt) => ({ ...felt, put: null, turn: null });
 
 const alike = (one: unknown, other: unknown) => JSON.stringify(one) === JSON.stringify(other);
 
@@ -117,9 +117,12 @@ describe('the poker table as it has been shown', () =>
                 for (const [at, frame] of frames.entries())
                 {
                     const where = `action ${ at }, read by ${ String(reader) }`;
+                    const acted = frame.moves.flatMap((move) => (['check', 'call', 'raise', 'allin'].includes(move.e) && move.seat !== undefined ? [move.seat] : []));
+                    const turn = shown[at].turn;
 
                     expect(drawn(shown[at]), where).toEqual(drawn(feltAt(frame.state, reader)));
                     expect(shown[at].put, `what each seat has put in, ${ where }`).toEqual(frame.state.put);
+                    expect(turn === null || acted.includes(turn), `${ where }: the table has seat ${ String(turn) } on turn, who did nothing in it`).toBe(true);
                 }
             }
         });
@@ -656,6 +659,47 @@ describe('the poker table as it has been shown', () =>
         expect(EMPTY.chairs).toEqual([]);
         expect([EMPTY.board, EMPTY.hole, EMPTY.pots, EMPTY.tabled, EMPTY.paid]).toEqual([[], [], [], [], []]);
         expect([EMPTY.last, EMPTY.winner, EMPTY.reader]).toEqual([null, null, null]);
-        expect(step(EMPTY, { e: 'check', seat: 0, amount: 0 })).toBe(EMPTY);
+        expect(step(EMPTY, { e: 'check', seat: 0, amount: 0 }), 'a check moved something other than the turn').toEqual({ ...EMPTY, turn: 0 });
+        expect(step(EMPTY, { e: 'check', amount: 0 }), 'a table that changes nothing was built again').toBe(EMPTY);
+    });
+
+    it('shows the turn on whoever is betting, checking or calling while it is shown, and on nobody while the table does anything else', () =>
+    {
+        const frames = played(6, 13);
+        const table = feltAt(frames[0].state, 2);
+        const seat = table.turn ?? 0;
+
+        expect(table.turn, 'a table read from a board has nobody on turn').toBe(pokerEngine.turnOf(frames[0].state));
+        expect([EMPTY.turn, before(table).turn]).toEqual([null, null]);
+        expect(feltOf({ ...(pokerEngine.view(frames[0].state, 2) as Board), winner: 3 }, 2).turn, 'a finished table has somebody on turn').toBeNull();
+
+        for (const e of ['check', 'call', 'raise', 'allin'] as const)
+        {
+            expect(step({ ...table, turn: null }, { e, seat, amount: 40 }).turn, e).toBe(seat);
+        }
+
+        for (const move of [
+            { e: 'fold', seat, amount: 0 },
+            { e: 'blind', seat, amount: 10 },
+            { e: 'deal', hand: 2, button: 0, small: 10, big: 20 },
+            { e: 'board', street: 'flop', cards: [1, 2, 3] },
+            { e: 'refund', seat, amount: 10 },
+            { e: 'pot', amount: 30, winners: [seat] },
+            { e: 'end', hand: 1 },
+            { e: 'bust', seat },
+            { e: 'forfeit', seat },
+            { e: 'finish', seat }
+        ] as const)
+        {
+            expect(step(table, move as Told).turn, move.e).toBeNull();
+        }
+    });
+
+    it('takes two tables for the same one whoever is on turn at them: nothing told says who is next', () =>
+    {
+        const table = feltAt(played(6, 13)[0].state, 2);
+
+        expect(sameAs({ ...table, turn: null }, table)).toBe(true);
+        expect(sameAs({ ...table, turn: 4 }, { ...table, turn: 1 })).toBe(true);
     });
 });
