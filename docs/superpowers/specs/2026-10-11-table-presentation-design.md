@@ -1938,8 +1938,9 @@ unchanged. Where it differs from what this section said:
 - **A pressed card stays in the hand, lifted, until the felt lays it**, whether or not the server
   has answered by then (`lifted`). The hand reads the view, and on a busy felt the answer arrives
   before the hurried scenes in front have finished.
-- **Still to come**: the turn-over of another seat's card (it fades in from its seat as before),
-  trump travelling to the medal, the crown's travel and the fan's FLIP.
+- **Still to come** when this was written: the turn-over of another seat's card (it faded in
+  from its seat), trump travelling to the medal, the crown's travel and the fan's FLIP. The
+  fan came in 4.4, the crown in 4.5b and the turn-over in 4.6a, below.
 
 **As built (commit 4.5, the deal).** The deal row of the table above, without the hand's end.
 
@@ -1986,6 +1987,19 @@ table above.
   by 844 and 538 px at 1280 by 800, where an empty row had cost it 25 px until this commit.
   At three seats on a phone it loses 66 px as the deck is passed, the next hand needing two
   rows.
+
+**As built (commit 4.6a, another seat's card).** The row "Play a card" of the table above.
+
+- **The card leaves the top of the seat's pile as a back**, at that back's size, or the plate
+  where no pile is drawn, and is one clone with both faces. It lands at the tilt its card
+  lies at.
+- **The flight and the turn are two animations with a curve each.** On the flight's curve the
+  card would be edge on some 22 ms into its 360, by the curve's arithmetic, and the back
+  would never be seen.
+- **Measured on the built server**: a back for the first 125 ms, by which time the card has
+  crossed nine tenths of the way, and a face that opens over the 235 ms it takes to settle.
+  At 390 by 844 the top seat's card leaves a back 17 px wide and the side seats' leave their
+  plates at 30 px; at 1280 by 800 every card leaves the top of a pile, 25 px wide.
 
 ### 5.4 Poker
 

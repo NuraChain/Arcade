@@ -16,7 +16,7 @@ import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, PLUS, SHUFFLE, TURN, TURN_GA
 import { EMPTY, HISTORY, before, feltOf, sameAs, step, unplay, type Felt, type Laid, type Told } from '../../game/hokm-felt.ts';
 import { EASE, TIMING, centreOf, outside, rectIn, type Rect } from '../../game/motion.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
-import { anchor, cardAt, cardNode, stackNode, turnNode } from '../../game/stage/cards.ts';
+import { anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../../game/stage/cards.ts';
 import { hashOf } from '../../game/stage/curves.ts';
 import type { Ctx } from '../../game/stage/director.ts';
 import type { Act } from '../../game/stage/feed.ts';
@@ -696,8 +696,18 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         stand(to);
     };
 
+    const backSpot = (seat: number) =>
+    {
+        const top = find(`.hokm-seat[data-seat="${ seat }"] .hokm-pile > .card-back:last-child`);
+        const around = seatRect(seat);
+
+        return layer !== null && drawn(top) ? rectIn(layer, top) : (around === null ? null : cardAt(around, BACK_W));
+    };
+
     const lay = (stage: Stage, seat: number, card: number, own: Rect | null) =>
     {
+        const back = seat === mine || stage.quiet() ? null : backSpot(seat);
+
         if (seat === mine)
         {
             stale = stale.filter((one) => one !== card);
@@ -740,21 +750,24 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         }
 
         const to = rectIn(layer, target);
-        const from = own ?? cardAt(seatRect(seat) ?? to, to.width * 0.6);
+        const from = own ?? back ?? cardAt(seatRect(seat) ?? to, to.width * 0.6);
+        const landed = () =>
+        {
+            landing = landing.filter((one) => one !== card);
+            sound?.play('card-place', { gain: 0.9 });
+        };
 
         sound?.play('card-slide', { pan: panOf(from) });
 
-        return launch(stage, layer, cardNode(card, to.width), from, to, {
-            duration: seat === mine ? TIMING.FLY : TIMING.FLY_THEIRS,
-            easing: EASE.fly,
-            toRotate: tiltOf(card),
-            fromOpacity: own === null ? 0 : 1,
-            landed: () =>
-            {
-                landing = landing.filter((one) => one !== card);
-                sound?.play('card-place', { gain: 0.9 });
-            }
-        }).done;
+        return back === null
+            ? launch(stage, layer, cardNode(card, to.width), from, to, {
+                duration: seat === mine ? TIMING.FLY : TIMING.FLY_THEIRS,
+                easing: EASE.fly,
+                toRotate: tiltOf(card),
+                fromOpacity: own === null ? 0 : 1,
+                landed
+            }).done
+            : turn(stage, layer, turnNode(card, to.width), back, to, { duration: TIMING.FLY_THEIRS, easing: EASE.fly, flip: EASE.flip, toRotate: tiltOf(card), landed }).done;
     };
 
     const tally = (stage: Stage, seat: number) =>

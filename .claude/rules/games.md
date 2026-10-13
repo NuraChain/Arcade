@@ -4486,6 +4486,27 @@ cap, the clock, a felt a hand behind, two jumps, the match's end and reduced mot
 `hokm-beats.spec.ts` holds the time it is given; `stage-flight.spec.ts` holds the turn face
 down; `hokm-cues.spec.ts` holds the one gather and a shuffle that waits for the pass.
 
+**A card another seat plays leaves their hand as a back and is turned over on its way.**
+
+- It was a face from the first frame, fading in at the seat: the one card on the table whose
+  face nobody had seen appeared already showing it. It is the kit's two-faced clone now
+  (`turnNode`), a back until it is edge on and a face after, landing at the tilt the card
+  lies at. The reader's own card stays a face flown from its slot: they have been looking at
+  it. Reduced motion keeps the fade where the card lies.
+- **It leaves from the top card of the pile, at that card's size** (`backSpot`), measured
+  BEFORE the model takes the card: under eleven cards the pile draws one back fewer the
+  moment the card is played, and the back in the air is the one that left it. Where no pile
+  is drawn (the side seats of a phone, any compact table) it leaves the plate at a back's
+  size, as a packet does.
+- **`turn` is two animations on the clone, the flight and the flip**, because one curve cannot
+  serve both. A flight eases out hard: it is nine tenths of the way there after a third of
+  its time. A turn on that curve is edge on in its second frame and nobody sees a back. The
+  flip takes its own curve where one is given (`flip`, `EASE.flip`), and the card is a back
+  for the first 125 ms of 360, which is most of the way across the table, and opens face up
+  as it settles. A deal's turn gives none and is as it was.
+- A flight is counted by its clone in the specs (`moved`), not by its animations: one card is
+  four of them now.
+
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.

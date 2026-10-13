@@ -190,6 +190,7 @@ describe('the frames of a flight', () =>
         expect(easings(true).pop).toBe(POP_LINEAR);
         expect(easings(false).snap).toBe('cubic-bezier(0.2, 0, 0, 1)');
         expect(easings(false).pop).toBe('cubic-bezier(0.34, 1.56, 0.64, 1)');
+        expect([easings(true).flip, easings(false).flip], 'a turn that runs on the curve of its flight is over in its first frames').toEqual(['ease-out', 'ease-out']);
         expect(SNAP_LINEAR.startsWith('linear(0,') && SNAP_LINEAR.endsWith(' 1)')).toBe(true);
     });
 });
@@ -262,6 +263,10 @@ describe('a packet of cards, and a card turned over on its way', () =>
         return at === -1 ? null : { frames: animate.mock.calls[at][0] as Keyframe[], timing: animate.mock.calls[at][1] as KeyframeAnimationOptions };
     };
 
+    const every = (animate: { mock: { calls: unknown[][]; contexts: unknown[] } }, target: Element) => animate.mock.calls
+        .filter((_, at) => animate.mock.contexts[at] === target)
+        .map((call) => ({ frames: call[0] as Keyframe[], timing: call[1] as KeyframeAnimationOptions }));
+
     it('is as many backs as it holds cards, one on another, and never more than three thick', () =>
     {
         const five = stackNode(5, 30);
@@ -289,7 +294,7 @@ describe('a packet of cards, and a card turned over on its way', () =>
         expect(face.style.opacity).toBe('0');
     });
 
-    it('goes edge on halfway there, a back until then and a face from then on, all three on one clock', () =>
+    it('goes edge on halfway through its turn, a back until then and a face from then on, and flies as it turns', () =>
     {
         const { stage, layer } = rig();
         const animate = vi.spyOn(Element.prototype, 'animate');
@@ -298,23 +303,40 @@ describe('a packet of cards, and a card turned over on its way', () =>
 
         turn(stage, layer, node, FROM, TO, { duration: 240, delay: 60, easing: 'ease-out' });
 
-        const box = frames(animate, node);
+        const [flip, travel] = every(animate, node);
         const under = frames(animate, face);
         const over = frames(animate, back);
 
         expect(layer.contains(node)).toBe(true);
         expect(node.classList.contains('flight')).toBe(true);
         expect(placed(node)).toEqual(boxed(TO));
-        expect(box?.frames.map((one) => one.translate)).toEqual(['-205px -120px', '-102.5px -60px', '0px 0px']);
-        expect(box?.frames.map((one) => one.scale)).toEqual(['0.5 0.5', `${ EDGE } 0.75`, '1 1']);
-        expect(box?.frames[1].offset).toBe(0.5);
+        expect(every(animate, node).length, 'the flight and the turn are one animation again, on one curve').toBe(2);
+        expect(travel.frames.map((one) => [one.translate, one.rotate])).toEqual([['-205px -120px', '0deg'], ['0px 0px', '0deg']]);
+        expect(flip.frames.map((one) => [one.scale, one.offset])).toEqual([['0.5 0.5', undefined], [`${ EDGE } 0.75`, 0.5], ['1 1', undefined]]);
         expect(over?.frames.map((one) => [one.opacity, one.offset])).toEqual([[1, undefined], [1, 0.5], [0, 0.5], [0, undefined]]);
         expect(under?.frames.map((one) => [one.opacity, one.offset])).toEqual([[0, undefined], [0, 0.5], [1, 0.5], [1, undefined]]);
 
-        for (const one of [box, under, over])
+        for (const one of [flip, travel, under, over])
         {
             expect([one?.timing.duration, one?.timing.delay, one?.timing.easing, one?.timing.fill]).toEqual([240, 60, 'ease-out', 'both']);
         }
+    });
+
+    it('turns on a curve of its own when it is given one, and lands at the tilt it is asked for', () =>
+    {
+        const { stage, layer } = rig();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const node = turnNode(27, 60);
+        const [back, face] = [...node.children];
+
+        turn(stage, layer, node, FROM, TO, { duration: 240, easing: 'cubic-bezier(0.05, 0.7, 0.1, 1)', flip: 'linear', toRotate: -4 });
+
+        const [flip, travel] = every(animate, node);
+
+        expect([flip.timing.easing, frames(animate, back)?.timing.easing, frames(animate, face)?.timing.easing], 'a side changed on another curve than the card went edge on').toEqual(['linear', 'linear', 'linear']);
+        expect(travel.timing.easing, 'the flight took the curve of the turn').toBe('cubic-bezier(0.05, 0.7, 0.1, 1)');
+        expect(travel.frames.map((one) => one.rotate)).toEqual(['0deg', '-4deg']);
+        expect(flip.frames.some((one) => 'rotate' in one || 'translate' in one), 'the turn moves the card as well as turning it').toBe(false);
     });
 
     it('is turned the other way when it is asked to go face down: the face until halfway, the back from then on', () =>
@@ -328,7 +350,7 @@ describe('a packet of cards, and a card turned over on its way', () =>
 
         expect(frames(animate, face)?.frames.map((one) => [one.opacity, one.offset]), 'the face was not the side that left').toEqual([[1, undefined], [1, 0.5], [0, 0.5], [0, undefined]]);
         expect(frames(animate, back)?.frames.map((one) => [one.opacity, one.offset])).toEqual([[0, undefined], [0, 0.5], [1, 0.5], [1, undefined]]);
-        expect(frames(animate, node)?.frames.map((one) => one.scale), 'it did not go edge on').toEqual(['0.5 0.5', `${ EDGE } 0.75`, '1 1']);
+        expect(every(animate, node)[0].frames.map((one) => one.scale), 'it did not go edge on').toEqual(['0.5 0.5', `${ EDGE } 0.75`, '1 1']);
         expect(frames(animate, face)?.timing.fill, 'the face it was built with hidden would show nothing before it leaves').toBe('both');
     });
 

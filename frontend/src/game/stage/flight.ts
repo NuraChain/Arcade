@@ -16,8 +16,10 @@ export interface Turn
 {
     duration: number;
     easing: string;
+    flip?: string;
     delay?: number;
     down?: boolean;
+    toRotate?: number;
     landed?: () => void;
 }
 
@@ -46,7 +48,8 @@ export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from:
     const start = centreOf(from);
     const end = centreOf(to);
     const scale = to.width > 0 ? from.width / to.width : 1;
-    const timing = { duration: flight.duration, delay: flight.delay, easing: flight.easing, fill: 'both' as const };
+    const travel = { duration: flight.duration, delay: flight.delay, easing: flight.easing, fill: 'both' as const };
+    const flip = { ...travel, easing: flight.flip ?? flight.easing };
     const [back, face] = [...clone.children];
     const [first, last] = flight.down === true ? [face, back] : [back, face];
 
@@ -54,20 +57,25 @@ export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from:
 
     if (first !== undefined)
     {
-        stage.animate(first, SHOWN_FIRST, timing);
+        stage.animate(first, SHOWN_FIRST, flip);
     }
 
     if (last !== undefined)
     {
-        stage.animate(last, SHOWN_LAST, timing);
+        stage.animate(last, SHOWN_LAST, flip);
     }
 
+    stage.animate(clone, [
+        { scale: `${ scale } ${ scale }` },
+        { scale: `${ EDGE } ${ (scale + 1) / 2 }`, offset: 0.5 },
+        { scale: '1 1' }
+    ], flip);
+
     return stage.animate(clone, [
-        { translate: `${ start.x - end.x }px ${ start.y - end.y }px`, scale: `${ scale } ${ scale }` },
-        { translate: `${ (start.x - end.x) / 2 }px ${ (start.y - end.y) / 2 }px`, scale: `${ EDGE } ${ (scale + 1) / 2 }`, offset: 0.5 },
-        { translate: '0px 0px', scale: '1 1' }
+        { translate: `${ start.x - end.x }px ${ start.y - end.y }px`, rotate: '0deg' },
+        { translate: '0px 0px', rotate: `${ flight.toRotate ?? 0 }deg` }
     ], {
-        ...timing,
+        ...travel,
         landed: () =>
         {
             clone.remove();
