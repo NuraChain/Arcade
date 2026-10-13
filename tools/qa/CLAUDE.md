@@ -400,7 +400,14 @@ Eleven things worth knowing before changing any of them:
 - **A stopped clock stops Playwright's own waiting.** `page.clock.install()` goes before the
   table is opened. `waitForFunction` polls on the page's frames, which do not come while the
   clock is stopped, so the pass asks with `evaluate` and waits in Node (`waitFor`). A resize
-  needs `clock.runFor(20)` after it, or the frame that seats the names never fires.
+  needs `clock.runFor(20)` after it, or the frame that seats the names never fires, and it
+  needs it AFTER the page has heard of the resize: the observer that asks for that frame
+  fires on the browser's own next frame, in real time, and a clock run before it has fired
+  runs nothing. The pass ran the clock straight after the resize for a long while and was
+  green by which came first; then a table read "the names lie on the board" at 320 and 360,
+  the first two sizes, on one run and not on the next of the same build. It waits 80 ms and
+  runs the clock, three times over, because a frame that finds the felt's shape changed asks
+  for another.
   `pauseAt` wants a time a little ahead (400 ms): one already past throws AND leaves the clock
   stopped, and only `resume()` starts it again.
 - **A live turn is thirty seconds, and so is the watcher's delay.** The seat on turn would be

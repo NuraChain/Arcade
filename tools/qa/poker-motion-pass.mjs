@@ -445,8 +445,14 @@ const heldAt = async (sizes, said) =>
     for (const size of sizes)
     {
         await dana.page.setViewportSize(size);
-        await dana.page.clock.runFor(20);
-        await dana.page.waitForTimeout(160);
+
+        for (let frame = 0; frame < 3; frame += 1)
+        {
+            await dana.page.waitForTimeout(80);
+            await dana.page.clock.runFor(20);
+        }
+
+        await dana.page.waitForTimeout(80);
 
         const found = await lying(dana.page);
 

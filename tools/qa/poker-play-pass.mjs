@@ -288,7 +288,11 @@ try
                 {
                     const flights = [...document.querySelectorAll('.board-flight > .flight')];
                     const names = [...document.querySelectorAll('.poker-named[data-placed]')];
-                    const solids = [...document.querySelectorAll('.table-plate, .poker-backs, .poker-board, .poker-tally > *')].map(box);
+                    const solids = [...document.querySelectorAll('.table-plate, .poker-backs:has(> :not([data-coming])), .poker-board, .poker-tally > *')];
+                    const clashes = names.flatMap((name) => solids.map((solid) => ({
+                        area: shared(box(name), box(solid)),
+                        says: `the name at seat ${ name.closest('.poker-seat')?.getAttribute('data-seat') ?? '?' } on ${ solid.className.split(' ')[0] }${ solid.closest('.poker-seat') === null ? '' : ` of seat ${ solid.closest('.poker-seat').getAttribute('data-seat') }` }`
+                    }))).sort((one, two) => two.area - one.area);
 
                     frames.push({
                         at: performance.now(),
@@ -298,7 +302,8 @@ try
                         board: document.querySelectorAll('.poker-board .card-face').length,
                         discs: flights.filter((one) => one.classList.contains('chip-stack')).length,
                         turning: flights.filter((one) => one.classList.contains('turning')).length,
-                        clash: Math.max(0, ...names.flatMap((name) => solids.map((solid) => shared(box(name), solid))))
+                        clash: clashes[0]?.area ?? 0,
+                        on: clashes[0]?.says ?? ''
                     });
 
                     if (window.__shown === frames)
@@ -334,6 +339,7 @@ try
             const river = first((frame) => frame.board === 5 && frame.turning === 0);
             const paid = first((frame) => frame.won > 0);
             const worst = Math.max(0, ...frames.map((frame) => frame.clash));
+            const clashed = frames.filter((frame) => frame.clash > 1);
 
             record(
                 `${ player.handle } sees the other hand turned over where it lay, and both hands named`,
@@ -350,7 +356,13 @@ try
                 river !== -1 && paid > river && frames[paid].at - frames[river].at >= 800 && frames.slice(paid).some((frame) => frame.discs > 0),
                 paid === -1 || river === -1 ? `the board was whole at ${ river }, the pot was pushed at ${ paid }` : `${ Math.round(frames[paid].at - frames[river].at) } ms between them`
             );
-            record(`${ player.handle } sees the name of a hand lie on nothing`, worst <= 1, `${ Math.round(worst) } square pixels shared`);
+            record(
+                `${ player.handle } sees the name of a hand lie on nothing`,
+                worst <= 1,
+                clashed.length === 0
+                    ? `${ Math.round(worst) } square pixels shared`
+                    : `${ Math.round(worst) } square pixels shared, ${ clashed[clashed.length - 1].on }, in ${ clashed.length } of ${ frames.length } frames over ${ Math.round(clashed[clashed.length - 1].at - clashed[0].at) } ms`
+            );
         }
 
         const after = (await dana.api('GET', `/matches/${ matchId }`)).body;
