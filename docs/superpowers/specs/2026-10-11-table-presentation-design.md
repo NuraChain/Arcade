@@ -2289,6 +2289,28 @@ drop-shadow filter, and a flight has to reach the hand row.
   5.3 to 5.5 lay on the felt has the seats, their cards, the bets and the middle to avoid, and
   nothing else.
 
+**As built (commit 5.2, the felt is a model of what has been shown).** The model is the table
+under *The model* above, and the board reads only it, with no motion. Where it differs:
+
+- **`between` is not in this commit.** With no motion the model's hand is never behind the
+  view's: nothing could make it true and no spec could hold it. It lands with the deal's motion
+  (5.4), where a hand can first be behind. `over && !presenting` is in.
+- **The hands shown and the pots paid are on the model** (`tabled`, `paid`): written by `show`
+  and `pot`, cleared by `deal`, kept at `end`. Both can be read from a view at rest (empty
+  between hands, `last`'s at a finished game), so the parity spec compares whole tables and not
+  a projection of them. `put` is the one thing it cannot compare with a view, and it compares
+  that with the engine's own state.
+- **`put` is `null` from a `pot` to the `end`**, and the layers are not listed while they are
+  paid: the total counts down.
+- **The model is kept unless it is drawn differently from the view** (`sameAs`, which leaves
+  `put` out), at a reset as well as at rest.
+- **`through`** is the list of tables a batch goes through, each deal with the reader's cards
+  only if it is the newest; `told` is the last of them. 5.3 to 5.5 play its steps.
+- **The predicted move** is `pressed(view, seat, verb, amount)`, and the answer covers it when
+  its first move has the same event, seat and amount.
+- **The cues are still `pokerBeats`**, heard from the events the board is handed. A watcher's
+  board had `events` in its props and listened to the store: it hears now.
+
 **Limits.** §3.4, and §4.2 for the 2500 ms bound.
 
 **Checklist.** The owner's list was written for card games in general. In Hold'em, "draw" is the

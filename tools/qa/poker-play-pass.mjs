@@ -108,7 +108,19 @@ try
             const raise = await pressable(mover.page, /^(Raise to|Bet) /);
 
             record(`${ mover.handle } is offered a raise with the slider's presets`, raise !== null);
-            await raise?.click();
+
+            const press = await mover.page.evaluate(() =>
+            {
+                const stage = document.querySelector('.poker-stage');
+                const seen = () => ({ rev: stage?.dataset.rev ?? '', pot: document.querySelector('.poker-pot')?.textContent?.trim() ?? '' });
+                const was = seen();
+
+                [...document.querySelectorAll('.poker-raise button')].find((one) => /^(Raise to|Bet) /.test(one.textContent?.trim() ?? ''))?.click();
+
+                return { was, now: seen() };
+            });
+
+            record(`${ mover.handle }'s chips are on the table at the press, before the server has answered`, press.now.rev === press.was.rev && press.now.pot !== press.was.pot, `${ press.was.pot } became ${ press.now.pot } at revision ${ press.now.rev }`);
             raised = true;
             verb = 'raise';
         }

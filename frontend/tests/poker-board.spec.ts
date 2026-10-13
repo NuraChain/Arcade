@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { createSignal } from 'azerothjs';
+import { batch, createSignal } from 'azerothjs';
 
 import PokerBoard from '../src/components/games/poker-board.component.azeroth';
+import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
+import { resetHaptics, setHaptics } from '../src/lib/haptics.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard } from '../src/stores/match.store.ts';
+import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { seatBets, type Box } from '../src/game/chip-spot.ts';
 
@@ -74,7 +78,7 @@ describe('PokerBoard', () =>
 {
     it('sits the reader at the bottom and deals to their LEFT, because poker passes clockwise', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}) }) as Rendered);
         const me = place(container, 'You');
         const next = place(container, 'omid.k');
         const opposite = place(container, 'reza.t');
@@ -87,7 +91,7 @@ describe('PokerBoard', () =>
 
     it('offers check and no fold when there is nothing to call', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 0 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 0 }) }) as Rendered);
 
         expect(button(container, 'Check')).toBeDefined();
         expect(button(container, 'Fold')).toBeUndefined();
@@ -96,7 +100,7 @@ describe('PokerBoard', () =>
     it('offers fold and call when there is a bet to meet, and sends each as its verb', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
 
         fire(button(container, 'Fold')!, 'click');
         fire(button(container, 'Fold')!, 'click');
@@ -111,7 +115,7 @@ describe('PokerBoard', () =>
     it('folds the reader’s own cards on the second press and never on the first, and lets them go when anything else is pressed', async () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
         const cards = () => button(container, 'Fold')!;
 
         await Promise.resolve();
@@ -161,7 +165,7 @@ describe('PokerBoard', () =>
 
     it('draws no bar under the table and nothing in its corners: the turn is said to a screen reader alone, the seconds are on the reader’s own plate and the tip is the last thing in their hand', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: { ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: { ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
         const live = container.querySelector('[aria-live="polite"]')!;
         const mine = container.querySelector('.poker-seat[data-seat="0"]')!;
         const hand = container.querySelector('.poker-hand')!;
@@ -182,7 +186,7 @@ describe('PokerBoard', () =>
 
     it('draws no seconds on the plate of another seat that is on turn: the ring is its clock, and a screen reader is told the time', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: { ...match({ turn: 3 }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: { ...match({ turn: 3 }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
         const theirs = container.querySelector('.poker-seat[data-seat="3"]')!;
 
         expect(container.querySelector('.poker-clock'), 'a number is drawn on a plate that is not the reader\'s').toBeNull();
@@ -194,37 +198,18 @@ describe('PokerBoard', () =>
     it('gives a seat that is not on turn its cards and nothing to press', () =>
     {
         const waiting = match({ toCall: 20, turn: 3 });
-        const { container } = renderTest(() => PokerBoard({ match: { ...waiting, turn: 3 } }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: { ...waiting, turn: 3 } }) as Rendered);
 
         expect(container.querySelectorAll('.poker-hand .card-face')).toHaveLength(2);
         expect(container.querySelector('ul.poker-hole')?.getAttribute('aria-label')).toBe('Your cards');
         expect(container.querySelectorAll('button')).toHaveLength(0);
     });
 
-    it('puts the call in front of the reader at the press, and takes it back if the server refuses', async () =>
-    {
-        let answer: (outcome: 'stale') => void = () => undefined;
-        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
-        {
-            answer = resolve;
-        }));
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
-
-        fire(button(container, 'Call 20')!, 'click');
-
-        expect(container.querySelector('.poker-bet')?.textContent).toContain('20');
-
-        answer('stale');
-        await Promise.resolve();
-        await Promise.resolve();
-
-        expect(container.querySelector('.poker-bet')).toBeNull();
-    });
-
     it('raises to what the reader chose, and to the pot on the pot button', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, pot: 50, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) })
         }) as Rendered);
 
@@ -243,7 +228,7 @@ describe('PokerBoard', () =>
     it('goes all in rather than raising when the whole stack is the only raise left', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, minRaiseTo: 300, maxRaiseTo: 300 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20, minRaiseTo: 300, maxRaiseTo: 300 }) }) as Rendered);
 
         fire(button(container, 'All in, 300')!, 'click');
 
@@ -252,7 +237,7 @@ describe('PokerBoard', () =>
 
     it('shows no raise at all when nobody is left who could answer one', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
 
         expect(container.textContent).not.toContain('Raise to');
         expect(container.querySelector('[role="slider"]')).toBeNull();
@@ -261,6 +246,7 @@ describe('PokerBoard', () =>
     it('calls the pot in the middle the total, because it counts the bets still in front of the seats', () =>
     {
         const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             match: match({ pot: 70, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 40 : 0, folded: false, allIn: false, out: false })) })
         }) as Rendered);
 
@@ -270,12 +256,13 @@ describe('PokerBoard', () =>
 
     it('names a side pot only when somebody is all in', () =>
     {
-        const even = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
+        const even = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}) }) as Rendered);
 
         expect(even.container.textContent).not.toContain('side pot');
         even.unmount();
 
         const split = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             match: match({ pot: 650, pots: [{ amount: 300, eligible: [0, 1, 2] }, { amount: 350, eligible: [1, 2] }] })
         }) as Rendered);
 
@@ -284,7 +271,7 @@ describe('PokerBoard', () =>
 
     it('gives a spectator the table and nothing to press', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }, null) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }, null) }) as Rendered);
 
         expect(container.querySelectorAll('button').length).toBe(0);
         expect(container.textContent).not.toContain('Your cards');
@@ -293,6 +280,7 @@ describe('PokerBoard', () =>
     it('says who won the last hand, and with what', () =>
     {
         const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             match: match({ last: { board: [0, 1, 2, 3, 4], shown: [{ seat: 1, cards: [5, 6], category: 'flush' }], pots: [{ amount: 240, winners: [1] }] } })
         }) as Rendered);
 
@@ -301,7 +289,7 @@ describe('PokerBoard', () =>
 
     it('names the best hand the reader holds and prices the call against the pot', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20, pot: 30 }) }) as Rendered);
 
         expect(container.textContent).toContain('Your best hand so far: a pair of twos.');
         expect(container.textContent).toContain('Calling costs 20 against a pot of 30.');
@@ -309,7 +297,7 @@ describe('PokerBoard', () =>
 
     it('writes the hand over the reader\'s cards in a line of its own, and keeps the sentence for a screen reader', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20, pot: 30 }) }) as Rendered);
         const name = container.querySelector('.poker-own > .poker-hand-name')!;
 
         expect(name.textContent).toBe('a pair of twos');
@@ -319,7 +307,7 @@ describe('PokerBoard', () =>
 
     it('says when the hand is the board\'s and not the reader\'s', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ street: 'river', board: [8, 9, 10, 11, 12], hole: [13, 27] }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ street: 'river', board: [8, 9, 10, 11, 12], hole: [13, 27] }) }) as Rendered);
 
         expect(container.querySelector('.poker-hand-name')?.textContent).toMatch(/^The board: a straight flush, \S/);
         expect(container.querySelector('.poker-own > .sr-only')?.textContent).toMatch(/^You are playing the board: a straight flush, \S/);
@@ -328,7 +316,7 @@ describe('PokerBoard', () =>
     it('keeps the row the reader\'s cards lie in when they fold, as two empty places, so the table does not change size', () =>
     {
         const seats = Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: 0, folded: seat === 0, allIn: false, out: false }));
-        const { container } = renderTest(() => PokerBoard({ match: match({ turn: 3, hole: [], seats }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ turn: 3, hole: [], seats }) }) as Rendered);
 
         expect(container.querySelector('.poker-hand'), 'the row went with the cards').not.toBeNull();
         expect(container.querySelectorAll('.poker-hand .poker-pocket')).toHaveLength(2);
@@ -340,12 +328,12 @@ describe('PokerBoard', () =>
     it('draws no row for somebody who is out of the game, or who is watching', () =>
     {
         const seats = Array.from({ length: 6 }, (_, seat) => ({ seat, stack: seat === 0 ? 0 : 1500, bet: 0, folded: false, allIn: false, out: seat === 0 }));
-        const out = renderTest(() => PokerBoard({ match: match({ turn: 3, hole: [], seats }) }) as Rendered);
+        const out = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ turn: 3, hole: [], seats }) }) as Rendered);
 
         expect(out.container.querySelector('.poker-hand')).toBeNull();
         out.unmount();
 
-        const watching = renderTest(() => PokerBoard({ match: match({ turn: 3 }, null) }) as Rendered);
+        const watching = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ turn: 3 }, null) }) as Rendered);
 
         expect(watching.container.querySelector('.poker-hand')).toBeNull();
     });
@@ -354,7 +342,7 @@ describe('PokerBoard', () =>
     {
         useSettings().update({ hintOutcome: false });
 
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20, pot: 30 }) }) as Rendered);
 
         expect(container.textContent).not.toContain('best hand');
         expect(container.textContent).not.toContain('Calling costs');
@@ -364,14 +352,14 @@ describe('PokerBoard', () =>
 
     it('coaches the rule in play, and goes quiet with the coach off', () =>
     {
-        const on = renderTest(() => PokerBoard({ match: match({ toCall: 0 }) }) as Rendered);
+        const on = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 0 }) }) as Rendered);
 
         expect(on.container.querySelector('[role="note"]')?.textContent).toContain('There is nothing to call, so checking costs you nothing.');
         on.unmount();
 
         useSettings().update({ hintRules: false });
 
-        const off = renderTest(() => PokerBoard({ match: match({ toCall: 0 }) }) as Rendered);
+        const off = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 0 }) }) as Rendered);
 
         expect(off.container.querySelector('[role="note"]')).toBeNull();
     });
@@ -380,7 +368,7 @@ describe('PokerBoard', () =>
     {
         useSettings().update({ hintMoves: false });
 
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }) }) as Rendered);
 
         expect(button(container, 'Fold')).toBeDefined();
         expect(button(container, 'Call 20')).toBeDefined();
@@ -389,7 +377,7 @@ describe('PokerBoard', () =>
 
     it('gives a spectator no tip and no outcome', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }, null) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }, null) }) as Rendered);
 
         expect(container.querySelector('[role="note"]')).toBeNull();
         expect(container.textContent).not.toContain('best hand');
@@ -531,10 +519,9 @@ describe('where a bet sits on the felt', () =>
         expect(seatBets([{ plate: box(0, 0, 40, 20), width: 44, height: 22 }], box(0, 0, 40, 20), [], [], 4)).toEqual([null]);
     });
 
-
     it('keeps the last hand and the blinds beside the pot, the one place on a table where no seat ever is', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}) }) as Rendered);
         const tally = container.querySelector('.poker-centre > .poker-tally')!;
 
         expect([...tally.children].map((one) => one.className)).toEqual(['poker-last', 'poker-pot', 'poker-blinds']);
@@ -547,7 +534,7 @@ describe('where a bet sits on the felt', () =>
 
     it('shuts the last hand when anything else on the page is pressed, and leaves it open for a press inside it', async () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}) }) as Rendered);
         const last = container.querySelector<HTMLDetailsElement>('.poker-last')!;
 
         await Promise.resolve();
@@ -583,6 +570,7 @@ describe('where a bet sits on the felt', () =>
     it('draws each bet inside its own seat, so it travels with the plate wherever the table puts it', () =>
     {
         const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             match: match({ seats: Array.from({ length: 6 }, (_, at) => ({ seat: at, stack: at === 0 ? 0 : 1500, bet: at === 0 ? 1500 : (at === 3 ? 20 : 0), folded: false, allIn: at === 0, out: false })) })
         }) as Rendered);
         const bets = [...container.querySelectorAll('.poker-bet')];
@@ -627,6 +615,7 @@ describe('a table that is read again', () =>
     {
         const [current, setCurrent] = createSignal(first);
         const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
             get match()
             {
                 return current();
@@ -824,7 +813,7 @@ describe('a table of the shape its room gives it', () =>
 {
     const measured = (width: number, height: number) =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}, 0, 9) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}, 0, 9) }) as Rendered);
         const felt = container.querySelector<HTMLElement>('.poker-table')!;
 
         felt.getBoundingClientRect = () => ({ left: 0, top: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
@@ -843,7 +832,7 @@ describe('a table of the shape its room gives it', () =>
 
     it('puts the reader at the middle of the near rail whichever seat the server gave them, and the seat after them to their left', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}, 2) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}, 2) }) as Rendered);
 
         expect(at(container, 2).slice(0, 1)).toEqual([50]);
         expect(at(container, 2)[1]).toBeGreaterThan(90);
@@ -856,7 +845,7 @@ describe('a table of the shape its room gives it', () =>
 
     it('is round until it has been measured, and says how many sit at it', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: match({}, 0, 9) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({}, 0, 9) }) as Rendered);
         const [x, y, ux, uy] = at(container, 0);
 
         expect(container.querySelector('.poker-table')?.getAttribute('data-seats')).toBe('9');
@@ -890,7 +879,7 @@ describe('a table of the shape its room gives it', () =>
     it('seats a bet only once it has measured the table, so no bet is seen where it is not', async () =>
     {
         const seats = Array.from({ length: 9 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false }));
-        const { container } = renderTest(() => PokerBoard({ match: match({ seats }, 0, 9) }) as Rendered);
+        const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ seats }, 0, 9) }) as Rendered);
         const bet = container.querySelector<HTMLElement>('.poker-bet')!;
 
         expect(bet.dataset.placed, 'a bet was shown before the table had been measured').toBeUndefined();
@@ -955,5 +944,401 @@ describe('a bet in front of its seat', () =>
         expect(bet).not.toBeNull();
         expect(bet).not.toEqual(box(97, 121, 50, 20));
         expect([plate, cards, taken].some((other) => meets(bet!, other))).toBe(false);
+    });
+});
+
+describe('a table that shows what has happened on it', () =>
+{
+    type Move = Extract<MatchEvent['log'], { kind: 'poker' }>['moves'][number];
+
+    const rows = (changed: Record<number, Partial<Poker['seats'][number]>> = {}) =>
+        Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: 0, folded: false, allIn: false, out: false, ...changed[seat] }));
+
+    const blinds = { 3: { stack: 1490, bet: 10 }, 4: { stack: 1480, bet: 20 } };
+
+    const everybody = [0, 1, 2, 3, 4, 5];
+
+    const facing = (view: Partial<Poker> = {}, more: Partial<MatchView> = {}): MatchView => ({
+        ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: rows(blinds), ...view }),
+        ...more
+    });
+
+    const waiting = (view: Partial<Poker> = {}, more: Partial<MatchView> = {}) =>
+        facing({ turn: 1, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined, ...view }, { turn: 1, ...more });
+
+    const called = (chips = 20) => waiting(
+        { pot: 30 + chips, pots: [{ amount: 30 + chips, eligible: everybody }], seats: rows({ ...blinds, 0: { stack: 1500 - chips, bet: chips } }) },
+        { rev: 8 }
+    );
+
+    const told = (rev: number, seat: number, ...moves: Move[]): MatchEvent => ({ rev, seat, at: '', log: { kind: 'poker', moves } });
+
+    const heard = (seq: number, ...events: MatchEvent[]): EventBatch => ({ seq, id: 'match-pk', events, live: true, jump: false });
+
+    const turns = async () =>
+    {
+        await Promise.resolve();
+        await Promise.resolve();
+    };
+
+    const seated = async (first: MatchView, events: EventBatch = NO_EVENTS) =>
+    {
+        const [current, setCurrent] = createSignal({ match: first, events });
+        const busy: boolean[] = [];
+        const { container } = renderTest(() => PokerBoard({
+            get match()
+            {
+                return current().match;
+            },
+            get events()
+            {
+                return current().events;
+            },
+            onPresenting: (now: boolean) =>
+            {
+                busy.push(now);
+            },
+            turnMs: 30_000
+        }) as Rendered);
+
+        await turns();
+
+        const write = (next: MatchView, batch: EventBatch = current().events) => setCurrent({ match: structuredClone(next), events: batch });
+
+        return {
+            container,
+            busy,
+            write,
+            read: async (next: MatchView, batch?: EventBatch) =>
+            {
+                write(next, batch);
+                await turns();
+            }
+        };
+    };
+
+    const pressing = () =>
+    {
+        let answer: (outcome: 'now' | 'stale' | 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        return async (outcome: 'now' | 'stale' | 'failed') =>
+        {
+            answer(outcome);
+            await turns();
+        };
+    };
+
+    const bet = (container: HTMLElement, seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .poker-bet`)?.textContent ?? '';
+
+    const stack = (container: HTMLElement, seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .table-plate-facts .tally`)?.textContent ?? '';
+
+    const pot = (container: HTMLElement) => container.querySelector('.poker-pot')?.textContent?.trim() ?? '';
+
+    const presenting = (container: HTMLElement) => container.querySelector('.poker-stage')?.getAttribute('data-presenting');
+
+    it('puts the reader’s chips in front of them at the press, out of their stack and into the pot, before the server has answered', async () =>
+    {
+        pressing();
+
+        const { container } = await seated(facing());
+
+        fire(button(container, 'Call 20')!, 'click');
+
+        expect(bet(container, 0)).toBe('20');
+        expect(stack(container, 0)).toBe('1,480');
+        expect(pot(container)).toBe('Total pot 50');
+        expect(container.querySelector('.poker-stage')?.getAttribute('data-rev'), 'the server had already answered').toBe('7');
+    });
+
+    it('takes the answer to a press as the move already on the table, and plays whatever else the action did', async () =>
+    {
+        const answer = pressing();
+        const { container, busy, read } = await seated(facing());
+
+        fire(button(container, 'Call 20')!, 'click');
+        await read(called(), heard(1, told(8, 0, { e: 'call', seat: 0, amount: 20 })));
+        await answer('now');
+
+        expect(busy, 'the answer was not played as the rest of the reader’s own action').toEqual([true, false]);
+        expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['20', '1,480', 'Total pot 50']);
+        expect(presenting(container)).toBeNull();
+    });
+
+    it('keeps the chips where the press put them while the same table is read again', async () =>
+    {
+        pressing();
+
+        const { container, read } = await seated(facing());
+
+        fire(button(container, 'Call 20')!, 'click');
+        await read(facing({}, { remainingMs: 12_000 }));
+
+        expect([bet(container, 0), stack(container, 0), pot(container)], 'a second read of the table took the call back').toEqual(['20', '1,480', 'Total pot 50']);
+    });
+
+    it.each(['failed', 'stale'] as const)('gives the chips back when the press comes back %s', async (outcome) =>
+    {
+        const answer = pressing();
+        const { container } = await seated(facing());
+
+        fire(button(container, 'Call 20')!, 'click');
+        await answer(outcome);
+
+        expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['', '1,500', 'Total pot 30']);
+    });
+
+    it('takes the table as the server describes it when the answer is not the move it put down', async () =>
+    {
+        pressing();
+
+        const { container, busy, read } = await seated(facing());
+
+        fire(button(container, 'Call 20')!, 'click');
+        await read(called(40), heard(1, told(8, 0, { e: 'call', seat: 0, amount: 40 })));
+
+        expect(busy, 'a move the table had not put down was played over the one it had').toEqual([]);
+        expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['40', '1,460', 'Total pot 70']);
+    });
+
+    it('takes the reader’s chips back when somebody else’s action reaches the table first', async () =>
+    {
+        pressing();
+
+        const { container, read } = await seated(facing());
+        const left = facing({ seats: rows({ ...blinds, 5: { stack: 0, out: true } }) }, { rev: 8 });
+
+        fire(button(container, 'Call 20')!, 'click');
+        await read(left, heard(1, told(8, 5, { e: 'forfeit', seat: 5, reason: 'left', place: 6 })));
+
+        expect([bet(container, 0), stack(container, 0), pot(container)]).toEqual(['', '1,500', 'Total pot 30']);
+        expect(stack(container, 5)).toBe('0');
+    });
+
+    it('plays what it is told somebody did, says so while it does, and ends on the table the server describes', async () =>
+    {
+        const { container, busy, read } = await seated(waiting());
+        const before = [...container.querySelectorAll<Element>('.poker-stage *')];
+        const turning = container.querySelector('.poker-seat[data-seat="1"]')!;
+        const clock = new Set(['.table-plate-clock', '.table-plate-clock *', '.table-plate-trail *'].flatMap((one) => [...turning.querySelectorAll(one)]));
+        const raised = waiting(
+            { turn: 2, pot: 90, pots: [{ amount: 90, eligible: everybody }], seats: rows({ ...blinds, 1: { stack: 1440, bet: 60 } }) },
+            { rev: 8, turn: 2 }
+        );
+
+        await read(raised, heard(1, told(8, 1, { e: 'raise', seat: 1, amount: 60 })));
+
+        expect(busy).toEqual([true, false]);
+        expect([bet(container, 1), stack(container, 1), pot(container)]).toEqual(['60', '1,440', 'Total pot 90']);
+        expect(presenting(container), 'the table still says it is showing something').toBeNull();
+        expect(before.filter((one) => !document.contains(one) && !clock.has(one)), 'a raise by one seat took more off the table than the clock of the turn that ended').toEqual([]);
+    });
+
+    it('follows a table that moved with nothing told of it', async () =>
+    {
+        const { container, read } = await seated(waiting());
+
+        await read(waiting({ pot: 90, pots: [{ amount: 90, eligible: everybody }], seats: rows({ ...blinds, 1: { stack: 1440, bet: 60 } }) }, { rev: 8 }));
+
+        expect([bet(container, 1), stack(container, 1), pot(container)]).toEqual(['60', '1,440', 'Total pot 90']);
+        expect(presenting(container)).toBeNull();
+    });
+
+    it('plays the opening onto a table with nothing dealt, and ends with the blinds down and the reader’s two cards', async () =>
+    {
+        const opening: EventBatch = {
+            ...heard(1, told(1, 0, { e: 'deal', hand: 1, button: 2, small: 10, big: 20 }, { e: 'blind', seat: 3, amount: 10 }, { e: 'blind', seat: 4, amount: 20 })),
+            opens: () => true
+        };
+        const { container, busy } = await seated(waiting({}, { rev: 1 }), opening);
+
+        expect(busy).toEqual([true, false]);
+        expect([bet(container, 3), bet(container, 4), stack(container, 3), stack(container, 4), pot(container)]).toEqual(['10', '20', '1,490', '1,480', 'Total pot 30']);
+        expect(container.querySelectorAll('.poker-hole .card-face')).toHaveLength(2);
+        expect(container.querySelector('.poker-puck')?.getAttribute('data-seat')).toBe('2');
+    });
+
+    it('shows how the game ended only once what ended it has been played', async () =>
+    {
+        const alone = { 2: { stack: 0, out: true }, 3: { stack: 0, out: true }, 4: { stack: 0, out: true }, 5: { stack: 0, out: true } };
+        const two = waiting({ button: 0, pots: [{ amount: 30, eligible: [0, 1] }], seats: rows({ ...alone, 0: { stack: 4490, bet: 10 }, 1: { stack: 4480, bet: 20 } }) });
+        const { container, busy, write } = await seated(two);
+        const tagOf = (seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .table-plate-tag`)?.textContent ?? '';
+        const won = waiting(
+            {
+                button: 0,
+                turn: undefined,
+                pot: 0,
+                pots: [],
+                hole: [0, 13],
+                winner: 0,
+                seats: rows({ ...alone, 0: { stack: 4520 }, 1: { stack: 0, out: true } }),
+                last: { board: [], shown: [], pots: [{ amount: 30, winners: [0] }] }
+            },
+            {
+                rev: 8,
+                turn: undefined,
+                finishedAt: new Date(401_000).toISOString(),
+                players: two.players.map((one) => (one.seat === 0 ? { ...one, result: 'won' as const } : one))
+            }
+        );
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(container.querySelector('.poker-hand')).not.toBeNull();
+
+        write(won, heard(1, told(
+            8,
+            1,
+            { e: 'forfeit', seat: 1, reason: 'left', place: 2 },
+            { e: 'pot', amount: 30, winners: [0] },
+            { e: 'end', hand: 1, dealt: [0, 1] },
+            { e: 'finish', seat: 0 }
+        )));
+
+        expect(presenting(container), 'the table does not say it is showing what ended the game').toBe('true');
+        expect(container.querySelector('.table-result'), 'the result stood over a table that was still showing how the game ended').toBeNull();
+        expect(tagOf(0), 'a plate called the game before the table had shown it').toBe('');
+
+        await turns();
+
+        expect(busy).toEqual([true, false]);
+        expect(presenting(container)).toBeNull();
+        expect(tagOf(0)).toBe('Won');
+        expect(container.querySelector('.table-result')).not.toBeNull();
+        expect(container.querySelector('.poker-hand'), 'the reader’s row was still under the result').toBeNull();
+        expect(stack(container, 0)).toBe('4,520');
+    });
+
+    it('is not called over, for somebody watching, before the table has shown how it ended', async () =>
+    {
+        vi.spyOn(usePeople(), 'want').mockImplementation(async () => undefined);
+
+        const alone = { 2: { stack: 0, out: true }, 3: { stack: 0, out: true }, 4: { stack: 0, out: true }, 5: { stack: 0, out: true } };
+        const ending = waiting(
+            { button: 0, hole: [], pots: [{ amount: 30, eligible: [0, 1] }], seats: rows({ ...alone, 0: { stack: 4490, bet: 10 }, 1: { stack: 4480, bet: 20 } }) },
+            { mine: undefined }
+        );
+        const ended = waiting(
+            {
+                button: 0,
+                turn: undefined,
+                pot: 0,
+                pots: [],
+                hole: [],
+                winner: 0,
+                seats: rows({ ...alone, 0: { stack: 4520 }, 1: { stack: 0, out: true } }),
+                last: { board: [], shown: [], pots: [{ amount: 30, winners: [0] }] }
+            },
+            { mine: undefined, rev: 8, turn: undefined, finishedAt: new Date(401_000).toISOString() }
+        );
+        const [watch, setWatch] = createSignal<Watched>({ match: ending, behind: 30, delay: 30, live: true });
+        const [events, setEvents] = createSignal<EventBatch>(NO_EVENTS);
+        const { container } = renderTest(() => WatchBoard({
+            get watch()
+            {
+                return watch();
+            },
+            get events()
+            {
+                return events();
+            },
+            onDone: () => undefined
+        }) as Rendered);
+        const over = () => container.textContent?.includes(useLocale().t('watch.finished')) ?? false;
+        const back = () => [...container.querySelectorAll('button')].some((one) => one.textContent?.trim() === useLocale().t('watch.back'));
+
+        await vi.waitFor(() => expect(container.querySelector('.table-stage')).not.toBeNull(), { timeout: 4000 });
+        await turns();
+        await turns();
+
+        batch(() =>
+        {
+            setWatch({ match: ended, behind: 0, delay: 30, live: false });
+            setEvents(heard(1, told(
+                8,
+                1,
+                { e: 'forfeit', seat: 1, reason: 'left', place: 2 },
+                { e: 'pot', amount: 30, winners: [0] },
+                { e: 'end', hand: 1, dealt: [0, 1] },
+                { e: 'finish', seat: 0 }
+            )));
+        });
+
+        expect(presenting(container), 'the end of the game was not played').toBe('true');
+        expect(over(), 'the game was called over while the table was still showing how it ended').toBe(false);
+        expect(back()).toBe(false);
+        expect(container.querySelector('.table-result')).toBeNull();
+
+        await turns();
+        await turns();
+
+        expect(presenting(container)).toBeNull();
+        expect(over()).toBe(true);
+        expect(back()).toBe(true);
+        expect(container.querySelector('.table-result')).not.toBeNull();
+    });
+
+    it('takes the result of the game before away the moment another game is on the table', async () =>
+    {
+        const { container, read } = await seated(waiting({ turn: undefined, winner: 2 }, { turn: undefined, finishedAt: new Date(401_000).toISOString() }));
+        const again: EventBatch = {
+            ...heard(1, told(1, 0, { e: 'deal', hand: 1, button: 2, small: 10, big: 20 }, { e: 'blind', seat: 3, amount: 10 }, { e: 'blind', seat: 4, amount: 20 })),
+            id: 'match-next',
+            opens: () => true
+        };
+
+        expect(container.querySelector('.table-result')).not.toBeNull();
+
+        await read(waiting({}, { id: 'match-next', rev: 1 }), again);
+
+        expect(container.querySelector('.table-result'), 'the result of the game before stood over this one').toBeNull();
+        expect(container.querySelector('.poker-hand')).not.toBeNull();
+        expect([bet(container, 3), bet(container, 4), pot(container)]).toEqual(['10', '20', 'Total pot 30']);
+    });
+
+    it('hears what happens from the events it is handed, not from the store of the reader’s own game', async () =>
+    {
+        const clock = manualClock(400_000);
+        const vibrate = vi.fn(() => true);
+
+        setRuntime({ clock, seed: 3 });
+        setHaptics(true);
+        Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+
+        try
+        {
+            const folded = { folded: true };
+            const { read } = await seated(waiting({ seats: rows({ 2: folded, 3: { stack: 1490, bet: 10, ...folded }, 4: { stack: 1480, bet: 20, ...folded }, 5: folded }) }));
+
+            await read(
+                waiting({ hand: 2, button: 3, hole: [4, 17], blinds: { small: 10, big: 20, level: 1, next: 9 }, seats: rows({ 0: { stack: 1530 }, 3: { stack: 1490 }, 4: { stack: 1470, bet: 10 }, 5: { stack: 1480, bet: 20 } }) }, { rev: 8 }),
+                heard(1, told(
+                    8,
+                    1,
+                    { e: 'fold', seat: 1, amount: 0 },
+                    { e: 'pot', amount: 30, winners: [0] },
+                    { e: 'end', hand: 1, dealt: everybody },
+                    { e: 'deal', hand: 2, button: 3, small: 10, big: 20 },
+                    { e: 'blind', seat: 4, amount: 10 },
+                    { e: 'blind', seat: 5, amount: 20 }
+                ))
+            );
+
+            expect(useBoard().events().events, 'the store of the reader’s own game was what was heard').toEqual([]);
+            expect(vibrate).not.toHaveBeenCalled();
+
+            clock.advance(400);
+
+            expect(vibrate).toHaveBeenCalledWith([16, 40, 24]);
+        }
+        finally
+        {
+            resetHaptics();
+            Reflect.deleteProperty(navigator, 'vibrate');
+        }
     });
 });

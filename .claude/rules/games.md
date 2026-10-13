@@ -2025,8 +2025,9 @@ watcher's board moved.
 **Every board answers the press before the server does, and only with what the press decides.** A
 hokm card leaves the hand and flies to the felt at once, and the server's echo of that same card is
 taken out of the batch rather than flown twice; a ludo token walks to `movedTo`'s square, computed from
-the server's own `ludo/board.ts`; a poker call, raise, all-in or fold is drawn in front of the reader
-by `predicted`; a backgammon turn stays staged on the board until the revision moves. Nothing that
+the server's own `ludo/board.ts`; a poker call, raise, all-in or fold is put on the table as the move
+`pressed` names, which is the first event the engine logs for it; a backgammon turn stays staged on
+the board until the revision moves. Nothing that
 chance or another player decides is ever guessed - no die, no card dealt, no capture, no pot, no
 street, no turn - so the prediction can only be wrong when the server refuses, and `board.play`
 answers `stale` or `failed` for exactly that and the board takes it back. A prediction is keyed to the
@@ -3114,6 +3115,56 @@ height with the reader's row, 70% of a wide one's width, the board's card at 44p
 and at 5.5% of a table 1,700 wide and more, faces on a wide stage, the hand's name on one
 line), no seat's cards on a plate, on the board or off the table, the puck on the plate of the
 seat that deals, and a table of nine (`poker-9`).
+
+**The felt is a model of what has been shown, and the table draws from nothing else**
+(`game/poker-felt.ts`, as hokm's is `hokm-felt.ts`; the cloth's tile under `public/` shares the
+word and nothing else). `feltOf` reads a view, `step` applies one logged move, `through` is every
+table a batch goes through and `told` the last of them, `before` is the table before the first
+hand was dealt. The board keeps ONE model from batch to batch and steps it with what it is told.
+
+- **It is kept, and not read again from the view at rest.** The wire carries the bets of the
+  street and the pot's layers, and not what each seat has put in over the hand (`put`), without
+  which the layers cannot be moved on. A model that has seen a hand from its deal knows it. One
+  picked up after the flop says `null`, keeps the layers it was given until the batch has landed,
+  takes them from the view then, and knows again from the next deal. `sameAs` compares what is
+  drawn and leaves `put` out, so a model that knows is not thrown away for a view that cannot
+  say, at a reset as well as at rest.
+- **`deal` clears and re-arms; `end` keeps.** The board, the hands shown (`tabled`) and the pots
+  paid (`paid`) stay on the table when a hand ends and under a result, as the engine leaves
+  them, and the next deal takes them. So everything the model holds but `put` can be read from
+  a view at rest: `tabled` and `paid` are empty between hands and are `last`'s at a finished
+  game, and the spec compares WHOLE tables. From a `pot` to the `end` the layers are not listed:
+  the total counts down while they are paid.
+- **The reader's cards come only with a deal**, from the view the batch carried, and only the
+  newest deal of a batch has them. A hand that was over before the reader saw it shows no face:
+  the cards the batch carries are the next hand's. A fold, a bust or walking out takes them, as
+  the view stops sending them.
+- **What reads which.** The plates (stack, bet, tag, dim, the backs), the puck, the board, the
+  pot and its layers, the blinds, "Last hand", the reader's cards and the name of their hand
+  read the model. The turn's ring, the clock, what a call costs, the raise's bounds, the tip
+  and the turn's sentence read the view, so nobody waits to be allowed to act. The result is
+  `over && !presenting`, and a plate does not say "Won" before it.
+- **A press steps the model** with the move `pressed` names (`game/helpers/poker.ts`), and the
+  presenter is told (`predict`): the first move of the answer is dropped from the batch when it
+  is that event, seat and amount, and anything else is a snap to the view. The move still out
+  is part of the table the presenter is shown (`sightNow`), so reading the same revision again
+  takes nothing back. `stale` or `failed` does.
+- **Nothing moves yet.** A batch is applied whole, in one scene of no length, which is why the
+  stage says `data-presenting` for a turn of the event loop. The board hears the events it is
+  HANDED (`tableCues` on `props.events`): it listened to the store of the reader's own game,
+  and somebody watching heard nothing.
+
+`poker-felt.spec.ts` plays whole games through the real engine with a seeded die, at two, six
+and nine seats. For every seat and for nobody, the model stepped from `before` is the model of
+the engine's own view after EVERY action, and what it says each seat has put in is the engine's
+own `put`; with seats walking out on their turn, out of turn and heads-up; and picked up from
+the view at forty moments of each game. The games are required to contain a dead small blind, a
+dead button, two hands in one action, a side pot, a split pot, chips given back and a showdown,
+and no step may make or lose a chip. `helpers-poker.spec.ts` compares `pressed` with the first
+move the engine logs for every action of three games. `poker-board.spec.ts` (*a table that
+shows what has happened on it*) holds the press, its answer, the second read, the refusal,
+somebody else's action reaching the table first, the opening, the result's wait, the game
+after it, and the events handed in.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
@@ -4218,6 +4269,8 @@ point with the mouse held down and taps the points of the board for the other ho
 point is taken from the layout module the board is drawn from - and fails if a button for a move
 is on show under the board. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
+wants the raise in the pot in the turn of the press and at the revision it was pressed on (the
+press and the read are one evaluation in the page, so no answer can have come between them),
 and both finish over the api and assert the result in both browsers. What "the other browser saw it"
 means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,
 so the opponent's "Dana is playing" is rightly unchanged, and the first version of the pass called

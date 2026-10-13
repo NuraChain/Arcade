@@ -11,11 +11,16 @@ import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
 import { seatBets, type Box } from '../../game/chip-spot.ts';
 import { aroundStadium, type Spot } from '../../game/poker-seats.ts';
-import { pokerOf, type PokerBoard } from '../../data/match.ts';
-import { coachOf, outcomeOf, predicted, type PokerVerb } from '../../game/helpers/poker.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { pokerOf } from '../../data/match.ts';
+import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/helpers/poker.ts';
+import { EMPTY, HISTORY, before, feltOf, sameAs, step, told, type Felt, type Told } from '../../game/poker-felt.ts';
+import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { runtime } from '../../lib/runtime.ts';
 import { pokerBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -32,14 +37,6 @@ const ROUND = 1;
 
 const PUCK_IN = 0.15;
 
-const NO_CARDS: number[] = [];
-
-const NO_ROWS: PokerBoard['seats'] = [];
-
-const NO_POTS: PokerBoard['pots'] = [];
-
-const NO_HANDS: NonNullable<PokerBoard['last']>['shown'] = [];
-
 const UNSEATED = {
     row: { seat: -1, stack: 0, bet: 0, folded: false, allIn: false, out: true },
     x: 50,
@@ -51,10 +48,11 @@ const UNSEATED = {
     tag: null as PlateTag | null
 };
 
-export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+export default component PokerBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
     state amount = 0;
@@ -63,15 +61,23 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     state folding = false;
 
+    state shown: Felt | null = null;
+
+    state presenting = false;
+
     derived game = props.match;
 
     derived view = pokerOf(game);
 
     derived over = game.finishedAt !== undefined;
 
+    derived result = over && !presenting;
+
     derived mine = game.mine;
 
     derived viewer = mine ?? 0;
+
+    derived felt = shown ?? (view === null ? EMPTY : feltOf(view, mine ?? null));
 
     derived count = view?.seats.length ?? game.seats;
 
@@ -98,14 +104,14 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     const cues = tableCues({
         enabled: untrack(() => settings.settings().sound),
-        seq: untrack(() => board.events().seq),
+        seq: untrack(() => props.events.seq),
         match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
         beats: (events) => pokerBeats(events.flatMap((one) => (one.log.kind === 'poker' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
     });
 
     effect
     {
-        const batch = board.events();
+        const batch = props.events;
 
         untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
     }
@@ -125,6 +131,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     }
 
     let root: HTMLElement | null = null;
+    let presenter: Presenter<Told> | null = null;
+    let held: Felt = EMPTY;
+    let sent: { id: string; rev: number; move: Told } | null = null;
 
     state ratio = ROUND;
 
@@ -151,9 +160,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     {
         laying = 0;
 
-        const felt = feltNode();
+        const cloth = feltNode();
 
-        if (felt === null)
+        if (cloth === null)
         {
             return;
         }
@@ -164,7 +173,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return;
         }
 
-        const table = felt.getBoundingClientRect();
+        const table = cloth.getBoundingClientRect();
         const solid = (element: Element | null): Box[] =>
         {
             const box = element?.getBoundingClientRect();
@@ -185,8 +194,8 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             bottom: Math.max(...boxes.map((box) => box.bottom))
         });
         const atSeat = (seat: Element) => untrack(() => plateAt(Number(seat.getAttribute('data-seat'))));
-        const puck = felt.querySelector<HTMLElement>('.poker-puck');
-        const dealer = puck === null ? null : felt.querySelector(`.poker-seat[data-seat="${ puck.dataset.seat ?? '' }"]`);
+        const puck = cloth.querySelector<HTMLElement>('.poker-puck');
+        const dealer = puck === null ? null : cloth.querySelector(`.poker-seat[data-seat="${ puck.dataset.seat ?? '' }"]`);
         const [plate] = solid(dealer);
 
         if (puck !== null && dealer !== null && plate !== undefined)
@@ -202,7 +211,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             puck.dataset.placed = 'true';
         }
 
-        const chips = [...felt.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet')];
+        const chips = [...cloth.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet')];
         const spots = seatBets(
             chips.map((chip) =>
             {
@@ -219,8 +228,8 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                 };
             }),
             table,
-            [...felt.querySelectorAll('.table-plate, .poker-backs')].flatMap(solid),
-            [...felt.querySelectorAll('.poker-centre > *, .poker-last > summary')].flatMap(reach),
+            [...cloth.querySelectorAll('.table-plate, .poker-backs')].flatMap(solid),
+            [...cloth.querySelectorAll('.poker-centre > *, .poker-last > summary')].flatMap(reach),
             CHIP_GAP
         );
 
@@ -260,11 +269,93 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         reseat();
     };
 
+
+    const sending = () => (sent !== null && sent.id === game.id && sent.rev === game.rev ? sent : null);
+
+    const sightNow = (): Sight<Felt> | null =>
+    {
+        if (view === null)
+        {
+            return null;
+        }
+
+        const now = feltOf(view, mine ?? null);
+        const ahead = sending();
+
+        return { id: game.id, rev: game.rev, seat: mine ?? null, view: ahead === null ? now : step(now, ahead.move) };
+    };
+
+    const reset = (sight: Sight<Felt>) =>
+    {
+        held = sameAs(held, sight.view) ? held : sight.view;
+        shown = held;
+    };
+
+    const mend = () =>
+    {
+        const sight = sightNow();
+
+        if (presenter !== null && !presenter.presenting() && sight !== null)
+        {
+            reset(sight);
+        }
+    };
+
+    const staging: Table<Felt, Told> = {
+        kind: 'poker',
+        history: HISTORY,
+        before: (sight) => ({ ...sight, view: before(sight.view) }),
+        reset,
+        same: (sight) => sameAs(held, sight.view),
+        settle: reset,
+        play: (acts, sight) =>
+        {
+            held = told(held, acts.flatMap((act) => act.moves), sight.view);
+            shown = held;
+        },
+        estimate: () => 0
+    };
+
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            mend();
+        });
+    }
+
     mount
     {
         const watcher = typeof ResizeObserver === 'undefined' || root === null ? null : new ResizeObserver(resized);
-        const felt = feltNode();
+        const cloth = feltNode();
+        const clock = runtime().clock;
+        const report = (error: unknown) => console.error(error);
+        const made = createPresenter<Felt, Told>({
+            stage: createStage({ clock, quiet: () => device.reducedMotion(), report }),
+            clock,
+            table: staging,
+            sight: () => untrack(sightNow),
+            report
+        });
+        const unwatch = made.watch((busy) =>
+        {
+            presenting = busy;
+            props.onPresenting?.(busy);
 
+            if (!busy)
+            {
+                untrack(mend);
+            }
+        });
+
+        presenter = made;
+        untrack(() => made.see(props.events));
         shape();
 
         if (watcher !== null && root !== null)
@@ -272,9 +363,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             watcher.observe(root);
         }
 
-        if (watcher !== null && felt !== null)
+        if (watcher !== null && cloth !== null)
         {
-            watcher.observe(felt);
+            watcher.observe(cloth);
         }
 
         void document.fonts?.ready.then(reseat);
@@ -288,6 +379,10 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                 cancelAnimationFrame(laying);
             }
 
+            unwatch();
+            props.onPresenting?.(false);
+            made.dispose();
+            presenter = null;
             cues.dispose();
         };
     }
@@ -304,15 +399,21 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived myRow = view?.seats.find((row) => row.seat === viewer);
 
+    derived myChair = felt.chairs.find((chair) => chair.seat === viewer);
+
     derived tip = view === null || over ? null : coachOf(view, mine);
 
-    derived outcome = view === null || over || !settings.settings().hintOutcome ? null : outcomeOf(view, mine);
+    derived captioned = settings.settings().hintOutcome;
+
+    derived holding = captioned && mine !== undefined ? handOf(felt) : null;
+
+    derived price = view === null || over || !captioned ? null : priceOf(view, mine);
 
     derived handNamed = ((): string =>
     {
-        const hand = outcome?.hand;
+        const hand = holding;
 
-        if (hand == null)
+        if (hand === null)
         {
             return '';
         }
@@ -324,18 +425,13 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         });
     })();
 
-    derived onBoard = outcome?.hand?.board === true;
+    derived onBoard = holding?.board === true;
 
     derived handSays = handNamed === '' ? '' : locale.t(onBoard ? 'helpers.poker.board' : 'helpers.poker.best', { hand: handNamed });
 
     derived handBrief = onBoard ? locale.t('helpers.poker.board.brief', { hand: handNamed }) : handNamed;
 
-    derived costSays = (() =>
-    {
-        const call = outcome?.call;
-
-        return call == null ? '' : locale.t('helpers.poker.cost', { chips: chips(call.chips), pot: chips(call.pot) });
-    })();
+    derived costSays = price === null ? '' : locale.t('helpers.poker.cost', { chips: chips(price.chips), pot: chips(price.pot) });
 
     effect
     {
@@ -359,13 +455,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return Math.min(high, Math.max(low, target));
     };
 
-    state ahead: { rev: number; view: NonNullable<typeof view> } | null = null;
-
-    derived drawn = ahead !== null && ahead.rev === game.rev ? ahead.view : view;
-
     derived turnSeat = view?.turn;
 
-    derived button = view?.button;
+    derived button = felt.button;
 
     derived stateOf = (row: { seat: number; out: boolean; folded: boolean; allIn: boolean }): PlateTag | null =>
     {
@@ -384,12 +476,21 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return { text: locale.t('poker.folded'), tone: 'neutral' };
         }
 
-        return plateTag(locale, game.players.find((one) => one.seat === row.seat), over);
+        const player = game.players.find((one) => one.seat === row.seat);
+
+        if (player === undefined || !over || result)
+        {
+            return plateTag(locale, player, over);
+        }
+
+        const { result: _unshown, ...plain } = player;
+
+        return plateTag(locale, plain, over);
     };
 
     derived ring = aroundStadium(count, ratio);
 
-    derived plates = new Map((drawn?.seats ?? NO_ROWS).map((row): [number, typeof UNSEATED] =>
+    derived plates = new Map(felt.chairs.map((row): [number, typeof UNSEATED] =>
     {
         const spot = ring[(row.seat - viewer + count) % count] ?? UNSEATED;
 
@@ -427,37 +528,35 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived playing = !over;
 
-    derived blindsSay = view === null ? '' : `${ chips(view.blinds.small) }/${ chips(view.blinds.big) }`;
+    derived blindsSay = view === null ? '' : `${ chips(felt.blinds.small) }/${ chips(felt.blinds.big) }`;
 
-    derived streetSays = locale.t(`poker.street.${ view?.street ?? 'preflop' }` as never);
+    derived streetSays = locale.t(`poker.street.${ felt.street }` as never);
 
     derived blindsTold = view === null
         ? ''
-        : `${ locale.t('poker.blinds') }, ${ streetSays }, ${ locale.plural('poker.next', view.blinds.next) }, ${ locale.t('poker.hand', { n: locale.n(view.hand) }) }, ${ locale.t('poker.level', { level: locale.n(view.blinds.level) }) }`;
+        : `${ locale.t('poker.blinds') }, ${ streetSays }, ${ locale.plural('poker.next', felt.blinds.next) }, ${ locale.t('poker.hand', { n: locale.n(felt.hand) }) }, ${ locale.t('poker.level', { level: locale.n(felt.blinds.level) }) }`;
 
-    derived slots = BOARD_SLOTS.map((slot) => ({ slot, cards: (view?.board ?? NO_CARDS).slice(slot, slot + 1) }));
+    derived slots = BOARD_SLOTS.map((slot) => ({ slot, cards: felt.board.slice(slot, slot + 1) }));
 
-    derived potSays = locale.t('poker.pot', { chips: chips(view?.pot ?? 0) });
+    derived potSays = locale.t('poker.pot', { chips: chips(felt.pot) });
 
-    derived layers = view?.pots ?? NO_POTS;
+    derived layers = felt.pots;
 
     derived sided = layers.length > 1;
 
     derived potsSay = locale.list(layers.map((pot, index) => locale.t(index === 0 ? 'poker.main' : 'poker.side', { chips: chips(pot.amount) })));
 
-    derived lastKnown = view?.last !== undefined;
+    derived lastKnown = felt.last !== null;
 
-    derived lastShown = view?.last?.shown ?? NO_HANDS;
+    derived lastShown = felt.last === null ? [] : felt.last.shown.map((row) => ({ ...row, cards: [...row.cards] }));
 
     derived lastTabled = lastShown.length > 0;
 
-    derived hole = view?.hole ?? NO_CARDS;
+    derived hole = [...felt.hole];
 
     derived pockets = POCKETS.map((slot) => ({ slot, cards: hole.slice(slot, slot + 1) }));
 
-    derived handed = view !== null && !over && mine !== undefined && myRow !== undefined && !myRow.out;
-
-    derived captioned = settings.settings().hintOutcome;
+    derived handed = view !== null && !result && mine !== undefined && myChair !== undefined && !myChair.out;
 
     derived opening = highest === 0;
 
@@ -484,7 +583,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return '';
         }
 
-        if (mine !== undefined && myRow?.out === true)
+        if (mine !== undefined && myChair?.out === true)
         {
             return locale.t('poker.turn.out');
         }
@@ -499,9 +598,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived lastSays = ((): string[] =>
     {
-        const last = view?.last;
+        const last = felt.last;
 
-        if (last === undefined)
+        if (last === null)
         {
             return [];
         }
@@ -517,21 +616,40 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         });
     })();
 
+    const unsend = (id: string, rev: number) =>
+    {
+        if (sent === null || sent.id !== id || sent.rev !== rev)
+        {
+            return;
+        }
+
+        sent = null;
+        presenter?.predict(null);
+        untrack(mend);
+    };
+
     const send = async (verb: PokerVerb, amount?: number) =>
     {
         const current = untrack(() => view);
         const seat = untrack(() => mine);
+        const id = untrack(() => game.id);
+        const rev = untrack(() => game.rev);
 
-        if (current !== null && seat !== undefined && !untrack(board.busy))
+        if (current !== null && seat !== undefined && presenter !== null && !untrack(board.busy))
         {
-            ahead = { rev: untrack(() => game.rev), view: predicted(current, seat, verb, amount) };
+            const move = pressed(current, seat, verb, amount);
+
+            sent = { id, rev, move };
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === move.e && moves[0].seat === seat && moves[0].amount === move.amount ? 1 : null) });
+            held = step(held, move);
+            shown = held;
         }
 
         const outcome = await board.play(verb === 'raise' ? { kind: 'poker', verb, amount: amount ?? 0 } : { kind: 'poker', verb });
 
         if (outcome === 'stale' || outcome === 'failed')
         {
-            ahead = null;
+            unsend(id, rev);
         }
     };
 
@@ -620,7 +738,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         await (chosen >= high ? send('allin') : send('raise', chosen));
     };
 
-    <div data-rev={ props.match.rev } class="table-stage poker-stage" ref={ (element) => root = element }>
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage poker-stage" ref={ (element) => root = element }>
         <div class="table-grid poker-grid">
             <Show when={ seated }>
                 { () =>
@@ -855,7 +973,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             </Show>
         </div>
 
-        <Show when={ over }>
+        <Show when={ result }>
             { () =>
                 <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
