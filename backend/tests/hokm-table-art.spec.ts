@@ -255,6 +255,28 @@ describe('the hand a hokm reader holds', () =>
         expect(board).toContain('<span class="hokm-token" data-suit={ call.suit } aria-hidden="true">');
     });
 
+    it('reads a card in the box it is offered in and puts one down in the box it is glimpsed in, and draws neither place', () =>
+    {
+        const lifted = ruleOf('.hokm-offer,\n.hokm-lift');
+        const down = ruleOf('.hokm-glimpse,\n.hokm-down');
+        const unseen = ruleOf('.hokm-lift,\n.hokm-down');
+
+        expect(lifted, 'a card is lifted to a box that is not the one it is offered in').toContain('inline-size: var(--card-w);');
+        expect(lifted).toContain('inset: 0;');
+        expect(lifted).toContain('margin: auto;');
+        expect(down, 'a card goes face down somewhere else than where it is glimpsed').toContain('left: calc(8% + clamp(1.75rem, 8cqmin, 2.75rem) + 1rem);');
+        expect(down).toContain('rotate: 9deg;');
+        expect(board, 'the card lands at another tilt than the one it lies at').toContain('const GLIMPSE_TILT = 9;');
+        expect(ruleOf('.hokm-down'), 'the place has no size to fly a card to').toContain('inline-size: var(--card-w);');
+        expect(unseen).toContain('visibility: hidden;');
+        expect(unseen).toContain('pointer-events: none;');
+        expect(ruleOf('.hokm-glimpse'), 'the card that lands is dimmed in one frame').toContain('animation: hokm-sink 0.4s ease-out;');
+        expect(sheet).toContain('@keyframes hokm-sink\n{\n    from\n    {\n        opacity: 1;\n    }\n}');
+        expect(board).toContain('<span class="hokm-lift"></span>');
+        expect(board).toContain('<span class="hokm-down"></span>');
+        expect(board, 'a card that lies on the felt can be kept after the view has taken it back').toContain('disabled={ board.busy() || !drawing }');
+    });
+
     it('never takes a card away from the keyboard, and draws the keyboard\'s place on the card itself', () =>
     {
         const held = (/<button\s+type="button"\s+class="card-hold"[\s\S]*?>\s*<CardFace/.exec(board) ?? [''])[0];

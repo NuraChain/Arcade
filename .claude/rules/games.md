@@ -3806,8 +3806,8 @@ nothing in flight can widen a page the matrix measures.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
 - **The two-handed draw is played on the felt, by the card and the stock, and rings once.** A stock
-  pile with its count sits at the felt's edge; a draw flies one card back from it to the drawer
-  (`drawOne`) and a discard is a sound with nothing flying. The seat putting cards down lifts
+  pile with its count sits at the felt's edge, and what flies from it and to it is under *The
+  two-handed draw is played with cards that move*, below. The seat putting cards down lifts
   them in the hand. The stock counts them ("2/3") and, at the exact count, lights up and takes
   them when it is pressed; a lift past the count is refused with the deny cue, so the count never
   reads "4/3". The drawer alone is shown the drawn card, face up in the middle of the felt:
@@ -4587,6 +4587,63 @@ seats and reduced motion; `hokm-cues.spec.ts` holds `trump` at the landing and `
 the keyboard, reduced motion, a jump, the echo in the air and after it, the card the server
 had taken and the table that had moved on; `hokm-cues.spec.ts` holds `deny` and its absence;
 `hokm-table-art.spec.ts` holds the hidden slot.
+
+**The two-handed draw is played with cards that move.**
+
+- It was a card that appeared in the middle of the felt, one back that flew to the hand
+  whatever had been chosen, and cards put down that were a sound. Every card that leaves the
+  stock is seen leaving it now, and every card that goes face down is seen going.
+- **The number on the stock is the cards in the pile** (`pileOf`). The server's `stock` does
+  not count the card on offer, and only the drawer is sent that card. For the seat it is
+  offered to it lies face up on the felt. For everybody else it is still the top card of the
+  pile and is counted there, so a waiting seat and a watcher read one more than the drawer
+  does: 42, 40, 38 against 41, 39, 37. The number changes when a card is seen to move
+  (`dealing.stock` through a scene), and a card the reader is keeping, passing or being given
+  back is out of it all the while (`outOfStock`).
+- **The card on offer is lifted** from the top of the stock, growing and turning over, to the
+  middle of the felt (`lift`, 360 ms), at the end of the scene that made it the reader's turn.
+  It is drawn from what has been SHOWN (`seen.offer`, `lain`) and not from the view, and the
+  card, the stock's press, the sentence, the chime and the turn's ring wait for it to land
+  (`veiled` holds them, and the cap and the hurry that release the five cards release this).
+  A jump shows it at once (`shownAll`).
+- **A draw is two cards.** A keep flies the card from the felt to its place in the hand, and
+  the next card comes off the stock, turns over for the reader alone beside it and lies there
+  dimmed (`.hokm-glimpse`; it lands at the tilt it lies at and is dimmed over 0.4 s). A pass
+  turns the card face down where it lies and slides it away, and the card taken instead comes
+  off the stock and turns face up into its slot. Another seat's draw is one back to their
+  pile and one back away, ALWAYS in that order, because which they chose is theirs to know.
+  So is a draw of the reader's own that the newest view cannot tell (`latest`): one two
+  actions back in a batch.
+- **Cards put down go as one packet** to the place beside the stock, at the size of a card of
+  the stock, and are released there (D4: no pile, no count, no class with "discard" or "burn"
+  in it). The reader's own turn face down first and gather where they were held.
+- **Two places on the felt are measured and never drawn**: `.hokm-lift`, the offer's box, and
+  `.hokm-down`, the glimpse's. A flight needs somewhere to go before the thing that will lie
+  there is in the page, and after it has left.
+- **A press is answered at once**, with a prelude (`pledge`, `pledged`): the kept card leaves
+  for the hand, the passed card turns over and goes, the chosen cards turn over and go, and
+  the prediction covers nothing. The scene for the server's `draw` or `discard` plays what
+  the press could not (the second card, the card taken instead, the counts) and waits for
+  what is still on its way before the turn passes. A refusal brings the card back to the felt
+  (from the hand, out of the air, or turned face up from beside the stock) or the cards back
+  to their places, with `deny`, and the keyboard with it (`undraw`, `unput`). A jump drops
+  the pledge: the table is drawn from the view, and the whole draw is played when it is
+  answered. The scene and the refusal tell their own pledge by the object itself, so an
+  answer that comes after a jump says nothing.
+- **The reader is not asked for cards before they have been dealt them**: `due` waits for
+  `veiled`. A fast Hâkem could put the dealer into the discard while their felt was still
+  dealing, and a tap on a card that could not be seen counted as a choice.
+- The keyboard goes to a kept card when it is in the hand, and to the hand at once when a
+  card is passed or cards are put down: the thing that was pressed is gone.
+
+`hokm-board.spec.ts` (*the two-handed draw*) holds the count for each reader, the two
+places, another seat's draw, the lift and where it comes from, a jump, the clock's keep and
+pass, the press for each of the three and what the server's answer still plays, each
+refusal, a draw the view cannot tell, a later turn's card, the packets, reduced motion and
+the keyboard; *a hand dealt in packets* holds the cards not asked for early;
+`hokm-cues.spec.ts` holds what is heard at the press and at the answer, the chime at the
+landing and `deny`; `hokm-beats.spec.ts` holds the time each is given;
+`hokm-table-art.spec.ts` holds the two places and the dimming.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the

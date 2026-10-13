@@ -4,7 +4,7 @@ import { createSignal } from 'azerothjs';
 
 import { dealerOf } from '../../backend/src/domains/match/hokm/scoring.ts';
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
-import { NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
+import { DRAW_GAP, LIFT, NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
 import { EASE, TIMING } from '../src/game/motion.ts';
 import { FAST, HASTE } from '../src/game/stage/director.ts';
 import { EDGE } from '../src/game/stage/flight.ts';
@@ -1533,20 +1533,661 @@ describe('the two-handed draw', () =>
         ]);
     });
 
-    it('shows the stock as a count to everybody, counts a hand being filled on its plate and nowhere else, and gives a watcher nothing to press', () =>
+    it('counts the cards that are in the stock, the one being looked at among them unless it lies on the felt, and gives a watcher nothing to press', () =>
     {
         const drawer = renderTest(() => HokmBoard({ events: NO_EVENTS, match: drawing(0) }) as Rendered);
 
-        expect(drawer.container.querySelector('.hokm-stock')?.textContent).toContain('39');
+        expect(drawer.container.querySelector('.hokm-stock-count')?.textContent, 'the card on the felt in front of the reader is counted in the stock as well').toBe('39');
         expect(drawer.container.querySelector('.hokm-filled')).toBeNull();
         expect(drawer.container.textContent).not.toContain('7/13');
         expect(drawer.container.querySelector('.hokm-seat[data-seat="0"]')?.textContent).toContain('5 cards');
         drawer.unmount();
 
+        for (const other of [drawing(1), watching()])
+        {
+            const seen = renderTest(() => HokmBoard({ events: NO_EVENTS, match: other }) as Rendered);
+
+            expect(seen.container.querySelector('.hokm-stock-count')?.textContent, `reader ${ other.mine }: a card nobody has seen leave the stock is missing from its count`).toBe('40');
+            expect([...seen.container.querySelectorAll('.hokm-side p')].map((one) => one.textContent), `reader ${ other.mine }`).toContain('40 cards in the stock');
+            seen.unmount();
+        }
+
         const watcher = renderTest(() => HokmBoard({ events: NO_EVENTS, match: watching() }) as Rendered);
 
-        expect(watcher.container.querySelector('.hokm-stock')?.textContent).toContain('39');
         expect(beside(watcher.container)).toEqual([]);
+    });
+
+    const chairs = (mine: number, theirs: number) => [{ seat: 0, side: 0, held: mine, tricks: 0, out: false }, { seat: 1, side: 1, held: theirs, tricks: 0, out: false }];
+
+    const theirs = (view: Partial<Hokm> = {}): MatchView => ({ ...two({ phase: 'draw', turn: 1, stock: 39, hand: [1, 15, 27, 40, 41, 50], seats: chairs(6, 5), ...view }, 0), remainingMs: 20_000 });
+
+    const ours = (view: Partial<Hokm> = {}): MatchView => ({ ...two({ phase: 'draw', turn: 0, stock: 39, offer: 12, hand: [1, 15, 27, 40, 41, 50], seats: chairs(6, 6), ...view }, 0), remainingMs: 20_000 });
+
+    const air = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.board-flight > .flight')].map((one) =>
+    {
+        const face = one.querySelector<HTMLElement>('.card-face');
+        const card = face === null ? null : Number(face.style.getPropertyValue('--at-suit')) * 13 + Number(face.style.getPropertyValue('--at-rank'));
+
+        return one.classList.contains('turning') ? `turn ${ card }` : (one.classList.contains('stack') ? `backs ${ one.children.length }` : (card === null ? 'back' : `face ${ card }`));
+    });
+
+    const left = (container: HTMLElement) => container.querySelector('.hokm-stock-count .tally')?.textContent;
+
+    const heldBy = (container: HTMLElement) => [0, 1].map((seat) => Number([...container.querySelectorAll(`.hokm-seat[data-seat="${ seat }"] .table-plate-facts .tally`)][1]?.textContent));
+
+    const said = (container: HTMLElement) => container.querySelector('.hokm-rail > p[aria-live]')?.textContent;
+
+    const at = (x: number, y: number, width: number, height: number) => ({ x, y, left: x, top: y, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+    it('has a place on the felt for a card to be read at and one for a card to go face down, and draws neither', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ events: NO_EVENTS, match: theirs() }) as Rendered);
+
+        for (const spot of ['.hokm-lift', '.hokm-down'])
+        {
+            expect(container.querySelector(`.hokm-table ${ spot }`)?.closest('[aria-hidden="true"]'), spot).not.toBeNull();
+            expect(container.querySelector(spot)?.children.length, spot).toBe(0);
+        }
+
+        expect(container.querySelector('[class*="discard"], [class*="burn"]')).toBeNull();
+    });
+
+    it('takes a card the other seat draws to their hand as a back and puts one more face down, whichever they chose, and only then lifts the reader\'s', async () =>
+    {
+        const { container, send } = await mounted(theirs());
+
+        expect([left(container), ...heldBy(container)]).toEqual(['40', 6, 5]);
+
+        send([act(4, 1, { e: 'draw', seat: 1 })], { offer: 12 });
+        await flush();
+
+        expect([air(container), left(container), ...heldBy(container)], 'the card they take did not leave the stock at once').toEqual([['back'], '39', 6, 5]);
+
+        await elapse(DRAW_GAP + 2);
+
+        expect([air(container), left(container)], 'the card that goes face down did not follow it').toEqual([['back', 'back'], '38']);
+        expect(container.querySelector('.board-flight .card-face'), 'a card of theirs was shown').toBeNull();
+
+        await elapse(TIMING.DEAL_FLY - DRAW_GAP);
+
+        expect([air(container), ...heldBy(container)], 'their hand was not counted when the card reached it').toEqual([['back'], 6, 6]);
+        expect(container.querySelector('.hokm-seat[data-seat="1"] > .hokm-clock'), 'the turn passed before the draw had been seen').not.toBeNull();
+
+        await elapse(DRAW_GAP + 2);
+
+        expect([air(container), left(container)], 'the card offered to the reader did not leave the stock turning over').toEqual([['turn 12'], '37']);
+        expect([container.querySelector('.hokm-offer'), container.querySelector('.hokm-stock-press'), said(container)], 'the reader was asked before the card had been shown to them').toEqual([null, null, '']);
+
+        await elapse(LIFT - 10);
+
+        expect([container.querySelector('.hokm-offer'), container.querySelector('.hokm-stock-press')]).toEqual([null, null]);
+
+        await elapse(15);
+
+        expect(container.querySelector<HTMLButtonElement>('button.hokm-offer')?.disabled, 'the card that landed cannot be kept').toBe(false);
+        expect(container.querySelector('.hokm-offer .card-face')).not.toBeNull();
+        expect(container.querySelector('.hokm-stock-press')).not.toBeNull();
+        expect([air(container), left(container), said(container)]).toEqual([[], '37', 'Keep it, or take the next.']);
+        expect(container.querySelector('.hokm-seat[data-seat="0"] > .hokm-clock')).not.toBeNull();
+    });
+
+    it('lifts the card from the top of the stock to the place it is read at, growing as it comes', async () =>
+    {
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            if (this.classList.contains('hokm-lift'))
+            {
+                return at(400, 300, 72, 102);
+            }
+
+            return this.classList.contains('card-back') && this.closest('.hokm-stock-pile') !== null ? at(60, 320, 36, 51) : at(0, 0, 0, 0);
+        });
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(theirs());
+
+        send([act(4, 1, { e: 'draw', seat: 1 })], { offer: 12 });
+        await elapse(TIMING.DEAL_FLY + DRAW_GAP + 5);
+
+        const [clone] = [...container.querySelectorAll<HTMLElement>('.board-flight > .turning')];
+        const frames = animate.mock.calls.filter((_, nth) => animate.mock.contexts[nth] === clone).map(([one]) => one as Keyframe[]);
+
+        expect([clone?.style.left, clone?.style.top, clone?.style.width], 'the card does not land where it is read').toEqual(['400px', '300px', '72px']);
+        expect(frames.map((one) => one[0]?.translate).filter((one) => one !== undefined), 'it did not come from the top of the stock').toEqual(['-358px -5.5px']);
+        expect(frames.map((one) => one[0]?.scale).filter((one) => one !== undefined), 'it did not leave the stock at the size of a card of the stock').toEqual(['0.5 0.5']);
+        expect([...(clone?.children ?? [])].map((one) => one.className), 'it left the stock face up').toEqual(['card-back', 'card-face']);
+    });
+
+    it('offers a card that is there when the board has to jump, without waiting for it to be lifted', async () =>
+    {
+        const { container, read, match: now } = await mounted(theirs());
+
+        read({ ...ours({ stock: 37, seats: chairs(6, 6) }), rev: now().rev + 5 });
+        await elapse(TIMING.FADE);
+
+        expect(container.querySelector('.hokm-offer .card-face'), 'the card is in the view and not on the felt').not.toBeNull();
+        expect([left(container), said(container)]).toEqual(['37', 'Keep it, or take the next.']);
+        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
+    });
+
+    const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+    {
+        if (this.classList.contains('flight'))
+        {
+            return at(250, 500, 60, 84);
+        }
+
+        if (this.classList.contains('hokm-lift'))
+        {
+            return at(400, 300, 72, 102);
+        }
+
+        if (this.classList.contains('hokm-down'))
+        {
+            return at(110, 310, 36, 51);
+        }
+
+        if (this.classList.contains('card-face') && this.closest('.card-hold[data-card="12"]') !== null)
+        {
+            return at(100, 700, 60, 84);
+        }
+
+        return this.classList.contains('card-back') && this.closest('.hokm-stock-pile') !== null ? at(60, 320, 36, 51) : at(0, 0, 0, 0);
+    });
+
+    const asked = () =>
+    {
+        let answer: (outcome: 'stale' | 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        return (outcome: 'stale' | 'failed') => answer(outcome);
+    };
+
+    const keyed = (button: HTMLElement | null) =>
+    {
+        button?.focus();
+        button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    };
+
+    it('flies a card the clock kept for the reader from the felt to its place in the hand, and turns over beside the stock the one that went face down', async () =>
+    {
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(ours());
+        const slot = () => container.querySelector('.card-hold[data-card="12"]')?.closest('li');
+        const first = (clone: Element | undefined) => animate.mock.calls.filter((_, nth) => animate.mock.contexts[nth] === clone).map(([one]) => (one as Keyframe[])[0]);
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 12, 15, 27, 40, 41, 50], offer: undefined, glimpse: 9 });
+        await flush();
+
+        const [kept] = [...container.querySelectorAll('.board-flight > .flight')];
+
+        expect([air(container), left(container), ...heldBy(container)], 'the card did not leave the felt for the hand').toEqual([['face 12'], '39', 6, 6]);
+        expect(container.querySelector('.hokm-offer'), 'the card was on the felt and in the air at once').toBeNull();
+        expect(slot()?.getAttribute('data-dealt'), 'the card was in the hand before it had crossed the table').toBe('false');
+        expect([first(kept)[0]?.translate, first(kept)[0]?.scale], 'it did not come from where it lay').toEqual(['306px -391px', '1.2']);
+
+        await elapse(DRAW_GAP + 2);
+
+        const second = [...container.querySelectorAll('.board-flight > .turning')].pop();
+
+        expect([air(container), left(container)], 'the card that goes face down did not leave the stock').toEqual([['face 12', 'turn 9'], '38']);
+        expect(first(second).find((one) => one?.translate !== undefined)?.translate, 'it did not go from the stock to its place beside it').toBe('-50px 10px');
+        expect(animate.mock.calls.filter((_, nth) => animate.mock.contexts[nth] === second).map(([one]) => (one as Keyframe[]).at(-1)?.rotate).filter((one) => one !== undefined), 'it does not land at the tilt it will lie at').toEqual(['9deg']);
+        expect(container.querySelector('.hokm-glimpse'), 'the card put down was shown before it had been turned over').toBeNull();
+
+        await elapse(TIMING.FLY - DRAW_GAP + 5);
+
+        expect([slot()?.hasAttribute('data-dealt'), slot()?.hasAttribute('data-back'), ...heldBy(container)], 'the card that landed is not in the hand, or not counted').toEqual([false, false, 7, 6]);
+
+        await elapse(DRAW_GAP + LIFT - TIMING.FLY + 5);
+
+        expect(container.querySelector('.hokm-glimpse .card-face'), 'the reader is not shown what the keep put down').not.toBeNull();
+        expect([air(container), left(container)], 'the card the other seat is looking at left the count of the stock').toEqual([[], '38']);
+        expect(container.querySelector('.hokm-seat[data-seat="1"] > .hokm-clock')).not.toBeNull();
+    });
+
+    it('sends the card the reader keeps to their hand at the press, and flies it once whatever the server says after', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(ours());
+        const slot = () => container.querySelector('.card-hold[data-card="12"]')?.closest('li');
+
+        fire(offer(container)!, 'click');
+
+        const [kept] = [...container.querySelectorAll('.board-flight > .flight')];
+        const frames = animate.mock.calls[animate.mock.contexts.lastIndexOf(kept)]?.[0] as Keyframe[] | undefined;
+
+        expect([air(container), offer(container), stock(container), left(container), ...heldBy(container)], 'the card waited for the server, or the stock counted it back in').toEqual([['face 12'], null, null, '39', 6, 6]);
+        expect([frames?.[0].translate, frames?.[0].scale], 'it did not come from where it lay').toEqual(['306px -391px', '1.2']);
+        expect(slot()?.getAttribute('data-back'), 'the card was in the hand before it had crossed the table').toBe('true');
+        expect([...container.querySelectorAll<HTMLElement>('.hokm-hand .card-hold')].map((one) => Number(one.dataset.card)), 'the hand made no room for it, or not where the server will say it goes').toEqual([1, 12, 15, 27, 40, 41, 50]);
+
+        await elapse(TIMING.FLY + 5);
+
+        expect([air(container), slot()?.hasAttribute('data-back'), left(container)]).toEqual([[], false, '39']);
+        expect(document.activeElement?.classList.contains('card-hold'), 'a card that was clicked took the keyboard').toBe(false);
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 12, 15, 27, 40, 41, 50], offer: undefined, glimpse: 9 });
+        await flush();
+
+        expect([air(container), left(container)], 'the card the server confirmed was flown again, or the one put down was not').toEqual([['turn 9'], '38']);
+        expect([slot()?.hasAttribute('data-dealt'), slot()?.hasAttribute('data-back')], 'the card that had landed was hidden again').toEqual([false, false]);
+
+        await elapse(LIFT + 5);
+
+        expect(container.querySelector('.hokm-glimpse .card-face')).not.toBeNull();
+        expect([air(container), left(container), ...heldBy(container), moved(animate)[0]]).toEqual([[], '38', 7, 6, 2]);
+    });
+
+    it('leaves a kept card in the hand, and off the felt, however long the server takes to answer', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container } = await mounted(ours());
+
+        fire(offer(container)!, 'click');
+        await elapse(4000, 20);
+
+        expect([offer(container), stock(container), left(container), said(container)], 'the card was put back on the felt, or asked about again, while it was being kept').toEqual([null, null, '39', 'Keep it, or take the next.']);
+        expect(container.querySelector('.card-hold[data-card="12"]')?.closest('li')?.hasAttribute('data-back')).toBe(false);
+    });
+
+    it('brings a card the reader could not keep back to the felt from the hand, and offers it again when it has landed', async () =>
+    {
+        const answer = asked();
+
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(ours());
+
+        fire(offer(container)!, 'click');
+        await elapse(TIMING.FLY + 20);
+        answer('failed');
+        await flush();
+
+        const [back] = [...container.querySelectorAll('.board-flight > .flight')];
+        const frames = animate.mock.calls[animate.mock.contexts.lastIndexOf(back)]?.[0] as Keyframe[] | undefined;
+
+        expect([air(container), container.querySelector('.card-hold[data-card="12"]'), offer(container)], 'the card was left in a hand that does not hold it, or put on the felt in one frame').toEqual([['face 12'], null, null]);
+        expect(left(container), 'a card on its way back to the felt was counted into the stock').toBe('39');
+        expect([frames?.[0].translate, frames?.at(-1)?.translate], 'it did not come back from its place in the hand').toEqual(['-306px 391px', '0px 0px']);
+
+        await elapse(TIMING.FLY + 5);
+
+        expect(offer(container)?.disabled, 'the card that came back cannot be kept').toBe(false);
+        expect([air(container), stock(container) === null, left(container), container.querySelectorAll('.hokm-hand .card-hold').length]).toEqual([[], false, '39', 6]);
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 15, 27, 33, 40, 41, 50], offer: undefined });
+        await elapse(LONG, 5);
+
+        expect(left(container), 'the stock went on counting as if the card were still on its way back').toBe('38');
+    });
+
+    it('turns a card round in the air when keeping it is refused before it has reached the hand', async () =>
+    {
+        const answer = asked();
+
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(ours());
+
+        fire(offer(container)!, 'click');
+        await elapse(100);
+        answer('stale');
+        await flush();
+
+        const [back] = [...container.querySelectorAll('.board-flight > .flight')];
+        const frames = animate.mock.calls[animate.mock.contexts.lastIndexOf(back)]?.[0] as Keyframe[] | undefined;
+
+        expect(air(container), 'the copy on its way to the hand went on flying').toEqual(['face 12']);
+        expect(frames?.[0].translate, 'it jumped to the hand it had not reached, and came back from there').toBe('-156px 191px');
+        expect(container.querySelector('.hokm-hand > li[data-back]')).toBeNull();
+    });
+
+    it('turns a card the clock passed for the reader face down where it lies, slides it away, and brings the next one from the stock face up', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(ours());
+        const slot = () => container.querySelector('.card-hold[data-card="33"]')?.closest('li');
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 15, 27, 33, 40, 41, 50], offer: undefined });
+        await flush();
+
+        const [passed] = [...container.querySelectorAll('.board-flight > .turning')];
+        const faces = animate.mock.calls.filter((_, nth) => animate.mock.contexts[nth] === passed?.querySelector('.card-face')).map(([one]) => (one as Keyframe[]).map((frame) => frame.opacity));
+
+        expect([air(container), left(container)], 'the card that was passed did not turn over where it lay').toEqual([['turn 12'], '39']);
+        expect(faces, 'it was not turned face down').toEqual([[1, 1, 0, 0]]);
+        expect(container.querySelector('.hokm-offer')).toBeNull();
+        expect(slot()?.getAttribute('data-dealt'), 'the card that was taken was in the hand before it had left the stock').toBe('false');
+
+        await elapse(TURN + 5);
+
+        expect([air(container), left(container)], 'the passed card did not go away as a back while the next one came face up').toEqual([['back', 'turn 33'], '38']);
+
+        await elapse(LIFT + 5);
+
+        expect([air(container), slot()?.hasAttribute('data-dealt'), ...heldBy(container)]).toEqual([[], false, 7, 6]);
+        expect(container.querySelector('.hokm-glimpse'), 'a card nobody looked at is shown to the reader').toBeNull();
+    });
+
+    it('turns the card the reader passes over at the press and slides it away, and deals them the next when the server sends it', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(ours());
+        const slot = () => container.querySelector('.card-hold[data-card="33"]')?.closest('li');
+
+        fire(stock(container)!, 'click');
+
+        expect([air(container), offer(container), stock(container), left(container)], 'the card waited for the server, or the stock counted it back in').toEqual([['turn 12'], null, null, '39']);
+
+        await elapse(TURN + 5);
+
+        expect(air(container), 'it was not slid away face down').toEqual(['back']);
+
+        await elapse(TIMING.DEAL_FLY + 5);
+
+        expect([air(container), container.querySelectorAll('.hokm-hand .card-hold').length]).toEqual([[], 6]);
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 15, 27, 33, 40, 41, 50], offer: undefined });
+        await flush();
+
+        expect([air(container), left(container), slot()?.getAttribute('data-dealt')], 'the card taken instead did not come from the stock, or the passed one went twice').toEqual([['turn 33'], '38', 'false']);
+
+        await elapse(LIFT + 5);
+
+        expect([air(container), slot()?.hasAttribute('data-dealt'), ...heldBy(container), moved(animate)[0]]).toEqual([[], false, 7, 6, 3]);
+    });
+
+    it('turns a card the reader could not pass face up again and brings it back from beside the stock', async () =>
+    {
+        const answer = asked();
+        const { container } = await mounted(ours());
+
+        fire(stock(container)!, 'click');
+        await elapse(TURN + TIMING.DEAL_FLY + 20);
+        answer('stale');
+        await flush();
+
+        expect([air(container), offer(container), left(container)], 'the card was put back on the felt in one frame, or counted into the stock on its way').toEqual([['turn 12'], null, '39']);
+
+        await elapse(LIFT + 5);
+
+        expect(offer(container)?.querySelector('.card-face')).not.toBeNull();
+        expect([air(container), stock(container) === null, left(container)]).toEqual([[], false, '39']);
+    });
+
+    it('puts a card back on the felt when the board has to jump while keeping it is still being asked, and plays the whole draw when it is answered', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(ours());
+
+        fire(offer(container)!, 'click');
+
+        const looking = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        document.dispatchEvent(new Event('visibilitychange'));
+
+        expect([air(container), offer(container)?.querySelector('.card-face') === null, container.querySelectorAll('.hokm-hand .card-hold').length], 'the table was drawn from the view with the card still in the hand, or in the air').toEqual([[], false, 6]);
+        expect(container.querySelector('.hokm-hand > li[data-back]')).toBeNull();
+
+        looking.mockReturnValue('visible');
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 12, 15, 27, 40, 41, 50], offer: undefined, glimpse: 9 });
+        await flush();
+
+        expect(air(container), 'a draw the table had forgotten half of was played by halves').toEqual(['face 12']);
+    });
+
+    it('hands the keyboard to a kept card when it is in the hand, and to the hand at once when a card is passed or cards are put down', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const kept = await mounted(ours());
+
+        keyed(offer(kept.container));
+        await elapse(TIMING.FLY - 5);
+
+        expect(document.activeElement, 'the keyboard was given a card that cannot be seen yet').not.toBe(kept.container.querySelector('.card-hold[data-card="12"]'));
+
+        await elapse(10);
+
+        expect(document.activeElement, 'the keyboard was left on a card that is gone from the felt').toBe(kept.container.querySelector('.card-hold[data-card="12"]'));
+        cleanup();
+
+        const answer = asked();
+        const refused = await mounted(ours());
+
+        keyed(offer(refused.container));
+        await elapse(TIMING.FLY + 20);
+        answer('failed');
+        await elapse(TIMING.FLY + 20);
+
+        expect(document.activeElement, 'the keyboard did not go back to the card with it').toBe(offer(refused.container));
+        cleanup();
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const passed = await mounted(ours());
+
+        keyed(stock(passed.container));
+
+        expect(document.activeElement, 'the keyboard was left on the stock, which can no longer be pressed').toBe(passed.container.querySelector('.card-hold[data-card="1"]'));
+        cleanup();
+
+        const put = await mounted(two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0));
+
+        [51, 3, 27].forEach((card) => fire(put.container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click'));
+        keyed(stock(put.container));
+
+        expect(document.activeElement, 'the keyboard went with the cards that were put down').toBe(put.container.querySelector('.card-hold[data-card="14"]'));
+    });
+
+    it('plays a draw of the reader\'s that it cannot read as anybody\'s: one back to the hand and one away', async () =>
+    {
+        const { container, send } = await mounted(ours());
+
+        send([act(4, 0, { e: 'draw', seat: 0 }), act(5, 1, { e: 'draw', seat: 1 })], { hand: [1, 12, 15, 27, 40, 41, 50], offer: 20, glimpse: 9 });
+        await flush();
+
+        expect(air(container), 'a draw two actions back was played from a view that is not its own').toEqual(['back']);
+        expect([container.querySelector('.hokm-offer'), left(container)], 'the card that lay there was left lying, or counted twice').toEqual([null, '39']);
+
+        await elapse(LONG, 5);
+
+        expect(container.querySelector('.hokm-offer .card-face')).not.toBeNull();
+        expect([left(container), ...heldBy(container), container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length]).toEqual(['35', 7, 7, 0]);
+    });
+
+    it('lifts no card for the reader that belongs to a later turn than the one being played', async () =>
+    {
+        const { container, send } = await mounted(theirs());
+
+        send([act(4, 1, { e: 'draw', seat: 1 }), act(5, 0, { e: 'draw', seat: 0 }), act(6, 1, { e: 'draw', seat: 1 })], { hand: [1, 15, 20, 27, 40, 41, 50], offer: 30 });
+        await elapse(TIMING.DEAL_FLY + DRAW_GAP + 10);
+
+        expect(air(container), 'the card of the reader\'s next turn was lifted two turns early').toEqual(['back']);
+        expect(container.querySelector('.hokm-offer')).toBeNull();
+
+        await elapse(LONG, 5);
+
+        expect(container.querySelector('.hokm-offer .card-face')).not.toBeNull();
+        expect([left(container), ...heldBy(container)]).toEqual(['33', 7, 7]);
+    });
+
+    it('plays cards the clock put down for the reader as backs from their hand', async () =>
+    {
+        const { container, send } = await mounted(two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0));
+
+        send([act(4, 0, { e: 'discard', seat: 0 })], { hand: [3, 27], discard: undefined });
+        await flush();
+
+        expect([air(container), ...heldBy(container)], 'cards nobody chose were turned over one by one').toEqual([['backs 3'], 2, 5]);
+        expect(container.querySelectorAll('.hokm-hand .card-hold').length).toBe(2);
+
+        await elapse(TIMING.DEAL_FLY + 5);
+
+        expect(air(container)).toEqual([]);
+    });
+
+    it('gives the chosen cards back to the hand when the board has to jump, and plays them from there when the server says they went', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0));
+        const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+
+        [51, 3, 27].forEach((card) => fire(hold(card), 'click'));
+        fire(stock(container)!, 'click');
+
+        const looking = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        document.dispatchEvent(new Event('visibilitychange'));
+
+        expect([air(container), container.querySelectorAll('.hokm-hand .card-hold').length], 'the table was drawn from the view with three of its cards missing').toEqual([[], 5]);
+
+        looking.mockReturnValue('visible');
+        send([act(4, 0, { e: 'discard', seat: 0 })], { hand: [14, 40], discard: undefined });
+        await flush();
+
+        expect(air(container), 'cards the table had given back were not put down in front of the reader').toEqual(['backs 3']);
+    });
+
+    it('lands a card that goes face down at the size of a card of the stock, and at the tilt one lies at there', async () =>
+    {
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            if (this.classList.contains('hokm-down'))
+            {
+                return at(110, 310, 44, 62);
+            }
+
+            return this.classList.contains('card-back') && this.closest('.hokm-stock-pile') !== null ? at(60, 320, 44, 62) : at(0, 0, 0, 0);
+        });
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(theirs());
+
+        send([act(4, 1, { e: 'draw', seat: 1 })]);
+        await elapse(DRAW_GAP + 5);
+
+        const gone = [...container.querySelectorAll<HTMLElement>('.board-flight > .flight')].pop();
+        const frames = animate.mock.calls[animate.mock.contexts.lastIndexOf(gone)]?.[0] as Keyframe[] | undefined;
+
+        expect([gone?.style.left, gone?.style.width], 'the card does not go to the place beside the stock').toEqual(['110px', '44px']);
+        expect([frames?.[0].translate, frames?.[0].scale, frames?.at(-1)?.rotate, frames?.at(-1)?.opacity], 'it shrinks on the way, lands straight, or is left lying').toEqual(['-50px 10px', '1', '9deg', 0]);
+    });
+
+    it('gathers the cards the reader chose face down at the press and slides them away as one packet, once', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0));
+        const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+
+        [51, 3, 27].forEach((card) => fire(hold(card), 'click'));
+        fire(stock(container)!, 'click');
+
+        expect([air(container), container.querySelectorAll('.hokm-hand .card-hold').length, container.querySelector('.hokm-stock-due'), stock(container)], 'the three waited for the server, or more could be chosen after them').toEqual([['turn 3', 'turn 27', 'turn 51'], 2, null, null]);
+
+        send([act(4, 0, { e: 'discard', seat: 0 })], { hand: [14, 40], discard: undefined }, { remainingMs: 20_000 });
+        await elapse(TURN + 5);
+
+        expect(air(container), 'they did not go as one packet').toEqual(['backs 3']);
+        expect([heldBy(container), container.querySelector('.hokm-seat[data-seat="0"] > .hokm-clock') === null], 'the hand was not counted down when the server said they had gone, or the turn passed before they had').toEqual([[2, 5], false]);
+
+        await elapse(TIMING.DEAL_FLY + 20);
+
+        expect([air(container), left(container), ...heldBy(container), moved(animate)[0]], 'the cards were put down again when the server said they had gone').toEqual([[], '42', 2, 5, 4]);
+        expect(container.querySelector('[class*="discard"], [class*="burn"]'), 'something on the felt describes the cards put down').toBeNull();
+    });
+
+    it('turns the cards the reader could not put down face up again and brings them back to their places', async () =>
+    {
+        useDevice().overrideCoarse(false);
+
+        const answer = asked();
+        const { container } = await mounted(two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0));
+        const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+        const unseen = () => container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length;
+
+        [51, 3, 27].forEach((card) => fire(hold(card), 'click'));
+        fire(stock(container)!, 'click');
+        await elapse(TURN + TIMING.DEAL_FLY + 20);
+        answer('failed');
+        await flush();
+
+        expect([air(container), container.querySelectorAll('.hokm-hand .card-hold').length, unseen()], 'the cards were put back in the hand in one frame').toEqual([['turn 3', 'turn 27', 'turn 51'], 5, 3]);
+
+        await elapse(TURN + 2 * TURN_GAP + 5);
+
+        expect([air(container), unseen(), container.querySelector('.hokm-stock-due')?.textContent?.trim()]).toEqual([[], 0, '0/3']);
+    });
+
+    it('takes the cards the other seat puts down from their pile as backs, and lifts the first card for a reader who is the Hâkem', async () =>
+    {
+        const { container, send } = await mounted(two({ phase: 'discard', turn: 1, stock: 42, hand: [14, 40], seats: chairs(2, 5) }, 0));
+
+        send([act(4, 1, { e: 'discard', seat: 1 })], { offer: 12 });
+        await flush();
+
+        expect([air(container), left(container), ...heldBy(container)]).toEqual([['backs 2'], '42', 2, 3]);
+
+        await elapse(TIMING.DEAL_FLY + 5);
+
+        expect([air(container), left(container)], 'the first card was not lifted for the Hâkem').toEqual([['turn 12'], '41']);
+        expect(container.querySelector('.hokm-offer')).toBeNull();
+
+        await elapse(LIFT + 5);
+
+        expect(container.querySelector('.hokm-offer .card-face')).not.toBeNull();
+        expect(left(container)).toBe('41');
+    });
+
+    it('leaves the first card in the stock when it is the other seat that is offered it', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+
+        const { container, send } = await mounted(two({ phase: 'discard', turn: 0, discard: 2, hakem: 1, dealer: 0, stock: 42, hand: [3, 14, 27, 40, 51], seats: chairs(5, 2) }, 0));
+        const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+
+        [51, 3].forEach((card) => fire(hold(card), 'click'));
+        fire(stock(container)!, 'click');
+        send([act(4, 0, { e: 'discard', seat: 0 })], { hand: [14, 27, 40], discard: undefined });
+        await elapse(LONG, 5);
+
+        expect([left(container), container.querySelector('.hokm-offer'), container.querySelector('.board-flight')?.children.length]).toEqual(['42', null, 0]);
+    });
+
+    it('only puts the cards down, and lifts the next, for a reader who asked for less motion', async () =>
+    {
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(theirs());
+
+        send([act(4, 1, { e: 'draw', seat: 1 })], { offer: 12 });
+        await elapse(DRAW_GAP + 5);
+
+        expect(container.querySelector('.hokm-offer .card-face'), 'the card was held back for a flight nobody is shown').not.toBeNull();
+        expect([left(container), ...heldBy(container), moved(animate)]).toEqual(['37', 6, 6, [0, 0]]);
     });
 
     it('lets the seat putting cards down lift them, and takes them at the stock only at the exact count', () =>
@@ -2844,6 +3485,33 @@ describe('a hand dealt in packets', () =>
 
         expect(container.querySelector('.hokm-deck')).toBeNull();
         expect(container.querySelector('.hokm-stock')).not.toBeNull();
+    });
+
+    it('does not ask a reader for cards to put down, or lift one for the stock, before the hand they are asked about has been dealt to them', async () =>
+    {
+        const two: MatchView = {
+            ...naming(0, { hakem: 1, dealer: 0, turn: 1, lead: 1, hand: FIVE, stock: 42, seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false })), points: [0, 0] }),
+            seats: 2,
+            rev: 1,
+            players: [0, 1].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+        };
+        const { container, send } = await mounted(two, { seq: 1, id: 'match-1', events: [act(1, 1, { e: 'deal', hakem: 1 })], live: true, jump: false, opens: () => true });
+        const due = () => container.querySelector('.hokm-stock-due')?.textContent?.trim();
+
+        send([act(2, 1, { e: 'trump', seat: 1, suit: 'spades' }), act(3, 1, { e: 'discard', seat: 1 })], { discard: 2 });
+        await flush();
+
+        expect(hidden(container), 'the five were shown before they had been dealt').toBe(5);
+        expect(due(), 'the reader was asked for two of five cards they have not been dealt').toBeUndefined();
+        expect(container.querySelector('.hokm-rail > p[aria-live]')?.textContent, 'and told to in words').toBe('');
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+
+        expect(container.querySelector('.card-hold[data-card="14"]')?.getAttribute('aria-pressed'), 'a card that cannot be seen was lifted for the stock').not.toBe('true');
+
+        await elapse(LONG, 5);
+
+        expect([hidden(container), due()]).toEqual([0, '0/2']);
     });
 
     it('counts the stock down as each five leaves it at a table for two, and the two hands up as each lands', async () =>

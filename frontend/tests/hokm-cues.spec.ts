@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire } from '@azerothjs/testing';
 
-import { NAMING, SHUFFLE, TURN } from '../src/game/hokm-beats.ts';
+import { LIFT, NAMING, SHUFFLE, TURN } from '../src/game/hokm-beats.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
@@ -352,14 +352,145 @@ describe('what a hokm table is heard to do', () =>
         expect(container.querySelector('.hokm-trick[data-card="14"]')).not.toBeNull();
     });
 
-    it('lets a card drawn from the stock and a card put down be heard at a table for two', async () =>
+    it('lets the two cards of a draw be heard leaving the stock, and cards put down be heard going and landing', async () =>
     {
-        const { send } = await mounted(match({ phase: 'draw', turn: 1, lead: 0, stock: 20 }, 0, 2));
+        const drawn = await mounted(match({ phase: 'draw', turn: 1, lead: 0, stock: 20 }, 0, 2));
 
-        send([act(4, 1, { e: 'draw', seat: 1 }), act(5, 0, { e: 'discard', seat: 0 })]);
+        drawn.send([act(4, 1, { e: 'draw', seat: 1 })]);
         await elapse(LONG, 5);
 
-        expect([count('card-slide'), count('card-place')]).toEqual([1, 1]);
+        expect([count('card-slide'), count('card-place')], 'a draw is two cards leaving the stock').toEqual([2, 0]);
+
+        cleanup();
+        told.heard.length = 0;
+
+        const put = await mounted(match({ phase: 'discard', turn: 1, lead: 0, stock: 42 }, 0, 2));
+
+        put.send([act(4, 1, { e: 'discard', seat: 1 })]);
+        await elapse(LONG, 5);
+
+        expect([count('card-slide'), count('card-place')], 'cards put down go as one packet and land once').toEqual([1, 1]);
+    });
+
+    it('lets a card the reader keeps be heard leaving at the press and not again, and the one it puts down when the server names it', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(match({ phase: 'draw', turn: 0, lead: 0, stock: 39, offer: 12, hand: [1, 15, 27] }, 0, 2));
+
+        fire(container.querySelector<HTMLButtonElement>('button.hokm-offer')!, 'click');
+
+        expect([count('card-slide'), told.felt], 'the card was not heard leaving at the press').toEqual([1, ['select']]);
+
+        send([act(4, 0, { e: 'draw', seat: 0 })], { hand: [1, 12, 15, 27], offer: undefined, glimpse: 9 });
+        await elapse(LONG, 5);
+
+        expect([count('card-slide'), count('deny')], 'the kept card was heard twice, or the one put down not at all').toEqual([2, 0]);
+    });
+
+    it('lets cards the reader puts down be heard going and landing from the press, and not again when the server says they went', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+        useDevice().overrideCoarse(false);
+
+        const { container, send } = await mounted(match({ phase: 'discard', turn: 0, lead: 0, discard: 2, stock: 42, hand: [3, 14, 27] }, 0, 2));
+
+        [3, 14].forEach((card) => fire(container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click'));
+        told.heard.length = 0;
+        fire(container.querySelector<HTMLButtonElement>('button.hokm-stock-press')!, 'click');
+        await elapse(TURN + TIMING.DEAL_FLY + 10);
+
+        expect([count('card-slide'), count('card-place')], 'the cards went and landed unheard').toEqual([1, 1]);
+
+        send([act(4, 0, { e: 'discard', seat: 0 })], { hand: [27], discard: undefined });
+        await elapse(LONG, 5);
+
+        expect([count('card-slide'), count('card-place')], 'they were heard again when the server said so').toEqual([1, 1]);
+    });
+
+    it('says nothing for a refusal that comes after the table has had to jump', async () =>
+    {
+        let answer: (outcome: 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockImplementation(() => new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+        useDevice().overrideCoarse(false);
+
+        const jump = () =>
+        {
+            const looking = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+            document.dispatchEvent(new Event('visibilitychange'));
+            looking.mockReturnValue('visible');
+        };
+        const kept = await mounted(match({ phase: 'draw', turn: 0, lead: 0, stock: 39, offer: 12, hand: [1, 15, 27] }, 0, 2));
+
+        fire(kept.container.querySelector<HTMLButtonElement>('button.hokm-offer')!, 'click');
+        jump();
+        answer('failed');
+        await elapse(LONG, 5);
+
+        expect([count('deny'), kept.container.querySelector('button.hokm-offer') === null], 'a card the jump had put back was refused aloud').toEqual([0, false]);
+
+        cleanup();
+
+        const put = await mounted(match({ phase: 'discard', turn: 0, lead: 0, discard: 2, stock: 42, hand: [3, 14, 27] }, 0, 2));
+
+        [3, 14].forEach((card) => fire(put.container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click'));
+        fire(put.container.querySelector<HTMLButtonElement>('button.hokm-stock-press')!, 'click');
+        jump();
+        answer('failed');
+        await elapse(LONG, 5);
+
+        expect([count('deny'), put.container.querySelectorAll('.hokm-hand > li:not([data-dealt="false"]) .card-hold').length], 'cards the jump had given back were refused aloud, or hidden again').toEqual([0, 3]);
+    });
+
+    it('says no, to the ear and to the hand, when a card cannot be kept, passed or put down', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('failed');
+        useDevice().overrideCoarse(false);
+
+        const kept = await mounted(match({ phase: 'draw', turn: 0, lead: 0, stock: 39, offer: 12, hand: [1, 15, 27] }, 0, 2));
+
+        fire(kept.container.querySelector<HTMLButtonElement>('button.hokm-offer')!, 'click');
+        await elapse(LONG, 5);
+
+        expect([count('deny'), told.felt.filter((one) => one === 'deny').length], 'a card that could not be kept came back without a word').toEqual([1, 1]);
+
+        cleanup();
+
+        const passed = await mounted(match({ phase: 'draw', turn: 0, lead: 0, stock: 39, offer: 12, hand: [1, 15, 27] }, 0, 2));
+
+        fire(passed.container.querySelector<HTMLButtonElement>('button.hokm-stock-press')!, 'click');
+        await elapse(LONG, 5);
+
+        expect(count('deny'), 'a card that could not be passed came back without a word').toBe(2);
+
+        cleanup();
+
+        const put = await mounted(match({ phase: 'discard', turn: 0, lead: 0, discard: 2, stock: 42, hand: [3, 14, 27] }, 0, 2));
+
+        [3, 14].forEach((card) => fire(put.container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click'));
+        fire(put.container.querySelector<HTMLButtonElement>('button.hokm-stock-press')!, 'click');
+        await elapse(LONG, 5);
+
+        expect(count('deny'), 'cards that could not be put down came back without a word').toBe(3);
+    });
+
+    it('lets the card lifted for the reader be heard, and rings them in when it has landed and not while it is in the stock', async () =>
+    {
+        const { send } = await mounted(match({ phase: 'discard', turn: 1, lead: 0, stock: 42, hand: [14, 40] }, 0, 2));
+
+        send([act(4, 1, { e: 'discard', seat: 1 })], { offer: 12 });
+        await elapse(TIMING.DEAL_FLY + LIFT - 10);
+
+        expect([count('card-slide'), count('turn')], 'the reader was rung in to a card they have not been shown').toEqual([2, 0]);
+
+        await elapse(20);
+
+        expect([count('turn'), told.felt.filter((one) => one === 'ready').length]).toEqual([1, 1]);
     });
 
     it('is silent when the board has to jump to where the game is', async () =>

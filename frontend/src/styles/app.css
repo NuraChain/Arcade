@@ -1650,7 +1650,8 @@ html:has(.site-drawer[open])
     }
 }
 
-.hokm-offer
+.hokm-offer,
+.hokm-lift
 {
     --card-w: clamp(2.75rem, 14cqmin, 4.5rem);
 
@@ -1660,9 +1661,20 @@ html:has(.site-drawer[open])
     inline-size: var(--card-w);
     block-size: calc(var(--card-w) * 288 / 204);
     margin: auto;
+}
+
+.hokm-offer
+{
     border-radius: calc(var(--card-w) * 0.08);
     box-shadow: 0 14px 26px -8px rgb(0 0 0 / 0.75);
     cursor: pointer;
+}
+
+.hokm-lift,
+.hokm-down
+{
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .hokm-offer::after
@@ -1680,7 +1692,8 @@ html:has(.site-drawer[open])
     cursor: default;
 }
 
-.hokm-glimpse
+.hokm-glimpse,
+.hokm-down
 {
     --card-w: clamp(1.75rem, 8cqmin, 2.75rem);
 
@@ -1690,8 +1703,27 @@ html:has(.site-drawer[open])
     left: calc(8% + clamp(1.75rem, 8cqmin, 2.75rem) + 1rem);
     translate: 0 -50%;
     rotate: 9deg;
-    opacity: 0.6;
     pointer-events: none;
+}
+
+.hokm-glimpse
+{
+    opacity: 0.6;
+    animation: hokm-sink 0.4s ease-out;
+}
+
+.hokm-down
+{
+    inline-size: var(--card-w);
+    block-size: calc(var(--card-w) * 288 / 204);
+}
+
+@keyframes hokm-sink
+{
+    from
+    {
+        opacity: 1;
+    }
 }
 
 .hokm-stock

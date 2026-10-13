@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { CARRY, COLLECT_GAP, NAMING, ROUND, SHUFFLE, TURN, TURN_GAP, collectLength, dealGap, dealLength, dealtIn, gatherLength, gatherOrder, holdBefore, openLength, openingPackets, restPackets, spanOf } from '../src/game/hokm-beats.ts';
+import { CARRY, COLLECT_GAP, DRAW_GAP, LIFT, NAMING, ROUND, SHUFFLE, TURN, TURN_GAP, collectLength, dealGap, dealLength, dealtIn, gatherLength, gatherOrder, holdBefore, openLength, openingPackets, restPackets, spanOf } from '../src/game/hokm-beats.ts';
 import type { Told } from '../src/game/hokm-felt.ts';
 import { TIMING } from '../src/game/motion.ts';
 
@@ -68,11 +68,16 @@ describe('how long a felt takes to show what happened', () =>
         expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 2, 0), 'at a table for two the suit is named and nothing is dealt').toBe(NAMING + TIMING.FADE);
     });
 
-    it('lets one draw finish before the next one flies, and gives a card put down no time of its own', () =>
+    it('gives a draw its two cards and the card lifted after it, and cards put down the time to turn over and go', () =>
     {
-        expect(spanOf([{ e: 'draw', seat: 1 }], 2, 0)).toBe(TIMING.DEAL_FLY);
-        expect(spanOf([{ e: 'draw', seat: 1 }, { e: 'draw', seat: 0 }], 2, 0)).toBe(2 * TIMING.DEAL_FLY);
-        expect(spanOf([{ e: 'discard', seat: 0 }], 2, 0)).toBe(0);
+        expect(LIFT, 'a card is lifted from the stock in the time another seat\'s card takes to reach the felt').toBe(TIMING.FLY_THEIRS);
+        expect(spanOf([{ e: 'draw', seat: 1 }], 2, 0), 'another seat draws, and the reader is offered the next').toBe(DRAW_GAP + TIMING.DEAL_FLY + LIFT);
+        expect(spanOf([{ e: 'draw', seat: 0 }], 2, 0), 'the reader passes: the card turns over, and the next comes').toBe(TURN + LIFT);
+        expect(spanOf([{ e: 'draw', seat: 1 }], 2, null), 'a watcher is offered nothing').toBe(DRAW_GAP + TIMING.DEAL_FLY);
+        expect(spanOf([{ e: 'draw', seat: 1 }, { e: 'draw', seat: 0 }], 2, 0), 'one draw finishes before the next flies').toBe(DRAW_GAP + TIMING.DEAL_FLY + LIFT + TURN + LIFT);
+        expect(spanOf([{ e: 'discard', seat: 0 }], 2, 0), 'the reader\'s own are turned face down first').toBe(TURN + TIMING.DEAL_FLY);
+        expect(spanOf([{ e: 'discard', seat: 1 }], 2, 0)).toBe(TIMING.DEAL_FLY + LIFT);
+        expect(spanOf([{ e: 'discard', seat: 1 }], 2, null)).toBe(TIMING.DEAL_FLY);
         expect(spanOf([{ e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 }], 2, 0)).toBe(0);
     });
 

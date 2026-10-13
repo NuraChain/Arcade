@@ -22,6 +22,10 @@ export const CARRY = 420;
 
 export const NAMING = 340;
 
+export const LIFT = 360;
+
+export const DRAW_GAP = 120;
+
 export const BANNER_IN = 360;
 
 export const BANNER_OUT = 200;
@@ -110,7 +114,11 @@ export function spanOf(moves: readonly Told[], seats: number, mine: number | nul
         }
         else if (move.e === 'draw')
         {
-            at += TIMING.DEAL_FLY;
+            at += (move.seat === mine ? TURN + LIFT : DRAW_GAP + TIMING.DEAL_FLY) + (mine !== null && move.seat !== mine ? LIFT : 0);
+        }
+        else if (move.e === 'discard')
+        {
+            at += (move.seat === mine ? TURN : 0) + TIMING.DEAL_FLY + (mine !== null && move.seat !== mine ? LIFT : 0);
         }
 
         down = at;

@@ -1168,7 +1168,7 @@ view always: a decision, or a control for a decision already visible.
 | Points, the hand number | model | Today they change 2 to 3.3 s before the banner. |
 | The crown, the dealer's mark | model | The crown travels; today the plate has already moved it. |
 | The trump chip (felt or bar), the centre caption | model | The chip is the medallion's destination. |
-| The stock and its number | model | 42 through trump and both discards, then 41, 39 ... 1, then gone. |
+| The stock and its number | model, and the card on offer where it cannot be seen | 42 through trump and both discards, then 41, 39 ... 1 for the drawer and one more for everybody else, then gone. |
 | The trump chooser, its sentence in the live region, its chime and haptic, the coach tip, the five cards | model, held by rule 7 | The coach names the Hâkem's longest suit and the cards' buttons carry their names: either would tell the deal in words. |
 | The rest of the reader's cards after trump | model, held by rule 7 | Released when the reader's last packet lands. |
 | Which cards are legal; Sort | view | Sort waits while a deal plays. |
@@ -2037,6 +2037,36 @@ table above.
   request gave up, back in its slot 340 ms later with the hand counting thirteen throughout,
   and played again from that slot, whole, when the network returned with the server having
   taken it. At 1280 the card grows from 76 px in the hand to 97 px on the felt and back.
+
+**As built (commit 4.7, the two-handed draw).** The six rows from "`discard`, the reader's" to
+"`draw`, the other seat's" of the table above.
+
+- **The stock's number is the cards in the pile, not the model's.** The row "The stock and its
+  number" above said 42 through both discards and then 41, 39 and so on. That is what the
+  drawer reads. The card on offer to another seat is still the top card of the pile for
+  everybody who cannot see it, and is counted there: a waiting seat and a watcher read 42,
+  40, 38. The number moves when a card is seen to leave.
+- **The offer is lifted** from the top of the stock to the middle of the felt, turning over,
+  in 360 ms, at the end of the scene that made it the reader's turn. The card, the stock's
+  press, the words, the chime and the turn's ring wait for it (rule 7; the cap is the 2500 ms
+  the rest of a deal has).
+- **A keep's second card is shown to the reader**, not only said: it comes off the stock,
+  turns over beside it and lies there dimmed, where the card "the keep put face down" was
+  already drawn. The row said it stays a sentence.
+- **The three presses are preludes that cover nothing**, not `complete` predictions: the
+  card or cards move at the press, and the scene for the server's event still plays the
+  second half, the counts and the hand-off, after what is in the air has landed. A refusal
+  plays the card or cards back; a jump drops the pledge.
+- **Another seat's draw is one back in and one back away, 120 ms apart**; a draw of the
+  reader's own that the newest view cannot tell is played the same.
+- **Measured on the built server** at 1280 by 800: the offer leaves the stock 43 px wide and
+  lands 72 px wide 357 ms later; a kept card reaches its slot in 339 ms from the press, with
+  the answer 12 ms behind it, and the card it puts down lands beside the stock 363 ms after
+  that and is dimmed to 0.6 over 0.4 s; a passed card turns over in 218 ms and is gone
+  260 ms later, the card taken instead in the hand 361 ms after the answer; cards put down
+  turn over in 217 ms from the frame of the press and go as one packet in 260 ms, at the
+  44 px of a card of the stock; the turn's ring passes when the last of them has landed. At
+  390 by 844 the offer is lifted from 30 px to 53 px.
 
 ### 5.4 Poker
 
