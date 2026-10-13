@@ -93,12 +93,12 @@ export async function mounted(first: MatchView, heard: EventBatch = NO_EVENTS, w
         container,
         match: current,
         read: (next: MatchView) => setCurrent(structuredClone(next)),
-        send: (events: MatchEvent[], view: Partial<Hokm> = {}, more: Partial<MatchView> = {}) => batch(() =>
+        send: (events: MatchEvent[], view: Partial<Hokm> = {}, more: Partial<MatchView> = {}, live = false) => batch(() =>
         {
             const next = after(current(), events, view, more);
 
             setCurrent(next);
-            setTold((last) => ({ ...NO_EVENTS, seq: last.seq + 1, id: next.id, events }));
+            setTold((last) => ({ ...NO_EVENTS, seq: last.seq + 1, id: next.id, events, live }));
         })
     };
 }

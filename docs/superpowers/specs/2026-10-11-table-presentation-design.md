@@ -1819,7 +1819,7 @@ the next batch's plan into the tail of the scene that took it.
 | A refused card | It flies back to its slot, and focus returns to it. | `deny` and its haptic. | One fly-back, whichever of the batch and the answer speaks first. |
 | `trick` | 120 ms after the last landing (today) the winning card straightens and glows. A linger of 900 ms, 450 ms at the least. Then the cards are gathered to the winner: 420 ms each, 35 ms apart, the winner's card last (today). The winner's trick count moves when the cards ARRIVE, with a "+1". | `trick` and a `select` haptic for the reader's side; `card-gather`, panned to the winner. | The least counts from the moment the trick was taken. A card or a deal behind it cuts the linger; a banner or a finish does not: today's rule, kept by the port. Once the chooser is held, a batch that carries a `deal` runs this linger and the banner at their least (§4.2). |
 | `hand` | A banner, "+n" or the kot's word, as a scene with a linger: it pops in, holds and leaves on the stage's clock. Today's whole banner is 1400 ms. The points and the hand number move with it. | `hand-won` for the reader's side, `win` on a kot; the `hand` or `kot` haptic (earlier spec). | Not CSS with a baked delay: it can be hastened and lingered like any scene. |
-| A hand ends and another begins | Unplayed cards, and the stock where there is one, go face down to the dealer. The deck and the dealer's mark pass on. The crown travels to the new Hâkem, 520 ms (earlier spec). Then `deal`. | Not specified. | New: today the leftover cards vanish. When the Hâkem changes the old Hâkem becomes the dealer, so at two players the two marks swap. |
+| A hand ends and another begins | Unplayed cards, and the stock where there is one, go face down to the dealer. The deck and the dealer's mark pass on. The crown travels to the new Hâkem, 520 ms (earlier spec; 420 ms as built). Then `deal`. | Not specified. | New: today the leftover cards vanish. When the Hâkem changes the old Hâkem becomes the dealer, so at two players the two marks swap. |
 | `finish` | The last trick is taken and gathered and the banner shown as in any hand; then the result arrives after the queue (§6). No collection of the hands is specified: the final view still carries them. | `win` and its haptic for the winner, from the queue as today. | |
 | `forfeit` | Nothing moves on the felt. The plate dims and is tagged; the result follows the queue. | None. | A forfeit ends the match. No scene for the cards is specified. |
 | `discard`, the reader's | The chosen cards leave the hand as backs for a point beside the stock and are released there (D4). | `card-place` at half gain (today). | A `complete` prediction. No pile, no count, and no class containing "discard" or "burn". |
@@ -1924,7 +1924,7 @@ unchanged. Where it differs from what this section said:
   lifted. A winner who leads quickly still sees the trick they took for 450 ms.
 - **`overflows` went.** The presenter's own limits decide: double speed past 1.5 s, and a jump when
   what was missed is more than the felt's six seconds of scenes. A hand's end is about four and a
-  half, so more than one hand still jumps.
+  half (five and a quarter since 4.5b gathers it), so more than one hand still jumps.
 - **A refusal takes the card back off the model** (`unplay`) and gives it to the hand in one scene;
   it does not fly yet (4.6). `failed` is a lost answer, so an echo that comes after it is played.
 - **The result waits for the queue here**, ahead of §6: the panel, the tags that say who won, the
@@ -1958,6 +1958,34 @@ unchanged. Where it differs from what this section said:
   reader's cards turning up after the last packet has landed.
 - **Measured, the opening**: 450 ms of shuffle, 260 ms for the Hâkem's packet, the five up
   360 ms later, and the chooser with the fifth.
+
+**As built (commit 4.5b, the hand's end).** The row "A hand ends and another begins" of the
+table above.
+
+- **The order**: the banner, then the gather, then the model's step, then the deck and the
+  marks carried, then the shuffle and the deal. The reader's unplayed cards stay in the row,
+  as the same nodes, until the gather takes them, though the view dropped them four or five
+  seconds earlier.
+- **What is gathered is everything a seat has**, its tricks with its unplayed cards, so a
+  hand played to the last card is gathered too and no deck is put down from nowhere. The
+  reader's own cards turn face down where they lie and close into one packet first.
+- **The deck appears with the first packet to reach it**, at the old dealer's trick spot, and
+  is slid from there to the new dealer's. At a table for two the packets go to the stock's
+  place, and the stock is counted from the deal.
+- **The crown and the dealer's mark take 420 ms**, not the 520 ms of the earlier spec, and
+  land together with the deck. Nothing is carried when the Hâkem stays.
+- **Rule 7 is departed from in one place.** The cap on the hold of a new hand counts from the
+  felt reaching that hand, not from the view's arrival: a hand's end is about five seconds
+  for everybody, and a cap from the arrival showed the Hâkem the new five, and asked for
+  trump, with the last trick still on the table. The reader's own clock is the floor: with
+  eight seconds of their turn left, the hand is shown wherever the felt is.
+- **Measured on the built server**, four seats, from the banner's going: the reader's fold
+  224 ms, the other seats leaving 60 ms apart, the deck on the felt at 327 ms, every packet in
+  at 484 ms; with a new Hâkem the deck and the marks arrive 425 ms after that and the first
+  packet of the deal leaves 449 ms later. The table keeps its height throughout: 627 px at 390
+  by 844 and 538 px at 1280 by 800, where an empty row had cost it 25 px until this commit.
+  At three seats on a phone it loses 66 px as the deck is passed, the next hand needing two
+  rows.
 
 ### 5.4 Poker
 

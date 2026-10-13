@@ -188,15 +188,27 @@ describe('the hand a hokm reader holds', () =>
 
     it('keeps the room a hand will be dealt into, one row or two, and hides a card until it has been dealt', () =>
     {
-        const kept = /min-block-size: calc\(var\(--keep, 1\) \* \(var\(--hand-card\) \* 288 \/ 204 \+ ([\d.]+)rem\) - \(var\(--keep, 1\) - 1\) \* var\(--hand-card\) \* 144 \/ 204\);/.exec(width);
+        const kept = /min-block-size: calc\(var\(--rows, 1\) \* \(var\(--hand-card\) \* 288 \/ 204 \+ ([\d.]+)rem\) - \(var\(--rows, 1\) - 1\) \* var\(--hand-card\) \* 144 \/ 204\);/.exec(width);
         const row = /block-size: calc\(var\(--card-h\) \+ ([\d.]+)rem\);/.exec(ruleOf('.hokm-hand'));
 
         expect(kept, 'the room kept is not a whole row, or a second row does not lie half over the first').not.toBeNull();
         expect(Number(kept?.[1]), 'the room kept for a row is not the height of a row').toBe(Number(row?.[1]));
         expect(ruleOf('.hokm-hand + .hokm-hand')).toContain('margin-block-start: calc(var(--card-h) * -0.5);');
-        expect(board).toContain('--keep: ${ roomy }');
+        expect(board, 'the card is sized by one count of rows and its room kept by another, or by a count that can be nought').toContain('style={ `--rows: ${ roomy }` }');
+        expect(board).toContain('derived roomy = Math.max(1, rows.length,');
         expect(ruleOf('.hokm-hand > li[data-dealt=\'false\']')).toContain('visibility: hidden;');
-        expect(board).toContain('data-dealt={ unseen.has(card) ? \'false\' : undefined }');
+        expect(board).toContain('data-dealt={ current && unseen.has(card) ? \'false\' : undefined }');
+    });
+
+    it('keeps the deck and the stock in their places and out of sight until a card of the hand before has reached them', () =>
+    {
+        const unseen = ruleOf('.hokm-deck[data-ghost=\'true\'],\n.hokm-stock[data-ghost=\'true\'],\n.hokm-stock-count[data-idle=\'true\']');
+
+        expect(unseen, 'a thing that cards fly to is taken out of the layout while it waits, and they fly to nowhere').toContain('visibility: hidden;');
+        expect(/display:/.test(unseen)).toBe(false);
+        expect(board).toContain('<span class="hokm-deck" data-ghost={ ghost ? \'true\' : undefined }');
+        expect(board).toContain('<div class="hokm-stock" data-live={ stockLive ? \'true\' : undefined } data-ghost={ ghost ? \'true\' : undefined }>');
+        expect(board).toContain('class="hokm-chip hokm-stock-count" data-idle={ counted ? undefined : \'true\' }');
     });
 
     it('rests the deck where a card of the dealer\'s would lie, and stacks a packet and a turning card in one box', () =>

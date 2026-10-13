@@ -12,7 +12,7 @@ import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } fr
 import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
 import { coachOf, outcomeOf } from '../../game/helpers/hokm.ts';
-import { BANNER_IN, BANNER_OUT, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
+import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
 import { EMPTY, HISTORY, before, feltOf, sameAs, step, unplay, type Felt, type Laid, type Told } from '../../game/hokm-felt.ts';
 import { EASE, TIMING, centreOf, outside, rectIn, type Rect } from '../../game/motion.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
@@ -72,6 +72,8 @@ const BACK_W = 30;
 
 const DEALT_CAP = 2000;
 
+const HURRY_MS = 8000;
+
 const SIGN_IN: Keyframe[] = [{ opacity: 0, scale: '0.8' }, { opacity: 1, scale: '1' }];
 
 const KOT_IN: Keyframe[] = [{ opacity: 0, scale: '1.6', rotate: '-8deg' }, { opacity: 1, scale: '1', rotate: '0deg' }];
@@ -120,7 +122,13 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     state seen: { round: number; cards: ReadonlySet<number> } = untrack(() => ({ round: hokmOf(props.match)?.round ?? 0, cards: new Set(hokmOf(props.match)?.hand ?? []) }));
 
-    state dealing: { counts: readonly number[]; deck: number | null; stock: number | null } | null = null;
+    state dealing: { counts: readonly number[]; won: readonly number[] | null; deck: number | null; stock: number | null } | null = null;
+
+    state stale: readonly number[] = untrack(() => hokmOf(props.match)?.hand ?? []);
+
+    state carried: { hakem: boolean; dealer: boolean } = { hakem: false, dealer: false };
+
+    state ghost = false;
 
     state presenting = false;
 
@@ -138,9 +146,13 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived mine = game.mine;
 
-    derived unseen = new Set((view?.hand ?? []).filter((card) => view?.round !== seen.round || !seen.cards.has(card)));
+    derived current = view !== null && view.round === seen.round;
+
+    derived unseen = new Set((view?.hand ?? []).filter((card) => !current || !seen.cards.has(card)));
 
     derived veiled = unseen.size > 0;
+
+    derived capped = veiled && current;
 
     derived whoAt = (seat: number) => game.players.find((one) => one.seat === seat)?.who ?? '';
 
@@ -226,11 +238,13 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     {
         const chair = chairs[row.seat];
         const held = dealing?.counts[row.seat] ?? row.held;
+        const tricks = dealing?.won?.[row.seat] ?? row.tricks;
+        const mark = markOf(row.seat, felt.hakem, felt.dealer);
 
         return {
-            row: { ...row, held },
+            row: { ...row, held, tricks },
             side: sideOf(chair),
-            mark: markOf(row.seat, felt.hakem, felt.dealer),
+            mark: mark !== null && carried[mark] ? null : mark,
             backs: row.seat === mine ? 0 : Math.min(held, BACKS_SHOWN)
         };
     });
@@ -280,7 +294,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived myTurn = view !== null && !over && view.phase === 'tricks' && view.turn === mine;
 
-    derived acting = view !== null && !over && mine !== undefined && (view.phase === 'trump' ? view.hakem === mine && !veiled : view.turn === mine);
+    derived owed = view !== null && !over && mine !== undefined && (view.phase === 'trump' ? view.hakem === mine : view.turn === mine);
+
+    derived acting = owed && !(view !== null && view.phase === 'trump' && veiled);
+
+    derived spare = veiled && owed ? game.remainingMs : undefined;
 
     derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
 
@@ -310,7 +328,13 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived stockLive = putting || drawing;
 
-    derived stockBacks = [0, 1, 2].slice(0, Math.min(3, felt.stock ?? 0));
+    derived piled = stocked || (dealing !== null && felt.seats === 2);
+
+    derived stockLeft = dealing?.stock ?? felt.stock;
+
+    derived counted = stockLeft !== null;
+
+    derived stockBacks = [0, 1, 2].slice(0, Math.min(3, stockLeft ?? (piled ? 3 : 0)));
 
     derived tagOf = (seat: number) =>
     {
@@ -344,9 +368,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     derived holds = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand])
         .filter((card) => !(sending !== null && sending.gone && card === sending.card));
 
-    derived hand = lifted === null || holds.includes(lifted.card)
+    derived fresh = lifted === null || holds.includes(lifted.card)
         ? holds
         : [...holds.slice(0, lifted.at), lifted.card, ...holds.slice(lifted.at)];
+
+    derived hand = current ? fresh : stale;
 
     derived handed = view !== null && !result && (hand.length > 0 || mine !== undefined);
 
@@ -587,6 +613,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const heldAt = (felt: Felt) => Array.from({ length: felt.seats }, (_, seat) => felt.chairs.find((chair) => chair.seat === seat)?.held ?? 0);
 
+    const wonAt = (felt: Felt) => Array.from({ length: felt.seats }, (_, seat) => felt.chairs.find((chair) => chair.seat === seat)?.tricks ?? 0);
+
     const withMe = (side: number | undefined) => mine !== undefined && side !== undefined && sideAt(mine) === side;
 
     const originOf = (card: number) =>
@@ -670,6 +698,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const lay = (stage: Stage, seat: number, card: number, own: Rect | null) =>
     {
+        if (seat === mine)
+        {
+            stale = stale.filter((one) => one !== card);
+        }
+
         if (seat === mine && lifted !== null && lifted.card === card)
         {
             const free = () => lifted = null;
@@ -861,9 +894,10 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const show = (cards: readonly number[]) =>
     {
-        const round = view?.round ?? 0;
-
-        seen = { round, cards: new Set([...(seen.round === round ? seen.cards : []), ...cards]) };
+        if (current)
+        {
+            seen = { round: seen.round, cards: new Set([...seen.cards, ...cards]) };
+        }
     };
 
     const deckSpot = () =>
@@ -940,6 +974,151 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             quiet: 'skip',
             landed
         }).done.then(() => opened);
+    };
+
+    const markOn = (seat: number) => find(`.hokm-seat[data-seat="${ seat }"] .table-plate-marker`);
+
+    const spotOf = (place: Element | null) => (place === null || layer === null ? null : rectIn(layer, place));
+
+    const fold = (stage: Stage, cards: readonly number[], to: Rect) =>
+    {
+        const faces = cards.map((card) =>
+        {
+            const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+
+            return { card, at: face === null || layer === null ? null : cardAt(rectIn(layer, face), face.offsetWidth || BACK_W) };
+        });
+
+        return Promise.all(faces.map((one) => (layer === null || one.at === null
+            ? Promise.resolve()
+            : turn(stage, layer, turnNode(one.card, to.width), one.at, to, { duration: TURN, easing: EASE.snap, down: true }).done)));
+    };
+
+    const collect = async (had: readonly number[], won: readonly number[], ctx: Ctx) =>
+    {
+        const flown: Promise<void>[] = [];
+        const to = deckSpot();
+        const left = had.map((count, seat) => ({ seat, count: count + won[seat] * had.length }))
+            .filter((one) => one.count > 0)
+            .sort((one, other) => Number(other.seat === mine) - Number(one.seat === mine));
+
+        const leave = async (one: { seat: number; count: number }) =>
+        {
+            const fanned = one.seat === mine && !current && stale.length > 0;
+            const pile = seatRect(one.seat);
+            const from = fanned ? handSpot() : (pile === null ? null : cardAt(pile, BACK_W));
+            const closed = fanned && from !== null ? fold(ctx.stage, stale, from) : null;
+
+            if (dealing !== null)
+            {
+                dealing = {
+                    ...dealing,
+                    counts: dealing.counts.map((count, seat) => (seat === one.seat ? 0 : count)),
+                    won: dealing.won === null ? null : dealing.won.map((count, seat) => (seat === one.seat ? 0 : count))
+                };
+            }
+
+            if (fanned)
+            {
+                stale = [];
+            }
+
+            if (closed !== null)
+            {
+                await closed;
+            }
+
+            if (!ctx.live() || layer === null || from === null || to === null)
+            {
+                return;
+            }
+
+            await launch(ctx.stage, layer, stackNode(one.count, to.width), from, to, {
+                duration: TIMING.DEAL_FLY,
+                easing: EASE.gather,
+                quiet: 'skip',
+                landed: () =>
+                {
+                    ghost = false;
+                }
+            }).done;
+        };
+
+        if (left.length === 0)
+        {
+            return;
+        }
+
+        sound?.play('card-gather');
+
+        for (const [nth, one] of left.entries())
+        {
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            flown.push(leave(one));
+
+            if (nth < left.length - 1)
+            {
+                await ctx.stage.wait(COLLECT_GAP);
+            }
+        }
+
+        await Promise.all(flown);
+    };
+
+    const carry = (mark: 'hakem' | 'dealer', from: Rect | null, stage: Stage) =>
+    {
+        const seat = mark === 'hakem' ? held.hakem : held.dealer;
+        const drawn = markOn(seat)?.firstElementChild?.cloneNode(true);
+        const to = spotOf(markOn(seat));
+        const clone = document.createElement('div');
+
+        if (stage.quiet() || layer === null || from === null || to === null || !(drawn instanceof Element))
+        {
+            return Promise.resolve();
+        }
+
+        clone.append(drawn);
+        carried = { ...carried, [mark]: true };
+
+        return launch(stage, layer, clone, from, to, {
+            duration: CARRY,
+            easing: EASE.fly,
+            landed: () =>
+            {
+                carried = { ...carried, [mark]: false };
+            }
+        }).done;
+    };
+
+    const pass = async (from: { hakem: number; dealer: number; crown: Rect | null; hand: Rect | null; deck: Rect | null }, stage: Stage) =>
+    {
+        const deck = find('.hokm-deck');
+        const to = spotOf(deck);
+        const moved: Promise<void>[] = [];
+
+        if (from.dealer !== held.dealer && deck !== null && from.deck !== null && to !== null)
+        {
+            moved.push(stage.animate(deck, [
+                { translate: `${ centreOf(from.deck).x - centreOf(to).x }px ${ centreOf(from.deck).y - centreOf(to).y }px`, composite: 'add' },
+                { translate: '0px 0px', composite: 'add' }
+            ], { duration: CARRY, easing: EASE.fly }).done);
+        }
+
+        if (from.dealer !== held.dealer)
+        {
+            moved.push(carry('dealer', from.hand, stage));
+        }
+
+        if (from.hakem !== held.hakem)
+        {
+            moved.push(carry('hakem', from.crown, stage));
+        }
+
+        await Promise.all(moved);
     };
 
     const dealOut = async (packets: readonly Packet[], shuffled: boolean, ctx: Ctx) =>
@@ -1060,24 +1239,45 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             }
 
             const had = heldAt(held);
+            const won = wonAt(held);
+
+            if (move.e === 'deal' && [...had, ...won].some((count) => count > 0))
+            {
+                ghost = !ctx.stage.quiet();
+                dealing = { counts: had, won, deck: held.seats === 2 ? null : held.dealer, stock: null };
+                await collect(had, won, ctx);
+
+                if (!ctx.live())
+                {
+                    return;
+                }
+            }
+
+            const leaving = move.e === 'deal'
+                ? { hakem: held.hakem, dealer: held.dealer, crown: spotOf(markOn(held.hakem)), hand: spotOf(markOn(held.dealer)), deck: spotOf(find('.hokm-deck')) }
+                : null;
 
             held = step(held, move);
 
-            if (move.e === 'deal')
+            if (leaving !== null)
             {
                 const packets = openingPackets(held.seats, held.hakem);
 
+                ghost = false;
+                seen = seen.round === held.round ? seen : { round: held.round, cards: new Set() };
                 dealing = {
                     counts: had.map(() => 0),
+                    won: null,
                     deck: held.seats === 2 ? null : held.dealer,
                     stock: held.stock === null ? null : held.stock + packets.reduce((sum, one) => sum + one.count, 0)
                 };
                 shown = held;
+                await pass(leaving, ctx.stage);
                 await dealOut(packets, true, ctx);
             }
             else if (move.e === 'trump')
             {
-                dealing = held.seats === 2 ? null : { counts: had, deck: held.dealer, stock: null };
+                dealing = held.seats === 2 ? null : { counts: had, won: null, deck: held.dealer, stock: null };
                 shown = held;
                 sound?.play('trump');
                 sound?.play('card-place', { gain: 0.6 });
@@ -1113,6 +1313,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         origins.clear();
         held = sight.view;
         dealing = null;
+        ghost = false;
+        carried = { hakem: false, dealer: false };
         seen = { round: view?.round ?? 0, cards: new Set(heldAt(held)[mine ?? -1] === 0 ? [] : (view?.hand ?? [])) };
         shown = held;
         lying = null;
@@ -1124,7 +1326,6 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     const rest = () =>
     {
         result = over;
-        dealing = null;
         seen = { round: view?.round ?? 0, cards: new Set(view?.hand ?? []) };
 
         if (sending === null || !sending.gone)
@@ -1198,12 +1399,53 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     effect
     {
-        const hidden = veiled;
+        const hidden = capped;
 
         untrack(() =>
         {
             uncap();
             uncap = hidden ? runtime().clock.after(DEALT_CAP, () => show([...unseen])) : () => undefined;
+        });
+    }
+
+    let unhurry: () => void = () => undefined;
+
+    effect
+    {
+        const left = spare;
+
+        untrack(() =>
+        {
+            const all = () =>
+            {
+                seen = { round: view?.round ?? 0, cards: new Set(view?.hand ?? []) };
+            };
+
+            unhurry();
+            unhurry = () => undefined;
+
+            if (left !== undefined && left < HURRY_MS)
+            {
+                all();
+            }
+            else if (left !== undefined)
+            {
+                unhurry = runtime().clock.after(left - HURRY_MS, all);
+            }
+        });
+    }
+
+    effect
+    {
+        const mirrored = fresh;
+        const on = current;
+
+        untrack(() =>
+        {
+            if (on)
+            {
+                stale = mirrored;
+            }
         });
     }
 
@@ -1388,6 +1630,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             rig = null;
             steady();
             uncap();
+            unhurry();
             sound?.dispose();
             sound = null;
         };
@@ -1455,7 +1698,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
                             <Show when={ decked }>
                                 { () =>
-                                    <span class="hokm-deck" style={ `--dx: ${ deckReach[0] }; --dy: ${ deckReach[1] }` } aria-hidden="true">
+                                    <span class="hokm-deck" data-ghost={ ghost ? 'true' : undefined } style={ `--dx: ${ deckReach[0] }; --dy: ${ deckReach[1] }` } aria-hidden="true">
                                         <span class="card-back" style="--i: 0"></span>
                                         <span class="card-back" style="--i: 1"></span>
                                         <span class="card-back" style="--i: 2"></span>
@@ -1463,15 +1706,15 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                 }
                             </Show>
 
-                            <Show when={ stocked }>
+                            <Show when={ piled }>
                                 { () =>
-                                    <div class="hokm-stock" data-live={ stockLive ? 'true' : undefined }>
+                                    <div class="hokm-stock" data-live={ stockLive ? 'true' : undefined } data-ghost={ ghost ? 'true' : undefined }>
                                         <span class="hokm-stock-pile" aria-hidden="true">
                                             <For each={ stockBacks } key={ (back) => back } let={ back }>
                                                 <span class="card-back" style={ `--i: ${ back }` }></span>
                                             </For>
                                         </span>
-                                        <span class="hokm-chip hokm-stock-count" aria-hidden="true"><span class="tally">{ locale.n(dealing?.stock ?? felt.stock ?? 0) }</span></span>
+                                        <span class="hokm-chip hokm-stock-count" data-idle={ counted ? undefined : 'true' } aria-hidden="true"><span class="tally">{ locale.n(stockLeft ?? 0) }</span></span>
                                         <Show when={ discarding }>
                                             { () =>
                                                 <span class="hokm-stock-due" data-full={ putting ? 'true' : undefined } aria-hidden="true">
@@ -1653,11 +1896,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                         </section>
                         <Show when={ handed }>
                             { () =>
-                                <div class="hokm-hands" data-sliding={ sliding ? 'true' : undefined } style={ `--rows: ${ rows.length }; --keep: ${ roomy }` }>
+                                <div class="hokm-hands" data-sliding={ sliding ? 'true' : undefined } style={ `--rows: ${ roomy }` }>
                                 <For each={ rows } key={ (_, index) => index } let={ row }>
                                     <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
                                         <For each={ row } key={ (card) => card } let={ card } index={ index }>
-                                            <li style={ fan(index, row.length) } data-dealt={ unseen.has(card) ? 'false' : undefined }>
+                                            <li style={ fan(index, row.length) } data-dealt={ current && unseen.has(card) ? 'false' : undefined }>
                                                 <button
                                                     type="button"
                                                     class="card-hold"

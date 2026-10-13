@@ -17,8 +17,13 @@ export interface Turn
     duration: number;
     easing: string;
     delay?: number;
+    down?: boolean;
     landed?: () => void;
 }
+
+const SHOWN_FIRST: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }];
+
+const SHOWN_LAST: Keyframe[] = [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1, offset: 0.5 }, { opacity: 1 }];
 
 function put(layer: HTMLElement, clone: HTMLElement, at: Rect)
 {
@@ -43,17 +48,18 @@ export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from:
     const scale = to.width > 0 ? from.width / to.width : 1;
     const timing = { duration: flight.duration, delay: flight.delay, easing: flight.easing, fill: 'both' as const };
     const [back, face] = [...clone.children];
+    const [first, last] = flight.down === true ? [face, back] : [back, face];
 
     put(layer, clone, to);
 
-    if (back !== undefined)
+    if (first !== undefined)
     {
-        stage.animate(back, [{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], timing);
+        stage.animate(first, SHOWN_FIRST, timing);
     }
 
-    if (face !== undefined)
+    if (last !== undefined)
     {
-        stage.animate(face, [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1, offset: 0.5 }, { opacity: 1 }], timing);
+        stage.animate(last, SHOWN_LAST, timing);
     }
 
     return stage.animate(clone, [

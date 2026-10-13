@@ -4387,31 +4387,104 @@ dealt.**
   so.
 - **The round is in `seen`** because the cards a hand leaves unplayed are often among the
   first five of the next, and without it they were shown before their packet.
-- **At rest the hand shows the view's hand.** `rest`, `reset` and the cap each write `seen`
-  whole, so a card can be hidden only while something is still to be played. A reset to the
-  table before the opening, where the reader holds nothing, hides them all.
+- **At rest the hand shows the view's hand.** `rest`, `reset`, the cap and the hurry each write
+  `seen` whole, so a card can be hidden only while something is still to be played. A reset to
+  the table before the opening, where the reader holds nothing, hides them all.
 - **The row a hand is dealt into is there from the first** (`handed`, for any seated reader),
-  with the room the whole hand will need: `--keep` is two where seventeen cards will make two
-  rows, from the moment the deck is out. The table had one size while a reader waited for
-  trump and another when the cards came, and at three seats on a phone it moved once more, by
-  66 px, when the hand turned out to need a second row. It keeps one size now from the deal
-  until a row goes, and across the end of a hand. Somebody watching is dealt nothing and has
-  no row.
+  with the room the whole hand will need: `--rows` is `roomy`, which is two where seventeen
+  cards will make two rows, from the moment the deck is out. The table had one size while a
+  reader waited for trump and another when the cards came, and at three seats on a phone it
+  moved once more, by 66 px, when the hand turned out to need a second row. It keeps one size
+  now from the deal until a row goes. Somebody watching is dealt nothing and has no row.
+- **One count of rows sizes the card and keeps its room, and it is never nought.** The row
+  said `--rows: 0` when it held no card, the stylesheet divides by it (`10cqb / var(--rows)`),
+  and the card the empty row kept room for came out at its 84 px ceiling where the cards that
+  arrived were 66: at 1280 wide the table was 25 px shorter for as long as the row was empty,
+  which is every trump pause of a reader who is not the Hâkem and every gather. The room was
+  kept by a second count (`--keep`), which is gone. Two rows are only ever used where the card
+  is already at its floor, so sizing the five of a pause by the rows to come moves nothing.
 - **The Hâkem is asked nothing until the five are up** (rule 7): the chooser, the sentence a
   screen reader is given, the tip, the chime and its haptic all wait on `veiled`, and so does
-  Sort. A hold on a decision is capped: 2000 ms after cards arrived unseen they are shown,
-  whatever the felt is doing (`DEALT_CAP`, on the runtime clock, armed once and not at every
-  card). Before the hold, a Hâkem who was at the table for the opening heard no chime at all,
-  since the turn was theirs from the first frame.
-- Left for 4.5b: the cards a hand leaves unplayed still vanish, the reader's when the view
-  drops them and everybody's count at the next deal's first frame. Left for 4.6: at four seats
-  the chooser lies over the deck for the Hâkem, the one seat with the dealer on its left.
+  Sort. A hold on a decision is capped at 2000 ms (`DEALT_CAP`, on the runtime clock, armed
+  once and not at every card), counted from where the next block says. Before the hold, a
+  Hâkem who was at the table for the opening heard no chime at all, since the turn was theirs
+  from the first frame.
+- Left for 4.6: at four seats the chooser lies over the deck for the Hâkem, the one seat with
+  the dealer on its left.
 
 `hokm-beats.spec.ts` holds the packets, the seeded split and the time a deal takes;
 `stage-flight.spec.ts` holds the packet's stack and the turn; `hokm-board.spec.ts` (*a hand
 dealt in packets*) holds the deck, the counts, the hidden cards and their turning up, the row,
 the hold and its cap, a jump and reduced motion; `hokm-cues.spec.ts` holds the eleven slides
 and the chime that waits.
+
+**A hand ends on the table: what is left of it goes back to the dealer, and the deck is passed
+on.**
+
+- **The reader's cards stay until the felt gathers them.** The view drops a hand's unplayed
+  cards the moment the server deals the next one, four or five seconds before the table has
+  called the hand. `stale` is the hand as the row last showed it, mirrored by an effect while
+  `current` holds (the view's round is the round `seen` is in), and `hand` is `stale` whenever
+  it does not. The cards are the same nodes throughout. `lay` takes the reader's own last card
+  out of `stale`, or it would lie on the felt and in the hand at once. `data-dealt` asks for
+  `current` too: a card of the last hand that the next one also holds was hidden in the row it
+  was still lying in.
+- **Everything a seat has goes back**: the cards it did not play and the tricks it took, as
+  one packet of backs from its pile (or its plate) to where the deck will lie, the reader's
+  own first and the others 60 ms apart (`COLLECT_GAP`). A plate counts both down to nothing as
+  its packet LEAVES (`dealing.won` beside `dealing.counts`). A hand played to its last card is
+  gathered by its tricks. The first version gathered unplayed cards only, and after thirteen
+  tricks the deck appeared in front of the new dealer from nowhere.
+- **The reader's cards are turned face down where they lie** and close into one packet in the
+  middle of the row before it leaves (`fold`: `turn` with `down`, the face until half way and
+  the back from then on, each card from its own width so it does not change size as it
+  starts). They were swapped for a packet of backs in one frame, which is the state swap this
+  work exists to remove. A hand a hurried reader has already been shown is not folded: the
+  row holds the next hand by then, and the packet leaves from the plate.
+- **The deck is laid down by the first packet to reach it.** It is in its place from the
+  start of the gather, because the packets need somewhere to fly to, and `visibility: hidden`
+  until one lands (`ghost`). At a table for two the place is the stock's: `piled` draws the
+  stock while `dealing` is set there, with its count out of sight (`data-idle`) until the deal
+  gives it one, since the cards coming back are twenty-six and the count would have read that
+  and climbed. `reset` clears `ghost`, `carried` and `dealing`, and it alone: a table that
+  jumps in the middle of a gather would keep its deck out of sight for the whole trump pause,
+  and one that jumps during the carry would have a mark on no plate. `rest` cleared them as
+  well, and with both doing it a fault in either one was caught by no test.
+- **Then the model steps, and the deck and the marks are carried** (`pass`, `CARRY` 420 ms):
+  the deck node itself slides from the old dealer's place by an additive translate, and the
+  crown and the dealer's mark fly as copies while their plates draw none (`carried`). Nothing
+  moves when the Hâkem stays the Hâkem. The shuffle and the deal follow.
+- **`seen` moves to the new round in the deal's scene**, and `show` adds to it only while
+  `current`. `show` used to take the view's round with it, so a felt that was a whole hand
+  behind put the newest hand in the row of the hand it was still playing, at the first card
+  it turned up.
+- **The cap counts from the felt reaching the hand, and the reader's own clock ends the
+  hold.** This is where the board departs from rule 7's wording, "from the view's arrival". A
+  hand's end takes about five seconds for everybody, so a cap from the arrival cut every one
+  of them short for the Hâkem: the new five were up, and trump asked for, with the last trick
+  still on the table. `capped` is `veiled && current`. What keeps a reader from waiting too
+  long is their clock, not a count of milliseconds: with cards unseen and the turn theirs
+  (`owed`), all of them are shown when less than eight seconds of it are left (`HURRY_MS`), at
+  once if that is how the view arrives and on a timer armed from `remainingMs` if not. A read
+  of `remainingMs` alone let a reader with nine seconds watch all five of a hand's end, and
+  any turn's clock showed a reader who was not on turn thirteen cards before one was dealt.
+- **`spanOf` gives a deal that follows a `hand` its gather and its pass** (`collectLength`,
+  `CARRY`), once, and the first deal of a match neither.
+- **For a reader who asked for less motion nothing is flown.** No packet, no card turning over
+  and no mark is drawn, and no mark leaves its plate: `carry` does nothing when the stage is
+  quiet, where it used to hide the mark for the one tick a skipped flight takes. The deck is
+  in sight from the start of the gather, since no packet is coming to lay it down, and it
+  fades in where its new dealer sits (rule 4: an arrival fades in). The counts, the gaps and
+  the cue run in order as they do for everybody.
+- Known and kept: at three seats on a phone the table loses 66 px when a hand needs its
+  second row, which is now the moment the deck is passed on, and gets it back when the row
+  goes.
+
+`hokm-board.spec.ts` (*a hand that ends on the table*) holds the cards that stay, the fold,
+the gather with its counts, the deck and the stock that wait, the slide and the carry, the
+cap, the clock, a felt a hand behind, two jumps, the match's end and reduced motion;
+`hokm-beats.spec.ts` holds the time it is given; `stage-flight.spec.ts` holds the turn face
+down; `hokm-cues.spec.ts` holds the one gather and a shuffle that waits for the pass.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the

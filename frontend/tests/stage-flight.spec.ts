@@ -317,6 +317,21 @@ describe('a packet of cards, and a card turned over on its way', () =>
         }
     });
 
+    it('is turned the other way when it is asked to go face down: the face until halfway, the back from then on', () =>
+    {
+        const { stage, layer } = rig();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const node = turnNode(27, 60);
+        const [back, face] = [...node.children];
+
+        turn(stage, layer, node, FROM, TO, { duration: 240, easing: 'ease-out', down: true });
+
+        expect(frames(animate, face)?.frames.map((one) => [one.opacity, one.offset]), 'the face was not the side that left').toEqual([[1, undefined], [1, 0.5], [0, 0.5], [0, undefined]]);
+        expect(frames(animate, back)?.frames.map((one) => [one.opacity, one.offset])).toEqual([[0, undefined], [0, 0.5], [1, 0.5], [1, undefined]]);
+        expect(frames(animate, node)?.frames.map((one) => one.scale), 'it did not go edge on').toEqual(['0.5 0.5', `${ EDGE } 0.75`, '1 1']);
+        expect(frames(animate, face)?.timing.fill, 'the face it was built with hidden would show nothing before it leaves').toBe('both');
+    });
+
     it('is taken out when it has landed, and says so once', async () =>
     {
         const { stage, layer, elapse } = rig();

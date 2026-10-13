@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire } from '@azerothjs/testing';
 
-import { SHUFFLE } from '../src/game/hokm-beats.ts';
+import { SHUFFLE, TURN } from '../src/game/hokm-beats.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
@@ -78,6 +78,8 @@ const match = (view: Partial<Hokm>, mine: number | null = 0, seats = 4): MatchVi
         ...view
     }
 });
+
+const CARRY = 420;
 
 const clock = () => runtime().clock as ManualClock;
 
@@ -392,7 +394,11 @@ describe('what a hokm table is heard to do', () =>
         four.send([act(4, 0, { e: 'hand', side: 1, points: 1, kot: false }, { e: 'deal', hakem: 1 })]);
         await elapse(TIMING.BANNER - 1);
 
-        expect(count('card-shuffle'), 'the next hand was shuffled while the last was still being called').toBe(0);
+        expect([count('card-gather'), count('card-shuffle')], 'the last hand was gathered up while it was still being called').toEqual([0, 0]);
+
+        await elapse(TURN + TIMING.DEAL_FLY + CARRY);
+
+        expect([count('card-gather'), count('card-shuffle')], 'the deck was shuffled before every hand was back in it and it had been passed on').toEqual([1, 0]);
 
         await elapse(SHUFFLE);
 

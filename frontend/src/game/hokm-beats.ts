@@ -16,6 +16,10 @@ export const TURN = 220;
 
 export const TURN_GAP = 35;
 
+export const COLLECT_GAP = 60;
+
+export const CARRY = 420;
+
 export const BANNER_IN = 360;
 
 export const BANNER_OUT = 200;
@@ -34,6 +38,8 @@ export const dealLength = (packets: number, shuffled: boolean) =>
     (shuffled ? SHUFFLE : 0) + dealGap(packets) * Math.max(0, packets - 1) + TIMING.DEAL_FLY;
 
 export const openLength = (cards: number) => (cards <= 0 ? 0 : TURN + TURN_GAP * (cards - 1));
+
+export const collectLength = (seats: number, folds: boolean) => TIMING.DEAL_FLY + Math.max(folds ? TURN : 0, COLLECT_GAP * Math.max(0, seats - 1));
 
 export const openingPackets = (seats: number, hakem: number): Packet[] =>
     (seats === 2 ? [hakem, (hakem + 1) % seats] : [hakem]).map((seat) => ({ seat, count: OPENING }));
@@ -64,6 +70,7 @@ export function spanOf(moves: readonly Told[], seats: number, mine: number | nul
 {
     let at = 0;
     let down = 0;
+    let ended = false;
 
     moves.forEach((move, index) =>
     {
@@ -86,10 +93,14 @@ export function spanOf(moves: readonly Told[], seats: number, mine: number | nul
         else if (move.e === 'hand')
         {
             at += TIMING.BANNER;
+            ended = true;
         }
         else if (move.e === 'deal')
         {
-            at += dealLength(seats === 2 ? 2 : 1, true) + (mine !== null && (seats === 2 || move.hakem === mine) ? openLength(OPENING) : 0);
+            at += (ended ? collectLength(seats, mine !== null) + CARRY : 0)
+                + dealLength(seats === 2 ? 2 : 1, true)
+                + (mine !== null && (seats === 2 || move.hakem === mine) ? openLength(OPENING) : 0);
+            ended = false;
         }
         else if (move.e === 'trump')
         {

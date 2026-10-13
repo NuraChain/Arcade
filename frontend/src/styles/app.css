@@ -2022,6 +2022,13 @@ html:has(.site-drawer[open])
     top: calc(4px - var(--i) * 2px);
 }
 
+.hokm-deck[data-ghost='true'],
+.hokm-stock[data-ghost='true'],
+.hokm-stock-count[data-idle='true']
+{
+    visibility: hidden;
+}
+
 .hokm-trick[data-landing='true']
 {
     opacity: 0;
@@ -2140,7 +2147,7 @@ html:has(.site-drawer[open])
 {
     --hand-card: clamp(max(2.4rem, min(3.5rem, 12cqb)), min(12.5cqi, 10cqb / var(--rows, 1)), 5.25rem);
 
-    min-block-size: calc(var(--keep, 1) * (var(--hand-card) * 288 / 204 + 1.6rem) - (var(--keep, 1) - 1) * var(--hand-card) * 144 / 204);
+    min-block-size: calc(var(--rows, 1) * (var(--hand-card) * 288 / 204 + 1.6rem) - (var(--rows, 1) - 1) * var(--hand-card) * 144 / 204);
 }
 
 .hokm-hand > li[data-dealt='false']
