@@ -643,6 +643,44 @@ describe('a table that is read again', () =>
         expect(gone(before), 'these were drawn again though nothing had changed').toEqual([]);
     });
 
+    it('leaves a raise open at the amount chosen, and a fold armed, when the answer it had is read again', () =>
+    {
+        const { container, read } = shown(flop());
+
+        fire(button(container, 'Raise')!, 'click');
+        fire(button(container, 'Pot')!, 'click');
+
+        expect(button(container, 'Raise to 1,060'), 'the pot button chose something else').toBeDefined();
+
+        read(flop({}, { remainingMs: 12_000 }));
+
+        expect(container.querySelector('.poker-raise'), 'reading the table again shut the raise').not.toBeNull();
+        expect(button(container, 'Raise to 1,060'), 'reading the table again put the amount back to the least').toBeDefined();
+
+        fire(button(container, 'Fold')!, 'click');
+
+        expect(button(container, 'Fold')!.dataset.armed).toBe('true');
+
+        read(flop({}, { remainingMs: 9_000 }));
+
+        expect(button(container, 'Fold')!.dataset.armed, 'reading the table again let go of an armed fold').toBe('true');
+    });
+
+    it('shuts the raise and forgets its amount when the table moves on', () =>
+    {
+        const { container, read } = shown(flop());
+
+        fire(button(container, 'Raise')!, 'click');
+        fire(button(container, 'Pot')!, 'click');
+        read(flop({ pot: 500, seats: rows({ 3: { stack: 1460, bet: 40 } }) }, { rev: 8 }));
+
+        expect(container.querySelector('.poker-raise'), 'a raise chosen against a table that has moved on was left open').toBeNull();
+
+        fire(button(container, 'Raise')!, 'click');
+
+        expect(button(container, 'Raise to 600'), 'the amount chosen for the table before was kept').toBeDefined();
+    });
+
     it('keeps every plate, card and chip when somebody else puts chips in, and draws only their bet', () =>
     {
         const { container, read } = shown(flop({ turn: 2, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));

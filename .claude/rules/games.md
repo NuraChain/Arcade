@@ -3051,12 +3051,19 @@ chip or a card lands on.
   compiled to ONE read (`frontend/CLAUDE.md`, *Three things ride on the rebuild*): a bet raised
   from 40 to 200 kept "40" for as long as its pill lived, from the moment the pill stopped
   being drawn again.
+- **Reading the same answer again changes nothing the reader was doing.** The effect that
+  puts a raise back to its least and lets go of an armed fold read the revision through the
+  game, and the game is a new object with every answer. So any second read of the table (a
+  socket that came back, a doorbell) shut the chooser under the reader's finger, put the
+  amount back to the least and let the fold go. It reads a `derived` of the id and the
+  revision, which changes only when the table moves on.
 
 `poker-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
 the board the answer it had as a new object and wants all of them still in the page; then a
 call by another seat (only the clock of the turn that ended may go), a raise and a street
 closing, a card coming and a new hand, the button moving, a tag changing its word, "Last hand"
-left open, and the chip under the keyboard while the clock runs down.
+left open, the chip under the keyboard while the clock runs down, and a raise left open at the
+amount chosen with a fold left armed.
 
 **The table takes the room, and what is on it is sized by it.** It was drawn at 4:5 or 16:10
 inside whatever room the stage had: 58% of a phone's height, 51% of a turned phone's width,

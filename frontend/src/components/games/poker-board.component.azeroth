@@ -433,17 +433,17 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived costSays = price === null ? '' : locale.t('helpers.poker.cost', { chips: chips(price.chips), pot: chips(price.pot) });
 
+    derived answered = `${ game.id } ${ game.rev }`;
+
     effect
     {
         const floor = low;
-        const rev = game.rev;
 
-        if (rev >= 0)
-        {
-            amount = floor;
-            raising = false;
-            folding = false;
-        }
+        void answered;
+
+        amount = floor;
+        raising = false;
+        folding = false;
     }
 
     derived chosen = Math.min(high, Math.max(low, amount));
