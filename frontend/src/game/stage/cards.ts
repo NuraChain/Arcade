@@ -28,7 +28,7 @@ export function cardNode(card: number | null, width: number): HTMLElement
 
 export const STACK = 3;
 
-export function stackNode(count: number, width: number): HTMLElement
+export function stackNode(count: number, width: number)
 {
     const box = cardNode(null, width);
 
@@ -48,7 +48,7 @@ export function stackNode(count: number, width: number): HTMLElement
     return box;
 }
 
-export function turnNode(card: number, width: number): HTMLElement
+export function turnNode(card: number, width: number)
 {
     const box = cardNode(null, width);
     const face = cardNode(card, width).firstElementChild as HTMLElement;
@@ -62,7 +62,7 @@ export function turnNode(card: number, width: number): HTMLElement
 
 export const drawn = (element: Element | null): element is Element => element !== null && element.getClientRects().length > 0;
 
-export function anchor(layer: Element, places: readonly (Element | null)[]): Rect | null
+export function anchor(layer: Element, places: readonly (Element | null)[])
 {
     const place = places.find(drawn) ?? places.filter((one) => one !== null).pop() ?? null;
 

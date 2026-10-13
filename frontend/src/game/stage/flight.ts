@@ -1,5 +1,5 @@
 import { centreOf, flightFrames, type FlightShape, type Rect } from '../motion.ts';
-import type { Quiet, Run, Stage } from './stage.ts';
+import type { Quiet, Stage } from './stage.ts';
 
 export const EDGE = 0.04;
 
@@ -38,7 +38,7 @@ export function put(layer: HTMLElement, clone: HTMLElement, at: Rect)
     layer.append(clone);
 }
 
-export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Turn): Run
+export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Turn)
 {
     if (stage.quiet())
     {
@@ -84,7 +84,7 @@ export function turn(stage: Stage, layer: HTMLElement, clone: HTMLElement, from:
     });
 }
 
-export function launch(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Launch): Run
+export function launch(stage: Stage, layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Launch)
 {
     const mode = flight.quiet ?? 'in';
 

@@ -2893,27 +2893,27 @@ const SEVENTEEN = [0, 1, 2, 3, 4, 13, 14, 15, 16, 26, 27, 28, 29, 39, 40, 41, 42
 
 const roomOf = (width: number, height: number) => vi.stubGlobal('ResizeObserver', class
 {
-    private readonly told: ResizeObserverCallback;
+    readonly #told: ResizeObserverCallback;
 
     constructor(told: ResizeObserverCallback)
     {
-        this.told = told;
+        this.#told = told;
     }
 
-    observe(target: Element)
+    public observe(target: Element)
     {
         if (target.classList.contains('hokm-stage'))
         {
-            this.told([{ contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+            this.#told([{ contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
         }
     }
 
-    unobserve()
+    public unobserve()
     {
         return undefined;
     }
 
-    disconnect()
+    public disconnect()
     {
         return undefined;
     }
@@ -4633,7 +4633,6 @@ describe('trump named on the medal', () =>
     const suit = (container: HTMLElement, nth: number) => [...container.querySelectorAll<HTMLButtonElement>('.hokm-choose button')][nth];
 
     const key = (button: HTMLElement) => button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
-
 
     const hidden = (container: HTMLElement) => container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length;
 

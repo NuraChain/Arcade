@@ -25,7 +25,7 @@ const randomOf = (seed: number) =>
 
 const feltAt = (state: HokmState, reader: number | null = null) => feltOf(hokmEngine.view(state, reader) as Board, state.seats);
 
-const played = (seats: number, seed: number, quitsAfter = Infinity): Frame[] =>
+const played = (seats: number, seed: number, quitsAfter = Infinity) =>
 {
     const next = randomOf(seed);
     const deal = (sides: number) => 1 + (next() % sides);
