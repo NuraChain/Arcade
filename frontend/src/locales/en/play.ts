@@ -370,6 +370,7 @@ export const play = {
     'hokm.stock': { one: '{count} card in the stock', other: '{count} cards in the stock' },
     'backgammon.score': '{score} of {target}',
     'backgammon.pips': { one: '{count} pip', other: '{count} pips' },
+    'backgammon.pips.word': { one: 'pip', other: 'pips' },
     'backgammon.doubled.you': '{name} doubles to {cube}. Take it, or give up this game?',
     'backgammon.doubled.them': 'You doubled to {cube}. Waiting for {name} to answer.',
     'backgammon.doubled.watch': '{name} doubles to {cube}.',

@@ -230,9 +230,17 @@ quality.
 - **Upright** (B1): the board keeps its shape and its width; the bands become the two seats. Each
   seat is a rail the board's width: face, name, clock, the match score as points won of points
   needed, and the pip count in figures that can be read (B4). Floor: board and rails together are
-  at least 80% of the stage's height at 390x844.
+  at least 70% of the stage's height at 390x844.
 - **Wide** (B2): the board is centred with a seat rail above and below it, or beside it when
-  the stage is short, and nothing is left against one edge.
+  the stage is wide for its height, and nothing is left against one edge.
+
+**As built (B.1).** One set of seats, `.bg-rail`, where there were two sets of pills. The floor
+was written as 80% and is 70%: a rail tall enough for 80% at 390x844 is 153 px of walnut with a
+face and a number in it, and at 120 px (73%) it reads as a seat. The seats go beside the board
+from a stage of 4 to 3, not only on a short one: from about that shape a board as tall as the
+stage is the larger board, and at 1280x800 it is 811 px wide where a rail over and under it
+would leave 635. The match is told in pegs, up to nine points, and the pips in a figure with
+its word under it; both are written out once for a screen reader.
 - A cursor on the points (B3, D14): arrows walk the points that hold a checker that may move,
   Enter lifts, arrows then walk the marked points, Enter puts down, Escape puts back. The dice
   and the cube are in the same walk.

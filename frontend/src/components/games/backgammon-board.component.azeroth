@@ -49,6 +49,8 @@ import type { Rematch } from './boards.ts';
 
 type Tone = 'light' | 'dark';
 
+const PEGS_MOST = 9;
+
 interface Spike
 {
     point: number;
@@ -961,6 +963,9 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         locale.plural(`backgammon.game.${ how }` as never, points)
     ];
 
+    const pegsOf = (score: number) =>
+        Array.from({ length: view === null || view.target > PEGS_MOST ? 0 : view.target }, (_, at) => ({ at, won: at < score }));
+
     derived plates = [1 - viewer, viewer].map((seat) =>
     {
         const row = view?.seats.find((one) => one.seat === seat);
@@ -970,7 +975,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             seat,
             tone: toneOf(seat),
             score: facts?.score[side] ?? row?.score ?? 0,
-            pips: facts?.pips[side] ?? row?.pips ?? 0
+            pips: facts?.pips[side] ?? row?.pips ?? 0,
+            pegs: pegsOf(facts?.score[side] ?? row?.score ?? 0)
         };
     });
 
@@ -979,33 +985,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             <Show when={ ready }>
                 { () =>
                     <span class="contents">
-                        <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
-                            <div class={ () => (plate.seat === viewer ? 'table-hand bg-plate bg-plate-out' : 'table-top bg-plate bg-plate-out') }>
-                                <TablePlate
-                                    who={ whoAt(plate.seat) }
-                                    name={ nameOf(plate.seat) }
-                                    turn={ !over && view!.turn === plate.seat }
-                                    remainingMs={ game.remainingMs }
-                                    turnMs={ props.turnMs }
-                                    tag={ tagOf(plate.seat)?.text }
-                                    tone={ tagOf(plate.seat)?.tone }
-                                    bubble={ props.speech?.[whoAt(plate.seat)] }
-                                    below={ plate.seat !== viewer }
-                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
-                                    marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
-                                    facts={
-                                        <span class="contents">
-                                            <span>{ locale.t('backgammon.score', { score: locale.n(plate.score), target: locale.n(view!.target) }) }</span>
-                                            <span>{ locale.plural('backgammon.pips', plate.pips) }</span>
-                                        </span>
-                                    }
-                                />
-                                <Show when={ plate.seat === onTurn }>
-                                    { () => <TurnClock remainingMs={ game.remainingMs } over={ over } class="bg-clock" /> }
-                                </Show>
-                            </div>
-                        </For>
-
                         <div class="table-fit">
                             <div class="table-surface bg-board">
                                 <div class="relative h-full [direction:ltr]">
@@ -1093,7 +1072,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                             </div>
 
                             <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
-                                <div class="bg-plate bg-plate-in" data-me={ plate.seat === viewer ? 'true' : undefined }>
+                                <div class="bg-rail" data-me={ plate.seat === viewer ? 'true' : undefined }>
                                     <TablePlate
                                         who={ whoAt(plate.seat) }
                                         name={ nameOf(plate.seat) }
@@ -1108,13 +1087,25 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                                         marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
                                         facts={
                                             <span class="contents">
-                                                <span>{ locale.t('backgammon.score', { score: locale.n(plate.score), target: locale.n(view!.target) }) }</span>
-                                                <span>{ locale.plural('backgammon.pips', plate.pips) }</span>
+                                                <span class="bg-score" aria-hidden="true">
+                                                    <For each={ plate.pegs } key={ (peg) => peg.at } let={ peg }>
+                                                        <i data-won={ peg.won ? 'true' : undefined }></i>
+                                                    </For>
+                                                </span>
+                                                <span class={ () => (plate.pegs.length > 0 ? 'sr-only' : 'bg-score-says') }>{ locale.t('backgammon.score', { score: locale.n(plate.score), target: locale.n(view!.target) }) }</span>
+                                                <Show when={ plate.seat === onTurn }>
+                                                    { () => <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ plate.seat === mine } brief class="bg-clock" /> }
+                                                </Show>
                                             </span>
                                         }
                                     />
-                                    <Show when={ plate.seat === onTurn }>
-                                        { () => <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ plate.seat === mine } class="bg-clock" /> }
+                                    <span class="bg-pips" aria-hidden="true">
+                                        <b>{ locale.n(plate.pips) }</b>
+                                        <small>{ locale.plural('backgammon.pips.word', plate.pips) }</small>
+                                    </span>
+                                    <span class="sr-only">{ locale.plural('backgammon.pips', plate.pips) }</span>
+                                    <Show when={ plate.seat === viewer }>
+                                        { () => <CoachLine tip={ tip } lamp /> }
                                     </Show>
                                 </div>
                             </For>
@@ -1143,8 +1134,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                                 { () => <span class="block">{ locale.t('backgammon.crawford') }</span> }
                             </Show>
                         </p>
-
-                        <CoachLine tip={ tip } lamp />
                     </section>
                 }
             </Show>

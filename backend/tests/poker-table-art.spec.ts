@@ -229,7 +229,7 @@ describe('what the reader holds and presses at a poker table', () =>
         const row = ruleOf('.poker-hand');
         const side = ruleOf('.poker-side');
         const floor = /\n    grid-template-columns: minmax\(0, 1fr\) auto minmax\(min\(([0-9.]+)rem, 100% - 2 \* var\(--card-w\) - ([0-9.]+)rem\), 1fr\);/.exec(row);
-        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp]'), 'inline-size');
+        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp]'), 'inline-size');
         const needed = rem(side, 'margin-inline-start') + rem(ruleOf('.poker-acts'), 'min-inline-size') + rem(side, 'gap') + lamp;
 
         expect(row).toContain('display: grid;');
@@ -264,7 +264,7 @@ describe('what the reader holds and presses at a poker table', () =>
     {
         const thing = rem(ruleOf('.poker-thing'), 'min-inline-size');
         const three = 3 * thing + 2 * rem(ruleOf('.poker-acts'), 'gap');
-        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp]'), 'inline-size');
+        const lamp = rem(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp]'), 'inline-size');
         const bubble = ruleOf('.poker-side > .coach-line[data-lamp][data-open] > span:last-child');
         const wide = Number(/\n    inline-size: min\(([0-9.]+)rem, 100cqw - 2rem\);/.exec(bubble)?.[1]);
 

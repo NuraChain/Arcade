@@ -2919,6 +2919,39 @@ The turn mark on a plate still reads the view; it follows the shown model with t
 the game and the pips, as the table shows them*) and `backgammon-board.spec.ts` (*a game that
 ends on the board*) hold it.
 
+**The two seats are rails of the board's own wood** (`.bg-rail`, one of each, `data-me` on the
+reader's; B.1 of the graphics design). A pill at two corners of a board 310 px tall left a tall
+phone mostly bare page, and on a desktop two pills stood a hand's width from the board. A rail is
+as wide as the board, walnut with the brass line, and carries the face with its turn ring, the
+name, the match as pegs (a hole for each point there is to win and a brass peg for each one won;
+figures past nine points), the clock in its brief form beside the pegs, the pips as a figure of
+20 px and more with its word under it, and on the reader's rail the lamp. What a rail draws is
+said once for somebody who cannot see it: the pegs and the figure are hidden from a screen reader
+and "1 of 3" and "90 pips" are written for it.
+
+- **How tall a rail is comes from the room**: `--rail` is what is left of the stage's height
+  when the board has taken its width, halved, between 4rem and 7.5rem. At 390x844 the board and
+  its seats are 73% of the stage (the design asked for 80%; a rail of 153 px is a card with
+  nothing in it, and 120 reads as a seat). The fit pass holds 70% on an upright stage.
+- **Where the stage is wide for its height the seats stand beside the board**, one over the
+  other, and the lot is centred (`@container stage (min-aspect-ratio: 4 / 3)`): a board as tall
+  as the stage is larger than one with a rail over and under it from about that shape on.
+- **`.bg-grid` takes back the column** the shared wide rule gives every table for its words.
+  Left alone it gave the board 904 px of a 1304 px stage and pushed the seats off its edge.
+- **The lamp's tip opens back along the rail** from the lamp, and from the whole card where the
+  seats stand beside the board, where a tip anchored to the lamp lay on the seat's own name.
+- **Under a chat sheet the two seats share one row over the board**, half the board's width
+  each. The stage's columns are worked out from the stage, and the board from the fit, which is
+  20 px wider on a phone where it bleeds to the screen's edge: `--bleed` puts that back so a
+  rail ends where the board ends.
+
+`backgammon-board.spec.ts` (*the two seats of a backgammon table*) and
+`backend/tests/backgammon-table-art.spec.ts` hold it, and the fit pass measures it: two seats,
+neither on the board, 70% of an upright stage, the lot centred, the pips at 20 px. Against a
+production build whose sheet was broken four ways (a rail never taller than its least, the
+seats not centred beside the board, the pips at 16 px, a seat lying on the board) it failed 20
+of its 44 checks on the backgammon cell, each of the four by name.
+
 **The motion itself is held by a lab and a pass**: `tools/qa/backgammon-motion-lab.mjs` on the
 dev server and `tools/qa/backgammon-motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`,
 *The motion labs and the motion passes*). They follow each checker and each die by its name
@@ -5303,9 +5336,9 @@ the moment anything a player needs is below the fold.
   `min(100cqw, 100cqh * var(--ratio))` wide - the board is sized from BOTH axes of the room it has, so
   a tall phone and a short laptop each get the largest board that fits. A game that has two drawings
   of its table picks one by the fit cell's aspect, not by the screen's.
-- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts
-  backgammon's plates in a column beside the board. Ludo, hokm and poker have no bar and no
-  column: their grids are the board alone, or the table and the hand.
+- No table keeps a bar of words or a column for one now: the grids are the board alone, or the
+  table and the hand. Backgammon's grid is its fit, and inside the fit the board stands with a
+  seat over and under it, or beside it where the stage is wide for its height.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
@@ -5547,7 +5580,7 @@ just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
 or `over`, on the arena), rules of its own where they were once a short stage's: hokm's trump and
 score leave the felt for the row under the table,
-poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two plates share
+poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two seats share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
 difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
 not. It used to get the short layout for free, because the 48dvh sheet made the stage that short; a
@@ -5608,9 +5641,9 @@ end to it:
   screen reader.
 
 The result of a game gives up the same room at every table, where its card used to be centred
-half under the chat. Backgammon's stage still has a column, for its plates, and keeps that column
-under the chat as it always has. `play.spec.ts` holds the attribute through narrow, wide and
-closed.
+half under the chat. Backgammon's seats go back over and under the board beside a chat, because
+the stage is no longer wide for its height. `play.spec.ts` holds the attribute through narrow,
+wide and closed.
 
 **One chat instance, never unmounted while the table is open.** The card and the sheet are the same
 `TableChat` in one container whose classes change with the posture and which is `hidden` when closed.
@@ -5656,7 +5689,8 @@ its half ("an answer, not a failure") and no spec mounted either page in that st
 preference that is on by default and can be switched off on the settings page or from the table menu
 without leaving the game: `hintMoves` lights up what can move, `hintOutcome` says what a move does
 before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status,
-or a lamp that opens over the board where the bar under it has gone (backgammon, ludo and hokm).
+or a lamp that opens over the board where the bar under it has gone (ludo and hokm; backgammon's
+lamp is in the reader's seat).
 `hintOutcome` has nothing left to switch that a sighted player sees in those three. In backgammon
 and ludo it switched the wording of the move buttons, and the owner had every list of moves
 removed. In hokm it still writes what a card would do into the card's accessible name, and the

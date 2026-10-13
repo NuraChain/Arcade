@@ -84,7 +84,7 @@ const watchGames = async (player) => await player.page.evaluate(() =>
             early('the result card stood under a banner');
         }
 
-        if (playing && [...document.querySelectorAll('.bg-plate .table-plate-tag')].some((tag) => /^(Won|Lost)$/.test((tag.textContent ?? '').trim())))
+        if (playing && [...document.querySelectorAll('.bg-rail .table-plate-tag')].some((tag) => /^(Won|Lost)$/.test((tag.textContent ?? '').trim())))
         {
             early('a plate said who had won while the table was still playing');
         }

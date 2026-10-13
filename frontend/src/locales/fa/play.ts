@@ -373,6 +373,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'hokm.stock': { one: '{count} کارت در دسته', other: '{count} کارت در دسته' },
     'backgammon.score': '{score} از {target}',
     'backgammon.pips': { one: '{count} خانه', other: '{count} خانه' },
+    'backgammon.pips.word': { one: 'خانه', other: 'خانه' },
     'backgammon.doubled.you': '{name} بازی را به {cube} دوبل کرد. قبول می‌کنی یا این دست را واگذار می‌کنی؟',
     'backgammon.doubled.them': 'به {cube} دوبل کردی. منتظر جواب {name} هستیم.',
     'backgammon.doubled.watch': '{name} به {cube} دوبل کرد.',

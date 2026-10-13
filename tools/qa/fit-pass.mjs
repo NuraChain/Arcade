@@ -53,7 +53,7 @@ const USABLE = {
     ludo: { wide: [208, 208], tall: [208, 208], card: 0 }
 };
 
-const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5, board: 44, boardShare: 0.124, lean: 0.75, grand: 1700, grandShare: 0.055 };
+const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5, board: 44, boardShare: 0.124, lean: 0.75, grand: 1700, grandShare: 0.055, seats: 0.7, pips: 20 };
 
 const LANGUAGES = {
     en: { locale: 'en-US', show: englishPlay['play.table.chatShow'], hide: englishPlay['play.table.chatHide'], raise: [englishPlay['poker.raise'], englishPlay['poker.bet']] },
@@ -643,6 +643,46 @@ const measure = async (page, rules) => await page.evaluate((given) =>
                 {
                     found.push({ kind: 'small', what: `a card in the hand shows ${ shows.toFixed(1) }px of itself on a phone, under ${ given.fills.shows }` });
                 }
+            }
+        }
+
+        if (surface.classList.contains('bg-board') && stage !== null && !given.openChat)
+        {
+            const room = box(stage);
+            const rails = [...document.querySelectorAll('.bg-rail')].filter(shown).map(box);
+            const all = [drawn, ...rails];
+            const top = Math.min(...all.map((one) => one.top));
+            const bottom = Math.max(...all.map((one) => one.bottom));
+            const left = Math.min(...all.map((one) => one.left));
+            const right = Math.max(...all.map((one) => one.right));
+            const tall = (bottom - top) / room.height;
+            const off = Math.abs((left - room.left) - (room.right - right));
+            const lying = rails.filter((one) => Math.min(one.right, drawn.right) - Math.max(one.left, drawn.left) > 1 && Math.min(one.bottom, drawn.bottom) - Math.max(one.top, drawn.top) > 1);
+            const figures = [...document.querySelectorAll('.bg-pips > b')].map((one) => Number.parseFloat(getComputedStyle(one).fontSize));
+
+            if (rails.length !== 2)
+            {
+                found.push({ kind: 'small', what: `${ rails.length } seats are drawn at a backgammon board, where there are two` });
+            }
+
+            if (lying.length > 0)
+            {
+                found.push({ kind: 'small', what: 'a seat lies on the backgammon board' });
+            }
+
+            if (room.height > room.width && tall < given.fills.seats)
+            {
+                found.push({ kind: 'small', what: `the board and its two seats take ${ Math.round(tall * 100) }% of an upright stage's height, under ${ given.fills.seats * 100 }%` });
+            }
+
+            if (off > 2)
+            {
+                found.push({ kind: 'small', what: `the board and its seats stand ${ Math.round(off) }px nearer one side of the stage than the other` });
+            }
+
+            if (figures.some((one) => one < given.fills.pips))
+            {
+                found.push({ kind: 'small', what: `the pips are written at ${ Math.min(...figures) }px, under ${ given.fills.pips }` });
             }
         }
 

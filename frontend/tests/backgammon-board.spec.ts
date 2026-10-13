@@ -767,7 +767,7 @@ describe('a game that ends on the board', () =>
     const flag = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-layer .bgt-banner');
 
     const plate = (container: HTMLElement, name: string) =>
-        [...container.querySelectorAll<HTMLElement>('.bg-plate')].filter((one) => one.textContent?.includes(name));
+        [...container.querySelectorAll<HTMLElement>('.bg-rail')].filter((one) => one.textContent?.includes(name));
 
     const reads = (container: HTMLElement, name: string, words: string) =>
     {
@@ -1070,6 +1070,90 @@ describe('the backgammon helpers', () =>
     });
 });
 
+describe('the two seats of a backgammon table', () =>
+{
+    const rails = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.bg-rail')];
+
+    const pegs = (rail: HTMLElement) => [...rail.querySelectorAll<HTMLElement>('.bg-score > i')].map((peg) => peg.hasAttribute('data-won'));
+
+    const scored = (mine: number, theirs: number, more: Partial<Backgammon> = {}, rev = 4) => match({
+        seats: [
+            { seat: 0, checkers: [...START], pips: 167, score: mine },
+            { seat: 1, checkers: [...START], pips: 167, score: theirs }
+        ],
+        ...more
+    }, 0, { rev });
+
+    it('draws each seat once, the other side’s and then the reader’s', async () =>
+    {
+        const { container } = await live(match({}));
+
+        expect(rails(container).map((rail) => rail.hasAttribute('data-me'))).toEqual([false, true]);
+        expect([container.querySelectorAll('.table-plate').length, container.querySelectorAll('.bg-plate').length], 'a seat is drawn twice, or wears the name it had when there were two of each').toEqual([2, 0]);
+    });
+
+    it('tells the match in pegs, one for each point there is to win and a brass one for each point won', async () =>
+    {
+        const { container } = await live(scored(2, 0));
+        const [theirs, mine] = rails(container);
+
+        expect([pegs(theirs), pegs(mine)]).toEqual([[false, false, false], [true, true, false]]);
+        expect([theirs, mine].map((rail) => rail.querySelector('.bg-score')?.getAttribute('aria-hidden')), 'a row of pegs is read out as nothing').toEqual(['true', 'true']);
+        expect([theirs.textContent, mine.textContent].map((said) => said?.match(/\d of \d/)?.[0]), 'the score is not said to somebody who cannot see the pegs').toEqual(['0 of 3', '2 of 3']);
+        expect(container.querySelector('.bg-score-says'), 'the score is drawn twice, in pegs and in figures').toBeNull();
+    });
+
+    it('fills a peg when a point is won, in the seat that was there', async () =>
+    {
+        const table = await live(scored(0, 0));
+        const before = rails(table.container);
+
+        table.move(scored(0, 1, { round: 2 }, 5));
+        await elapse(1200);
+
+        const after = rails(table.container);
+
+        expect(after.map((rail, at) => rail === before[at]), 'a seat was drawn again for a point').toEqual([true, true]);
+        expect([pegs(after[0]), pegs(after[1])]).toEqual([[true, false, false], [false, false, false]]);
+    });
+
+    it('writes a match too long for pegs in figures: nine points are pegs and ten are not', async () =>
+    {
+        const nine = await live(scored(4, 7, { target: 9 }));
+
+        expect(rails(nine.container).map((rail) => pegs(rail).filter(Boolean).length + ' of ' + pegs(rail).length)).toEqual(['7 of 9', '4 of 9']);
+        nine.unmount();
+
+        const { container } = await live(scored(4, 7, { target: 10 }));
+        const [theirs, mine] = rails(container);
+
+        expect([pegs(theirs), pegs(mine)]).toEqual([[], []]);
+        expect([theirs, mine].map((rail) => rail.querySelector('.bg-score-says')?.textContent)).toEqual(['7 of 10', '4 of 10']);
+    });
+
+    it('writes the pips in figures of their own, with the word for that many under them, and says them once to somebody who cannot see them', async () =>
+    {
+        const { container } = await live(match({ seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }));
+        const [theirs, mine] = rails(container);
+
+        expect([theirs, mine].map((rail) => [rail.querySelector('.bg-pips > b')?.textContent, rail.querySelector('.bg-pips > small')?.textContent, rail.querySelector('.bg-pips')?.getAttribute('aria-hidden')]))
+            .toEqual([['1', 'pip', 'true'], ['90', 'pips', 'true']]);
+        expect([theirs, mine].map((rail) => [...rail.querySelectorAll(':scope > .sr-only')].map((one) => one.textContent))).toEqual([['1 pip'], ['90 pips']]);
+    });
+
+    it('keeps the tip’s lamp in the reader’s seat, and gives somebody watching none', async () =>
+    {
+        const { container } = await live(match({ dice: [3, 3] }));
+        const [theirs, mine] = rails(container);
+
+        expect([theirs.querySelector('[role="note"]') === null, mine.querySelector('[role="note"]') !== null]).toEqual([true, true]);
+
+        const watching = still(match({ dice: [3, 3] }, null));
+
+        expect(watching.container.querySelector('[role="note"]')).toBeNull();
+    });
+});
+
 describe('moves made on the table itself', () =>
 {
     const whole = (container: HTMLElement) => zone(container).dataset.live === 'done';
@@ -1102,17 +1186,20 @@ describe('moves made on the table itself', () =>
         expect(container.querySelector('[aria-live="polite"]')?.classList.contains('sr-only')).toBe(true);
         expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('You rolled 3 and 3. Move your checkers.');
         expect(bar.textContent).toContain('Match to 3');
-        expect(drawn.map((one) => one.getAttribute('role'))).toEqual(['note']);
+        expect(drawn.map((one) => one.getAttribute('role')), 'something is drawn where the words were').toEqual([]);
+        expect(container.querySelector('.bg-rail[data-me] [role="note"]'), 'the tip is not in the reader’s seat').not.toBeNull();
     });
 
     it('puts the clock on the plate of whoever is on turn', async () =>
     {
         const mine = await live(match({}, 0, { remainingMs: 20_000 }));
-        const rows = (container: HTMLElement) => [...container.querySelectorAll('.bg-plate')].filter((row) => row.querySelector('.bg-clock') !== null);
+        const rows = (container: HTMLElement) => [...container.querySelectorAll('.bg-rail')].filter((row) => row.querySelector('.bg-clock') !== null);
 
         expect(rows(mine.container).length).toBeGreaterThan(0);
         expect(rows(mine.container).every((row) => row.classList.contains('table-hand') || row.hasAttribute('data-me'))).toBe(true);
         expect(mine.container.querySelector('.table-bar .bg-clock')).toBeNull();
+        expect([...mine.container.querySelectorAll('.bg-clock > .contents > span')].map((one) => [one.getAttribute('aria-hidden'), one.classList.contains('sr-only')]), 'a rail has no room for the clock written out: it is drawn in brief and said in full')
+            .toEqual([['true', false], [null, true]]);
         mine.unmount();
 
         const theirs = await live(match({ turn: 1 }, 0, { turn: 1, remainingMs: 20_000 }));
