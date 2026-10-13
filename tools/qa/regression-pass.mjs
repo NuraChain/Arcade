@@ -356,6 +356,27 @@ console.log('\n[7] Persian — the new copy exists in both languages');
         const settings = await page.locator('body').innerText();
         record('the account card names the wallet in Persian', settings.includes('ورود با کیف پول'), '');
         record('and offers no wallet button to a wallet that is already connected', !settings.includes('اتصال کیف پول'), '');
+
+        await page.goto(`${ BASE }/app/leaderboard`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(1200);
+
+        const names = await page.evaluate(() => [...document.querySelectorAll('ol > li [dir="auto"]')].map((name) =>
+        {
+            const box = name.getBoundingClientRect();
+            const range = document.createRange();
+
+            range.selectNodeContents(name);
+
+            const ink = range.getBoundingClientRect();
+            const text = (name.textContent ?? '').trim();
+
+            return { text, latin: /^[ -~]+$/.test(text), room: Math.round(box.width - ink.width), off: Math.round(box.right - ink.right) };
+        }));
+        const drifting = names.filter((one) => one.latin && one.room > 8);
+        const astray = drifting.filter((one) => one.off > 1);
+
+        record('the leaderboard lists a name in Latin letters with room to drift in', drifting.length > 0, `${ names.length } names on the board`);
+        record('and it stands at the right of its row, where the row starts', astray.length === 0, astray.slice(0, 2).map((one) => `"${ one.text }" ends ${ one.off }px short of the right`).join(' ; '));
         record('console clean in Persian', errors.length === 0, errors.slice(0, 3).join(' ; '));
     }
     catch (e)

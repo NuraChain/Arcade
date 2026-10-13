@@ -39,6 +39,12 @@
         min-inline-size: 0;
     }
 
+    :where(.truncate[dir='auto'], .table-plate-name)
+    {
+        text-align: -webkit-match-parent;
+        text-align: match-parent;
+    }
+
     @supports not selector(::-webkit-scrollbar)
     {
         *

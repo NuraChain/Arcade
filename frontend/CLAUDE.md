@@ -1490,6 +1490,21 @@ Both catalogues are split by area under `locales/{en,fa}/` and typed
 key that is *identical* in both languages fails `tests/data.spec.ts`. Interpolation-only strings
 therefore do not belong in the catalogue.
 
+**A name keeps the page's side and its own reading order.** Every display name carries
+`dir="auto"`, so "Mina Sadeghi" on a Persian page is an element that reads left to right, and
+`text-align: start` is then ITS left. Wherever the element is stretched across its row (`flex-1`,
+`w-full`, or a child of a column), the name stood at the far end from its own avatar: on the
+leaderboard and in a game's result, while a Persian name beside it stood where it should. The
+owner saw it. `base.css` gives every one-line label (`.truncate[dir='auto']`, and the plate's
+name) `text-align: match-parent`, which answers with the PARENT's start, so the letters still
+read their own way and the label stands where the row begins. Chromium and Safari know the word
+only as `-webkit-match-parent` and Firefox only plain, so both are written, the plain one last.
+The rule is inside `:where()`: a label centred or ended on purpose keeps its place. Text of more
+than one line (a message, a bio, a clamped preview) is not a label and keeps its own side.
+`backend/tests/label-direction.spec.ts` holds the two words, the three places the rule has to
+reach, and that no stretched `dir="auto"` element is out of its reach; the regression pass
+measures a Latin name on the Persian leaderboard.
+
 **A MEASURED coordinate is physical, and so is the property that applies it.** The tooltip placed
 itself with `inset-inline-start: var(--x)` while `place()` hands back a `left` read off
 `getBoundingClientRect` - which worked only by accident. The bubble carries `dir="auto"` so a Latin
