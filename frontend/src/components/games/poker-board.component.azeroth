@@ -1,4 +1,4 @@
-import { untrack } from 'azerothjs';
+import { batch, untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
@@ -14,10 +14,12 @@ import { aroundStadium, type Spot } from '../../game/poker-seats.ts';
 import { pokerOf } from '../../data/match.ts';
 import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/helpers/poker.ts';
 import { EASE, centreOf, rectIn, type Rect } from '../../game/motion.ts';
-import { BOARD_GAP, CARD_GAP, CHIP_FLY, DEAL_LEAD, DEAL_SLIDE, DISC_GAP, GATHER, GATHER_GAP, KNOCK, POT_SPAN, POT_WON, WIN_AFTER, slidesFor, spanOf } from '../../game/poker-beats.ts';
-import { EMPTY, HISTORY, STILL, before, drawnOf, feltOf, flying, sameAs, step, swept, through, type Air, type Felt, type Told } from '../../game/poker-felt.ts';
+import { BETWEEN_CAP, BOARD_GAP, BOARD_OUT, CARD_FLY, CARD_GAP, CARD_RISE, CHIP_FLY, COLLECT, DEAL_LEAD, DISC_GAP, GATHER, GATHER_GAP, KNOCK, MUCK, MUCK_GAP, POT_SPAN, POT_WON, PUCK, TURN, WIN_AFTER, collectGap, dealGap, slides, spanOf } from '../../game/poker-beats.ts';
+import { EMPTY, HISTORY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, step, swept, through, unturned, type Air, type Felt, type Told } from '../../game/poker-felt.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { cardAt, cardNode, stackNode, turnNode } from '../../game/stage/cards.ts';
 import { discsFor, pour } from '../../game/stage/chips.ts';
+import { launch, turn, type Launch } from '../../game/stage/flight.ts';
 import type { Ctx } from '../../game/stage/director.ts';
 import type { Act } from '../../game/stage/feed.ts';
 import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
@@ -37,6 +39,10 @@ const BOARD_SLOTS = [0, 1, 2, 3, 4];
 
 const POCKETS = [0, 1];
 
+const HOLE = 2;
+
+const DECK = 0.7;
+
 const CHIP_GAP = 4;
 
 const ROUND = 1;
@@ -54,6 +60,19 @@ const UNSEATED = {
     tag: null as PlateTag | null
 };
 
+interface Shown
+{
+    card: number;
+    box: Rect;
+}
+
+interface Lying
+{
+    faces: readonly Shown[];
+    held: readonly Shown[];
+    piles: readonly Rect[];
+}
+
 export default component PokerBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
@@ -66,6 +85,10 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     state raising = false;
 
     state shown: Felt | null = null;
+
+    state arriving: readonly number[] = STILL.cards;
+
+    state lifted = false;
 
     state presenting = false;
 
@@ -104,6 +127,13 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
+    derived between = view !== null && !over && mine !== undefined
+        && (felt.hand !== view.hand || (arriving[mine] ?? 0) > 0 || felt.board.length < view.board.length);
+
+    derived waiting = between && !lifted;
+
+    derived acting = myTurn && !waiting;
+
     const settings = useSettings();
 
     let sound: SoundHandle | null = null;
@@ -112,9 +142,23 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     effect
     {
-        const yours = myTurn;
+        const yours = acting;
 
         untrack(() => chime(yours && props.match.mine !== undefined));
+    }
+
+    let uncap: () => void = () => undefined;
+
+    effect
+    {
+        const behind = between;
+
+        untrack(() =>
+        {
+            uncap();
+            lifted = false;
+            uncap = behind ? runtime().clock.after(BETWEEN_CAP, () => lifted = true) : () => undefined;
+        });
     }
 
     effect
@@ -282,11 +326,12 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         return { id: game.id, rev: game.rev, seat: mine ?? null, view: ahead === null ? now : step(now, ahead.move) };
     };
 
-    const show = () =>
+    const show = () => batch(() =>
     {
         shown = drawnOf(held, air);
         coming = air.bets;
-    };
+        arriving = air.cards;
+    });
 
     const reset = (sight: Sight<Felt>) =>
     {
@@ -310,6 +355,90 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     const spotOf = (seat: number) => boxOf(find(`.poker-seat[data-seat="${ seat }"] > .poker-bet > .chip-stack`));
 
     const potSpot = () => boxOf(find('.poker-pot > .chip-stack'));
+
+    const cardWide = () => boxOf(find('.poker-backs > .card-back'))?.width ?? (boxOf(find('.poker-slot'))?.width ?? 0) / 2;
+
+    const puckSpot = () =>
+    {
+        const puck = find('.poker-puck');
+        const cloth = boxOf(feltNode());
+        const [x = NaN, y = NaN] = (puck?.style.translate ?? '').split(' ').map(parseFloat);
+
+        return puck === null || cloth === null || puck.dataset.placed !== 'true' || !Number.isFinite(x) || !Number.isFinite(y)
+            ? null
+            : { x: cloth.x + x, y: cloth.y + y, width: puck.offsetWidth, height: puck.offsetHeight };
+    };
+
+    const deckSpot = () =>
+    {
+        const around = puckSpot() ?? boxOf(plateOf(held.button)) ?? boxOf(feltNode());
+        const wide = cardWide();
+
+        return around === null || wide <= 0 ? null : cardAt(around, wide * DECK);
+    };
+
+    const leave = (over: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, shape: Launch, ctx: Ctx) =>
+    {
+        const flown = launch(ctx.stage, over, clone, from, to, shape).done;
+
+        ctx.stage.animate(clone, [{ opacity: 0 }, { opacity: 1 }], { duration: CARD_RISE, quiet: 'skip' });
+
+        return flown;
+    };
+
+    const pocketOf = (nth: number) => find(`.poker-pocket:nth-child(${ nth + 1 })`);
+
+    const placeOf = (seat: number, nth: number) =>
+    {
+        const back = find(`.poker-seat[data-seat="${ seat }"] > .poker-backs > .card-back:nth-child(${ nth + 1 })`);
+        const lying = seat === mine ? boxOf(pocketOf(nth)) : boxOf(back);
+        const plate = boxOf(plateOf(seat));
+        const wide = cardWide();
+
+        if (lying !== null)
+        {
+            return { to: lying, tilt: back === null ? 0 : parseFloat(getComputedStyle(back).rotate) || 0, rests: true };
+        }
+
+        return plate === null || wide <= 0 ? null : { to: cardAt(plate, wide), tilt: 0, rests: false };
+    };
+
+    const facesOf = (selector: string, cards: readonly number[]) => cards.flatMap((card, at) =>
+    {
+        const box = boxOf(find(`${ selector }:nth-child(${ at + 1 })`));
+
+        return box === null ? [] : [{ card, box }];
+    });
+
+    const pileOf = (seat: number) =>
+    {
+        const plate = boxOf(plateOf(seat));
+        const wide = cardWide();
+
+        return boxOf(find(`.poker-seat[data-seat="${ seat }"] > .poker-backs`)) ?? (plate === null || wide <= 0 ? null : cardAt(plate, wide));
+    };
+
+    const pilesOf = (seats: readonly number[]) => seats.flatMap((seat) =>
+    {
+        const box = pileOf(seat);
+
+        return box === null ? [] : [box];
+    });
+
+    const cardsOf = (seat: number): Lying => (seat === mine
+        ? { faces: [], held: facesOf('.poker-pocket', drawnOf(held, air).hole), piles: [] }
+        : { faces: [], held: [], piles: pilesOf([seat]) });
+
+    const lyingNow = (): Lying =>
+    {
+        const lain = drawnOf(held, air);
+
+        return {
+            faces: [...facesOf('.poker-slot', lain.board), ...facesOf('.poker-pocket', lain.hole)],
+            held: [],
+            piles: pilesOf(held.chairs.map((chair) => chair.seat).filter((seat) => seat !== mine && inHand(held, seat)))
+        };
+    };
 
     const discAt = (place: Rect, like: Rect): Rect =>
     {
@@ -410,7 +539,187 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         }
     };
 
-    const scene = async (move: Told, next: Felt, ctx: Ctx) =>
+    const sweep = async (lying: Lying, length: number, gap: number, ctx: Ctx) =>
+    {
+        const deck = deckSpot();
+        const over = layer;
+        const wide = cardWide();
+
+        if (over === null || deck === null)
+        {
+            return;
+        }
+
+        const away = (clone: HTMLElement, from: Rect, nth: number) => launch(ctx.stage, over, clone, from, cardAt(deck, from.width), {
+            duration: length,
+            delay: nth * gap,
+            easing: EASE.fly,
+            toScale: deck.width / from.width,
+            toOpacity: 0,
+            fadeFrom: 0.6,
+            quiet: 'skip'
+        }).done;
+
+        await Promise.all([
+            ...lying.faces.map((one, at) => away(cardNode(one.card, one.box.width), one.box, at)),
+            ...lying.held.map((one, at) => turn(ctx.stage, over, turnNode(one.card, one.box.width), one.box, one.box, { duration: TURN, easing: EASE.snap, down: true }).done
+                .then(() => away(cardNode(null, one.box.width), one.box, at))),
+            ...lying.piles.map((box, at) => away(stackNode(HOLE, wide), cardAt(box, wide), lying.faces.length + at))
+        ]);
+    };
+
+    const newHand = async (next: Felt, ctx: Ctx) =>
+    {
+        const lying = lyingNow();
+        const puck = find('.poker-puck');
+        const was = puck?.style.translate ?? '';
+
+        sound?.play('card-shuffle', { gain: 0.6 });
+        held = next;
+        air = dealing(air, held);
+        show();
+        seatChips();
+
+        const now = puck?.style.translate ?? '';
+
+        if (puck !== null && was !== '' && now !== '' && was !== now)
+        {
+            ctx.stage.animate(puck, [{ translate: was }, { translate: now }], { duration: PUCK, easing: EASE.fly });
+        }
+
+        await sweep(lying, COLLECT, collectGap(lying.faces.length + lying.held.length + lying.piles.length), ctx);
+    };
+
+    const dealTo = (seat: number, nth: number, ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const place = placeOf(seat, nth);
+        const over = layer;
+        const card = seat === mine ? held.hole[nth] : undefined;
+        const arrive = () =>
+        {
+            air = landed(air, seat);
+            show();
+        };
+
+        if (over === null || from === null || place === null)
+        {
+            arrive();
+
+            return Promise.resolve();
+        }
+
+        const rests = place.rests && (seat !== mine || card !== undefined);
+        const flown = leave(over, cardNode(null, place.to.width), from, place.to, {
+            duration: CARD_FLY,
+            easing: EASE.fly,
+            toRotate: place.tilt,
+            toOpacity: rests ? 1 : 0,
+            fadeFrom: rests ? undefined : 0.8,
+            quiet: 'skip',
+            landed: card === undefined ? arrive : undefined
+        }, ctx);
+
+        return card === undefined
+            ? flown
+            : flown.then(() => turn(ctx.stage, over, turnNode(card, place.to.width), place.to, place.to, { duration: TURN, easing: EASE.snap, landed: arrive }).done);
+    };
+
+    const dealOut = async (ctx: Ctx) =>
+    {
+        const order = dealOrder(held);
+        const gap = dealGap(order.length);
+        const landings: Promise<void>[] = [];
+
+        if (!await pause(DEAL_LEAD, ctx))
+        {
+            return;
+        }
+
+        for (const [at, seat] of order.entries())
+        {
+            if (slides(at, order.length))
+            {
+                sound?.play('card-slide', { gain: 0.7, rate: 0.97 + (at % 3) * 0.04 });
+            }
+
+            landings.push(dealTo(seat, at < order.length / HOLE ? 0 : 1, ctx));
+
+            if (at < order.length - 1 && !await pause(gap, ctx))
+            {
+                return;
+            }
+        }
+
+        await Promise.all(landings);
+    };
+
+    const layOut = (card: number, slot: number, rest: number, ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const to = boxOf(find(`.poker-slot:nth-child(${ slot + 1 })`));
+        const over = layer;
+        const faced = () =>
+        {
+            air = unturned(air, -1);
+            show();
+            sound?.play('card-place');
+        };
+
+        sound?.play('card-slide', { gain: 0.7 });
+
+        if (over === null || from === null || to === null)
+        {
+            faced();
+
+            return Promise.resolve();
+        }
+
+        return leave(over, cardNode(null, to.width), from, to, { duration: CARD_FLY, easing: EASE.fly, quiet: 'skip' }, ctx)
+            .then(() => turn(ctx.stage, over, turnNode(card, to.width), to, to, { duration: TURN, delay: rest, easing: EASE.snap, landed: faced }).done);
+    };
+
+    const street = async (cards: readonly number[], next: Felt, ctx: Ctx) =>
+    {
+        const first = held.board.length;
+        const turns: Promise<void>[] = [];
+
+        held = next;
+        air = unturned(air, cards.length);
+        show();
+
+        for (const [at, card] of cards.entries())
+        {
+            turns.push(layOut(card, first + at, (cards.length - 1 - at) * BOARD_OUT + at * BOARD_GAP, ctx));
+
+            if (at < cards.length - 1 && !await pause(BOARD_OUT, ctx))
+            {
+                return;
+            }
+        }
+
+        await Promise.all(turns);
+    };
+
+    const cardsBack = async (cards: readonly number[], ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const over = layer;
+
+        if (over === null || from === null)
+        {
+            return;
+        }
+
+        await Promise.all(cards.flatMap((card, at) =>
+        {
+            const to = boxOf(pocketOf(at));
+
+            return to === null ? [] : [turn(ctx.stage, over, turnNode(card, to.width), from, to, { duration: CARD_FLY, delay: at * MUCK_GAP, easing: EASE.fly, flip: EASE.flip }).done];
+        }));
+    };
+
+    const scene = async (move: Told, next: Felt, ctx: Ctx, trail?: Promise<void>[]) =>
     {
         const seat = move.seat ?? -1;
         const mineToo = seat === mine;
@@ -439,42 +748,49 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             }
         }
 
+        if (move.e === 'deal')
+        {
+            await newHand(next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'board')
+        {
+            await street(move.cards ?? [], next, ctx);
+
+            return;
+        }
+
+        const leaving = inHand(held, seat) && !inHand(next, seat) ? cardsOf(seat) : null;
+
         held = next;
         show();
 
-        if (move.e === 'check')
+        if (leaving !== null)
         {
-            await knock(seat, ctx);
-        }
-        else if (move.e === 'deal')
-        {
-            const slides = slidesFor(held.chairs.length);
+            const away = sweep(leaving, MUCK, MUCK_GAP, ctx);
 
-            sound?.play('card-shuffle', { gain: 0.6 });
-
-            for (let card = 0; card < slides; card += 1)
-            {
-                ctx.stage.after(DEAL_LEAD + card * DEAL_SLIDE, () => sound?.play('card-slide', { gain: 0.7, rate: 0.97 + (card % 3) * 0.04 }));
-            }
-
-            await pause(DEAL_LEAD + slides * DEAL_SLIDE, ctx);
-        }
-        else if (move.e === 'fold')
-        {
             sound?.play('card-gather', { gain: 0.6 });
-            await pause(CARD_GAP, ctx);
-        }
-        else if (move.e === 'board')
-        {
-            for (let card = 0; card < (move.cards?.length ?? 0); card += 1)
-            {
-                sound?.play('card-place');
 
-                if (!await pause(BOARD_GAP, ctx))
+            if (trail !== undefined)
+            {
+                trail.push(away);
+            }
+            else
+            {
+                await away;
+
+                if (!ctx.live())
                 {
                     return;
                 }
             }
+        }
+
+        if (move.e === 'check')
+        {
+            await knock(seat, ctx);
         }
         else if (move.e === 'show')
         {
@@ -517,15 +833,52 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         await Promise.resolve();
 
         const tables = ctx.live() ? through(held, moves, sight.view) : [];
+        const from = latest(moves);
+        const trail: Promise<void>[] = [];
+        let out: Promise<void> | null = null;
 
-        for (const [at, move] of moves.slice(0, tables.length).entries())
+        if (from > 0 && tables.length > 0)
         {
-            await scene(move, tables[at], ctx);
+            layer?.replaceChildren();
+            air = STILL;
+            held = tables[from - 1];
+            show();
+        }
+
+        for (let at = from; at < tables.length; at += 1)
+        {
+            const move = moves[at];
+
+            if (move.e !== 'blind' && out !== null)
+            {
+                await out;
+                out = null;
+            }
+
+            if (ctx.live())
+            {
+                await scene(move, tables[at], ctx, trail);
+            }
 
             if (!ctx.live())
             {
                 return;
             }
+
+            if (move.e === 'deal')
+            {
+                out = dealOut(ctx);
+            }
+        }
+
+        if (out !== null)
+        {
+            await out;
+        }
+
+        if (trail.length > 0)
+        {
+            await Promise.all(trail);
         }
     };
 
@@ -543,6 +896,11 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         {
             sound?.play('deny');
             await chipsBack(seat, sight.view, ctx);
+        }
+        else if (sight.view.hole.length > held.hole.length)
+        {
+            sound?.play('deny');
+            await cardsBack(sight.view.hole, ctx);
         }
 
         if (ctx.live())
@@ -569,7 +927,12 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         same: (sight) => sameAs(held, sight.view),
         settle: reset,
         play,
-        estimate: (acts) => spanOf(acts.flatMap((act) => act.moves), untrack(() => count))
+        estimate: (acts) =>
+        {
+            const moves = acts.flatMap((act) => act.moves);
+
+            return spanOf(moves.slice(latest(moves)), untrack(() => count));
+        }
     };
 
     effect
@@ -638,6 +1001,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             }
 
             unwatch();
+            uncap();
             props.onPresenting?.(false);
             made.dispose();
             presenter = null;
@@ -648,7 +1012,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived toCall = view?.toCall ?? 0;
 
-    derived canRaise = myTurn && view?.minRaiseTo !== undefined && view?.maxRaiseTo !== undefined;
+    derived canRaise = acting && view?.minRaiseTo !== undefined && view?.maxRaiseTo !== undefined;
 
     derived low = view?.minRaiseTo ?? 0;
 
@@ -660,13 +1024,13 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived myChair = felt.chairs.find((chair) => chair.seat === viewer);
 
-    derived tip = view === null || over ? null : coachOf(view, mine);
+    derived tip = view === null || over || waiting ? null : coachOf(view, mine);
 
     derived captioned = settings.settings().hintOutcome;
 
     derived holding = captioned && mine !== undefined ? handOf(felt) : null;
 
-    derived price = view === null || over || !captioned ? null : priceOf(view, mine);
+    derived price = view === null || over || waiting || !captioned ? null : priceOf(view, mine);
 
     derived handNamed = ((): string =>
     {
@@ -819,7 +1183,9 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived lastTabled = lastShown.length > 0;
 
-    derived pockets = POCKETS.map((slot) => ({ slot, cards: felt.hole.slice(slot, slot + 1) }));
+    derived inHole = between && lifted && myTurn ? (view?.hole ?? []) : felt.hole;
+
+    derived pockets = POCKETS.map((slot) => ({ slot, cards: inHole.slice(slot, slot + 1) }));
 
     derived handed = view !== null && !result && mine !== undefined && myChair !== undefined && !myChair.out;
 
@@ -851,6 +1217,11 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         if (mine !== undefined && myChair?.out === true)
         {
             return locale.t('poker.turn.out');
+        }
+
+        if (waiting)
+        {
+            return '';
         }
 
         if (myTurn)
@@ -926,7 +1297,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived owing = toCall > 0;
 
-    derived priced = myTurn && costSays !== '';
+    derived priced = acting && costSays !== '';
 
     derived choosing = raising && canRaise;
 
@@ -1062,7 +1433,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                                         anchor={ plateAt(seat).x > 60 ? 'end' : (plateAt(seat).x < 40 ? 'start' : 'centre') }
                                         button={ button === seat }
                                         stack={ chips(plateAt(seat).row.stack) }
-                                        holds={ plateAt(seat).live && seat !== mine }
+                                        holds={ inHand(felt, seat) && seat !== mine }
+                                        cards={ HOLE - (arriving[seat] ?? 0) }
                                         bet={ betOn(seat) > 0 ? chips(betOn(seat)) : '' }
                                         discs={ discsFor(betOn(seat), felt.blinds.big) }
                                         landing={ plateAt(seat).row.bet === 0 }
@@ -1138,7 +1510,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                         </div>
 
                         <div class="poker-side">
-                            <Show when={ myTurn }>
+                            <Show when={ acting }>
                                 { () =>
                                     <div class="poker-acts">
                                         <Show when={ owing }>

@@ -2333,6 +2333,53 @@ it. The lamp is still the last thing in the row, after the room of three things 
 are there or not; its bubble is no wider than that room and the lamp, so it opens over them
 and not over the cards.
 
+**As built (commit 5.4, cards).** The rows `deal`, `fold`, `board`, "A hand boundary" and the
+fold's half of "A refused or stale action" of the table of scenes, and `between` of the
+model's table.
+
+- **No deck and no muck rest on the felt**, which *Anchors and layouts* allowed either way: the
+  dealer's mark is where cards come from and go to. Nothing new is a solid.
+- **The mark slides as itself**: the layout pass lays it at the new dealer and the scene
+  animates the real element from where it was laid before.
+- **`dealt` is on the model** (false for `EMPTY` and for the table before the first deal): the
+  opening's table draws no cards in front of anybody, and the wait can tell it from a table
+  that is merely level with the view.
+- **Cards in the air are two more entries of the ledger** (`Air.cards`, `Air.board`). The backs
+  of a seat are always both in their box and the one still coming is hidden, so the bet solver
+  seats a blind where it will stand before the cards arrive.
+- **The blinds and the deal overlap**: the deal-out is started and not awaited until the first
+  move that is not a `blind`. Played one after the other they cost 600 ms of the 2500.
+- **A fold does not hold the move after it** inside a batch. With it held, "fold, chips back,
+  gather, pot, sweep, deal" was 2920 ms for four seats, over the cap in an ordinary hand. It is
+  about 2400 now, with `POT_SPAN` 300 and `DEAL_LEAD` 150 as well, and the reader's old hand
+  swept face up instead of being turned down first.
+- **`between` is not the comparison of hands alone** that the model's table has. It is
+  `felt.hand !== view.hand || arriving[mine] > 0 || felt.board.length < view.board.length`:
+  a hand dealt on the model is level with the view while the reader's cards are still
+  flying, and so is a street while its cards are face down. The last clause was added when
+  the browser showed "Check, Bet" over a flop that was still coming out. A fourth clause,
+  `!felt.dealt`, was written and taken out again: an opening is set down and dealt inside
+  one turn of the event loop, so the fault that removed it changed no test and no frame.
+  `Felt.dealt` itself stays for `inHand`: without it the opening would sweep cards from every
+  seat of a table nobody has been dealt on.
+- **The cap shows the cards from the view** and brings the things to press, as hokm's does,
+  and only for a reader whose turn it is. Rule 7's "everything in front runs fast when the view
+  says it is the reader's turn" is NOT built: an urgent entry would run a deal at four times
+  its pace every other hand of a heads-up game. Nor does the hold end "when little of the turn
+  is left": the cap is 2.5 s of a 30 s turn.
+- **Two deals in one batch**: the table is set down just before the newest (`latest`), in the
+  batch only. Batches still queued are separate entries and the presenter's own catch-up rule
+  paces them.
+- **Sweeps shrink, deals grow**: a card that goes to the dealer is drawn at the size it had and
+  scaled down; one that comes from the dealer is drawn at the size it will have and scaled up
+  from 0.7 of a back, fading in over 90 ms so it does not cover the mark.
+- **Still drawn at once**, until 5.5: a hand shown down, and a pot paid to its winners.
+- **Seen on the built server** by a sampler on every frame and by filming: the opening (six
+  seats, 1.2 s, the first card to the left of the button), a hand folded round and the next
+  dealt (sweep, mark, blinds among the cards, the reader's two turned), the flop, the turn and
+  the river, less motion (no card in the air at any frame, the cards arriving 73 ms apart all
+  the same), and a phone in Persian with the reader's own fold pressed.
+
 **As built (commit 5.3b, chips travel).** The rows `blind` to `allin`, `check`, "A street
 closes", `refund`, "The reader acts" and "A refused or stale action" of the table of scenes.
 

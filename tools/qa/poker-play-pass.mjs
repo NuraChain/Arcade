@@ -191,6 +191,75 @@ try
         [...places].map(([handle, seen]) => `${ handle }'s first card stood at ${ [...seen].join(' and at ') }`).join(', ')
     );
 
+    console.log('\n[4] a fold ends the hand and the next is dealt in front of both');
+
+    const ending = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+    if (ending.finishedAt === undefined)
+    {
+        const folder = seats.get(ending.turn);
+
+        await level(dana, ending.rev);
+        await level(mina, ending.rev);
+
+        for (const player of [dana, mina])
+        {
+            await player.page.evaluate(() =>
+            {
+                const frames = [];
+                const sample = () =>
+                {
+                    frames.push({
+                        flying: [...document.querySelectorAll('.board-flight > .flight')].filter((one) => !one.classList.contains('chip-stack')).length,
+                        held: document.querySelectorAll('.poker-pocket .card-face').length,
+                        asked: document.querySelectorAll('.poker-acts button').length
+                    });
+
+                    if (window.__dealt === frames)
+                    {
+                        requestAnimationFrame(sample);
+                    }
+                };
+
+                window.__dealt = frames;
+                sample();
+            });
+        }
+
+        const folded = await folder.api('POST', `/matches/${ matchId }/play`, { key: `fold-${ ending.rev }`, rev: ending.rev, play: { kind: 'poker', verb: 'fold' } });
+
+        record(`${ folder.handle } folds and the hand is over`, folded.ok && folded.body.match.view.hand === ending.view.hand + 1, `${ folded.status }`);
+
+        const still = await level(dana, ending.rev + 1) && await level(mina, ending.rev + 1);
+
+        record('both tables play the hand out, deal the next and come to rest', still);
+
+        for (const player of [dana, mina])
+        {
+            const frames = await player.page.evaluate(() =>
+            {
+                const seen = window.__dealt;
+
+                window.__dealt = null;
+
+                return seen;
+            });
+            const emptied = frames.findIndex((frame) => frame.held === 0);
+            const dealt = frames.findIndex((frame, at) => at > emptied && frame.held === 2);
+
+            record(
+                `${ player.handle } gives up the old hand and is dealt two cards, with cards seen in the air between`,
+                emptied !== -1 && dealt !== -1 && frames.slice(emptied, dealt).some((frame) => frame.flying > 0),
+                `${ frames.length } frames, the hand was empty at ${ emptied } and full again at ${ dealt }`
+            );
+            record(
+                `${ player.handle } is asked nothing while their cards are on the way`,
+                frames.slice(Math.max(0, emptied), Math.max(0, dealt)).every((frame) => frame.asked === 0),
+                `${ frames.slice(Math.max(0, emptied), Math.max(0, dealt)).filter((frame) => frame.asked > 0).length } frames with something to press`
+            );
+        }
+    }
+
     const beside = await dana.page.evaluate(() => ({
         bar: document.querySelector('main .table-grid > .table-bar') !== null,
         said: [...document.querySelectorAll('main .table-fit > p')].filter((one) => !one.classList.contains('sr-only')).length,

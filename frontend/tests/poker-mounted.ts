@@ -73,6 +73,8 @@ export const elapse = async (ms: number, step = 10) =>
 
 const at = (x: number, y: number, width: number, height: number) => ({ x, y, left: x, top: y, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) }) as DOMRect;
 
+const nth = (element: Element) => [...(element.parentElement?.children ?? [])].indexOf(element);
+
 export const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
 {
     const seat = Number(this.closest('.poker-seat')?.getAttribute('data-seat') ?? -1);
@@ -82,7 +84,7 @@ export const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect')
         return at(0, 0, 400, 800);
     }
 
-    if (this.classList.contains('table-plate'))
+    if (this.classList.contains('table-plate') || this.classList.contains('poker-seat'))
     {
         return at(20 + seat * 60, 700 - seat * 100, 120, 40);
     }
@@ -95,6 +97,26 @@ export const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect')
     if (this.classList.contains('chip-stack') && seat >= 0)
     {
         return at(40 + seat * 60, 640 - seat * 100, 10, 10);
+    }
+
+    if (this.classList.contains('poker-slot'))
+    {
+        return at(120 + nth(this) * 30, 380, 24, 34);
+    }
+
+    if (this.classList.contains('poker-pocket'))
+    {
+        return at(170 + nth(this) * 40, 740, 36, 51);
+    }
+
+    if (this.classList.contains('poker-backs'))
+    {
+        return at(30 + seat * 60, 660 - seat * 100, 20, 17);
+    }
+
+    if (this.classList.contains('card-back') && this.parentElement?.classList.contains('poker-backs') === true)
+    {
+        return at(30 + seat * 60 + nth(this) * 8, 660 - seat * 100, 12, 17);
     }
 
     return at(0, 0, 0, 0);
@@ -148,5 +170,18 @@ export const stack = (container: HTMLElement, seat: number) => container.querySe
 export const pot = (container: HTMLElement) => container.querySelector('.poker-pot')?.textContent?.trim() ?? '';
 
 export const flights = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.board-flight > .flight')];
+
+export const discs = (container: HTMLElement) => flights(container).filter((one) => one.classList.contains('chip-stack'));
+
+export const flown = (container: HTMLElement) => flights(container).filter((one) => !one.classList.contains('chip-stack'));
+
+export const backs = (container: HTMLElement, seat: number) =>
+    [...container.querySelectorAll(`.poker-seat[data-seat="${ seat }"] .poker-backs > .card-back`)].filter((one) => !one.hasAttribute('data-coming')).length;
+
+export const pocketed = (container: HTMLElement) => container.querySelectorAll('.poker-pocket .card-face').length;
+
+export const faced = (container: HTMLElement) => container.querySelectorAll('.poker-board .card-face').length;
+
+export const acts = (container: HTMLElement) => [...container.querySelectorAll('.poker-acts .poker-thing-says')].map((one) => one.textContent?.trim() ?? '');
 
 export const presenting = (container: HTMLElement) => container.querySelector('.poker-stage')?.getAttribute('data-presenting') ?? null;

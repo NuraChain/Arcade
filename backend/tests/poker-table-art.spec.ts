@@ -153,7 +153,7 @@ describe('what lies on a poker table', () =>
         expect(cards).toContain('left: calc(50% + var(--ux) * (50% + var(--gap)));');
         expect(cards).toContain('top: calc(50% + var(--uy) * (50% + var(--gap)));');
         expect(cards).toContain('translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);');
-        expect(ruleOf('.poker-bet:not([data-placed]),\n.poker-bet[data-landing],\n.poker-puck:not([data-placed])')).toContain('visibility: hidden;');
+        expect(ruleOf('.poker-bet:not([data-placed]),\n.poker-bet[data-landing],\n.poker-backs > .card-back[data-coming],\n.poker-puck:not([data-placed])'), 'a bet whose chips are coming, a card that is being dealt or a mark that has not been laid is on show').toContain('visibility: hidden;');
     });
 
     it('lays a plate along its rail: a row where the rail runs across, a column where it runs down', () =>

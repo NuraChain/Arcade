@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMPTY, STILL, before, drawnOf, feltOf, flying, sameAs, step, swept, through, type Board, type Felt, type Told } from '../src/game/poker-felt.ts';
+import {
+    EMPTY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, step, swept, through, unturned, type Board, type Felt, type Told
+} from '../src/game/poker-felt.ts';
 import { pokerEngine } from '../../backend/src/domains/match/engines/poker.ts';
 import { apply, create, legalMoves } from '../../backend/src/domains/match/poker/engine.ts';
 import { STACK, type PokerAction, type PokerState } from '../../backend/src/domains/match/poker/state.ts';
@@ -349,7 +351,74 @@ describe('the poker table as it has been shown', () =>
         expect(refunds).toBeGreaterThan(3);
         expect(drawnOf(held, STILL), 'a table with nothing in the air was drawn as another').toBe(held);
         expect(drawnOf(held, flying(flying(STILL, 6, 2, 40, 0), 6, 2, -40, 0))).toBe(held);
-        expect(flying(flying(STILL, 6, 2, 40, 0), 6, 4, 0, 15)).toEqual({ bets: [0, 0, 40, 0, 0, 0], stacks: [0, 0, 0, 0, 15, 0] });
+        expect(flying(flying(STILL, 6, 2, 40, 0), 6, 4, 0, 15)).toEqual({ bets: [0, 0, 40, 0, 0, 0], stacks: [0, 0, 0, 0, 15, 0], cards: [], board: 0 });
+    });
+
+    it('counts the cards in the air: two to every seat still in the game, the reader’s own hidden until each lands, a street hidden until each card is turned', () =>
+    {
+        const frames = played(6, 13);
+        const reader = 2;
+        const table = feltAt(frames[0].state, reader);
+        const watched = feltAt(frames[0].state);
+        const air = dealing(STILL, table);
+        const gone = { ...table, chairs: table.chairs.map((chair) => (chair.seat === 5 ? { ...chair, out: true } : chair)) };
+        const flop = feltAt((frames.find((frame) => frame.state.board.length === 3) as Frame).state, reader);
+
+        expect(table.hole).toHaveLength(2);
+        expect(air.cards).toEqual([2, 2, 2, 2, 2, 2]);
+        expect(dealing(STILL, gone).cards, 'a seat that is out was dealt cards').toEqual([2, 2, 2, 2, 2, 0]);
+        expect(drawnOf(table, air).hole, 'the reader was shown cards that were still in the air').toEqual([]);
+        expect(drawnOf(table, landed(air, reader)).hole).toEqual(table.hole.slice(0, 1));
+        expect(drawnOf(table, landed(landed(air, reader), reader)).hole).toEqual(table.hole);
+        expect(drawnOf(table, landed(air, 4)).hole, 'a card landing in front of somebody else showed the reader one of theirs').toEqual([]);
+        expect(landed(landed(landed(air, 3), 3), 3).cards, 'more cards landed than were dealt').toEqual([2, 2, 2, 0, 2, 2]);
+        expect(drawnOf(watched, dealing(STILL, watched)), 'somebody watching has no cards to wait for').toBe(watched);
+        expect({ ...drawnOf(table, air), hole: table.hole }, 'cards in the air changed something else on the table').toEqual(table);
+        expect(dealing(flying(STILL, 6, 1, 20, 0), table).bets, 'the chips in the air were dropped when the cards were dealt').toEqual([0, 20, 0, 0, 0, 0]);
+        expect(flying(air, 6, 1, 20, 0).cards, 'the cards in the air were dropped when chips were put in').toEqual([2, 2, 2, 2, 2, 2]);
+        expect(flop.board).toHaveLength(3);
+        expect(drawnOf(flop, unturned(STILL, 3)).board, 'a street was shown before it was turned').toEqual([]);
+        expect(drawnOf(flop, unturned(unturned(STILL, 3), -1)).board).toEqual(flop.board.slice(0, 1));
+        expect(drawnOf(flop, unturned(unturned(STILL, 3), -3)), 'a table with nothing left in the air was drawn as another').toBe(flop);
+        expect(unturned(unturned(STILL, 1), -3).board, 'more cards were turned than were laid').toBe(0);
+    });
+
+    it('deals from the left of the button, round the table twice, and past a seat that is out', () =>
+    {
+        const table = feltAt(played(6, 13)[0].state);
+        const order = dealOrder(table);
+        const gone = { ...table, chairs: table.chairs.map((chair) => (chair.seat === (table.button + 2) % 6 ? { ...chair, out: true } : chair)) };
+
+        expect(order).toHaveLength(12);
+        expect(order.slice(6), 'the second card did not go round as the first did').toEqual(order.slice(0, 6));
+        expect(order.slice(0, 6)).toEqual([1, 2, 3, 4, 5, 6].map((step) => (table.button + step) % 6));
+        expect(dealOrder(gone).slice(0, 5)).toEqual([1, 3, 4, 5, 6].map((step) => (table.button + step) % 6));
+        expect(dealOrder(gone)).toHaveLength(10);
+    });
+
+    it('knows who holds cards: nobody before the first deal, and nobody who folded or is out', () =>
+    {
+        const table = feltAt(played(6, 13)[0].state, 2);
+        const folded = step(table, { e: 'fold', seat: 4, amount: 0 });
+
+        expect([EMPTY.dealt, before(table).dealt, table.dealt, step(before(table), { e: 'deal', hand: 1, button: 0, small: 10, big: 20 }).dealt]).toEqual([false, false, true, true]);
+        expect([0, 1, 2, 3, 4, 5].map((seat) => inHand(table, seat))).toEqual([true, true, true, true, true, true]);
+        expect([0, 1, 2, 3, 4, 5].map((seat) => inHand(before(table), seat)), 'cards were held on a table nothing had been dealt on').toEqual([false, false, false, false, false, false]);
+        expect([inHand(folded, 4), inHand(folded, 3)]).toEqual([false, true]);
+        expect(inHand(step(table, { e: 'forfeit', seat: 1 }), 1)).toBe(false);
+        expect(inHand(table, -1), 'a seat that is not at the table held cards').toBe(false);
+    });
+
+    it('plays a batch from its newest deal when two or more were dealt in it, and from its start otherwise', () =>
+    {
+        const deal = (hand: number): Told => ({ e: 'deal', hand, button: 1, small: 10, big: 20 });
+        const blind: Told = { e: 'blind', seat: 2, amount: 10 };
+        const end: Told = { e: 'end', hand: 1 };
+
+        expect(latest([])).toBe(0);
+        expect(latest([{ e: 'fold', seat: 1, amount: 0 }, end, deal(2), blind])).toBe(0);
+        expect(latest([deal(2), blind, end, deal(3), blind, blind])).toBe(3);
+        expect(latest([end, deal(2), end, deal(3), end, deal(4), blind])).toBe(5);
     });
 
     it('sweeps the bets to the middle and changes nothing else', () =>

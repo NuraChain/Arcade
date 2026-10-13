@@ -19,6 +19,7 @@ export default component PokerSeat(props: {
     button: boolean;
     stack: string;
     holds: boolean;
+    cards: number;
     bet: string;
     discs: number;
     landing: boolean;
@@ -31,6 +32,10 @@ export default component PokerSeat(props: {
     derived timed = props.turn;
 
     derived holding = props.holds;
+
+    derived first = props.cards < 1;
+
+    derived second = props.cards < 2;
 
     derived bet = props.bet;
 
@@ -72,8 +77,8 @@ export default component PokerSeat(props: {
         <Show when={ holding }>
             { () =>
                 <span class="poker-backs" aria-hidden="true">
-                    <span class="card-back"></span>
-                    <span class="card-back"></span>
+                    <span class="card-back" data-coming={ first ? 'true' : undefined }></span>
+                    <span class="card-back" data-coming={ second ? 'true' : undefined }></span>
                 </span>
             }
         </Show>

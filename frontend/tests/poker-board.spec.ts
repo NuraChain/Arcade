@@ -1381,7 +1381,6 @@ describe('a table that shows what has happened on it', () =>
             );
 
             expect(useBoard().events().events, 'the store of the reader’s own game was what was heard').toEqual([]);
-            expect(vibrate).not.toHaveBeenCalled();
 
             await elapse(400);
 

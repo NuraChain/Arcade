@@ -9,7 +9,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { POT_WON } from '../src/game/poker-beats.ts';
-import { BLINDS, EVERYBODY, elapse, heard, match, places, rows, seated, stack, told } from './poker-mounted.ts';
+import { BLINDS, EVERYBODY, elapse, heard, match, places, pot, rows, seated, stack, told } from './poker-mounted.ts';
 
 const sounds = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[] }));
 
@@ -67,6 +67,18 @@ const won = () => heard(1, told(
     { e: 'blind', seat: 5, amount: 20 }
 ));
 
+const dealt = () =>
+{
+    const after = sounds.heard.slice(sounds.heard.indexOf('card-shuffle') + 1);
+
+    return {
+        slides: after.filter((cue) => cue === 'card-slide').length,
+        chips: after.filter((cue) => cue === 'chip-lay').length,
+        others: after.filter((cue) => cue !== 'card-slide' && cue !== 'chip-lay'),
+        last: after.at(-1)
+    };
+};
+
 beforeEach(() =>
 {
     cleanup();
@@ -87,14 +99,15 @@ afterEach(() =>
 
 describe('what a poker table sounds like', () =>
 {
-    it('is heard in the order things happen: the fold, the pot and its winner, the shuffle and the deal, a chip for each blind as it lands', async () =>
+    it('is heard in the order things happen: the fold, the pot and its winner, the shuffle, then the cards going out with a chip for each blind among them', async () =>
     {
         const { read } = await seated(alone());
 
         await read(next(), won());
         await elapse(LONG);
 
-        expect(sounds.heard).toEqual(['card-gather', 'chips-stack', 'hand-won', 'card-shuffle', ...Array.from({ length: 8 }, () => 'card-slide'), 'chip-lay', 'chip-lay']);
+        expect(sounds.heard.slice(0, 4)).toEqual(['card-gather', 'chips-stack', 'hand-won', 'card-shuffle']);
+        expect(dealt(), 'the cards waited for the blinds, or a blind for the cards').toEqual({ slides: 8, chips: 2, others: [], last: 'card-slide' });
         expect(sounds.felt).toEqual(['hand']);
     });
 
@@ -107,7 +120,57 @@ describe('what a poker table sounds like', () =>
         await read(next(), won());
         await elapse(LONG);
 
-        expect(sounds.heard).toEqual(['card-gather', 'chips-stack', 'hand-won', 'card-shuffle', ...Array.from({ length: 8 }, () => 'card-slide'), 'chip-lay', 'chip-lay']);
+        expect(sounds.heard.slice(0, 4)).toEqual(['card-gather', 'chips-stack', 'hand-won', 'card-shuffle']);
+        expect(dealt()).toEqual({ slides: 8, chips: 2, others: [], last: 'card-slide' });
+    });
+
+    it('slides a card out and lays it down for each card of a street, the three of a flop out before the first is laid', async () =>
+    {
+        const { read } = await seated(match({ turn: 4 }, { turn: 4 }));
+        const flop = match({ street: 'flop', board: [5, 18, 31], turn: 3, seats: rows({ 3: { stack: 1490 }, 4: { stack: 1480 } }) }, { rev: 8, turn: 3 });
+
+        await read(flop, heard(1, told(8, 4, { e: 'board', street: 'flop', cards: [5, 18, 31] })));
+        await elapse(LONG);
+
+        expect(sounds.heard).toEqual(['card-slide', 'card-slide', 'card-slide', 'card-place', 'card-place', 'card-place']);
+    });
+
+    it('plays the newest hand alone when two were dealt since it last looked: the one before is set down as it ended', async () =>
+    {
+        const { container, read } = await seated(alone());
+        const fold = (seat: number): Parameters<typeof told>[2] => ({ e: 'fold', seat, amount: 0 });
+        const third = match(
+            { hand: 3, button: 4, hole: [4, 17], turn: 1, blinds: { small: 10, big: 20, level: 1, next: 8 }, seats: rows({ 0: { stack: 1510, bet: 20 }, 3: { stack: 1490 }, 4: { stack: 1470 }, 5: { stack: 1500, bet: 10 } }) },
+            { rev: 13, turn: 1 }
+        );
+
+        await read(third, heard(
+            1,
+            told(8, 1, fold(1), { e: 'pot', amount: 30, winners: [0] }, { e: 'end', hand: 1, dealt: EVERYBODY }, { e: 'deal', hand: 2, button: 3, small: 10, big: 20 }, { e: 'blind', seat: 4, amount: 10 }, { e: 'blind', seat: 5, amount: 20 }),
+            told(9, 0, fold(0)),
+            told(10, 1, fold(1)),
+            told(11, 2, fold(2)),
+            told(12, 3, fold(3)),
+            told(
+                13,
+                4,
+                fold(4),
+                { e: 'refund', seat: 5, amount: 10 },
+                { e: 'pot', amount: 20, winners: [5] },
+                { e: 'end', hand: 2, dealt: EVERYBODY },
+                { e: 'deal', hand: 3, button: 4, small: 10, big: 20 },
+                { e: 'blind', seat: 5, amount: 10 },
+                { e: 'blind', seat: 0, amount: 20 }
+            )
+        ));
+
+        expect([stack(container, 0), stack(container, 5)], 'the hand before the newest was not set down as it ended').toEqual(['1,530', '1,510']);
+
+        await elapse(LONG);
+
+        expect(sounds.heard.filter((cue) => cue !== 'card-slide'), 'a hand that was over was played out before the newest').toEqual(['card-shuffle', 'chip-lay', 'chip-lay']);
+        expect(sounds.felt).toEqual([]);
+        expect([stack(container, 0), stack(container, 5), pot(container)]).toEqual(['1,510', '1,500', 'Total pot 30']);
     });
 
     it('pays a pot to the sound of its chips, and tells the reader they won it a beat after, not on top of them', async () =>
@@ -167,7 +230,7 @@ describe('what a poker table sounds like', () =>
         expect(sounds.heard).toEqual(['chip-lay', 'chips-stack', 'card-gather', 'tick']);
     });
 
-    it('is not played for a table that has fallen a long way behind: that table is set down as it stands', async () =>
+    it('is not played hand after hand for a table that has fallen a long way behind: it is set down before the newest deal, and that one is dealt', async () =>
     {
         const { read } = await seated(alone());
         const dealt = (hand: number): Parameters<typeof told>[2] => ({ e: 'deal', hand, button: 3, small: 10, big: 20 });
@@ -178,7 +241,7 @@ describe('what a poker table sounds like', () =>
         );
         await elapse(LONG);
 
-        expect(sounds.heard, 'eight hands the reader missed were played out one after another').toEqual([]);
+        expect(sounds.heard, 'eight hands the reader missed were played out one after another').toEqual(['card-shuffle', ...Array.from({ length: 8 }, () => 'card-slide')]);
     });
 
     it('lays the reader’s chip once: at the press, and not again when the server says the same', async () =>
@@ -220,6 +283,29 @@ describe('what a poker table sounds like', () =>
         await elapse(LONG);
 
         expect(sounds.heard).toEqual(['chip-lay', 'deny']);
+    });
+
+    it('says no to a fold the server refuses, as the cards come back', async () =>
+    {
+        let answer: (outcome: 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container } = await seated(match({ turn: 0, toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500 }, { turn: 0 }));
+        const fold = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Fold') as HTMLButtonElement;
+
+        fire(fold, 'click');
+        await elapse(800);
+
+        expect(sounds.heard).toEqual(['card-gather']);
+
+        answer('failed');
+        await elapse(LONG);
+
+        expect(sounds.heard, 'a fold that was refused came back in silence').toEqual(['card-gather', 'deny']);
     });
 
     it('is not heard at all for a table that is set down as it stands', async () =>

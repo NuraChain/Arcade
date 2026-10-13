@@ -63,6 +63,7 @@ export interface Felt
     paid: readonly Paid[];
     last: Last | null;
     winner: number | null;
+    dealt: boolean;
 }
 
 export interface Board
@@ -112,10 +113,13 @@ export const EMPTY: Felt = {
     tabled: [],
     paid: [],
     last: null,
-    winner: null
+    winner: null,
+    dealt: false
 };
 
 const NO_CARDS: readonly number[] = [];
+
+const HOLE = 2;
 
 const levelAt = (hand: number) => Math.floor((Math.max(1, hand) - 1) / HANDS_PER_LEVEL);
 
@@ -173,7 +177,8 @@ export function feltOf(board: Board, reader: number | null): Felt
         tabled: ended ? last.shown : [],
         paid: ended ? last.pots : [],
         last,
-        winner: board.winner ?? null
+        winner: board.winner ?? null,
+        dealt: true
     };
 }
 
@@ -186,32 +191,70 @@ export interface Air
 {
     bets: readonly number[];
     stacks: readonly number[];
+    cards: readonly number[];
+    board: number;
 }
 
-export const STILL: Air = { bets: [], stacks: [] };
+export const STILL: Air = { bets: [], stacks: [], cards: [], board: 0 };
 
 export function flying(air: Air, seats: number, seat: number, toBet: number, toStack: number): Air
 {
     return {
+        ...air,
         bets: Array.from({ length: seats }, (_, at) => (air.bets[at] ?? 0) + (at === seat ? toBet : 0)),
         stacks: Array.from({ length: seats }, (_, at) => (air.stacks[at] ?? 0) + (at === seat ? toStack : 0))
     };
 }
 
+export function dealing(air: Air, felt: Felt): Air
+{
+    return { ...air, cards: felt.chairs.map((chair) => (chair.out ? 0 : HOLE)) };
+}
+
+export function landed(air: Air, seat: number): Air
+{
+    return { ...air, cards: air.cards.map((cards, at) => (at === seat ? Math.max(0, cards - 1) : cards)) };
+}
+
+export function unturned(air: Air, cards: number): Air
+{
+    return { ...air, board: Math.max(0, air.board + cards) };
+}
+
 export function drawnOf(felt: Felt, air: Air): Felt
 {
     const coming = air.bets.reduce((sum, chips) => sum + chips, 0);
+    const owed = felt.reader === null ? 0 : (air.cards[felt.reader] ?? 0);
 
-    if (coming === 0 && air.stacks.every((chips) => chips === 0))
+    if (coming === 0 && owed === 0 && air.board === 0 && air.stacks.every((chips) => chips === 0))
     {
         return felt;
     }
 
     return {
         ...felt,
+        board: felt.board.slice(0, Math.max(0, felt.board.length - air.board)),
         chairs: felt.chairs.map((chair) => ({ ...chair, stack: chair.stack - (air.stacks[chair.seat] ?? 0), bet: chair.bet - (air.bets[chair.seat] ?? 0) })),
-        pot: felt.pot - coming
+        pot: felt.pot - coming,
+        hole: felt.hole.slice(0, Math.max(0, felt.hole.length - owed))
     };
+}
+
+export function dealOrder(felt: Felt)
+{
+    const rank = leftOf(felt.button, felt.chairs.length);
+    const round = felt.chairs.filter((chair) => !chair.out).map((chair) => chair.seat).sort((one, other) => rank(one) - rank(other));
+
+    return [...round, ...round];
+}
+
+export const inHand = (felt: Felt, seat: number) => felt.dealt && felt.chairs.some((chair) => chair.seat === seat && !chair.folded && !chair.out);
+
+export function latest(moves: readonly Told[])
+{
+    const deals = moves.flatMap((move, at) => (move.e === 'deal' ? [at] : []));
+
+    return deals.length > 1 ? deals[deals.length - 1] : 0;
 }
 
 export function swept(felt: Felt)
@@ -235,7 +278,8 @@ export function before(felt: Felt): Felt
         tabled: [],
         paid: [],
         last: null,
-        winner: null
+        winner: null,
+        dealt: false
     };
 }
 
@@ -262,7 +306,8 @@ export function step(felt: Felt, move: Told, hole: readonly number[] = NO_CARDS)
             },
             hole: [...hole],
             tabled: [],
-            paid: []
+            paid: [],
+            dealt: true
         });
     }
 

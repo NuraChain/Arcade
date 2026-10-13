@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire } from '@azerothjs/testing';
 
-import { CHIP_FLY, DISC_GAP, GATHER, GATHER_GAP } from '../src/game/poker-beats.ts';
+import { CHIP_FLY, DISC_GAP, GATHER, GATHER_GAP, streetLength } from '../src/game/poker-beats.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -9,7 +9,7 @@ import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { BLINDS, EVERYBODY, bet, elapse, flights, heard, match, places, pot, presenting, rows, seated, stack, told, turns } from './poker-mounted.ts';
+import { BLINDS, EVERYBODY, bet, discs, elapse, flights, heard, match, places, pot, presenting, rows, seated, stack, told, turns } from './poker-mounted.ts';
 
 const button = (container: HTMLElement, label: string) =>
     [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === label) as HTMLButtonElement | undefined;
@@ -93,11 +93,11 @@ describe('chips that travel on a poker table', () =>
         await elapse(200);
 
         expect(container.querySelectorAll('.poker-bet'), 'the bets stayed in front of the seats while their chips went to the middle').toHaveLength(0);
-        expect(flights(container).length).toBe(4);
+        expect([discs(container).length, flights(container).length], 'a card left the dealer before the bets were in').toEqual([4, 4]);
         expect(pot(container)).toBe('Total pot 80');
         expect(container.querySelectorAll('.poker-board .card-face'), 'the flop came before the bets were in').toHaveLength(0);
 
-        await elapse(GATHER + 3 * GATHER_GAP + 400);
+        await elapse(GATHER + 3 * GATHER_GAP + streetLength(3));
 
         expect(flights(container)).toHaveLength(0);
         expect(pot(container)).toBe('Total pot 80');

@@ -3257,8 +3257,7 @@ land.
   by somebody watching too, and with less motion every cue still fires in its place, because
   the kit turns a flight into a fade and leaves the timers alone. A table set down as it
   stands (a jump, a hidden tab) is silent.
-- **Still drawn at once**, until 5.4 and 5.5: the cards (dealt, turned, mucked), the puck, and
-  a pot paid to its winners.
+- **Still drawn at once**, until 5.5: a hand shown down, and a pot paid to its winners.
 - **Two gaps, two names.** `CHIP_GAP` in the board is the 4 pixels between a bet and whatever
   it stands beside. The 45 ms between two discs is `DISC_GAP` in `game/poker-beats.ts`. They
   were one name for an hour: the import was shadowed without a word from the bundler, three
@@ -3271,6 +3270,76 @@ refusal flown home, a table read afresh in the middle of a flight, and less moti
 a watcher, a press laid once, and the silence of a table that is set down. `chips.spec.ts`
 holds the pour. `poker-play-pass.mjs` wants the reader's stack to have dropped at the press
 with a disc in the air, and the pot to count the chips only once they have landed.
+
+**Cards are dealt, turned and mucked.** The scenes are `newHand`, `dealOut`, `street` and
+`sweep` in the board; the pure halves are in `poker-felt.ts` and `poker-beats.ts`.
+
+- **No deck and no muck rest on the felt.** The dealer's mark is where cards come from and go
+  to (`deckSpot`: a box 0.7 of a back wide on the mark, on the dealer's plate while the mark
+  has not been laid, on the middle of the table if neither can be measured). So nothing new
+  is a solid for the bet solver or the fit pass.
+- **`deal`.** What lies on the table is swept to the NEW dealer: the board's cards and the
+  reader's own go face up and shrink away, each other seat's two as a pair of backs. The
+  mark slides to the new dealer: the REAL element, by `translate`, from the place the layout
+  pass had laid it to the place it lays it now. `card-shuffle`. After `DEAL_LEAD` the cards
+  go out one at a time, round the table twice from the left of the button (`dealOrder`),
+  `dealGap` apart: 70 ms, or less when eighteen cards have to fit `DEAL_MOST`. A back appears
+  in front of a seat when its flight lands. The reader's land in the two places of their hand
+  and are turned.
+- **The blinds do not wait for the cards**, nor the cards for the blinds: `play` starts
+  `dealOut` and goes on to the next move, and waits for it before any move that is not a
+  `blind`, and at the end of the batch.
+- **Cards in the air are in the ledger with the chips** (`Air.cards`, `Air.board`): the model
+  is stepped when the hand is dealt, and what is drawn is the model less what has not
+  landed. A seat's two backs are always both in their box and the one still coming is hidden
+  (`data-coming`), so the blind in front of them is seated where it will stand.
+- **`dealt` is on the model**: false for the table before the first deal, so the opening
+  draws no cards in front of anybody and collects none.
+- **`fold`, `forfeit`, `bust`**: any move after which a seat holds no cards (`inHand`) sweeps
+  them to the dealer. The reader's are turned face down where they lie, then go. In a batch
+  the flight does not hold the next move (`trail`): chips are pushed in while the cards are
+  still going, and the batch is not over until they have landed. A press waits for its own.
+- **`board`**: after the bets are gathered, each card of the street comes out face down,
+  `BOARD_OUT` apart, and they are turned in the order they came, `BOARD_GAP` apart. A place
+  on the board is empty until its card is face up.
+- **A sweep shrinks and a deal grows.** A card that goes to the dealer is drawn at the size
+  it had and scaled down; one that comes from the dealer is drawn at the size it will have
+  and scaled up from 0.7 of a back, fading in over 90 ms (`leave`) so that it does not cover
+  the mark. Nothing is ever a small drawing scaled up.
+- **The reader is not asked before they have seen what they are asked about** (`between`,
+  `waiting`, `acting`): the things to press, the price, the tip, the chime and the sentence
+  wait while the table's hand is not the view's, a card of the reader's is in the air, or
+  the board has fewer cards face up than the view's. A table nothing has been dealt on is
+  not a case of its own: an opening is set down and dealt before the page is drawn again
+  (`play` waits one microtask and `newHand` steps the model), and a clause for it changed
+  nothing any test or browser could see. The ring and the seconds never wait. After
+  `BETWEEN_CAP` (2500 ms on the clock from the moment the wait began) it is over whatever
+  the table shows: a reader whose turn it is has their cards shown from the view, and is
+  asked. `show()` writes its three states in ONE `batch`: written one after another, the
+  wait ended for the length of a write in the middle of a deal and the cap was armed afresh.
+- **The usual chain fits the cap, and only just.** "Fold, chips back, gather, pot, sweep,
+  deal" for a reader who is dealt first and acts first is about 2400 ms: that is why a fold
+  does not hold the next move, `POT_SPAN` is 300, `DEAL_LEAD` 150, and the reader's old hand
+  is not turned over before it is swept at a deal. A hand that ends in a showdown is longer
+  and the cap ends its wait (5.5 cuts the linger for a reader who is to act).
+- **A batch that holds two deals or more** is set down as it stood just before the newest and
+  played from there (`latest`), and its length is counted from there.
+- **A refused fold** brings the two cards back from the dealer to the hand, turning up, with
+  `deny`.
+- **Not built:** rule 7's "everything in front runs fast when the view says it is the
+  reader's turn" (an urgent entry would run every other deal of a heads-up game at four
+  times its pace), and a hold that ends "when little of the turn is left" (the cap is 2.5 s
+  of a 30 s turn).
+
+`poker-cards.spec.ts` (with the page's boxes given sizes) holds the order and the pace of a
+deal, where each card flies from and to, the sweep and the mark's slide, the cap, a fold by
+another seat and by the reader, a refused fold, a fold that does not hold the next move, the
+flop and when the reader is asked, less motion, a table set down in the middle of a deal, and
+somebody watching. `poker-felt.spec.ts` holds the cards in the air, the order of a deal,
+`inHand` and `latest`; `poker-beats.spec.ts` the gaps and the lengths; `poker-cues.spec.ts`
+what a deal and a street sound like, and that only the newest of two hands is played.
+`poker-play-pass.mjs` folds a hand and wants each player to give up the old one and be dealt
+two cards with cards seen in the air between, and to be asked nothing meanwhile.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
