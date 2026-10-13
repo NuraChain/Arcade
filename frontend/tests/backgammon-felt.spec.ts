@@ -23,7 +23,8 @@ const opening = (viewer: number) => shownOf({
     seed: 0,
     cube: { on: true, value: 1, owner: null },
     score: { near: 0, far: 0 },
-    round: 1
+    round: 1,
+    turn: null
 });
 
 describe('what the log says, as things to show', () =>
@@ -134,7 +135,7 @@ describe('what each of them does to the table', () =>
 {
     it('moves the checker and sends a blot to the bar of whoever owns it', () =>
     {
-        const before = shownOf({ viewer: 0, near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3], spent: [], seed: 0, cube: { on: true, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 });
+        const before = shownOf({ viewer: 0, near: row({ 13: 1, 6: 14 }), far: row({ 17: 1, 12: 14 }), dice: [5, 3], spent: [], seed: 0, cube: { on: true, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1, turn: 'near' });
         const after = step(before, { kind: 'hop', move: { side: 'near', from: 13, to: 8, hit: true }, die: 5 });
 
         expect(after.moved?.knocked?.spot).toBe(BAR);
@@ -161,7 +162,7 @@ describe('what each of them does to the table', () =>
 
     it('puts every checker back where a game starts, and the cube back in the middle', () =>
     {
-        const ended = shownOf({ viewer: 1, near: row({ 0: 15 }), far: row({ 25: 2, 3: 13 }), dice: [], spent: [], seed: 0, cube: { on: true, value: 4, owner: 'near' }, score: { near: 4, far: 1 }, round: 2 });
+        const ended = shownOf({ viewer: 1, near: row({ 0: 15 }), far: row({ 25: 2, 3: 13 }), dice: [], spent: [], seed: 0, cube: { on: true, value: 4, owner: 'near' }, score: { near: 4, far: 1 }, round: 2, turn: null });
         const after = step(ended, { kind: 'rack' });
 
         expect(countsOf(after.shown.men)).toEqual({ near: START, far: START });
@@ -186,7 +187,7 @@ describe('what each of them does to the table', () =>
 
     it('counts the pips of what it shows: a checker\'s own point, 25 for the bar and nothing once it is off', () =>
     {
-        const racing = shownOf({ viewer: 0, near: row({ 25: 1, 3: 2, 0: 12 }), far: row({ 1: 15 }), dice: [], spent: [], seed: 0, cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 });
+        const racing = shownOf({ viewer: 0, near: row({ 25: 1, 3: 2, 0: 12 }), far: row({ 1: 15 }), dice: [], spent: [], seed: 0, cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1, turn: 'near' });
 
         expect(pipsOf(opening(0).men)).toEqual({ near: 167, far: 167 });
         expect(pipsOf(racing.men)).toEqual({ near: 31, far: 15 });
@@ -288,6 +289,50 @@ describe('the table as a board describes it', () =>
     });
 });
 
+describe('whose turn the table has shown', () =>
+{
+    const turned = (from: 'near' | 'far' | null, moves: Told[], viewer = 0) =>
+        beatsOf(moves, viewer).reduce((shown, beat) => step(shown, beat).shown, { ...opening(viewer), turn: from }).turn;
+
+    it('is the side that says so on the board, and nobody\'s once the match is over', () =>
+    {
+        const board = { turn: 1, dice: [], seats: [], cubed: false, cube: 1, round: 1 };
+
+        expect([feltOf(board, 0, false, 0).turn, feltOf(board, 1, false, 0).turn, feltOf(board, 1, true, 0).turn]).toEqual(['far', 'near', null]);
+        expect(shownOf(feltOf(board, 0, false, 0)).turn).toBe('far');
+    });
+
+    it('goes to the higher die of the two that open a game, whichever seat is reading', () =>
+    {
+        expect(turned(null, [{ e: 'opening', seat: 0, dice: [6, 2] }])).toBe('near');
+        expect(turned(null, [{ e: 'opening', seat: 1, dice: [2, 6] }])).toBe('far');
+        expect(turned(null, [{ e: 'opening', seat: 1, dice: [2, 6] }], 1)).toBe('near');
+        expect(turned(null, [{ e: 'opening', seat: 0, dice: [4, 4] }]), 'two dice the same name nobody').toBeNull();
+    });
+
+    it('is whoever threw the dice, and stays theirs while their checkers move', () =>
+    {
+        expect(turned('near', [{ e: 'roll', seat: 1, dice: [3, 4] }])).toBe('far');
+        expect(turned('far', [{ e: 'roll', seat: 1, dice: [3, 4] }, { e: 'move', seat: 1, from: 24, to: 21, die: 3, hit: false }])).toBe('far');
+        expect(turned('near', [{ e: 'move', seat: 0, from: 24, to: 21, die: 3, hit: false }]), 'a move says nothing about who is next').toBe('near');
+    });
+
+    it('passes to the other side when a roll cannot be played, when a double is offered, and when one is taken', () =>
+    {
+        expect(turned('near', [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])).toBe('far');
+        expect(turned('near', [{ e: 'double', seat: 0, cube: 2 }])).toBe('far');
+        expect(turned('far', [{ e: 'take', seat: 1, cube: 2 }])).toBe('near');
+    });
+
+    it('is nobody\'s while a game is being called, until the next one is opened, and when the match is finished', () =>
+    {
+        expect(turned('near', [{ e: 'game', seat: 0, how: 'single', points: 1 }])).toBeNull();
+        expect(turned('near', [{ e: 'drop', seat: 1 }, { e: 'game', seat: 0, how: 'single', points: 1 }, { e: 'opening', seat: 1, dice: [1, 5] }])).toBe('far');
+        expect(turned('near', [{ e: 'game', seat: 0, how: 'single', points: 1 }, { e: 'finish', seat: 0 }])).toBeNull();
+        expect(turned('far', [{ e: 'finish', seat: 0 }])).toBeNull();
+    });
+});
+
 describe('the table against the engine', () =>
 {
     const dieOf = (seed: number): Die =>
@@ -362,9 +407,10 @@ describe('the table against the engine', () =>
         const opened = create(target, true, die);
         const before = shownOf({ ...feltAt(opened.state, viewer), near: START, far: START, dice: [] });
         let state = opened.state;
-        let shown = follow(before, opened.events, viewer, `seed ${ seed } opening`, seen);
+        let shown = follow({ ...before, turn: null }, opened.events, viewer, `seed ${ seed } opening`, seen);
 
         expect(sameAs(shown, feltAt(state, viewer)), `seed ${ seed } viewer ${ viewer } at the opening`).toBe(true);
+        expect(shown.turn, `seed ${ seed } viewer ${ viewer }: who starts`).toBe(feltAt(state, viewer).turn);
 
         for (let actions = 0; state.winner === null && actions < 2000; actions += 1)
         {
@@ -383,7 +429,14 @@ describe('the table against the engine', () =>
             state = outcome.state;
             shown = follow(shown, outcome.events, viewer, `seed ${ seed } rev ${ state.rev }`, seen);
 
-            expect(sameAs(shown, feltAt(state, viewer)), `seed ${ seed } viewer ${ viewer } rev ${ state.rev } after ${ JSON.stringify(told(outcome.events)) }`).toBe(true);
+            const felt = feltAt(state, viewer);
+            const said = beatsOf(told(outcome.events), viewer).filter((beat) => beat.kind !== 'clear');
+            const quiet = said.length > 0 && said[said.length - 1].kind === 'hop';
+
+            expect(sameAs(shown, felt), `seed ${ seed } viewer ${ viewer } rev ${ state.rev } after ${ JSON.stringify(told(outcome.events)) }`).toBe(true);
+            expect(shown.turn, `seed ${ seed } viewer ${ viewer } rev ${ state.rev }: whose turn, after ${ JSON.stringify(told(outcome.events)) }`).toBe(quiet ? (felt.turn === 'near' ? 'far' : 'near') : felt.turn);
+            seen.add(quiet ? 'turn left to the board' : 'turn told');
+            shown = { ...shown, turn: felt.turn };
         }
 
         expect(state.winner, `seed ${ seed } never ended`).not.toBeNull();
@@ -401,7 +454,7 @@ describe('the table against the engine', () =>
             }
         }
 
-        for (const kind of ['cast', 'hop', 'walk', 'enter', 'off', 'hit', 'pass', 'clear', 'offer', 'take', 'drop', 'game', 'rack', 'finish'])
+        for (const kind of ['cast', 'hop', 'walk', 'enter', 'off', 'hit', 'pass', 'clear', 'offer', 'take', 'drop', 'game', 'rack', 'finish', 'turn told', 'turn left to the board'])
         {
             expect(seen.has(kind), kind).toBe(true);
         }

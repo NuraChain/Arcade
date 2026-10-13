@@ -26,6 +26,7 @@ export interface Felt
     cube: Cube;
     score: Score;
     round: number;
+    turn: Side | null;
 }
 
 export interface Shown
@@ -36,10 +37,12 @@ export interface Shown
     cube: Cube;
     score: Score;
     round: number;
+    turn: Side | null;
 }
 
 export interface Position
 {
+    turn: number;
     dice: readonly number[];
     seats: readonly { seat: number; checkers: readonly number[]; score: number }[];
     cubed: boolean;
@@ -87,6 +90,8 @@ export const seedOf = (id: string, rev: number, nth = 0) => hashOf(id, rev, nth)
 
 const twice = (faces: readonly number[]) => faces.length === 2 && faces[0] === faces[1];
 
+const facing = (side: Side): Side => (side === 'near' ? 'far' : 'near');
+
 export function feltOf(position: Position, viewer: number, over: boolean, seed: number): Felt
 {
     const rowOf = (seat: number) => position.seats.find((row) => row.seat === seat)?.checkers ?? [];
@@ -106,7 +111,8 @@ export function feltOf(position: Position, viewer: number, over: boolean, seed: 
             owner: position.owner === undefined ? null : (position.owner === viewer ? 'near' : 'far')
         },
         score: { near: scoreOf(viewer), far: scoreOf(1 - viewer) },
-        round: position.round
+        round: position.round,
+        turn: over ? null : (position.turn === viewer ? 'near' : 'far')
     };
 }
 
@@ -118,7 +124,8 @@ export function shownOf(felt: Felt, serial = 0): Shown
         dice: [...felt.dice],
         cube: felt.cube,
         score: { ...felt.score },
-        round: felt.round
+        round: felt.round,
+        turn: felt.turn
     };
 }
 
@@ -242,7 +249,20 @@ export function step(shown: Shown, beat: Beat): Stepped
 {
     if (beat.kind === 'cast')
     {
-        return { shown: { ...shown, dice: [...beat.faces] }, moved: null, transfers: NOBODY };
+        const [one, two] = beat.sides;
+        const turn = one === two ? one : (beat.faces[0] === beat.faces[1] ? shown.turn : (beat.faces[0] > beat.faces[1] ? one : two));
+
+        return { shown: { ...shown, dice: [...beat.faces], turn }, moved: null, transfers: NOBODY };
+    }
+
+    if (beat.kind === 'pass' || beat.kind === 'offer')
+    {
+        return { shown: { ...shown, turn: facing(beat.side) }, moved: null, transfers: NOBODY };
+    }
+
+    if (beat.kind === 'finish')
+    {
+        return { shown: { ...shown, turn: null }, moved: null, transfers: NOBODY };
     }
 
     if (beat.kind === 'clear')
@@ -261,12 +281,12 @@ export function step(shown: Shown, beat: Beat): Stepped
 
     if (beat.kind === 'take')
     {
-        return { shown: { ...shown, cube: { on: shown.cube.on, value: beat.value, owner: beat.side } }, moved: null, transfers: NOBODY };
+        return { shown: { ...shown, cube: { on: shown.cube.on, value: beat.value, owner: beat.side }, turn: facing(beat.side) }, moved: null, transfers: NOBODY };
     }
 
     if (beat.kind === 'game')
     {
-        return { shown: { ...shown, score: { ...shown.score, [beat.side]: shown.score[beat.side] + beat.points } }, moved: null, transfers: NOBODY };
+        return { shown: { ...shown, score: { ...shown.score, [beat.side]: shown.score[beat.side] + beat.points }, turn: null }, moved: null, transfers: NOBODY };
     }
 
     if (beat.kind === 'rack')

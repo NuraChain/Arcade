@@ -2513,6 +2513,16 @@ In scope by D5. These land in P6, after the four boards.
 | The stage changes size | A flight lands, or a lingering clone rests, where its target used to be. | Chat sheet, rotation, full screen, a hand row appearing: what is in flight settles and what lingers is re-placed. | The flight layer is inside the stage, so it survives full screen, where nothing outside the arena is painted. |
 | A sheet covers the board | `pause()` sets an attribute that pauses CSS keyframes; script motion and timers run on. | Under a blocking sheet the queue and its sounds keep running; only the CSS loops pause. | |
 
+**As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
+moved one game a commit, and each takes the turn from what its own log can say:
+
+- **Backgammon.** The turn is a field of the shown model, a side or nobody. A throw gives it to
+  whoever threw, told as the dice leave their side, and an opening to the higher die, told when
+  the two dice have landed; a roll that cannot be played, a double offered and a double taken
+  pass it; a game that is called and the end of the match take it from everybody. A move says nothing about who is next, so the turn is
+  put right from the view when everything told has been played. Seen before the change on the
+  production build: the ring on whoever starts while the two dice that decide it were in the air.
+
 ## 7. Spectators
 
 D3: a watcher gets the real motion, thirty seconds late, from delayed events on the watch read. A

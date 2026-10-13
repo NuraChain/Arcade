@@ -37,6 +37,7 @@ const felt = (over: Partial<Felt> = {}): Felt => ({
     cube: { on: true, value: 1, owner: null },
     score: { near: 0, far: 0 },
     round: 1,
+    turn: 'near',
     ...over
 });
 
@@ -720,7 +721,7 @@ describe('what happened, played on the table', () =>
         {
             table.reset(sight(felt({ near: row({ 6: 15 }), far: row({ 25: 1, 1: 14 }), score: { near: 2, far: 1 }, round: 4 })));
 
-            expect(last()).toEqual({ score: { near: 2, far: 1 }, round: 4, pips: { near: 90, far: 39 } });
+            expect(last()).toEqual({ score: { near: 2, far: 1 }, round: 4, pips: { near: 90, far: 39 }, turn: 'near' });
         });
 
         it('change when what they count has been shown: the pips when a checker has landed, the points when the game is called, the next game when the checkers are racked', async () =>
@@ -728,11 +729,11 @@ describe('what happened, played on the table', () =>
             flagged = ['You win the game', 'Gammon · 4 points'];
 
             const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
-            const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
+            const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2, turn: 'far' }), 6);
 
             table.reset(sight(before));
 
-            expect(last()).toEqual({ score: { near: 0, far: 0 }, round: 1, pips: { near: 1, far: 300 } });
+            expect(last()).toEqual({ score: { near: 0, far: 0 }, round: 1, pips: { near: 1, far: 300 }, turn: 'near' });
 
             play([act(6, 0, [
                 { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
@@ -745,11 +746,89 @@ describe('what happened, played on the table', () =>
 
             await elapse(400 + PICK_MS + 60);
 
-            expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 1, pips: { near: 0, far: 300 } });
+            expect(last(), 'a game was called and somebody still wore the turn').toEqual({ score: { near: 4, far: 0 }, round: 1, pips: { near: 0, far: 300 }, turn: null });
 
             await elapse(GAME_MS + FLAG_MS + 2400);
 
-            expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 2, pips: { near: 167, far: 167 } });
+            expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 2, pips: { near: 167, far: 167 }, turn: 'far' });
+        });
+
+        it('give the turn to whoever starts when the two dice that say so have landed, and not before', async () =>
+        {
+            const opened = sight(felt({ dice: [2, 5], seed: seedOf('m', 1), turn: 'far' }), 1);
+
+            const bare = table.before?.(opened) ?? opened;
+
+            expect(bare.view.turn, 'the table as it stood before the opening already had a turn').toBeNull();
+
+            table.reset(bare);
+
+            expect(last().turn).toBeNull();
+
+            play([act(1, 1, [{ e: 'opening', seat: 1, dice: [2, 5] }])], opened);
+            await elapse(300);
+
+            expect(last().turn, 'who starts was told while the dice were in the air').toBeNull();
+
+            await elapse(THROW_MS);
+
+            expect(last().turn).toBe('far');
+        });
+
+        it('pass the turn as whoever is next throws their dice, after the checkers that ended the last one', async () =>
+        {
+            const after = sight(felt({ near: row({ 24: 2, 13: 4, 8: 2, 7: 2, 6: 5 }), dice: [3, 4], seed: seedOf('m', 6), turn: 'far' }), 6);
+
+            table.reset(sight(felt({ dice: [6, 1] })));
+            play([act(6, 0, [
+                { e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false },
+                { e: 'move', seat: 0, from: 8, to: 7, die: 1, hit: false },
+                { e: 'roll', seat: 1, dice: [3, 4] }
+            ])], after);
+            const thrown = () => rolls.some(([seed, down]) => seed === seedOf('m', 6) && !down);
+            const landed = () => rolls.some(([seed, down]) => seed === seedOf('m', 6) && down);
+
+            await elapse(300);
+
+            expect([thrown(), last().turn], 'the turn was passed while the move that ends it was still being made').toEqual([false, 'near']);
+
+            for (let waited = 0; waited < 4000 && !thrown(); waited += 50)
+            {
+                await elapse(50);
+            }
+
+            await elapse(200);
+
+            expect([thrown(), landed(), last().turn], 'the next dice were in the air and the turn was still with whoever had moved').toEqual([true, false, 'far']);
+
+            await elapse(THROW_MS);
+
+            expect([landed(), last().turn]).toEqual([true, 'far']);
+        });
+
+        it('pass the turn when the last checker has landed, where nobody rolls for whoever is next', async () =>
+        {
+            const after = sight(felt({ near: row({ 24: 2, 13: 4, 8: 2, 7: 2, 6: 5 }), dice: [], turn: 'far' }), 6);
+
+            table.reset(sight(felt({ dice: [6, 1] })));
+            play([act(6, 0, [
+                { e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false },
+                { e: 'move', seat: 0, from: 8, to: 7, die: 1, hit: false }
+            ])], after);
+            await elapse(WALK_MOST + 100);
+
+            expect(last().turn).toBe('near');
+
+            await elapse(WALK_MOST + PICK_MS + 600);
+
+            expect(last().turn).toBe('far');
+        });
+
+        it('know a board that differs only in whose turn it is from the one they show', () =>
+        {
+            table.reset(sight(felt()));
+
+            expect([table.same(sight(felt())), table.same(sight(felt({ turn: 'far' })))]).toEqual([true, false]);
         });
 
         it('follow the reader\'s own checker when it has been put down, and come back with it', async () =>
@@ -769,14 +848,14 @@ describe('what happened, played on the table', () =>
 
         it('are told once for each change, not once for each thing that happens', async () =>
         {
-            table.reset(sight(felt()));
+            table.reset(sight(felt({ turn: 'far' })));
 
             const told = facts.length;
 
             play([act(6, 1, [{ e: 'roll', seat: 1, dice: [6, 5] }, { e: 'pass', seat: 1 }])], sight(felt(), 6));
             await elapse(3000);
 
-            expect(facts.length, 'a roll and a pass change neither the score nor a pip').toBe(told);
+            expect(facts.slice(told).map((one) => one.turn), 'a roll and a pass change neither the score nor a pip, and pass the turn once').toEqual(['near']);
         });
     });
 

@@ -84,6 +84,7 @@ export interface Facts
     score: Score;
     round: number;
     pips: Score;
+    turn: Side | null;
 }
 
 export interface BackgammonTable extends Table<Felt, Told>
@@ -273,7 +274,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     const alive = new Set<Die>();
     const zone = make('bgt-dice', host);
     const cubeEl = make('bgt-cube', host);
-    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1 };
+    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1, turn: null };
     let dice: Die[] = [];
     let diceSeed = -1;
     let used: number[] = [];
@@ -798,7 +799,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
     const tell = () =>
     {
-        const now: Facts = { score: shown.score, round: shown.round, pips: pipsOf(shown.men) };
+        const now: Facts = { score: shown.score, round: shown.round, pips: pipsOf(shown.men), turn: shown.turn };
         const key = JSON.stringify(now);
 
         if (key !== said)
@@ -1074,7 +1075,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             await swap(felt.dice, felt.seed);
         }
 
-        shown = { ...shown, score: { ...felt.score }, round: felt.round };
+        shown = { ...shown, score: { ...felt.score }, round: felt.round, turn: felt.turn };
         dim();
         wait();
         tell();
@@ -1089,6 +1090,11 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         if (beat.kind === 'cast')
         {
+            if (beat.sides[0] === beat.sides[1])
+            {
+                tell();
+            }
+
             await cast(beat.faces, beat.sides, seedOf(at.id, at.rev, beat.nth));
         }
         else if (beat.kind === 'hop')
@@ -1217,7 +1223,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         history: HISTORY,
 
-        before: (sight) => ({ ...sight, view: { ...sight.view, dice: [], spent: [] } }),
+        before: (sight) => ({ ...sight, view: { ...sight.view, dice: [], spent: [], turn: null } }),
 
         reset(sight)
         {
@@ -1244,7 +1250,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             tell();
         },
 
-        same: (sight) => sameAs(shown, sight.view),
+        same: (sight) => sameAs(shown, sight.view) && shown.turn === sight.view.turn,
 
         settle: (sight) => mend(sight.view),
 

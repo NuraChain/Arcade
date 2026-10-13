@@ -29,7 +29,7 @@ const level = async (player, rev) => await waitFor(async () => await player.page
 
 const watchOpening = async (player) => await player.page.evaluate(() =>
 {
-    const seen = { first: null, flew: false };
+    const seen = { first: null, flew: false, early: false };
     const timer = setInterval(() =>
     {
         const stage = document.querySelector('.table-stage');
@@ -42,8 +42,11 @@ const watchOpening = async (player) => await player.page.evaluate(() =>
         const flying = [...document.querySelectorAll('.bg-layer .bgt-dice .die3d-body')]
             .some((body) => body.getAnimations().some((one) => one.playState === 'running'));
 
+        const worn = document.querySelectorAll('.bg-rail .table-plate[data-turn]').length;
+
         seen.first ??= { presenting: stage.hasAttribute('data-presenting'), flying };
         seen.flew ||= flying;
+        seen.early ||= flying && worn > 0;
 
         if (seen.flew && !stage.hasAttribute('data-presenting'))
         {
@@ -230,6 +233,7 @@ try
 
         record(`${ player.handle } is shown the first roll being thrown, not dice that were already down`, seen?.first?.presenting === true && seen.flew === true, JSON.stringify(seen));
         record(`${ player.handle }'s dice come to rest on the faces that were rolled`, await faces(player) === rolled, `${ await faces(player) } for ${ rolled }`);
+        record(`${ player.handle } is not shown who starts until the two dice that say so have landed, and is shown it then`, seen?.early === false && await player.page.locator('.bg-rail .table-plate[data-turn]').count() === 1, JSON.stringify(seen));
         await watchGames(player);
     }
 

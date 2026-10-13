@@ -765,6 +765,18 @@ describe('the opening roll', () =>
         expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
     });
 
+    it('names nobody as on turn until the two dice that say who starts have landed', async () =>
+    {
+        const table = await live(begun({ remainingMs: 20_000 }), opening('match-bg', () => true));
+        const worn = () => [...table.container.querySelectorAll('.bg-rail')].map((rail) => [rail.querySelector('.table-plate')?.hasAttribute('data-turn') === true, rail.querySelector('.bg-clock') !== null]);
+
+        expect(worn(), 'who starts was shown while the dice that decide it were in the air').toEqual([[false, false], [false, false]]);
+
+        await elapse(1500);
+
+        expect(worn()).toEqual([[false, false], [true, true]]);
+    });
+
     it('is left alone on a board that is already showing the game: the dice stay where they lie', async () =>
     {
         const animate = vi.spyOn(Element.prototype, 'animate');
@@ -1777,6 +1789,28 @@ describe('moves made on the table itself', () =>
 
         expect(rows(theirs.container).length).toBeGreaterThan(0);
         expect(rows(theirs.container).some((row) => row.classList.contains('table-hand') || row.hasAttribute('data-me'))).toBe(false);
+    });
+
+    it('passes the ring and the clock when the table has shown the turn passing: after the checkers that ended one turn and the dice that begin the next', async () =>
+    {
+        const table = await live(match({}, 0, { remainingMs: 20_000 }));
+        const worn = () => [...table.container.querySelectorAll('.bg-rail')].map((rail) => [rail.querySelector('.table-plate')?.hasAttribute('data-turn') === true, rail.querySelector('.bg-clock') !== null]);
+        const moved = position({ 24: 2, 13: 4, 8: 2, 7: 2, 6: 5 }, { 24: 2, 13: 5, 8: 3, 6: 5 });
+
+        expect(worn()).toEqual([[false, false], [true, true]]);
+
+        table.tell(match({ turn: 1, dice: [3, 4], seats: moved }, 0, { rev: 5, turn: 1, remainingMs: 20_000 }), [happened(5, 0, [
+            { e: 'move', seat: 0, from: 13, to: 7, die: 6, hit: false },
+            { e: 'move', seat: 0, from: 8, to: 7, die: 1, hit: false },
+            { e: 'roll', seat: 1, dice: [3, 4] }
+        ])]);
+        await elapse(300);
+
+        expect(worn(), 'the turn left the reader while their own checkers were still moving').toEqual([[false, false], [true, true]]);
+
+        await elapse(4000);
+
+        expect(worn()).toEqual([[true, true], [false, false]]);
     });
 
     it('rolls when the dice lying on the table are tapped, and shakes them until the answer comes', async () =>

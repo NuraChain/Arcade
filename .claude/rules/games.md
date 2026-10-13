@@ -2915,10 +2915,40 @@ simply the next game.
   asks whether something was SHOWN has to hold whatever would snap it away. `data-presenting`
   alone is not "caught up" either: it is absent in the moment before a frame arrives.
 
-The turn mark on a plate still reads the view; it follows the shown model with the hand-off
-(6.2). `backgammon-felt.spec.ts`, `backgammon-table.spec.ts` (*a game that is won*; *the score,
+`backgammon-felt.spec.ts`, `backgammon-table.spec.ts` (*a game that is won*; *the score,
 the game and the pips, as the table shows them*) and `backgammon-board.spec.ts` (*a game that
 ends on the board*) hold it.
+
+**The turn is passed when the table has shown it passing** (6.2). The ring round a face and the
+clock beside the pegs read the view, and the view runs ahead: the ring was on whoever starts
+while the two dice that decide it were still in the air, seen on the production build 700 ms
+into a game and again after Play again, and it left a mover while their checkers were still
+walking. The turn is part of the shown model now (`Shown.turn`, a side or nobody), told with the
+score and the pips (`Facts.turn`), and the two seats read that.
+
+- **The dice give it.** A throw gives the turn to whoever threw as the dice leave their side:
+  who throws is no secret, and a ring that waited a second for the dice to land sat on the
+  player before while somebody else's dice flew. The two dice of an opening give it to the
+  higher one, and only when they have LANDED: the model is stepped as the throw begins and
+  told when it ends, like the pips of a checker in the air.
+- **A roll that cannot be played, a double that is offered and a double that is taken pass it**
+  to the other side. A game that is called takes it from everybody until the next one is
+  opened, and so does the end of the match. The table as it stood before an opening
+  (`before`) has nobody on turn.
+- **A move says nothing about who is next**, and the log has nothing else to say it with when
+  nobody rolls for the next player (somebody who may double is not rolled for). So the turn is
+  put right from the view when everything told has been played (`mend`), which is the moment
+  the last checker lands. `same` counts the turn, so a board that differs from the table only
+  in whose turn it is still gets put right.
+- What still reads the view is what decides: whether the reader may roll or move, their chime,
+  the number on the clock. Rule 1.
+
+`backgammon-felt.spec.ts` (*whose turn the table has shown*) holds each step, and the engine
+parity holds the whole: after every action of whole matches the model's turn is the board's,
+or the action ended on a checker and the board's is the other side. `backgammon-table.spec.ts`
+holds when it is told (with the throw of a roll, after the landing of an opening) and
+`backgammon-board.spec.ts` the ring and the clock at an opening and at a hand-off. The play pass watches both browsers through
+the first roll and fails if a seat wears the turn while the dice fly.
 
 **The two seats are rails of the board's own wood** (`.bg-rail`, one of each, `data-me` on the
 reader's; B.1 of the graphics design). A pill at two corners of a board 310 px tall left a tall

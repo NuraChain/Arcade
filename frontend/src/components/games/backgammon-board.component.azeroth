@@ -204,7 +204,9 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
-    derived onTurn = view === null || over ? -1 : view.turn;
+    derived onTurn = view === null || over
+        ? -1
+        : (facts === null ? view.turn : (facts.turn === null ? -1 : (facts.turn === 'near' ? viewer : 1 - viewer)));
 
     const settings = useSettings();
 
@@ -1363,7 +1365,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                                     <TablePlate
                                         who={ whoAt(plate.seat) }
                                         name={ nameOf(plate.seat) }
-                                        turn={ !over && view!.turn === plate.seat }
+                                        turn={ plate.seat === onTurn }
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
                                         tag={ tagOf(plate.seat)?.text }
