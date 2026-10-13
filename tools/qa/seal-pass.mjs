@@ -222,7 +222,7 @@ for (const size of SIZES)
             if (await field.count() > 0)
             {
                 await field.fill(phrase);
-                await page.getByRole('button', { name: /Confirm with the phrase|تأیید با عبارت/ }).first().click();
+                await page.getByRole('button', { name: /Restore with the phrase|بازگرداندن با عبارت/ }).first().click();
                 await page.waitForTimeout(8000);
                 await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
                 await page.waitForTimeout(800);
