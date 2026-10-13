@@ -1378,10 +1378,15 @@ The client half of the same audits, each a thing that outlived what it belonged 
 
 ## What the browser stopped paying for
 
-- **A message is opened once.** `chat.source` keeps what it opened by `(id, signature)` - the same
-  bytes cannot open to different words - so a refetch of the list or a thread, which every doorbell
-  causes, costs no signature check, no key fetch and no decryption for anything already on screen. Only
-  a successful open is kept; a failure is asked again. It is capped with the archive and dropped with it.
+- **A message is opened once.** `chat.source` keeps what it opened by everything its signature covers
+  (`sealedAs`: the room, the epoch and the count, the id, the account and the device, the kind, the
+  time, the commitment, the last moment, the nonce, the words and the signature itself), so a refetch
+  of the list or a thread, which every doorbell causes, costs no signature check, no key fetch and no
+  decryption for anything already on screen. It was kept by `(id, signature)`, on the reasoning that
+  the same bytes cannot open to different words. The words are not all a row says: its time, its last
+  moment and its room are read from the row, so a server that served an opened message again with
+  any of them changed was believed without being asked. Only a successful open is kept; a failure is
+  asked again. It is capped with the archive and dropped with it.
 - **Unknown people are asked about in one request.** `GET /social/names?handles=` answers up to fifty
   (`NAMES_MAX`, a zero-import module both halves read) with a name, a bio and a hue - no presence and no
   relation - where `people.want` used to send one request per handle.

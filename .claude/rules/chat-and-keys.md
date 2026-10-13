@@ -690,6 +690,17 @@ are the sender's `clientAt`, also in the AAD, not `created_at`, which the server
 rewrite. The envelope's stated guarantees are only true if the read path actually looks at the
 authenticated values, and for four commits it did not.
 
+**What was opened once is believed only for the row it was opened from.** The reader keeps what it
+has opened so that a list or a thread read again costs nothing, and it kept it by `(id, signature)`.
+But `asMessage` takes the time, the last moment and the room from the ROW, so for any message this
+tab had already opened a server could serve it re-dated (the cue announced it as just sent), give a
+disappearing one longer (it stayed readable past the moment its sender signed), or serve it in
+another room (it was shown as said there), and none of it was asked about again. Those are exactly
+what binding `clientAt`, `expiresAt` and `conversationId` into the AAD is for. The key is now every
+field the signature covers (`sealedAs`), so a row that differs in any of them is opened afresh and
+refused, as one that had never been opened always was. Found by reading, on the way to a spec that
+failed three shuffled runs in ten; `sealing.spec.ts` holds every field, one at a time.
+
 **`sessions.device_id` is written by a first enrolment and never moved again.** Re-enrolling used to
 rebind it, and everything that branch checks is satisfied by PUBLIC data — the id is a hash of two
 published keys, and `GET /devices` hands every device's keys to any session on the account — so any

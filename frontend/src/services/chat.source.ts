@@ -99,6 +99,22 @@ export interface ChatSource
 
 const byAt = (a: Message, b: Message) => a.at - b.at;
 
+const sealedAs = (wire: ChatMessage) => [
+    wire.conversationId,
+    wire.epoch,
+    wire.seq,
+    wire.id,
+    wire.senderAccountId,
+    wire.senderDeviceId,
+    wire.kind,
+    wire.clientAt,
+    wire.commitment,
+    wire.expiresAt,
+    wire.iv,
+    wire.body,
+    wire.signature
+].join('|');
+
 /**
  * Every live source, so the plaintext they hold can be thrown away from outside them.
  *
@@ -263,7 +279,7 @@ export function createApiSource()
         keyFor: (epoch: number) => Promise<Uint8Array | null>
     ) =>
     {
-        const key = `${ wire.id }|${ wire.signature ?? '' }`;
+        const key = sealedAs(wire);
         const held = opens.get(key);
 
         if (held !== undefined)
