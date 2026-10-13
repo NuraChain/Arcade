@@ -2623,6 +2623,27 @@ html:has(.site-drawer[open])
     translate: -50% -50%;
 }
 
+.poker-board
+{
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.poker-slot
+{
+    display: flex;
+    box-sizing: border-box;
+    inline-size: var(--card-w);
+    aspect-ratio: 204 / 288;
+    border-radius: calc(var(--card-w) * 0.08);
+}
+
+.poker-slot:empty
+{
+    border: 1px dashed rgb(255 255 255 / 0.25);
+}
+
 .poker-seat
 {
     --dx: calc((50 - var(--x)) * var(--ratio));

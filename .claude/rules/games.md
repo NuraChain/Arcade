@@ -3020,6 +3020,33 @@ corner and the seat that is not on turn; `fit-pass.mjs` holds the corner clear o
 bet, card and chip at every size, and with the chat shut it arms the reader's cards, as it
 lifts a card at hokm, and fails one that does not breathe or whose ring reaches a plate.
 
+**The table is drawn once and stays**, as hokm's is (*The table is drawn once and stays*, under
+*The table, and the cards on it*). The whole table sat in one branch that read the board, and
+the board is a new object with every answer: every action, and every re-read the page makes,
+drew 164 elements again. Nothing looked different. "Last hand" shut under whoever
+had it open, a bet was a new pill at every raise, and nothing on the felt could be the thing a
+chip or a card lands on.
+
+- Every branch reads a `derived` boolean (`seated`, `sided`, `lastKnown`, `owing`, `raisable`).
+- **The seats are a list of seat numbers**, and each is a `PokerSeat` handed strings and
+  booleans (`plateAt(seat)` answers by number). The dealer's mark, the stack, the backs and the
+  bet are its own markup, so a plate is the same plate through a hand.
+- **The board is five slots that stay**, each holding the card that lies in it or nothing, so
+  the turn card is drawn in the slot that was kept for it. A slot with no card draws its own
+  outline (`.poker-slot:empty`; a `<For>`'s markers are comments, which `:empty` does not count).
+- The plate's tag reads a `derived` in the shared `TablePlate`, so "All in" becomes "Out" in
+  the node it has, at every game.
+- **A number in a branch is read through a `derived`.** `{ props.bet }` inside a branch is
+  compiled to ONE read (`frontend/CLAUDE.md`, *Three things ride on the rebuild*): a bet raised
+  from 40 to 200 kept "40" for as long as its pill lived, from the moment the pill stopped
+  being drawn again.
+
+`poker-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
+the board the answer it had as a new object and wants all of them still in the page; then a
+call by another seat (only the ring of the turn that ended may go), a raise and a street
+closing, a card coming and a new hand, the button moving, a tag changing its word, "Last hand"
+left open, and the chip under the keyboard while the clock runs down.
+
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
 table rather than touring a lobby for the rest of the run. A finish clears readiness, and the

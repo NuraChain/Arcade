@@ -545,10 +545,16 @@ table, and were drawn again with every re-read of it. Each reads a `derived` boo
 create form's choice of seats does, and `lobby-panel.spec.ts` and `table-row.spec.ts` hand each
 the table again and ask for the same node.
 
-Two things ride on the rebuild without saying so, and both have to be put right in the same change:
+Three things ride on the rebuild without saying so, and each has to be put right in the same change:
 a `fallback` that opens with a ternary (chosen once, so it was only ever refreshed by being
-rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), and a child
-that copies a prop into a local. A screenshot cannot see any of this: the rebuild finishes inside a
+rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), a child
+that copies a prop into a local, and a hole of TEXT that reads a prop. `{ props.bet }` inside a
+branch is compiled to `bindContent(el, props.bet)`, one read made while the branch is built, where
+the same hole outside a branch is live and an ATTRIBUTE in the same branch is live. It is in the
+framework's register with a reproduction (entry 40). A poker seat's bet kept "40" after a raise to
+200 the day its pill stopped being drawn again. Inside a branch a prop is read through a `derived`
+(`derived bet = props.bet`, then `{ bet }`); `poker-seat` and the shared `table-plate` do.
+A screenshot cannot see any of this: the rebuild finishes inside a
 frame. Mark the nodes and ask `document.contains` afterwards, which is what `play.spec.ts` does
 (*a table that is read again*) and what the browser pass did across a whole game.
 

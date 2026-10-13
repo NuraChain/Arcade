@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import PokerBoard from '../src/components/games/poker-board.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
@@ -524,5 +525,221 @@ describe('where a bet sits on the felt', () =>
         expect(bets).toHaveLength(2);
         expect(bets.every((bet) => bet.parentElement?.classList.contains('poker-seat'))).toBe(true);
         expect(bets.map((bet) => bet.closest('.poker-seat')!.querySelector('.table-plate-name')?.textContent)).toEqual(['You', 'reza.t']);
+    });
+});
+
+describe('a table that is read again', () =>
+{
+    const rows = (changed: Record<number, Partial<Poker['seats'][number]>> = {}) => Array.from({ length: 6 }, (_, seat) => ({
+        seat,
+        stack: 1500,
+        bet: seat === 4 ? 40 : 0,
+        folded: seat === 1,
+        allIn: false,
+        out: false,
+        ...(seat === 5 ? { stack: 0, bet: 300, allIn: true } : {}),
+        ...changed[seat]
+    }));
+
+    const flop = (view: Partial<Poker> = {}, more: Partial<MatchView> = {}): MatchView => ({
+        ...match({
+            street: 'flop',
+            board: [5, 18, 31],
+            pot: 460,
+            pots: [{ amount: 240, eligible: [0, 2, 3, 4, 5] }, { amount: 220, eligible: [0, 2, 3, 4] }],
+            toCall: 300,
+            minRaiseTo: 600,
+            maxRaiseTo: 1500,
+            seats: rows(),
+            last: { board: [1, 2, 3, 4, 6], shown: [{ seat: 2, cards: [8, 21], category: 'pair' }, { seat: 3, cards: [9, 22], category: 'high-card' }], pots: [{ amount: 80, winners: [2] }] },
+            ...view
+        }),
+        remainingMs: 20_000,
+        ...more
+    });
+
+    const shown = (first: MatchView) =>
+    {
+        const [current, setCurrent] = createSignal(first);
+        const { container } = renderTest(() => PokerBoard({
+            get match()
+            {
+                return current();
+            },
+            turnMs: 30_000
+        }) as Rendered);
+
+        return { container, read: (next: MatchView) => setCurrent(structuredClone(next)) };
+    };
+
+    const under = (container: HTMLElement) => [...container.querySelectorAll<Element>('.poker-stage *')];
+
+    const gone = (nodes: readonly Element[]) => nodes
+        .filter((one) => !document.contains(one))
+        .map((one) => `${ one.tagName.toLowerCase() }.${ (one.getAttribute('class') ?? '').split(' ')[0] }`);
+
+    it('draws nothing again for an answer it already had', () =>
+    {
+        const { container, read } = shown(flop());
+        const before = under(container);
+
+        read(flop());
+
+        expect(before.length, 'the table was not drawn at all').toBeGreaterThan(120);
+        expect(gone(before), 'these were drawn again though nothing had changed').toEqual([]);
+    });
+
+    it('keeps every plate, card and chip when somebody else puts chips in, and draws only their bet', () =>
+    {
+        const { container, read } = shown(flop({ turn: 2, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));
+        const before = under(container);
+        const bets = container.querySelectorAll('.poker-bet').length;
+
+        read(flop({ turn: 3, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined, pot: 760, seats: rows({ 2: { stack: 1200, bet: 300 } }) }, { rev: 8 }));
+
+        expect(container.querySelectorAll('.poker-bet').length).toBe(bets + 1);
+        expect(container.querySelector('.poker-seat[data-seat="2"] .poker-bet')?.textContent).toBe('300');
+        expect(container.querySelector('.poker-seat[data-seat="2"] .table-plate-facts')?.textContent).toBe('1,200');
+        expect(gone(before), 'a call by one seat took more off the table than the ring of the turn that ended').toEqual(['svg.table-plate-clock', 'circle.']);
+    });
+
+    it('keeps a bet that grows the pill it was, and takes away only the pill of a bet that is gathered', () =>
+    {
+        const { container, read } = shown(flop());
+        const pill = container.querySelector('.poker-seat[data-seat="4"] .poker-bet')!;
+        const before = under(container);
+
+        read(flop({ seats: rows({ 4: { stack: 1300, bet: 200 } }) }, { rev: 8 }));
+
+        expect(container.querySelector('.poker-seat[data-seat="4"] .poker-bet'), 'a raise drew the bet again').toBe(pill);
+        expect(pill.textContent).toBe('200');
+        expect(gone(before)).toEqual([]);
+
+        read(flop({ street: 'turn', board: [5, 18, 31, 44], seats: rows({ 4: { bet: 0 }, 5: { bet: 0 } }) }, { rev: 9 }));
+
+        expect(gone(before).filter((one) => one === 'span.poker-bet')).toHaveLength(2);
+        expect(gone(before).filter((one) => !/^span\.(poker-bet|h-2\.5|tally)$/.test(one)), 'the street closing took more off the table than the two bets').toEqual([]);
+    });
+
+    it('keeps the cards on the board when another comes, in the slot it had kept empty', () =>
+    {
+        const { container, read } = shown(flop());
+        const slots = [...container.querySelectorAll('.poker-slot')];
+        const faces = [...container.querySelectorAll('.poker-board .card-face')];
+        const before = under(container);
+
+        expect(slots).toHaveLength(5);
+        expect(faces).toHaveLength(3);
+
+        read(flop({ street: 'turn', board: [5, 18, 31, 44] }, { rev: 8 }));
+
+        expect([...container.querySelectorAll('.poker-slot')], 'a slot was made again to take its card').toEqual(slots);
+        expect([...container.querySelectorAll('.poker-board .card-face')].slice(0, 3)).toEqual(faces);
+        expect(slots.map((slot) => slot.querySelectorAll('.card-face').length)).toEqual([1, 1, 1, 1, 0]);
+        expect(gone(before)).toEqual([]);
+    });
+
+    it('takes the cards off the board for a new hand and leaves the five slots', () =>
+    {
+        const { container, read } = shown(flop());
+        const slots = [...container.querySelectorAll('.poker-slot')];
+
+        read(flop({ street: 'preflop', hand: 2, board: [], hole: [7, 20] }, { rev: 8 }));
+
+        expect(slots).toHaveLength(5);
+        expect([...container.querySelectorAll('.poker-slot')]).toEqual(slots);
+        expect(container.querySelectorAll('.poker-board .card-face')).toHaveLength(0);
+    });
+
+    it('leaves the reader on the chip they were on while the clock runs down', () =>
+    {
+        const { container, read } = shown(flop());
+        const call = button(container, 'Call 300')!;
+
+        call.focus();
+        expect(document.activeElement).toBe(call);
+
+        read(flop());
+        expect(document.activeElement, 'a re-read took the chip out from under the keyboard').toBe(call);
+
+        read(flop({}, { remainingMs: 12_000 }));
+        expect(document.activeElement, 'the clock moving on took the chip out from under the keyboard').toBe(call);
+    });
+
+    it('keeps the last hand open, and its rows, while the table plays on', () =>
+    {
+        const { container, read } = shown(flop());
+        const last = container.querySelector<HTMLDetailsElement>('.poker-last')!;
+        const rows = [...last.querySelectorAll('li')];
+
+        last.open = true;
+        read(flop({}, { remainingMs: 12_000 }));
+
+        expect(rows).toHaveLength(2);
+        expect(container.querySelector('.poker-last'), 'the panel was drawn again and shut').toBe(last);
+        expect(last.open).toBe(true);
+        expect([...last.querySelectorAll('li')]).toEqual(rows);
+    });
+
+    it('keeps the dealer\'s mark while the button is where it was, and moves it without drawing a plate again', () =>
+    {
+        const { container, read } = shown(flop());
+        const mark = container.querySelector('.poker-dealer')!;
+        const plates = [...container.querySelectorAll('.table-plate')];
+
+        expect(mark.closest('.poker-seat')?.getAttribute('data-seat')).toBe('2');
+
+        read(flop({}, { remainingMs: 12_000 }));
+        expect(container.querySelector('.poker-dealer'), 'the mark was drawn again where it already was').toBe(mark);
+
+        read(flop({ button: 3 }, { rev: 8 }));
+
+        expect(container.querySelectorAll('.poker-dealer')).toHaveLength(1);
+        expect(container.querySelector('.poker-dealer')?.closest('.poker-seat')?.getAttribute('data-seat')).toBe('3');
+        expect([...container.querySelectorAll('.table-plate')], 'moving the button drew the plates again').toEqual(plates);
+    });
+
+    it('keeps what a plate says of its seat, and changes the word in place', () =>
+    {
+        const { container, read } = shown(flop());
+        const tagOf = (seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .table-plate-tag`);
+        const folded = tagOf(1)!;
+        const shoved = tagOf(5)!;
+
+        expect([folded.textContent, shoved.textContent]).toEqual(['Folded', 'All in']);
+
+        read(flop({}, { remainingMs: 12_000 }));
+
+        expect(tagOf(1), 'a tag was drawn again for a seat that had not changed').toBe(folded);
+        expect(tagOf(5)).toBe(shoved);
+
+        read(flop({ seats: rows({ 4: { folded: true, bet: 0 } }) }, { rev: 8 }));
+
+        expect(tagOf(1)).toBe(folded);
+        expect(tagOf(4)?.textContent).toBe('Folded');
+        expect(container.querySelector('.poker-seat[data-seat="4"] .poker-backs'), 'a seat that folded kept its cards').toBeNull();
+        expect(container.querySelector('.poker-seat[data-seat="3"] .poker-backs')).not.toBeNull();
+
+        read(flop({ seats: rows({ 5: { allIn: false, out: true, bet: 0 } }) }, { rev: 9 }));
+
+        expect(tagOf(5), 'a tag was drawn again to change its word').toBe(shoved);
+        expect([shoved.textContent, shoved.getAttribute('data-tone')]).toEqual(['Out', 'neutral']);
+    });
+
+    it('keeps the reader\'s two cards the cards they were when the turn comes round to them', () =>
+    {
+        const { container, read } = shown(flop({ turn: 4, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));
+        const hand = container.querySelector('.poker-hand')!;
+
+        expect(container.querySelector('.poker-acts')).toBeNull();
+
+        read(flop({ turn: 4, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }, { remainingMs: 12_000 }));
+
+        expect(container.querySelector('.poker-hand'), 'the hand was drawn again though nothing was dealt').toBe(hand);
+
+        read(flop({ turn: 0, toCall: 0 }, { rev: 8 }));
+
+        expect(container.querySelector('.poker-hand')).toBe(hand);
+        expect(button(container, 'Check')).toBeDefined();
     });
 });

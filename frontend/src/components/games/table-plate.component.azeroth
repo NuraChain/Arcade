@@ -66,6 +66,12 @@ export default component TablePlate(props: {
 
     derived trailed = trail !== undefined;
 
+    derived tag = props.tag ?? '';
+
+    derived tagged = tag !== '';
+
+    derived tone = props.tone ?? 'neutral';
+
     derived clock = ((): { key: string; style: string; still: boolean }[] =>
     {
         if (props.turn !== true || props.remainingMs === undefined || props.turnMs === undefined || props.turnMs <= 0)
@@ -123,8 +129,8 @@ export default component TablePlate(props: {
                 { () => <span class="table-plate-facts">{ facts }</span> }
             </Show>
         </span>
-        <Show when={ props.tag !== undefined && props.tag !== '' }>
-            { () => <span class="table-plate-tag" data-tone={ props.tone ?? 'neutral' }>{ props.tag }</span> }
+        <Show when={ tagged }>
+            { () => <span class="table-plate-tag" data-tone={ tone }>{ tag }</span> }
         </Show>
         <Show when={ trailed }>
             { () => <span class="table-plate-trail">{ trail }</span> }

@@ -1,0 +1,72 @@
+import type { PlateTone } from './plate-tag.ts';
+import TablePlate from './table-plate.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component PokerSeat(props: {
+    who: string;
+    name: string;
+    turn: boolean;
+    remainingMs?: number;
+    turnMs?: number;
+    dim: boolean;
+    tag?: string;
+    tone?: PlateTone;
+    bubble?: string;
+    below: boolean;
+    anchor: 'start' | 'end' | 'centre';
+    button: boolean;
+    stack: string;
+    holds: boolean;
+    bet: string;
+})
+{
+    const locale = useLocale();
+
+    derived dealing = props.button;
+
+    derived holding = props.holds;
+
+    derived bet = props.bet;
+
+    derived betting = bet !== '';
+
+    <>
+        <TablePlate
+            who={ props.who }
+            name={ props.name }
+            turn={ props.turn }
+            remainingMs={ props.remainingMs }
+            turnMs={ props.turnMs }
+            dim={ props.dim }
+            tag={ props.tag }
+            tone={ props.tone }
+            bubble={ props.bubble }
+            below={ props.below }
+            anchor={ props.anchor }
+            marker={
+                <span class="contents">
+                    <Show when={ dealing }>
+                        { () => <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> }
+                    </Show>
+                </span>
+            }
+            facts={ <span class="tally font-bold text-gold">{ props.stack }</span> }
+        />
+        <Show when={ holding }>
+            { () =>
+                <span class="poker-backs" aria-hidden="true">
+                    <span class="card-back -rotate-6"></span>
+                    <span class="card-back -ms-1.5 rotate-6"></span>
+                </span>
+            }
+        </Show>
+        <Show when={ betting }>
+            { () =>
+                <span class="poker-bet">
+                    <span class="h-2.5 w-2.5 rounded-full border-2 border-dashed border-white bg-madder" aria-hidden="true"></span>
+                    <span class="tally">{ bet }</span>
+                </span>
+            }
+        </Show>
+    </>
+}
