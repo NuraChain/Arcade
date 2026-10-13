@@ -264,7 +264,7 @@ the chat shut and open:
 
 Then a roll made by tapping the dice (thrown, tumbling, the faces read from the cubes in both
 browsers), a turn that begins with a hit, less motion, a hidden tab and a reload, a turn that
-begins by bearing off, and Play again. About two hundred and thirty checks: a turn is two hops
+begins by bearing off, and Play again. About two hundred and forty checks: a turn is two hops
 or four.
 
 **The watcher is a third account that opens the table's page with no chair.** The pass lets the
@@ -283,7 +283,7 @@ the board is still playing. The watcher is then shown the finished game with its
 way back, no chair and no Play again, and is taken on to the next game when the players start
 one. The three waits are a minute and a half of the pass.
 
-**Ludo's pass is `tools/qa/ludo-motion-pass.mjs`**, run the same way, about six minutes and 223
+**Ludo's pass is `tools/qa/ludo-motion-pass.mjs`**, run the same way, about six minutes and 235
 checks (one fewer when the roll after the quiet move cannot be played, because a die nobody can
 use is taken away). A roll is made by pressing the die and read in both browsers: thrown from the
 middle of the board in the roller's, in over the roller's corner in the other, its face from the
@@ -303,6 +303,18 @@ never been in the air), a hidden tab and a reload, the watcher half a minute beh
 pawn home in front of the watcher (the confetti before the result, and no word that the game is
 over while the board is still playing it), and Play again. What chance will not give in bounded
 time is the lab's: a capture, a pair, a home that is not the last, each fate of the die.
+
+**A result that leaves is watched from before the press.** `watchLeaving(page, air)` samples the
+card on every frame (there, leaving, inert, its opacity, the rows it shows, and how many of `air`
+are in the document: the dice or the flights the next game opens with), and `leavingFindings`
+turns the frames into what a pass records: the card goes over more than one frame and about a
+quarter of a second, only ever fading, unable to be pressed, telling of the game it was about,
+with nothing of the next game played under it and that game then played where it can be seen.
+The rows are compared and not the whole card, because the line about who is ready changes while
+the card stands and can change in the frame the next game arrives. A game that plays nothing
+when it starts is asked without the last two (`leavingFindings(rows, false)`): Ludo. The two
+motion passes that already pressed Play again ask it, and the Hokm and poker play passes now
+play a rematch to ask it: no pass had, and Hokm's result stood over the next deal unseen.
 
 **Hokm's pass is `tools/qa/hokm-motion-pass.mjs`**, run the same way, about five minutes and 92
 checks: four seats, three of them played over the api, with a fifth person watching, and then

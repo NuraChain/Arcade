@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
 import PokerBoard from '../src/components/games/poker-board.component.azeroth';
+import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetHaptics, setHaptics } from '../src/lib/haptics.ts';
@@ -1331,21 +1332,50 @@ describe('a table that shows what has happened on it', () =>
         expect(container.querySelector('.table-result')).not.toBeNull();
     });
 
-    it('takes the result of the game before away the moment another game is on the table', async () =>
+    it('lets the result of the game before leave when another game is on the table, and deals that game only when it has gone', async () =>
     {
-        const { container, read } = await seated(waiting({ turn: undefined, winner: 2 }, { turn: undefined, finishedAt: new Date(401_000).toISOString() }));
+        const next = waiting({}, { id: 'match-next', rev: 1 });
         const again: EventBatch = {
             ...heard(1, told(1, 0, { e: 'deal', hand: 1, button: 2, small: 10, big: 20 }, { e: 'blind', seat: 3, amount: 10 }, { e: 'blind', seat: 4, amount: 20 })),
             id: 'match-next',
             opens: () => true
         };
+        const dealt = async (table: HTMLElement) =>
+        {
+            let spent = 0;
 
-        expect(container.querySelector('.table-result')).not.toBeNull();
+            for (; spent < 6000 && presenting(table) !== null; spent += 10)
+            {
+                await elapse(10);
+            }
 
-        await read(waiting({}, { id: 'match-next', rev: 1 }), again);
+            return spent;
+        };
 
-        expect(container.querySelector('.table-result'), 'the result of the game before stood over this one').toBeNull();
+        const alone = await dealt((await seated(next, again)).container);
+
+        cleanup();
+
+        const { container, read } = await seated(waiting({ turn: undefined, winner: 2 }, { turn: undefined, finishedAt: new Date(401_000).toISOString() }));
+        const result = () => container.querySelector('.table-result');
+
+        expect(result()).not.toBeNull();
+        expect([alone > RESULT_OUT, alone < 6000], 'a game dealt at a table with no result on it took no time to deal, or never finished').toEqual([true, true]);
+
+        await read(next, again);
+
+        expect(result()?.getAttribute('data-leaving'), 'the result of the game before stood over this one, or was gone in one frame').toBe('true');
         expect(container.querySelector('.poker-hand')).not.toBeNull();
+
+        await elapse(RESULT_OUT - 10);
+
+        expect(result(), 'the result was taken away before it had faded').not.toBeNull();
+
+        await elapse(10);
+
+        expect(result()).toBeNull();
+        expect(presenting(container), 'the table had nothing left to show when its result had only just gone').toBe('true');
+        expect(Math.abs(await dealt(container) - alone), 'the next game was dealt under the result of the last one, or waited longer than that result took to leave').toBeLessThanOrEqual(20);
 
         await elapse(1500);
 

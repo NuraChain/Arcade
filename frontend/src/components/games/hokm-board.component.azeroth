@@ -2,7 +2,7 @@ import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
 import HokmSeat, { SIDE_TONE } from './hokm-seat.component.azeroth';
 import type { SeatMark } from './hokm-mark.component.azeroth';
 import { plateTag } from './plate-tag.ts';
@@ -862,6 +862,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     let layer: HTMLElement | null = null;
     let sound: SoundHandle | null = null;
     let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
     let rig: Stage | null = null;
     let steady: () => void = () => undefined;
     let held: Felt = EMPTY;
@@ -2271,7 +2272,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             const clock = runtime().clock;
             const report = (error: unknown) => console.error(error);
             rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
-            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0) });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;
@@ -2643,11 +2644,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             </Show>
         </div>
 
-        <Show when={ result }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
 
         <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>

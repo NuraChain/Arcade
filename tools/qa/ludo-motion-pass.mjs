@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { WATCH_DELAY_MS } from '../../backend/src/domains/match/turns.ts';
 import { dieRest } from '../../frontend/src/game/board/ludo-board.ts';
 import { dieOf, differs, endingIn, inside, leadIn, pawnsOf, plainEntryIn, plainWalkIn, planOf, stateOf } from './ludo-routes.mjs';
-import { armPress, bystanders, faceOf, hideTab, hopsOf, judge, keyframesOf, pressOf, seriesOf, smooth, stopWatching, travelOf, unkeyedIn, watch, watchKeyframes } from './motion.mjs';
+import { armPress, bystanders, faceOf, hideTab, hopsOf, judge, keyframesOf, leavingFindings, leavingOf, pressOf, seriesOf, smooth, stopWatching, travelOf, unkeyedIn, watch, watchKeyframes, watchLeaving } from './motion.mjs';
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
@@ -640,6 +640,11 @@ try
 
     for (const player of [dana, mina])
     {
+        await watchLeaving(player.page);
+    }
+
+    for (const player of [dana, mina])
+    {
         await level(player, finished.rev);
 
         const again = await waitFor(async () => await pressable(player.page, /Play again/i) !== null, 10000);
@@ -677,6 +682,11 @@ try
             await player.page.waitForTimeout(300);
             await rested('after Play again', player, fresh.view);
             record(`after Play again: ${ player.handle } has eight pawns and no confetti`, await player.page.locator(board).count() === 8 && await player.page.locator(CONFETTI).count() === 0);
+
+            for (const [name, ok, detail] of leavingFindings(await leavingOf(player.page), false))
+            {
+                record(`after Play again, ${ player.handle }: ${ name }`, ok, detail);
+            }
         }
 
         record('the watcher is taken on to the next game at the table', await waitFor(async () =>

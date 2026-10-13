@@ -1,3 +1,4 @@
+import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
 import { BASE, clearTables, launch, pressable, recorder, seat, solid, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
@@ -418,7 +419,46 @@ try
         record(`${ player.handle } reads the result on a card the board does not show through`, await solid(player.page, '.table-result-card'));
     }
 
-    console.log('\n[5] the console, over the whole match');
+    console.log('\n[7] another game at the same table');
+
+    for (const player of [dana, mina])
+    {
+        await watchLeaving(player.page, '.board-flight > *');
+    }
+
+    for (const player of [dana, mina])
+    {
+        await (await pressable(player.page, /Play again/i))?.click();
+    }
+
+    const again = await waitFor(async () =>
+    {
+        const next = (await dana.api('GET', `/tables/${ tableId }`)).body?.matchId ?? '';
+
+        return next !== '' && next !== matchId;
+    }, 10000);
+
+    record('a new game begins at the same table', again);
+
+    if (again)
+    {
+        const next = (await dana.api('GET', `/tables/${ tableId }`)).body.matchId;
+
+        for (const player of [dana, mina])
+        {
+            const gone = await waitFor(async () => await player.page.locator('.table-result, .table-result-tab').count() === 0, 8000);
+
+            record(`${ player.handle } is dealt the next game`, gone && await level(player, (await player.api('GET', `/matches/${ next }`)).body.rev, 20000)
+                && await player.page.locator('.poker-hand').count() > 0);
+
+            for (const [name, ok, detail] of leavingFindings(await leavingOf(player.page)))
+            {
+                record(`${ player.handle }: ${ name }`, ok, detail);
+            }
+        }
+    }
+
+    console.log('\n[8] the console, over the whole match');
 
     record('nothing was logged in either browser', dana.errors.length === 0 && mina.errors.length === 0, [...dana.errors, ...mina.errors].slice(0, 2).join(' | '));
 }

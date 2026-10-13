@@ -43,6 +43,6 @@ describe('a table that arrives', () =>
 
     it('simply stands there for somebody who asked for less motion', () =>
     {
-        expect(sheet).toMatch(/@media \(prefers-reduced-motion: reduce\)\n\{\n    \.table-plate-bubble,\n    \.table-result,\n    \.table-stage\n    \{\n        animation: none;\n    \}/);
+        expect(sheet).toMatch(/@media \(prefers-reduced-motion: reduce\)\n\{\n    \.table-plate-bubble,\n    \.table-stage\n    \{\n        animation: none;\n    \}/);
     });
 });

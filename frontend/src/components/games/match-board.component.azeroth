@@ -562,10 +562,6 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
             </Show>
         </div>
 
-        <Show when={ result }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
     </div>
 }

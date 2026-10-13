@@ -4,6 +4,7 @@ import { batch, createSignal } from 'azerothjs';
 
 import DieFace from '../src/components/games/die-face.component.azeroth';
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
+import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { seatsFor } from '../src/components/games/seats.ts';
 import { ludoOf } from '../src/data/match.ts';
@@ -906,6 +907,36 @@ describe('the ludo table, played from what happened', () =>
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(tags(container)).toEqual([useLocale().t('card.lost'), useLocale().t('card.won')]);
+    });
+
+    it('lets the result leave when another game starts at the table, over a board already set for that game', async () =>
+    {
+        quiet();
+
+        const { after } = closing();
+        const { container, tell } = await live(wonBy(after.state, 0, 2));
+        const result = () => container.querySelector('.table-result');
+
+        await flush();
+
+        expect(result()).not.toBeNull();
+        expect(dots(container, 1)).toBe(4);
+
+        tell(seen(standing([EMPTY, EMPTY], null, 0), 0, 0, { id: 'match-next' }), []);
+        await flush();
+
+        expect(result()?.getAttribute('data-leaving'), 'the result of the game before stood over the next one, or was gone in one frame').toBe('true');
+        expect(result()?.querySelectorAll('.table-result-card li'), 'the result went telling of a game that had only just begun').toHaveLength(2);
+        expect(dots(container, 1), 'the board kept the last game on it under a result that was leaving').toBe(0);
+        expect(tags(container)).toEqual([null, null]);
+
+        await elapse(RESULT_OUT - 10);
+
+        expect(result(), 'the result was taken away before it had faded').not.toBeNull();
+
+        await elapse(10);
+
+        expect(result()).toBeNull();
     });
 
     it('says a seat has gone when its pawns have gone home, in a game that goes on', async () =>

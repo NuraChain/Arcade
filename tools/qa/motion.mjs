@@ -540,3 +540,100 @@ export async function hideTab(page, hidden)
         document.dispatchEvent(new Event('visibilitychange'));
     }, hidden);
 }
+
+/**
+ * A result leaving the table it stood over, sampled every frame from before Play again is pressed.
+ * `air` selects what the next game puts in the air when it opens (dice, cards, chips), so a pass
+ * can say whether any of it was played under the card.
+ *
+ * The words kept are the rows of the result, not the whole card: the line about who is ready for
+ * another game changes while the card stands, and may change in the very frame the next game
+ * arrives.
+ */
+export async function watchLeaving(page, air)
+{
+    await page.evaluate((flying) =>
+    {
+        cancelAnimationFrame(window.__leaving?.raf);
+
+        const rows = [];
+        const state = { rows, raf: 0 };
+        const started = performance.now();
+
+        const step = () =>
+        {
+            const card = document.querySelector('.table-result, .table-result-tab');
+
+            rows.push({
+                at: performance.now() - started,
+                card: card !== null,
+                leaving: card?.hasAttribute('data-leaving') === true,
+                inert: card?.hasAttribute('inert') === true,
+                opacity: card === null ? 0 : Number(getComputedStyle(card).opacity),
+                says: [...(card?.querySelectorAll('.table-result-card li') ?? [])].map((row) => row.textContent ?? '').join(' | '),
+                air: flying === '' ? 0 : document.querySelectorAll(flying).length
+            });
+            state.raf = requestAnimationFrame(step);
+        };
+
+        window.__leaving = state;
+        state.raf = requestAnimationFrame(step);
+    }, air ?? '');
+}
+
+export async function leavingOf(page)
+{
+    return await page.evaluate(() =>
+    {
+        const state = window.__leaving;
+
+        if (state === undefined)
+        {
+            return [];
+        }
+
+        cancelAnimationFrame(state.raf);
+
+        return state.rows;
+    });
+}
+
+/**
+ * What a watched result did on its way out, as findings a pass can record. `opening` is false for
+ * a game that plays nothing when it starts (Ludo), where there is nothing to hold back.
+ */
+export function leavingFindings(rows, opening = true)
+{
+    const first = rows.findIndex((row) => row.card && row.leaving);
+    const stood = rows.slice(0, Math.max(0, first)).filter((row) => row.card);
+    const going = [];
+    let at = first;
+
+    for (; first !== -1 && at < rows.length && rows[at].card && rows[at].leaving; at += 1)
+    {
+        going.push(rows[at]);
+    }
+
+    const after = first === -1 ? [] : rows.slice(at);
+    const span = going.length === 0 || after.length === 0 ? 0 : after[0].at - going[0].at;
+    const fades = going.map((row) => row.opacity.toFixed(2)).join(' ');
+    const under = going.reduce((most, row) => Math.max(most, row.air), 0);
+    const findings = [
+        ['the result leaves the table, and not in one frame', going.length >= 3, `${ going.length } frames of it leaving, ${ stood.length } of it standing`],
+        ['it takes about as long to go as it took to come', span >= 150 && span <= 600, `${ Math.round(span) } ms`],
+        ['it fades, and is never brought back up on its way', going.length > 0 && going.every((row, index) => index === 0 || row.opacity <= going[index - 1].opacity + 0.02) && going[going.length - 1].opacity < 0.5, fades],
+        ['it cannot be pressed on its way out', going.length > 0 && going.every((row) => row.inert)],
+        ['it goes telling of the game it was about', stood.length > 0 && going.length > 0 && going.every((row) => row.says === stood[stood.length - 1].says && row.says !== ''), `${ going[0]?.says ?? '' } / ${ stood[stood.length - 1]?.says ?? '' }`],
+        ['no result is put back when it has gone', !after.some((row) => row.card)]
+    ];
+
+    if (opening)
+    {
+        findings.push(
+            ['nothing of the next game is played under it', going.length > 0 && under === 0, `${ under } in the air`],
+            ['the next game is then played where it can be seen', after.some((row) => row.air > 0)]
+        );
+    }
+
+    return findings;
+}

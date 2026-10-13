@@ -27,6 +27,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
 import { tableBody } from './tables.mjs';
 
 function cachedChromium()
@@ -585,8 +586,55 @@ try
         }
     }
 
-    // ---------------------------------------------------------------- 6. the console, throughout
-    console.log('\n[6] the console, over the whole match');
+    // ---------------------------------------------------------------- 6. another game at the table
+    console.log('\n[6] another game at the same table');
+    {
+        /**
+         * A rematch is the one moment a result and an opening deal meet. The board once kept the
+         * result of the game before over the next one until its first cards had been dealt, with
+         * no row on the page to deal them into, and no pass asked for another game.
+         */
+        for (const who of [dana, mina])
+        {
+            await watchLeaving(who.page, 'main .board-flight > *');
+        }
+
+        for (const who of [dana, mina])
+        {
+            await (await pressable(who.page, /Play again/i))?.click();
+        }
+
+        let next = match;
+
+        for (let tries = 0; tries < 50 && (next === match || next === undefined || next === null); tries += 1)
+        {
+            await dana.page.waitForTimeout(200);
+            next = (await (await dana.request.get(`${ BASE }/api/tables/${ tableId }`)).json()).matchId;
+        }
+
+        record('a new game begins at the same table', typeof next === 'string' && next !== match);
+
+        for (const who of [dana, mina])
+        {
+            const dealt = await who.page.waitForFunction(() =>
+            {
+                const table = document.querySelector('main .table-stage');
+
+                return table !== null && document.querySelector('.table-result, .table-result-tab') === null && !table.hasAttribute('data-presenting')
+                    && document.querySelectorAll('.hokm-hand > li').length > 0 && document.querySelector('.hokm-hand > li[data-dealt="false"]') === null;
+            }, null, { timeout: 20_000 }).then(() => true, () => false);
+
+            record(`${ who.handle } is dealt the next game, into a hand that is on the page`, dealt);
+
+            for (const [name, ok, detail] of leavingFindings(await leavingOf(who.page)))
+            {
+                record(`${ who.handle }: ${ name }`, ok, detail);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 7. the console, throughout
+    console.log('\n[7] the console, over the whole match');
     {
         record('nothing was logged in either browser', dana.errors.length === 0 && mina.errors.length === 0,
             [...dana.errors, ...mina.errors].slice(0, 2).join(' | '));

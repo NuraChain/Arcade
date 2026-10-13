@@ -5465,6 +5465,64 @@ is moving, and somebody who asked for less motion gets a table that simply stand
 game that starts again at the same table is the same board, so it does not arrive twice.
 `backend/tests/table-stage-art.spec.ts` holds the rule.
 
+**The result leaves as it came** (6.1). Play again took the result off the table in one frame:
+it had faded in over 240 ms and was gone between two paints, with the opening of the next game
+already playing where it had been. `table-result` keeps itself on the page now. The four boards
+mount it bare, with `shown={ result }`, and it decides for itself how it goes:
+
+- **Another game takes the table** (the match's id is another one): it goes over `RESULT_OUT`,
+  240 ms, by opacity alone, marked `data-leaving` and `inert`. Inert is the page's own way of
+  saying a thing cannot be pressed or held by the keyboard, and it lets a touch through to the
+  table underneath, so no `pointer-events` rule says it a second time.
+- **The game it tells of is still the one on the table**: it is taken away at once, as it always
+  was. Two things reach here. The derived `over && !presenting` of three boards is true for one
+  round of the flush that brings the final batch (the note under *The result waits for the
+  table* says why Hokm holds a state instead), and a card that latched on that one round faded
+  for a quarter of a second over a table still showing how its game ended: six specs caught it.
+  And a late batch can make a finished table play again.
+- **It tells only of a game that is over.** Hokm's held `result` falls one round AFTER the next
+  game arrives, and for that round the card was handed a game that had only just begun with
+  `shown` still true: it took that game as its own, and so went at once when `shown` fell, for
+  the id had not changed since. `shown` counts only with a finished match beside it.
+- **It goes as it stood.** The match, the reader's chair, who is ready and the press that is
+  out are kept from the last time it stood (`last`). A rematch may seat the reader in another
+  chair, and a card that followed `props.mine` turned "You won." into the other player's name
+  on its way out; one that followed the match told of a game with no result in it.
+- **The count is released with the scope, not with the mount** (`onCleanup`). `onMount` runs in
+  a microtask and registers nothing when the scope has gone before it, so a cleanup returned
+  from `mount` was never run for a card taken away in the turn it was made.
+
+**It comes and goes by ONE transition, not by two keyframes.** `.table-result` has
+`transition: opacity 240ms`, comes from `@starting-style { opacity: 0 }` and goes to
+`[data-leaving] { opacity: 0 }`. It was `result-in` and a new `result-out` at first, and a card
+taken away before it had finished arriving was drawn at full strength for a frame and then
+faded: a keyframe starts from the value the sheet gives the element, not from where the element
+has got to. Seen on the production build with a press 93 ms after the card arrived. Nobody
+presses that fast, but somebody watching is half a minute behind and is taken on to the next
+game whenever the watch says so, which can be inside that quarter second. A transition turns
+back from wherever it is. What does NOT work, tried in Chromium: keeping the keyframe for the
+way in and writing `animation: none; opacity: 0` with a transition for the way out. No
+transition starts from a value an animation was holding, and the card vanished at once.
+
+**The opening waits behind it.** The presenter takes `lead`, asked once for each opening after
+the table has been drawn as it stood before (`before`), and plays a wait that long in front of
+the opening, with its estimate, so a batch that follows counts it as time the table is behind.
+The dice, the deal and the first cards are therefore seen on a clear table and not through a
+card that is leaving, and `data-presenting` is set for the whole of it. The board cannot answer
+`lead` from `result`: the card stands as a tab when it is folded and stands while it leaves, so
+the card says so itself (`onStand`) and three boards keep that one word. Ludo plays nothing when
+it starts, so its board keeps none.
+
+Less motion: `base.css` gives every transition no time there, so the card is simply there and
+simply gone, and `.table-result` left the list that stills animations, having none. The table
+still waits its quarter second, because rule 4 leaves timers alone.
+
+Held by `match-result.spec.ts` (*the result, leaving the table it stood over*), a rematch in each
+of the four board specs, `presenter.spec.ts` (*the opening of a game*), and
+`backend/tests/table-result-art.spec.ts`, which also holds the sheet's 240 ms and `RESULT_OUT` to
+one another. In a browser: `leavingFindings` in `tools/qa/motion.mjs`, asked by the backgammon and
+Ludo motion passes and by a rematch that the Hokm and poker play passes now play.
+
 **`board.lost()` is a latch, not the resource's error,** because the store asks again by itself - at
 every `game` doorbell, and every three seconds while the socket is down - and a resource clears its
 error while a request is in flight: read directly, the complaint was taken away and drawn again each

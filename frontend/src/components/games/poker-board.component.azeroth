@@ -3,7 +3,7 @@ import { batch, untrack } from 'azerothjs';
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import PokerSeat from './poker-seat.component.azeroth';
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
 import { plateTag, type PlateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
@@ -154,6 +154,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     let uncap: () => void = () => undefined;
     let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
 
     const hurry = () =>
     {
@@ -1159,7 +1160,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             clock,
             table: staging,
             sight: () => untrack(sightNow),
-            report
+            report,
+            lead: () => (resultStands ? RESULT_OUT : 0)
         });
         const unwatch = made.watch((busy) =>
         {
@@ -1778,11 +1780,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             </Show>
         </div>
 
-        <Show when={ result }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
 
         <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>

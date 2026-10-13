@@ -779,7 +779,15 @@ html:has(.site-drawer[open])
     overflow-y: auto;
     background: rgb(8 13 25 / 0.6);
     backdrop-filter: blur(3px);
-    animation: result-in 240ms var(--ease-ui, ease) both;
+    transition: opacity 240ms var(--ease-ui, ease);
+}
+
+@starting-style
+{
+    .table-result
+    {
+        opacity: 0;
+    }
 }
 
 .table-result > *
@@ -801,14 +809,13 @@ html:has(.site-drawer[open])
     left: 50%;
     bottom: 0.75rem;
     translate: -50% 0;
+    transition: opacity 240ms var(--ease-ui, ease);
 }
 
-@keyframes result-in
+.table-result[data-leaving],
+.table-result-tab[data-leaving]
 {
-    from
-    {
-        opacity: 0;
-    }
+    opacity: 0;
 }
 
 @container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)
@@ -1159,7 +1166,6 @@ html:has(.site-drawer[open])
 @media (prefers-reduced-motion: reduce)
 {
     .table-plate-bubble,
-    .table-result,
     .table-stage
     {
         animation: none;

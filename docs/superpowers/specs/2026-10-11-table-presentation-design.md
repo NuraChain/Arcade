@@ -2519,6 +2519,18 @@ alike, and a table that is scaled on the way is a different measure from the one
 lands on. Measured before: the waiting room gone, 25 ms of the placeholder, the whole board,
 inside three frames. The opening already played under it (rule 9) and still does.
 
+**As built (6.1), Play again.** The result goes over the 240 ms it came in, by opacity alone,
+when the game on the table is another one, and at once when it is not (a finished table that is
+made to play again, and the one round of the flush in which a derived `over && !presenting` is
+true before the scene that ends the game has begun). It goes telling of the game it was about:
+the match, the reader's chair and the state of the rematch are kept as they stood. The opening
+of the next game waits those 240 ms on a table already drawn as it stood before, through a
+`lead` the presenter asks the board for once for each opening, so the first dice and the first
+cards are not seen through a card on its way out. The pieces are racked and the cards collected
+quietly under the card, as this section's table says. Found on the way and fixed apart: Hokm
+kept the result of the game before over the next deal until that deal had been played, because
+the one place that drops its held result returned early while anything was playing.
+
 **As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
 moved one game a commit, and each takes the turn from what its own log can say:
 

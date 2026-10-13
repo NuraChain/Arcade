@@ -25,7 +25,7 @@ const flush = async () =>
 
 const cost = (acts: readonly { moves: readonly Move[] }[]) => acts.reduce((sum, act) => sum + act.moves.length * ACT_MS, 0);
 
-const setup = (hooked = true) =>
+const setup = (hooked = true, lead?: () => number) =>
 {
     const clock = manualClock(1000);
     const stage = createStage({ clock, quiet: () => false });
@@ -73,7 +73,7 @@ const setup = (hooked = true) =>
         ...(hooked ? { before: (seen: Sight<null>) => ({ ...seen, rev: 0 }) } : {})
     };
 
-    const presenter = createPresenter<null, Move>({ stage, clock, table, sight: () => sight, report: (error) => reported.push(error) });
+    const presenter = createPresenter<null, Move>({ stage, clock, table, sight: () => sight, report: (error) => reported.push(error), ...(lead === undefined ? {} : { lead }) });
 
     presenter.watch((busy) => told.push(busy));
 
@@ -614,6 +614,82 @@ describe('the opening of a game', () =>
 
         expect(calls).toEqual(['reset m1@0', 'play 1:e1', 'played 1']);
         expect(presenter.presenting()).toBe(false);
+    });
+
+    it('waits as long as the board asks before it is played, on a table already drawn as it stood before', async () =>
+    {
+        let asked = 0;
+
+        const { presenter, calls, batch, at, elapse } = setup(true, () =>
+        {
+            asked += 1;
+
+            return 240;
+        });
+
+        at(1);
+        presenter.see(batch([1], { opens: token().opens }));
+
+        expect(calls, 'the table was not drawn as it stood before the opening at once').toEqual(['reset m1@0']);
+        expect(presenter.presenting(), 'a table that is waiting to open said it was idle').toBe(true);
+
+        await elapse(230);
+
+        expect(calls, 'the opening did not wait').toEqual(['reset m1@0']);
+
+        await elapse(15);
+
+        expect(calls).toEqual(['reset m1@0', 'play 1:e1']);
+
+        await elapse(ACT_MS);
+
+        expect([calls, presenter.presenting(), asked]).toEqual([['reset m1@0', 'play 1:e1', 'played 1'], false, 1]);
+    });
+
+    it('asks for no wait where none is wanted, and asks nothing for a move that is not an opening', async () =>
+    {
+        let asked = 0;
+
+        const none = setup(true, () => 0);
+
+        none.at(1);
+        none.presenter.see(none.batch([1], { opens: token().opens }));
+
+        expect(none.calls, 'an opening with nothing to wait for did not start at once').toEqual(['reset m1@0', 'play 1:e1']);
+
+        const later = setup(true, () =>
+        {
+            asked += 1;
+
+            return 240;
+        });
+
+        later.opened();
+        later.at(6);
+        later.presenter.see(later.batch([6]));
+
+        expect([later.calls, asked]).toEqual([['play 6:e6'], 0]);
+    });
+
+    it('counts the wait among what the table is behind by, when an opening comes with moves after it', async () =>
+    {
+        const late = setup(true, () => 240);
+        const prompt = setup(true);
+
+        late.at(4);
+        late.presenter.see(late.batch([1, 2, 3, 4], { opens: token().opens }));
+        prompt.at(4);
+        prompt.presenter.see(prompt.batch([1, 2, 3, 4], { opens: token().opens }));
+
+        await late.elapse(240);
+        await prompt.elapse((ACT_MS * 4) / FAST);
+
+        expect(prompt.calls, 'three moves in front of the newest were taken for more than the table may be behind').toEqual(['reset m1@0', 'play 1:e1 2:e2 3:e3 4:e4']);
+        expect(late.calls).toEqual(['reset m1@0', 'play 1:e1 2:e2 3:e3 4:e4']);
+
+        await late.elapse((ACT_MS * 4) / FAST);
+
+        expect(late.calls[late.calls.length - 1], 'the wait was not counted, and the table fell further behind for it').toBe('played 4');
     });
 
     it('is played once: a table put on the page a second time is drawn as it stands', () =>

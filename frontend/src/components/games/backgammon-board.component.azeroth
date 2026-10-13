@@ -1,6 +1,6 @@
 import { untrack } from 'azerothjs';
 
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT } from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
@@ -215,6 +215,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     let layer: HTMLElement | null = null;
     let men: BackgammonTable | null = null;
     let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
     let sound: SoundHandle | null = null;
     let drag: Drag | null = null;
     let cursor: HTMLElement | null = null;
@@ -658,7 +659,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                         : locale.t('backgammon.passed.them', { name: nameOf(side === 'near' ? viewer : 1 - viewer), dice });
                 }
             });
-            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0) });
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;
@@ -1428,10 +1429,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             </Show>
         </div>
 
-        <Show when={ result }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
     </div>
 }

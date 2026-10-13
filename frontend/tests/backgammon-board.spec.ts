@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { batch, createSignal } from 'azerothjs';
 
 import BackgammonBoard from '../src/components/games/backgammon-board.component.azeroth';
+import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import {
     BAR_LEFT,
@@ -736,27 +737,42 @@ describe('the opening roll', () =>
         expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
     });
 
-    it('is thrown for the next game at the same table, when that game comes with the frame that began it', async () =>
+    it('is thrown for the next game at the same table when the result of the game before has left it, and not under it', async () =>
     {
+        const animate = vi.spyOn(Element.prototype, 'animate');
         const table = await live(match({ dice: [], phase: 'roll' }, 0, {
             rev: 9,
             finishedAt: new Date(401_000).toISOString(),
+            outcome: 'won',
+            winner: 0,
             players: [
                 { seat: 0, who: 'dana.w', timeouts: 0, result: 'won' },
                 { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost' }
             ] as MatchView['players']
         }));
         const next = begun({ id: 'match-next' });
+        const result = () => table.container.querySelector('.table-result');
+        const thrown = () => animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'));
 
-        expect(table.container.querySelector('.table-result')).not.toBeNull();
+        expect(result()).not.toBeNull();
 
+        animate.mockClear();
         table.tell(next, [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], { opens: () => true });
         await flush();
 
-        expect(stageOf(table.container).getAttribute('data-presenting')).toBe('true');
-        expect(table.container.querySelector('.table-result'), 'the result of the game before stood over the opening of this one').toBeNull();
+        expect(stageOf(table.container).getAttribute('data-presenting'), 'a table waiting to open behind its result said it was idle').toBe('true');
+        expect(result()?.getAttribute('data-leaving'), 'the result of the game before stood over the opening of this one, or was gone in one frame').toBe('true');
+        expect(result()?.querySelectorAll('.table-result-card li'), 'the result went telling of a game that had only just begun').toHaveLength(2);
         expect(lit(table.container)).toBe(0);
         expect(said(table.container), 'a sentence about the game before was read out over the opening of this one').toBe('');
+
+        await elapse(RESULT_OUT - 1);
+
+        expect([result() === null, thrown()], 'the dice that open the next game were thrown under the result of the last one').toEqual([false, false]);
+
+        await elapse(1);
+
+        expect([result(), thrown()], 'the dice waited longer than the result took to leave').toEqual([null, true]);
 
         await elapse(1500);
 

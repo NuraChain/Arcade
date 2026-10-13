@@ -6,7 +6,7 @@ import { VALUE, kindOf } from '../../backend/src/domains/match/backgammon/scorin
 import { WATCH_DELAY_MS } from '../../backend/src/domains/match/turns.ts';
 import { BAR_LEFT, BAR_WIDTH, HEIGHT, POINT_WIDTH, TRAY, TRAY_LEFT, WIDTH, columnOf } from '../../frontend/src/game/backgammon-layout.ts';
 import { countsOf, differs, expectedOf, menOf, planOf, tonesOf } from './backgammon-routes.mjs';
-import { armPress, bystanders, diceOf, faceOf, hideTab, judge, keyframesOf, pressOf, seriesOf, smooth, stopWatching, travelOf, unkeyedIn, watch, watchKeyframes } from './motion.mjs';
+import { armPress, bystanders, diceOf, faceOf, hideTab, judge, keyframesOf, leavingFindings, leavingOf, pressOf, seriesOf, smooth, stopWatching, travelOf, unkeyedIn, watch, watchKeyframes, watchLeaving } from './motion.mjs';
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
@@ -751,6 +751,11 @@ try
 
     for (const player of [dana, mina])
     {
+        await watchLeaving(player.page, '.bg-layer .bgt-dice > .die3d');
+    }
+
+    for (const player of [dana, mina])
+    {
         await level(player, finished.rev);
 
         const again = await waitFor(async () => await pressable(player.page, /Play again/i) !== null, 10000);
@@ -788,6 +793,11 @@ try
             await player.page.waitForTimeout(300);
             await rested('after Play again', player, fresh.view);
             await diceTold('after Play again', player, fresh.view);
+
+            for (const [name, ok, detail] of leavingFindings(await leavingOf(player.page)))
+            {
+                record(`after Play again, ${ player.handle }: ${ name }`, ok, detail);
+            }
             record(`after Play again: ${ player.handle } has thirty checkers`, await player.page.locator('.bg-layer .man').count() === 30);
         }
 

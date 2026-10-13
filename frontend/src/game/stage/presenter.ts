@@ -36,6 +36,7 @@ export interface PresenterOptions<V, M>
     table: Table<V, M>;
     sight: () => Sight<V> | null;
     report: (error: unknown) => void;
+    lead?: () => number;
 }
 
 export interface Presenter<M>
@@ -157,6 +158,13 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
 
         cursor = 0;
         snap(table.before(sight));
+
+        const wait = options.lead?.() ?? 0;
+
+        if (wait > 0)
+        {
+            director.enqueue((ctx) => ctx.stage.wait(wait), { estimate: wait });
+        }
 
         return told(sight, batch);
     };

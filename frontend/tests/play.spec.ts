@@ -10,6 +10,7 @@ import PlayHeader from '../src/components/games/play-header.component.azeroth';
 import TableChat from '../src/components/games/table-chat.component.azeroth';
 import TableDock from '../src/components/games/table-dock.component.azeroth';
 import TableMenu from '../src/components/games/table-menu.component.azeroth';
+import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { BOARDS } from '../src/components/games/boards.ts';
@@ -2981,9 +2982,17 @@ describe('PlayPage', () =>
             await vi.waitFor(() => expect(container.querySelector('.bg-board')).not.toBeNull(), { timeout: 4000 });
             await settle();
 
+            const offered = pressable(container, 'Play again');
+
             expect(asks).toBe(2);
             expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(offered === undefined || offered.closest('.table-result[data-leaving][inert]') !== null, 'the next game was on the table with the last one still offering another').toBe(true);
+
+            clock.advance(RESULT_OUT);
+            await settle();
+
             expect(pressable(container, 'Play again')).toBeUndefined();
+            expect(container.querySelector('.table-result')).toBeNull();
         });
 
         it('says a chair is free once the other player has left', async () =>
