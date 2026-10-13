@@ -7,6 +7,10 @@ import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import {
     BAR_LEFT,
     BAR_WIDTH,
+    BOTTOM,
+    CUBE,
+    CUBE_EDGE,
+    DICE_X,
     FIELD_LEFT,
     FIELD_RIGHT,
     FRAME,
@@ -17,6 +21,7 @@ import {
     TRAY_LEFT,
     WIDTH,
     columnOf,
+    patchOf,
     pointAt
 } from '../src/game/backgammon-layout.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -194,6 +199,21 @@ describe('the backgammon board geometry', () =>
         expect(FIELD_LEFT + POINT_WIDTH * 12 + BAR_WIDTH).toBeCloseTo(FIELD_RIGHT);
         expect(FIELD_RIGHT + FRAME + TRAY + FRAME).toBe(WIDTH);
         expect(TRAY_LEFT).toBe(FIELD_RIGHT + FRAME);
+    });
+
+    it('gives every place a checker of the reader\'s can be a patch of the board that is that place and no other', () =>
+    {
+        const found = [25, ...Array.from({ length: 24 }, (_, index) => 24 - index), 0].map((spot) =>
+        {
+            const patch = patchOf(spot);
+            const corners = [[0.1, 0.1], [0.9, 0.1], [0.5, 0.5], [0.1, 0.9], [0.9, 0.9]].map(([across, down]) => pointAt(patch.x + patch.w * across, patch.y + patch.h * down));
+
+            return [spot, [...new Set(corners)]];
+        });
+
+        expect(found).toEqual([[25, ['bar']], ...Array.from({ length: 24 }, (_, index) => [24 - index, [24 - index]]), [0, ['tray']]]);
+        expect(patchOf(25).y, 'the bar\'s patch is not on the reader\'s half of the bar').toBeGreaterThan(MIDDLE);
+        expect(patchOf(0).y, 'the tray\'s patch is not on the reader\'s half of the tray').toBeGreaterThanOrEqual(MIDDLE);
     });
 
     it('lays the points out the way a board is printed: my home bottom right, theirs top right', () =>
@@ -1070,6 +1090,556 @@ describe('the backgammon helpers', () =>
     });
 });
 
+describe('a backgammon board played from a keyboard', () =>
+{
+    const stops = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.bg-cursor > .bg-stop')];
+
+    const named = (container: HTMLElement) => stops(container).map((stop) => stop.getAttribute('aria-label'));
+
+    const keys = (container: HTMLElement) => stops(container).map((stop) => stop.dataset.stop);
+
+    const tabbed = (container: HTMLElement) => stops(container).filter((stop) => stop.tabIndex === 0).map((stop) => stop.dataset.stop);
+
+    const at = (container: HTMLElement, name: string) => stops(container).find((stop) => stop.dataset.stop === name)!;
+
+    const key = async (on: HTMLElement, which: string) =>
+    {
+        const typed = new KeyboardEvent('keydown', { key: which, bubbles: true, cancelable: true });
+
+        on.dispatchEvent(typed);
+        await flush();
+
+        return typed.defaultPrevented;
+    };
+
+    const focused = () => (document.activeElement as HTMLElement | null)?.dataset.stop ?? null;
+
+    const asking = (container: HTMLElement) => container.querySelector<HTMLElement>('.bg-ask');
+
+    const blot = position({ 24: 2, 13: 5, 8: 3, 6: 5 }, { 24: 2, 13: 5, 8: 3, 7: 1, 6: 4 });
+
+    it('stands a stop on the dice when the reader is to roll, and one on the cube when they may double', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const plain = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        expect(named(plain.container)).toEqual(['The dice. Roll them.']);
+        expect([at(plain.container, 'dice').style.left, at(plain.container, 'dice').style.top], 'the stop is not where the dice lie').toEqual([`${ (DICE_X / WIDTH * 100).toFixed(3) }%`, '50%']);
+        expect(plain.container.querySelector('.bg-cursor')?.getAttribute('role')).toBe('group');
+        expect(plain.container.querySelector('.bg-cursor')?.getAttribute('aria-label')).toBe('The board');
+        expect(stops(plain.container).map((stop) => stop.getAttribute('role'))).toEqual(['button']);
+
+        expect(await key(at(plain.container, 'dice'), 'Enter'), 'the page was left to scroll or press something else').toBe(true);
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'roll' }]);
+        plain.unmount();
+
+        const doubling = await live(match({ phase: 'roll', dice: [], doubling: true }));
+
+        expect(named(doubling.container)).toEqual(['The dice. Roll them.', 'The cube. Offer a double to 2.']);
+        expect(at(doubling.container, 'cube').style.top, 'the stop is not on the cube in the middle').toBe(`${ ((MIDDLE - CUBE / 2) / HEIGHT * 100).toFixed(3) }%`);
+
+        await key(at(doubling.container, 'cube'), ' ');
+
+        expect(doubling.container.querySelector('.bg-ask'), 'the cube was pressed and nothing was asked').not.toBeNull();
+        doubling.unmount();
+
+        const held = await live(match({ phase: 'roll', dice: [], doubling: true, cube: 2, owner: 0 }));
+
+        expect(named(held.container)).toEqual(['The dice. Roll them.', 'The cube. Offer a double to 4.']);
+        expect(at(held.container, 'cube').style.top, 'the stop is not on the cube the reader holds').toBe(`${ ((BOTTOM - CUBE_EDGE - CUBE / 2) / HEIGHT * 100).toFixed(3) }%`);
+    });
+
+    it('comes to the first checker when the dice a key rolled have landed, and to the dice again when the turn comes back', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+
+        const table = await live(match({ phase: 'roll', dice: [], doubling: false }));
+
+        at(table.container, 'dice').focus();
+        await key(at(table.container, 'dice'), 'Enter');
+
+        expect(focused()).toBe('dice');
+
+        table.tell(match({}, 0, { rev: 5 }), [happened(5, 0, [{ e: 'roll', seat: 0, dice: [6, 1] }])]);
+        await elapse(2400);
+
+        expect(keys(table.container)).toEqual(['at-24', 'at-13', 'at-8', 'at-6']);
+        expect(focused(), 'the dice have landed and the keyboard is nowhere').toBe('at-24');
+
+        table.tell(match({ turn: 1, phase: 'roll', dice: [] }, 0, { rev: 6, turn: 1 }), [happened(6, 0, [{ e: 'move', seat: 0, from: 24, to: 18, die: 6, hit: false }, { e: 'move', seat: 0, from: 6, to: 5, die: 1, hit: false }])]);
+        await elapse(2400);
+
+        expect([keys(table.container), focused()]).toEqual([[], null]);
+
+        table.tell(match({ phase: 'roll', dice: [], seats: position({ 24: 1, 18: 1, 13: 5, 8: 3, 6: 4, 5: 1 }, { 24: 2, 13: 5, 8: 3, 6: 5 }) }, 0, { rev: 7 }), []);
+        await elapse(2400);
+
+        expect([keys(table.container), focused()], 'the turn came back and the keyboard did not').toEqual([['dice'], 'dice']);
+    });
+
+    it('stands a stop on every point with a checker that may move, the farthest first, and says what stands there and what the key does', async () =>
+    {
+        const { container } = await live(match({}));
+
+        expect(keys(container)).toEqual(['at-24', 'at-13', 'at-8', 'at-6']);
+        expect(named(container)).toEqual([
+            'Point 24, 2 checkers. Lift one.',
+            'Point 13, 5 checkers. Move one to point 7.',
+            'Point 8, 3 checkers. Lift one.',
+            'Point 6, 5 checkers. Move one to point 5.'
+        ]);
+    });
+
+    it('says where a checker goes when the key moves it at once: to a point, onto a blot, off the board, in from the bar', async () =>
+    {
+        const striking = await live(match({ seats: position({ 24: 1, 6: 14 }, { 7: 1, 6: 12, 2: 2 }) }));
+
+        expect(named(striking.container)).toEqual(['Point 24, 1 checker. Move it to point 18 and hit.', 'Point 6, 14 checkers. Move one to point 5.']);
+
+        await key(at(striking.container, 'at-24'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(striking.container), 'the stop said the key moves the checker, and it did not').toBe(1);
+        striking.unmount();
+
+        const bearing = await live(match({ seats: position({ 1: 2, 0: 13 }, { 1: 1, 0: 14 }) }));
+
+        expect(named(bearing.container)).toEqual(['Point 1, 2 checkers. Bear one off.']);
+        bearing.unmount();
+
+        const entering = await live(match({ seats: position({ 25: 1, 6: 14 }, { 13: 2, 6: 12, 1: 1 }) }));
+
+        expect(named(entering.container)).toEqual(['The bar, 1 checker. Bring it in on point 24 and hit.']);
+    });
+
+    it('lies each stop over its own point, so the ring round it is round the place that is meant', async () =>
+    {
+        const { container } = await live(match({}));
+        const patch = patchOf(13);
+        const drawn = at(container, 'at-13').style;
+
+        expect([drawn.left, drawn.top, drawn.width, drawn.height]).toEqual([
+            `${ (patch.x / WIDTH * 100).toFixed(3) }%`,
+            `${ (patch.y / HEIGHT * 100).toFixed(3) }%`,
+            `${ (patch.w / WIDTH * 100).toFixed(3) }%`,
+            `${ (patch.h / HEIGHT * 100).toFixed(3) }%`
+        ]);
+    });
+
+    it('keeps one stop in the tab order, and walks the others with the arrows, round and round', async () =>
+    {
+        const { container } = await live(match({}));
+
+        expect(tabbed(container)).toEqual(['at-24']);
+
+        at(container, 'at-24').focus();
+
+        expect(await key(at(container, 'at-24'), 'ArrowRight')).toBe(true);
+        expect([focused(), tabbed(container)]).toEqual(['at-13', ['at-13']]);
+
+        const walk = async (which: string) =>
+        {
+            await key(document.activeElement as HTMLElement, which);
+
+            return focused();
+        };
+
+        expect([await walk('ArrowDown'), await walk('ArrowRight'), await walk('ArrowDown')], 'the walk does not go on, past the last stop to the first').toEqual(['at-8', 'at-6', 'at-24']);
+        expect([await walk('ArrowLeft'), await walk('ArrowUp'), await walk('ArrowLeft')], 'the walk does not go back, past the first stop to the last').toEqual(['at-6', 'at-8', 'at-13']);
+        expect([await walk('End'), await walk('Home'), await walk('ArrowUp')]).toEqual(['at-6', 'at-24', 'at-6']);
+        expect(tabbed(container)).toEqual(['at-6']);
+        expect(await key(at(container, 'at-6'), 'a'), 'a key that means nothing here was taken from the page').toBe(false);
+    });
+
+    it('lifts a checker with Enter, stands the stops on the places it may go, and goes to the first of them', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').focus();
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect(named(container)).toEqual(['Point 24. Put it back.', 'Point 23. Put it down here.', 'Point 18. Put it down here.']);
+        expect([focused(), tabbed(container)]).toEqual(['at-23', ['at-23']]);
+        expect(staged(container)).toBe(0);
+    });
+
+    it('puts it down with Enter, moves a checker that has one place to go without lifting it, and comes to the dice when the move is whole', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').focus();
+        await key(at(container, 'at-24'), 'Enter');
+        await key(at(container, 'at-18'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(container)).toBe(1);
+        expect(named(container)).toEqual([
+            'Point 24, 1 checker. Move it to point 23.',
+            'Point 18. Take the last move back.',
+            'Point 8, 3 checkers. Move one to point 7.',
+            'Point 6, 5 checkers. Move one to point 5.'
+        ]);
+        expect(focused()).toBe('at-24');
+
+        await key(at(container, 'at-6'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(container)).toBe(2);
+        expect(named(container)).toEqual(['Point 5. Take the last move back.', 'The dice. Play this move.']);
+        expect(focused(), 'the move is whole and the keyboard is not on the dice').toBe('dice');
+
+        await key(at(container, 'dice'), 'Enter');
+
+        expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'move', hops: [{ from: 24, to: 18 }, { from: 6, to: 5 }] }]);
+    });
+
+    it('puts back what is lifted with Escape, and leaves Escape to the page when nothing is', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').focus();
+
+        expect(await key(at(container, 'at-24'), 'Escape'), 'Escape was taken with nothing lifted').toBe(false);
+
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect(await key(at(container, 'at-23'), 'Escape')).toBe(true);
+        expect(keys(container)).toEqual(['at-24', 'at-13', 'at-8', 'at-6']);
+        expect(focused()).toBe('at-24');
+    });
+
+    it('lets a checker that has just moved go on, or back to where it came from', async () =>
+    {
+        const { container } = await live(match({ dice: [3, 1] }));
+
+        at(container, 'at-13').focus();
+        await key(at(container, 'at-13'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(container)).toBe(1);
+        expect(focused(), 'the keyboard did not go with a checker that may go on').toBe('at-10');
+        expect(at(container, 'at-10').getAttribute('aria-label'), 'a checker that may go on or back is lifted, whatever the stop says').toBe('Point 10, 1 checker. Lift it.');
+
+        await key(at(container, 'at-10'), 'Enter');
+
+        expect(named(container)).toEqual(['Point 13. Take the last move back.', 'Point 10. Put it back.', 'Point 9. Put it down here.']);
+        expect(focused(), 'a checker was lifted to go on and the keyboard was put on the stop that takes its move back').toBe('at-9');
+
+        await key(at(container, 'at-13'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(container)).toBe(0);
+    });
+
+    it('leaves the keyboard where it is when a key could do nothing', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-13').focus();
+        vi.spyOn(useBoard(), 'busy').mockReturnValue(true);
+        await key(at(container, 'at-13'), 'Enter');
+
+        expect([staged(container), focused()]).toEqual([0, 'at-13']);
+    });
+
+    it('does a thing once for a key that is held down, and leaves the page none of it', async () =>
+    {
+        const { container } = await live(match({}));
+        const held = (which: string) =>
+        {
+            const typed = new KeyboardEvent('keydown', { key: which, repeat: true, bubbles: true, cancelable: true });
+
+            (document.activeElement as HTMLElement).dispatchEvent(typed);
+
+            return typed.defaultPrevented;
+        };
+
+        at(container, 'at-24').focus();
+
+        expect(held('Enter')).toBe(true);
+
+        await flush();
+
+        expect([keys(container), focused()], 'Enter held down lifted a checker').toEqual([['at-24', 'at-13', 'at-8', 'at-6'], 'at-24']);
+        expect(held(' ')).toBe(true);
+
+        await flush();
+
+        expect([keys(container), focused()], 'the space bar held down lifted a checker').toEqual([['at-24', 'at-13', 'at-8', 'at-6'], 'at-24']);
+
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect(held('Escape')).toBe(true);
+
+        await flush();
+
+        expect([keys(container), focused()], 'Escape held down put a checker back').toEqual([['at-24', 'at-23', 'at-18'], 'at-23']);
+        expect([held('ArrowRight'), focused()], 'an arrow held down does not walk').toEqual([true, 'at-18']);
+    });
+
+    it('puts a lifted checker back from the stop on its own point', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').focus();
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect(named(container)[0]).toBe('Point 24. Put it back.');
+
+        await key(at(container, 'at-23'), 'ArrowLeft');
+
+        expect(focused()).toBe('at-24');
+
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect([keys(container), focused(), staged(container)], 'the stop that says it puts the checker back did not').toEqual([['at-24', 'at-13', 'at-8', 'at-6'], 'at-24', 0]);
+    });
+
+    it('hands the keyboard to the question the cube asks, and takes it to the dice when the answer is not now', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = await live(match({ phase: 'roll', dice: [], doubling: true }));
+
+        at(container, 'cube').focus();
+        await key(at(container, 'cube'), 'Enter');
+
+        const ask = asking(container)!;
+
+        expect([ask.getAttribute('role'), ask.getAttribute('tabindex'), document.getElementById(ask.getAttribute('aria-labelledby') ?? '')?.textContent]).toEqual(['group', '-1', 'Offer a double to 2?']);
+        expect(document.activeElement, 'the question was asked and the keyboard was left on the cube').toBe(ask);
+        expect([await key(ask, 'Tab'), asking(container) === ask], 'a key that answers nothing answered').toEqual([false, true]);
+        expect(await key(ask, 'Escape'), 'Escape was left to the page').toBe(true);
+        expect([asking(container), focused()], 'the question went and the keyboard went nowhere').toEqual([null, 'dice']);
+
+        await key(at(container, 'dice'), 'ArrowRight');
+        await key(at(container, 'cube'), ' ');
+
+        const not = button(asking(container)!, 'Not now');
+
+        not.focus();
+        await key(not, 'Enter');
+        fire(not, 'click');
+        await flush();
+
+        expect([asking(container), focused()]).toEqual([null, 'dice']);
+        expect(play).not.toHaveBeenCalled();
+    });
+
+    it('hands the keyboard to the answer when the other side doubles, for a reader who is using it and has it nowhere else', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+
+        const mine = match({ phase: 'roll', dice: [], doubling: false });
+        const theirs = match({ turn: 1, phase: 'roll', dice: [] }, 0, { rev: 5, turn: 1 });
+        const doubled = match({ phase: 'double', dice: [] }, 0, { rev: 6 });
+        const using = await live(mine);
+
+        at(using.container, 'dice').focus();
+        await key(at(using.container, 'dice'), 'Enter');
+        using.tell(theirs, []);
+        await elapse(1200);
+
+        expect(focused()).toBeNull();
+
+        using.tell(doubled, []);
+        await elapse(1200);
+
+        const ask = asking(using.container)!;
+
+        expect([ask.getAttribute('role'), ask.getAttribute('tabindex')]).toEqual(['group', '-1']);
+        expect(document.getElementById(ask.getAttribute('aria-labelledby') ?? '')?.textContent).toContain('doubles to 2.');
+        expect(document.activeElement, 'the other side doubled and the keyboard was left nowhere').toBe(ask);
+        expect(await key(ask, 'Escape'), 'Escape answered a double nobody may leave unanswered').toBe(false);
+        expect(asking(using.container)).toBe(ask);
+
+        cleanup();
+
+        const byHand = await live(theirs);
+
+        byHand.tell(doubled, []);
+        await elapse(1200);
+
+        expect([asking(byHand.container) === null, document.activeElement === document.body], 'somebody playing by hand was given the keyboard').toEqual([false, true]);
+
+        cleanup();
+
+        const elsewhere = await live(mine);
+        const field = document.body.appendChild(document.createElement('input'));
+
+        at(elsewhere.container, 'dice').focus();
+        await key(at(elsewhere.container, 'dice'), 'Enter');
+        field.focus();
+        elsewhere.tell(theirs, []);
+        await elapse(1200);
+        elsewhere.tell(doubled, []);
+        await elapse(1200);
+
+        expect([asking(elsewhere.container) === null, document.activeElement === field], 'somebody typing somewhere else was taken to the board').toEqual([false, true]);
+
+        field.remove();
+    });
+
+    it('follows a reader who answered with a key to the dice when the turn comes back, and not one who answered by hand', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+
+        const doubled = match({ phase: 'double', dice: [] });
+        const theirs = match({ turn: 1, phase: 'roll', dice: [], cube: 2, owner: 0 }, 0, { rev: 5, turn: 1 });
+        const mine = match({ phase: 'roll', dice: [], cube: 2, owner: 0 }, 0, { rev: 6 });
+        const answered = async (by: 'key' | 'hand') =>
+        {
+            const table = await live(doubled);
+            const take = button(asking(table.container)!, 'Take at 2');
+
+            take.focus();
+            await key(take, 'Tab');
+
+            if (by === 'hand')
+            {
+                take.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            }
+
+            fire(take, 'click');
+            table.tell(theirs, []);
+            await elapse(1200);
+            table.tell(mine, []);
+            await elapse(1200);
+
+            const on = [keys(table.container), focused()];
+
+            cleanup();
+
+            return on;
+        };
+
+        expect(await answered('key'), 'the turn came back and the keyboard did not').toEqual([['dice'], 'dice']);
+        expect(await answered('hand'), 'somebody answering by hand was given a ring they did not ask for').toEqual([['dice'], null]);
+    });
+
+    it('takes the last move back from the checker that made it', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').focus();
+        await key(at(container, 'at-24'), 'Enter');
+        await key(at(container, 'at-18'), 'Enter');
+        await elapse(1200);
+        await key(at(container, 'at-18'), 'Enter');
+        await elapse(1200);
+
+        expect(staged(container)).toBe(0);
+        expect(keys(container)).toEqual(['at-24', 'at-13', 'at-8', 'at-6']);
+        expect(focused()).toBe('at-24');
+    });
+
+    it('says where a checker would be hit, where one comes in from the bar, and where one is borne off', async () =>
+    {
+        const hitting = await live(match({ seats: blot }));
+
+        at(hitting.container, 'at-24').focus();
+        await key(at(hitting.container, 'at-24'), 'Enter');
+
+        expect(named(hitting.container)).toEqual(['Point 24. Put it back.', 'Point 23. Put it down here.', 'Point 18. Put it down here and hit.']);
+        hitting.unmount();
+
+        const barred = await live(match({ seats: position({ 25: 1, 24: 1, 13: 5, 8: 3, 6: 5 }, { 24: 2, 13: 5, 8: 3, 6: 5 }) }));
+
+        expect(named(barred.container)).toEqual(['The bar, 1 checker. Bring it in on point 24.']);
+        barred.unmount();
+
+        const choosing = await live(match({ dice: [2, 1], seats: position({ 25: 2, 13: 5, 8: 3, 6: 5 }, { 24: 2, 13: 5, 8: 3, 6: 5 }) }));
+
+        expect(named(choosing.container)).toEqual(['The bar, 2 checkers. Bring one in.']);
+
+        at(choosing.container, 'at-25').focus();
+        await key(at(choosing.container, 'at-25'), 'Enter');
+
+        expect(named(choosing.container)).toEqual(['The bar. Put it back.', 'Point 24. Put it down here.', 'Point 23. Put it down here.']);
+        choosing.unmount();
+
+        const home = await live(match({ seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }));
+
+        at(home.container, 'at-6').focus();
+        await key(at(home.container, 'at-6'), 'Enter');
+
+        expect(named(home.container)).toEqual(['Point 6. Put it back.', 'Point 5. Put it down here.', 'Bear it off.']);
+    });
+
+    it('uses a stop for a press that came from no pointer, and leaves a pointer\'s press to the board under it', async () =>
+    {
+        const { container } = await live(match({}));
+
+        at(container, 'at-24').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+
+        expect(keys(container), 'a pointer pressed a stop').toEqual(['at-24', 'at-13', 'at-8', 'at-6']);
+
+        at(container, 'at-24').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+        await flush();
+
+        expect(keys(container)).toEqual(['at-24', 'at-23', 'at-18']);
+    });
+
+    it('does not take the keyboard to the board after a move made by hand, even from somebody who had been using it', async () =>
+    {
+        const { container } = await live(match({}));
+
+        hop(container, 13, 7);
+        await elapse(1200);
+
+        expect(staged(container)).toBe(1);
+        expect(focused(), 'somebody playing by hand was given a ring they did not ask for').toBeNull();
+
+        cleanup();
+
+        const again = await live(match({}));
+
+        at(again.container, 'at-24').focus();
+        await key(at(again.container, 'at-24'), 'Enter');
+
+        expect(focused()).toBe('at-23');
+
+        tapPoint(again.container, 13, 'pointerdown');
+        tapPoint(again.container, 13);
+        await elapse(1200);
+
+        expect(staged(again.container)).toBe(1);
+        expect(focused(), 'a move made by hand took the keyboard back to the board').toBeNull();
+    });
+
+    it('gives somebody watching no stops, and nobody a stop when it is not their turn', async () =>
+    {
+        const watching = still(match({}, null));
+
+        expect(watching.container.querySelector('.bg-cursor')).toBeNull();
+        watching.unmount();
+
+        const waiting = await live(match({ turn: 1 }, 0, { turn: 1 }));
+
+        expect(stops(waiting.container)).toEqual([]);
+    });
+
+    it('says all of it in Persian, with Persian figures', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = await live(match({}));
+
+        expect(container.querySelector('.bg-cursor')?.getAttribute('aria-label')).toBe('تخته');
+        expect(named(container)).toEqual([
+            'خانهٔ ۲۴، ۲ مهره. یکی را بردار.',
+            'خانهٔ ۱۳، ۵ مهره. یکی را به خانهٔ ۷ ببر.',
+            'خانهٔ ۸، ۳ مهره. یکی را بردار.',
+            'خانهٔ ۶، ۵ مهره. یکی را به خانهٔ ۵ ببر.'
+        ]);
+
+        await key(at(container, 'at-24'), 'Enter');
+
+        expect(named(container)).toEqual(['خانهٔ ۲۴. سر جایش برگردان.', 'خانهٔ ۲۳. همین‌جا بگذارش.', 'خانهٔ ۱۸. همین‌جا بگذارش.']);
+    });
+});
+
 describe('the two seats of a backgammon table', () =>
 {
     const rails = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.bg-rail')];
@@ -1158,7 +1728,7 @@ describe('moves made on the table itself', () =>
 {
     const whole = (container: HTMLElement) => zone(container).dataset.live === 'done';
 
-    it('has no control of the page for a move anywhere on the stage, shown or hidden', async () =>
+    it('has no button, list or panel of the page for a move anywhere on the stage: what a key can press lies on the board', async () =>
     {
         const rolling = await live(match({ phase: 'roll', dice: [], doubling: true }));
         const moving = await live(match({}));
@@ -1168,6 +1738,7 @@ describe('moves made on the table itself', () =>
             expect([...container.querySelectorAll('.table-stage button')].map((one) => one.textContent?.trim()), 'a move is offered as a button').toEqual([]);
             expect(container.querySelector('.bg-keys'), 'the helper panel is still there').toBeNull();
             expect(container.querySelector('.table-stage ul')).toBeNull();
+            expect([...container.querySelectorAll('.table-stage [role="button"]')].filter((one) => one.parentElement?.classList.contains('bg-cursor') !== true), 'something a key can press is not on the board').toEqual([]);
         }
 
         hop(moving.container, 13, 7);

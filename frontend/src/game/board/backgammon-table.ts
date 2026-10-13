@@ -3,8 +3,8 @@ import {
     BAR_WIDTH,
     BOTTOM,
     CUBE,
+    DICE_X,
     HEIGHT,
-    MIDDLE,
     POINT_WIDTH,
     RADIUS,
     SLAB,
@@ -12,7 +12,8 @@ import {
     TOP,
     TRAY,
     WIDTH,
-    columnOf
+    columnOf,
+    cubeY
 } from '../backgammon-layout.ts';
 import {
     beatsOf,
@@ -200,8 +201,6 @@ const SET_DOWN = 'cubic-bezier(0.2, 0.7, 0.3, 1)';
 
 const BAR_X = BAR_LEFT + BAR_WIDTH / 2;
 
-const DICE_X = BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3;
-
 const cq = (units: number) => `${ (units * UNIT).toFixed(3) }cqw`;
 
 const placed = (x: number, y: number, halfX = RADIUS, halfY = RADIUS) => `${ cq(x - halfX) } ${ cq(y - halfY) }`;
@@ -215,8 +214,6 @@ const make = (name: string, parent?: HTMLElement) =>
 
     return made;
 };
-
-const cubeY = (owner: Side | null) => (owner === null ? MIDDLE : (owner === 'near' ? BOTTOM - 44 : TOP + 44));
 
 const cubeAt = (owner: Side | null) => `${ cq(BAR_X - CUBE / 2) } ${ cq(cubeY(owner) - CUBE / 2) }`;
 

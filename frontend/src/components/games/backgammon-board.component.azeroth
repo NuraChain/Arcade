@@ -16,7 +16,7 @@ import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { diceOf, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
-import type { Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
+import { BAR, OFF, type Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
 import { coachOf, hits, outcomeOf, reachOf } from '../../game/helpers/backgammon.ts';
 import { createBackgammonTable, HOP_MS, type BackgammonTable, type Facts, type Invite } from '../../game/board/backgammon-table.ts';
 import { feltOf, seedOf, type Felt, type Told } from '../../game/backgammon-felt.ts';
@@ -29,6 +29,8 @@ import {
     BAR_LEFT,
     BAR_WIDTH,
     BOTTOM,
+    CUBE,
+    DICE_X,
     FIELD_LEFT,
     FIELD_RIGHT,
     FRAME,
@@ -42,7 +44,10 @@ import {
     TRAY_LEFT,
     WIDTH,
     columnOf,
-    pointAt
+    cubeY,
+    patchOf,
+    pointAt,
+    type Patch
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
@@ -50,6 +55,22 @@ import type { Rematch } from './boards.ts';
 type Tone = 'light' | 'dark';
 
 const PEGS_MOST = 9;
+
+interface Stop
+{
+    key: string;
+    says: string;
+    place: string;
+}
+
+const NO_STOPS: Stop[] = [];
+
+const WALKS: Record<string, number | undefined> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+const placed = (patch: Patch) =>
+    `left: ${ (patch.x / WIDTH * 100).toFixed(3) }%; top: ${ (patch.y / HEIGHT * 100).toFixed(3) }%; width: ${ (patch.w / WIDTH * 100).toFixed(3) }%; height: ${ (patch.h / HEIGHT * 100).toFixed(3) }%`;
+
+const DICE_PLACE = `left: ${ (DICE_X / WIDTH * 100).toFixed(3) }%; top: 50%`;
 
 interface Spike
 {
@@ -143,6 +164,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     state presenting = false;
 
+    state rover = '';
+
     derived game = props.match;
 
     derived at = `${ game.id }:${ game.rev }`;
@@ -192,6 +215,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     let presenter: Presenter<Told> | null = null;
     let sound: SoundHandle | null = null;
     let drag: Drag | null = null;
+    let cursor: HTMLElement | null = null;
+    let byKey = false;
 
     const chime = turnChime(() => sound);
 
@@ -383,6 +408,101 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
         return whole ? 'done' : null;
     })();
+
+    const sayAt = (spot: number) =>
+    {
+        const point = locale.n(spot);
+
+        if (chosen === null)
+        {
+            if (spot === taken)
+            {
+                return locale.t('backgammon.stop.undo', { point });
+            }
+
+            const ways = (plan?.next ?? []).filter((hop) => hop.from === spot);
+            const only = spot !== last?.to && new Set(ways.map((hop) => hop.to)).size === 1 ? ways[0] : null;
+
+            if (only === null)
+            {
+                return spot === BAR
+                    ? locale.plural('backgammon.stop.lift.bar', near[BAR] ?? 0)
+                    : locale.plural('backgammon.stop.lift', near[spot] ?? 0, { point });
+            }
+
+            const struck = plan !== null && hits(outcomeOf(plan.at, only));
+            const to = locale.n(only.to);
+
+            if (spot === BAR)
+            {
+                return locale.plural(struck ? 'backgammon.stop.enter.hit' : 'backgammon.stop.enter', near[BAR] ?? 0, { to });
+            }
+
+            if (only.to === OFF)
+            {
+                return locale.plural('backgammon.stop.move.off', near[spot] ?? 0, { point });
+            }
+
+            return locale.plural(struck ? 'backgammon.stop.move.hit' : 'backgammon.stop.move', near[spot] ?? 0, { point, to });
+        }
+
+        if (spot === chosen)
+        {
+            return spot === BAR ? locale.t('backgammon.stop.back.bar') : locale.t('backgammon.stop.back', { point });
+        }
+
+        if (spot === home)
+        {
+            return locale.t('backgammon.stop.undo', { point });
+        }
+
+        if (spot === OFF)
+        {
+            return locale.t('backgammon.stop.off');
+        }
+
+        return locale.t(plan !== null && hits(outcomeOf(plan.at, { from: chosen, to: spot })) ? 'backgammon.stop.hit' : 'backgammon.stop.put', { point });
+    };
+
+    derived cubePlace = placed({
+        x: BAR_LEFT + BAR_WIDTH / 2 - CUBE / 2,
+        y: cubeY(view?.owner === undefined ? null : 'near') - CUBE / 2,
+        w: CUBE,
+        h: CUBE
+    });
+
+    derived stops = ((): Stop[] =>
+    {
+        if (rolling)
+        {
+            return [
+                { key: 'dice', says: locale.t('backgammon.stop.roll'), place: DICE_PLACE },
+                ...(mayDouble ? [{ key: 'cube', says: locale.t('backgammon.stop.double', { cube: locale.n(raised) }), place: cubePlace }] : [])
+            ];
+        }
+
+        if (plan === null)
+        {
+            return NO_STOPS;
+        }
+
+        const spots = chosen === null
+            ? [...plan.next.map((hop) => hop.from), ...(taken === null ? [] : [taken])]
+            : [...reach.keys(), chosen, ...(home === null ? [] : [home])];
+
+        return [
+            ...[...new Set(spots)].sort((one, two) => two - one).map((spot) => ({ key: `at-${ spot }`, says: sayAt(spot), place: placed(patchOf(spot)) })),
+            ...(whole ? [{ key: 'dice', says: locale.t('backgammon.stop.play'), place: DICE_PLACE }] : [])
+        ];
+    })();
+
+    derived roving = stops.some((stop) => stop.key === rover) ? rover : (stops[0]?.key ?? '');
+
+    derived resting = onward ? `at-${ last?.to }` : (stops.find((stop) => stop.key !== `at-${ taken }`)?.key ?? '');
+
+    derived bound = chosen === null
+        ? resting
+        : (stops.find((stop) => stop.key !== `at-${ chosen }` && stop.key !== `at-${ home }`)?.key ?? '');
 
     const sightNow = (): Sight<Felt> | null =>
     {
@@ -791,6 +911,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     {
         const spot = spotOf(boardAt(event));
 
+        byKey = false;
+
         if (event.button > 0 || (drag !== null && !event.isPrimary))
         {
             return;
@@ -942,6 +1064,161 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         }
     };
 
+    const use = (key: string) =>
+    {
+        if (key === 'dice')
+        {
+            pressDice();
+        }
+        else if (key === 'cube')
+        {
+            pressCube();
+        }
+        else
+        {
+            const spot = Number(key.slice(3));
+
+            if (choose(spot === chosen ? null : spot) === null)
+            {
+                men?.hold(chosen);
+            }
+        }
+    };
+
+    const stopAt = (key: string) => cursor?.querySelector<HTMLElement>(`[data-stop="${ key }"]`) ?? null;
+
+    const stopOf = (target: EventTarget | null) => (target instanceof HTMLElement ? target.closest<HTMLElement>('.bg-stop')?.dataset.stop ?? null : null);
+
+    const refocus = (must: boolean) =>
+    {
+        const held = document.activeElement;
+        const question = cursor?.parentElement?.querySelector<HTMLElement>('.bg-ask') ?? null;
+
+        if (question !== null)
+        {
+            if (held === document.body || cursor?.contains(held) === true)
+            {
+                question.focus({ preventScroll: true });
+            }
+        }
+        else if (must || held === document.body)
+        {
+            stopAt(untrack(() => bound))?.focus({ preventScroll: true });
+        }
+    };
+
+    const keyed = (act: () => void) =>
+    {
+        const before = untrack(() => stops);
+
+        byKey = true;
+        act();
+
+        if (untrack(() => stops) !== before)
+        {
+            queueMicrotask(() => refocus(true));
+        }
+    };
+
+    const onKey = (event: KeyboardEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key === null)
+        {
+            return;
+        }
+
+        if (event.repeat && (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape'))
+        {
+            event.preventDefault();
+
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ')
+        {
+            event.preventDefault();
+            keyed(() => use(key));
+
+            return;
+        }
+
+        if (event.key === 'Escape' && chosen !== null)
+        {
+            event.preventDefault();
+            keyed(() =>
+            {
+                choose(null);
+                men?.hold(null);
+            });
+
+            return;
+        }
+
+        const keys = stops.map((stop) => stop.key);
+        const step = WALKS[event.key];
+        const ends = event.key === 'Home' ? keys[0] : (event.key === 'End' ? keys[keys.length - 1] : undefined);
+        const next = ends ?? (step === undefined ? undefined : keys[(keys.indexOf(key) + step + keys.length) % keys.length]);
+
+        if (next !== undefined)
+        {
+            event.preventDefault();
+            stopAt(next)?.focus({ preventScroll: true });
+        }
+    };
+
+    const onFocus = (event: FocusEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null)
+        {
+            rover = key;
+        }
+    };
+
+    const onClick = (event: MouseEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null && event.detail === 0)
+        {
+            keyed(() => use(key));
+        }
+    };
+
+    const onAskKey = (event: KeyboardEvent) =>
+    {
+        byKey = true;
+
+        if (event.key === 'Escape' && asked)
+        {
+            event.preventDefault();
+            keep();
+        }
+    };
+
+    const onAskPointer = () =>
+    {
+        byKey = false;
+    };
+
+    effect
+    {
+        void stops;
+        void asked;
+        void answering;
+
+        untrack(() =>
+        {
+            if (byKey)
+            {
+                queueMicrotask(() => refocus(false));
+            }
+        });
+    }
+
     const tagOf = (seat: number) =>
     {
         const player = game.players.find((one) => one.seat === seat);
@@ -1025,6 +1302,16 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
                                     <div class="bg-layer" aria-hidden="true" ref={ (element) => layer = element }></div>
 
+                                    <Show when={ mine !== undefined }>
+                                        { () =>
+                                            <div class="bg-cursor" role="group" aria-label={ locale.t('backgammon.board') } ref={ (element) => cursor = element } onKeyDown={ onKey } onFocusIn={ onFocus } onClick={ onClick }>
+                                                <For each={ stops } key={ (stop) => stop.key } let={ stop }>
+                                                    <span class="bg-stop" role="button" tabindex={ stop.key === roving ? 0 : -1 } aria-label={ stop.says } data-stop={ stop.key } style={ stop.place }></span>
+                                                </For>
+                                            </div>
+                                        }
+                                    </Show>
+
                                     <Show when={ diceTold }>
                                         { () =>
                                             <span class="sr-only" role="img" aria-label={ diceSaid }></span>
@@ -1033,8 +1320,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
                                     <Show when={ asked }>
                                         { () =>
-                                            <div class="bg-ask" dir={ locale.dir() }>
-                                                <p class="bg-ask-title">{ locale.t('backgammon.double.ask', { cube: locale.n(raised) }) }</p>
+                                            <div class="bg-ask" dir={ locale.dir() } role="group" aria-labelledby="bg-ask-title" tabindex="-1" onKeyDown={ onAskKey } onPointerDown={ onAskPointer }>
+                                                <p class="bg-ask-title" id="bg-ask-title">{ locale.t('backgammon.double.ask', { cube: locale.n(raised) }) }</p>
                                                 <div class="flex flex-wrap justify-center gap-2">
                                                     <Button variant="primary" size="md" loading={ board.busy() } onClick={ () => void answer('double') }>
                                                         { locale.t('backgammon.double', { cube: locale.n(raised) }) }
@@ -1049,8 +1336,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
                                     <Show when={ answering }>
                                         { () =>
-                                            <div class="bg-ask" dir={ locale.dir() }>
-                                                <p class="bg-ask-title">{ locale.t('backgammon.doubled.watch', { name: nameOf(1 - viewer), cube: locale.n(raised) }) }</p>
+                                            <div class="bg-ask" dir={ locale.dir() } role="group" aria-labelledby="bg-ask-title" tabindex="-1" onKeyDown={ onAskKey } onPointerDown={ onAskPointer }>
+                                                <p class="bg-ask-title" id="bg-ask-title">{ locale.t('backgammon.doubled.watch', { name: nameOf(1 - viewer), cube: locale.n(raised) }) }</p>
                                                 <div class="flex flex-wrap justify-center gap-2">
                                                     <Button variant="primary" size="md" loading={ board.busy() } onClick={ () => void answer('take') }>
                                                         { locale.t('backgammon.take', { cube: locale.n(raised) }) }

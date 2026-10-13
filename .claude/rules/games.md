@@ -2657,13 +2657,14 @@ took it out the day they saw it - one press of Tab after a click on the board op
 desktop: "also remove that dom helper paly the move 23 > 18 and etc.. on desktop delete these
 things on all of games game should be real player should tocuh or click on game things such as
 card dice and etc..". So it is gone, with the hop sentences, the Hit tag and the eight strings
-only it used, and **no game gets one**: not shown, not hidden, not for a wider screen. What that
-costs is said plainly, because it is a cost: a backgammon turn cannot be made from a keyboard or
-by a screen reader any more. If that is wanted again it has to be play ON the table - a cursor
-that walks the points - and it is the owner's to ask for. What stays is what nobody sees and
-nothing can press: the turn sentence as a live region, the match line, and each side's stacks in
-words. The stage says how many hops are staged (`data-staged`), which is how a spec and the play
-pass know a tap was taken now that no button reports it.
+only it used, and **no game gets one**: not shown, not hidden, not for a wider screen. For a
+while that cost a keyboard its turn: a backgammon move could not be made from one or by a screen
+reader at all. It is played from a keyboard now, ON the table, by a cursor that stands on the
+points (*The board is played from a keyboard*, below), which is what the owner's second brief
+asked for and what this paragraph named as the only way back. What stays beside it is what nobody
+sees and nothing can press: the turn sentence as a live region, the match line, and each side's
+stacks in words. The stage says how many hops are staged (`data-staged`), which is how a spec and
+the play pass know a tap was taken now that no button reports it.
 
 **Nothing textual sits under the board.** The owner again, the same day: "description for movement
 is useless on games", "we can have more space of game", "game board is more important that
@@ -2951,6 +2952,74 @@ neither on the board, 70% of an upright stage, the lot centred, the pips at 20 p
 production build whose sheet was broken four ways (a rail never taller than its least, the
 seats not centred beside the board, the pips at 16 px, a seat lying on the board) it failed 20
 of its 44 checks on the backgammon cell, each of the four by name.
+
+**The board is played from a keyboard, by a cursor that stands on the points** (B.2 of the
+graphics design, D14). No panel and no list came back: what a key can press lies on the board,
+over the thing a finger would press.
+
+- **A stop is a place where something can be done.** `.bg-cursor` lies over the board, a group
+  named "The board", and holds one `.bg-stop` for each: the dice when they are to be rolled, the
+  cube when a double may be offered, every point (and the bar) with a checker that may move, from
+  the bar down, and the checker that last moved when all it can do is go back. With a checker
+  lifted the stops are the places it may go, its own point, and the point it came from if it had
+  just moved. When the move is whole the dice are a stop again. Somebody watching has no cursor,
+  and nobody has a stop when it is not their turn.
+- **A stop's name says what stands there and what the key does**, in the reader's language
+  (`backgammon.stop.*`): "Point 13, 5 checkers. Lift one.", "Point 18. Put it down here and
+  hit.", "Point 24. Put it back.", "Point 18. Take the last move back.", "The dice. Play this
+  move." A checker with one place to go is not lifted, it goes, exactly as a tap sends it, and
+  its stop says where: "Point 6, 5 checkers. Move one to point 5.", "... and hit.", "Bear one
+  off.", "The bar, 1 checker. Bring it in on point 24." The first build said "Lift one" on all
+  of them, and for somebody who cannot see the board Enter on "lift" was a checker gone with
+  nothing said of where. A checker that has just moved and may go on IS lifted, whatever else
+  is true, because from there it may also go back.
+- **A stop lies over its own place.** `patchOf` in `backgammon-layout.ts` gives the half of a
+  point's column the reader's checkers stand in, the reader's half of the bar and of the tray;
+  the dice stop is the size of the place a finger presses them (`.bgt-hit`), and the cube's is
+  the cube. `DICE_X` and `cubeY` moved to the layout so the renderer and the cursor read one
+  number. A stop takes no pointer: a press is still read off the board by where it lands.
+- **One stop is in the order of the Tab key and the arrows walk the rest**, round and round,
+  Home and End to the first and the last (`roving`). Enter or the space bar uses a stop, and so
+  does a click that comes with no pointer (`detail` 0). Escape puts back what is lifted and is
+  left to the page when nothing is. **A key held down acts once** (`event.repeat`): held for
+  half a second, Enter would otherwise lift, put down and send a whole turn at thirty presses a
+  second.
+- **The keyboard goes where the move goes**, for a reader who is using it (`byKey`: a key sets
+  it, a pointer on the board or in the cube's question clears it). With a checker that may go
+  on; to the first place a lifted checker may go; to the dice when the move is whole; to the
+  first checker when the dice a key rolled have landed; to the dice when the turn comes back.
+  Never onto a stop that takes a move back, lifted or not. It is moved only from a stop or from
+  nowhere (`document.body`), so a reader who has gone to the chat is left there, and a key that
+  could do nothing moves nothing.
+- **The cube's question takes the keyboard.** `.bg-ask` is a group named by its own title and
+  can be focused. It takes the keyboard when it opens, from the cube or from nowhere, and holds
+  it on the card, not on a button: an Enter that was already on its way answers nothing. Tab
+  goes to the answers. Escape is "Not now" to the reader's own question and nothing at all to a
+  double that has to be answered. When the question goes, the keyboard is on the dice.
+- **Focus is a ring drawn inside the stop** in the product's focus colour with a light line
+  inside it, and under them an outline no eye sees, which is what a screen with forced colours
+  draws when it throws the shadow away.
+
+Four things no test had asked. The stop called "Put it back" lifted the checker again
+(`choose` of the point it stands on): a fault put into the code survived, and reading why
+found it. Lifting a checker that had just moved put the keyboard on the stop that takes the
+move back, one Enter from undoing it: found by playing a turn with the keyboard on the
+production build, where the three stops are 13, 11 and 6 and the first that is not the lifted
+one is the way back. The first test of the arrows pressed each key on a stop it named and not
+on the stop the keyboard was on, so down, up and Home could each go the wrong way and pass;
+it types where the keyboard is now and reads where it went after every key. And two guards
+the faults could not tell from their absence went.
+
+`backgammon-board.spec.ts` (*a backgammon board played from a keyboard*) holds the stops, the
+names in both languages, every key, the held key, the press with no pointer, where the keyboard
+goes after each of them, the question and the answer, a reader playing by hand and one who has
+gone elsewhere. `backgammon-table-art.spec.ts` (*the cursor of a backgammon table*) holds the
+sheet. The play pass makes a whole turn with Enter alone and asks the cube's question with the
+keyboard. One hundred faults put into the code one at a time were each caught by a spec.
+Against a production build whose cursor never puts the keyboard anywhere the pass failed four
+of its six keyboard lines, and the fifth, that the other browser sees the move, passed with no
+move made, because the dice were still landing there; it waits for the revision the move makes
+now. Against a build where a key on the dice or the cube does nothing it failed all six.
 
 **The motion itself is held by a lab and a pass**: `tools/qa/backgammon-motion-lab.mjs` on the
 dev server and `tools/qa/backgammon-motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`,
@@ -4555,7 +4624,9 @@ for themselves. Backgammon plays eight turns ON THE TABLE - it taps the dice to 
 turn, the cube and then Double, Take on the board, carries the first checker of each turn to its
 point with the mouse held down and taps the points of the board for the other hops, with where a
 point is taken from the layout module the board is drawn from - and fails if a button for a move
-is on show under the board. Poker plays
+is on show under the board. Then it makes one turn with the keyboard and nothing else, Enter on
+the dice and Enter on whatever stop the keyboard is then found on until the turn is sent, and
+asks the cube's question and puts it away with keys. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
 wants the raise out of the reader's stack and in the air in the turn of the press, at the
 revision it was pressed on (the press and the read are one evaluation in the page, so no

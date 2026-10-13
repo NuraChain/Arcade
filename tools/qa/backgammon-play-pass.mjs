@@ -158,6 +158,13 @@ const tapDice = async (player, mode) =>
     return true;
 };
 
+const stopHeld = async (player) => await player.page.evaluate(() =>
+{
+    const held = document.activeElement;
+
+    return held !== null && held.classList.contains('bg-stop') ? { key: held.dataset.stop ?? '', says: held.getAttribute('aria-label') ?? '' } : null;
+});
+
 const shown = async (player) => await player.page.locator('main .table-stage button').evaluateAll((buttons) =>
     buttons.filter((button) => button.closest('.bg-ask, .table-result') === null).length);
 
@@ -327,7 +334,148 @@ try
         record(`${ other.handle } sees it without reloading`, await waitFor(async () => (await drawn(other)) !== before, 8000), verb);
     }
 
-    console.log('\n[4] the rest over the api');
+    console.log('\n[4] a turn made with the keyboard alone');
+
+    {
+        const keys = { rolled: 0, first: null, steps: 0, named: 0, last: '', played: false, seen: false };
+        let typist = null;
+        let other = null;
+
+        for (let step = 0; step < 12 && typist === null; step += 1)
+        {
+            const current = (await dana.api('GET', `/matches/${ matchId }`)).body;
+            const mover = seats.get(current.turn);
+            const view = current.view;
+
+            await level(dana, current.rev);
+            await level(mina, current.rev);
+
+            if (view.phase !== 'roll')
+            {
+                const own = view.seats.find((row) => row.seat === current.turn).checkers;
+                const theirs = view.seats.find((row) => row.seat !== current.turn).checkers;
+                const play = view.phase === 'double' ? { kind: 'backgammon', verb: 'take' } : { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] };
+
+                await mover.api('POST', `/matches/${ matchId }/play`, { key: `bgk-${ step }-${ matchId }`, rev: current.rev, play });
+
+                continue;
+            }
+
+            const stop = mover.page.locator('.bg-cursor > .bg-stop[data-stop="dice"][tabindex="0"]');
+
+            if (!await waitFor(async () => await stop.count() === 1, 8000))
+            {
+                break;
+            }
+
+            await stop.focus();
+            await mover.page.keyboard.press('Enter');
+            keys.rolled += 1;
+
+            const rolled = await waitFor(async () => (await mover.api('GET', `/matches/${ matchId }`)).body.rev > current.rev);
+            const after = (await mover.api('GET', `/matches/${ matchId }`)).body;
+
+            if (rolled && after.turn === current.turn && after.view.phase === 'move')
+            {
+                typist = mover;
+                other = mover === dana ? mina : dana;
+            }
+        }
+
+        if (typist !== null)
+        {
+            const before = (await typist.api('GET', `/matches/${ matchId }`)).body;
+
+            await waitFor(async () => (await stopHeld(typist))?.key.startsWith('at-') === true, 12000);
+            keys.first = await stopHeld(typist);
+
+            for (let step = 0; step < 16 && !keys.played; step += 1)
+            {
+                const on = await stopHeld(typist);
+
+                if (on === null)
+                {
+                    await typist.page.waitForTimeout(150);
+                }
+                else
+                {
+                    keys.steps += 1;
+                    keys.named += on.says === '' ? 0 : 1;
+                    keys.last = on.key;
+                    await typist.page.keyboard.press('Enter');
+                    await typist.page.waitForTimeout(300);
+                }
+
+                keys.played = (await typist.api('GET', `/matches/${ matchId }`)).body.rev > before.rev;
+            }
+
+            keys.seen = keys.played && await level(other, before.rev + 1);
+        }
+
+        record('the dice are a stop in the tab order, and Enter on them rolls', typist !== null, `${ keys.rolled } rolls`);
+        record('when its dice have landed the keyboard is on a checker that may move, and the stop says what stands there', keys.first !== null && /^(Point \d+|The bar), \d+ checkers?\./.test(keys.first.says), keys.first === null ? 'nowhere' : keys.first.says);
+        record('a whole turn is made with Enter alone: every stop it came to had a name, and the last was the dice', keys.played && keys.steps > 1 && keys.named === keys.steps && keys.last === 'dice', `${ keys.steps } presses, the last on ${ keys.last }`);
+        record('the other browser comes to the move made with keys without reloading', keys.seen);
+    }
+
+    console.log('\n[5] the cube\'s question, asked with the keyboard');
+
+    {
+        const asked = { met: false, cube: false, taken: false, named: '', back: false, kept: false };
+
+        for (let step = 0; step < 8 && !asked.met; step += 1)
+        {
+            const current = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+            if (current.finishedAt !== undefined)
+            {
+                break;
+            }
+
+            const mover = seats.get(current.turn);
+            const view = current.view;
+
+            await level(dana, current.rev);
+            await level(mina, current.rev);
+
+            if (view.phase === 'roll' && view.doubling)
+            {
+                const stop = mover.page.locator('.bg-cursor > .bg-stop[data-stop="dice"]');
+
+                asked.met = await waitFor(async () => await stop.count() === 1 && await mover.page.locator('.bg-cursor > .bg-stop[data-stop="cube"]').count() === 1, 8000);
+
+                if (!asked.met)
+                {
+                    break;
+                }
+
+                await stop.focus();
+                await mover.page.keyboard.press('ArrowRight');
+                asked.cube = (await stopHeld(mover))?.key === 'cube';
+                await mover.page.keyboard.press('Enter');
+                asked.taken = await waitFor(async () => await mover.page.evaluate(() => document.activeElement?.classList.contains('bg-ask') === true), 3000);
+                asked.named = await mover.page.evaluate(() => document.getElementById(document.activeElement?.getAttribute('aria-labelledby') ?? '')?.textContent ?? '');
+                await mover.page.keyboard.press('Escape');
+                asked.back = await waitFor(async () => await mover.page.locator('.bg-ask').count() === 0 && (await stopHeld(mover))?.key === 'dice', 3000);
+                asked.kept = (await dana.api('GET', `/matches/${ matchId }`)).body.rev === current.rev;
+            }
+            else
+            {
+                const own = view.seats.find((row) => row.seat === current.turn).checkers;
+                const theirs = view.seats.find((row) => row.seat !== current.turn).checkers;
+                const play = view.phase === 'roll'
+                    ? { kind: 'backgammon', verb: 'roll' }
+                    : (view.phase === 'double' ? { kind: 'backgammon', verb: 'take' } : { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] });
+
+                await mover.api('POST', `/matches/${ matchId }/play`, { key: `bgq-${ step }-${ matchId }`, rev: current.rev, play });
+            }
+        }
+
+        record('the cube is a stop beside the dice for whoever may double, and the question it asks takes the keyboard', asked.met && asked.cube && asked.taken && /^Offer a double to \d+\?$/.test(asked.named), asked.met ? `on the cube ${ asked.cube }, in the question ${ asked.taken }, named "${ asked.named }"` : 'nobody could double in eight steps');
+        record('Escape answers not now: nothing is offered, and the keyboard is back on the dice', asked.back && asked.kept, `back ${ asked.back }, nothing sent ${ asked.kept }`);
+    }
+
+    console.log('\n[6] the rest over the api');
 
     let round = 0;
 
@@ -393,7 +541,7 @@ try
         record(`${ player.handle } reads the result on a card the board does not show through`, await solid(player.page, '.table-result-card'));
     }
 
-    console.log('\n[5] the console, over the whole match');
+    console.log('\n[7] the console, over the whole match');
 
     record('nothing was logged in either browser', dana.errors.length === 0 && mina.errors.length === 0, [...dana.errors, ...mina.errors].slice(0, 2).join(' | '));
 }

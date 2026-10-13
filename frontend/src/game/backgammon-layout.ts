@@ -99,3 +99,42 @@ export function pointAt(x: number, y: number): number | 'bar' | 'tray' | null
 
     return right ? 6 - slot : 12 - slot;
 }
+
+export const DICE_X = BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3;
+
+export const CUBE_EDGE = 44;
+
+export function cubeY(owner: 'near' | 'far' | null)
+{
+    if (owner === null)
+    {
+        return MIDDLE;
+    }
+
+    return owner === 'near' ? BOTTOM - CUBE_EDGE : TOP + CUBE_EDGE;
+}
+
+export interface Patch
+{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export function patchOf(spot: number)
+{
+    if (spot === 0)
+    {
+        return { x: TRAY_LEFT, y: MIDDLE, w: TRAY, h: BOTTOM - MIDDLE };
+    }
+
+    if (spot === 25)
+    {
+        return { x: BAR_LEFT, y: MIDDLE + BAR_GAP, w: BAR_WIDTH, h: BOTTOM - CUBE_EDGE - CUBE / 2 - MIDDLE - BAR_GAP };
+    }
+
+    const column = columnOf(spot);
+
+    return { x: column.x, y: column.row === 'top' ? TOP : MIDDLE, w: POINT_WIDTH, h: MIDDLE - TOP };
+}

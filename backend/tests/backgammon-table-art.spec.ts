@@ -92,3 +92,56 @@ describe('the seats of a backgammon table', () =>
         expect(sheet).not.toContain('--plates');
     });
 });
+
+describe('the cursor of a backgammon table', () =>
+{
+    const cursor = ruleOf('.bg-cursor');
+    const stop = ruleOf('.bg-stop');
+    const dice = ruleOf('.bg-stop[data-stop=\'dice\']');
+    const valueOf = (rule: string, property: string) => new RegExp(`\\n    ${ property }: ([^;]+);`).exec(rule)?.[1] ?? '';
+
+    it('lies over the whole board and measures by it, as the layer the dice are drawn in does', () =>
+    {
+        for (const rule of [cursor, ruleOf('.bg-layer')])
+        {
+            expect(rule).toContain('\n    position: absolute;');
+            expect(rule).toContain('\n    inset: 0;');
+            expect(rule).toContain('\n    container-type: inline-size;');
+        }
+    });
+
+    it('takes no touch and no click from the board under it', () =>
+    {
+        expect(cursor).toContain('\n    pointer-events: none;');
+        expect(stop).toContain('\n    pointer-events: none;');
+        expect(sheet).not.toMatch(/\.bg-stop[^\n{]*\n\{[^}]*pointer-events: auto/);
+    });
+
+    it('shows nothing until a keyboard is on it, and then a ring drawn inside the stop', () =>
+    {
+        const held = ruleOf('.bg-stop:focus-visible');
+
+        expect(stop).not.toMatch(/\n    (background|box-shadow|border|outline):/);
+        expect(held).toMatch(/\n    box-shadow: inset 0 0 0 [^;]*var\(--accent\)/);
+        expect(sheet).not.toContain('.bg-stop:focus\n');
+    });
+
+    it('keeps an outline no eye sees for a screen whose colours are forced, where a shadow is not drawn', () =>
+    {
+        const held = ruleOf('.bg-stop:focus-visible');
+
+        expect(held).toMatch(/\n    outline: [^;]+ solid transparent;/);
+        expect(valueOf(held, 'outline-offset')).toMatch(/\* -1\)$/);
+        expect(sheet).not.toMatch(/\.bg-stop[^\n{]*\n\{[^}]*outline: none/);
+    });
+
+    it('has a stop for the dice the size of the place a finger presses them, measured as they are', () =>
+    {
+        const hit = ruleOf('.bgt-hit');
+
+        expect(valueOf(hit, 'inline-size')).not.toBe('');
+        expect([valueOf(dice, 'inline-size'), valueOf(dice, 'block-size'), valueOf(dice, 'translate')]).toEqual([valueOf(hit, 'inline-size'), valueOf(hit, 'block-size'), valueOf(hit, 'translate')]);
+        expect(valueOf(ruleOf('.bgt-dice'), '--dice-em')).toMatch(/^clamp\(/);
+        expect(valueOf(dice, 'font-size')).toBe(valueOf(ruleOf('.bgt-dice'), '--dice-em'));
+    });
+});

@@ -245,6 +245,16 @@ its word under it; both are written out once for a screen reader.
   Enter lifts, arrows then walk the marked points, Enter puts down, Escape puts back. The dice
   and the cube are in the same walk.
 
+**As built (B.2).** The cursor is a layer of stops over the board, one for each place where
+something can be done, and what it walks is the turn, not the row: the dice and the cube while
+the reader is to roll; the points with a checker that may move, from the bar down, while they
+move; the places a lifted checker may go; the dice again when the move is whole. Four things
+the sketch above did not say. A checker with one place to go is not lifted, it goes, as a tap
+sends it, and its stop says where. The keyboard follows the move for a reader who is using it,
+and never rests on a stop that takes a move back. A key held down acts once. And the cube's
+question is part of the walk: it takes the keyboard when it opens, on the card and not on an
+answer, and gives it back to the dice.
+
 ### 3.4 Hokm
 
 - **Upright** (H2): the table takes the stage's height less the hand. The two side seats are

@@ -4057,6 +4057,39 @@ html:has(.site-drawer[open])
     pointer-events: none;
 }
 
+.bg-cursor
+{
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    container-type: inline-size;
+    pointer-events: none;
+}
+
+.bg-stop
+{
+    position: absolute;
+    border-radius: max(0.25rem, 1.2cqw);
+    pointer-events: none;
+}
+
+.bg-stop:focus-visible
+{
+    outline: max(2px, 0.55cqw) solid transparent;
+    outline-offset: calc(max(2px, 0.55cqw) * -1);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: inset 0 0 0 max(2px, 0.55cqw) var(--accent), inset 0 0 0 max(3px, 0.8cqw) rgb(255 255 255 / 0.7);
+}
+
+.bg-stop[data-stop='dice']
+{
+    inline-size: 3.9em;
+    block-size: 2.3em;
+    border-radius: 0.5em;
+    font-size: clamp(1.75rem, 7.5cqw, 2.75rem);
+    translate: -50% -50%;
+}
+
 .man
 {
     position: absolute;
