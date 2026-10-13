@@ -2627,7 +2627,6 @@ html:has(.site-drawer[open])
     white-space: nowrap;
 }
 
-.poker-pot > svg,
 .poker-last > summary > svg
 {
     inline-size: 1.1em;
@@ -2875,14 +2874,75 @@ html:has(.site-drawer[open])
     visibility: hidden;
 }
 
-.poker-bet-disc
+.chip-stack
 {
-    box-sizing: border-box;
+    --chips: 1;
+    --chip-rim: color-mix(in srgb, var(--madder) 58%, black);
+    --chip-band: color-mix(in srgb, var(--madder) 82%, white);
+
+    position: relative;
+    flex: none;
     inline-size: 0.85em;
     block-size: 0.85em;
-    border: 0.17em dashed white;
-    border-radius: 999px;
+}
+
+.chip-stack::before
+{
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: calc(50% - 0.21em - (var(--chips) - 1) * 0.07em);
+    box-sizing: border-box;
+    block-size: 0.42em;
+    border: 0.07em solid rgb(255 255 255 / 0.92);
+    border-radius: 50%;
     background: var(--madder);
+    box-shadow: 0 0.1em 0.1em rgb(0 0 0 / 0.55);
+}
+
+.chip-stack[data-chips='0']::before
+{
+    content: none;
+}
+
+.chip-stack[data-chips='2']
+{
+    --chips: 2;
+}
+
+.chip-stack[data-chips='2']::before
+{
+    box-shadow: 0 0.14em 0 var(--chip-rim), 0 0.24em 0.1em rgb(0 0 0 / 0.55);
+}
+
+.chip-stack[data-chips='3']
+{
+    --chips: 3;
+}
+
+.chip-stack[data-chips='3']::before
+{
+    box-shadow: 0 0.14em 0 var(--chip-rim), 0 0.28em 0 var(--chip-band), 0 0.38em 0.1em rgb(0 0 0 / 0.55);
+}
+
+.chip-stack[data-chips='4']
+{
+    --chips: 4;
+}
+
+.chip-stack[data-chips='4']::before
+{
+    box-shadow: 0 0.14em 0 var(--chip-rim), 0 0.28em 0 var(--chip-band), 0 0.42em 0 var(--chip-rim), 0 0.52em 0.1em rgb(0 0 0 / 0.55);
+}
+
+.chip-stack[data-chips='5']
+{
+    --chips: 5;
+}
+
+.chip-stack[data-chips='5']::before
+{
+    box-shadow: 0 0.14em 0 var(--chip-rim), 0 0.28em 0 var(--chip-band), 0 0.42em 0 var(--chip-rim), 0 0.56em 0 var(--chip-band), 0 0.66em 0.1em rgb(0 0 0 / 0.55);
 }
 
 .poker-puck
@@ -2974,6 +3034,7 @@ html:has(.site-drawer[open])
     --card-w: clamp(2.6rem, min(13cqi, 10cqb), 4.5rem);
 
     display: flex;
+    min-block-size: 3.825rem;
     align-items: flex-end;
     justify-content: center;
     gap: 0.75rem;
@@ -3125,63 +3186,48 @@ html:has(.site-drawer[open])
     box-shadow: 0 0 0 2px var(--accent), 0 10px 18px -6px rgb(0 0 0 / 0.7);
 }
 
-.poker-thing > .poker-hole > span
+.poker-muck
 {
+    --back-w: 1.4rem;
+
     position: relative;
-    transition: translate 160ms var(--ease-ui, ease);
+    display: block;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    transition: translate 140ms var(--ease-ui, ease);
 }
 
-.poker-thing > .poker-hole .card-face
+.poker-muck > .card-back
 {
-    transition: box-shadow 160ms ease;
-}
-
-.poker-thing[data-armed] > .poker-hole .card-face
-{
-    box-shadow: 0 0 0 3px var(--danger), 0 8px 18px -6px rgb(0 0 0 / 0.6);
-}
-
-.poker-thing[data-armed] > .poker-thing-says
-{
-    color: var(--danger);
-}
-
-.poker-thing[data-armed] > .poker-hole > span::before
-{
-    content: '';
     position: absolute;
-    inset: 0;
-    border-radius: calc(var(--card-w) * 0.08);
-    box-shadow: 0 0 0 3px var(--danger), 0 0 14px 2px color-mix(in srgb, var(--danger) 70%, transparent);
-    animation: bgt-invite 1.6s ease-in-out infinite;
-    pointer-events: none;
+    left: 50%;
+    top: 50%;
+    translate: -80% -46%;
+    rotate: -16deg;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 4px 8px -3px rgb(0 0 0 / 0.7);
+}
+
+.poker-muck > .card-back + .card-back
+{
+    translate: -24% -58%;
+    rotate: 9deg;
 }
 
 @media (hover: hover)
 {
-    .poker-thing:enabled:hover > .poker-disc
+    .poker-thing:enabled:hover > .poker-disc,
+    .poker-thing:enabled:hover > .poker-muck
     {
         translate: 0 -0.2rem;
-    }
-
-    .poker-thing:enabled:hover > .poker-hole > span
-    {
-        translate: 0 -0.3rem;
     }
 }
 
 @media (prefers-reduced-motion: reduce)
 {
     .poker-disc,
-    .poker-thing > .poker-hole > span,
-    .poker-thing > .poker-hole .card-face
+    .poker-muck
     {
         transition: none;
-    }
-
-    .poker-thing[data-armed] > .poker-hole > span::before
-    {
-        animation: none;
     }
 }
 

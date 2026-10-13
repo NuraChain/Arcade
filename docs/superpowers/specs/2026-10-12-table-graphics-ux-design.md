@@ -356,6 +356,18 @@ row gets.
 Not in this commit: the fold as its own control and the drawn stacks (5.3), the cards' and the
 puck's motion (5.4).
 
+**As built (commit 5.3a, the fold and the stacks).** P4 and P6, drawn and not yet moving.
+
+- **The fold** (P4) is two cards face down, pushed away, the first of the reader's three
+  things, and there only while there is a bet to meet. One press folds. The reader's cards
+  are cards again: no line round them, no word under them, nothing to press, and the same two
+  nodes through a hand.
+- **A bet and the pot** (P6, D20) wear a stack of one to five discs where they wore a dot and a
+  coin: by the size of the amount against the big blind, drawn by the stylesheet inside the
+  box the dot had, so no pill changed size and no bet moved.
+- The reader's row no longer grows by a caption when a bet comes: the table kept its height
+  at 1280 where it gave up 17px.
+
 ### 3.6 Round the tables
 
 - The games page's opening lines get the width of the page and the counts sit under them (A1).

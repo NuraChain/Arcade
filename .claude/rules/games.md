@@ -2972,24 +2972,24 @@ places the next seat to the reader's left; `poker-board.spec.ts` pins it. See
 `docs/games/03-poker.md`, *The table*, for the pot split the view shows and why a folded player is
 sent no cards.
 
-**A poker table has no bar: the reader's own cards and chips are what is pressed.** Under the
+**A poker table has no bar: the reader's own chips and a pair of cards are what is pressed.** Under the
 table sat a bar: a sentence about the turn, the clock, the tip, what a call costs, and Fold,
 Check or Call, and Raise as buttons. The owner had every such thing taken off every game on
 2026-10-11 (*Every move is made on the table, and nowhere else*, under *Backgammon*). A poker
 action is a choice and sometimes an amount, so the choices are the reader's own things, in
 their hand under the table:
 
-- **The cards fold.** They are a button only while there is a bet to meet, as Fold was offered
-  only then. The first press arms them: a red ring that breathes, as a lifted card's does at
-  hokm, and the word under them in red. The second press folds. A press anywhere else on the
-  PAGE lets them go (the listener is the document's: a phone that does not move focus on a tap
-  would otherwise leave them armed while the reader typed in the chat), and so do Escape, focus
-  leaving them, another action and the turn passing: a fold left armed is one stray press from
-  a lost hand. A fold cannot be taken back, so one press never does it, with a mouse or a
-  finger. The tip that speaks while there is a bet to meet ends by naming the gesture, as
-  hokm's tips name theirs. Armed cards do not rise. They did, by 0.9rem, and on a phone held
-  sideways the hand lies 4px under the reader's own plate: the cards and their ring lay 13px
-  over it, which nobody saw until the fit pass armed them at every size.
+- **Folding is a thing of its own: two cards face down, pushed away** (`.poker-muck`), first
+  of the three, and there only while there is a bet to meet, as Fold was offered only then.
+  One press folds, as one press calls and one goes all in. The reader's cards are CARDS and
+  nothing to press: the same two nodes whether or not there is a bet to meet.
+  For a while the cards themselves were the fold: a button while there was a bet to meet,
+  armed by a first press under a red ring and sent by a second. It read as something wrong
+  with the reader's hand (a red line and the word "Fold" on their own cards, finding P4 of
+  the graphics audit), the cards were drawn again each time the turn came round with a bet,
+  the row grew by a caption and moved the table 17px at 1280, and the second press was the
+  one confirmation at a table where a call and an all-in take one press. The tip that
+  speaks while there is a bet to meet no longer names a gesture: the thing says "Fold".
 - **A chip calls, and in the same place a disc checks.** The chip is red and its caption says
   the amount ("Call 20", "Call all in, 300"); with nothing to call it is a plain disc with a hand
   on it.
@@ -3022,14 +3022,23 @@ their hand under the table:
     history mark, the pot, and "10/20". The street, the hands until the blinds rise and the
     level are said in the same place to a screen reader: the cards on the board already show
     which street it is. The panel opens over the board, and a press anywhere else on the page
-    shuts it, as it lets go of an armed fold.
+    shuts it.
 - **The grid is the table and the hand** (`.table-grid.poker-grid`). Beside a chat on a phone
   held sideways it gives up its far end, as ludo's and hokm's do.
+- **A bet is a stack of discs beside its number, and so is the pot** (`.chip-stack`, drawn by
+  the stylesheet: an ellipse and the edges of the discs under it). One to five discs by the
+  size of the bet against the big blind (`discsFor` in `game/stage/chips.ts`: over 1, 2.5, 6
+  and 15 blinds), so the same 600 is a tall stack early and a short one when the blinds have
+  risen. The stack is drawn inside the box the old dot had (0.85em square), so a pill is the
+  size it was and every bet's place is the place it had (D20: chips at rest are still a
+  number in a pill). The pot wore a coin icon and wears the same stack.
 
-`poker-board.spec.ts` holds the two presses, the press elsewhere, Escape, the focus leaving, the
-plate that carries the seconds, the lamp's place and the seat that is not on turn; with the
-chat shut `fit-pass.mjs` arms the reader's cards, as it lifts a card at hokm, and fails one
-that does not breathe or whose ring reaches a plate.
+`poker-board.spec.ts` holds the fold as a control of its own and the reader's cards as cards
+(one press folds, a press on the cards does nothing, the two cards are the same nodes when a
+bet comes), the discs of a bet and of the pot and the stack kept while its bet grows, the plate
+that carries the seconds, the lamp's place and the seat that is not on turn; `chips.spec.ts`
+holds how many discs an amount is. `fit-pass.mjs` counts the fold among the things in the
+reader's hand that may not reach a plate.
 
 **The table is drawn once and stays**, as hokm's is (*The table is drawn once and stays*, under
 *The table, and the cards on it*). The whole table sat in one branch that read the board, and
@@ -3052,18 +3061,18 @@ chip or a card lands on.
   from 40 to 200 kept "40" for as long as its pill lived, from the moment the pill stopped
   being drawn again.
 - **Reading the same answer again changes nothing the reader was doing.** The effect that
-  puts a raise back to its least and lets go of an armed fold read the revision through the
-  game, and the game is a new object with every answer. So any second read of the table (a
-  socket that came back, a doorbell) shut the chooser under the reader's finger, put the
-  amount back to the least and let the fold go. It reads a `derived` of the id and the
-  revision, which changes only when the table moves on.
+  puts a raise back to its least read the revision through the game, and the game is a new
+  object with every answer. So any second read of the table (a socket that came back, a
+  doorbell) shut the chooser under the reader's finger and put the amount back to the
+  least. It reads a `derived` of the id and the revision, which changes only when the table
+  moves on.
 
 `poker-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
 the board the answer it had as a new object and wants all of them still in the page; then a
 call by another seat (only the clock of the turn that ended may go), a raise and a street
 closing, a card coming and a new hand, the button moving, a tag changing its word, "Last hand"
 left open, the chip under the keyboard while the clock runs down, and a raise left open at the
-amount chosen with a fold left armed.
+amount chosen.
 
 **The table takes the room, and what is on it is sized by it.** It was drawn at 4:5 or 16:10
 inside whatever room the stage had: 58% of a phone's height, 51% of a turned phone's width,

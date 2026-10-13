@@ -54,16 +54,14 @@ try
 
     const named = async (player) => await player.page.evaluate(() =>
     {
-        const hand = document.querySelector('.poker-hand');
-        const list = hand?.querySelector('ul[aria-label="Your cards"]') ?? null;
+        const list = document.querySelector('.poker-hand ul[aria-label="Your cards"]');
 
-        return list === null
-            ? /^Your cards: \S/.test(hand?.querySelector('.poker-own > .contents > .sr-only')?.textContent ?? '')
-            : [...list.querySelectorAll('li > [role="img"]')].filter((one) => (one.getAttribute('aria-label') ?? '') !== '').length === 2;
+        return list !== null && list.closest('button') === null
+            && [...list.querySelectorAll('li > [role="img"]')].filter((one) => (one.getAttribute('aria-label') ?? '') !== '').length === 2;
     });
 
     record('each player is shown two cards of their own', await waitFor(async () => await held(dana) === 2 && await held(mina) === 2));
-    record('and each is told them in words, whether or not they are the cards that fold', await named(dana) && await named(mina));
+    record('and each is told them in words, as cards and not as something to press', await named(dana) && await named(mina));
     record('whose turn it is is said to a screen reader in both browsers', await waitFor(async () => await says(dana) !== '' && await says(mina) !== '', 4000));
 
     const matchId = (await dana.api('GET', `/tables/${ tableId }`)).body.matchId;

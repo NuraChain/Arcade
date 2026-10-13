@@ -14,6 +14,7 @@ import { aroundStadium, type Spot } from '../../game/poker-seats.ts';
 import { pokerOf } from '../../data/match.ts';
 import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/helpers/poker.ts';
 import { EMPTY, HISTORY, before, feltOf, sameAs, step, told, type Felt, type Told } from '../../game/poker-felt.ts';
+import { discsFor } from '../../game/stage/chips.ts';
 import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
 import { createStage } from '../../game/stage/stage.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
@@ -58,8 +59,6 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     state amount = 0;
 
     state raising = false;
-
-    state folding = false;
 
     state shown: Felt | null = null;
 
@@ -443,7 +442,6 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
         amount = floor;
         raising = false;
-        folding = false;
     }
 
     derived chosen = Math.min(high, Math.max(low, amount));
@@ -540,6 +538,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived potSays = locale.t('poker.pot', { chips: chips(felt.pot) });
 
+    derived potDiscs = discsFor(felt.pot, felt.blinds.big);
+
     derived layers = felt.pots;
 
     derived sided = layers.length > 1;
@@ -552,9 +552,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived lastTabled = lastShown.length > 0;
 
-    derived hole = [...felt.hole];
-
-    derived pockets = POCKETS.map((slot) => ({ slot, cards: hole.slice(slot, slot + 1) }));
+    derived pockets = POCKETS.map((slot) => ({ slot, cards: felt.hole.slice(slot, slot + 1) }));
 
     derived handed = view !== null && !result && mine !== undefined && myChair !== undefined && !myChair.out;
 
@@ -656,14 +654,11 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     const act = async (verb: 'fold' | 'check' | 'call' | 'allin') =>
     {
         haptic('select');
-        folding = false;
         raising = false;
         await send(verb);
     };
 
     derived owing = toCall > 0;
-
-    derived foldable = myTurn && owing;
 
     derived priced = myTurn && costSays !== '';
 
@@ -677,38 +672,13 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     derived named = handSays !== '';
 
-
     derived callSays = toCall >= (myRow?.stack ?? 0)
         ? locale.t('poker.callAllIn', { chips: chips(myRow?.stack ?? 0) })
         : locale.t('poker.call', { chips: chips(toCall) });
 
-    const pressHole = () =>
-    {
-        if (!foldable || untrack(board.busy))
-        {
-            return;
-        }
-
-        if (folding)
-        {
-            void act('fold');
-            return;
-        }
-
-        folding = true;
-        raising = false;
-        haptic('tick');
-    };
-
     const letGo = (event: PointerEvent) =>
     {
         const on = event.target instanceof Element ? event.target : null;
-
-        if (folding && on?.closest('[data-armed]') == null)
-        {
-            folding = false;
-        }
-
         const last = root?.querySelector<HTMLDetailsElement>('.poker-last') ?? null;
 
         if (last !== null && last.open && on?.closest('.poker-last') == null)
@@ -726,7 +696,6 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     const openRaise = () =>
     {
-        folding = false;
         raising = !raising;
     };
 
@@ -797,7 +766,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                                         </div>
                                     </details>
                                     <p class="poker-pot">
-                                        <Icon name="coins" size={ 13 } class="text-gold" />
+                                        <span class="chip-stack" data-chips={ potDiscs } aria-hidden="true"></span>
                                         <span>{ potSays }</span>
                                     </p>
                                     <p class="poker-blinds">
@@ -829,6 +798,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                                         stack={ chips(plateAt(seat).row.stack) }
                                         holds={ plateAt(seat).live && seat !== mine }
                                         bet={ plateAt(seat).row.bet > 0 ? chips(plateAt(seat).row.bet) : '' }
+                                        discs={ discsFor(plateAt(seat).row.bet, felt.blinds.big) }
                                     />
                                 </div>
                             </For>
@@ -887,50 +857,33 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
                                 { () => <p class="poker-hand-name" aria-hidden="true">{ handBrief }</p> }
                             </Show>
 
-                            <Show
-                                when={ foldable }
-                                fallback={
-                                    <ul class="poker-hole" aria-label={ locale.t('poker.hole') }>
-                                        <For each={ pockets } key={ (one) => one.slot } let={ one }>
-                                            <li class="poker-pocket">
-                                                <For each={ one.cards } key={ (card) => card } let={ card }>
-                                                    <span class="flex" role="img" aria-label={ cardSays(card) }>
-                                                        <CardFace card={ card } />
-                                                    </span>
-                                                </For>
-                                            </li>
-                                        </For>
-                                    </ul>
-                                }
-                            >
-                                { () =>
-                                    <span class="contents">
-                                        <span class="sr-only">{ locale.t('poker.hole') }: { cardsSay(hole) }</span>
-                                        <button
-                                            type="button"
-                                            class="poker-thing"
-                                            data-armed={ folding ? 'true' : undefined }
-                                            aria-pressed={ folding }
-                                            disabled={ board.busy() }
-                                            onClick={ pressHole }
-                                            onFocusOut={ () => folding = false }
-                                            onKeyDown={ (event) => (event.key === 'Escape' ? folding = false : undefined) }
-                                        >
-                                            <span class="poker-hole" aria-hidden="true">
-                                                <For each={ hole } key={ (card) => card } let={ card }>
-                                                    <span class="flex"><CardFace card={ card } /></span>
-                                                </For>
+                            <ul class="poker-hole" aria-label={ locale.t('poker.hole') }>
+                                <For each={ pockets } key={ (one) => one.slot } let={ one }>
+                                    <li class="poker-pocket">
+                                        <For each={ one.cards } key={ (card) => card } let={ card }>
+                                            <span class="flex" role="img" aria-label={ cardSays(card) }>
+                                                <CardFace card={ card } />
                                             </span>
-                                            <span class="poker-thing-says">{ locale.t('poker.fold') }</span>
-                                        </button>
-                                    </span>
-                                }
-                            </Show>
+                                        </For>
+                                    </li>
+                                </For>
+                            </ul>
                         </div>
 
                         <Show when={ myTurn }>
                             { () =>
                                 <div class="poker-acts">
+                                    <Show when={ owing }>
+                                        { () =>
+                                            <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('fold') }>
+                                                <span class="poker-muck" aria-hidden="true">
+                                                    <span class="card-back"></span>
+                                                    <span class="card-back"></span>
+                                                </span>
+                                                <span class="poker-thing-says">{ locale.t('poker.fold') }</span>
+                                            </button>
+                                        }
+                                    </Show>
                                     <Show
                                         when={ owing }
                                         fallback={

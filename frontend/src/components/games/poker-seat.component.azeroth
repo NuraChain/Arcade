@@ -20,6 +20,7 @@ export default component PokerSeat(props: {
     stack: string;
     holds: boolean;
     bet: string;
+    discs: number;
 })
 {
     const locale = useLocale();
@@ -31,6 +32,8 @@ export default component PokerSeat(props: {
     derived holding = props.holds;
 
     derived bet = props.bet;
+
+    derived discs = props.discs;
 
     derived betting = bet !== '';
 
@@ -74,7 +77,7 @@ export default component PokerSeat(props: {
         <Show when={ betting }>
             { () =>
                 <span class="poker-bet">
-                    <span class="poker-bet-disc" aria-hidden="true"></span>
+                    <span class="chip-stack" data-chips={ discs } aria-hidden="true"></span>
                     <span class="tally">{ bet }</span>
                 </span>
             }

@@ -2311,6 +2311,19 @@ under *The model* above, and the board reads only it, with no motion. Where it d
 - **The cues are still `pokerBeats`**, heard from the events the board is handed. A watcher's
   board had `events` in its props and listened to the store: it hears now.
 
+**As built (commit 5.3a, the fold and the stacks).** Nothing moves in it; it changes what the
+motion of 5.3b and 5.4 will carry.
+
+- **The Fold row of the table of controls above is no longer true.** Folding is a control of
+  its own, two cards face down pushed away, with the check or the call and the raise, and one
+  press folds. The cards the reader holds are never a button, so the fold's flight (5.4)
+  leaves from cards that are the same nodes through the hand, and the row they lie in does
+  not change height when a bet comes.
+- **A resting bet is a stack of one to five discs beside its number** (`discsFor(amount, big
+  blind)` in `game/stage/chips.ts`, the kit's `chips` module, which 5.3b gives its flights).
+  The count a pill shows at rest is the count that flies to it. The pot wears the same stack.
+  D6 stands: the pill's box is what it was, so *The bet spot* is unchanged.
+
 **Limits.** §3.4, and §4.2 for the 2500 ms bound.
 
 **Checklist.** The owner's list was written for card games in general. In Hold'em, "draw" is the

@@ -168,3 +168,41 @@ describe('what lies on a poker table', () =>
         expect(sheet).not.toMatch(/\.table-corner|\.poker-chips|\.poker-chip\b|\.poker-bar-facts|\.poker-dealer/);
     });
 });
+
+describe('what the reader holds and presses at a poker table', () =>
+{
+    const rem = (rule: string, property: string) => Number(new RegExp(`\\n    ${ property }: ([0-9.]+)rem;`).exec(rule)?.[1]);
+
+    it('keeps room in the reader\'s row for the things to press, so the table is the size it was when the turn comes', () =>
+    {
+        const row = rem(ruleOf('.poker-hand'), 'min-block-size');
+        const disc = rem(ruleOf('.poker-disc'), 'block-size');
+        const lamp = rem(ruleOf('.poker-hand > .coach-line[data-lamp]'), 'margin-block-end');
+
+        expect(disc).toBe(2.75);
+        expect(row, 'the row is not as tall as the lamp that stands in it on the reader\'s turn').toBeCloseTo(disc + lamp, 5);
+        expect(rem(ruleOf('.poker-muck'), 'block-size'), 'the fold is not the size of the chips beside it').toBe(disc);
+    });
+
+    it('draws the discs of a bet inside the box its dot had, one edge under the top disc for each disc more', () =>
+    {
+        const box = ruleOf('.chip-stack');
+        const top = ruleOf('.chip-stack::before');
+        const line = Number(/\n    line-height: ([\d.]+);/.exec(ruleOf('.poker-bet'))?.[1]);
+        const face = Number(/\n    block-size: ([\d.]+)em;/.exec(top)?.[1]);
+        const edges = [2, 3, 4, 5].map((discs) => [...ruleOf(`.chip-stack[data-chips='${ discs }']::before`).matchAll(/0 ([\d.]+)em 0 var\(--chip-(?:rim|band)\)/g)].map((found) => Number(found[1])));
+
+        expect(box).toContain('inline-size: 0.85em;');
+        expect(box).toContain('block-size: 0.85em;');
+        expect(edges.map((one) => one.length)).toEqual([1, 2, 3, 4]);
+        expect(edges[3], 'the edges do not go down by even steps').toEqual([0.14, 0.28, 0.42, 0.56]);
+        expect(face + (edges[3].at(-1) ?? 0), 'five discs stand taller than the line of the pill they are in').toBeLessThanOrEqual(line);
+        expect([2, 3, 4, 5].map((discs) => ruleOf(`.chip-stack[data-chips='${ discs }']`))).toEqual([2, 3, 4, 5].map((discs) => expect.stringContaining(`--chips: ${ discs };`)));
+        expect(ruleOf('.chip-stack[data-chips=\'0\']::before'), 'no chips are drawn as one').toContain('content: none;');
+    });
+
+    it('has no rule left for cards that fold, or for the dot a bet wore', () =>
+    {
+        expect(sheet).not.toMatch(/\.poker-thing\[data-armed\]|\.poker-thing > \.poker-hole|\.poker-bet-disc/);
+    });
+});

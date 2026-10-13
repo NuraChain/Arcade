@@ -103,7 +103,6 @@ describe('PokerBoard', () =>
         const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
 
         fire(button(container, 'Fold')!, 'click');
-        fire(button(container, 'Fold')!, 'click');
         fire(button(container, 'Call 20')!, 'click');
 
         expect(play.mock.calls.map((call) => call[0])).toEqual([
@@ -112,55 +111,49 @@ describe('PokerBoard', () =>
         ]);
     });
 
-    it('folds the reader’s own cards on the second press and never on the first, and lets them go when anything else is pressed', async () =>
+    it('folds on a control of its own, drawn as two cards pushed away, at one press, and leaves the reader’s cards the cards they are', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
-        const cards = () => button(container, 'Fold')!;
+        const fold = button(container, 'Fold')!;
+        const held = container.querySelector('ul.poker-hole')!;
 
-        await Promise.resolve();
-        await Promise.resolve();
+        expect(fold.closest('.poker-acts'), 'the fold does not stand with the other things to press').not.toBeNull();
+        expect(fold.querySelectorAll('.poker-muck > .card-back')).toHaveLength(2);
+        expect(fold.querySelector('.poker-muck')?.getAttribute('aria-hidden'), 'the drawing of the fold is read out beside its word').toBe('true');
+        expect(fold.querySelector('.card-face'), 'the fold is drawn with the reader’s own cards').toBeNull();
+        expect(fold.hasAttribute('aria-pressed'), 'the fold still says it has to be pressed twice').toBe(false);
+        expect(held.getAttribute('aria-label')).toBe('Your cards');
+        expect([...held.querySelectorAll('[role="img"]')].map((one) => /\S/.test(one.getAttribute('aria-label') ?? ''))).toEqual([true, true]);
+        expect(held.closest('button'), 'the reader’s cards are something to press').toBeNull();
+        expect(container.querySelectorAll('.poker-hand .card-face')).toHaveLength(2);
 
-        expect(cards().querySelectorAll('.card-face')).toHaveLength(2);
-        expect(cards().getAttribute('aria-pressed')).toBe('false');
-        expect(container.querySelector('.poker-own > .contents > .sr-only')?.textContent, 'the cards stopped being said once they were the thing that folds').toMatch(/^Your cards: \S/);
+        fire(held.querySelector('.card-face')!, 'click');
 
-        fire(cards(), 'click');
+        expect(play, 'a press on the reader’s own cards folded them').not.toHaveBeenCalled();
 
-        expect(play).not.toHaveBeenCalled();
-        expect(cards().getAttribute('aria-pressed')).toBe('true');
-        expect(cards().dataset.armed).toBe('true');
-
-        fire(container.querySelector('.poker-table')!, 'pointerdown');
-
-        expect(cards().getAttribute('aria-pressed')).toBe('false');
-        expect(cards().dataset.armed).toBeUndefined();
-
-        fire(cards(), 'click');
-        fire(document.body, 'pointerdown');
-
-        expect(cards().dataset.armed, 'a press on the page outside the table left a fold armed').toBeUndefined();
-
-        fire(cards(), 'click');
-        fire(cards(), 'focusout');
-
-        expect(cards().dataset.armed).toBeUndefined();
-
-        fire(cards(), 'click');
-        cards().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-
-        expect(cards().dataset.armed).toBeUndefined();
-        expect(play).not.toHaveBeenCalled();
-
-        fire(cards(), 'click');
-        fire(cards(), 'pointerdown');
-
-        expect(cards().dataset.armed).toBe('true');
-
-        fire(cards(), 'click');
+        fire(fold, 'click');
 
         expect(play).toHaveBeenCalledTimes(1);
         expect(play).toHaveBeenCalledWith({ kind: 'poker', verb: 'fold' });
+    });
+
+    it('draws a bet as a stack of discs beside its number, more of them for more chips, and the pot as one', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({
+            events: NO_EVENTS,
+            match: match({
+                pot: 1850,
+                seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: seat === 5 ? 0 : 1500, bet: [0, 0, 0, 20, 330, 1500][seat], folded: false, allIn: seat === 5, out: false }))
+            })
+        }) as Rendered);
+        const discs = (seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .poker-bet > .chip-stack`)?.getAttribute('data-chips') ?? null;
+
+        expect([discs(3), discs(4), discs(5)]).toEqual(['1', '5', '5']);
+        expect(discs(0), 'a seat with no bet has discs in front of it').toBeNull();
+        expect(container.querySelector('.poker-pot > .chip-stack')?.getAttribute('data-chips')).toBe('5');
+        expect(container.querySelector('.poker-pot svg'), 'the pot still wears the coins').toBeNull();
+        expect([...container.querySelectorAll('.chip-stack')].every((one) => one.getAttribute('aria-hidden') === 'true')).toBe(true);
     });
 
     it('draws no bar under the table and nothing in its corners: the turn is said to a screen reader alone, the seconds are on the reader’s own plate and the tip is the last thing in their hand', () =>
@@ -643,7 +636,7 @@ describe('a table that is read again', () =>
         expect(gone(before), 'these were drawn again though nothing had changed').toEqual([]);
     });
 
-    it('leaves a raise open at the amount chosen, and a fold armed, when the answer it had is read again', () =>
+    it('leaves a raise open at the amount chosen when the answer it had is read again', () =>
     {
         const { container, read } = shown(flop());
 
@@ -656,14 +649,6 @@ describe('a table that is read again', () =>
 
         expect(container.querySelector('.poker-raise'), 'reading the table again shut the raise').not.toBeNull();
         expect(button(container, 'Raise to 1,060'), 'reading the table again put the amount back to the least').toBeDefined();
-
-        fire(button(container, 'Fold')!, 'click');
-
-        expect(button(container, 'Fold')!.dataset.armed).toBe('true');
-
-        read(flop({}, { remainingMs: 9_000 }));
-
-        expect(button(container, 'Fold')!.dataset.armed, 'reading the table again let go of an armed fold').toBe('true');
     });
 
     it('shuts the raise and forgets its amount when the table moves on', () =>
@@ -713,7 +698,7 @@ describe('a table that is read again', () =>
         read(flop({ street: 'turn', board: [5, 18, 31, 44], seats: rows({ 4: { bet: 0 }, 5: { bet: 0 } }) }, { rev: 9 }));
 
         expect(gone(before).filter((one) => one === 'span.poker-bet')).toHaveLength(2);
-        expect(gone(before).filter((one) => !/^span\.(poker-bet|poker-bet-disc|tally)$/.test(one)), 'the street closing took more off the table than the two bets').toEqual([]);
+        expect(gone(before).filter((one) => !/^span\.(poker-bet|chip-stack|tally)$/.test(one)), 'the street closing took more off the table than the two bets').toEqual([]);
     });
 
     it('keeps the cards on the board when another comes, in the slot it had kept empty', () =>
@@ -833,7 +818,9 @@ describe('a table that is read again', () =>
     {
         const { container, read } = shown(flop({ turn: 4, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));
         const hand = container.querySelector('.poker-hand')!;
+        const cards = [...container.querySelectorAll('.poker-hole .card-face')];
 
+        expect(cards).toHaveLength(2);
         expect(container.querySelector('.poker-acts')).toBeNull();
 
         read(flop({ turn: 4, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }, { remainingMs: 12_000 }));
@@ -844,6 +831,24 @@ describe('a table that is read again', () =>
 
         expect(container.querySelector('.poker-hand')).toBe(hand);
         expect(button(container, 'Check')).toBeDefined();
+
+        read(flop({ turn: 0 }, { rev: 9 }));
+
+        expect(button(container, 'Fold'), 'there is a bet to meet and nothing to fold with').toBeDefined();
+        expect([...container.querySelectorAll('.poker-hole .card-face')].map((one, at) => one === cards[at]), 'a bet to meet drew the reader\'s cards again').toEqual([true, true]);
+    });
+
+    it('keeps the stack of discs a bet has, and changes how many there are when the bet grows', () =>
+    {
+        const { container, read } = shown(flop({ turn: 4, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));
+        const stack = container.querySelector('.poker-seat[data-seat="4"] .poker-bet > .chip-stack')!;
+
+        expect(stack.getAttribute('data-chips')).toBe('2');
+
+        read(flop({ turn: 0, pot: 620, seats: rows({ 4: { stack: 1300, bet: 200 } }) }, { rev: 8 }));
+
+        expect(container.querySelector('.poker-seat[data-seat="4"] .poker-bet > .chip-stack'), 'a raise drew the discs again').toBe(stack);
+        expect(stack.getAttribute('data-chips')).toBe('4');
     });
 });
 

@@ -804,7 +804,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             }
         }
 
-        const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc')].filter(shown);
+        const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc, .poker-hand .poker-muck')].filter(shown);
 
         for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .poker-hand > .coach-line')].filter(shown))
         {
@@ -1200,9 +1200,8 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
 const lift = async (page) => await page.evaluate(async () =>
 {
-    const fold = document.querySelector('.poker-hand .poker-thing:has(> .poker-hole):enabled');
     const tapped = matchMedia('(pointer: coarse)').matches && document.querySelector('.hokm-stock-due') === null;
-    const thing = fold ?? (tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:not([aria-disabled="true"])') : null);
+    const thing = tapped ? document.querySelector('.hokm-hand .card-hold[data-legal="true"]:not([aria-disabled="true"])') : null;
     const rev = () => document.querySelector('.table-stage')?.getAttribute('data-rev') ?? null;
     const before = rev();
 
@@ -1220,7 +1219,7 @@ const lift = async (page) => await page.evaluate(async () =>
         return [];
     }
 
-    const lifted = document.querySelector('.poker-thing[data-armed], .card-hold[data-go]');
+    const lifted = document.querySelector('.card-hold[data-go]');
 
     if (lifted === null)
     {
@@ -1229,7 +1228,7 @@ const lift = async (page) => await page.evaluate(async () =>
 
     const found = [];
     const ring = 3;
-    const glowing = lifted.matches('.card-hold') ? [lifted] : [...lifted.querySelectorAll('.poker-hole > span')];
+    const glowing = [lifted];
     const lit = glowing.filter((one) =>
     {
         const glow = getComputedStyle(one, '::before');
@@ -1286,7 +1285,6 @@ const cell = async (label, spec, page, url, size, openChat, language, waits, las
 
     if (!openChat)
     {
-        await page.locator('.poker-hand .poker-thing:has(> .poker-hole):enabled').first().hover({ timeout: 500 }).catch(() => null);
         found.push(...await lift(page));
     }
 
