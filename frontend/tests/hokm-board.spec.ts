@@ -16,7 +16,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { NO_EVENTS, useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
-import { act, card, elapse, flush, mounted, type Hokm } from './hokm-mounted.ts';
+import { act, after, card, elapse, flush, mounted, type Hokm } from './hokm-mounted.ts';
 
 type Rendered = HTMLElement;
 
@@ -838,8 +838,277 @@ describe('playing ahead of the server', () =>
 
         expect(container.querySelector('.card-hold[data-card="14"]')).not.toBeNull();
         expect(container.querySelector('.hokm-trick[data-card="14"]')).toBeNull();
-        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
         expect(container.querySelector('.hokm-seat[data-seat="0"] > .hokm-clock'), 'the turn was not given back with the card').not.toBeNull();
+
+        await elapse(TIMING.FLY);
+
+        expect(container.querySelector('.board-flight')?.children.length, 'the card that came back was left in the air').toBe(0);
+        expect(container.querySelector('.hokm-hand > li[data-back]'), 'the card that came back is in the hand and cannot be seen').toBeNull();
+    });
+
+    it('flies a refused card back from the felt to its place in the hand, and shows it there only when it lands', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const at = (left: number, top: number, width: number, height: number) => ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            if (this.classList.contains('card-face') && this.closest('.card-hold[data-card="14"]') !== null)
+            {
+                return at(300, 500, 40, 56);
+            }
+
+            return this.classList.contains('hokm-trick') ? at(200, 200, 44, 60) : at(0, 0, 0, 0);
+        });
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(40);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(turn());
+        const slot = () => container.querySelector<HTMLElement>('.card-hold[data-card="14"]')?.closest('li');
+
+        press(container, 14);
+        await elapse(TIMING.FLY + 20);
+
+        expect(container.querySelector('.hokm-trick[data-card="14"]'), 'the card never reached the felt').not.toBeNull();
+
+        answer('stale');
+        await flush();
+
+        const [clone] = [...container.querySelectorAll<HTMLElement>('.board-flight > .flight')];
+        const frames = animate.mock.calls[animate.mock.contexts.lastIndexOf(clone)]?.[0] as Keyframe[] | undefined;
+
+        expect(container.querySelector('.hokm-trick[data-card="14"]'), 'the refused card went on lying on the felt').toBeNull();
+        expect(clone?.querySelector<HTMLElement>('.card-face')?.style.getPropertyValue('--at-rank'), 'nothing carried the card back').toBe('1');
+        expect(frames?.[0].translate, 'the card did not come back from where it lay').toBe('-98px -298px');
+        expect(frames?.[0].scale, 'the card left the felt at the size of the box it lay askew in').toBe('1');
+        expect(frames?.[0].rotate, 'it left the felt straight, though it lay askew').toBe(`${ ((14 * 37) % 11) - 5 }deg`);
+        expect(frames?.at(-1)?.rotate).toBe('0deg');
+        expect(slot()?.getAttribute('data-back'), 'the card was in the hand while it was still crossing the table').toBe('true');
+
+        await elapse(TIMING.FLY - 5);
+
+        expect(slot()?.getAttribute('data-back')).toBe('true');
+
+        await elapse(10);
+
+        expect(slot()?.hasAttribute('data-back')).toBe(false);
+        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
+    });
+
+    it('flies a card the server took after all from the place it had come back to, not out of nowhere', async () =>
+    {
+        const at = (left: number, top: number, width: number, height: number) => ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('failed');
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            if (this.classList.contains('card-face') && this.closest('.card-hold[data-card="14"]') !== null)
+            {
+                return at(300, 500, 40, 56);
+            }
+
+            return this.classList.contains('hokm-trick') ? at(200, 200, 40, 56) : at(0, 0, 0, 0);
+        });
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(2 * TIMING.FLY + 20);
+
+        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
+
+        send([card(4, 0, 14)]);
+        await flush();
+
+        const [clone] = [...container.querySelectorAll('.board-flight > .flight')];
+        const [first] = (animate.mock.calls[animate.mock.contexts.lastIndexOf(clone)]?.[0] ?? []) as Keyframe[];
+
+        expect(container.querySelector('.card-hold[data-card="14"]'), 'the hand still holds the card the server took').toBeNull();
+        expect([first?.translate, first?.opacity], 'the card faded in from the plate, though it was lying in the hand a moment before').toEqual(['100px 300px', 1]);
+    });
+
+    it('turns a card round where it is in the air, when the server took it after all while it was coming back', async () =>
+    {
+        const at = (left: number, top: number, width: number, height: number) => ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('failed');
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            if (this.classList.contains('flight'))
+            {
+                return at(250, 350, 48, 62);
+            }
+
+            if (this.classList.contains('card-face') && this.closest('.card-hold[data-card="14"]') !== null)
+            {
+                return at(300, 500, 40, 56);
+            }
+
+            return this.classList.contains('hokm-trick') ? at(200, 200, 40, 56) : at(0, 0, 0, 0);
+        });
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(40);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(TIMING.FLY);
+
+        expect(container.querySelector('.hokm-hand > li[data-back]'), 'the card was not on its way back').not.toBeNull();
+
+        send([card(4, 0, 14)]);
+        await flush();
+
+        const [clone] = [...container.querySelectorAll('.board-flight > .flight')];
+        const [first] = (animate.mock.calls[animate.mock.contexts.lastIndexOf(clone)]?.[0] ?? []) as Keyframe[];
+
+        expect([first?.translate, first?.scale, first?.opacity], 'the card jumped to the hand it had not reached, and went out from there').toEqual(['54px 153px', '1', 1]);
+    });
+
+    it('leaves a card the server had taken where it lies, when the press is said to have failed', async () =>
+    {
+        let answer: (outcome: 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, match: now, read } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(TIMING.FLY + 20);
+        read(after(now(), [card(4, 0, 14)]));
+        await flush();
+        answer('failed');
+        await elapse(TIMING.FLY + 20);
+
+        expect(container.querySelector('.hokm-trick[data-card="14"]'), 'a card the server has was taken off the felt').not.toBeNull();
+        expect(container.querySelector('.card-hold[data-card="14"]')).toBeNull();
+        expect(moved(animate), 'a card the server has was sent back to a hand that does not hold it').toEqual([1, 0]);
+    });
+
+    it('does not hurry the table along for a card it had given back before the refusal came', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container, send } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(TIMING.FLY + 20);
+        send([card(4, 0, 0)]);
+        await flush();
+        send([card(5, 1, 1)]);
+        await flush();
+        answer('stale');
+        await elapse(Math.ceil(TIMING.FLY_THEIRS / HASTE) + 5);
+
+        expect(container.querySelector('.hokm-trick[data-card="1"]')?.getAttribute('data-landing'), 'a card somebody else played was hurried down for a refusal with nothing left to undo').toBe('true');
+        expect(container.querySelector('.card-hold[data-card="14"]'), 'the refused card is not in the hand').not.toBeNull();
+        expect(container.querySelector('.card-hold[data-card="14"]')?.hasAttribute('data-picked'), 'the refused card was left lifted').toBe(false);
+        expect(container.querySelector('.hokm-hand > li[data-back]')).toBeNull();
+    });
+
+    it('hands the keyboard back to a refused card that was played with a key, when it is in the hand again', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container } = await mounted(turn());
+        const held = () => container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]');
+
+        held()?.focus();
+        held()?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+        await elapse(TIMING.FLY + 20);
+        answer('stale');
+        await elapse(TIMING.FLY - 5);
+
+        expect(document.activeElement, 'the keyboard was given a card that cannot be seen yet').not.toBe(held());
+
+        await elapse(10);
+
+        expect(document.activeElement, 'the keyboard was left on the card beside the one that was refused').toBe(held());
+    });
+
+    it('leaves a card that was clicked where the keyboard is, when it is refused', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('stale');
+
+        const { container } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(2 * TIMING.FLY + 20);
+
+        expect(document.activeElement?.classList.contains('card-hold')).toBe(false);
+    });
+
+    it('only fades a refused card in where it is held, for a reader who asked for less motion', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(TIMING.FADE + 20);
+        answer('stale');
+        await flush();
+
+        expect(animate.mock.calls.at(-1)?.[0]).toEqual([{ opacity: 0, offset: 0 }]);
+        expect(container.querySelectorAll('.board-flight > .flight').length, 'nothing was drawn where the card is held again').toBe(1);
+
+        await elapse(TIMING.FADE + 5);
+
+        expect(container.querySelector('.hokm-hand > li[data-back]')).toBeNull();
+        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
+    });
+
+    it('leaves no card hidden in the hand when the board has to jump while one is on its way back', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container, send } = await mounted(turn());
+
+        press(container, 14);
+        await elapse(TIMING.FLY + 20);
+        answer('stale');
+        await elapse(50);
+
+        expect(container.querySelector('.hokm-hand > li[data-back]')).not.toBeNull();
+
+        send([act(9, 2, { e: 'forfeit', seat: 2 })], { plays: [0, 14] });
+        await flush();
+
+        expect(container.querySelector('.hokm-hand > li[data-back]'), 'a card the jump took out of the air is in the hand and cannot be seen').toBeNull();
+        expect(container.querySelector('.board-flight')?.children.length).toBe(0);
     });
 
     it('puts back a card the server could not be asked about', async () =>
@@ -953,7 +1222,8 @@ describe('playing ahead of the server', () =>
         send([card(4, 0, 14)]);
         await flush();
 
-        expect(moved(animate), 'the card the server took was not played on the felt').toEqual([2, 0]);
+        expect(moved(animate), 'the card did not go out, come back and go out again').toEqual([3, 0]);
+        expect(container.querySelectorAll('.board-flight > .flight').length, 'the card was on its way back and on its way out at once').toBe(1);
         expect(container.querySelector('.hokm-trick[data-card="14"]')?.getAttribute('data-landing')).toBe('true');
 
         await elapse(TIMING.FLY);

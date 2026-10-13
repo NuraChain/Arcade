@@ -196,8 +196,9 @@ describe('the hand a hokm reader holds', () =>
         expect(ruleOf('.hokm-hand + .hokm-hand')).toContain('margin-block-start: calc(var(--card-h) * -0.5);');
         expect(board, 'the card is sized by one count of rows and its room kept by another, or by a count that can be nought').toContain('style={ `--rows: ${ roomy }` }');
         expect(board).toContain('derived roomy = Math.max(1, rows.length,');
-        expect(ruleOf('.hokm-hand > li[data-dealt=\'false\']')).toContain('visibility: hidden;');
+        expect(ruleOf('.hokm-hand > li[data-dealt=\'false\'],\n.hokm-hand > li[data-back=\'true\']'), 'a card not dealt yet, or one on its way back from the felt, is drawn in the hand or gives up its place').toContain('visibility: hidden;');
         expect(board).toContain('data-dealt={ current && unseen.has(card) ? \'false\' : undefined }');
+        expect(board).toContain('data-back={ homing === card ? \'true\' : undefined }');
     });
 
     it('keeps the deck and the stock in their places and out of sight until a card of the hand before has reached them', () =>

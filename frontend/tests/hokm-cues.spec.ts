@@ -295,6 +295,63 @@ describe('what a hokm table is heard to do', () =>
         expect(told.felt).toContain('deny');
     });
 
+    it('says no, to the ear and to the hand, when a card that has reached the felt is refused', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('stale');
+        useDevice().overrideCoarse(false);
+
+        const { container } = await mounted(match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }));
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+        await elapse(2 * TIMING.FLY + 20);
+
+        expect([count('deny'), told.felt.filter((one) => one === 'deny').length], 'a card came back from the felt without a word').toEqual([1, 1]);
+    });
+
+    it('says no when a card is refused while it is still waiting in the hand', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+        useDevice().overrideCoarse(false);
+
+        const { container, send } = await mounted(match({ phase: 'tricks', trump: 'spades', turn: 3, lead: 1, trick: [1, 2], hand: [0, 14, 30], plays: [] }));
+
+        send([card(4, 3, 3)], { plays: [0, 14] });
+        await elapse(5);
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+        answer('stale');
+        await elapse(LONG, 5);
+
+        expect([count('deny'), told.felt.filter((one) => one === 'deny').length], 'a card that was refused before it left was put down without a word').toEqual([1, 1]);
+    });
+
+    it('does not say no to a card the server had taken, when the press is said to have failed', async () =>
+    {
+        let answer: (outcome: 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+        useDevice().overrideCoarse(false);
+
+        const { container, send } = await mounted(match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }));
+
+        fire(container.querySelector<HTMLButtonElement>('.card-hold[data-card="14"]')!, 'click');
+        await elapse(TIMING.FLY + 20);
+        send([card(4, 0, 14)]);
+        await elapse(5);
+        answer('failed');
+        await elapse(TIMING.FLY + 20);
+
+        expect([count('deny'), told.felt.filter((one) => one === 'deny').length], 'a card that lies on the felt for everybody was said no to').toEqual([0, 0]);
+        expect(container.querySelector('.hokm-trick[data-card="14"]')).not.toBeNull();
+    });
+
     it('lets a card drawn from the stock and a card put down be heard at a table for two', async () =>
     {
         const { send } = await mounted(match({ phase: 'draw', turn: 1, lead: 0, stock: 20 }, 0, 2));

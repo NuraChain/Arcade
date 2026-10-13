@@ -1926,7 +1926,7 @@ unchanged. Where it differs from what this section said:
   what was missed is more than the felt's six seconds of scenes. A hand's end is about four and a
   half (five and a quarter since 4.5b gathers it), so more than one hand still jumps.
 - **A refusal takes the card back off the model** (`unplay`) and gives it to the hand in one scene;
-  it does not fly yet (4.6). `failed` is a lost answer, so an echo that comes after it is played.
+  it flies since 4.6c, below. `failed` is a lost answer, so an echo that comes after it is played.
 - **The result waits for the queue here**, ahead of §6: the panel, the tags that say who won, the
   turn's ring and the row under the table, which would otherwise change the table's size under the
   last trick.
@@ -2018,6 +2018,25 @@ table above.
   crown 14 px wide and lands on the medal 58 px wide 340 ms later, and the medal settles from
   1.2 times its size. The chooser lies on nothing at ten sizes from 360 by 560 to 1920 by
   1009, with 6 px to spare above the reader's plate at the tightest.
+
+**As built (commit 4.6c, the refused card).** The row "Refused card" of the table above.
+
+- **The card is carried back**: a face from where it lay on the felt, straightening on the
+  way, to its own slot, in the 340 ms it took to get there. The hand holds it again from the
+  first frame, hidden, so the fan has made room before it arrives. `deny` and its haptic are
+  at the refusal, for a card that had left and for one that was still waiting.
+- **Nothing waits for it.** What happened instead is played at once. The same card after all
+  is taken out of the air and goes out again from where it was, or from the slot it had come
+  back to.
+- **A refusal is one only while the reader still holds the card.** The store reads the match
+  again before it answers `failed`, so the answer can follow the view that shows the card
+  was taken. Nothing is said or undone then. Where the table moved on without the card the
+  jump has given it back, and the refusal queues no scene.
+- **Seen on the built server** with the network cut, at 390 by 844 and at 1280 by 800 in
+  Persian: the card on the felt within 371 ms of the press, refused 3.1 s after it when the
+  request gave up, back in its slot 340 ms later with the hand counting thirteen throughout,
+  and played again from that slot, whole, when the network returned with the server having
+  taken it. At 1280 the card grows from 76 px in the hand to 97 px on the felt and back.
 
 ### 5.4 Poker
 

@@ -4555,6 +4555,39 @@ refusal, another seat's call, a suit that is not the one pressed, the keyboard, 
 seats and reduced motion; `hokm-cues.spec.ts` holds `trump` at the landing and `deny`;
 `hokm-table-art.spec.ts` holds the disc and the chooser's three places.
 
+**A refused card flies back to the hand.**
+
+- A card the server would not take, after it had flown to the felt, was taken off the model
+  and put back in the hand in one frame. It is carried back now (`refuse`): a face from where
+  it lay, straightening as it goes, to its own slot, in the time it took to get there. The
+  hand has the card again from the first frame, in its place and not to be seen (`homing`,
+  `data-back`, the rule a card not yet dealt has), so the fan has made room before it
+  arrives; it is shown when the copy lands.
+- The flight is not waited for. What the server says happened instead is played at once, as
+  it was. If that is the same card after all (a lost answer, and then its echo), `originOf`
+  takes the copy out of the air and the card goes out again from where the copy was
+  (`recalled`). Landed already, it goes out from the slot it came back to, which the refusal
+  wrote down (`origins`): the hand reads the view and holds the card no longer by the time
+  the scene runs, and it used to fade in from the reader's plate.
+- **A refusal is one only while the reader still holds the card.** The store reads the match
+  again before it answers `failed`, so that answer can come AFTER the view that shows the
+  card was taken: the socket's frame applied, its ack lost, the retry over HTTP refused.
+  `refuse` then says nothing and undoes nothing. It used to take the card off the felt, and
+  nothing put it back before the next action at the table.
+- Where the table has moved on without the card, the jump has given it back already: `deny`
+  is heard and no scene is queued (`sending`, not `sent`), so nothing in front is hurried
+  for a refusal that has nothing left to undo.
+- `deny` is heard and felt for every refused card, one that had left the hand and one that
+  was still waiting in it. Neither said a word before.
+- A card played with a key gets the keyboard back when it can be seen again (`sent.keyed`):
+  it was handed to the neighbour when the card was laid, and a card that is not drawn cannot
+  take it.
+
+`hokm-board.spec.ts` (*playing ahead of the server*) holds the flight back and its landing,
+the keyboard, reduced motion, a jump, the echo in the air and after it, the card the server
+had taken and the table that had moved on; `hokm-cues.spec.ts` holds `deny` and its absence;
+`hokm-table-art.spec.ts` holds the hidden slot.
+
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.

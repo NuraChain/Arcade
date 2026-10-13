@@ -22,7 +22,7 @@ import type { Ctx } from '../../game/stage/director.ts';
 import type { Act } from '../../game/stage/feed.ts';
 import { launch, turn } from '../../game/stage/flight.ts';
 import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
-import { createStage, type Stage } from '../../game/stage/stage.ts';
+import { createStage, type Run, type Stage } from '../../game/stage/stage.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
@@ -118,7 +118,9 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     state banner: { points: number; kot: boolean; ours: boolean } | null = null;
 
-    state sent: { id: string; card: number; rev: number; gone: boolean } | null = null;
+    state sent: { id: string; card: number; rev: number; gone: boolean; keyed: boolean } | null = null;
+
+    state homing: number | null = null;
 
     state lifted: { card: number; at: number; keyed: boolean } | null = null;
 
@@ -470,7 +472,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             let gone = false;
 
             lifted = { card, at: hand.indexOf(card), keyed };
-            sent = { id, card, rev, gone };
+            sent = { id, card, rev, gone, keyed };
             presenter.predict({ rev, covers: (moves) => (gone ? (moves[0]?.e === 'card' && moves[0].card === card ? 1 : null) : 0) });
             presenter.act((ctx) =>
             {
@@ -482,7 +484,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                 const own = originOf(card);
 
                 gone = true;
-                sent = { id, card, rev, gone };
+                sent = { id, card, rev, gone, keyed };
 
                 return lay(ctx.stage, seat, card, own);
             }, TIMING.FLY);
@@ -686,10 +688,33 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const withMe = (side: number | undefined) => mine !== undefined && side !== undefined && sideAt(mine) === side;
 
+    const unhome = () =>
+    {
+        homing = null;
+        homeward = null;
+    };
+
+    const recalled = (card: number) =>
+    {
+        if (homing !== card || homeward === null)
+        {
+            return null;
+        }
+
+        const { clone, run } = homeward;
+        const at = layer === null ? null : rectIn(layer, clone);
+
+        run.cancel();
+        clone.remove();
+        unhome();
+
+        return at;
+    };
+
     const originOf = (card: number) =>
     {
         const face = find(`.card-hold[data-card="${ card }"] .card-face`);
-        const from = face === null || layer === null ? origins.get(card) : rectIn(layer, face);
+        const from = recalled(card) ?? (face === null || layer === null ? origins.get(card) : rectIn(layer, face));
 
         origins.delete(card);
 
@@ -1412,6 +1437,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         ghost = false;
         carried = { hakem: false, dealer: false };
         token = null;
+        unhome();
         seen = { round: view?.round ?? 0, cards: new Set(heldAt(held)[mine ?? -1] === 0 ? [] : (view?.hand ?? [])) };
         shown = held;
         lying = null;
@@ -1466,14 +1492,16 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
         origins.delete(card);
 
-        if (!same())
+        if (!same() || view?.hand.includes(card) !== true)
         {
             return;
         }
 
         presenter?.predict(null);
+        sound?.play('deny');
+        haptic('deny');
 
-        if (sent?.gone !== true)
+        if (sending?.gone !== true)
         {
             sent = null;
             lifted = null;
@@ -1481,18 +1509,50 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             return;
         }
 
-        presenter?.act(() =>
+        presenter?.act((ctx) =>
         {
-            if (same() && mine !== undefined)
+            if (!same() || mine === undefined)
             {
-                sent = null;
-                held = unplay(held, mine, card);
-                shown = held;
+                return;
             }
+
+            const placed = find(`.hokm-trick[data-card="${ card }"]`);
+            const from = placed === null || layer === null ? null : rectIn(layer, placed);
+            const keyed = sent?.keyed === true;
+
+            sent = null;
+            held = unplay(held, mine, card);
+            shown = held;
+            homing = card;
+
+            const slot = find(`.card-hold[data-card="${ card }"] .card-face`);
+            const to = slot === null || layer === null ? null : rectIn(layer, slot);
+            const clone = cardNode(card, to?.width ?? BACK_W);
+            const home = () =>
+            {
+                unhome();
+
+                if (keyed)
+                {
+                    stand(card);
+                }
+            };
+
+            if (layer === null || from === null || to === null)
+            {
+                home();
+
+                return;
+            }
+
+            origins.set(card, to);
+            homeward = { clone, run: launch(ctx.stage, layer, clone, from, to, { duration: TIMING.FLY, easing: EASE.fly, fromRotate: tiltOf(card), landed: home }) };
         });
     };
 
     let named: Promise<void> = Promise.resolve();
+
+    let homeward: { clone: HTMLElement; run: Run } | null = null;
 
     let uncap: () => void = () => undefined;
 
@@ -2005,7 +2065,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                 <For each={ rows } key={ (_, index) => index } let={ row }>
                                     <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
                                         <For each={ row } key={ (card) => card } let={ card } index={ index }>
-                                            <li style={ fan(index, row.length) } data-dealt={ current && unseen.has(card) ? 'false' : undefined }>
+                                            <li style={ fan(index, row.length) } data-dealt={ current && unseen.has(card) ? 'false' : undefined } data-back={ homing === card ? 'true' : undefined }>
                                                 <button
                                                     type="button"
                                                     class="card-hold"

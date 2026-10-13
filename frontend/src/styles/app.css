@@ -2265,7 +2265,8 @@ html:has(.site-drawer[open])
     min-block-size: calc(var(--rows, 1) * (var(--hand-card) * 288 / 204 + 1.6rem) - (var(--rows, 1) - 1) * var(--hand-card) * 144 / 204);
 }
 
-.hokm-hand > li[data-dealt='false']
+.hokm-hand > li[data-dealt='false'],
+.hokm-hand > li[data-back='true']
 {
     visibility: hidden;
 }
