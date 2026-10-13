@@ -281,6 +281,17 @@ async function audit(page)
             problems.push({ kind: 'landmark', detail: 'no main landmark' });
         }
 
+        for (const lead of document.querySelectorAll('.page header p'))
+        {
+            const box = lead.getBoundingClientRect();
+            const words = (lead.textContent ?? '').trim().split(/\s+/).length;
+
+            if (box.width > 1 && words >= 8 && box.width < 240)
+            {
+                problems.push({ kind: 'squeezed', detail: `a header line of ${ words } words is ${ Math.round(box.width) }px wide` });
+            }
+        }
+
         if (document.querySelector('.table-stage') !== null)
         {
             const page = document.querySelector('.page');

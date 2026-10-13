@@ -155,6 +155,17 @@ Only a hero or a profile card stands in for it. Section headings are `SectionHea
 at `text-ui-lg`, with the blue "See all" beside them and a 44px row whether or not they have one, so
 two headings side by side line up.
 
+**A header's lead keeps room to be read, and its actions go under it when they would take that
+room.** The header was a column that became a row at one width of its container (`@2xl`), with
+actions that never shrank, so wherever the row was just wide enough to exist the lead had what
+was left: on the games page, whose actions are two counts and two buttons (533px), the lead was
+165px wide in four lines at 1024 and 277px in two at 1440, beside a title with half the page
+empty under it. It is one wrapping row now. The title and lead ask for 24rem
+(`flex-[1_1_24rem]`) and the actions wrap onto a line of their own when both do not fit, which no
+breakpoint has to guess: the same header is a row beside a single button and a stack beside the
+games page's counts. The matrix calls a header line of eight words or more that is under 240px
+wide `squeezed`.
+
 **One gutter, on every side.** `--page-pad` is 16px on a phone, 24 from 640 and 32 from 1024, and
 `Page` pads its top by the same amount as its sides - it was 16px at the top under 32px sides on a
 desktop, so every page began closer to the top bar than to the sidebar. The social panel starts at

@@ -74,7 +74,9 @@ against a chain it starts and does not use it.
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both
 languages, and fails on horizontal overflow, a control smaller than 44px under a coarse pointer
-(hit-tested with `elementFromPoint`, so an expanded hit area counts), a missing `main` landmark
+(hit-tested with `elementFromPoint`, so an expanded hit area counts), a missing `main` landmark,
+a header line squeezed narrow (`squeezed`: eight words or more in under 240px, which is what a
+page header's lead was left with beside actions that would not wrap)
 or a dirty console. Findings land in `tools/qa/out/matrix/report.json` with a screenshot per
 failing cell.
 
