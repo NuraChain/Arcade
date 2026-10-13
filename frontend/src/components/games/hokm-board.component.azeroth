@@ -20,7 +20,7 @@ import { anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../../game
 import { hashOf } from '../../game/stage/curves.ts';
 import type { Ctx } from '../../game/stage/director.ts';
 import type { Act } from '../../game/stage/feed.ts';
-import { launch, turn } from '../../game/stage/flight.ts';
+import { launch, put, turn } from '../../game/stage/flight.ts';
 import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
 import { createStage, type Run, type Stage } from '../../game/stage/stage.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -77,6 +77,18 @@ const REST_CAP = 2500;
 const HURRY_MS = 8000;
 
 const GLIMPSE_TILT = 9;
+
+const DRAG_SLOP = 10;
+
+const DRAG_SLOP_MOUSE = 4;
+
+const FLICK = 0.5;
+
+const FLICK_REACH = 36;
+
+const FLICK_SPAN = 120;
+
+const CARRIED: Run = { done: Promise.resolve(), length: 0, cancel: () => undefined, finish: () => undefined };
 
 const SIGN_IN: Keyframe[] = [{ opacity: 0, scale: '0.8' }, { opacity: 1, scale: '1' }];
 
@@ -519,6 +531,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             {
                 if (sending === null || sending.card !== card)
                 {
+                    sendHome(card);
+
                     return;
                 }
 
@@ -554,6 +568,124 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
         picked = card;
         haptic('tick');
+    };
+
+    const press = (event: MouseEvent, card: number) =>
+    {
+        if (slipped === card)
+        {
+            slipped = null;
+
+            return;
+        }
+
+        if (discarding)
+        {
+            toggleAway(card);
+        }
+        else
+        {
+            touchCard(card, event.detail === 0);
+        }
+    };
+
+    const hold = (event: PointerEvent, card: number) =>
+    {
+        const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+
+        slipped = null;
+
+        if (event.button > 0 || grip !== null || !legal.has(card) || board.busy() || layer === null || face === null)
+        {
+            return;
+        }
+
+        grip = { id: event.pointerId, card, x: event.clientX, y: event.clientY, from: rectIn(layer, face), clone: null, trail: [] };
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    };
+
+    const drag = (event: PointerEvent) =>
+    {
+        const held = grip;
+
+        if (held === null || held.id !== event.pointerId || layer === null)
+        {
+            return;
+        }
+
+        const dx = event.clientX - held.x;
+        const dy = event.clientY - held.y;
+        const now = runtime().clock.now();
+
+        if (held.clone === null)
+        {
+            if (Math.hypot(dx, dy) < (event.pointerType === 'mouse' ? DRAG_SLOP_MOUSE : DRAG_SLOP))
+            {
+                return;
+            }
+
+            held.clone = cardNode(held.card, held.from.width);
+            held.clone.classList.add('hokm-carried');
+            put(layer, held.clone, held.from);
+            homing = held.card;
+            homeward = { clone: held.clone, run: CARRIED };
+            picked = null;
+            haptic('tick');
+        }
+
+        held.clone.style.translate = `${ dx }px ${ dy }px`;
+        held.trail = [...held.trail.filter((one) => now - one.at < FLICK_SPAN), { y: event.clientY, at: now }];
+    };
+
+    const sendHome = (card: number) =>
+    {
+        const from = recalled(card);
+        const to = slotOf(card);
+        const stage = rig;
+
+        if (from === null || to === null || layer === null || stage === null)
+        {
+            return;
+        }
+
+        const clone = cardNode(card, to.width);
+
+        homing = card;
+        homeward = { clone, run: launch(stage, layer, clone, from, to, { duration: TIMING.FLY, easing: EASE.fly, landed: unhome }) };
+    };
+
+    const letGo = (event: PointerEvent) =>
+    {
+        const held = grip;
+
+        if (held === null || held.id !== event.pointerId)
+        {
+            return;
+        }
+
+        grip = null;
+
+        if (held.clone === null)
+        {
+            return;
+        }
+
+        const table = find('.hokm-table')?.getBoundingClientRect();
+        const now = runtime().clock.now();
+        const since = held.trail[0];
+        const over = table !== undefined && event.clientX >= table.left && event.clientX <= table.right && event.clientY >= table.top && event.clientY <= table.bottom;
+        const flicked = since !== undefined && now > since.at && (since.y - event.clientY) / (now - since.at) >= FLICK && held.y - event.clientY >= FLICK_REACH;
+
+        slipped = held.card;
+
+        if (event.type === 'pointerup' && (over || flicked) && legal.has(held.card) && !board.busy())
+        {
+            void playCard(held.card, false);
+        }
+        else
+        {
+            sendHome(held.card);
+        }
     };
 
     const struck = (stage: Stage) =>
@@ -736,6 +868,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     let wasActing = untrack(() => acting);
     let chimedDraw = -1;
     let pledged: Promise<void> | null = null;
+    let grip: { id: number; card: number; x: number; y: number; from: Rect; clone: HTMLElement | null; trail: { y: number; at: number }[] } | null = null;
+    let slipped: number | null = null;
     const origins = new Map<number, Rect>();
 
     const viewFelt = () => (view === null ? EMPTY : feltOf(view, game.seats));
@@ -1831,6 +1965,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         pledge = null;
         pledged = null;
         returning = false;
+        grip = null;
         unhome();
         seen = heldAt(held)[mine ?? -1] === 0 ? { round: view?.round ?? 0, cards: new Set(), offer: null } : shownAll(view);
         shown = held;
@@ -1899,6 +2034,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         {
             sent = null;
             lifted = null;
+            sendHome(card);
 
             return;
         }
@@ -2482,7 +2618,11 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                                     aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
                                                     onFocus={ () => kept = card }
                                                     onKeyDown={ (event: KeyboardEvent) => walk(event, card) }
-                                                    onClick={ (event: MouseEvent) => (discarding ? toggleAway(card) : touchCard(card, event.detail === 0)) }
+                                                    onPointerDown={ (event: PointerEvent) => hold(event, card) }
+                                                    onPointerMove={ drag }
+                                                    onPointerUp={ letGo }
+                                                    onPointerCancel={ letGo }
+                                                    onClick={ (event: MouseEvent) => press(event, card) }
                                                 >
                                                     <CardFace card={ card } />
                                                 </button>

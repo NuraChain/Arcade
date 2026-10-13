@@ -252,6 +252,15 @@ quality.
   the table (H5). The middle of the felt holds the trump medallion and nothing written (H7).
 - A card dragged or flicked onto the felt is played; let go short of it, it goes back (D18).
 
+**As built (commit 4.9, a card carried to the felt).** A card that may be played is carried
+past a slop of 10 px under a finger and 4 px with a mouse, as a copy in the flight layer with
+its place in the hand kept. Let go anywhere on the table it is played, and flies to its place
+on the felt from where it was let go. Thrown towards the table at half a pixel a millisecond
+or more over its last 120 ms, having gone 36 px, it is played from where the finger left it.
+Anything else sends it home. Seen on the built server with a real finger's events at 390 by
+844 in Persian: no `pointercancel`, the page does not scroll, a short drag comes back, and a
+drag to the felt plays the card where a tap would only have lifted it.
+
 **As built (commit 4.4, the fan).** H1 and H6.
 
 | Stage | Card before | Card now | Each shows |

@@ -27,7 +27,7 @@ const SHOWN_FIRST: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { 
 
 const SHOWN_LAST: Keyframe[] = [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1, offset: 0.5 }, { opacity: 1 }];
 
-function put(layer: HTMLElement, clone: HTMLElement, at: Rect)
+export function put(layer: HTMLElement, clone: HTMLElement, at: Rect)
 {
     clone.classList.add('flight');
     clone.setAttribute('aria-hidden', 'true');

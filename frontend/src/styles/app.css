@@ -2303,6 +2303,16 @@ html:has(.site-drawer[open])
     visibility: hidden;
 }
 
+.hokm-hand .card-hold
+{
+    touch-action: none;
+}
+
+.board-flight > .hokm-carried
+{
+    filter: drop-shadow(0 12px 14px rgb(0 0 0 / 0.5));
+}
+
 .hokm-hand
 {
     container: fan / inline-size;

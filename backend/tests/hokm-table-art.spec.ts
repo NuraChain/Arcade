@@ -277,6 +277,20 @@ describe('the hand a hokm reader holds', () =>
         expect(board, 'a card that lies on the felt can be kept after the view has taken it back').toContain('disabled={ board.busy() || !drawing }');
     });
 
+    it('lets a card be carried: no gesture of the browser\'s takes a finger that starts on it, and the copy that is carried does not lag', () =>
+    {
+        const carried = ruleOf('.board-flight > .hokm-carried');
+
+        expect(ruleOf('.hokm-hand .card-hold'), 'a finger dragged up from a card scrolls the page instead of carrying it').toContain('touch-action: none;');
+        expect(carried).toContain('filter: drop-shadow(');
+        expect(/transition|animation/.test(carried), 'a carried card that eases after the pointer lags behind the finger').toBe(false);
+        expect(board).toContain('onPointerDown={ (event: PointerEvent) => hold(event, card) }');
+        expect(board).toContain('onPointerMove={ drag }');
+        expect(board).toContain('onPointerUp={ letGo }');
+        expect(board).toContain('onPointerCancel={ letGo }');
+        expect(board, 'the click that ends a drag is taken for a press').toContain('onClick={ (event: MouseEvent) => press(event, card) }');
+    });
+
     it('never takes a card away from the keyboard, and draws the keyboard\'s place on the card itself', () =>
     {
         const held = (/<button\s+type="button"\s+class="card-hold"[\s\S]*?>\s*<CardFace/.exec(board) ?? [''])[0];

@@ -4855,3 +4855,415 @@ describe('trump named on the medal', () =>
         expect(container.querySelectorAll('.board-flight > *').length).toBe(0);
     });
 });
+
+describe('a card carried to the felt', () =>
+{
+    const five = () => [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 5, tricks: 0, out: false }));
+
+    const turn = (view: Partial<Hokm> = {}): MatchView => ({
+        ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14], seats: five(), ...view }, 0),
+        remainingMs: 20_000
+    });
+
+    const at = (x: number, y: number, width: number, height: number) => ({ x, y, left: x, top: y, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+    const places = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+    {
+        if (this.classList.contains('flight'))
+        {
+            return at(380, 280, 60, 84);
+        }
+
+        if (this.classList.contains('hokm-table'))
+        {
+            return at(0, 100, 800, 400);
+        }
+
+        if (this.classList.contains('card-face') && this.closest('.card-hold[data-card="14"]') !== null)
+        {
+            return at(300, 700, 60, 84);
+        }
+
+        return this.classList.contains('hokm-trick') ? at(390, 300, 60, 84) : at(0, 0, 0, 0);
+    });
+
+    const pointer = (target: Element | null | undefined, type: string, x: number, y: number, more: PointerEventInit = {}) =>
+        target?.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 7, ...more }));
+
+    const held = (container: HTMLElement, card = 14) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`);
+
+    const carried = (container: HTMLElement) => container.querySelector<HTMLElement>('.board-flight > .hokm-carried');
+
+    const inAir = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.board-flight > .flight')];
+
+    const first = (animate: { mock: { calls: unknown[][]; contexts: unknown[] } }, clone: Element | undefined) =>
+        (animate.mock.calls[animate.mock.contexts.lastIndexOf(clone)]?.[0] as Keyframe[] | undefined)?.[0];
+
+    const unanswered = () => vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+    beforeEach(() =>
+    {
+        useDevice().overrideCoarse(false);
+    });
+
+    it('carries nothing for a press that hardly moves, and plays the card as a press does', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 336, 744);
+
+        expect(carried(container), 'a finger that trembled picked the card up').toBeNull();
+        expect(held(container)?.closest('li')?.hasAttribute('data-back')).toBe(false);
+
+        pointer(held(container), 'pointerup', 336, 744);
+        fire(held(container)!, 'click');
+
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
+    });
+
+    it('takes less to carry a card with a mouse than with a finger', async () =>
+    {
+        unanswered();
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740, { pointerType: 'touch' });
+        pointer(held(container), 'pointermove', 335, 740, { pointerType: 'touch' });
+
+        expect(carried(container), 'five pixels under a finger is a tap').toBeNull();
+
+        pointer(held(container), 'pointerup', 335, 740, { pointerType: 'touch' });
+        pointer(held(container), 'pointerdown', 330, 740, { pointerType: 'mouse' });
+        pointer(held(container), 'pointermove', 335, 740, { pointerType: 'mouse' });
+
+        expect(carried(container), 'five pixels with a mouse held down is a drag').not.toBeNull();
+    });
+
+    it('lifts a copy of the card under the pointer, and keeps its place in the hand for it, unseen', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 380, 500);
+
+        const copy = carried(container);
+        const face = copy?.querySelector<HTMLElement>('.card-face');
+
+        expect([copy?.style.left, copy?.style.top, copy?.style.width, copy?.style.translate], 'the copy is not where the card was, moved by as much as the pointer').toEqual(['300px', '700px', '60px', '50px -240px']);
+        expect([face?.style.getPropertyValue('--at-rank'), face?.style.getPropertyValue('--at-suit'), copy?.getAttribute('aria-hidden')], 'it is not that card').toEqual(['1', '1', 'true']);
+        expect(held(container)?.closest('li')?.getAttribute('data-back'), 'the card is in the hand and in the air at once').toBe('true');
+        expect(container.querySelectorAll('.hokm-hand .card-hold').length, 'the hand closed over the place of a card that may come back').toBe(3);
+
+        pointer(held(container), 'pointermove', 400, 420);
+
+        expect(copy?.style.translate, 'the copy did not follow the pointer').toBe('70px -320px');
+        expect(inAir(container).length).toBe(1);
+        expect(play, 'a card was played before it was let go').not.toHaveBeenCalled();
+    });
+
+    it('plays the card where it is let go on the table, and flies it from there', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 400, 420);
+        pointer(held(container), 'pointerup', 410, 320);
+        await flush();
+
+        const [flying] = inAir(container);
+
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
+        expect([inAir(container).length, carried(container)], 'the copy that was carried was left in the air beside the card that flies').toEqual([1, null]);
+        expect([first(animate, flying)?.translate, first(animate, flying)?.opacity], 'the card went back to the hand to set off, or came out of nowhere').toEqual(['-10px -20px', 1]);
+        expect(held(container), 'the card is on the felt and in the hand').toBeNull();
+        expect(container.querySelector('.hokm-trick[data-card="14"]')?.getAttribute('data-landing')).toBe('true');
+    });
+
+    it('takes the card back to its place when it is let go short of the table, and does not count that as a press', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 350, 640);
+        pointer(held(container), 'pointerup', 350, 640);
+
+        const [back] = inAir(container);
+
+        expect([inAir(container).length, carried(container), first(animate, back)?.translate], 'the card was dropped where it was let go, or put back in one frame').toEqual([1, null, '80px -420px']);
+        expect(held(container)?.closest('li')?.getAttribute('data-back'), 'the card was in the hand while it was still on its way back').toBe('true');
+
+        fire(held(container)!, 'click');
+
+        expect(play, 'the click that ends a drag played the card').not.toHaveBeenCalled();
+
+        await elapse(TIMING.FLY + 5);
+
+        expect([inAir(container).length, held(container)?.closest('li')?.hasAttribute('data-back')]).toEqual([0, false]);
+
+        fire(held(container)!, 'click');
+
+        expect(play, 'the card could not be played after it had been put back').toHaveBeenCalledTimes(1);
+    });
+
+    it('plays a card that is flicked towards the table, and not one that is carried slowly and stopped short', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const flicked = await mounted(turn());
+
+        pointer(held(flicked.container), 'pointerdown', 330, 740);
+        await elapse(20);
+        pointer(held(flicked.container), 'pointermove', 332, 700);
+        await elapse(30);
+        pointer(held(flicked.container), 'pointermove', 334, 640);
+        await elapse(20);
+        pointer(held(flicked.container), 'pointerup', 334, 600);
+        await flush();
+
+        expect(play, 'a card thrown at the table fell back into the hand').toHaveBeenCalledTimes(1);
+
+        cleanup();
+        play.mockClear();
+
+        const slow = await mounted(turn());
+
+        pointer(held(slow.container), 'pointerdown', 330, 740);
+        await elapse(200);
+        pointer(held(slow.container), 'pointermove', 332, 700);
+        await elapse(300);
+        pointer(held(slow.container), 'pointermove', 334, 640);
+        await elapse(300);
+        pointer(held(slow.container), 'pointerup', 334, 620);
+        await flush();
+
+        expect(play, 'a card that was carried a little way and let go was played').not.toHaveBeenCalled();
+        expect(inAir(slow.container).length, 'it was not sent back').toBe(1);
+
+        cleanup();
+
+        const twitch = await mounted(turn());
+
+        pointer(held(twitch.container), 'pointerdown', 330, 740);
+        await elapse(10);
+        pointer(held(twitch.container), 'pointermove', 330, 728);
+        await elapse(10);
+        pointer(held(twitch.container), 'pointerup', 330, 722);
+        await flush();
+
+        expect(play, 'a card that jerked a finger\'s width was thrown at the table').not.toHaveBeenCalled();
+
+        cleanup();
+
+        const late = await mounted(turn());
+
+        pointer(held(late.container), 'pointerdown', 330, 740);
+        await elapse(500);
+        pointer(held(late.container), 'pointermove', 332, 730);
+        await elapse(500);
+        pointer(held(late.container), 'pointermove', 332, 720);
+        await elapse(20);
+        pointer(held(late.container), 'pointermove', 332, 690);
+        await elapse(20);
+        pointer(held(late.container), 'pointerup', 332, 660);
+        await flush();
+
+        expect(play, 'a card that was held a while and then thrown was judged by the whole of its way').toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a card that came back from a drag be pressed, at the first press', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 350, 640);
+        pointer(held(container), 'pointerup', 350, 640);
+        await elapse(TIMING.FLY + 5);
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointerup', 330, 740);
+        fire(held(container)!, 'click');
+
+        expect(play, 'a press was taken for the end of a drag that was over long before').toHaveBeenCalledTimes(1);
+    });
+
+    it('takes a card home that is let go on the table after it stopped being the reader\'s to play', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container, send } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 400, 420);
+        send([card(4, 0, 0)]);
+        await flush();
+        pointer(held(container), 'pointerup', 410, 320);
+        await flush();
+
+        expect([carried(container), play.mock.calls.length], 'a card that could no longer be played was left hanging where it was dropped, or played').toEqual([null, 0]);
+
+        await elapse(LONG, 5);
+
+        expect([inAir(container).length, held(container)?.closest('li')?.hasAttribute('data-back'), container.querySelector('.hokm-trick[data-card="14"]')]).toEqual([0, false, null]);
+    });
+
+    it('brings a carried card home when the turn it was dropped for has been played for the reader', async () =>
+    {
+        unanswered();
+        places();
+
+        const { container, send } = await mounted(turn({ turn: 3, lead: 1, trick: [1, 2], plays: [] }));
+
+        send([card(4, 3, 3)], { plays: [0, 14] });
+        await flush();
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 400, 420);
+        pointer(held(container), 'pointerup', 410, 320);
+        send([card(5, 0, 0)]);
+        await elapse(LONG, 5);
+
+        expect([carried(container), inAir(container).length, held(container)?.closest('li')?.hasAttribute('data-back')], 'a card dropped for a turn that had passed was left hanging over the table').toEqual([null, 0, false]);
+        expect([...container.querySelectorAll<HTMLElement>('.hokm-trick')].map((one) => one.dataset.card), 'the card that was played for the reader is not the one on the felt').toContain('0');
+        expect(container.querySelector('.hokm-trick[data-card="14"]')).toBeNull();
+    });
+
+    it('cannot be carried when it is not the reader\'s turn, when it may not be played, or while the board is busy', async () =>
+    {
+        unanswered();
+        places();
+
+        const waiting = await mounted(turn({ turn: 1, plays: [] }));
+
+        pointer(held(waiting.container), 'pointerdown', 330, 740);
+        pointer(held(waiting.container), 'pointermove', 380, 500);
+
+        expect(carried(waiting.container), 'a card was picked up out of turn').toBeNull();
+        cleanup();
+
+        const barred = await mounted(turn());
+
+        pointer(held(barred.container, 30), 'pointerdown', 330, 740);
+        pointer(held(barred.container, 30), 'pointermove', 380, 500);
+
+        expect(carried(barred.container), 'a card that may not be played was picked up').toBeNull();
+        cleanup();
+        vi.spyOn(useBoard(), 'busy').mockReturnValue(true);
+
+        const busy = await mounted(turn());
+
+        pointer(held(busy.container), 'pointerdown', 330, 740);
+        pointer(held(busy.container), 'pointermove', 380, 500);
+
+        expect(carried(busy.container), 'a card was picked up while another was being asked about').toBeNull();
+    });
+
+    it('takes the card back when the pointer is taken away, and does not let a second finger take it from the first', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container, 0), 'pointerdown', 200, 740, { pointerId: 8 });
+        pointer(held(container, 0), 'pointermove', 260, 500, { pointerId: 8 });
+
+        expect(carried(container), 'a second finger carried a card while the first was holding one').toBeNull();
+
+        pointer(held(container), 'pointermove', 400, 420);
+
+        expect(carried(container)?.querySelector<HTMLElement>('.card-face')?.style.getPropertyValue('--at-rank'), 'the first finger lost its card').toBe('1');
+
+        pointer(held(container), 'pointercancel', 410, 320);
+
+        expect([inAir(container).length, carried(container), play.mock.calls.length], 'a card whose pointer was taken away was played, or left in the air').toEqual([1, null, 0]);
+
+        await elapse(TIMING.FLY + 5);
+
+        expect([inAir(container).length, held(container)?.closest('li')?.hasAttribute('data-back')]).toEqual([0, false]);
+    });
+
+    it('leaves nothing in the air when the board has to jump while a card is carried', async () =>
+    {
+        const play = unanswered();
+
+        places();
+
+        const { container } = await mounted(turn());
+
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 400, 420);
+
+        const looking = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        document.dispatchEvent(new Event('visibilitychange'));
+        looking.mockReturnValue('visible');
+
+        expect([inAir(container).length, held(container)?.closest('li')?.hasAttribute('data-back')], 'the card is in no hand and nowhere on the table').toEqual([0, false]);
+
+        pointer(held(container), 'pointermove', 410, 330);
+        pointer(held(container), 'pointerup', 410, 320);
+        await flush();
+
+        expect([inAir(container).length, play.mock.calls.length], 'a card the jump had put back was played by the hand that had been carrying it').toEqual([0, 0]);
+    });
+
+    it('brings a carried card home when what it was dropped for is refused before it could leave', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+        places();
+
+        const { container, send } = await mounted(turn({ turn: 3, lead: 1, trick: [1, 2], plays: [] }));
+
+        send([card(4, 3, 3)], { plays: [0, 14] });
+        await flush();
+        pointer(held(container), 'pointerdown', 330, 740);
+        pointer(held(container), 'pointermove', 400, 420);
+        pointer(held(container), 'pointerup', 410, 320);
+
+        expect(carried(container), 'the card did not wait where it was let go for the table to be ready').not.toBeNull();
+
+        answer('stale');
+        await flush();
+
+        expect([carried(container), held(container)?.closest('li')?.getAttribute('data-back')], 'the card was left hanging where it was dropped').toEqual([null, 'true']);
+
+        await elapse(LONG, 5);
+
+        expect([held(container)?.closest('li')?.hasAttribute('data-back'), container.querySelector('.hokm-trick[data-card="14"]'), container.querySelector('.board-flight')?.children.length]).toEqual([false, null, 0]);
+    });
+});

@@ -4652,6 +4652,35 @@ the keyboard; *a hand dealt in packets* holds the cards not asked for early;
 landing and `deny`; `hokm-beats.spec.ts` holds the time each is given;
 `hokm-table-art.spec.ts` holds the two places and the dimming.
 
+**A card may be carried to the felt, or thrown at it.**
+
+- D18: dragging is offered where it is the natural gesture and is never the only one. A card
+  that may be played is held by its pointer (`hold`), and past a slop (10 px under a finger,
+  4 with a mouse held down) a copy of it follows the pointer in the flight layer (`drag`,
+  `.hokm-carried`) while its place in the hand is kept for it, unseen, exactly as the place
+  of a card on its way back is (`homing`, and `homeward` with a run that does nothing).
+- Let go on the table, or thrown towards it (half a pixel a millisecond over its last 120 ms,
+  and 36 px from where it was taken), it is played, and it flies from where it was let go:
+  `originOf` finds the copy in the air first (`recalled`), which is what a refused card that
+  is played again uses. Let go anywhere else, or with the pointer taken away, it flies back to
+  its place (`sendHome`). So does a card dropped for a press that is refused before it could
+  leave, for a turn that was played for the reader while the table was busy, or after it
+  stopped being the reader's to play.
+- The click that ends a drag is not a press (`slipped`), and the next press on that card is.
+- `touch-action: none` on a card of the hand: a finger that starts on a card and goes up the
+  screen is carrying it, not scrolling the page. The copy has no transition, so it does not
+  lag behind the finger.
+- A tap is what it was, a key is what it was, and nothing can only be done by dragging. With
+  a finger a tap lifts a card and a second tap plays it; a drag plays it in one.
+
+`hokm-board.spec.ts` (*a card carried to the felt*) holds the two slops, the copy and the
+place kept, the drop on the table and where the flight starts, the drop short of it, the
+three throws that are not one and the one that is, who may not carry, a pointer taken away,
+a second finger, a jump, and the three ways a dropped card comes home;
+`hokm-table-art.spec.ts` holds `touch-action`, the copy that does not ease and the four
+handlers; `hokm-motion-pass.mjs` carries a card to the table and lets one go short of it
+with a real pointer at two sizes.
+
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.
