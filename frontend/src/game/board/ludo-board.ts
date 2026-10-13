@@ -135,9 +135,9 @@ type Moved = Extract<Beat, { kind: 'move' }>;
 
 type Thrown = Extract<Beat, { kind: 'roll' }>;
 
-const NOBODY: Shown = { pawns: [], out: [], die: null };
+const NOBODY: Shown = { pawns: [], out: [], die: null, turn: null };
 
-const WAITING: Felt = { pawns: [], out: [], die: { roller: 0, face: 6, fate: 'pending' }, winners: [] };
+const WAITING: Felt = { pawns: [], out: [], die: { roller: 0, face: 6, fate: 'pending' }, winners: [], turn: 0 };
 
 const cq = (value: number) => `${ value.toFixed(3) }cqi`;
 
@@ -449,7 +449,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             home[pawn.owner] = (home[pawn.owner] ?? 0) + (pawn.progress >= FINISHED && !pending.has(pawn.key) ? 1 : 0);
         }
 
-        const facts = { home, out, die: plateDie, plate: where === 'plate' };
+        const facts = { home, out, die: plateDie, plate: where === 'plate', turn: shown.turn };
         const said = JSON.stringify(facts);
 
         if (said !== told)
@@ -1513,7 +1513,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             mark();
         },
 
-        same: (sight) => sameAs(shown, sight.view) && pending.size === 0 && celebrated === sight.view.winners.join(),
+        same: (sight) => sameAs(shown, sight.view) && shown.turn === sight.view.turn && pending.size === 0 && celebrated === sight.view.winners.join(),
 
         settle: (sight, ctx) => mend(sight.view, ctx),
 
@@ -1534,7 +1534,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
                 }
             }
 
-            if (ctx.live() && !(sameAs(shown, sight.view) && pending.size === 0))
+            if (ctx.live() && !(sameAs(shown, sight.view) && shown.turn === sight.view.turn && pending.size === 0))
             {
                 await mend(sight.view, ctx);
             }

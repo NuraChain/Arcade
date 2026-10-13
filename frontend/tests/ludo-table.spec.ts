@@ -1414,6 +1414,25 @@ describe('the ludo table, played from what happened', () =>
         expect(english.filter((line) => line.includes('{'))).toEqual([]);
     });
 
+    it('keeps the turn on whoever moved until their pawn has landed, and passes it then', async () =>
+    {
+        const start = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], 4, 1);
+        const moved = stepped(start, { kind: 'move', seat: 1, piece: 0 });
+        const table = await live(seen(start, 0, 5));
+        const current = () => [...table.container.querySelectorAll('.yard-badge')].map((badge) => badge.querySelector('.table-plate')?.getAttribute('aria-current') ?? null);
+
+        expect(current()).toEqual([null, 'true']);
+
+        table.tell(seen(moved.state, 0, 6), [happened(6, 1, moved.moves)]);
+        await elapse(150);
+
+        expect(current(), 'the turn left a player whose pawn was still walking').toEqual([null, 'true']);
+
+        await elapse(3000);
+
+        expect(current()).toEqual(['true', null]);
+    });
+
     it('shows the die on its roller\'s plate once it has been picked up from the board, and names whoever rolled it', async () =>
     {
         quiet();

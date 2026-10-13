@@ -1307,6 +1307,72 @@ describe('a ludo roll, played', () =>
     });
 });
 
+describe('whose turn the ludo table says it is', () =>
+{
+    const two = (die: number | null, turn: number) => standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], die, turn);
+
+    it('is the board\'s for a table that is simply drawn', () =>
+    {
+        table.reset(sight(two(null, 1)));
+
+        expect(lastFacts().turn).toBe(1);
+    });
+
+    it('stays with a pawn while it walks, and goes to whoever is next as their die is thrown, before anything is told of the roll', async () =>
+    {
+        const start = two(4, 0);
+        const moved = stepped(start, { kind: 'move', seat: 0, piece: 0 });
+        const rolled = stepped(moved.state, { kind: 'roll', seat: 1, die: 3 });
+
+        table.reset(sight(start));
+
+        expect(lastFacts().turn).toBe(0);
+
+        play([moved.act, rolled.act], sight(rolled.state));
+        await elapse(120);
+
+        expect(lastFacts().turn, 'the turn was passed while the pawn that ends it was still walking').toBe(0);
+
+        for (let waited = 0; waited < 4000 && lastFacts().turn !== 1; waited += 20)
+        {
+            await elapse(20);
+        }
+
+        expect(lastFacts().turn).toBe(1);
+        expect(pawn('0-0').style.translate, 'the turn was passed before the pawn that ends it had landed').toBe(onSquare('red', 14));
+        expect(lastFacts().die, 'the roll was told with the turn, before the die had landed').toBeNull();
+        expect(cues, 'the turn waited for the die to come down').not.toContain('die-land');
+
+        await elapse(4000);
+
+        expect(lastFacts()).toMatchObject({ turn: 1, die: { roller: 1, face: 3 } });
+    });
+
+    it('goes to whoever is next when the pawn has landed, where nothing else has been told', async () =>
+    {
+        const start = two(4, 0);
+        const moved = stepped(start, { kind: 'move', seat: 0, piece: 0 });
+
+        table.reset(sight(start));
+        play([moved.act], sight(moved.state));
+        await elapse(120);
+
+        expect(lastFacts().turn).toBe(0);
+
+        await elapse(3000);
+
+        expect(lastFacts().turn).toBe(1);
+        expect(director.busy()).toBe(false);
+    });
+
+    it('knows a board that differs only in whose turn it is from the one it shows', () =>
+    {
+        table.reset(sight(two(null, 0)));
+
+        expect([table.same(sight(two(null, 0))), table.same(sight(two(null, 1)))]).toEqual([true, false]);
+    });
+});
+
 describe('where a ludo die comes to rest', () =>
 {
     const centreOfDie = (colour: LudoColour) => ({ col: (dieRest(colour).x - MARGIN * 100) / C, row: (dieRest(colour).y - MARGIN * 100) / C });

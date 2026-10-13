@@ -176,6 +176,8 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         return playing;
     };
 
+    derived shownTurn = facts === null ? game.turn : (facts.turn ?? undefined);
+
     derived dieAt = (seat: number) =>
     {
         if (facts === null)
@@ -507,7 +509,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
                                 home={ homeAt(entry.player.seat, entry.seat.home) }
                                 corner={ entry.corner }
                                 mine={ mine }
-                                active={ entry.player.seat === game.turn }
+                                active={ entry.player.seat === shownTurn }
                                 controls={ ludo.controls }
                                 colours={ entry.colours }
                                 partner={ entry.player.seat === partner }

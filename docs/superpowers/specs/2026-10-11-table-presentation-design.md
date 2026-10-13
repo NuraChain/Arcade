@@ -2522,6 +2522,11 @@ moved one game a commit, and each takes the turn from what its own log can say:
   pass it; a game that is called and the end of the match take it from everybody. A move says nothing about who is next, so the turn is
   put right from the view when everything told has been played. Seen before the change on the
   production build: the ring on whoever starts while the two dice that decide it were in the air.
+- **Ludo.** The turn is a field of the shown model, a seat or nobody. Whoever rolls has it from
+  the moment the die leaves their corner; a pawn that moves keeps it where it is, because a six,
+  a capture and a pawn come home keep the turn and only the engine knows; a seat that leaves
+  while it is theirs loses it, and a finished game has nobody on turn. The view puts it right
+  when the pawn has landed.
 
 ## 7. Spectators
 

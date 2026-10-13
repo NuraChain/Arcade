@@ -4052,6 +4052,29 @@ failed the lines about the ring and about Enter; built with the keyboard never p
 it failed those two and the line that finds it there. Forty-nine faults put into the code one
 at a time were each caught by a spec.
 
+**The turn is passed when the board has shown it passing** (6.2). A plate's ring and its clock
+followed `game.turn`, which is the board the server sent: when somebody else rolled and moved
+in one answer, their ring was gone and the next player's was lit while their die was still in
+the air and before their pawn had taken a step. The turn is part of the shown model now
+(`Shown.turn`) and of what the table tells (`Facts.turn`), and the plates read that
+(`shownTurn` in `match-board`, which falls back to the board's turn where there is no table to
+ask: the flat tokens of a browser with no canvas).
+
+- **Whoever rolls is on turn from the moment the die leaves their corner**, whatever the roll
+  comes to. Who throws is no secret; only the face is held for the landing.
+- **A pawn that moves says nothing about who is next**, and nothing else in the log does: a
+  six, a capture and a pawn come home keep the turn, and that is the engine's to know. So the
+  turn is put right from the view when everything told has been played, which is when the
+  pawn has landed. `same` counts the turn, and so does the check that ends a batch.
+- **A seat that leaves while it is theirs has the turn taken from it**, and a finished game has
+  nobody on turn.
+
+`ludo-felt.spec.ts` (*whose turn the ludo table has shown*) holds each step, and the engine
+parity never finds the table naming a seat that neither acted nor is next. `ludo-board.spec.ts`
+(*whose turn the ludo table says it is*) holds when it is told, and `ludo-table.spec.ts` the
+ring on a plate while a pawn walks. Twelve faults put into the code one at a time were each
+caught by a spec.
+
 **The clock is on the plate of whoever is to play, and the lamp stands in the board's own
 frame.** The bar at the foot of the ludo table held three things: the lamp at its start, the
 "plays best upright" sentence on a phone held sideways, and the clock at its end. It was laid

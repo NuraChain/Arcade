@@ -37,6 +37,7 @@ export interface Facts
     out: readonly number[];
     die: Rolled | null;
     plate: boolean;
+    turn: number | null;
 }
 
 export interface BoardOptions

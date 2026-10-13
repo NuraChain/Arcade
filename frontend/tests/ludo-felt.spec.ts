@@ -139,11 +139,48 @@ const stepped = (state: LudoState, action: EngineAction) =>
     return { state: outcome.state, act: { rev: outcome.state.rev, seat: action.seat, moves: outcome.events as readonly Told[] } };
 };
 
+describe('whose turn the ludo table has shown', () =>
+{
+    const bare = (turn: number | null): Shown => ({ pawns: [], out: [], die: null, turn });
+
+    it('is the board\'s for a table drawn from one', () =>
+    {
+        const state = opened(3, false, 2);
+
+        expect(feltAt(state).turn).toBe(ludoEngine.turnOf(state));
+        expect(shownOf(feltAt(state)).turn).toBe(ludoEngine.turnOf(state));
+    });
+
+    it('goes to whoever rolls, whatever the roll comes to', () =>
+    {
+        for (const fate of ['pending', 'no-move', 'three-sixes', 'wasted'] as const)
+        {
+            expect(step(bare(0), { kind: 'roll', seat: 2, face: 6, fate }).turn, fate).toBe(2);
+        }
+    });
+
+    it('stays where it is while a pawn moves: nothing told says who is next', () =>
+    {
+        expect(step(bare(1), { kind: 'move', key: '1-0', seat: 1, from: 3, to: 7, victims: [], home: false }).turn).toBe(1);
+    });
+
+    it('is taken from a seat that leaves while it is theirs, and from nobody else', () =>
+    {
+        expect(step(bare(2), { kind: 'forfeit', seat: 2, survives: true }).turn).toBeNull();
+        expect(step(bare(1), { kind: 'forfeit', seat: 2, survives: true }).turn).toBe(1);
+    });
+
+    it('is nobody\'s once the game is over', () =>
+    {
+        expect(step(bare(1), { kind: 'finish' }).turn).toBeNull();
+    });
+});
+
 describe('the ludo board as it has been shown', () =>
 {
     it('is the board the engine describes after every action, for every seat and for nobody, over whole games', () =>
     {
-        const met = { rolls: 0, wasted: 0, sixes: 0, stuck: 0, moves: 0, captures: 0, homes: 0, helped: 0, leftAlive: 0, leftOver: 0, dieTaken: 0, finishes: 0 };
+        const met = { rolls: 0, wasted: 0, sixes: 0, stuck: 0, moves: 0, captures: 0, homes: 0, helped: 0, leftAlive: 0, leftOver: 0, dieTaken: 0, finishes: 0, turnTold: 0, turnLeft: 0 };
         let checked = 0;
 
         for (const [index, game] of GAMES.entries())
@@ -170,9 +207,15 @@ describe('the ludo board as it has been shown', () =>
 
                     shown = folded(shown, beats);
 
+                    const acted = beats.flatMap((beat) => (beat.kind === 'roll' || beat.kind === 'move' ? [beat.seat] : []));
+
                     expect(shown.pawns, `the pawns after revision ${ frame.act.rev }`).toEqual(felt.pawns);
                     expect(shown.out).toEqual(felt.out);
                     expect(sameAs(shown, felt), `the die after revision ${ frame.act.rev }`).toBe(true);
+                    expect(shown.turn === felt.turn || shown.turn === null || acted.includes(shown.turn), `after revision ${ frame.act.rev } the table has seat ${ shown.turn } on turn, who did nothing in it and is not next (${ felt.turn })`).toBe(true);
+                    met.turnTold += shown.turn === felt.turn ? 1 : 0;
+                    met.turnLeft += shown.turn === felt.turn ? 0 : 1;
+                    shown = { ...shown, turn: felt.turn };
 
                     for (const beat of beats)
                     {

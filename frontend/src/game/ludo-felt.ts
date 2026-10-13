@@ -26,6 +26,7 @@ export interface Felt
     out: readonly number[];
     die: Rolled | null;
     winners: readonly string[];
+    turn: number | null;
 }
 
 export interface Shown
@@ -33,6 +34,7 @@ export interface Shown
     pawns: readonly Pawn[];
     out: readonly number[];
     die: Rolled | null;
+    turn: number | null;
 }
 
 export interface Position
@@ -133,7 +135,8 @@ export function feltOf(board: Position, turn: number | undefined, winners: reado
             .sort(byKey),
         out: board.seats.filter((seat) => seat.out).map((seat) => seat.seat).sort((one, other) => one - other),
         die: board.die === undefined || turn === undefined ? null : { roller: turn, face: board.die, fate: 'pending' },
-        winners
+        winners,
+        turn: turn ?? null
     };
 }
 
@@ -142,7 +145,8 @@ export function shownOf(felt: Felt): Shown
     return {
         pawns: felt.pawns.map((pawn) => ({ ...pawn })),
         out: [...felt.out],
-        die: felt.die === null ? null : { ...felt.die }
+        die: felt.die === null ? null : { ...felt.die },
+        turn: felt.turn
     };
 }
 
@@ -240,7 +244,7 @@ export function step(shown: Shown, beat: Beat): Shown
 {
     if (beat.kind === 'roll')
     {
-        return { ...shown, die: beat.fate === 'pending' ? { roller: beat.seat, face: beat.face, fate: 'pending' } : null };
+        return { ...shown, die: beat.fate === 'pending' ? { roller: beat.seat, face: beat.face, fate: 'pending' } : null, turn: beat.seat };
     }
 
     if (beat.kind === 'move')
@@ -266,9 +270,10 @@ export function step(shown: Shown, beat: Beat): Shown
             ...shown,
             out: shown.out.includes(beat.seat) ? shown.out : [...shown.out, beat.seat].sort((one, other) => one - other),
             die: !beat.survives || shown.die?.roller === beat.seat ? null : shown.die,
+            turn: shown.turn === beat.seat ? null : shown.turn,
             pawns: beat.survives ? shown.pawns.map((pawn) => (pawn.owner === beat.seat ? { ...pawn, progress: YARD } : pawn)) : shown.pawns
         };
     }
 
-    return { ...shown, die: null };
+    return { ...shown, die: null, turn: null };
 }
