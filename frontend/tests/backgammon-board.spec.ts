@@ -563,6 +563,51 @@ describe('the backgammon table on the page', () =>
         expect(dice(container)).toEqual([]);
     });
 
+    it('says a seat missed its turn only when the table has shown the turn played for it, and goes on saying so until its next turn has been shown', async () =>
+    {
+        const missing = (view: MatchView, timeouts: number): MatchView =>
+            ({ ...view, players: view.players.map((one) => (one.seat === 1 ? { ...one, timeouts } : one)) as MatchView['players'] });
+        const tags = (container: HTMLElement) => [...container.querySelectorAll('.table-plate-tag')].map((one) => one.textContent);
+        const once = useLocale().plural('card.missed', 1);
+        const missed = await live(theirs());
+
+        missed.tell(missing(answered(), 1), theirMove());
+        await flush();
+
+        expect(stageOf(missed.container).getAttribute('data-presenting')).toBe('true');
+        expect(tags(missed.container), 'the plate said a turn was missed while the move played for it was still on its way').toEqual([]);
+
+        await elapse(4000);
+
+        expect(stageOf(missed.container).hasAttribute('data-presenting')).toBe(false);
+        expect(tags(missed.container)).toEqual([once]);
+
+        missed.unmount();
+
+        const played = await live(missing(theirs(), 1));
+
+        expect(tags(played.container)).toEqual([once]);
+
+        played.tell(answered(), theirMove());
+        await flush();
+
+        expect(tags(played.container), 'the plate forgot the missed turn before the turn that mends it had been shown').toEqual([once]);
+
+        await elapse(4000);
+
+        expect(tags(played.container)).toEqual([]);
+
+        played.unmount();
+
+        const level = await live(theirs());
+
+        level.move(missing({ ...theirs(), rev: 5 }, 1));
+        await flush();
+
+        expect(stageOf(level.container).hasAttribute('data-presenting')).toBe(false);
+        expect(tags(level.container), 'a table with nothing to show first kept the missed turn to itself').toEqual([once]);
+    });
+
     it('is given only so long to show how the game ended', async () =>
     {
         const counts = vi.spyOn(runtime().clock, 'after');

@@ -909,6 +909,34 @@ describe('the ludo table, played from what happened', () =>
         expect(tags(container)).toEqual([useLocale().t('card.lost'), useLocale().t('card.won')]);
     });
 
+    it('says a seat missed its turn only when the board has shown the turn played for it', async () =>
+    {
+        quiet();
+
+        const from = standing([[10, YARD, YARD, YARD], EMPTY], null, 0);
+        const rolled = stepped(from, { kind: 'roll', seat: 0, die: 3 });
+        const missing = [{ seat: 0, who: SEATED[0], timeouts: 1 }, { seat: 1, who: SEATED[1], timeouts: 0 }] as MatchView['players'];
+        const { container, tell } = await live(seen(from, 1, 1));
+        const said = () => tags(container).filter((one) => one !== null);
+
+        tell(seen(rolled.state, 1, 2, { players: missing }), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+        expect(said(), 'a plate said a turn was missed while the roll made for it was still in the air').toEqual([]);
+
+        await elapse(3000);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(said()).toEqual([useLocale().plural('card.missed', 1)]);
+
+        tell(seen(rolled.state, 1, 3, { players: missing.map((one) => (one.seat === 0 ? { ...one, timeouts: 2 } : one)) as MatchView['players'] }), []);
+        await flush();
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(said(), 'a board with nothing to show first kept the missed turn to itself').toEqual([useLocale().plural('card.missed', 2)]);
+    });
+
     it('gives the board only so long to show how the game ended', async () =>
     {
         quiet();

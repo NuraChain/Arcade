@@ -5,7 +5,7 @@ import CoachLine from './coach-line.component.azeroth';
 import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import HokmSeat, { SIDE_TONE } from './hokm-seat.component.azeroth';
 import type { SeatMark } from './hokm-mark.component.azeroth';
-import { plateTag } from './plate-tag.ts';
+import { missesOf, plateTag, withMisses } from './plate-tag.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } from '../../data/cards.ts';
@@ -182,6 +182,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     state token: { suit: Suit; pledged: boolean } | null = null;
 
     state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
 
     state result = untrack(() => props.match.finishedAt !== undefined);
 
@@ -399,7 +401,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived tagOf = (seat: number) =>
     {
-        const player = game.players.find((one) => one.seat === seat);
+        const seated = game.players.find((one) => one.seat === seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
 
         if (player === undefined || !over || result)
         {
@@ -1979,6 +1982,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     const rest = () =>
     {
         result = over;
+        missed = missesOf(game.players);
         seen = shownAll(view);
 
         if (sending === null || !sending.gone)
@@ -2003,6 +2007,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         }
 
         result = over;
+        missed = missesOf(game.players);
 
         if (presenter !== null && sight !== null && !sameAs(held, sight.view))
         {

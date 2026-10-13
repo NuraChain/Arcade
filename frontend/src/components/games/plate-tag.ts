@@ -17,6 +17,10 @@ export const goneKey = (exit: MatchPlayer['exit']) => GONE[exit ?? 'left'];
 export const resultWord = (locale: ReturnType<typeof useLocale>, result: NonNullable<MatchPlayer['result']>, exit: MatchPlayer['exit']) =>
     locale.t(result === 'abandoned' ? goneKey(exit) : `history.result.${ result }`);
 
+export const missesOf = (players: readonly MatchPlayer[]) => new Map(players.map((one) => [one.seat, one.timeouts ?? 0]));
+
+export const withMisses = (player: MatchPlayer, missed: ReadonlyMap<number, number>) => ({ ...player, timeouts: missed.get(player.seat) ?? 0 });
+
 export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlayer | undefined, finished: boolean): PlateTag | null
 {
     if (player === undefined)

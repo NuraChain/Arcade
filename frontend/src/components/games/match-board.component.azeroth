@@ -12,6 +12,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
+import { missesOf, withMisses } from './plate-tag.ts';
 import type { BoardGoal, BoardHandle, BoardOptions, Facts } from '../../game/bridge.ts';
 import { chairsOf, ludoOf, type LudoSeat, type MatchPlayer } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
@@ -114,6 +115,8 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     state presenting = false;
 
+    state missed = untrack(() => missesOf(props.match.players));
+
     state rigged = false;
 
     state said = '';
@@ -164,8 +167,10 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     derived seatAt = (seat: LudoSeat): LudoSeat => (seat.out === gone(seat) ? seat : { ...seat, out: gone(seat) });
 
-    derived playerAt = (player: MatchPlayer, seat: LudoSeat): MatchPlayer =>
+    derived playerAt = (seated: MatchPlayer, seat: LudoSeat): MatchPlayer =>
     {
+        const player = withMisses(seated, missed);
+
         if (player.result === undefined || result || gone(seat))
         {
             return player;
@@ -248,6 +253,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         if (!presenter.presenting())
         {
             shownRev = untrack(() => game.rev);
+            missed = missesOf(untrack(() => game.players));
         }
     };
 

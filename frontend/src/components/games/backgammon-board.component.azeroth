@@ -4,7 +4,7 @@ import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.a
 import TurnClock from './turn-clock.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
-import { plateTag } from './plate-tag.ts';
+import { missesOf, plateTag, withMisses } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
@@ -163,6 +163,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     state facts: Facts | null = null;
 
     state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
 
     state rover = '';
 
@@ -522,6 +524,14 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         };
     };
 
+    const caughtUp = () =>
+    {
+        if (presenter?.presenting() !== true)
+        {
+            missed = missesOf(untrack(() => game.players));
+        }
+    };
+
     effect
     {
         const batch = props.events;
@@ -529,7 +539,11 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         void game.id;
         void game.rev;
 
-        untrack(() => presenter?.see(batch));
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            caughtUp();
+        });
     }
 
     effect
@@ -668,6 +682,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 if (!busy)
                 {
                     passed = '';
+                    caughtUp();
                 }
             });
 
@@ -1224,7 +1239,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     const tagOf = (seat: number) =>
     {
-        const player = game.players.find((one) => one.seat === seat);
+        const seated = game.players.find((one) => one.seat === seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
 
         if (player === undefined || !over || result)
         {

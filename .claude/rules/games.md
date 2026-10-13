@@ -2344,7 +2344,20 @@ read; "No contest" on every poker plate and every four-handed Hokm plate on a ph
 So the tag counts and the sentence explains. A missed turn is "Missed 1", "Missed 2"
 (`card.missed`), gold until the next miss is the one that ends the game for that seat and red
 then; the words about what the next one costs are in the Players list, which has the room
-(`match.missed`, and `match.missed.last`, a key that had copy and no caller). A game that did
+(`match.missed`, and `match.missed.last`, a key that had copy and no caller).
+
+**The tag follows the turn it is about** (6.2). The count comes in the view, and the view arrives
+with the move the server played for the seat, so a plate said "Missed 1" while that move was
+still on its way across the table, and stopped saying it while the move that mends it was. A
+board keeps the counts as they stood the last time it had caught up (`missed`, from `missesOf`)
+and tags a plate from those (`withMisses`): taken where each board already puts itself right at
+rest (after it has heard something, if nothing is playing, and when what was playing has
+finished), so a count that changes on a table with nothing to show is said at once. It is NOT
+taken in an effect that watches the view: the view and its events arrive in one write, and for
+one round of that flush the table does not yet say it is showing anything, which is the round
+the result card latched on. Ludo's `yard-badge` reads the count from the player it is handed,
+so the board hands it one with the held count. The Players list still reads the newest view: it
+is a panel beside the table, not a mark on it. A game that did
 not count is "Void" on a plate and still "No contest" in the result, a seat the clock took is
 "Timeout", and in Persian a walkout is «ترک کرد» and a timeout «وقت تمام». The result panel says
 a seat's way out in the plate's own words, so the three are one set in each language. Poker's

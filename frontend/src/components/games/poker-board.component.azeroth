@@ -4,7 +4,7 @@ import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import PokerSeat from './poker-seat.component.azeroth';
 import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
-import { plateTag, type PlateTag } from './plate-tag.ts';
+import { missesOf, plateTag, withMisses, type PlateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -96,6 +96,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     state lifted = false;
 
     state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
 
     derived game = props.match;
 
@@ -1110,6 +1112,11 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     {
         const sight = sightNow();
 
+        if (presenter?.presenting() !== true)
+        {
+            missed = missesOf(game.players);
+        }
+
         if (presenter !== null && !presenter.presenting() && sight !== null)
         {
             reset(sight);
@@ -1298,7 +1305,8 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             return { text: locale.t('poker.folded'), tone: 'neutral' };
         }
 
-        const player = game.players.find((one) => one.seat === row.seat);
+        const seated = game.players.find((one) => one.seat === row.seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
 
         if (player === undefined || !over || result)
         {

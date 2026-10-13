@@ -508,6 +508,32 @@ describe('the table in motion', () =>
         expect(container.querySelector('.hokm-stage')?.hasAttribute('data-presenting')).toBe(false);
     });
 
+    it('says a seat missed its turn only when the table has shown the card played for it', async () =>
+    {
+        const { container, send } = await mounted(playing());
+        const missing = [0, 1, 2, 3].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: seat === 1 ? 1 : 0 })) as MatchView['players'];
+        const tags = () => [...container.querySelectorAll('.hokm-seat')]
+            .map((one) => `${ one.getAttribute('data-seat') }:${ one.querySelector('.table-plate-tag')?.textContent ?? '' }`)
+            .filter((one) => !one.endsWith(':'));
+
+        send([card(4, 1, 12)], {}, { players: missing });
+        await flush();
+
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting')).toBe('true');
+        expect(tags(), 'the plate said a turn was missed while the card played for it was still in the air').toEqual([]);
+
+        await elapse(TIMING.FLY_THEIRS);
+
+        expect(container.querySelector('.hokm-stage')?.hasAttribute('data-presenting')).toBe(false);
+        expect(tags()).toEqual([`1:${ useLocale().plural('card.missed', 1) }`]);
+
+        send([], {}, { rev: 5, players: missing.map((one) => (one.seat === 1 ? { ...one, timeouts: 2 } : one)) as MatchView['players'] });
+        await flush();
+
+        expect(container.querySelector('.hokm-stage')?.hasAttribute('data-presenting')).toBe(false);
+        expect(tags(), 'a table with nothing to show first kept the missed turn to itself').toEqual([`1:${ useLocale().plural('card.missed', 2) }`]);
+    });
+
     it('gives the table only so long to show how the game ended, and as long as it likes while the game goes on', async () =>
     {
         const counts = vi.spyOn(runtime().clock, 'after');

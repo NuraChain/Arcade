@@ -2546,6 +2546,11 @@ minutes already had, stepped once a second on the product clock while its seat i
 step this section left "to be set in commit 6.2" is the second, the beat the clock beside the
 ring already counts on.
 
+**As built, a missed turn.** The move the server plays for a seat was already played like any
+other. The plate's "Missed n" now waits for it: a board tags its plates from the counts as they
+stood the last time it had caught up, and takes them where it already puts itself right at rest.
+The tag is taken away the same way, when the turn that mends it has been shown.
+
 **As built (6.2), the turn passing.** Hokm's plates already read the felt. The other three are
 moved one game a commit, and each takes the turn from what its own log can say:
 

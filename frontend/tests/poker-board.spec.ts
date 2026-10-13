@@ -1264,6 +1264,31 @@ describe('a table that shows what has happened on it', () =>
         expect(stack(container, 0)).toBe('4,520');
     });
 
+    it('says a seat missed its turn only when the table has shown what was played for it', async () =>
+    {
+        const { container, read } = await seated(waiting());
+        const after = waiting({ turn: 2 }, { rev: 8, turn: 2 });
+        const tagOf = (seat: number) => container.querySelector(`.poker-seat[data-seat="${ seat }"] .table-plate-tag`)?.textContent ?? '';
+
+        await read(
+            { ...after, players: after.players.map((one) => (one.seat === 1 ? { ...one, timeouts: 1 } : one)) as MatchView['players'] },
+            heard(1, told(8, 1, { e: 'check', seat: 1 }))
+        );
+
+        expect(presenting(container)).toBe('true');
+        expect(tagOf(1), 'the plate said a turn was missed while the check made for it was still being shown').toBe('');
+
+        await elapse(600);
+
+        expect(presenting(container)).toBeNull();
+        expect(tagOf(1)).toBe(useLocale().plural('card.missed', 1));
+
+        await read({ ...after, rev: 9, players: after.players.map((one) => (one.seat === 1 ? { ...one, timeouts: 2 } : one)) as MatchView['players'] });
+
+        expect(presenting(container)).toBeNull();
+        expect(tagOf(1), 'a table with nothing to show first kept the missed turn to itself').toBe(useLocale().plural('card.missed', 2));
+    });
+
     it('gives the table only so long to show how the game ended', async () =>
     {
         const counts = vi.spyOn(runtime().clock, 'after');
