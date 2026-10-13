@@ -3001,24 +3001,34 @@ their hand under the table:
   button's own text, so it is its name to a screen reader and to the passes, and no `aria-label`
   can drift from what is drawn.
 - **The sentences are a screen reader's**: the turn, and what a call costs against the pot. The
-  name of the reader's best hand stays beside the cards, which is all `hintOutcome` still draws.
-- **The clock and the tip are in the corner of the table** (`.table-corner`, the corner hokm
-  used until its clock went to a plate), with the blinds above them when the felt has shed its chip. The corner is the
-  table's RIGHT in both languages, because a felt does not mirror, and its things keep to that
-  edge by `margin-left: auto`: `align-items: flex-end` is the left of a column in Persian, and it
-  left the lamp a clock's width in from the edge there. The street is not said in the corner:
-  the cards on the board already say which street it is. The bets are seated clear of the
-  corner: `seatBets` is handed its boxes beside the pot and the cards. With the chat open the
-  corner is empty, the blinds included. On the smallest felt a phone gives, six bets, the pot
-  and the cards leave no spare spot: with the blinds in the corner a 1,500 bet went under them,
-  and with the corner made an obstacle the same bet went onto the pot.
+  name of the reader's best hand is one line over their cards (`.poker-hand-name`: "A pair of
+  kings", "The board: a straight, ace high"), which is all `hintOutcome` still draws, and the
+  whole sentence is beside it for a screen reader. It was a sentence beside the cards that
+  wrapped to three lines on a narrow phone. The line keeps its height when it has nothing to
+  say, and on a stage under 24rem tall it lies beside the cards, where a line over them would
+  be taken from the table's height.
+- **Nothing stands in a corner of the table.** A clock, a lamp, the blinds and "Last hand"
+  stood in the corners of the table's box, which a stadium leaves bare, until the table took
+  the whole stage. A seat on a bend stands in such a corner at six seats on a wide table, at
+  nine on a tall one, and on any table about as wide as it is tall: the fit pass found a chip
+  or a clock on a plate in 166 of 430 cells. So each went where no seat can be:
+  - **the seconds are on the reader's own plate** while it is their turn (`.poker-clock`, in
+    the plate's `trail`). Another seat on turn wears the ring round its face and no number, and
+    its time is said to a screen reader from the same plate;
+  - **the tip's lamp is the last thing in the reader's hand**, as hokm's is in its row, and its
+    bubble opens over the table from the lamp's own end;
+  - **"Last hand" and the blinds are beside the pot** (`.poker-tally`): a round button with the
+    history mark, the pot, and "10/20". The street, the hands until the blinds rise and the
+    level are said in the same place to a screen reader: the cards on the board already show
+    which street it is. The panel opens over the board, and a press anywhere else on the page
+    shuts it, as it lets go of an armed fold.
 - **The grid is the table and the hand** (`.table-grid.poker-grid`). Beside a chat on a phone
   held sideways it gives up its far end, as ludo's and hokm's do.
 
 `poker-board.spec.ts` holds the two presses, the press elsewhere, Escape, the focus leaving, the
-corner and the seat that is not on turn; `fit-pass.mjs` holds the corner clear of every plate,
-bet, card and chip at every size, and with the chat shut it arms the reader's cards, as it
-lifts a card at hokm, and fails one that does not breathe or whose ring reaches a plate.
+plate that carries the seconds, the lamp's place and the seat that is not on turn; with the
+chat shut `fit-pass.mjs` arms the reader's cards, as it lifts a card at hokm, and fails one
+that does not breathe or whose ring reaches a plate.
 
 **The table is drawn once and stays**, as hokm's is (*The table is drawn once and stays*, under
 *The table, and the cards on it*). The whole table sat in one branch that read the board, and
@@ -3043,9 +3053,67 @@ chip or a card lands on.
 
 `poker-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
 the board the answer it had as a new object and wants all of them still in the page; then a
-call by another seat (only the ring of the turn that ended may go), a raise and a street
+call by another seat (only the clock of the turn that ended may go), a raise and a street
 closing, a card coming and a new hand, the button moving, a tag changing its word, "Last hand"
 left open, and the chip under the keyboard while the clock runs down.
+
+**The table takes the room, and what is on it is sized by it.** It was drawn at 4:5 or 16:10
+inside whatever room the stage had: 58% of a phone's height, 51% of a turned phone's width,
+and on a large screen a table 1,480 wide with plates 100 wide and a board 280 wide on it.
+
+- **Any shape between half as wide as tall and 2.4 times as wide** (`.poker-stage
+  .table-surface.poker-table`): the stage's whole box. On a phone the fit box also gives up
+  the page's gutter, as hokm's does.
+- **`--u` is a hundredth of the table's shorter side** (`.poker-table > *`, registered with
+  `@property` so that it is a length where it is declared and inherits as one). The face, the
+  type, a plate's width, a card back, the puck and the gaps are multiples of it between a
+  floor and a ceiling. Nothing on the table is written under 11px.
+- **The seats stand on the rail, evenly along it** (`game/poker-seats.ts`, `aroundStadium`):
+  the reader at the middle of the near rail and the rest clockwise, at equal steps along a
+  stadium drawn half the rail's width in from the table's edge. An ellipse put a seat on the
+  felt wherever the table was not an ellipse. The shape is MEASURED (`shape()`: at mount, in
+  the resize observer, which watches the felt as well as the stage, and in the layout pass). A
+  table is round until then, which is what a spec sees.
+- **A plate lies along its rail** (`data-lies`): a row, the face beside the name and the
+  stack, where the rail runs across (`flat`); a column where it runs down (`upright`). A
+  column shows no name on a table under 30rem wide or 22rem tall, as hokm's side seats do
+  not. A tag ("Folded", "All in", a result) takes the stack's line and never adds one: a plate
+  that grew by a line moved everything measured from it.
+- **Each seat faces square across its rail** (`--ux` and `--uy`: one of them is 1 or -1 and
+  the other nothing). The cards it holds lie on the felt in front of its plate
+  (`.poker-backs`), and its bet in front of the cards (`seatBets`, which is told `toward` and
+  `lead`), with the places beside the seat as the fallback they always were. Cards laid along
+  the true line to the middle of the table went into a corner of the board from every seat on
+  a bend.
+- **A bet is not seen until it has been seated** (`data-placed`), and neither is the puck. A
+  frame at the stylesheet's own place was a bet lying on its seat's cards.
+- **ONE puck** (`.poker-puck`), the table's and not a plate's, laid by the layout pass on the
+  corner of the dealer's face that is nearest the felt and kept inside the plate's box, so it
+  is nothing new for a bet to avoid. It is the same node from hand to hand, and it is drawn
+  at every size: the mark it replaces was the avatar's, and went with the avatar on a small
+  felt, where nobody could see who dealt. The plate says "Dealer" to a screen reader.
+- **The board is as wide as the cloth lets it be**: an eighth of a tall table's width (47px
+  at 390 by 844, where it was 29); a tenth of a wide table's width, or 17.5% of its height.
+  Nine seats take a little less from a table that is nearly round or wide, where a seat on a
+  bend holds its cards near the board's end, and at a table that is not wide they raise the
+  middle to 43%, between the two rows of seats down each side.
+- **Two sizes shed things, and they are the table's own** (`@container`): under 19rem wide or
+  15rem tall no cards lie in front of the seats; under 17rem wide or 12rem tall the plates
+  lose their faces and are a name and a stack. A phone turned over (844 by 390) keeps both.
+- **The reader's row keeps its box while they are in the game.** A fold left it with no cards
+  and it went: the table grew by its height and every measured place moved. It shows two
+  empty places now, as the board shows its slots. It goes when the reader is out, and a
+  watcher has none. On a stage under 24rem tall the reader's cards are 36px wide, which is
+  what lets the table be 70% of a turned phone's width.
+
+`poker-seats.spec.ts` holds the rail (every seat the same way in from the edge, at two, six and
+nine seats and eight shapes), the mirror, the even steps and the facing; `poker-board.spec.ts`
+(*a table of the shape its room gives it*, *a bet in front of its seat*) holds the measuring,
+the bet's place and its fallback; `fit-pass.mjs` holds the floors (85% of an upright stage's
+height with the reader's row, 70% of a wide one's width, the board's card at 44px on a phone
+and at 5.5% of a table 1,700 wide and more, faces on a wide stage, the hand's name on one
+line), no seat's cards on a plate, on the board or off the table, the puck on the plate of the
+seat that deals, and a table of nine (`poker-9`).
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
@@ -4172,16 +4240,33 @@ gold lines, corner flourishes and medallion stay vector, in `hokm-frame.svg` and
 the one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
 smooth cloth compresses well.
 
-**Poker has a table of its own at the same standard**, because the owner asked for one: a stadium with
-a padded black leather rail (Poly Haven's CC0 `brown_leather` normals under a near-black tint), a
-walnut racetrack with a brass inlay and a deep emerald felt, rendered by `tools/blender/poker-table.py`
-into `poker-table-{wide,tall}.webp` (1600x1000 and 1000x1250), with the betting line and a faint
-four-suit medallion as vector in `poker-ornaments-*.svg` from `tools/art/poker.mjs`. It is a separate
-script on purpose: `surfaces.py` renders the hokm and ludo tables, the owner does not want those
-re-rendered, and the helpers both use moved to `tools/blender/lib/tables.py` unchanged. Run it with
-`blender -b --factory-startup --python tools/blender/poker-table.py` (`NURA_SURFACE` picks one,
-`NURA_SAMPLES` sets quality); the two numbers the SVG needs - rail, track and groove as fractions of the
-short side - are written in both files and have to agree. The deck comes from `tools/art/deck.mjs`, and the suits from
+**Poker's table is a drawing, and the stylesheet makes it.** The owner asked for a table of
+poker's own, and for a while it was a photograph: a stadium rendered in Blender with a padded
+BLACK leather rail, in two shapes. The owner then called it ugly, the black border most of all
+(2026-10-13). On a navy page a black rail is a smudge with no edge; rail and racetrack took
+15.5% of the table's shorter side on every edge; and a photograph of a stadium cannot be cut
+in nine for a table of another shape without a seam down its middle. So `.poker-table::before`
+is the rail and `.poker-table::after` is the wood and the cloth, each a box with
+`border-radius: 999px`, which is a stadium at any shape:
+
+- **the rail** is leather the colour of a saddle, lit from above (a gradient), rolled (an
+  inset shadow darkens both its edges) and stitched (a dashed `outline` drawn inside it);
+- **a brass bead** where the leather meets the wood, and **a walnut ring**: the ring is the
+  `::after`'s BORDER, painted by a background clipped to `border-box`, and the cloth is the
+  same element's `padding-box`. Two pseudo-elements carry four materials;
+- **the cloth** is teal baize under a light from above, with the groove and the rim's shadow
+  as inset shadows, the betting line as an `outline` at a negative offset, and the four-suit
+  medallion as a background in the middle;
+- **grain** is three small SVG tiles of `feTurbulence` from `tools/art/poker.mjs`
+  (`poker-leather`, `poker-wood`, `poker-felt`), each drawn at the size it was made, so
+  nothing is stretched. The four files are 2.6 KB together, where the photographs were 105 KB,
+  and the table is sharp at any size.
+
+Rail and wood are 10.2% of the shorter side (7 and 3.2), a third less than the photograph's, so
+the cloth is wider. `backend/tests/poker-table-art.spec.ts` holds the files, the medallion's
+scale, the grain's sizes, that the rail is not dark again, and that `RAIL` in
+`game/poker-seats.ts` is the rail the sheet draws. `tools/blender/poker-table.py` is gone:
+nothing draws what it rendered. The deck comes from `tools/art/deck.mjs`, and the suits from
 `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card and a spade in the
 hero art are one path.
 
@@ -4964,7 +5049,9 @@ poker-6-folded opens each page as a seat that has folded (no hole cards, so no h
 tallest table and the biggest plates), poker-6-allin as a seat that has shoved (a tag and a 1,500
 bet in front of the reader), and poker-2-facing as the seat facing a shove (a tagged top seat with
 the big bet), and poker-6-crowd as the seat to act after a limp and three all-ins over the blinds - six
-chips round a pot of three shoves, the most a table carries. Two hokm cells have a trick on the felt:
+chips round a pot of three shoves, the most a table carries. poker-9 is a table of nine, the most
+seats a rail carries: three plates down each side of a tall table and two at its head, three along
+the near rail of a wide one. Two hokm cells have a trick on the felt:
 hokm-2-follow opens as the dealer facing the Hâkem's lead, the card the reader has to follow, and
 hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-4-trump stops
 before trump is named and opens as the Hâkem, who has the four suits on the felt, and as a seat

@@ -316,6 +316,46 @@ drag to the felt plays the card where a tap would only have lifted it.
   them. Folding is its own control with the other two, drawn as the cards pushed away.
 - **Bets and the pot** (P6, D20): a drawn stack by size beside the number.
 
+**As built (commit 5.1, the table takes the stage).** P1, P2, P3 and P7, the place of P5's backs
+(their motion is 5.4's), and the owner's request of 2026-10-13: "redesign table graphic of poker
+it is too ugly specially that black border".
+
+| Stage | Table before | Table now | Board card | The reader's card | A plate |
+|---|---|---|---|---|---|
+| 390x844 | 358 by 448, 58% of the stage's height | 378 by 674; with the reader's row, 99% | 47 by 67 (was 29 by 40) | 47 by 66 | 129 by 43 across, 57 by 63 down (was 84 by 74) |
+| 844x390 | 403 by 252, 51% of the stage's width | 588 by 245, 74% | 43 by 61 (was 26 by 36) | 36 by 51 (was 42 by 59) | 104 by 41, with its face (was 84 by 40, without) |
+| 740x360 | | 516 by 215, 75% | 38 by 53 | 36 by 51 | 104 by 41, with its face; no cards before the seats |
+| 1280x800 | 907 by 567 | 1144 by 533 | 93 by 132 (was 45 by 64) | 67 by 94 | 181 by 59 (was 104 by 74) |
+| 1920x1080 | 1343 by 839 | 1784 by 806 | 112 by 158, 6.3% of the table's width (was 53 by 75) | 72 by 102 | 240 by 68 (was 104 by 74) |
+
+Each is six seats with the reader on turn and a bet to meet, which is the tallest the reader's
+row gets.
+
+- **The table is a drawing now, and the stylesheet makes it** (D19 kept: nothing from outside).
+  It was a photograph with a black leather rail. It is a rail of saddle leather, stitched, a
+  brass bead, a walnut ring and teal cloth: two boxes with round ends, which are a stadium at
+  any shape, with three small tiles of grain. Rail and wood are 10.2% of the shorter side,
+  where the photograph's were 15.5%, so the cloth is wider.
+- **`--u`** is a hundredth of the table's shorter side, and the face, the type, the plates,
+  the backs and the puck are multiples of it between a floor and a ceiling. Type on the table
+  is never under 11px.
+- **The seats stand on the rail** at even steps along it, and a plate lies along its rail: a
+  row where the rail runs across, a column where it runs down. A column has no name on a small
+  table, as hokm's side seats have none. This is 3.1's "two sizes, with a name and without".
+- **A seat's cards lie on the felt in front of its plate** (P5's place), and its bet in front
+  of them. They are shed under 19rem by 15rem, and faces under 17rem by 12rem; a phone turned
+  over keeps both.
+- **Nothing stands in a corner of the table** (S4 for poker). The seconds are on the reader's
+  own plate, the lamp is in the reader's row, and "Last hand" and the blinds are beside the
+  pot.
+- **The hand's name is one line over the reader's cards** (P7): "Ace high", where the sentence
+  "Your best hand so far: ace high." wrapped to three lines. A screen reader has the sentence.
+- **Two, six and nine seats** at twelve sizes, the chat shut and open, in both languages: the
+  fit pass, 313 checks, with the floors of this section as checks and a table of nine.
+
+Not in this commit: the fold as its own control and the drawn stacks (5.3), the cards' and the
+puck's motion (5.4).
+
 ### 3.6 Round the tables
 
 - The games page's opening lines get the width of the page and the counts sit under them (A1).

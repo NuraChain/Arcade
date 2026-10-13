@@ -8,7 +8,7 @@ const browser = await launch();
 const dana = await seat(browser, 'dana.w');
 const mina = await seat(browser, 'mina', { width: 390, height: 844 });
 
-const says = async (player) => (await player.page.locator('section p[aria-live="polite"]').first().textContent().catch(() => '')) ?? '';
+const says = async (player) => await player.page.evaluate(() => document.querySelector('.table-stage p[aria-live="polite"]')?.textContent ?? '');
 
 const drawn = async (player) => `${ await says(player) }|${ await player.page.locator('[aria-label="Poker table"]').innerHTML().catch(() => '') }`;
 
@@ -58,12 +58,13 @@ try
         const list = hand?.querySelector('ul[aria-label="Your cards"]') ?? null;
 
         return list === null
-            ? /^Your cards: \S/.test(hand?.querySelector('.sr-only')?.textContent ?? '')
-            : [...list.querySelectorAll('li[role="img"]')].filter((one) => (one.getAttribute('aria-label') ?? '') !== '').length === 2;
+            ? /^Your cards: \S/.test(hand?.querySelector('.poker-own > .contents > .sr-only')?.textContent ?? '')
+            : [...list.querySelectorAll('li > [role="img"]')].filter((one) => (one.getAttribute('aria-label') ?? '') !== '').length === 2;
     });
 
     record('each player is shown two cards of their own', await waitFor(async () => await held(dana) === 2 && await held(mina) === 2));
     record('and each is told them in words, whether or not they are the cards that fold', await named(dana) && await named(mina));
+    record('whose turn it is is said to a screen reader in both browsers', await waitFor(async () => await says(dana) !== '' && await says(mina) !== '', 4000));
 
     const matchId = (await dana.api('GET', `/tables/${ tableId }`)).body.matchId;
     const seats = new Map();
@@ -129,11 +130,13 @@ try
 
     const beside = await dana.page.evaluate(() => ({
         bar: document.querySelector('main .table-grid > .table-bar') !== null,
-        said: [...document.querySelectorAll('main .table-corner > p')].filter((one) => !one.classList.contains('sr-only')).length,
+        said: [...document.querySelectorAll('main .table-fit > p')].filter((one) => !one.classList.contains('sr-only')).length,
+        corner: document.querySelectorAll('main .table-corner, main .poker-chips').length,
         strays: [...document.querySelectorAll('main .table-stage button')].filter((one) => one.closest('.poker-hand, .poker-last, .table-result') === null).length
     }));
 
     record('no bar of buttons or sentences is drawn under the table', !beside.bar && beside.said === 0);
+    record('nothing stands in a corner of the table', beside.corner === 0, `${ beside.corner } things`);
     record('every control is the reader’s own cards and chips, or the chooser they opened', beside.strays === 0, `${ beside.strays } elsewhere`);
 
     console.log('\n[4] the rest over the api, all in');

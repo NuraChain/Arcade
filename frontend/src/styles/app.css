@@ -657,6 +657,13 @@ html:has(.site-drawer[open])
     initial-value: 0px;
 }
 
+@property --u
+{
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+}
+
 .table-fit
 {
     container: fit / size;
@@ -709,7 +716,7 @@ html:has(.site-drawer[open])
     -webkit-line-clamp: unset;
 }
 
-:is(.table-bar, .ludo-lamp) .coach-line[data-lamp]
+:is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp]
 {
     position: relative;
     box-sizing: border-box;
@@ -723,7 +730,7 @@ html:has(.site-drawer[open])
     border-radius: 999px;
 }
 
-:is(.table-bar, .ludo-lamp) .coach-line[data-lamp] > span:last-child
+:is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp] > span:last-child
 {
     position: absolute;
     inset-block-end: calc(100% + 0.5rem);
@@ -736,7 +743,7 @@ html:has(.site-drawer[open])
     white-space: nowrap;
 }
 
-:is(.table-bar, .ludo-lamp) .coach-line[data-lamp][data-open] > span:last-child
+:is(.table-bar, .ludo-lamp, .poker-hand) .coach-line[data-lamp][data-open] > span:last-child
 {
     overflow: visible;
     inline-size: min(20rem, 100cqw - 2rem);
@@ -1816,56 +1823,6 @@ html:has(.site-drawer[open])
     color: var(--bright-ink);
 }
 
-.table-bar.table-corner
-{
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    z-index: 3;
-    grid-area: auto;
-    flex-direction: column;
-    gap: 0.25rem;
-    inline-size: auto;
-    justify-self: auto;
-    align-self: auto;
-    pointer-events: none;
-}
-
-.table-bar.table-corner > *
-{
-    margin-left: auto;
-    pointer-events: auto;
-}
-
-.table-bar.table-corner > .poker-bar-facts
-{
-    pointer-events: none;
-}
-
-.table-bar.table-corner .coach-line[data-lamp]
-{
-    position: static;
-}
-
-.table-bar.table-corner .coach-line[data-lamp] > span:last-child
-{
-    inset-inline-start: auto;
-    right: 0;
-}
-
-.table-corner-tools
-{
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-[data-sheet] .table-corner > :is(.table-corner-clock, .table-corner-tools),
-[data-beside] .table-corner > :is(.table-corner-clock, .table-corner-tools)
-{
-    display: none;
-}
-
 [data-beside] .table-grid:is(.hokm-grid, .poker-grid)
 {
     padding-inline-end: var(--beside);
@@ -2492,26 +2449,61 @@ html:has(.site-drawer[open])
     }
 }
 
-.poker-table
+.poker-stage .table-surface.poker-table
 {
-    --ratio: 0.8;
-
+    inline-size: min(100cqw, 100cqh * 2.4);
+    block-size: min(100cqh, 100cqw / 0.5);
+    aspect-ratio: auto;
     direction: ltr;
     container-type: size;
-    background:
-        url('/board/poker-ornaments-tall.svg') center / 100% 100% no-repeat,
-        url('/board/poker-table-tall.webp') center / 100% 100% no-repeat;
-    filter: drop-shadow(0 18px 28px rgb(0 0 0 / 0.55));
 }
 
-@container fit (min-aspect-ratio: 9 / 8) or (max-height: 19.5rem)
+.poker-table::before,
+.poker-table::after
 {
-    .poker-table
-    {
-        --ratio: 1.6;
+    content: '';
+    position: absolute;
+    z-index: -1;
+    border-radius: 999px;
+    pointer-events: none;
+}
 
-        background-image: url('/board/poker-ornaments-wide.svg'), url('/board/poker-table-wide.webp');
-    }
+.poker-table::before
+{
+    inset: 0;
+    background:
+        url('/board/poker-leather.svg') 0 0 / 12.5rem 12.5rem,
+        linear-gradient(180deg, #9C5631 0%, #86452A 30%, #6F3722 62%, #55291A 100%);
+    box-shadow:
+        0 2.4cqmin 4.2cqmin rgb(0 0 0 / 0.6),
+        0 0.5cqmin 0.9cqmin rgb(0 0 0 / 0.55),
+        inset 0 0.35cqmin 0.4cqmin rgb(255 224 190 / 0.42),
+        inset 0 0 2.2cqmin 0.3cqmin rgb(24 9 3 / 0.62),
+        inset 0 -0.8cqmin 1.2cqmin rgb(0 0 0 / 0.5),
+        inset 0 0 0 max(1px, 0.14cqmin) rgb(30 14 6 / 0.85);
+    outline: max(1px, 0.12cqmin) dashed rgb(255 232 200 / 0.34);
+    outline-offset: -1.3cqmin;
+}
+
+.poker-table::after
+{
+    inset: 7cqmin;
+    border: 3.2cqmin solid transparent;
+    background:
+        url('/board/poker-medallion.svg') center / 27cqmin 27cqmin no-repeat padding-box,
+        url('/board/poker-felt.svg') 0 0 / 16rem 16rem padding-box,
+        radial-gradient(ellipse 80% 80% at 50% 42%, #21907B 0%, #17705F 46%, #0E4E43 80%, #093B33 100%) padding-box,
+        url('/board/poker-wood.svg') 0 0 / 32rem 16rem border-box,
+        linear-gradient(180deg, #7A4B29 0%, #5A341B 50%, #3A2010 100%) border-box;
+    box-shadow:
+        0 0 0 max(1px, 0.28cqmin) #D2AC5F,
+        0 0 0 max(2px, 0.52cqmin) rgb(46 24 10 / 0.9),
+        0 0 2.4cqmin 0.9cqmin rgb(20 8 2 / 0.6),
+        inset 0 0 0 max(1px, 0.45cqmin) rgb(3 22 18 / 0.92),
+        inset 0 1.8cqmin 2.6cqmin rgb(0 0 0 / 0.5),
+        inset 0 0 7cqmin rgb(0 0 0 / 0.28);
+    outline: max(1px, 0.22cqmin) solid rgb(231 198 122 / 0.5);
+    outline-offset: -9.2cqmin;
 }
 
 .table-grid.poker-grid
@@ -2528,89 +2520,28 @@ html:has(.site-drawer[open])
     position: relative;
 }
 
-.poker-chips
+@container stage (max-width: 36rem)
 {
-    position: absolute;
-    z-index: 4;
-    inset-inline: 1.5%;
-    top: 1.5%;
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-    pointer-events: none;
-}
-
-.poker-chip
-{
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.2rem 0.55rem 0.2rem 0.35rem;
-    border: 1px solid rgb(245 158 11 / 0.3);
-    border-radius: 999px;
-    background: rgb(8 13 25 / 0.8);
-    color: #F5E6B8;
-    font-size: var(--text-ui-2xs);
-    font-weight: 600;
-    line-height: 1.2;
-    white-space: nowrap;
-    pointer-events: auto;
-}
-
-.poker-last
-{
-    position: relative;
-}
-
-.poker-last > summary
-{
-    position: relative;
-    cursor: pointer;
-    list-style: none;
-}
-
-.poker-last > summary::-webkit-details-marker
-{
-    display: none;
-}
-
-.poker-last > summary::before
-{
-    content: '';
-    position: absolute;
-    inset: -0.6rem -0.25rem;
-}
-
-@media (pointer: coarse)
-{
-    .poker-last > summary::before
+    .poker-stage .table-fit
     {
-        inset: -0.8rem -0.5rem;
+        margin-inline: calc(0.375rem - var(--page-pad, 1rem));
     }
 }
 
-.poker-last[open] > summary
+.poker-table > *
 {
-    border-color: var(--gold);
-}
-
-.poker-last-panel
-{
-    position: absolute;
-    z-index: 10;
-    right: 0;
-    top: calc(100% + 0.4rem);
-    inline-size: min(18rem, 86cqw);
-    padding: 0.75rem;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-panel);
-    background: var(--lifted);
-    box-shadow: 0 18px 36px -18px rgb(0 0 0 / 0.9);
+    --u: 1cqmin;
+    --face: clamp(1.75rem, var(--u) * 9, 3.5rem);
+    --type: clamp(0.6875rem, var(--u) * 3.1, 1rem);
+    --pill-w: clamp(6.5rem, var(--u) * 34, 15rem);
+    --col-w: clamp(3.5rem, var(--u) * 15, 8rem);
+    --back-w: clamp(0.9rem, var(--u) * 5.6, 3rem);
+    --gap: clamp(0.2rem, var(--u), 0.5rem);
 }
 
 .poker-centre
 {
-    --card-w: clamp(1.6rem, 8cqmin, 3.3rem);
+    --card-w: clamp(1.9rem, min(12.5cqw, 17.5cqh), 7rem);
 
     position: absolute;
     left: 50%;
@@ -2619,15 +2550,44 @@ html:has(.site-drawer[open])
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
+    gap: clamp(0.3rem, var(--u) * 1.4, 0.8rem);
     translate: -50% -50%;
+}
+
+.poker-centre:has(.poker-last[open])
+{
+    z-index: 5;
+}
+
+@container (min-aspect-ratio: 17 / 20)
+{
+    .poker-table[data-seats='9'] > .poker-centre
+    {
+        --card-w: clamp(1.9rem, min(9.4cqw, 17.5cqh), 7rem);
+    }
+}
+
+@container (min-aspect-ratio: 1 / 1)
+{
+    .poker-centre
+    {
+        --card-w: clamp(1.9rem, min(10.2cqw, 17.5cqh), 7rem);
+    }
+}
+
+@container (max-aspect-ratio: 5 / 4)
+{
+    .poker-table[data-seats='9'] > .poker-centre
+    {
+        top: 43%;
+    }
 }
 
 .poker-board
 {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: calc(var(--card-w) * 0.09);
 }
 
 .poker-slot
@@ -2644,14 +2604,111 @@ html:has(.site-drawer[open])
     border: 1px dashed rgb(255 255 255 / 0.25);
 }
 
+.poker-tally
+{
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    color: white;
+    font-size: clamp(0.75rem, var(--u) * 3.3, 1.125rem);
+    line-height: 1.35;
+}
+
+.poker-pot
+{
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.25em 0.85em;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.35);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.poker-pot > svg,
+.poker-last > summary > svg
+{
+    inline-size: 1.1em;
+    block-size: 1.1em;
+}
+
+.poker-blinds
+{
+    padding: 0.25em 0.7em;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 999px;
+    color: rgb(255 255 255 / 0.78);
+    font-size: max(0.6875rem, 0.9em);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.poker-last
+{
+    display: flex;
+}
+
+.poker-last > summary
+{
+    position: relative;
+    display: flex;
+    box-sizing: border-box;
+    inline-size: 1.85em;
+    block-size: 1.85em;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(245 158 11 / 0.35);
+    border-radius: 999px;
+    background: rgb(8 13 25 / 0.55);
+    color: #F5E6B8;
+    cursor: pointer;
+    list-style: none;
+}
+
+.poker-last > summary::-webkit-details-marker
+{
+    display: none;
+}
+
+.poker-last > summary::before
+{
+    content: '';
+    position: absolute;
+    inset: -0.7rem;
+}
+
+.poker-last[open] > summary
+{
+    border-color: var(--gold);
+}
+
+.poker-last-panel
+{
+    position: absolute;
+    z-index: 10;
+    left: 50%;
+    bottom: calc(100% + 0.4rem);
+    inline-size: min(18rem, 86cqw);
+    padding: 0.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-panel);
+    background: var(--lifted);
+    box-shadow: 0 18px 36px -18px rgb(0 0 0 / 0.9);
+    translate: -50% 0;
+}
+
+.poker-pots
+{
+    color: rgb(255 255 255 / 0.7);
+    font-size: var(--type);
+    line-height: 1.3;
+    text-align: center;
+}
+
 .poker-seat
 {
-    --dx: calc((50 - var(--x)) * var(--ratio));
-    --dy: calc(50 - var(--y));
-    --reach: max(var(--dx), -1 * var(--dx), var(--dy), -1 * var(--dy));
-    --ux: calc(var(--dx) / var(--reach));
-    --uy: calc(var(--dy) / var(--reach));
-
     position: absolute;
     z-index: 3;
     left: calc(var(--x) * 1%);
@@ -2661,126 +2718,255 @@ html:has(.site-drawer[open])
         clamp(var(--y) * -1cqh, -50%, (100 - var(--y)) * 1cqh - 100%);
 }
 
-.poker-bet
-{
-    position: absolute;
-    z-index: 2;
-    left: calc(50% + var(--ux) * (50% + 0.25rem));
-    top: calc(50% + var(--uy) * (50% + 0.25rem));
-    display: flex;
-    inline-size: max-content;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.125rem 0.5rem;
-    border-radius: 999px;
-    background: rgb(0 0 0 / 0.6);
-    color: white;
-    font-size: var(--text-ui-2xs);
-    font-weight: 700;
-    line-height: 1rem;
-    white-space: nowrap;
-    translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);
-}
-
-.poker-table > *
-{
-    --plate-w: 5.25rem;
-}
-
-.poker-chips > .poker-chip,
-.poker-last > summary
-{
-    min-inline-size: 0;
-    max-inline-size: calc((97cqw - var(--plate-w)) / 2 - 0.5rem);
-    overflow: hidden;
-}
-
 .poker-seat .table-plate
 {
-    flex-direction: column;
-    gap: 0.15rem;
-    inline-size: var(--plate-w);
-    padding: 0.3rem 0.25rem 0.35rem;
-    border-radius: 0.8rem;
+    display: grid;
+    align-items: center;
+    column-gap: calc(var(--face) * 0.22);
+    max-inline-size: none;
+    padding: calc(var(--face) * 0.09);
+}
+
+.poker-seat[data-lies='flat'] .table-plate
+{
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'face name' 'face line';
+    inline-size: var(--pill-w);
+    padding-inline-end: calc(var(--face) * 0.34);
+}
+
+.poker-seat[data-lies='upright'] .table-plate
+{
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'face' 'name' 'line';
+    justify-items: center;
+    inline-size: var(--col-w);
+    border-radius: calc(var(--face) * 0.5);
     text-align: center;
+}
+
+.poker-seat .table-plate-avatar
+{
+    grid-area: face;
+}
+
+.poker-seat .table-plate-avatar > [role='img']
+{
+    inline-size: var(--face);
+    block-size: var(--face);
+    font-size: calc(var(--face) * 0.38);
 }
 
 .poker-seat .table-plate-text
 {
-    align-items: center;
-    max-inline-size: 100%;
+    display: contents;
 }
 
 .poker-seat .table-plate-name
 {
+    grid-area: name;
+    align-self: end;
     max-inline-size: 100%;
+    font-size: var(--type);
+    line-height: 1.2;
+}
+
+.poker-seat .table-plate-facts,
+.poker-seat .table-plate-tag
+{
+    grid-area: line;
+    align-self: start;
+    font-size: var(--type);
+    line-height: 1.2;
+}
+
+.poker-seat .table-plate-tag
+{
+    inline-size: max-content;
+    max-inline-size: none;
+    padding-inline: 0.45em;
+    text-transform: none;
+}
+
+.poker-seat[data-lies='flat'] .table-plate-tag
+{
+    justify-self: start;
+}
+
+.poker-seat .table-plate:has(> .table-plate-tag) .table-plate-facts
+{
+    visibility: hidden;
+}
+
+.poker-seat .table-plate-trail
+{
+    position: absolute;
+}
+
+.poker-seat .table-plate-trail:has(> .contents > .poker-clock)
+{
+    position: static;
+    grid-column: 3;
+    grid-row: 1 / 3;
+    display: flex;
+}
+
+.poker-clock
+{
+    block-size: auto;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: var(--type);
+    font-weight: 700;
+}
+
+.poker-clock > svg
+{
+    display: none;
 }
 
 .poker-backs
 {
-    --back-w: 0.8rem;
-
     position: absolute;
-    left: 0.35rem;
-    top: 0.3rem;
+    left: calc(50% + var(--ux) * (50% + var(--gap)));
+    top: calc(50% + var(--uy) * (50% + var(--gap)));
     display: flex;
+    translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);
     pointer-events: none;
 }
 
-@container (min-width: 36rem)
+.poker-backs > .card-back
 {
-    .poker-table > *
-    {
-        --plate-w: 6.5rem;
-    }
+    rotate: -5deg;
 }
 
-@container (max-width: 22rem)
+.poker-backs > .card-back + .card-back
 {
-    .poker-table > *
-    {
-        --plate-w: 4rem;
-    }
-
-    .poker-seat .table-plate
-    {
-        padding: 0.2rem;
-    }
-
-    .poker-seat .table-plate-tag
-    {
-        padding-inline: 0.15rem;
-    }
-
-    .poker-seat .table-plate-avatar,
-    .poker-backs
-    {
-        display: none;
-    }
+    margin-inline-start: calc(var(--back-w) * -0.42);
+    rotate: 6deg;
 }
 
-@container (max-height: 20rem)
+.poker-bet
 {
-    .poker-seat .table-plate-avatar,
-    .poker-backs
-    {
-        display: none;
-    }
-}
-
-.poker-dealer
-{
+    position: absolute;
+    z-index: 2;
+    left: calc(50% + var(--ux) * (50% + var(--gap)));
+    top: calc(50% + var(--uy) * (50% + var(--gap)));
     display: flex;
-    inline-size: 1rem;
-    block-size: 1rem;
+    inline-size: max-content;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.14em 0.6em 0.14em 0.4em;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.6);
+    color: white;
+    font-size: var(--type);
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+    translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);
+}
+
+.poker-bet:not([data-placed]),
+.poker-puck:not([data-placed])
+{
+    visibility: hidden;
+}
+
+.poker-bet-disc
+{
+    box-sizing: border-box;
+    inline-size: 0.85em;
+    block-size: 0.85em;
+    border: 0.17em dashed white;
+    border-radius: 999px;
+    background: var(--madder);
+}
+
+.poker-puck
+{
+    position: absolute;
+    z-index: 4;
+    left: 0;
+    top: 0;
+    display: flex;
+    inline-size: clamp(1.05rem, var(--u) * 4.4, 1.75rem);
+    block-size: clamp(1.05rem, var(--u) * 4.4, 1.75rem);
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    background: white;
+    background: radial-gradient(circle at 35% 30%, #FFFFFF, #E4E7EE 60%, #C3C8D4);
     color: var(--bright-ink);
-    font-size: 0.55rem;
+    font-size: clamp(0.6875rem, var(--u) * 2.6, 1rem);
     font-weight: 900;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 2px 4px rgb(0 0 0 / 0.55);
+    pointer-events: none;
+}
+
+@container (max-width: 30rem) or (max-height: 22rem)
+{
+    .poker-seat[data-lies='upright'] .table-plate
+    {
+        grid-template-areas: 'face' 'line';
+    }
+
+    .poker-seat[data-lies='upright'] .table-plate-name
+    {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        clip-path: inset(50%);
+    }
+}
+
+@container (max-width: 19rem) or (max-height: 15rem)
+{
+    .poker-backs
+    {
+        display: none;
+    }
+}
+
+@container (max-width: 17rem) or (max-height: 12rem)
+{
+    .poker-table > *
+    {
+        --pill-w: 4.25rem;
+        --col-w: 4.25rem;
+    }
+
+    .poker-seat .table-plate-avatar
+    {
+        display: none;
+    }
+
+    .poker-seat:is([data-lies='flat'], [data-lies='upright']) .table-plate
+    {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: 'name' 'line';
+        justify-items: center;
+        padding: 0.2rem 0.3rem;
+        border-radius: 0.6rem;
+        text-align: center;
+    }
+
+    .poker-seat[data-lies='upright'] .table-plate-name
+    {
+        position: static;
+        inline-size: auto;
+        block-size: auto;
+        margin: 0;
+        clip-path: none;
+    }
+
+    .poker-seat[data-lies='flat'] .table-plate-tag
+    {
+        justify-self: center;
+    }
 }
 
 .poker-hand
@@ -2794,25 +2980,77 @@ html:has(.site-drawer[open])
     margin-block-start: -0.25rem;
 }
 
+.poker-hand > .coach-line[data-lamp]
+{
+    margin-block-end: 1.075rem;
+}
+
+.poker-hand > .coach-line[data-lamp] > span:last-child
+{
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+}
+
+.poker-own
+{
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+@container stage (max-height: 24rem)
+{
+    .poker-hand
+    {
+        --card-w: 2.25rem;
+    }
+
+    .poker-own
+    {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+}
+
 .poker-hole
 {
     display: flex;
     gap: 0.375rem;
 }
 
+.poker-pocket
+{
+    display: flex;
+    box-sizing: border-box;
+    inline-size: var(--card-w);
+    aspect-ratio: 204 / 288;
+    border-radius: calc(var(--card-w) * 0.08);
+}
+
+.poker-pocket:empty
+{
+    border: 1px dashed var(--line-strong);
+}
+
 .poker-hand-name
 {
-    display: -webkit-box;
     overflow: hidden;
-    min-inline-size: 0;
-    flex: 0 1 9rem;
-    align-self: center;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    max-inline-size: min(15rem, 62cqi);
+    min-block-size: 1.2em;
     color: var(--color-text);
     font-size: var(--text-ui-xs);
     font-weight: 600;
-    text-align: end;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.poker-hand-name::first-letter
+{
+    text-transform: uppercase;
 }
 
 .poker-acts
@@ -2945,52 +3183,6 @@ html:has(.site-drawer[open])
     {
         animation: none;
     }
-}
-
-.poker-bar-facts
-{
-    display: none;
-}
-
-@container stage (max-height: 24rem)
-{
-    .poker-chips > .poker-chip
-    {
-        display: none;
-    }
-
-    .poker-last
-    {
-        margin-inline-start: auto;
-    }
-
-    .poker-bar-facts
-    {
-        display: flex;
-    }
-}
-
-[data-sheet] .poker-chips > .poker-chip,
-.poker-stage[data-felt='short'] .poker-chips > .poker-chip
-{
-    display: none;
-}
-
-[data-sheet] .poker-last,
-.poker-stage[data-felt='short'] .poker-last
-{
-    margin-inline-start: auto;
-}
-
-.poker-stage[data-felt='short'] .poker-bar-facts
-{
-    display: flex;
-}
-
-[data-sheet] .poker-stage .poker-bar-facts,
-[data-beside] .poker-stage .poker-bar-facts
-{
-    display: none;
 }
 
 @media (max-height: 540px)

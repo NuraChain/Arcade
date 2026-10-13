@@ -4,6 +4,7 @@ import type { helpersPoker as reference } from '../en/helpers-poker.ts';
 export const helpersPoker: Pick<Dictionary, keyof typeof reference> = {
     'helpers.poker.best': 'بهترین دستت تا اینجا: {hand}.',
     'helpers.poker.board': 'با کارت‌های وسط بازی می‌کنی: {hand}.',
+    'helpers.poker.board.brief': 'کارت‌های وسط: {hand}',
     'helpers.poker.hand.high-card': 'بالاترین کارت {top}',
     'helpers.poker.hand.pair': 'جفت {tops}',
     'helpers.poker.hand.two-pair': 'دو جفت، {tops} و {seconds}',

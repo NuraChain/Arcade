@@ -6,56 +6,54 @@ import { SUIT_PATH } from './suits.mjs';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'board');
 
-const MARGIN = 0.012;
-const RAIL = 0.085;
-const TRACK = 0.05;
-const GROOVE = 0.008;
-
 const GOLD = '#D9B45A';
+
+const MEDAL = 130;
 
 const round = (value) => Math.round(value * 100) / 100;
 
-function stadium(x, y, width, height)
+function medallion()
 {
-    const radius = Math.min(width, height) / 2;
-
-    return `<rect x="${ round(x) }" y="${ round(y) }" width="${ round(width) }" height="${ round(height) }" rx="${ round(radius) }"/>`;
-}
-
-function ornaments(width, height)
-{
-    const short = Math.min(width, height);
-    const felt = short * (MARGIN + RAIL + TRACK + GROOVE);
-    const fw = width - felt * 2;
-    const fh = height - felt * 2;
-    const line = short * 0.07;
-    const cx = width / 2;
-    const cy = height / 2;
-    const medal = short * 0.13;
+    const half = MEDAL + 5;
     const pips = [
         ['spade', 0, -1],
         ['heart', 1, 0],
         ['club', 0, 1],
         ['diamond', -1, 0]
     ].map(([suit, dx, dy]) =>
-        `<path d="${ SUIT_PATH[suit] }" transform="translate(${ round(dx * medal * 0.62) } ${ round(dy * medal * 0.62) }) scale(${ round(medal / 60) })"/>`).join('');
+        `<path d="${ SUIT_PATH[suit] }" transform="translate(${ round(dx * MEDAL * 0.62) } ${ round(dy * MEDAL * 0.62) }) scale(${ round(MEDAL / 60) })"/>`).join('');
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }">
-<g fill="none" stroke="${ GOLD }">
-    <g stroke-opacity="0.36" stroke-width="2.5">${ stadium(felt + line, felt + line, fw - line * 2, fh - line * 2) }</g>
-    <g stroke-opacity="0.14" stroke-width="1.5">${ stadium(felt + line + 9, felt + line + 9, fw - line * 2 - 18, fh - line * 2 - 18) }</g>
-</g>
-<g transform="translate(${ round(cx) } ${ round(cy) })">
-    <circle r="${ round(medal) }" fill="#062E28" fill-opacity="0.18" stroke="${ GOLD }" stroke-opacity="0.26" stroke-width="2.5"/>
-    <circle r="${ round(medal * 0.88) }" fill="none" stroke="${ GOLD }" stroke-opacity="0.14" stroke-width="1.5" stroke-dasharray="3 7"/>
-    <g fill="${ GOLD }" fill-opacity="0.05" stroke="${ GOLD }" stroke-opacity="0.12" stroke-width="1.2">${ pips }</g>
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ half * 2 } ${ half * 2 }" width="${ half * 2 }" height="${ half * 2 }">
+<g transform="translate(${ half } ${ half })">
+    <circle r="${ MEDAL }" fill="#04201B" fill-opacity="0.2" stroke="${ GOLD }" stroke-opacity="0.3" stroke-width="2.5"/>
+    <circle r="${ round(MEDAL * 0.88) }" fill="none" stroke="${ GOLD }" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="3 7"/>
+    <g fill="${ GOLD }" fill-opacity="0.06" stroke="${ GOLD }" stroke-opacity="0.14" stroke-width="1.2">${ pips }</g>
 </g>
 </svg>
 `;
 }
 
-for (const [name, width, height] of [['poker-ornaments-wide.svg', 1600, 1000], ['poker-ornaments-tall.svg', 1000, 1250]])
+function grain({ width, height, frequency, octaves, seed, slope, lift, opacity })
 {
-    writeFileSync(join(OUT, name), ornaments(width, height));
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }">
+<filter id="grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="${ frequency }" numOctaves="${ octaves }" seed="${ seed }" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 ${ slope } ${ lift }"/>
+</filter>
+<rect width="${ width }" height="${ height }" filter="url(#grain)" opacity="${ opacity }"/>
+</svg>
+`;
+}
+
+const DRAWINGS = [
+    ['poker-medallion.svg', medallion()],
+    ['poker-felt.svg', grain({ width: 256, height: 256, frequency: '0.95', octaves: 2, seed: 3, slope: -1.4, lift: 0.86, opacity: 0.42 })],
+    ['poker-leather.svg', grain({ width: 200, height: 200, frequency: '1.5', octaves: 2, seed: 7, slope: -1.2, lift: 0.74, opacity: 0.3 })],
+    ['poker-wood.svg', grain({ width: 512, height: 256, frequency: '0.008 0.22', octaves: 3, seed: 11, slope: -2.2, lift: 1.25, opacity: 0.45 })]
+];
+
+for (const [name, drawing] of DRAWINGS)
+{
+    writeFileSync(join(OUT, name), drawing);
     console.log(`board ${ name }`);
 }

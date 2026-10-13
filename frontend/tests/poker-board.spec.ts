@@ -119,7 +119,7 @@ describe('PokerBoard', () =>
 
         expect(cards().querySelectorAll('.card-face')).toHaveLength(2);
         expect(cards().getAttribute('aria-pressed')).toBe('false');
-        expect(container.querySelector('.poker-hand .sr-only')?.textContent, 'the cards stopped being said once they were the thing that folds').toMatch(/^Your cards: \S/);
+        expect(container.querySelector('.poker-own > .contents > .sr-only')?.textContent, 'the cards stopped being said once they were the thing that folds').toMatch(/^Your cards: \S/);
 
         fire(cards(), 'click');
 
@@ -159,22 +159,36 @@ describe('PokerBoard', () =>
         expect(play).toHaveBeenCalledWith({ kind: 'poker', verb: 'fold' });
     });
 
-    it('draws no bar under the table: the cards and the chips are in the reader’s hand, the turn is said to a screen reader alone, and the clock and the tip stand in the corner', () =>
+    it('draws no bar under the table and nothing in its corners: the turn is said to a screen reader alone, the seconds are on the reader’s own plate and the tip is the last thing in their hand', () =>
     {
-        const { container } = renderTest(() => PokerBoard({ match: { ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }), remainingMs: 20_000 } }) as Rendered);
-        const corner = container.querySelector('.table-fit > .table-corner')!;
+        const { container } = renderTest(() => PokerBoard({ match: { ...match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
         const live = container.querySelector('[aria-live="polite"]')!;
+        const mine = container.querySelector('.poker-seat[data-seat="0"]')!;
+        const hand = container.querySelector('.poker-hand')!;
 
         expect(container.querySelector('.table-grid')!.classList.contains('poker-grid')).toBe(true);
         expect(container.querySelector('.table-grid > .table-bar')).toBeNull();
-        expect(container.querySelector('.poker-bar')).toBeNull();
+        expect(container.querySelector('.poker-bar, .table-corner, .poker-chips'), 'something stands under the table or in a corner of it again').toBeNull();
         expect(live.classList.contains('sr-only')).toBe(true);
         expect(live.textContent).toBe('Your turn. 20 to call.');
-        expect(live.closest('.table-corner')).toBe(corner);
-        expect([...corner.querySelectorAll('.table-corner-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
-        expect(corner.querySelector('.table-corner-tools [role="note"]')?.getAttribute('data-lamp')).toBe('true');
+        expect(container.querySelectorAll('.poker-clock')).toHaveLength(1);
+        expect([...mine.querySelectorAll('.table-plate-trail .poker-clock span')].map((one) => one.textContent?.trim())).toEqual(expect.arrayContaining(['20s', 'About 20s left']));
+        expect(hand.lastElementChild?.getAttribute('role'), 'the tip is not the last thing in the hand').toBe('note');
+        expect(hand.lastElementChild?.getAttribute('data-lamp')).toBe('true');
+        expect(container.querySelectorAll('[role="note"]'), 'the tip is drawn in two places').toHaveLength(1);
         expect([...container.querySelectorAll('.poker-hand button')].map((one) => one.textContent?.trim())).toEqual(['Fold', 'Call 20', 'Raise']);
         expect([...container.querySelectorAll('button')].every((one) => one.closest('.poker-hand') !== null)).toBe(true);
+    });
+
+    it('draws no seconds on the plate of another seat that is on turn: the ring is its clock, and a screen reader is told the time', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: { ...match({ turn: 3 }), remainingMs: 20_000 }, turnMs: 30_000 }) as Rendered);
+        const theirs = container.querySelector('.poker-seat[data-seat="3"]')!;
+
+        expect(container.querySelector('.poker-clock'), 'a number is drawn on a plate that is not the reader\'s').toBeNull();
+        expect(theirs.querySelector('.table-plate-clock'), 'the seat on turn has no ring').not.toBeNull();
+        expect(theirs.querySelector('.table-plate-trail .sr-only')?.textContent).toContain('About 20s left');
+        expect([...container.querySelectorAll('.poker-seat')].filter((seat) => seat.querySelector('.table-plate-trail .inline-flex') !== null).map((seat) => seat.getAttribute('data-seat')), 'a clock runs on a plate whose turn it is not').toEqual(['3']);
     });
 
     it('gives a seat that is not on turn its cards and nothing to press', () =>
@@ -293,6 +307,49 @@ describe('PokerBoard', () =>
         expect(container.textContent).toContain('Calling costs 20 against a pot of 30.');
     });
 
+    it('writes the hand over the reader\'s cards in a line of its own, and keeps the sentence for a screen reader', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+        const name = container.querySelector('.poker-own > .poker-hand-name')!;
+
+        expect(name.textContent).toBe('a pair of twos');
+        expect(name.getAttribute('aria-hidden')).toBe('true');
+        expect(container.querySelector('.poker-own > .sr-only')?.textContent).toBe('Your best hand so far: a pair of twos.');
+    });
+
+    it('says when the hand is the board\'s and not the reader\'s', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({ street: 'river', board: [8, 9, 10, 11, 12], hole: [13, 27] }) }) as Rendered);
+
+        expect(container.querySelector('.poker-hand-name')?.textContent).toMatch(/^The board: a straight flush, \S/);
+        expect(container.querySelector('.poker-own > .sr-only')?.textContent).toMatch(/^You are playing the board: a straight flush, \S/);
+    });
+
+    it('keeps the row the reader\'s cards lie in when they fold, as two empty places, so the table does not change size', () =>
+    {
+        const seats = Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: 0, folded: seat === 0, allIn: false, out: false }));
+        const { container } = renderTest(() => PokerBoard({ match: match({ turn: 3, hole: [], seats }) }) as Rendered);
+
+        expect(container.querySelector('.poker-hand'), 'the row went with the cards').not.toBeNull();
+        expect(container.querySelectorAll('.poker-hand .poker-pocket')).toHaveLength(2);
+        expect(container.querySelectorAll('.poker-hand .card-face')).toHaveLength(0);
+        expect(container.querySelector('.poker-hand-name')?.textContent).toBe('');
+        expect(container.querySelector('.poker-hand button')).toBeNull();
+    });
+
+    it('draws no row for somebody who is out of the game, or who is watching', () =>
+    {
+        const seats = Array.from({ length: 6 }, (_, seat) => ({ seat, stack: seat === 0 ? 0 : 1500, bet: 0, folded: false, allIn: false, out: seat === 0 }));
+        const out = renderTest(() => PokerBoard({ match: match({ turn: 3, hole: [], seats }) }) as Rendered);
+
+        expect(out.container.querySelector('.poker-hand')).toBeNull();
+        out.unmount();
+
+        const watching = renderTest(() => PokerBoard({ match: match({ turn: 3 }, null) }) as Rendered);
+
+        expect(watching.container.querySelector('.poker-hand')).toBeNull();
+    });
+
     it('says nothing about the hand or the price with the outcome helper off', () =>
     {
         useSettings().update({ hintOutcome: false });
@@ -301,6 +358,7 @@ describe('PokerBoard', () =>
 
         expect(container.textContent).not.toContain('best hand');
         expect(container.textContent).not.toContain('Calling costs');
+        expect(container.querySelector('.poker-hand-name'), 'a line is kept over the cards for a helper that is off').toBeNull();
         expect(button(container, 'Call 20')).toBeDefined();
     });
 
@@ -473,31 +531,38 @@ describe('where a bet sits on the felt', () =>
         expect(seatBets([{ plate: box(0, 0, 40, 20), width: 44, height: 22 }], box(0, 0, 40, 20), [], [], 4)).toEqual([null]);
     });
 
-    const feltOf = (height: number) =>
+
+    it('keeps the last hand and the blinds beside the pot, the one place on a table where no seat ever is', () =>
     {
         const { container } = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
-        const felt = container.querySelector<HTMLElement>('.poker-table')!;
+        const tally = container.querySelector('.poker-centre > .poker-tally')!;
 
-        felt.getBoundingClientRect = () => ({ left: 0, top: 0, right: 343, bottom: height, width: 343, height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-
-        return container.querySelector<HTMLElement>('.poker-stage')!;
-    };
-
-    it('sheds the blinds chip from a felt shorter than 16rem, so the corner carries it and a crowded pot keeps the rail', async () =>
-    {
-        const stage = feltOf(214);
-
-        await vi.waitFor(() => expect(stage.dataset.felt).toBe('short'));
-        expect(stage.querySelector('.poker-bar-facts')).not.toBeNull();
+        expect([...tally.children].map((one) => one.className)).toEqual(['poker-last', 'poker-pot', 'poker-blinds']);
+        expect(tally.querySelector('.poker-pot')?.textContent).toBe('Total pot 30');
+        expect(tally.querySelector('.poker-blinds .tally')?.textContent).toBe('10/20');
+        expect(tally.querySelector('.poker-blinds .sr-only')?.textContent).toContain('Before the flop');
+        expect(tally.querySelector('.poker-last > summary')?.textContent?.trim()).toBe('Last hand');
+        expect(container.querySelector<HTMLElement>('.poker-stage')!.dataset.felt, 'the stage still says how tall its felt is').toBeUndefined();
     });
 
-    it('keeps the blinds chip on a felt with the room for it', async () =>
+    it('shuts the last hand when anything else on the page is pressed, and leaves it open for a press inside it', async () =>
     {
-        const stage = feltOf(300);
+        const { container } = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);
+        const last = container.querySelector<HTMLDetailsElement>('.poker-last')!;
 
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        await Promise.resolve();
+        await Promise.resolve();
 
-        expect(stage.dataset.felt).toBeUndefined();
+        last.open = true;
+        fire(last.querySelector('.poker-last-panel')!, 'pointerdown');
+        expect(last.open, 'a press inside the panel shut it').toBe(true);
+
+        fire(container.querySelector('.poker-table')!, 'pointerdown');
+        expect(last.open, 'the panel stayed open over a table somebody was pressing').toBe(false);
+
+        last.open = true;
+        fire(document.body, 'pointerdown');
+        expect(last.open).toBe(false);
     });
 
     it('seats the crowded pot a phone held upright gives a 343x214 felt once the felt has shed its blinds chip', () =>
@@ -593,14 +658,17 @@ describe('a table that is read again', () =>
     {
         const { container, read } = shown(flop({ turn: 2, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined }));
         const before = under(container);
+        const turning = container.querySelector('.poker-seat[data-seat="2"]')!;
+        const clock = new Set(['.table-plate-clock', '.table-plate-clock *', '.table-plate-trail *'].flatMap((one) => [...turning.querySelectorAll(one)]));
         const bets = container.querySelectorAll('.poker-bet').length;
 
         read(flop({ turn: 3, toCall: undefined, minRaiseTo: undefined, maxRaiseTo: undefined, pot: 760, seats: rows({ 2: { stack: 1200, bet: 300 } }) }, { rev: 8 }));
 
         expect(container.querySelectorAll('.poker-bet').length).toBe(bets + 1);
         expect(container.querySelector('.poker-seat[data-seat="2"] .poker-bet')?.textContent).toBe('300');
-        expect(container.querySelector('.poker-seat[data-seat="2"] .table-plate-facts')?.textContent).toBe('1,200');
-        expect(gone(before), 'a call by one seat took more off the table than the ring of the turn that ended').toEqual(['svg.table-plate-clock', 'circle.']);
+        expect(container.querySelector('.poker-seat[data-seat="2"] .table-plate-facts .tally')?.textContent).toBe('1,200');
+        expect(before.filter((one) => !document.contains(one) && !clock.has(one)), 'a call by one seat took more off the table than the clock of the turn that ended').toEqual([]);
+        expect(gone(before), 'the clock of the turn that ended is still on its plate').toEqual(expect.arrayContaining(['svg.table-plate-clock', 'circle.', 'span.sr-only']));
     });
 
     it('keeps a bet that grows the pill it was, and takes away only the pill of a bet that is gathered', () =>
@@ -618,7 +686,7 @@ describe('a table that is read again', () =>
         read(flop({ street: 'turn', board: [5, 18, 31, 44], seats: rows({ 4: { bet: 0 }, 5: { bet: 0 } }) }, { rev: 9 }));
 
         expect(gone(before).filter((one) => one === 'span.poker-bet')).toHaveLength(2);
-        expect(gone(before).filter((one) => !/^span\.(poker-bet|h-2\.5|tally)$/.test(one)), 'the street closing took more off the table than the two bets').toEqual([]);
+        expect(gone(before).filter((one) => !/^span\.(poker-bet|poker-bet-disc|tally)$/.test(one)), 'the street closing took more off the table than the two bets').toEqual([]);
     });
 
     it('keeps the cards on the board when another comes, in the slot it had kept empty', () =>
@@ -681,21 +749,29 @@ describe('a table that is read again', () =>
         expect([...last.querySelectorAll('li')]).toEqual(rows);
     });
 
-    it('keeps the dealer\'s mark while the button is where it was, and moves it without drawing a plate again', () =>
+    it('keeps the dealer\'s button the one button on the table, and moves it without drawing a plate again', () =>
     {
         const { container, read } = shown(flop());
-        const mark = container.querySelector('.poker-dealer')!;
+        const puck = container.querySelector<HTMLElement>('.poker-puck')!;
         const plates = [...container.querySelectorAll('.table-plate')];
+        const told = () => [...container.querySelectorAll('.poker-seat')]
+            .filter((seat) => seat.querySelector('.table-plate-facts .sr-only') !== null)
+            .map((seat) => seat.getAttribute('data-seat'));
 
-        expect(mark.closest('.poker-seat')?.getAttribute('data-seat')).toBe('2');
+        expect(container.querySelectorAll('.poker-puck')).toHaveLength(1);
+        expect(puck.parentElement?.classList.contains('poker-table'), 'the button is a plate\'s and not the table\'s').toBe(true);
+        expect([puck.dataset.seat, puck.textContent]).toEqual(['2', 'D']);
+        expect(told()).toEqual(['2']);
+        expect(container.querySelector('.poker-seat[data-seat="2"] .table-plate-facts .sr-only')?.textContent).toBe('Dealer');
 
         read(flop({}, { remainingMs: 12_000 }));
-        expect(container.querySelector('.poker-dealer'), 'the mark was drawn again where it already was').toBe(mark);
+        expect(container.querySelector('.poker-puck'), 'the button was made again where it already lay').toBe(puck);
 
         read(flop({ button: 3 }, { rev: 8 }));
 
-        expect(container.querySelectorAll('.poker-dealer')).toHaveLength(1);
-        expect(container.querySelector('.poker-dealer')?.closest('.poker-seat')?.getAttribute('data-seat')).toBe('3');
+        expect(container.querySelector('.poker-puck'), 'the button was made again to move it').toBe(puck);
+        expect(puck.dataset.seat).toBe('3');
+        expect(told()).toEqual(['3']);
         expect([...container.querySelectorAll('.table-plate')], 'moving the button drew the plates again').toEqual(plates);
     });
 
@@ -741,5 +817,143 @@ describe('a table that is read again', () =>
 
         expect(container.querySelector('.poker-hand')).toBe(hand);
         expect(button(container, 'Check')).toBeDefined();
+    });
+});
+
+describe('a table of the shape its room gives it', () =>
+{
+    const measured = (width: number, height: number) =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({}, 0, 9) }) as Rendered);
+        const felt = container.querySelector<HTMLElement>('.poker-table')!;
+
+        felt.getBoundingClientRect = () => ({ left: 0, top: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+        return container;
+    };
+
+    const lying = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.poker-seat')].map((seat) => seat.dataset.lies?.[0]).join('');
+
+    const at = (container: HTMLElement, seat: number) =>
+    {
+        const style = container.querySelector<HTMLElement>(`.poker-seat[data-seat="${ seat }"]`)!.style;
+
+        return ['--x', '--y', '--ux', '--uy'].map((name) => Number(style.getPropertyValue(name)));
+    };
+
+    it('puts the reader at the middle of the near rail whichever seat the server gave them, and the seat after them to their left', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({}, 2) }) as Rendered);
+
+        expect(at(container, 2).slice(0, 1)).toEqual([50]);
+        expect(at(container, 2)[1]).toBeGreaterThan(90);
+        expect(at(container, 3)[0], 'the seat after the reader is not to their left').toBeLessThan(50);
+        expect(at(container, 3)[1]).toBeGreaterThan(50);
+        expect(at(container, 1)[0]).toBeGreaterThan(50);
+        expect(at(container, 5)[1], 'the seat across the table is not at its far rail').toBeLessThan(10);
+        expect(container.querySelector('.poker-seat[data-seat="2"] .poker-backs'), 'the reader\'s own cards are drawn face down on the felt').toBeNull();
+    });
+
+    it('is round until it has been measured, and says how many sit at it', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({}, 0, 9) }) as Rendered);
+        const [x, y, ux, uy] = at(container, 0);
+
+        expect(container.querySelector('.poker-table')?.getAttribute('data-seats')).toBe('9');
+        expect(lying(container)).toBe('ffuuffuuf');
+        expect([x, ux, uy]).toEqual([50, 0, -1]);
+        expect(y).toBeCloseTo(94.9, 1);
+    });
+
+    it('stands three plates along the near rail of a table that lies wide, and one at each end', async () =>
+    {
+        const container = measured(600, 250);
+
+        await vi.waitFor(() => expect(lying(container)).toBe('ffuffffuf'));
+
+        expect(at(container, 1)[0], 'the seat after the reader is not to their left on the near rail').toBeLessThan(40);
+        expect(at(container, 1)[1]).toBeCloseTo(at(container, 0)[1], 5);
+        expect(at(container, 2).slice(2), 'a seat at the end of the table does not face along it').toEqual([1, expect.any(Number)]);
+    });
+
+    it('stands three plates down each side of a table that stands tall, and two at its head', async () =>
+    {
+        const container = measured(358, 660);
+
+        await vi.waitFor(() => expect(lying(container)).toBe('fuuuffuuu'));
+
+        expect(at(container, 2).slice(2)).toEqual([1, 0]);
+        expect(at(container, 7).slice(2)).toEqual([-1, 0]);
+        expect(at(container, 4)[1]).toBeLessThan(10);
+    });
+
+    it('seats a bet only once it has measured the table, so no bet is seen where it is not', async () =>
+    {
+        const seats = Array.from({ length: 9 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false }));
+        const { container } = renderTest(() => PokerBoard({ match: match({ seats }, 0, 9) }) as Rendered);
+        const bet = container.querySelector<HTMLElement>('.poker-bet')!;
+
+        expect(bet.dataset.placed, 'a bet was shown before the table had been measured').toBeUndefined();
+
+        await vi.waitFor(() => expect(bet.dataset.placed).toBe('true'));
+    });
+});
+
+describe('a bet in front of its seat', () =>
+{
+    const box = (left: number, top: number, width: number, height: number): Box => ({ left, top, right: left + width, bottom: top + height });
+
+    const meets = (one: Box, two: Box) => one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
+
+    const table = box(0, 0, 358, 660);
+
+    it('lies straight in front of the cards the seat holds, towards the middle of the table', () =>
+    {
+        const plate = box(0, 100, 56, 62);
+        const cards = box(60, 117, 33, 28);
+        const [bet] = seatBets([{ plate: box(0, 100, 93, 62), width: 50, height: 20, toward: { x: 1, y: 0 }, lead: cards }], table, [plate, cards], [], 4);
+
+        expect(bet).toEqual(box(97, 121, 50, 20));
+    });
+
+    it('lies in front of the plate of a seat that holds no cards', () =>
+    {
+        const plate = box(118, 615, 122, 38);
+        const [bet] = seatBets([{ plate, width: 50, height: 20, toward: { x: 0, y: -1 } }], table, [plate], [], 4);
+
+        expect(bet).toEqual(box(154, 591, 50, 20));
+    });
+
+    it('goes down the table from the far rail, and to the left from the right-hand one', () =>
+    {
+        const far = box(118, 8, 122, 38);
+        const right = box(302, 300, 56, 62);
+        const bets = seatBets([
+            { plate: far, width: 50, height: 20, toward: { x: 0, y: 1 } },
+            { plate: right, width: 50, height: 20, toward: { x: -1, y: 0 } }
+        ], table, [far, right], [], 4);
+
+        expect(bets).toEqual([box(154, 50, 50, 20), box(248, 321, 50, 20)]);
+    });
+
+    it('follows the longer side of the way to the felt from a seat on a bend', () =>
+    {
+        const plate = box(480, 40, 104, 41);
+        const cards = box(470, 85, 24, 21);
+        const [bet] = seatBets([{ plate: box(470, 40, 114, 66), width: 36, height: 16, toward: { x: -0.6, y: 1 }, lead: cards }], box(0, 0, 600, 250), [plate, cards], [], 4);
+
+        expect(bet).toEqual(box(464, 110, 36, 16));
+    });
+
+    it('takes a place beside the seat when the place in front is taken, and never one on a plate or on cards', () =>
+    {
+        const plate = box(0, 100, 56, 62);
+        const cards = box(60, 117, 33, 28);
+        const taken = box(95, 110, 80, 40);
+        const [bet] = seatBets([{ plate: box(0, 100, 93, 62), width: 50, height: 20, toward: { x: 1, y: 0 }, lead: cards }], table, [plate, cards], [taken], 4);
+
+        expect(bet).not.toBeNull();
+        expect(bet).not.toEqual(box(97, 121, 50, 20));
+        expect([plate, cards, taken].some((other) => meets(bet!, other))).toBe(false);
     });
 });

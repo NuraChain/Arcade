@@ -1524,11 +1524,15 @@ are gone, and a lifted card's ring breathes instead, which has no direction to g
 trap is anybody's, and the borders of a turned shape are `border-top` and `border-left`. It was
 seen at a Persian table, with every gate and the fit pass green.
 
-**A table does not mirror, so what stands at a place on it is placed physically.** The corner of
-small things (`.table-corner`: poker's clock and tip) is the felt's right in both
-languages, because the seats are. Its things keep to that edge with `margin-left: auto`:
-`align-items: flex-end` is the LEFT of a column in Persian, and it left poker's lamp a clock's
-width in from the edge there.
+**A table does not mirror, so what stands at a place on it is placed physically.** Poker's table
+is `direction: ltr` and its seats are placed by `left` and `top`: the seat after the reader is
+on the reader's left in both languages, and a seat's cards and bet lie on the side its plate
+faces (`--ux`, `--uy`), which is a side of the table and not of the sentence. The row by the pot
+(`.poker-tally`) reads left to right for the same reason, and only what is written in it takes
+the page's direction. When poker kept a clock and a lamp in a corner of its table, that corner
+was the felt's right in both languages, and `align-items: flex-end` put them on its LEFT in
+Persian: a column's end is a side of the sentence. The reader's own row under the table is
+theirs and not the table's, so it does follow the page.
 
 The language is not carried in the url, because AzerothJS prefix routing is recorded as broken in the
 framework's own `framework-bugs.md`. It is a `locale` COOKIE, written by the framework's own

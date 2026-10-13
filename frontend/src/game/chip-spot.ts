@@ -11,12 +11,15 @@ export interface Bet
     plate: Box;
     width: number;
     height: number;
+    toward?: { x: number; y: number };
+    lead?: Box;
 }
 
 interface Option
 {
     spot: Box;
     clash: number;
+    aside: number;
     snug: number;
     reach: number;
 }
@@ -37,7 +40,8 @@ const grown = (box: Box, by: number): Box => ({ left: box.left - by, top: box.to
 
 const beside = (bet: Bet, table: Box, gap: number) =>
 {
-    const { plate, width, height } = bet;
+    const { plate, width, height, toward } = bet;
+    const lead = bet.lead ?? plate;
     const at = (left: number, top: number): Box => ({ left, top, right: left + width, bottom: top + height });
     const across = [(plate.left + plate.right - width) / 2, plate.left, plate.right - width];
     const down = [(plate.top + plate.bottom - height) / 2, plate.top, plate.bottom - height];
@@ -45,32 +49,42 @@ const beside = (bet: Bet, table: Box, gap: number) =>
     const after = plate.right + gap;
     const above = plate.top - gap - height;
     const below = plate.bottom + gap;
+    const sideways = toward !== undefined && Math.abs(toward.x) >= Math.abs(toward.y);
+    const ahead = toward === undefined
+        ? []
+        : [sideways
+            ? at(toward.x > 0 ? lead.right + gap : lead.left - gap - width, (lead.top + lead.bottom - height) / 2)
+            : at((lead.left + lead.right - width) / 2, toward.y > 0 ? lead.bottom + gap : lead.top - gap - height)];
 
     return [
-        ...down.map((top) => at(after, top)),
-        ...down.map((top) => at(before, top)),
-        ...across.map((left) => at(left, above)),
-        ...across.map((left) => at(left, below)),
-        at(after, above),
-        at(before, above),
-        at(after, below),
-        at(before, below)
-    ].filter((spot) => spot.left >= table.left - 0.5 && spot.top >= table.top - 0.5 && spot.right <= table.right + 0.5 && spot.bottom <= table.bottom + 0.5);
+        ...ahead.map((spot) => ({ spot, aside: 0 })),
+        ...[
+            ...down.map((top) => at(after, top)),
+            ...down.map((top) => at(before, top)),
+            ...across.map((left) => at(left, above)),
+            ...across.map((left) => at(left, below)),
+            at(after, above),
+            at(before, above),
+            at(after, below),
+            at(before, below)
+        ].map((spot) => ({ spot, aside: 1 }))
+    ].filter(({ spot }) => spot.left >= table.left - 0.5 && spot.top >= table.top - 0.5 && spot.right <= table.right + 0.5 && spot.bottom <= table.bottom + 0.5);
 };
 
 const ranked = (bet: Bet, table: Box, plates: readonly Box[], rest: readonly Box[], gap: number): Option[] =>
 {
     const middle = { x: (table.left + table.right) / 2, y: (table.top + table.bottom) / 2 };
-    const spots = [...beside(bet, table, gap).map((spot) => ({ spot, snug: 0 })), ...beside(bet, table, Math.min(gap, SNUG_GAP)).map((spot) => ({ spot, snug: 1 }))];
+    const spots = [...beside(bet, table, gap).map((one) => ({ ...one, snug: 0 })), ...beside(bet, table, Math.min(gap, SNUG_GAP)).map((one) => ({ ...one, snug: 1 }))];
 
     return spots
-        .map(({ spot, snug }) => ({
+        .map(({ spot, aside, snug }) => ({
             spot,
             clash: plates.reduce((sum, box) => sum + PLATE_WEIGHT * shared(spot, box), 0) + rest.reduce((sum, box) => sum + shared(spot, box), 0),
+            aside,
             snug,
             reach: Math.round(Math.hypot((spot.left + spot.right) / 2 - middle.x, (spot.top + spot.bottom) / 2 - middle.y))
         }))
-        .sort((one, two) => one.clash - two.clash || one.snug - two.snug || one.reach - two.reach);
+        .sort((one, two) => one.clash - two.clash || one.aside - two.aside || one.snug - two.snug || one.reach - two.reach);
 };
 
 const searched = (options: readonly Option[][]) =>

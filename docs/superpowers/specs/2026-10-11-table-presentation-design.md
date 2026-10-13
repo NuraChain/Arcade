@@ -2220,8 +2220,9 @@ button's own text.
 | Bet or raise | "Bet" or "Raise" opens a slider with presets over the table; "Raise to {chips}" confirms | A chip with a plus opens the same chooser over the foot of the felt: an amount is a question the game has to ask, and it is asked on the table |
 | All in | "All in, {chips}" | A gold chip, when the whole stack is the only raise left |
 
-The clock and the tip's lamp are in the corner of the table, the one hokm used (`.table-corner`),
-with the blinds above them where the felt has shed its chip.
+The clock and the tip's lamp were in the corner of the table, the one hokm used
+(`.table-corner`), with the blinds above them where the felt had shed its chip. Commit 5.1 took
+everything out of the table's corners (*As built*, under *Anchors and layouts*).
 
 **The bet spot.** A pill is rendered only while a bet is above zero, and its spot is found by
 measurement a frame later; until then it sits at a CSS default, and a new bet can move pills that
@@ -2263,6 +2264,30 @@ drop-shadow filter, and a flight has to reach the hand row.
 - Anything left resting on the felt joins the solids that the bet solver and
   `tools/qa/fit-pass.mjs` avoid, in the commit that puts it there: a deck, a muck, and under D10
   the controls in front of the reader's seat.
+
+**As built (commit 5.1, the table takes the stage).** What 5.2 to 5.5 stand on:
+
+- **The sizes are the table's own, and there are two.** Under 19rem wide or 15rem tall no cards
+  lie in front of the seats; under 17rem wide or 12rem tall the plates have no faces. Both are
+  smaller than the 22rem by 20rem above, because the table is larger: it takes the stage's box
+  at any shape from 1:2 to 2.4:1.
+- **The seats stand on the rail at even steps** (`game/poker-seats.ts`), each facing square
+  across it (`--ux`, `--uy`). The backs lie on the felt in front of the plate, 5.6% of the
+  table's shorter side wide, and are solids for the bet solver and the fit pass. A dealt card
+  lands on them where they are drawn and on the plate where they are not.
+- **The bet solver is told which way a seat faces and what the bet stands in front of**
+  (`toward`, `lead`: the seat's cards). That place is tried first, and the places beside the
+  seat are the fallback. A bet is hidden until the pass has seated it (`data-placed`), so step 2
+  of *The bet spot* already has its hidden pill.
+- **The puck is ONE element of the table**, laid by the layout pass on the corner of the
+  dealer's face, inside the plate's box. It does not move by itself yet: 5.4 slides it.
+- **The reader's row keeps its box while the reader is in the game**, with two empty places
+  after a fold. This is the first of the two options under *The bet spot*: a fold moves nothing.
+  The resize observer watches the felt as well as the stage.
+- **Nothing stands in the table's corners.** The seconds are on the reader's plate, the lamp is
+  the last thing in the reader's row, and "Last hand" and the blinds are beside the pot. What
+  5.3 to 5.5 lay on the felt has the seats, their cards, the bets and the middle to avoid, and
+  nothing else.
 
 **Limits.** §3.4, and §4.2 for the 2500 ms bound.
 

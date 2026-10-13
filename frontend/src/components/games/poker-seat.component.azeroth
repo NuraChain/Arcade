@@ -1,11 +1,13 @@
 import type { PlateTone } from './plate-tag.ts';
 import TablePlate from './table-plate.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export default component PokerSeat(props: {
     who: string;
     name: string;
     turn: boolean;
+    own: boolean;
     remainingMs?: number;
     turnMs?: number;
     dim: boolean;
@@ -23,6 +25,8 @@ export default component PokerSeat(props: {
     const locale = useLocale();
 
     derived dealing = props.button;
+
+    derived timed = props.turn;
 
     derived holding = props.holds;
 
@@ -43,27 +47,34 @@ export default component PokerSeat(props: {
             bubble={ props.bubble }
             below={ props.below }
             anchor={ props.anchor }
-            marker={
+            facts={
                 <span class="contents">
+                    <span class="tally font-bold text-gold">{ props.stack }</span>
                     <Show when={ dealing }>
-                        { () => <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> }
+                        { () => <span class="sr-only">{ locale.t('poker.dealer') }</span> }
                     </Show>
                 </span>
             }
-            facts={ <span class="tally font-bold text-gold">{ props.stack }</span> }
+            trail={
+                <span class="contents">
+                    <Show when={ timed }>
+                        { () => <TurnClock remainingMs={ props.remainingMs } over={ false } yours={ props.own } brief class={ props.own ? 'poker-clock' : 'sr-only' } /> }
+                    </Show>
+                </span>
+            }
         />
         <Show when={ holding }>
             { () =>
                 <span class="poker-backs" aria-hidden="true">
-                    <span class="card-back -rotate-6"></span>
-                    <span class="card-back -ms-1.5 rotate-6"></span>
+                    <span class="card-back"></span>
+                    <span class="card-back"></span>
                 </span>
             }
         </Show>
         <Show when={ betting }>
             { () =>
                 <span class="poker-bet">
-                    <span class="h-2.5 w-2.5 rounded-full border-2 border-dashed border-white bg-madder" aria-hidden="true"></span>
+                    <span class="poker-bet-disc" aria-hidden="true"></span>
                     <span class="tally">{ bet }</span>
                 </span>
             }

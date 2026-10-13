@@ -39,6 +39,7 @@ const GAMES = [
     { id: 'poker-6-allin', game: 'poker', seats: 6, mode: 'live', target: 0, viewers: ['allin'] },
     { id: 'poker-6-crowd', game: 'poker', seats: 6, mode: 'live', target: 0, viewers: ['crowd'] },
     { id: 'poker-2-facing', game: 'poker', seats: 2, mode: 'live', target: 0, viewers: ['facing'] },
+    { id: 'poker-9', game: 'poker', seats: 9, mode: 'live', target: 0 },
     { id: 'backgammon', game: 'backgammon', seats: 2, mode: 'turns', target: 3 },
     { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0, also: [BROWSER_BARS] },
     { id: 'ludo-4-rolled', game: 'ludo', seats: 4, mode: 'turns', target: 0, stop: 'rolled', viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
@@ -52,7 +53,7 @@ const USABLE = {
     ludo: { wide: [208, 208], tall: [208, 208], card: 0 }
 };
 
-const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5 };
+const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5, board: 44, boardShare: 0.124, lean: 0.75, grand: 1700, grandShare: 0.055 };
 
 const LANGUAGES = {
     en: { locale: 'en-US', show: englishPlay['play.table.chatShow'], hide: englishPlay['play.table.chatHide'], raise: [englishPlay['poker.raise'], englishPlay['poker.bet']] },
@@ -644,13 +645,64 @@ const measure = async (page, rules) => await page.evaluate((given) =>
                 }
             }
         }
+
+        if (surface.classList.contains('poker-table') && stage !== null && !given.openChat)
+        {
+            const room = box(stage);
+            const upright = room.height > room.width;
+            const hand = document.querySelector('.poker-hand');
+            const tall = (drawn.height + (hand === null ? 0 : box(hand).height)) / room.height;
+            const across = drawn.width / room.width;
+            const slot = surface.querySelector('.poker-slot');
+            const own = document.querySelector('.poker-hand .card-face, .poker-pocket');
+            const card = slot === null ? 0 : box(slot).width;
+            const narrowest = Math.min(given.fills.board, drawn.width * given.fills.boardShare);
+            const faceless = [...surface.querySelectorAll('.poker-seat .table-plate')]
+                .filter((plate) => shown(plate) && [...plate.querySelectorAll('.table-plate-avatar')].filter(shown).length === 0);
+            const named = document.querySelector('.poker-hand-name');
+
+            if (upright && tall < given.fills.tall)
+            {
+                found.push({ kind: 'small', what: `the table and the reader's cards take ${ Math.round(tall * 100) }% of an upright stage's height, under ${ given.fills.tall * 100 }%` });
+            }
+
+            if (!upright && across < given.fills.wide)
+            {
+                found.push({ kind: 'small', what: `the table takes ${ Math.round(across * 100) }% of a wide stage's width, under ${ given.fills.wide * 100 }%` });
+            }
+
+            if (upright && room.width < given.fills.phone && drawn.width / drawn.height <= given.fills.lean && card < narrowest - 0.5)
+            {
+                found.push({ kind: 'small', what: `a card on the board is ${ card.toFixed(1) }px wide on a phone, under ${ narrowest.toFixed(1) }` });
+            }
+
+            if (!upright && own !== null && card < box(own).width - 0.5)
+            {
+                found.push({ kind: 'small', what: `a card on the board is ${ card.toFixed(1) }px wide on a wide stage, narrower than the reader's own ${ box(own).width.toFixed(1) }` });
+            }
+
+            if (drawn.width >= given.fills.grand && card < drawn.width * given.fills.grandShare - 0.5)
+            {
+                found.push({ kind: 'small', what: `a card on the board is ${ card.toFixed(1) }px wide on a table ${ Math.round(drawn.width) } wide, under ${ given.fills.grandShare * 100 }% of it` });
+            }
+
+            if (!upright && faceless.length > 0)
+            {
+                found.push({ kind: 'small', what: `${ faceless.length } plates on a wide stage have no face: ${ describe(faceless[0]) }` });
+            }
+
+            if (named !== null && shown(named) && box(named).height > parseFloat(getComputedStyle(named).fontSize) * 1.6)
+            {
+                found.push({ kind: 'cut', what: `the name of the reader's hand takes ${ Math.round(box(named).height) }px, more than one line` });
+            }
+        }
     }
 
     if (surface !== null)
     {
         const plates = [...surface.querySelectorAll('.table-plate')].filter(shown);
 
-        for (const chip of surface.querySelectorAll('.poker-chips .poker-chip, .hokm-felt-info .hokm-chip'))
+        for (const chip of surface.querySelectorAll('.poker-tally > *, .hokm-felt-info .hokm-chip'))
         {
             for (const plate of plates)
             {
@@ -754,7 +806,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
 
         const held = [...document.querySelectorAll('.hokm-hand .card-face, .poker-hand .card-face, .poker-hand .poker-disc')].filter(shown);
 
-        for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .table-corner > .poker-bar-facts, .table-corner-clock, .table-corner-tools > *')].filter(shown))
+        for (const one of [...document.querySelectorAll('.hokm-rail-end > :not(.contents), .hokm-rail-end > .contents > *, .hokm-seat > .hokm-clock, .poker-hand > .coach-line')].filter(shown))
         {
             const seat = one.closest('.hokm-seat');
 
@@ -1019,7 +1071,44 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         }
     }
 
-    const felt = [...document.querySelectorAll('.poker-bet, .table-surface .table-plate, .poker-centre > *, .poker-chips .poker-chip')].filter(shown);
+    const felt = [...document.querySelectorAll('.poker-bet, .table-surface .table-plate, .poker-centre > *, .poker-last > summary, .poker-backs, .poker-puck')].filter(shown);
+
+    for (const cards of [...document.querySelectorAll('.poker-backs')].filter(shown))
+    {
+        const rect = box(cards);
+        const whose = describe(cards.closest('.poker-seat')?.querySelector('.table-plate') ?? cards);
+
+        if (surface !== null && beyond(rect, box(surface)))
+        {
+            found.push({ kind: 'hangs', what: `the cards of ${ whose } ${ where(rect) } off the table` });
+        }
+
+        for (const other of document.querySelectorAll('.table-surface .table-plate, .poker-centre > *, .poker-backs'))
+        {
+            if (other !== cards && shown(other) && meets(rect, box(other)))
+            {
+                found.push({ kind: 'felt', what: `the cards of ${ whose } ${ where(rect) } meet ${ describe(other) } ${ where(box(other)) }` });
+            }
+        }
+    }
+
+    for (const puck of document.querySelectorAll('.poker-puck'))
+    {
+        const holder = document.querySelector(`.poker-seat[data-seat="${ puck.getAttribute('data-seat') }"] .table-plate`);
+
+        if (!shown(puck))
+        {
+            found.push({ kind: 'felt', what: 'the dealer\'s button is not drawn' });
+        }
+        else if (holder === null || !meets(box(puck), box(holder)))
+        {
+            found.push({ kind: 'felt', what: `the dealer's button ${ where(box(puck)) } is not on the plate of the seat that deals` });
+        }
+        else if (surface !== null && beyond(box(puck), box(surface)))
+        {
+            found.push({ kind: 'hangs', what: `the dealer's button ${ where(box(puck)) } off the table` });
+        }
+    }
 
     for (const chip of document.querySelectorAll('.poker-bet'))
     {
