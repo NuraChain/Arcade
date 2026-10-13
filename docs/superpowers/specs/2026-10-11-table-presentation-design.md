@@ -2070,6 +2070,15 @@ table above.
   44 px of a card of the stock; the turn's ring passes when the last of them has landed. At
   390 by 844 the offer is lifted from 30 px to 53 px.
 
+**As built (commit 4.8, the motion pass).** `tools/qa/hokm-motion-pass.mjs`, 92 checks on the
+built server, and no lab: nothing hokm shows needs a position that chance has to be asked
+for. Cards are copies in the flight layer with no names, so the pass follows each copy by
+what it is. It added one judgement to those of §8: a flight is no more than a fifth of the
+way there one frame after it sets off, counted in time, because a browser that paints faster
+than sixty frames a second hid a curve that covered 44% of a flight in its first frame from
+the check on single steps. That curve went in the commit before the pass (`EASE.fly`), and
+the pass against a build with it, and seven other faults, fails 42 of its 92.
+
 ### 5.4 Poker
 
 **Engine facts** (`backend/src/domains/match/poker/`). The table passes to the left (clockwise).

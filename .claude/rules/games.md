@@ -4681,6 +4681,14 @@ a second finger, a jump, and the three ways a dropped card comes home;
 handlers; `hokm-motion-pass.mjs` carries a card to the table and lets one go short of it
 with a real pointer at two sizes.
 
+**The motion itself is held by hokm's own pass**, `tools/qa/hokm-motion-pass.mjs` on the built
+server (`tools/qa/CLAUDE.md`, *The motion labs and the motion passes*). A card has no name in
+the page, so the pass follows every copy in the flight layer by what it is, and fails one
+that does not set off from its place, does not come to rest in its place, leaps, fades and
+comes back, or is a fifth of the way there one frame after it set off. It is the only thing
+that sees a real browser deal, turn a card over, lift one from the stock and answer a press.
+There is no lab: a hand's end is under a second of play over the api.
+
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.

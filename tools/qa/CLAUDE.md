@@ -304,6 +304,36 @@ pawn home in front of the watcher (the confetti before the result, and no word t
 over while the board is still playing it), and Play again. What chance will not give in bounded
 time is the lab's: a capture, a pair, a home that is not the last, each fate of the die.
 
+**Hokm's pass is `tools/qa/hokm-motion-pass.mjs`**, run the same way, about five minutes and 92
+checks: four seats, three of them played over the api, with a fifth person watching, and then
+two tables for two. Hokm has no lab. Everything it shows can be reached by playing on over the
+api, a hand's end in under a second, so there is no position that chance has to be asked for.
+
+A card has no name in the page. What flies is a copy in the flight layer, and the pass follows
+each copy from the frame it appears to the frame it is gone by what it is: a face, a back, a
+packet, or a card that turns (and which side of it is up).
+
+- Trump is named, the rest of the deal leaves the deck in eleven packets, and every card dealt
+  to the reader is turned face up into the hand.
+- At the five sizes the reader's card is in the air within two frames of the press and goes
+  from its place in the hand to its place on the felt, and another seat's card leaves their
+  cards, or their plate where none are drawn, as a back that is turned over on its way.
+- A card is carried to the felt with the pointer and flies from where it was let go, and one
+  let go short of the table goes back to its place.
+- A trick is gathered and a hand ends on the table; a reload, a hidden tab, less motion; the
+  watcher half a minute behind.
+- At a table for two, at a phone's size and at a desktop's: the cards put down at the press,
+  the card on offer lifted, a keep and its second card, another seat's draw in its two backs,
+  a pass and the card taken instead, and the number on the stock for the reader who can see
+  the card and for the one who cannot.
+
+Every flight is judged as a pawn's walk is (it sets off from its place, comes to rest in its
+place, travels no further than its way, never leaps, never fades and comes back), and by one
+thing more: it is no more than a fifth of the way there one frame of a sixtieth of a second
+after it sets off. A browser that paints faster than that hides a curve that jumps from the
+check on single steps, so this one is counted in time. It is what holds `EASE.fly` in a
+browser; `stage-flight.spec.ts` holds its arithmetic.
+
 Seven things worth knowing before changing any of them:
 
 - **A die laid on the table is a new node with a new name** (`die-<n>`, counted for the table's
@@ -353,6 +383,15 @@ corner, the die's face and its corner, the keyframes, and the watcher's walk. Ag
 that draws the board again in place of the scene it failed 27 of 223: the hops in the other
 browser at every size and at the entry, the way at five sizes of ten, a die that was never
 thrown, the watcher's walk, and a result that came with no confetti and no play before it.
+
+Hokm's pass against a production build broken eight ways (the reader's card held back 120ms,
+another seat's card flying face up from the first frame, the curve a flight had before it was
+made to gather speed, less motion ignored, the card on offer shown without being lifted, the
+second back of another seat's draw left out, a dropped card flying from the hand it was taken
+from, cards put down without being turned over) failed 42 of 92: the press at all five sizes,
+the first frame of every card that flew, the turn-over in the reader's browser and the
+watcher's, the dropped card at both sizes, the keyframes, and at both tables for two the cards
+put down, the draw and the lift.
 
 Not in a pass yet, each with the commit that makes it true: the chat opened, the screen turned
 and full screen entered in the middle of a flight (P6); a frame check under a throttled
