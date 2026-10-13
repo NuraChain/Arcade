@@ -217,6 +217,43 @@ describe('a hand of poker that ends in front of the table', () =>
         expect(container.querySelectorAll('.poker-shown, .poker-named'), 'the hands of a hand that is over were left in front of somebody watching').toHaveLength(0);
     });
 
+    it('draws a shown hand at the size of its backs where the larger one would lie on something, and at its own size when it has room again', async () =>
+    {
+        const boxes = places();
+        const usual = boxes.getMockImplementation() as (this: Element) => DOMRect;
+        const over = { x: 150, y: 510, left: 150, top: 510, right: 190, bottom: 538, width: 40, height: 28, toJSON: () => ({}) } as DOMRect;
+        let crowded = true;
+
+        boxes.mockImplementation(function (this: Element)
+        {
+            if (crowded && this.classList.contains('poker-shown') && this.closest('.poker-seat')?.getAttribute('data-seat') === '1')
+            {
+                return over;
+            }
+
+            return this.classList.contains('poker-face') && this.parentElement?.dataset.tight === 'true'
+                ? { ...over, width: 12, height: 17, right: over.left + 12, bottom: over.top + 17 } as DOMRect
+                : usual.call(this);
+        });
+
+        const { container, read } = await seated(river());
+        const hand = (seat: number) => container.querySelector<HTMLElement>(`.poker-seat[data-seat="${ seat }"] .poker-shown`);
+
+        await read(second(1), tabled([2]));
+        await elapse(CALLED + GATHERED);
+
+        expect(flown(container).map((one) => one.style.width), 'a hand with no room was turned over at the size it has no room for').toEqual(['12px', '12px']);
+
+        await until(() => shownAt(container, 1).length === 2);
+
+        expect(hand(1)?.dataset.tight, 'a hand that would lie on another seat’s plate at its full size was drawn at it').toBe('true');
+
+        crowded = false;
+        await until(() => shownAt(container, 2).length === 2);
+
+        expect([hand(1)?.dataset.tight, hand(2)?.dataset.tight], 'a hand with room for its full size was drawn small, or one that has room again stayed small').toEqual([undefined, undefined]);
+    });
+
     it('holds a showdown for the table to read before the pot is pushed', async () =>
     {
         const { container, read } = await seated(river());

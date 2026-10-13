@@ -3357,6 +3357,13 @@ the order they are played in is `staged`'s.
   place, laid from the left in either language, so the bets' solver seats round them as it
   does round backs. The reader's own hand is not turned: it lies face up in their row
   already, and is only named.
+- **A shown hand is larger only where there is room for it.** `seatChips` measures each
+  `.poker-shown` before it seats the bets: one whose larger size would lie on another seat's
+  plate or cards, on the board or the pot's row, or over the table's edge is marked
+  `data-tight` and drawn at the size and the overlap of its backs, which the fit pass holds.
+  It is measured again at every seating, and `tableHand` seats before it measures the faces,
+  so the cards are turned over at the size they will lie at. The motion pass's first held
+  table of nine at 320 wide found a side seat's larger cards lying on the pot's row.
 - **The name of a hand is a pill** (`.poker-named`, the words of `poker.category.*`), seated
   by the solver that seats a bet, in the place a bet would have: a hand that is shown has no
   bet. It is NOT a plate tag: a plate with a tag hides its stack, and the winner's stack is

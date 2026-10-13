@@ -258,6 +258,23 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             puck.dataset.placed = 'true';
         }
 
+        const middle = [...cloth.querySelectorAll('.poker-centre > *, .poker-last > summary')].flatMap(reach);
+        const touches = (one: Box, two: Box) => one.left < two.right - ROUND && two.left < one.right - ROUND && one.top < two.bottom - ROUND && two.top < one.bottom - ROUND;
+
+        for (const hand of cloth.querySelectorAll<HTMLElement>('.poker-seat > .poker-shown'))
+        {
+            delete hand.dataset.tight;
+
+            const [box] = solid(hand);
+            const others = [...cloth.querySelectorAll('.table-plate, .poker-backs')].filter((one) => hand.parentElement?.contains(one) !== true).flatMap(solid);
+            const beyond = box !== undefined && (box.left < table.left || box.top < table.top || box.right > table.right || box.bottom > table.bottom);
+
+            if (box !== undefined && (beyond || [...others, ...middle].some((one) => touches(box, one))))
+            {
+                hand.dataset.tight = 'true';
+            }
+        }
+
         const chips = [...cloth.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet, .poker-seat > .poker-named')];
         const spots = seatBets(
             chips.map((chip) =>
@@ -276,7 +293,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             }),
             table,
             [...cloth.querySelectorAll('.table-plate, .poker-backs')].flatMap(solid),
-            [...cloth.querySelectorAll('.poker-centre > *, .poker-last > summary')].flatMap(reach),
+            middle,
             CHIP_GAP
         );
 
@@ -768,6 +785,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
         air = turning(air, held, seat);
         show();
+        seatChips();
 
         await Promise.all(shownOf(seat, cards).map((face, nth) =>
         {

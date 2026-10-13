@@ -2867,6 +2867,16 @@ html:has(.site-drawer[open])
     rotate: 5deg;
 }
 
+.poker-shown[data-tight]
+{
+    --card-w: var(--back-w);
+}
+
+.poker-shown[data-tight] > .poker-face + .poker-face
+{
+    margin-inline-start: calc(var(--back-w) * -0.42);
+}
+
 .poker-named
 {
     position: absolute;

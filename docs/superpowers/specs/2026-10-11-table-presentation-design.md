@@ -2393,6 +2393,10 @@ in a run-out, `forfeit` and "Hand boundary" of the table of scenes.
   a phone. `--shown-w` is 9.5 hundredths of the shorter side: 36 px on a phone held upright,
   52 on a desk. Looked at with the page's clock stopped at 1440, 1280, 1024, 844x390, 768,
   430, 390, 360 and 320 wide: a hand and its name lay on nothing at any of them.
+- **And only where there is room** (the commit after 5.5). The board measures each shown hand
+  where it seats the bets, and one that would lie on another plate, on the middle or over
+  the edge is drawn at its backs' size (`data-tight`). A table of nine at 320 wide was the
+  case: no gate holds that table at rest, and the motion pass's held table found it.
 - **The name is a pill and not a plate tag.** A tag takes the line the stack is written on,
   and the stack is what counts the pot. The pill is seated by `seatBets` in the place of the
   bet a shown hand does not have.

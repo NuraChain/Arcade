@@ -173,6 +173,14 @@ describe('what lies on a poker table', () =>
         expect(ruleOf('.poker-shown > .poker-face + .poker-face')).toContain('margin-inline-start: calc(var(--shown-w) * -0.3);');
     });
 
+    it('draws a shown hand at the size and the overlap of its backs again where the board marks it as having no room for more', () =>
+    {
+        const [, , overlap] = /margin-inline-start: calc\(var\(--back-w\) \* (-)?([\d.]+)\);/.exec(ruleOf('.poker-backs > .card-back + .card-back')) ?? [];
+
+        expect(ruleOf('.poker-shown[data-tight]')).toContain('--card-w: var(--back-w);');
+        expect(ruleOf('.poker-shown[data-tight] > .poker-face + .poker-face'), 'a hand with no room is wider than the backs it was').toContain(`margin-inline-start: calc(var(--back-w) * -${ overlap });`);
+    });
+
     it('names a hand that is shown in a pill of its own, laid where a bet would be until it is seated, and gold when it has won', () =>
     {
         const name = ruleOf('.poker-named');
