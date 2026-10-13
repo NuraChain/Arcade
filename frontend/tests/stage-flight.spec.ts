@@ -184,6 +184,45 @@ describe('the frames of a flight', () =>
         expect(outside(plate, { x: 200, y: 30 }, 14), 'nowhere, from a box that is already there').toEqual({ x: 200, y: 30, dx: 0, dy: 0 });
     });
 
+    it('let a flight gather speed over its first frames, and spend most of its time settling', () =>
+    {
+        const [x1, y1, x2, y2] = (/cubic-bezier\(([^)]+)\)/.exec(easings(false).fly)?.[1] ?? '').split(',').map(Number);
+        const curve = (at: number, one: number, other: number) => 3 * (1 - at) ** 2 * at * one + 3 * (1 - at) * at ** 2 * other + at ** 3;
+        const along = (time: number) =>
+        {
+            let low = 0;
+            let high = 1;
+
+            for (let turn = 0; turn < 40; turn += 1)
+            {
+                const middle = (low + high) / 2;
+
+                if (curve(middle, x1, x2) < time)
+                {
+                    low = middle;
+                }
+                else
+                {
+                    high = middle;
+                }
+            }
+
+            return curve(low, y1, y2);
+        };
+
+        expect(easings(true).fly, 'a flight is one curve wherever it runs').toBe(easings(false).fly);
+
+        for (const length of [TIMING.DEAL_FLY, TIMING.FLY, TIMING.FLY_THEIRS])
+        {
+            const frames = Array.from({ length: Math.ceil(length * 60 / 1000) + 1 }, (_, nth) => along(Math.min(1, nth * 1000 / 60 / length)));
+            const steps = frames.slice(1).map((at, nth) => at - frames[nth]);
+
+            expect(steps[0], `${ length } ms: a card is a tenth of the way there before it has been seen to move`).toBeLessThan(0.1);
+            expect(Math.max(...steps), `${ length } ms: a card crosses a fifth of its way in one frame`).toBeLessThan(0.2);
+            expect(along(0.6), `${ length } ms: a card is still hurrying when it should be settling`).toBeGreaterThan(0.9);
+        }
+    });
+
     it('use the spring curves only where linear() is understood', () =>
     {
         expect(easings(true).snap).toBe(SNAP_LINEAR);

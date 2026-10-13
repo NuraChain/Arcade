@@ -19,7 +19,7 @@ export const POP_LINEAR = 'linear(0, 0.007 1.3%, 0.033 2.8%, 0.073 4.3%, 0.126 5
 export function easings(springs: boolean): { fly: string; gather: string; flip: string; snap: string; pop: string }
 {
     return {
-        fly: 'cubic-bezier(0.05, 0.7, 0.1, 1)',
+        fly: 'cubic-bezier(0.3, 0.3, 0.1, 1)',
         gather: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
         flip: 'ease-out',
         snap: springs ? SNAP_LINEAR : 'cubic-bezier(0.2, 0, 0, 1)',

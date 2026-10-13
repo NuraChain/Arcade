@@ -4498,11 +4498,18 @@ down; `hokm-cues.spec.ts` holds the one gather and a shuffle that waits for the 
   is drawn (the side seats of a phone, any compact table) it leaves the plate at a back's
   size, as a packet does.
 - **`turn` is two animations on the clone, the flight and the flip**, because one curve cannot
-  serve both. A flight eases out hard: it is nine tenths of the way there after a third of
-  its time. A turn on that curve is edge on in its second frame and nobody sees a back. The
-  flip takes its own curve where one is given (`flip`, `EASE.flip`), and the card is a back
-  for the first 125 ms of 360, which is most of the way across the table, and opens face up
-  as it settles. A deal's turn gives none and is as it was.
+  serve both. A flight is over early: nine tenths of the way there after six tenths of its time.
+  A turn on that curve is edge on in its first frames and the back is hardly seen. The flip
+  takes its own curve where one is given (`flip`, `EASE.flip`), and the card is a back for
+  the first 125 ms of 360, which is most of the way across the table, and opens face up as
+  it settles. A deal's turn gives none and is as it was.
+- **A flight gathers speed before it flies** (`EASE.fly`, `cubic-bezier(0.3, 0.3, 0.1, 1)`).
+  The curve it had, Material's emphasized decelerate, is made for something that comes on to
+  a screen already moving. A card that sets off from where the reader is looking crossed 44%
+  of its way in its first frame at 340 ms and 51% at 260 ms: it was half way there before it
+  had been seen to move, which is a jump with a long settle after it. It takes three to five
+  frames to reach its speed now, never crosses a fifth of its way in one, and is nine
+  tenths of the way there after six tenths of its time. `stage-flight.spec.ts` holds the three.
 - A flight is counted by its clone in the specs (`moved`), not by its animations: one card is
   four of them now.
 

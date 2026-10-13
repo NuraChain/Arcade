@@ -1995,9 +1995,11 @@ table above.
   lies at.
 - **The flight and the turn are two animations with a curve each.** On the flight's curve the
   card would be edge on some 22 ms into its 360, by the curve's arithmetic, and the back
-  would never be seen.
+  would never be seen. (The flight's curve was made gentler after 4.7, below: on it the card
+  would be edge on 84 ms in.)
 - **Measured on the built server**: a back for the first 125 ms, by which time the card has
   crossed nine tenths of the way, and a face that opens over the 235 ms it takes to settle.
+  With the gentler curve it has crossed seven tenths by then.
   At 390 by 844 the top seat's card leaves a back 17 px wide and the side seats' leave their
   plates at 30 px; at 1280 by 800 every card leaves the top of a pile, 25 px wide.
 
