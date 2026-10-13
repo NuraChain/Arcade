@@ -163,6 +163,19 @@ uses `bleed bleed-pad`, which read the gutter; the settings nav hard-coded `-mx-
 short of the edge on a desktop. `tools/qa` measures none of this, so it was measured by hand: every
 route at 390 and 1280, the first content's inset and the title's box.
 
+**The settings page is one column of sections.** Account, Appearance, Privacy & safety,
+Notifications, Voice and Game helpers stand one under another, each as wide as the column, and
+so do the rows inside them: one switch to a row, and the three safety lists one under another.
+It was a grid: two sections side by side from 72rem, the switches in two columns from 48rem,
+the lists in three. Sections of different heights left a hole beside the shorter one, a card
+of six switches read as a table, and the owner asked for the column (2026-10-13). The list of
+sections stays beside the column from 56rem: it is the way round the page and not a part of
+it. A control that is not a row keeps a width of its own (`max-w-md` on the two device pickers
+and the volume), and a button in a stacked panel does not stretch (`self-start` on "Turn on
+for this device"); the account's two buttons stand at the end of its row from 42rem.
+`settings.spec.ts` (*the page of settings*) holds the six sections as the children of one
+column and no `grid-cols-` anywhere under it.
+
 **Shape is crisp**: `rounded-control` (8px) for buttons, chips, icon buttons and inputs,
 `rounded-tile` (10px) for rows and tiles, `rounded-panel` (14px) for cards, `rounded-hero` (16px)
 for hero cards (`hero-surface`), `rounded-sheet` (18px). `rounded-full` is for avatars, presence

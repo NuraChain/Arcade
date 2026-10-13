@@ -194,3 +194,25 @@ describe('the safety lists', () =>
         expect(lines()[2], 'the line about reports was drawn again').toBe(drawn[2]);
     });
 });
+
+describe('the page of settings', () =>
+{
+    it('is one column of sections, each as wide as the column, with no grid of columns in any of them', async () =>
+    {
+        useSession().establish(establishAccount());
+
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const sections = [...container.querySelectorAll('section[id^="settings-"]')];
+        const column = sections[0]?.parentElement ?? null;
+        const classes = (column?.getAttribute('class') ?? '').split(' ');
+
+        expect(sections.map((one) => one.id)).toEqual(['settings-account', 'settings-appearance', 'settings-safety', 'settings-notifications', 'settings-voice', 'settings-helpers']);
+        expect(sections.every((one) => one.parentElement === column), 'a section stands beside another inside a wrapper of its own').toBe(true);
+        expect(classes).toEqual(expect.arrayContaining(['flex', 'flex-col']));
+        expect(classes.filter((one) => /grid/.test(one)), 'the sections are laid out as a grid').toEqual([]);
+        expect(
+            [...(column?.querySelectorAll('[class*="grid-cols-"]') ?? [])].map((one) => one.getAttribute('class')),
+            'something inside a section is laid out in columns'
+        ).toEqual([]);
+    });
+});

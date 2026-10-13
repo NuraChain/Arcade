@@ -106,7 +106,7 @@ export default component DeviceNotices()
 
                 <Show when={ standing === 'off' }>
                     { () =>
-                        <Button variant="primary" size="sm" leading="bell" loading={ busy } onClick={ () => void turnOn() }>
+                        <Button variant="primary" size="sm" leading="bell" loading={ busy } class="self-start" onClick={ () => void turnOn() }>
                             { locale.t('notify.device.enable') }
                         </Button>
                     }
