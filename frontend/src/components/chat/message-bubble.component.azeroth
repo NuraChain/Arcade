@@ -157,6 +157,8 @@ export default component MessageBubble(props: {
 
     derived winners = (props.message.ref?.winners ?? []).map((handle) => handle === props.me ? locale.t('common.you') : nameOf(handle));
 
+    derived won = scored && winners.length > 0;
+
     derived locked = props.message.locked ?? null;
 
     derived relayed = props.message.forwarded === true && locked === null;
@@ -221,24 +223,26 @@ export default component MessageBubble(props: {
                 fallback={
                     <div class={ () => [
                         'flex w-full max-w-[22rem] flex-col gap-3 rounded-panel border p-3',
-                        scored ? 'border-win/40 bg-win/5' : 'border-accent/40 bg-accent/5',
+                        won ? 'border-win/40 bg-win/5' : (scored ? 'border-line bg-field' : 'border-accent/40 bg-accent/5'),
                         mine ? 'ms-auto' : ''
                     ].filter(Boolean).join(' ') }>
                         <div class="flex items-center gap-2.5">
                             <span class={ () => [
                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                                scored ? 'bg-win/20 text-win' : 'bg-accent/20 text-accent'
+                                won ? 'bg-win/20 text-win' : (scored ? 'bg-raised text-muted' : 'bg-accent/20 text-accent')
                             ].join(' ') }>
-                                <Icon name={ scored ? 'trophy' : 'seat' } size={ 18 } />
+                                <Icon name={ won ? 'trophy' : (scored ? 'clock' : 'seat') } size={ 18 } />
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="truncate text-ui-base font-semibold text-text">
-                                    { scored
+                                    { won
                                         ? locale.plural('chat.result.title', winners.length, {
                                             winners: locale.list(winners),
                                             game: game === null ? '' : locale.t(game.nameKey)
                                         })
-                                        : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) }) }
+                                        : (scored
+                                            ? (game === null ? '' : locale.t(game.nameKey))
+                                            : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) })) }
                                 </span>
                                 <span class="truncate text-ui-xs text-muted">{ said }</span>
                             </span>

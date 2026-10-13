@@ -143,6 +143,37 @@ describe('a message bubble', () =>
         expect(deleted.textContent).toContain('The original message was deleted.');
     });
 
+    it('says who won a game on the card of its result, under a trophy', () =>
+    {
+        const container = show(text('m-won', '', {
+            kind: 'result',
+            ref: { game: 'backgammon', winners: ['sara.k'] },
+            line: { key: 'chat.line.result', params: { game: 'backgammon', winners: ['sara.k'] } }
+        }));
+        const card = container.querySelector('.rounded-panel')!;
+
+        expect(card.querySelector('.truncate')?.textContent?.trim()).toMatch(/ won Backgammon$/);
+        expect(card.querySelector('.truncate')?.textContent?.trim(), 'the card names nobody').not.toMatch(/^won /);
+        expect(card.className).toContain('border-win/40');
+        expect(card.querySelector('.text-win'), 'a game that was won has no trophy').not.toBeNull();
+    });
+
+    it('does not say a game nobody won was won: the card is the game\'s name, with no trophy', () =>
+    {
+        const container = show(text('m-void', '', {
+            kind: 'result',
+            ref: { game: 'backgammon', winners: [] },
+            line: { key: 'chat.line.result.none', params: { game: 'backgammon' } }
+        }));
+        const card = container.querySelector('.rounded-panel')!;
+        const [title, said] = [...card.querySelectorAll('.truncate')].map((one) => one.textContent?.trim());
+
+        expect(title, 'a game nobody won was said to have been won').toBe('Backgammon');
+        expect(said).toBe('The game ended with nobody winning');
+        expect(card.className).not.toContain('border-win/40');
+        expect(card.querySelector('.text-win'), 'a game nobody won was given a trophy').toBeNull();
+    });
+
     it('says a forwarded message was forwarded', () =>
     {
         expect(show(text('m-1', 'look', { forwarded: true })).textContent).toContain('Forwarded');
