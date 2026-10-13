@@ -171,6 +171,17 @@ opened for, and search terms move to `lib/search-terms.ts` so they are dropped o
 A search term against a sealed conversation is a fragment of what was said in it, and it was the one
 thing this product wrote down in cleartext.
 
+**A read that outlives its account keeps nothing.** `forgetArchive()` empties the archive and the
+cache of opened messages, and a read that was still on its way when it was called carried on and
+wrote what it opened into both, after they had been emptied. A source counts its resets (`age`), a
+read notes the count when it begins, and neither `remember` nor the cache keeps anything for a read
+whose count has moved. A browser never showed it, because the tab is loaded afresh a moment later.
+The suite did: one spec's thread landed in the list of the next whenever the machine was busy, the
+row then carried the author its signature names over a time the next spec had written, and
+`cues.spec.ts` failed about three shuffled runs in ten on a seed that puts a spec that opens a room
+two before one that re-dates that room's last line. `sealing.spec.ts` holds it without a race: a
+read is begun, the archive is forgotten in the same turn, and the read is awaited.
+
 **The archive filters expiry on the way OUT, not only on the way in.** A message that runs out while
 it is being held is never read again — the server stops returning it — so nothing ever comes back to
 evict it, and it stayed findable by its words for as long as the tab was open. The eviction that

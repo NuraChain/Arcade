@@ -343,6 +343,50 @@ describe('what leaves the browser when somebody signs out', () =>
         await source.thread(THREAD, scope, new AbortController().signal);
         expect(source.archive(scope)).toEqual([]);
     });
+
+    it('keeps nothing of a thread that was still being read when the account signed out', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const reading = source.thread(THREAD, scope, new AbortController().signal);
+
+        forgetArchive();
+
+        expect((await reading).messages.map((one) => one.text)).toEqual(['still on its way']);
+        expect(source.archive(scope), 'what was opened after the account had gone was kept for whoever searches next').toEqual([]);
+    });
+
+    it('opens nothing for the next reader from what such a read had opened', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const reading = source.thread(THREAD, scope, new AbortController().signal);
+
+        forgetArchive();
+        await reading;
+
+        const [row] = (await source.conversations(scope, new AbortController().signal)).rows;
+
+        expect([row.last?.locked, row.last?.text], 'a line was read without its key, from what a read that outlived its account had left').toEqual(['no-epoch-key', '']);
+    });
+
+    it('keeps nothing of a list that was still being read when the account signed out, not even who wrote last', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const listing = source.conversations(scope, new AbortController().signal);
+
+        forgetArchive();
+        await listing;
+
+        expect(source.archive(scope)).toEqual([]);
+    });
 });
 
 describe('rotation', () =>
