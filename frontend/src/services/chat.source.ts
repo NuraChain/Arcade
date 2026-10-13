@@ -316,6 +316,11 @@ export function createApiSource()
 
     const openHeld = async (born: number, id: string, wire: ChatMessage) =>
     {
+        if (wire.conversationId !== id)
+        {
+            return asMessage(born, wire, '', 'tampered');
+        }
+
         const given: Promise<Uint8Array | null>[] = [];
 
         try

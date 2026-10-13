@@ -701,6 +701,12 @@ field the signature covers (`sealedAs`), so a row that differs in any of them is
 refused, as one that had never been opened always was. Found by reading, on the way to a spec that
 failed three shuffled runs in ten; `sealing.spec.ts` holds every field, one at a time.
 
+**A room's last line is one of its own.** The list reads a room's last line from the row the server
+sends for that room, and nothing asked whether the line was that room's. A line this tab had opened
+in one room could be served as the last line of another and was read there from what had been
+opened: byte for byte what its sender signed, so no field of it differs, in a place its sender never
+put it. `openHeld` refuses a row whose line names another room as `tampered`.
+
 **`sessions.device_id` is written by a first enrolment and never moved again.** Re-enrolling used to
 rebind it, and everything that branch checks is satisfied by PUBLIC data — the id is a hash of two
 published keys, and `GET /devices` hands every device's keys to any session on the account — so any

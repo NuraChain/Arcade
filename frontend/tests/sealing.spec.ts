@@ -556,6 +556,22 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         expect(moved[0].text).toBe('');
     });
 
+    it('will not take a line it had opened in one room for the last line of another', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('said in the first room'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        server.conversations.push({ ...server.conversations[0], id: ELSEWHERE });
+
+        const rows = (await source.conversations(scope, new AbortController().signal)).rows;
+
+        expect(rows.map((row) => [row.conversation.id, row.last?.locked, row.last?.text])).toEqual([
+            [THREAD, undefined, 'said in the first room'],
+            [ELSEWHERE, 'tampered', '']
+        ]);
+    });
+
     it('will not read a reaction it had opened as a message, and refuses it for its signature', async () =>
     {
         const source = createApiSource();
