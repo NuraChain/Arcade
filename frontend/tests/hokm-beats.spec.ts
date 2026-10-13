@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { CARRY, COLLECT_GAP, ROUND, SHUFFLE, TURN, TURN_GAP, collectLength, dealGap, dealLength, dealtIn, gatherLength, gatherOrder, holdBefore, openLength, openingPackets, restPackets, spanOf } from '../src/game/hokm-beats.ts';
+import { CARRY, COLLECT_GAP, NAMING, ROUND, SHUFFLE, TURN, TURN_GAP, collectLength, dealGap, dealLength, dealtIn, gatherLength, gatherOrder, holdBefore, openLength, openingPackets, restPackets, spanOf } from '../src/game/hokm-beats.ts';
 import type { Told } from '../src/game/hokm-felt.ts';
 import { TIMING } from '../src/game/motion.ts';
 
@@ -61,10 +61,11 @@ describe('how long a felt takes to show what happened', () =>
 
     it('gives trump the rest of the deal in its eleven packets, the reader\'s last four turning up, and nothing more at a table for two', () =>
     {
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, 0)).toBe(TIMING.FADE + dealLength(11, false) + openLength(ROUND));
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 3, 0)).toBe(TIMING.FADE + dealLength(11, false) + openLength(ROUND));
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, null)).toBe(TIMING.FADE + dealLength(11, false));
-        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 2, 0)).toBe(TIMING.FADE);
+        expect(NAMING, 'a suit takes as long to reach the medal as a card to reach the felt').toBe(TIMING.FLY);
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, 0)).toBe(NAMING + TIMING.FADE + dealLength(11, false) + openLength(ROUND));
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 3, 0)).toBe(NAMING + TIMING.FADE + dealLength(11, false) + openLength(ROUND));
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 4, null)).toBe(NAMING + TIMING.FADE + dealLength(11, false));
+        expect(spanOf([{ e: 'trump', seat: 0, suit: 'spades' }], 2, 0), 'at a table for two the suit is named and nothing is dealt').toBe(NAMING + TIMING.FADE);
     });
 
     it('lets one draw finish before the next one flies, and gives a card put down no time of its own', () =>

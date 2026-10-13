@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire } from '@azerothjs/testing';
 
-import { SHUFFLE, TURN } from '../src/game/hokm-beats.ts';
+import { NAMING, SHUFFLE, TURN } from '../src/game/hokm-beats.ts';
 import { TIMING } from '../src/game/motion.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
@@ -255,6 +255,44 @@ describe('what a hokm table is heard to do', () =>
         expect(count('trump')).toBe(1);
         expect(order('trump', 'card-slide')).toBe(true);
         expect(count('card-slide'), 'the rest of the deal is five to three seats and two rounds of four to all of them').toBe(11);
+    });
+
+    it('lets trump be heard when its suit reaches the medal, not when the answer comes', async () =>
+    {
+        const { send } = await mounted(match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }, 1));
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'spades' })]);
+        await elapse(NAMING - 5);
+
+        expect(count('trump'), 'trump was heard while its suit was still crossing the table').toBe(0);
+
+        await elapse(10);
+
+        expect([count('trump'), count('card-slide')], 'the deal went on before the suit had been heard').toEqual([1, 0]);
+    });
+
+    it('says no, to the ear and to the hand, when the suit a Hâkem pressed is refused', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container } = await mounted(match({ phase: 'trump', trump: undefined, turn: 0, lead: 0 }));
+
+        fire(container.querySelector<HTMLButtonElement>('.hokm-choose button')!, 'click');
+        await elapse(NAMING + 5);
+
+        expect([count('trump'), count('deny')], 'the suit landed on the medal unheard').toEqual([1, 0]);
+        expect(told.felt).toContain('select');
+
+        answer('stale');
+        await elapse(5);
+
+        expect(count('deny')).toBe(1);
+        expect(told.felt).toContain('deny');
     });
 
     it('lets a card drawn from the stock and a card put down be heard at a table for two', async () =>

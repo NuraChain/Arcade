@@ -2001,6 +2001,24 @@ table above.
   At 390 by 844 the top seat's card leaves a back 17 px wide and the side seats' leave their
   plates at 30 px; at 1280 by 800 every card leaves the top of a pile, 25 px wide.
 
+**As built (commit 4.6b, trump).** The row "Trump" of the table above.
+
+- **A disc with the suit on it flies to the medal** in 340 ms, from the Hâkem's plate, and the
+  medal is struck as it lands: the sound, a pop, and the model shown. There is one trump chip
+  on the felt, in its corner, and it changes with the medal.
+- **The Hâkem's press is a prelude prediction that covers nothing.** The suits go and the disc
+  leaves the pressed button at once; the scene for the server's `trump` waits for that disc
+  instead of flying another. A refusal takes it back.
+- **The chooser stays on the felt (D10) and no longer on the middle of it**: one row of four
+  suits under the medal and the deck, named where the table is wide, two rows of two beside
+  the medal on a short wide table, one row across the medal on a short narrow one.
+- **Rule 7's second Hokm row has a cap of 2500 ms**, not 2000: the suit's flight is in front
+  of the rest of the deal now, which ends 2.1 s after the answer.
+- **Measured on the built server** at 1280 by 800, from another seat: the disc leaves the
+  crown 14 px wide and lands on the medal 58 px wide 340 ms later, and the medal settles from
+  1.2 times its size. The chooser lies on nothing at ten sizes from 360 by 560 to 1920 by
+  1009, with 6 px to spare above the reader's plate at the tightest.
+
 ### 5.4 Poker
 
 **Engine facts** (`backend/src/domains/match/poker/`). The table passes to the left (clockwise).

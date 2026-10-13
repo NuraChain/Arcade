@@ -12,9 +12,9 @@ import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } fr
 import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
 import { coachOf, outcomeOf } from '../../game/helpers/hokm.ts';
-import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
+import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
 import { EMPTY, HISTORY, before, feltOf, sameAs, step, unplay, type Felt, type Laid, type Told } from '../../game/hokm-felt.ts';
-import { EASE, TIMING, centreOf, outside, rectIn, type Rect } from '../../game/motion.ts';
+import { EASE, TIMING, centreOf, flightFrames, outside, rectIn, type Rect } from '../../game/motion.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
 import { anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../../game/stage/cards.ts';
 import { hashOf } from '../../game/stage/curves.ts';
@@ -72,6 +72,8 @@ const BACK_W = 30;
 
 const DEALT_CAP = 2000;
 
+const REST_CAP = 2500;
+
 const HURRY_MS = 8000;
 
 const SIGN_IN: Keyframe[] = [{ opacity: 0, scale: '0.8' }, { opacity: 1, scale: '1' }];
@@ -79,6 +81,10 @@ const SIGN_IN: Keyframe[] = [{ opacity: 0, scale: '0.8' }, { opacity: 1, scale: 
 const KOT_IN: Keyframe[] = [{ opacity: 0, scale: '1.6', rotate: '-8deg' }, { opacity: 1, scale: '1', rotate: '0deg' }];
 
 const SIGN_OUT: Keyframe[] = [{ opacity: 1 }, { opacity: 0 }];
+
+const STRUCK: Keyframe[] = [{ scale: '1.2' }, { scale: '1' }];
+
+const STRUCK_MS = 220;
 
 const PLUS_GAP = 14;
 
@@ -129,6 +135,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     state carried: { hakem: boolean; dealer: boolean } = { hakem: false, dealer: false };
 
     state ghost = false;
+
+    state token: { suit: Suit; pledged: boolean } | null = null;
 
     state presenting = false;
 
@@ -302,7 +310,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
 
-    derived choosing = view !== null && !over && view.phase === 'trump' && view.hakem === mine && !veiled;
+    derived choosing = view !== null && !over && view.phase === 'trump' && view.hakem === mine && !veiled && token === null;
 
     derived due = view !== null && !over && view.phase === 'discard' && view.turn === mine ? (view.discard ?? 0) : 0;
 
@@ -505,14 +513,75 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         haptic('tick');
     };
 
-    const callTrump = async (suit: Suit) =>
+    const struck = (stage: Stage) =>
     {
-        if (mine !== undefined)
+        sound?.play('trump');
+        sound?.play('card-place', { gain: 0.6 });
+
+        for (const one of [find('.hokm-medal'), find('.hokm-token')])
         {
-            haptic('select');
+            if (one !== null)
+            {
+                stage.animate(one, STRUCK, { duration: STRUCK_MS, easing: EASE.pop, quiet: 'skip' });
+            }
+        }
+    };
+
+    const name = (from: Rect | null, stage: Stage) =>
+    {
+        const disc = find('.hokm-token');
+        const to = spotOf(disc);
+
+        if (disc === null || from === null || to === null)
+        {
+            struck(stage);
+
+            return Promise.resolve();
         }
 
-        await board.play({ kind: 'hokm', verb: 'trump', suit });
+        return stage.animate(disc, flightFrames(from, to), { duration: NAMING, easing: EASE.fly, landed: () => struck(stage) }).done;
+    };
+
+    const unname = () =>
+    {
+        if (token === null || !token.pledged)
+        {
+            return;
+        }
+
+        presenter?.predict(null);
+        token = null;
+        sound?.play('deny');
+        haptic('deny');
+    };
+
+    const callTrump = async (suit: Suit, event: MouseEvent) =>
+    {
+        const rev = untrack(() => game.rev);
+        const from = spotOf(find(`.hokm-choose-suit[data-suit="${ suit }"]`));
+        const keyed = event.detail === 0;
+        const next = stop;
+
+        haptic('select');
+
+        if (presenter !== null && rig !== null)
+        {
+            token = { suit, pledged: true };
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === 'trump' ? 0 : null) });
+            named = name(from, rig);
+
+            if (keyed && next !== null)
+            {
+                stand(next);
+            }
+        }
+
+        const outcome = await board.play({ kind: 'hokm', verb: 'trump', suit });
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            unname();
+        }
     };
 
     const toggleAway = (card: number) =>
@@ -1290,10 +1359,24 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             }
             else if (move.e === 'trump')
             {
+                const suit = suitNamed(move.suit ?? null);
+
+                if (suit !== null && (token === null || !token.pledged || token.suit !== suit))
+                {
+                    token = { suit, pledged: false };
+                    named = name(spotOf(markOn(held.hakem)), ctx.stage);
+                }
+
+                await named;
+
+                if (!ctx.live())
+                {
+                    return;
+                }
+
                 dealing = held.seats === 2 ? null : { counts: had, won: null, deck: held.dealer, stock: null };
                 shown = held;
-                sound?.play('trump');
-                sound?.play('card-place', { gain: 0.6 });
+                token = null;
                 await ctx.stage.wait(TIMING.FADE);
                 await dealOut(restPackets(held.seats, held.full, held.hakem), false, ctx);
             }
@@ -1328,6 +1411,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         dealing = null;
         ghost = false;
         carried = { hakem: false, dealer: false };
+        token = null;
         seen = { round: view?.round ?? 0, cards: new Set(heldAt(held)[mine ?? -1] === 0 ? [] : (view?.hand ?? [])) };
         shown = held;
         lying = null;
@@ -1408,6 +1492,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         });
     };
 
+    let named: Promise<void> = Promise.resolve();
+
     let uncap: () => void = () => undefined;
 
     effect
@@ -1417,7 +1503,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         untrack(() =>
         {
             uncap();
-            uncap = hidden ? runtime().clock.after(DEALT_CAP, () => show([...unseen])) : () => undefined;
+            uncap = hidden ? runtime().clock.after(view?.phase === 'trump' ? DEALT_CAP : REST_CAP, () => show([...unseen])) : () => undefined;
         });
     }
 
@@ -1661,6 +1747,12 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                 </Show>
                             </div>
 
+                            <Show when={ token } let={ call }>
+                                <span class="hokm-token" data-suit={ call.suit } aria-hidden="true">
+                                    <Icon name={ SUIT_ICON[call.suit] } size={ 20 } class={ RED_SUITS.includes(call.suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                </span>
+                            </Show>
+
                             <div class="hokm-felt-info" aria-hidden="true">
                                 <span class="hokm-chip">
                                     <Show
@@ -1754,19 +1846,19 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
                                 { () =>
                                     <div class="hokm-choose" dir={ locale.dir() }>
                                         <p class="hokm-choose-title">{ locale.t('hokm.trump.choose') }</p>
-                                        <ul class="grid grid-cols-2 gap-2">
+                                        <ul class="hokm-choose-suits">
                                             <For each={ [...SUITS] } key={ (suit) => suit } let={ suit }>
                                                 <li class="flex min-w-0">
                                                     <button
                                                         type="button"
                                                         class="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-tile border border-white/15 bg-void/85 px-2 text-ui-sm font-semibold text-text shadow-2 transition hover:border-accent hover:bg-lifted disabled:cursor-not-allowed disabled:opacity-50"
                                                         disabled={ board.busy() }
-                                                        onClick={ () => void callTrump(suit) }
+                                                        onClick={ (event: MouseEvent) => void callTrump(suit, event) }
                                                     >
-                                                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text">
+                                                        <span class="hokm-choose-suit flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text" data-suit={ suit }>
                                                             <Icon name={ SUIT_ICON[suit] } size={ 16 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
                                                         </span>
-                                                        <span class="truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
+                                                        <span class="hokm-choose-name truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
                                                     </button>
                                                 </li>
                                             </For>

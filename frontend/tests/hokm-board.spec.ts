@@ -4,7 +4,7 @@ import { createSignal } from 'azerothjs';
 
 import { dealerOf } from '../../backend/src/domains/match/hokm/scoring.ts';
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
-import { PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
+import { NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, gatherLength } from '../src/game/hokm-beats.ts';
 import { EASE, TIMING } from '../src/game/motion.ts';
 import { FAST, HASTE } from '../src/game/stage/director.ts';
 import { EDGE } from '../src/game/stage/flight.ts';
@@ -2529,6 +2529,12 @@ describe('a hand dealt in packets', () =>
 
     const DEALT = 2000;
 
+    const NAMED = NAMING + TIMING.FADE;
+
+    const REST = 2500;
+
+    const STILL = 2 * TIMING.FADE;
+
     const naming = (mine: number, view: Partial<Hokm> = {}): MatchView => ({
         ...match({ phase: 'trump', trump: undefined, turn: 0, lead: 0, ...view }, mine),
         remainingMs: 20_000
@@ -2601,7 +2607,7 @@ describe('a hand dealt in packets', () =>
         const { container, send } = await mounted(naming(1));
 
         send(named(), dealt(THIRTEEN));
-        await elapse(TIMING.FADE + 10 * GAP - 5);
+        await elapse(NAMED + 10 * GAP - 5);
 
         expect(container.querySelector('.hokm-deck'), 'the deck went while there were cards still to deal from it').not.toBeNull();
 
@@ -2619,7 +2625,7 @@ describe('a hand dealt in packets', () =>
 
         expect(heldOn(container), 'the whole deal was counted before a card had left the deck').toEqual([5, 0, 0, 0]);
 
-        await elapse(TIMING.FADE + TIMING.DEAL_FLY - 5);
+        await elapse(NAMED + TIMING.DEAL_FLY - 5);
         expect(heldOn(container)).toEqual([5, 0, 0, 0]);
 
         await elapse(10);
@@ -2652,7 +2658,7 @@ describe('a hand dealt in packets', () =>
         expect(container.querySelectorAll('.hokm-hand .card-hold').length, 'the row was not laid out for the whole hand').toBe(13);
         expect(hidden(container), 'a card was shown before it had been dealt').toBe(13);
 
-        await elapse(TIMING.FADE + TIMING.DEAL_FLY + 5);
+        await elapse(NAMED + TIMING.DEAL_FLY + 5);
 
         const turning = [...container.querySelectorAll('.board-flight > .flight.turning')];
 
@@ -2686,14 +2692,33 @@ describe('a hand dealt in packets', () =>
         const { container, send } = await mounted(naming(1));
 
         send(named(), dealt([...THIRTEEN, 51]));
-        await elapse(TIMING.FADE + 2 * GAP);
+        await elapse(NAMED + 2 * GAP);
 
         expect(hidden(container)).toBe(14);
 
-        await elapse(DEALT - TIMING.FADE - 2 * GAP - 200);
+        await elapse(REST - NAMED - 2 * GAP - 200);
 
-        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'this deal was not over inside the two seconds a hold may last').toBeNull();
+        expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'this deal was not over inside the time a hold on it may last').toBeNull();
         expect(hidden(container), 'a card no packet carried was left face down when the felt had nothing more to show').toBe(0);
+    });
+
+    it('gives the rest of a deal half a second longer than the five before it shows what is still hidden', async () =>
+    {
+        const playing = { ...match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: FIVE, seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: 5, tricks: 0, out: false })) }, 0), remainingMs: 20_000 };
+        const { container, read } = await mounted(playing);
+
+        read({ ...playing, view: { ...(playing.view as Hokm), hand: [...FIVE, 51] } });
+        await elapse(DEALT + 5);
+
+        expect(hidden(container), 'a deal that takes two seconds and a tenth was cut short at two').toBe(1);
+
+        await elapse(REST - DEALT - 10);
+
+        expect(hidden(container)).toBe(1);
+
+        await elapse(10);
+
+        expect(hidden(container)).toBe(0);
     });
 
     it('goes on counting from the felt when cards are played straight after a deal, in the same answer', async () =>
@@ -2701,7 +2726,7 @@ describe('a hand dealt in packets', () =>
         const { container, send } = await mounted(naming(1));
 
         send([act(4, 0, { e: 'trump', seat: 0, suit: 'spades' }), card(5, 0, 2)], dealt(THIRTEEN));
-        await elapse((TIMING.FADE + 8 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP) / FAST + TIMING.FLY_THEIRS / FAST / 2);
+        await elapse((NAMED + 8 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP) / FAST + TIMING.FLY_THEIRS / FAST / 2);
 
         expect(container.querySelector('.hokm-stage')?.getAttribute('data-presenting'), 'the card after the deal was not still to land').toBe('true');
         expect(heldOn(container), 'the counts the deal left stood on the plates over the card that was played').toEqual([12, 13, 13, 13]);
@@ -2729,7 +2754,7 @@ describe('a hand dealt in packets', () =>
         const first = await mounted(naming(1));
 
         first.send(named(), dealt(THIRTEEN));
-        await elapse(TIMING.FADE + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
+        await elapse(NAMED + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
 
         const once = up(first.container);
 
@@ -2738,7 +2763,7 @@ describe('a hand dealt in packets', () =>
         const second = await mounted(naming(1));
 
         second.send(named(), dealt(THIRTEEN));
-        await elapse(TIMING.FADE + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
+        await elapse(NAMED + TIMING.DEAL_FLY + TURN + 4 * TURN_GAP + 5);
 
         expect(once.length).toBe(5);
         expect(up(second.container)).toEqual(once);
@@ -2757,7 +2782,7 @@ describe('a hand dealt in packets', () =>
         expect(up(container), 'the five the Hâkem named trump from were taken away to be dealt again').toEqual(FIVE);
         expect(hidden(container)).toBe(8);
 
-        await elapse(TIMING.FADE + 3 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP + 5);
+        await elapse(NAMED + 3 * GAP + TIMING.DEAL_FLY + TURN + 3 * TURN_GAP + 5);
 
         expect(hidden(container)).toBe(4);
 
@@ -2891,7 +2916,7 @@ describe('a hand dealt in packets', () =>
         const { container, send } = await mounted(naming(1));
 
         send(named(), dealt(THIRTEEN));
-        await elapse(TIMING.FADE + 2 * GAP);
+        await elapse(NAMED + 2 * GAP);
 
         expect(hidden(container)).toBeGreaterThan(0);
 
@@ -2910,7 +2935,7 @@ describe('a hand dealt in packets', () =>
         const { container, send } = await mounted(naming(1));
 
         send(named(), dealt(THIRTEEN));
-        await elapse(TIMING.FADE + 5);
+        await elapse(STILL + 5);
 
         expect(container.querySelectorAll('.board-flight > *').length, 'something was flown for a reader who asked for less motion').toBe(0);
         expect(hidden(container)).toBe(8);
@@ -3632,5 +3657,263 @@ describe('a card another seat plays', () =>
         expect(turning(container).length).toBe(0);
         expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ opacity: 0, offset: 0 }]]);
         expect(container.querySelector('.board-flight > .flight .card-face')).not.toBeNull();
+    });
+});
+
+describe('trump named on the medal', () =>
+{
+    const FIVE = [1, 14, 27, 40, 50];
+
+    const THIRTEEN = [1, 4, 9, 14, 17, 22, 27, 30, 35, 40, 43, 47, 50];
+
+    const naming = (mine: number, view: Partial<Hokm> = {}): MatchView => ({
+        ...match({ phase: 'trump', trump: undefined, turn: 0, lead: 0, hand: mine === 0 ? FIVE : [], ...view }, mine),
+        remainingMs: 20_000
+    });
+
+    const at = (left: number, top: number, width: number, height: number) => ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) }) as DOMRect;
+
+    const placed = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+    {
+        if (this.classList.contains('hokm-token'))
+        {
+            return at(180, 300, 40, 40);
+        }
+
+        if (this.classList.contains('hokm-choose-suit'))
+        {
+            return at(60 + 100 * [...document.querySelectorAll('.hokm-choose-suit')].indexOf(this), 500, 28, 28);
+        }
+
+        return this.classList.contains('table-plate-marker') ? at(20 + 100 * Number(this.closest<HTMLElement>('.hokm-seat')?.dataset.seat ?? 0), 40, 14, 14) : at(0, 0, 0, 0);
+    });
+
+    const calls = (animate: { mock: { calls: unknown[][]; contexts: unknown[] } }, one: Element | null | undefined) => animate.mock.calls
+        .filter((_, index) => animate.mock.contexts[index] === one)
+        .map((call) => ({ frames: call[0] as Keyframe[], timing: call[1] as KeyframeAnimationOptions }));
+
+    const suit = (container: HTMLElement, nth: number) => [...container.querySelectorAll<HTMLButtonElement>('.hokm-choose button')][nth];
+
+    const key = (button: HTMLElement) => button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+
+
+    const hidden = (container: HTMLElement) => container.querySelectorAll('.hokm-hand > li[data-dealt="false"]').length;
+
+    beforeEach(() =>
+    {
+        useDevice().overrideCoarse(false);
+    });
+
+    it('takes the four suits away at the press and flies the one that was pressed to the medal, before the server has answered', async () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+        const animate = vi.spyOn(Element.prototype, 'animate');
+
+        placed();
+
+        const { container } = await mounted(naming(0));
+        expect(container.querySelector('.hokm-token')).toBeNull();
+
+        fire(suit(container, 2), 'click');
+
+        const token = container.querySelector('.hokm-token');
+        const [flight] = calls(animate, token);
+
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'trump', suit: 'hearts' });
+        expect(container.querySelector('.hokm-choose'), 'the suits waited on the table for the server').toBeNull();
+        expect(token, 'nothing went to the medal').not.toBeNull();
+        expect(token?.getAttribute('data-suit'), 'the suit on its way is not the one that was pressed').toBe('hearts');
+        expect(token?.getAttribute('aria-hidden'), 'a disc crossing the felt is read out as if it were something to act on').toBe('true');
+        expect(token?.querySelector('svg')?.classList.contains('text-danger-fill'), 'a red suit is not drawn in red').toBe(true);
+        expect(flight?.frames[0].translate, 'the suit did not leave from the button that was pressed').toBe('74px 194px');
+        expect(flight?.frames[0].scale).toBe('0.7');
+        expect([flight?.timing.duration, flight?.timing.easing]).toEqual([NAMING, EASE.fly]);
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set'), 'the medal took a suit the server has not confirmed').toBe(false);
+    });
+
+    it('deals the rest when the server confirms it, and does not fly the suit a second time', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(naming(0));
+
+        fire(suit(container, 3), 'click');
+
+        const token = container.querySelector('.hokm-token');
+
+        await elapse(100);
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'spades' })], { hand: THIRTEEN, plays: [] });
+        await flush();
+
+        expect(container.querySelector('.hokm-token'), 'the suit was taken off the medal while it was still on its way').toBe(token);
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set')).toBe(false);
+        expect(hidden(container)).toBe(8);
+
+        await elapse(NAMING - 100 + 5);
+
+        expect(calls(animate, token).filter((one) => 'translate' in one.frames[0]).length, 'the suit was flown again when the server agreed').toBe(1);
+        expect(container.querySelector('.hokm-token'), 'the suit lay on a medal that already shows it').toBeNull();
+        expect(container.querySelector('.hokm-medal')?.getAttribute('data-set')).toBe('true');
+        expect(container.querySelector('.hokm-deck'), 'the deal went on without its deck').not.toBeNull();
+
+        await elapse(LONG, 5);
+
+        expect(hidden(container)).toBe(0);
+        expect(container.querySelector('.hokm-choose')).toBeNull();
+    });
+
+    it('takes the suit back and asks again when the server refuses it', async () =>
+    {
+        let answer: (outcome: 'stale' | 'failed') => void = () => undefined;
+
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        const { container } = await mounted(naming(0));
+
+        fire(suit(container, 0), 'click');
+        await elapse(NAMING + 50);
+
+        expect(container.querySelector('.hokm-token')).not.toBeNull();
+
+        answer('failed');
+        await flush();
+
+        expect(container.querySelector('.hokm-token'), 'a suit the server never took is still on the medal').toBeNull();
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set')).toBe(false);
+        expect(container.querySelectorAll('.hokm-choose button').length, 'the Hâkem was not asked again').toBe(4);
+    });
+
+    it('hands the keyboard to the hand when the suit was chosen with a key, and leaves it alone after a click', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const keyed = await mounted(naming(0));
+
+        suit(keyed.container, 1).focus();
+        key(suit(keyed.container, 1));
+
+        expect((document.activeElement as HTMLElement | null)?.dataset.card, 'the keyboard was left on a button that is gone').toBe(String(FIVE[0]));
+
+        cleanup();
+
+        const clicked = await mounted(naming(0));
+
+        fire(suit(clicked.container, 1), 'click');
+
+        expect(document.activeElement?.classList.contains('card-hold')).toBe(false);
+    });
+
+    it('flies the suit from the Hâkem\'s plate for everybody else, and sets the medal when it lands', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+
+        placed();
+
+        const { container, send } = await mounted(naming(1));
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'diamonds' })], { hand: THIRTEEN, plays: [] });
+        await flush();
+
+        const token = container.querySelector('.hokm-token');
+        const [flight] = calls(animate, token);
+
+        expect(token, 'trump was named and nothing went to the medal').not.toBeNull();
+        expect(token?.getAttribute('data-suit')).toBe('diamonds');
+        expect(flight?.frames[0].translate, 'the suit did not come from the Hâkem').toBe('-173px -273px');
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set'), 'the medal showed the suit before it had arrived').toBe(false);
+        expect(container.querySelector('.hokm-felt-info .hokm-chip svg.text-gold'), 'the corner showed the suit before it had arrived').not.toBeNull();
+
+        await elapse(NAMING - 5);
+
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set')).toBe(false);
+
+        await elapse(10);
+
+        expect(container.querySelector('.hokm-token')).toBeNull();
+        expect(container.querySelector('.hokm-medal')?.getAttribute('data-set')).toBe('true');
+        expect(calls(animate, container.querySelector('.hokm-medal')).map((one) => one.frames.map((frame) => frame.scale)), 'the medal took the suit without a mark').toEqual([['1.2', '1']]);
+    });
+
+    it('flies the server\'s suit, not the one that was pressed, when the two are not the same', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(naming(0));
+
+        fire(suit(container, 2), 'click');
+        await elapse(NAMING + 20);
+
+        expect(container.querySelector('.hokm-token')?.getAttribute('data-suit')).toBe('hearts');
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'clubs' })], { hand: THIRTEEN, plays: [] });
+        await flush();
+
+        expect(container.querySelector('.hokm-token')?.getAttribute('data-suit'), 'the suit that was pressed went on lying on the medal').toBe('clubs');
+        expect(container.querySelector('.hokm-medal')?.hasAttribute('data-set'), 'the medal took a suit before it had been flown to it').toBe(false);
+
+        await elapse(LONG, 5);
+
+        expect(container.querySelector('.hokm-token'), 'the suit that was pressed still lies on the medal').toBeNull();
+        expect(container.querySelector('.hokm-medal')?.getAttribute('data-set')).toBe('true');
+        expect(container.querySelector('.hokm-medal svg')?.classList.contains('text-bright-ink'), 'the medal shows the red suit that was pressed and not the black one that is trump').toBe(true);
+        expect(container.querySelector('.hokm-side')?.textContent).toContain('Clubs');
+    });
+
+    it('only fades the suit in on the medal for a reader who asked for less motion, and does not strike it', async () =>
+    {
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, send } = await mounted(naming(1));
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'diamonds' })], { hand: THIRTEEN, plays: [] });
+        await flush();
+
+        expect(calls(animate, container.querySelector('.hokm-token')).map((one) => one.frames)).toEqual([[{ opacity: 0, offset: 0 }]]);
+
+        await elapse(TIMING.FADE + 5);
+
+        expect(container.querySelector('.hokm-medal')?.getAttribute('data-set')).toBe('true');
+        expect(calls(animate, container.querySelector('.hokm-medal')), 'the medal was struck for somebody who asked for less motion').toEqual([]);
+    });
+
+    it('leaves no suit in the air when the board has to jump', async () =>
+    {
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+
+        const { container, send } = await mounted(naming(0));
+
+        fire(suit(container, 2), 'click');
+        await elapse(50);
+        send([act(9, 3, { e: 'forfeit', seat: 3 })]);
+        await flush();
+
+        expect(container.querySelector('.hokm-token'), 'a suit nobody confirmed lies on the medal of a table that jumped').toBeNull();
+        expect(container.querySelectorAll('.hokm-choose button').length).toBe(4);
+    });
+
+    it('names the suit and deals nothing at a table for two, where the rest is drawn', async () =>
+    {
+        const two: MatchView = {
+            ...naming(1, { hand: FIVE, stock: 42, seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false })), points: [0, 0], dealer: 1 }),
+            seats: 2,
+            players: [0, 1].map((seat) => ({ seat, who: `سارا${ seat }`, timeouts: 0 })) as MatchView['players']
+        };
+        const { container, send } = await mounted(two);
+
+        send([act(4, 0, { e: 'trump', seat: 0, suit: 'hearts' })]);
+        await flush();
+
+        expect(container.querySelector('.hokm-token')).not.toBeNull();
+
+        await elapse(NAMING + 5);
+
+        expect(container.querySelector('.hokm-token')).toBeNull();
+        expect(container.querySelector('.hokm-medal')?.getAttribute('data-set')).toBe('true');
+        expect(container.querySelectorAll('.board-flight > *').length).toBe(0);
     });
 });

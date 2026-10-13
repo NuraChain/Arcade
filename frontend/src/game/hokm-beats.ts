@@ -20,6 +20,8 @@ export const COLLECT_GAP = 60;
 
 export const CARRY = 420;
 
+export const NAMING = 340;
+
 export const BANNER_IN = 360;
 
 export const BANNER_OUT = 200;
@@ -104,7 +106,7 @@ export function spanOf(moves: readonly Told[], seats: number, mine: number | nul
         }
         else if (move.e === 'trump')
         {
-            at += TIMING.FADE + (seats === 2 ? 0 : dealLength(restPackets(seats, Math.floor(52 / seats), 0).length, false) + (mine === null ? 0 : openLength(ROUND)));
+            at += NAMING + TIMING.FADE + (seats === 2 ? 0 : dealLength(restPackets(seats, Math.floor(52 / seats), 0).length, false) + (mine === null ? 0 : openLength(ROUND)));
         }
         else if (move.e === 'draw')
         {

@@ -4409,8 +4409,7 @@ dealt.**
   once and not at every card), counted from where the next block says. Before the hold, a
   Hâkem who was at the table for the opening heard no chime at all, since the turn was theirs
   from the first frame.
-- Left for 4.6: at four seats the chooser lies over the deck for the Hâkem, the one seat with
-  the dealer on its left.
+
 
 `hokm-beats.spec.ts` holds the packets, the seeded split and the time a deal takes;
 `stage-flight.spec.ts` holds the packet's stack and the turn; `hokm-board.spec.ts` (*a hand
@@ -4506,6 +4505,55 @@ down; `hokm-cues.spec.ts` holds the one gather and a shuffle that waits for the 
   as it settles. A deal's turn gives none and is as it was.
 - A flight is counted by its clone in the specs (`moved`), not by its animations: one card is
   four of them now.
+
+**Trump is named on the medal, and the Hâkem who names it does not wait for the server.**
+
+- **A suit travels to the medal.** `trump` used to swap the medal's face and the corner chip
+  in one frame, with a sound. A disc with the suit on it (`.hokm-token`, the size of the
+  medal's face) flies there in 340 ms (`NAMING`), from the Hâkem's plate where the crown is,
+  and the medal is struck when it lands: `trump` is heard then, and the medal and the disc
+  are popped together. The model is shown at the landing (`shown = held`), so the corner chip
+  changes with the medal and not before it.
+- **The Hâkem's own press is a prelude** (rule 6). The four suits go at once, the disc leaves
+  the button that was pressed, and the request is out. The prediction covers nothing: when
+  the server's `trump` comes, the scene finds the reader's own disc on its way
+  (`token.pledged`), waits for it to land and deals. A refusal takes the disc back with
+  `deny`, to the ear and the hand, and the suits return. A suit the server named that is not
+  the one pressed is flown from the plate like anybody's. The disc is flown on the stage and
+  not through the director: a prelude orders nothing, and behind a scene still finishing it
+  would have lain on the medal until its turn came and then flown there.
+- **The disc is a real node at its resting place** (`<Show when={ token }>`), moved from
+  where it came by `flightFrames`, as the deck is slid: it is where it belongs if its flight
+  is cut, and reduced motion fades it in there and strikes nothing. It says its suit
+  (`data-suit`), because an icon is drawn from paths and nothing else in the page names the
+  suit that is on its way; the specs cannot tell one suit's drawing from another's.
+- **The four suits are one row under the medal and the deck** (`--under`: the lower of the
+  medal's edge and of a deck lying beside it). Their names are drawn where a table is 44rem
+  wide, and kept for a screen reader where it is not (`.hokm-choose-name`, clipped, never
+  `display: none`). Under 30rem of height the title goes the same way. Under 23rem the row
+  is the four buttons and no panel, 44 px high, which is what fits between a deck and the
+  reader's plate there. On a table under 17rem high, where nothing fits under the medal, the
+  suits are two rows of two beside it if the table is 30rem wide and one row across the medal
+  if it is not (a phone with its chat open). It was a panel over the middle of the felt: on the
+  medal, on the deck for the Hâkem at four seats, and on the side plates of a 360 px phone.
+  `--mid` and `--deck-h` moved to `.hokm-table > *`, so the chooser, the deck and the trick
+  are placed by one arithmetic. The fit pass's `hokm-4-trump` cell holds it: the chooser on
+  the table, on no plate, pile, chip or clock, on neither medal nor deck unless the chat is
+  open, and no suit under 44 px. Its first run failed twelve cells (the two rows of two were
+  given to every short table, and on a narrow one they lay on the right-hand plate) and its
+  second three (the row wore a panel 58 px high where 47 lay between the deck and the
+  reader's plate).
+- **The rest of a deal has its own cap, 2500 ms** (`REST_CAP`; the five keep 2000). With the
+  suit's flight in front of it a deal after trump ends 2.1 s after the answer by its own
+  arithmetic, and the one cap of two seconds turned the last four cards up a tenth of a second
+  before their turn.
+- A suit chosen with a key hands the keyboard to the hand: the buttons are gone, and it would
+  be left on the page's body.
+
+`hokm-board.spec.ts` (*trump named on the medal*) holds the press, the confirmation, the
+refusal, another seat's call, a suit that is not the one pressed, the keyboard, a jump, two
+seats and reduced motion; `hokm-cues.spec.ts` holds `trump` at the landing and `deny`;
+`hokm-table-art.spec.ts` holds the disc and the chooser's three places.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
@@ -4757,7 +4805,9 @@ bet in front of the reader), and poker-2-facing as the seat facing a shove (a ta
 the big bet), and poker-6-crowd as the seat to act after a limp and three all-ins over the blinds - six
 chips round a pot of three shoves, the most a table carries. Two hokm cells have a trick on the felt:
 hokm-2-follow opens as the dealer facing the Hâkem's lead, the card the reader has to follow, and
-hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-3 is the one
+hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-4-trump stops
+before trump is named and opens as the Hâkem, who has the four suits on the felt, and as a seat
+waiting on them. hokm-3 is the one
 table with no dana and nobody parked: three guests, named long enough to fill a plate, opened as the
 seat whose turn it is and as one waiting on it. Three hands put two plates in the felt's top
 corners, which is where the felt's two chips are, so it is the cell that meets a cramped felt.

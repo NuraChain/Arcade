@@ -31,6 +31,7 @@ const GAMES = [
     { id: 'hokm-2-follow', game: 'hokm', seats: 2, mode: 'turns', target: 7, tricks: 1 },
     { id: 'hokm-3', game: 'hokm', seats: 3, mode: 'turns', target: 7, guests: ['Alexander Reeves', 'امیرحسین محمدزاده', 'Maximilian Stone'], viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
     { id: 'hokm-4', game: 'hokm', seats: 4, mode: 'turns', target: 7 },
+    { id: 'hokm-4-trump', game: 'hokm', seats: 4, mode: 'turns', target: 7, stop: 'trump', viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
     { id: 'hokm-4-trick', game: 'hokm', seats: 4, mode: 'turns', target: 7, tricks: 3, viewers: ['turn', 'lead'], also: [BROWSER_BARS] },
     { id: 'poker-2', game: 'poker', seats: 2, mode: 'live', target: 0 },
     { id: 'poker-6', game: 'poker', seats: 6, mode: 'live', target: 0 },
@@ -172,6 +173,11 @@ const advance = async (spec, table) =>
 
         if (spec.game === 'hokm' && state.view.phase === 'trump')
         {
+            if (spec.stop === 'trump')
+            {
+                return;
+            }
+
             const mine = await matchOf(actor, table.matchId);
 
             await play(actor, table.matchId, mine.rev, { kind: 'hokm', verb: 'trump', suit: 'spades' }, key);
@@ -688,6 +694,32 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             if (shown(solid) && meets(box(medal), box(solid)))
             {
                 found.push({ kind: 'felt', what: `the medal ${ where(box(medal)) } lies under ${ describe(solid) } ${ where(box(solid)) }` });
+            }
+        }
+
+        const asked = surface.querySelector('.hokm-choose');
+
+        if (asked !== null && shown(asked))
+        {
+            if (beyond(box(asked), box(surface)))
+            {
+                found.push({ kind: 'hangs', what: `the trump chooser ${ where(box(asked)) } off the table` });
+            }
+
+            for (const solid of surface.querySelectorAll(`${ given.openChat ? '' : '.hokm-medal, .hokm-deck, .hokm-stock, ' }.table-plate, .hokm-pile, .hokm-felt-info .hokm-chip, .hokm-seat > .hokm-clock`))
+            {
+                if (shown(solid) && meets(box(asked), box(solid)))
+                {
+                    found.push({ kind: 'felt', what: `the trump chooser ${ where(box(asked)) } lies over ${ describe(solid) } ${ where(box(solid)) }` });
+                }
+            }
+
+            for (const suit of asked.querySelectorAll('button'))
+            {
+                if (box(suit).width < 44 || box(suit).height < 44)
+                {
+                    found.push({ kind: 'small', what: `a suit to choose trump with is ${ Math.round(box(suit).width) }x${ Math.round(box(suit).height) }` });
+                }
             }
         }
 

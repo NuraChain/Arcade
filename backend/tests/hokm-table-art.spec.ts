@@ -222,6 +222,38 @@ describe('the hand a hokm reader holds', () =>
         expect(ruleOf('.board-flight > .flight:is(.stack, .turning) > :is(.card-face, .card-back)')).toContain('inset: 0;');
     });
 
+    it('asks for trump in one row under the medal and the deck, beside the medal where a table is too short, and names the suits where there is room', () =>
+    {
+        const asked = ruleOf('.hokm-choose');
+
+        expect(ruleOf('.hokm-table > *'), 'what the chooser must clear is not the lower of the medal and a deck beside it').toContain('--under: max(50% + var(--medal) / 2, var(--mid) + var(--deck-h) / 2);');
+        expect(ruleOf('.hokm-deck'), 'the deck is one height and the room kept under it another').toContain('block-size: var(--deck-h);');
+        expect(asked).toContain('top: calc(var(--under) + 0.75rem);');
+        expect(/inset: 0;|margin: auto;/.test(asked), 'the chooser lies over the middle of the felt again, on the medal and the deck').toBe(false);
+        expect(ruleOf('.hokm-choose-suits')).toContain('grid-template-columns: repeat(4, 3.5rem);');
+        expect(ruleOf('.hokm-choose-name'), 'a name that is not drawn is not there for a screen reader either').toContain('clip-path: inset(50%);');
+        expect(/display: none|visibility: hidden/.test(ruleOf('.hokm-choose-name'))).toBe(false);
+        expect(sheet, 'on a table that is short and wide the suits are not beside the medal').toContain('@container (max-height: 16.99rem) and (min-width: 30rem)\n{\n    .hokm-choose\n    {\n        inset: auto;\n        top: calc(var(--mid) - 3rem);\n        left: calc(50% + var(--medal) / 2 + 0.5rem);');
+        expect(sheet, 'on a table that is short and narrow the suits are put beside the medal, where a plate is').toContain('@container (max-height: 16.99rem)\n{\n    .hokm-choose\n    {\n        top: calc(var(--mid) - 1.375rem);\n    }');
+        expect(sheet, 'a row that has 44 px between a deck and a plate still wears a panel 58 px high').toContain('@container (max-height: 23rem)\n{\n    .hokm-choose\n    {\n        top: calc(var(--under) + 0.25rem);\n        padding: 0;\n        border: 0;\n        background: none;');
+        expect(sheet).toContain('@container (min-width: 44rem) and (min-height: 17rem)\n{\n    .hokm-choose-suits\n    {\n        grid-template-columns: repeat(4, 8.75rem);');
+        expect(board).toContain('<span class="hokm-choose-name truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>');
+    });
+
+    it('draws the suit that is named on a disc the size of the medal\'s face, over everything on the felt', () =>
+    {
+        const token = ruleOf('.hokm-token');
+        const depth = (rule: string) => Number(/z-index: (\d+);/.exec(rule)?.[1]);
+
+        expect(token).toContain('inline-size: calc(var(--medal) * 0.72);');
+        expect(token).toContain('block-size: calc(var(--medal) * 0.72);');
+        expect(ruleOf('.hokm-medal::before'), 'the disc is not the size of the face it lands on').toContain('inset: 14%;');
+        expect(ruleOf('.hokm-medal')).toContain('inline-size: var(--medal);');
+        expect(token).toContain('pointer-events: none;');
+        expect(depth(token), 'the suit passes under the suits it was chosen from').toBeGreaterThan(depth(ruleOf('.hokm-choose')));
+        expect(board).toContain('<span class="hokm-token" data-suit={ call.suit } aria-hidden="true">');
+    });
+
     it('never takes a card away from the keyboard, and draws the keyboard\'s place on the card itself', () =>
     {
         const held = (/<button\s+type="button"\s+class="card-hold"[\s\S]*?>\s*<CardFace/.exec(board) ?? [''])[0];
