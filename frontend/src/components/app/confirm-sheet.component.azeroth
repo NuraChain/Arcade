@@ -29,7 +29,7 @@ export default component ConfirmSheet(props: OverlayProps & {
                 }
                 props.close(true);
             } }>{ props.confirm }</Button>
-            <Button variant="ghost" block onClick={ () => props.close(false) }>{ props.cancel ?? locale.t('common.cancel') }</Button>
+            <Button variant="ghost" block autofocus={ props.destructive === true } onClick={ () => props.close(false) }>{ props.cancel ?? locale.t('common.cancel') }</Button>
         </div>
     </div>
 }

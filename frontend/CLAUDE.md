@@ -1226,6 +1226,14 @@ in a `WeakMap`, and a layer opened from inside a dialog falls back to it when it
 left the page; a second sheet over a first that stays still goes back to the first.
 `shell.spec.ts` holds all three, with the page told first and with the host told first.
 
+**A question about something that cannot be undone gives the keyboard to Cancel.** A sheet gives
+the keyboard to the first thing in its body that can take it, and `ConfirmSheet` draws its answer
+first, so resigning, leaving or closing a table, deleting a message, removing a member, blocking
+somebody or ending a friendship was one Enter away from the press that asked about it. A
+`destructive` question marks Cancel `autofocus`, which `firstTabbable` prefers; the answer is
+still drawn first and is still the larger. A question that loses nothing leaves the keyboard on
+its answer. `confirm-sheet.spec.ts` holds both.
+
 **A tooltip belongs to a KEYBOARD focus, not to every focus.** `onFocusIn` fires for a programmatic
 `.focus()` too, and every sheet moves focus to its close button as it opens - so each one opened with
 the word "Close" floating over its own first paragraph, which on the table sheet covered the sentence

@@ -19,6 +19,7 @@ export default component Button(props: {
     loading?: boolean;
     pressed?: boolean;
     submit?: boolean;
+    autofocus?: boolean;
     label?: string;
     class?: string;
     onClick?: () => void;
@@ -61,6 +62,7 @@ export default component Button(props: {
                         aria-busy={ props.loading === true }
                         aria-pressed={ props.pressed }
                         aria-label={ props.label }
+                        autofocus={ props.autofocus === true }
                         onClick={ (event) =>
                         {
                             if (inert)
