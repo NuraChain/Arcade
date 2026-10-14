@@ -32,6 +32,7 @@ export const wallet = {
     'wallet.chooseLead': 'Pick the one you use. Signing is free, and it is the only step.',
     'wallet.chooseClose': 'Close',
     'wallet.missing': 'Not in this browser',
+    'wallet.unnamed': 'Browser wallet',
     'wallet.getIt': 'Get it',
     'wallet.nuraOnly': 'Nura Wallet announces itself only inside its own in-app browser. Scan this to get the link on your phone, then open it from the wallet.',
     'wallet.nuraHow': 'How to use Nura Wallet',

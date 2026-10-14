@@ -35,6 +35,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.chooseLead': 'همانی را انتخاب کن که استفاده می‌کنی. امضا رایگان است و تنها قدم همین است.',
     'wallet.chooseClose': 'بستن',
     'wallet.missing': 'در این مرورگر نیست',
+    'wallet.unnamed': 'کیف پول مرورگر',
     'wallet.getIt': 'نصبش کن',
     'wallet.nuraOnly': 'کیف پول نورا فقط داخل مرورگر خودش معرفی می‌شود. این کد را اسکن کن تا نشانی روی گوشی‌ات بیاید، بعد از داخل کیف پول بازش کن.',
     'wallet.nuraHow': 'راه استفاده از کیف پول نورا',

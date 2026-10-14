@@ -53,7 +53,7 @@ export function discoverWallets(onChange?: () => void): () => void
         }
         announced.set(rdns, {
             rdns,
-            name: detail.info?.name ?? 'Browser wallet',
+            name: detail.info?.name ?? '',
             icon: detail.info?.icon ?? '',
             provider: detail.provider
         });
@@ -128,15 +128,15 @@ export function detect(): Eip1193Provider | null
     return injected;
 }
 
-export function walletName(provider: Eip1193Provider | null): string
+export function walletName(provider: Eip1193Provider | null): string | null
 {
     if (provider === null)
     {
-        return 'Browser wallet';
+        return null;
     }
 
     const wallet = [...announced.values()].find((one) => one.provider === provider);
-    if (wallet !== undefined)
+    if (wallet !== undefined && wallet.name !== '')
     {
         return wallet.name;
     }
@@ -156,7 +156,7 @@ export function walletName(provider: Eip1193Provider | null): string
     {
         return 'Brave Wallet';
     }
-    return provider.isMetaMask === true ? 'MetaMask' : 'Browser wallet';
+    return provider.isMetaMask === true ? 'MetaMask' : null;
 }
 
 export function failureOf(error: unknown): WalletFailure

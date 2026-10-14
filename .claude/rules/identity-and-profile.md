@@ -442,5 +442,8 @@ chain; `NURA_CHAIN_ID` is what a wallet row records and what a contract wallet i
 
 `lib/wallet.ts` discovers providers through **EIP-6963** and falls back to `window.ethereum`.
 It does not believe `isMetaMask` — any injector can set that flag — so with no announcement it
-takes the first injected provider, and `walletName(null)` says "Browser wallet" rather than naming
-a wallet that is not installed.
+takes the first injected provider, and `walletName` answers `null` rather than naming a wallet that
+is not installed or did not say what it is. The page names that one in the reader's language
+(`wallet.unnamed`, "Browser wallet", "کیف پول مرورگر"): it was an English literal in the library,
+so a Persian reader's account card said "ورود با Browser wallet". A wallet that names itself keeps
+its product name in both languages.

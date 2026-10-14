@@ -172,8 +172,8 @@ describe('provider detection', () =>
         expect(walletName(fakeProvider())).toBe('MetaMask');
         expect(walletName({ ...fakeProvider(), isNuraWallet: true })).toBe('Nura Wallet');
         expect(walletName({ ...fakeProvider({ isMetaMask: false }), isRabby: true })).toBe('Rabby');
-        expect(walletName(fakeProvider({ isMetaMask: false }))).toBe('Browser wallet');
-        expect(walletName(null)).toBe('Browser wallet');
+        expect(walletName(fakeProvider({ isMetaMask: false })), 'an unnamed wallet was named, in one language').toBeNull();
+        expect(walletName(null)).toBeNull();
     });
 
     it('reads the standard provider error codes', () =>

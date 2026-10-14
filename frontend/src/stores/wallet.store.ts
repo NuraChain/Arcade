@@ -30,7 +30,7 @@ export interface WalletApi
     address: Getter<string | null>;
     chainId: Getter<string>;
     available: Getter<boolean>;
-    name: Getter<string>;
+    name: Getter<string | null>;
     failure: Getter<WalletFailure | null>;
     onNuraChain: Getter<boolean>;
     connect(): Promise<Account | null>;

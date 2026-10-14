@@ -16,7 +16,7 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
 
     derived status = wallet.status();
 
-    derived name = wallet.name();
+    derived name = wallet.name() ?? locale.t('wallet.unnamed');
 
     derived busy = status === 'connecting' || status === 'signing';
 
