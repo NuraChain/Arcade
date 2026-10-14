@@ -380,6 +380,48 @@ describe('typing', () =>
         stop();
     });
 
+    it('keeps somebody typing whose old line is read in after their notice came', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        await chat.refresh();
+        await settle();
+
+        expect(chat.lastOf('c-sara')?.from, 'the room\'s newest line is one of hers').toBe('sara.k');
+        expect(chat.typing('c-sara'), 'a line she wrote before she began typing ended it').toEqual(['sara.k']);
+
+        stop();
+    });
+
+    it('takes somebody out of the indicator for the first line of a room that had none', async () =>
+    {
+        const row = server.conversations.find((one) => one.id === 'c-sara')!;
+        const theirs = server.messages.find((one) => one.conversationId === 'c-sara' && one.kind === 'text' && one.from === 'sara.k')!;
+
+        server.messages = server.messages.filter((one) => one.conversationId !== 'c-sara');
+        delete row.last;
+
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+        await settle();
+
+        expect(chat.lastOf('c-sara'), 'the room is read and holds nothing').toBeUndefined();
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        server.messages.push(theirs);
+        row.last = theirs;
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara'), 'her first line has come and she is still said to be typing it').toEqual([]);
+
+        stop();
+    });
+
     it('says it is typing at a rate the gateway will not hang up on', () =>
     {
         const chat = useChat();

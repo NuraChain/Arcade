@@ -27,7 +27,7 @@ interface Typist
 {
     who: string;
     until: number;
-    after: string;
+    after: string | null;
 }
 
 let active: ChatSource = createApiSource();
@@ -338,11 +338,13 @@ export const useChat = createStore((): ChatApi =>
         const current = untrack(typists);
         const kept = (current[conversationId] ?? []).filter((entry) => entry.who !== who && entry.until > now);
 
-        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS, after: untrack(() => lastOf(conversationId))?.id ?? '' }] });
+        const after = untrack(() => (rowOf(conversationId) === undefined ? null : (lastOf(conversationId)?.id ?? '')));
+
+        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS, after }] });
         sweepSoon();
     };
 
-    const answered = (entry: Typist, last: Message | undefined) => last !== undefined && last.from === entry.who && last.id !== entry.after;
+    const answered = (entry: Typist, last: Message | undefined) => entry.after !== null && last !== undefined && last.from === entry.who && last.id !== entry.after;
 
     const announced = new Map<string, number>();
 

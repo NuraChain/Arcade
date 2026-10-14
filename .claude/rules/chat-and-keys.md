@@ -1353,7 +1353,10 @@ nobody ever sends "I stopped": the tab may have closed, the socket may have drop
 have walked away. A line from them ends it at once: the indicator leaves out anybody whose line has
 become the newest in the room since their notice came (`answered` in the chat store), where it went
 on saying they were typing the line that had already arrived, for up to four seconds. Seen in the
-clean production run; `realtime-stores.spec.ts` (*typing*) holds it.
+clean production run; `realtime-stores.spec.ts` (*typing*) holds it. A notice that came before the
+room had been read at all keeps its four seconds: the first version took an unread room for an
+empty one, so an old line of theirs read in a moment later hid somebody who was typing, while a
+room read and found empty is still answered by their first line.
 
 The client half is `services/realtime.source.ts` (the only module that constructs a `WebSocket`)
 and `stores/realtime.store.ts` (one connection, jittered backoff seeded from `runtime().seed`, a
