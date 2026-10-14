@@ -111,9 +111,15 @@ const play = async (matchId: string, userAt: ReadonlyMap<number, string>, next: 
 
         const action = backgammonEngine.autoplay(state, seat!, { die: () => 1 });
 
+        if (action?.kind === 'roll')
+        {
+            await matches.act(userAt.get(seat!)!, matchId, { play: { kind: 'backgammon', verb: 'roll' }, key: `roll-${ step }` });
+            continue;
+        }
+
         if (action?.kind !== 'move')
         {
-            throw new Error(`expected a move at step ${ step }, got ${ action?.kind }`);
+            throw new Error(`expected a roll or a move at step ${ step }, got ${ action?.kind }`);
         }
 
         await matches.act(userAt.get(seat!)!, matchId, { play: { kind: 'backgammon', verb: 'move', hops: action.hops }, key: `move-${ step }` });

@@ -175,7 +175,7 @@ const post = async (current, play) =>
 
 const auto = async (current) =>
 {
-    if (current.view.phase === 'roll')
+    if (current.view.phase === 'roll' || current.view.phase === 'opening')
     {
         return await post(current, { kind: 'backgammon', verb: 'roll' });
     }
@@ -401,11 +401,13 @@ const observe = async (label, current, hops) =>
 const diceTold = async (label, player, view) =>
 {
     const lying = (await diceOf(player.page)).filter((die) => !die.blank);
-    const wanted = view.dice.slice(0, 2);
+    const opening = view.phase === 'opening';
+    const wanted = opening ? (view.opening ?? []).map((one) => one.die).sort() : view.dice.slice(0, 2);
     const read = lying.map((die) => faceOf(die.transform));
+    const inOrder = (faces) => (opening ? [...faces].sort() : faces).join();
 
     record(`${ label }: ${ player.handle }'s dice are in the document and lie on the server's faces, read from each cube's matrix`,
-        lying.every((die) => die.connected) && read.map((one) => one.face).join() === wanted.join() && lying.map((die) => die.shown).join() === wanted.join() && read.every((one) => one.square > 0.98),
+        lying.every((die) => die.connected) && inOrder(read.map((one) => one.face)) === wanted.join() && inOrder(lying.map((die) => die.shown)) === wanted.join() && read.every((one) => one.square > 0.98),
         `${ lying.map((die, index) => `${ die.key } shows ${ die.shown }, lies on ${ read[index].face } (${ read[index].square })`).join('; ') } for ${ wanted.join() }`);
     record(`${ label }: ${ player.handle }'s cube is in the document`, await player.page.evaluate(() => document.querySelector('.bg-layer .bgt-cube')?.isConnected === true));
 };

@@ -221,6 +221,12 @@ const advance = async (spec, table) =>
             continue;
         }
 
+        if (spec.game === 'backgammon' && state.view.phase === 'opening')
+        {
+            await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, key);
+            continue;
+        }
+
         if (spec.game === 'backgammon' && state.view.phase === 'roll')
         {
             await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, key);

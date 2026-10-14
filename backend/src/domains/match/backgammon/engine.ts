@@ -6,15 +6,13 @@ import type { BackgammonAction, BackgammonEvent, BackgammonRefusal, BackgammonSt
 
 export const SEATS: readonly number[] = [2];
 
+export const UNTHROWN = 0;
+
 export type Die = (sides: number) => number;
 
 export type Outcome =
     | { ok: true; state: BackgammonState; events: BackgammonEvent[] }
     | { ok: false; reason: BackgammonRefusal };
-
-const OPENING_TRIES = 16;
-
-const PASS_LIMIT = 8;
 
 export function sideOf(state: BackgammonState, seat: number): Side
 {
@@ -31,7 +29,12 @@ function withSide(state: BackgammonState, seat: number, side: Side): BackgammonS
     return { ...state, checkers };
 }
 
-function rolled(state: BackgammonState, seat: number, dice: number[], die: Die, events: BackgammonEvent[], passes: number): BackgammonState
+function begin(state: BackgammonState, seat: number): BackgammonState
+{
+    return { ...state, turn: seat, phase: 'roll', dice: [], turns: state.turns + 1 };
+}
+
+function rolled(state: BackgammonState, seat: number, dice: number[], events: BackgammonEvent[])
 {
     const next: BackgammonState = { ...state, turn: seat, phase: 'move', dice };
 
@@ -42,55 +45,15 @@ function rolled(state: BackgammonState, seat: number, dice: number[], die: Die, 
 
     events.push({ e: 'pass', seat });
 
-    return begin(next, 1 - seat, die, events, passes + 1);
+    return begin(next, 1 - seat);
 }
 
-function begin(state: BackgammonState, seat: number, die: Die, events: BackgammonEvent[], passes = 0): BackgammonState
+function opening(state: BackgammonState): BackgammonState
 {
-    const waiting: BackgammonState = { ...state, turn: seat, phase: 'roll', dice: [], turns: state.turns + 1 };
-
-    if (passes >= PASS_LIMIT || mayDouble(waiting, seat))
-    {
-        return waiting;
-    }
-
-    const dice = [die(6), die(6)];
-
-    events.push({ e: 'roll', seat, dice });
-
-    return rolled(waiting, seat, dice, die, events, passes);
+    return { ...state, turn: 0, phase: 'opening', dice: [], thrown: [UNTHROWN, UNTHROWN], turns: state.turns + 1 };
 }
 
-function openWith(state: BackgammonState, first: number, second: number, die: Die, events: BackgammonEvent[])
-{
-    const seat = first > second ? 0 : 1;
-
-    events.push({ e: 'opening', seat, dice: [first, second] });
-
-    return rolled(state, seat, [first, second], die, events, 0);
-}
-
-function opening(previous: BackgammonState, die: Die, events: BackgammonEvent[])
-{
-    const state: BackgammonState = { ...previous, turns: previous.turns + 1 };
-
-    for (let tries = 0; tries < OPENING_TRIES; tries += 1)
-    {
-        const first = die(6);
-        const second = die(6);
-
-        if (first !== second)
-        {
-            return openWith(state, first, second, die, events);
-        }
-    }
-
-    const first = die(6);
-
-    return openWith(state, first, 1 + (first - 1 + die(5)) % 6, die, events);
-}
-
-export function create(target: number, cube: boolean, die: Die)
+export function create(target: number, cube: boolean)
 {
     const events: BackgammonEvent[] = [];
     const state = opening({
@@ -104,18 +67,19 @@ export function create(target: number, cube: boolean, die: Die)
         crawford: 'before',
         checkers: [[...START], [...START]],
         turn: 0,
-        phase: 'roll',
+        phase: 'opening',
         dice: [],
+        thrown: [UNTHROWN, UNTHROWN],
         cube: 1,
         owner: null,
         turns: 0,
         winner: null
-    }, die, events);
+    });
 
     return { state, events };
 }
 
-function endGame(state: BackgammonState, winner: number, how: GameKind, die: Die, events: BackgammonEvent[]): BackgammonState
+function endGame(state: BackgammonState, winner: number, how: GameKind, events: BackgammonEvent[]): BackgammonState
 {
     const points = VALUE[how] * state.cube;
     const score = [...state.score];
@@ -138,7 +102,7 @@ function endGame(state: BackgammonState, winner: number, how: GameKind, die: Die
         checkers: [[...START], [...START]],
         cube: 1,
         owner: null
-    }, die, events);
+    });
 }
 
 function refuse(reason: BackgammonRefusal): Outcome
@@ -146,7 +110,45 @@ function refuse(reason: BackgammonRefusal): Outcome
     return { ok: false, reason };
 }
 
-function answer(state: BackgammonState, next: BackgammonState, action: BackgammonAction, die: Die): Outcome
+function throwing(state: BackgammonState, next: BackgammonState, action: BackgammonAction, die: Die): Outcome
+{
+    if (action.kind !== 'roll')
+    {
+        return refuse(action.kind === 'move' ? 'must-roll-first' : (action.kind === 'double' ? 'cannot-double' : 'no-double'));
+    }
+
+    if (state.thrown[action.seat] !== UNTHROWN)
+    {
+        return refuse('already-rolled');
+    }
+
+    const thrown = [...state.thrown];
+
+    thrown[action.seat] = die(6);
+
+    const events: BackgammonEvent[] = [{ e: 'throw', seat: action.seat, die: thrown[action.seat] }];
+    const waiting = thrown.indexOf(UNTHROWN);
+
+    if (waiting >= 0)
+    {
+        return { ok: true, state: { ...next, thrown, turn: waiting }, events };
+    }
+
+    if (thrown[0] === thrown[1])
+    {
+        events.push({ e: 'tie', dice: thrown });
+
+        return { ok: true, state: opening(next), events };
+    }
+
+    const seat = thrown[0] > thrown[1] ? 0 : 1;
+
+    events.push({ e: 'opening', seat, dice: thrown });
+
+    return { ok: true, state: rolled({ ...next, thrown: [UNTHROWN, UNTHROWN], turns: next.turns + 1 }, seat, thrown, events), events };
+}
+
+function answer(state: BackgammonState, next: BackgammonState, action: BackgammonAction): Outcome
 {
     if (action.seat === state.turn)
     {
@@ -161,14 +163,14 @@ function answer(state: BackgammonState, next: BackgammonState, action: Backgammo
 
         events.push({ e: 'take', seat: action.seat, cube });
 
-        return { ok: true, state: begin({ ...next, cube, owner: action.seat }, state.turn, die, events), events };
+        return { ok: true, state: begin({ ...next, cube, owner: action.seat }, state.turn), events };
     }
 
     if (action.kind === 'drop')
     {
         events.push({ e: 'drop', seat: action.seat });
 
-        return { ok: true, state: endGame(next, state.turn, 'single', die, events), events };
+        return { ok: true, state: endGame(next, state.turn, 'single', events), events };
     }
 
     return refuse('double-pending');
@@ -184,7 +186,7 @@ function waitingToRoll(state: BackgammonState, next: BackgammonState, action: Ba
 
         events.push({ e: 'roll', seat: action.seat, dice });
 
-        return { ok: true, state: rolled(next, action.seat, dice, die, events, 0), events };
+        return { ok: true, state: rolled(next, action.seat, dice, events), events };
     }
 
     if (action.kind === 'double')
@@ -202,7 +204,7 @@ function waitingToRoll(state: BackgammonState, next: BackgammonState, action: Ba
     return refuse(action.kind === 'move' ? 'must-roll-first' : 'no-double');
 }
 
-function moving(state: BackgammonState, next: BackgammonState, action: BackgammonAction, die: Die): Outcome
+function moving(state: BackgammonState, next: BackgammonState, action: BackgammonAction): Outcome
 {
     if (action.kind !== 'move')
     {
@@ -221,10 +223,10 @@ function moving(state: BackgammonState, next: BackgammonState, action: Backgammo
 
     if (settled.side.me[OFF] === CHECKERS)
     {
-        return { ok: true, state: endGame(moved, action.seat, kindOf(settled.side.them), die, events), events };
+        return { ok: true, state: endGame(moved, action.seat, kindOf(settled.side.them), events), events };
     }
 
-    return { ok: true, state: begin(moved, 1 - action.seat, die, events), events };
+    return { ok: true, state: begin(moved, 1 - action.seat), events };
 }
 
 export function apply(state: BackgammonState, action: BackgammonAction, die: Die): Outcome
@@ -252,9 +254,14 @@ export function apply(state: BackgammonState, action: BackgammonAction, die: Die
 
     const next: BackgammonState = { ...state, rev: state.rev + 1 };
 
+    if (state.phase === 'opening')
+    {
+        return throwing(state, next, action, die);
+    }
+
     if (state.phase === 'double')
     {
-        return answer(state, next, action, die);
+        return answer(state, next, action);
     }
 
     if (action.seat !== state.turn)
@@ -262,7 +269,7 @@ export function apply(state: BackgammonState, action: BackgammonAction, die: Die
         return refuse('not-your-turn');
     }
 
-    return state.phase === 'roll' ? waitingToRoll(state, next, action, die) : moving(state, next, action, die);
+    return state.phase === 'roll' ? waitingToRoll(state, next, action, die) : moving(state, next, action);
 }
 
 export function legalMoves(state: BackgammonState, seat: number): BackgammonAction[]
@@ -270,6 +277,11 @@ export function legalMoves(state: BackgammonState, seat: number): BackgammonActi
     if (state.winner !== null)
     {
         return [];
+    }
+
+    if (state.phase === 'opening')
+    {
+        return state.thrown[seat] === UNTHROWN ? [{ kind: 'roll', seat }] : [];
     }
 
     if (state.phase === 'double')
@@ -295,6 +307,11 @@ export function autoplay(state: BackgammonState, seat: number): BackgammonAction
     if (state.winner !== null)
     {
         return null;
+    }
+
+    if (state.phase === 'opening')
+    {
+        return state.thrown[seat] === UNTHROWN ? { kind: 'roll', seat } : null;
     }
 
     if (state.phase === 'double')

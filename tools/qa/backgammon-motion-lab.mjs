@@ -379,9 +379,8 @@ try
 
     const endFrames = await sampled(async () => await act(opening, 0, [
         { e: 'move', seat: 0, from: 1, to: 0, die: 1 },
-        { e: 'game', seat: 0, how: 'single', points: 1, cube: 1 },
-        { e: 'opening', dice: [3, 5] }
-    ], { dice: [3, 5], scores: [1, 0], round: 2 }), { dice: true, settle: 400 });
+        { e: 'game', seat: 0, how: 'single', points: 1, cube: 1 }
+    ], { dice: [], phase: 'opening', opening: [], scores: [1, 0], round: 2 }), { dice: true, settle: 400 });
     const raised = endFrames.men.findIndex((frame) => frame.marks.banner);
     const lowered = endFrames.men.findLastIndex((frame) => frame.marks.banner);
     const under = endFrames.men.slice(raised, lowered + 1);
@@ -420,14 +419,21 @@ try
     record('the same thirty nodes are racked, none is made again', await strangers() === 0);
     await stood('thirty checkers stand at the start of the next game', opening);
 
-    const openers = await diceOf(page);
-    const drops = openers.map((die) => thrownFrom(endFrames.dice, die.key));
-
-    record('the next opening is thrown: two dice, on the faces rolled', openers.map((die) => faceOf(die.transform).face).join() === '3,5' && openers.map((die) => die.shown).join() === '3,5',
-        openers.map((die) => `${ die.key } shows ${ die.shown }, lies on ${ faceOf(die.transform).face }`).join('; '));
-    record('one die comes from each side of the board', drops[0] > 80 && drops[1] < -80, drops.map((drop) => Math.round(drop)).join(' and '));
-    record('the plates are told the point, then the next game', JSON.stringify((await told()).facts.map((one) => [one.score.near, one.round])) === JSON.stringify([[0, 1], [1, 1], [1, 2]]),
+    record('nothing is thrown for anybody at the start of the next game', (await diceOf(page)).filter((die) => !die.blank).length === 0);
+    record('the plates are told the point, then the next game', JSON.stringify((await told()).facts.map((one) => [one.score.near, one.round]).filter((one, index, all) => index === 0 || one.join() !== all[index - 1].join())) === JSON.stringify([[0, 1], [1, 1], [1, 2]]),
         JSON.stringify((await told()).facts.map((one) => [one.score.near, one.round, one.pips.near])));
+
+    const throwFrames = await sampled(async () =>
+    {
+        await act(opening, 1, [{ e: 'throw', seat: 1, die: 5 }], { dice: [], phase: 'opening', opening: [{ seat: 1, die: 5 }], scores: [1, 0], round: 2 });
+        await act(opening, 0, [{ e: 'throw', seat: 0, die: 3 }, { e: 'opening', seat: 1, dice: [3, 5] }], { dice: [3, 5], scores: [1, 0], round: 2 });
+    }, { dice: true, settle: 400 });
+    const openers = await diceOf(page);
+    const drops = [...new Set(throwFrames.dice.flatMap((frame) => Object.keys(frame.items)))].map((key) => thrownFrom(throwFrames.dice, key)).filter((drop) => Number.isFinite(drop));
+
+    record('the next game starts on the two dice thrown, one by each player', openers.map((die) => faceOf(die.transform).face).join() === '3,5' && openers.map((die) => die.shown).join() === '3,5',
+        openers.map((die) => `${ die.key } shows ${ die.shown }, lies on ${ faceOf(die.transform).face }`).join('; '));
+    record('each player\'s die comes from their own side of the board', drops.some((drop) => drop > 80) && drops.some((drop) => drop < -80), drops.map((drop) => Math.round(drop)).join(' and '));
 
     console.log('\n[8] every face of a die');
 

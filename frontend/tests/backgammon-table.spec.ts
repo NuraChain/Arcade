@@ -32,6 +32,7 @@ const felt = (over: Partial<Felt> = {}): Felt => ({
     near: START,
     far: START,
     dice: [],
+    opening: [],
     spent: spentBy(over.dice ?? [], []),
     seed: seedOf('m', 5),
     cube: { on: true, value: 1, owner: null },
@@ -339,23 +340,34 @@ describe('what happened, played on the table', () =>
         expect(thrown().map((one) => fromY(one) > 5)).toEqual([true, true]);
     });
 
-    it('opens a game with one die thrown from each side', async () =>
+    it('throws each opening die from the side of whoever threw it, and keeps the first where it lies', async () =>
     {
-        table.reset(sight(felt()));
-        play([act(1, -1, [{ e: 'opening', seat: 0, dice: [6, 2] }])], sight(felt({ dice: [6, 2] }), 6));
+        table.reset(sight(felt({ opening: [0, 0] })));
+        play([act(2, 0, [{ e: 'throw', seat: 0, die: 6 }])], sight(felt({ opening: [6, 0], turn: 'far' }), 2));
         await elapse(0);
 
-        expect(thrown().map((one) => fromY(one) > 5)).toEqual([true, false]);
-        expect(fromY(thrown()[1])).toBeLessThan(-5);
+        expect(thrown().map((one) => fromY(one) > 5)).toEqual([true]);
+
+        await elapse(THROW_MS + ROLL_CAP);
+        drawn.length = 0;
+        play([act(3, 1, [{ e: 'throw', seat: 1, die: 2 }])], sight(felt({ opening: [6, 2], turn: 'far' }), 3));
+        await elapse(0);
+
+        expect(thrown().map((one) => fromY(one) < -5), 'the second die did not come from the far side').toEqual([true]);
+
+        await elapse(THROW_MS + ROLL_CAP);
+
+        expect(dice().map((die) => die.dataset.face), 'the first die was picked up when the second was thrown').toEqual(['6', '2']);
     });
 
-    it('says how it stood before its opening roll: the same table with no dice on it', async () =>
+    it('says how it stood before its opening: the same table with no dice on it, and plays the throws and the start onto it', async () =>
     {
-        const seen = sight(felt({ dice: [6, 2] }), 1);
+        const seen = sight(felt({ dice: [6, 2], seed: seedOf('m', 3) }), 3);
         const before = table.before!(seen);
 
-        expect(before).toMatchObject({ id: 'm', rev: 1, seat: 0 });
-        expect(before.view).toMatchObject({ viewer: 0, dice: [], spent: [], seed: seen.view.seed });
+        expect(before).toMatchObject({ id: 'm', rev: 3, seat: 0 });
+        expect(before.view).toMatchObject({ viewer: 0, dice: [], opening: [], spent: [], seed: seen.view.seed });
+        expect(table.before!(sight(felt({ opening: [0, 4] }), 2)).view.opening, 'the table before a game opened was already in its opening').toEqual([]);
         expect(before.view.near).toBe(seen.view.near);
         expect(before.view.cube).toBe(seen.view.cube);
 
@@ -364,11 +376,38 @@ describe('what happened, played on the table', () =>
         expect(dice()).toHaveLength(0);
         expect(men()).toHaveLength(30);
 
-        play([act(1, -1, [{ e: 'opening', seat: 0, dice: [6, 2] }])], seen);
-        await elapse(THROW_MS + ROLL_CAP);
+        play([
+            act(2, 0, [{ e: 'throw', seat: 0, die: 6 }]),
+            act(3, 1, [{ e: 'throw', seat: 1, die: 2 }, { e: 'opening', seat: 0, dice: [6, 2] }])
+        ], seen);
+        await elapse((THROW_MS + ROLL_CAP) * 2 + PICK_MS * 2);
 
         expect(dice().map((die) => die.dataset.face)).toEqual(['6', '2']);
+        expect(dice().some((die) => die.hasAttribute('data-blank'))).toBe(false);
         expect(table.same(seen)).toBe(true);
+    });
+
+    it('picks both opening dice up on a tie', async () =>
+    {
+        table.reset(sight(felt({ opening: [3, 0], turn: 'far' })));
+
+        const first = dice()[0];
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['3']);
+
+        play([act(3, 1, [{ e: 'throw', seat: 1, die: 3 }, { e: 'tie', dice: [3, 3] }])], sight(felt({ opening: [0, 0] }), 3));
+        await elapse(0);
+
+        const second = dice().find((die) => die !== first)!;
+
+        await elapse(THROW_MS + ROLL_CAP);
+        const picked = (die: Element) => of(die).some((one) => one.options.duration === PICK_MS && one.frames.at(-1)?.opacity === 0);
+
+        await elapse(PICK_MS + 100);
+
+        expect([picked(first), picked(second)], 'the dice of a tie vanished instead of being picked up').toEqual([true, true]);
+        expect(dice()).toHaveLength(0);
+        expect(director.busy()).toBe(false);
     });
 
     it('lets the dice go from beyond the edge of the board, however big the board is', async () =>
@@ -576,13 +615,12 @@ describe('what happened, played on the table', () =>
     it('racks every checker and returns the cube before the next game opens', async () =>
     {
         const before = felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4], cube: { on: true, value: 2, owner: 'near' } });
-        const after = sight(felt({ dice: [2, 5], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
+        const after = sight(felt({ dice: [], opening: [0, 0], seed: seedOf('m', 6), score: { near: 4, far: 0 }, round: 2 }), 6);
 
         table.reset(sight(before));
         play([act(6, 0, [
             { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
-            { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 },
-            { e: 'opening', seat: 1, dice: [2, 5] }
+            { e: 'game', seat: 0, how: 'gammon', points: 4, cube: 2 }
         ])], after);
 
         await elapse(400 + PICK_MS + 60);
@@ -596,7 +634,7 @@ describe('what happened, played on the table', () =>
 
         await elapse(3200);
 
-        expect(dice().map((die) => die.dataset.face)).toEqual(['2', '5']);
+        expect(dice(), 'the next game opened with dice nobody threw').toHaveLength(0);
         expect(table.same(after)).toBe(true);
         expect(host.querySelectorAll('.man[data-off]')).toHaveLength(0);
         expect(director.busy()).toBe(false);
@@ -753,26 +791,23 @@ describe('what happened, played on the table', () =>
             expect(last()).toEqual({ score: { near: 4, far: 0 }, round: 2, pips: { near: 167, far: 167 }, turn: 'far' });
         });
 
-        it('give the turn to whoever starts when the two dice that say so have landed, and not before', async () =>
+        it('give the turn to whoever starts when the die that says so has landed, and not before', async () =>
         {
-            const opened = sight(felt({ dice: [2, 5], seed: seedOf('m', 1), turn: 'far' }), 1);
+            const begun = sight(felt({ dice: [1, 2], seed: seedOf('m', 7), turn: 'far' }), 7);
 
-            const bare = table.before?.(opened) ?? opened;
+            table.reset(sight(felt({ opening: [0, 2], turn: 'near' }), 6));
 
-            expect(bare.view.turn, 'the table as it stood before the opening already had a turn').toBeNull();
+            expect(last().turn).toBe('near');
 
-            table.reset(bare);
-
-            expect(last().turn).toBeNull();
-
-            play([act(1, 1, [{ e: 'opening', seat: 1, dice: [2, 5] }])], opened);
+            play([act(7, 0, [{ e: 'throw', seat: 0, die: 1 }, { e: 'opening', seat: 1, dice: [1, 2] }])], begun);
             await elapse(300);
 
-            expect(last().turn, 'who starts was told while the dice were in the air').toBeNull();
+            expect(last().turn, 'who starts was told while the die that says so was in the air').toBe('near');
 
-            await elapse(THROW_MS);
+            await elapse(THROW_MS + ROLL_CAP + PICK_MS);
 
             expect(last().turn).toBe('far');
+            expect(dice().map((die) => die.dataset.face)).toEqual(['1', '2']);
         });
 
         it('pass the turn as whoever is next throws their dice, after the checkers that ended the last one', async () =>
@@ -1375,6 +1410,46 @@ describe('what is pressed on the table itself', () =>
         expect(pressed).toEqual(['dice']);
     });
 
+    it('puts the reader\'s own blank die out in the opening, beside the other player\'s, and a tap on it is the throw', () =>
+    {
+        table.reset(sight(felt({ opening: [0, 4], turn: 'near' })));
+
+        expect(dice().map((die) => die.dataset.face), 'a die waited in the reader\'s place before they were offered one').toEqual(['4']);
+
+        table.invite('roll');
+
+        expect(dice().filter((die) => die.hasAttribute('data-blank')), 'an opening offered the two blank dice of a roll').toHaveLength(0);
+
+        table.invite('throw');
+
+        expect(dice()).toHaveLength(2);
+        expect(dice().filter((die) => die.hasAttribute('data-blank'))).toHaveLength(1);
+        expect(zone().dataset.live).toBe('roll');
+
+        tapDice();
+
+        expect(pressed).toEqual(['dice']);
+
+        table.invite(null);
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['4']);
+        expect(zone().hasAttribute('data-live')).toBe(false);
+    });
+
+    it('puts out nothing to throw for a reader who has thrown, nor for somebody watching', () =>
+    {
+        table.reset(sight(felt({ opening: [5, 0], turn: 'far' })));
+        table.invite('throw');
+
+        expect(dice().map((die) => die.dataset.face)).toEqual(['5']);
+        expect(dice().some((die) => die.hasAttribute('data-blank'))).toBe(false);
+
+        table.invite(null);
+        table.reset(sight(felt({ viewer: 1, opening: [0, 0], turn: 'far' }), 5, null));
+
+        expect(dice()).toHaveLength(0);
+    });
+
     it('takes the blank dice away when the roll is no longer the reader\'s, and has them back after the table is drawn again', async () =>
     {
         table.reset(sight(felt()));
@@ -1523,6 +1598,20 @@ describe('when a roll can be told', () =>
         expect(rolls[rolls.length - 1]).toEqual([seedOf('m', 9), true]);
         expect(rolls).toContainEqual([-1, true]);
         expect(faced[faced.length - 1]).toBe('6,1');
+    });
+
+    it('says when an opening die is thrown and when it has landed', async () =>
+    {
+        table.reset(sight(felt({ opening: [0, 0] })));
+        rolls.length = 0;
+        play([act(4, 1, [{ e: 'throw', seat: 1, die: 3 }])], sight(felt({ opening: [0, 3], seed: seedOf('m', 4) }), 4));
+        await elapse(0);
+
+        expect(rolls).toEqual([[seedOf('m', 4), false]]);
+
+        await elapse(THROW_MS + ROLL_CAP);
+
+        expect(rolls).toContainEqual([seedOf('m', 4), true]);
     });
 
     it('says the table is bare when the dice are picked up', async () =>

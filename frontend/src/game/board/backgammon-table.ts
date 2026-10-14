@@ -19,6 +19,7 @@ import {
     beatsOf,
     pipsOf,
     sameAs,
+    UNTHROWN,
     seedOf,
     shownOf,
     spentBy,
@@ -59,7 +60,7 @@ import type { Run, Stage } from '../stage/stage.ts';
 import type { SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
-export type Invite = 'roll' | 'done' | null;
+export type Invite = 'throw' | 'roll' | 'done' | null;
 
 export interface TableOptions
 {
@@ -164,6 +165,8 @@ const REACH_OVER = 1.2;
 
 const WAIT_SEED = 7;
 
+const OPENING_SEED = 11;
+
 const WAIT_MS = 180;
 
 const STICK_MS = 160;
@@ -231,6 +234,16 @@ const costOf = (beat: Beat) =>
         return PICK_MS + THROW_MS;
     }
 
+    if (beat.kind === 'throw')
+    {
+        return THROW_MS;
+    }
+
+    if (beat.kind === 'tie' || beat.kind === 'start')
+    {
+        return PICK_MS;
+    }
+
     if (beat.kind === 'hop')
     {
         return beat.move.hit ? HOP_MS + KNOCK_MS : HOP_MS;
@@ -274,8 +287,9 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
     const alive = new Set<Die>();
     const zone = make('bgt-dice', host);
     const cubeEl = make('bgt-cube', host);
-    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1, turn: null };
+    let shown: Shown = { viewer: 0, men: { men: [], serial: 0 }, dice: [], opening: [], cube: { on: false, value: 1, owner: null }, score: { near: 0, far: 0 }, round: 1, turn: null };
     let dice: Die[] = [];
+    const openers = new Map<number, { die: Die; face: number }>();
     let diceSeed = -1;
     let used: number[] = [];
     let wanted: { spent: readonly boolean[]; seed: number } = { spent: [], seed: -2 };
@@ -888,7 +902,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
     const live = () =>
     {
-        const mode = invited === 'roll'
+        const mode = invited === 'roll' || invited === 'throw'
             ? (waiting ? 'roll' : null)
             : (invited === 'done' && rested && dice.length > 0 ? 'done' : null);
 
@@ -903,8 +917,86 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         }
     };
 
+    const dropOpener = (seat: number) =>
+    {
+        const held = openers.get(seat);
+
+        if (held !== undefined)
+        {
+            drop(held.die);
+            openers.delete(seat);
+        }
+    };
+
+    const layOpener = (seat: number, face: number) =>
+    {
+        const die = lay(face === UNTHROWN ? 1 : face, seat, 2, OPENING_SEED);
+
+        if (face === UNTHROWN)
+        {
+            die.node.setAttribute('data-blank', '');
+            stage.animate(die.node, [{ opacity: 0, scale: '0.8', offset: 0 }], { duration: WAIT_MS });
+        }
+
+        openers.set(seat, { die, face });
+
+        return die;
+    };
+
+    const drawOpeners = () =>
+    {
+        if (shown.opening.length !== 2)
+        {
+            for (const seat of [...openers.keys()])
+            {
+                dropOpener(seat);
+            }
+
+            return;
+        }
+
+        for (const seat of [0, 1])
+        {
+            const face = shown.opening[seat];
+            const offered = face === UNTHROWN && seat === shown.viewer && invited === 'throw';
+            const held = openers.get(seat);
+
+            if (face === UNTHROWN && !offered)
+            {
+                dropOpener(seat);
+            }
+            else if (held === undefined || held.face !== face)
+            {
+                dropOpener(seat);
+                layOpener(seat, face);
+            }
+        }
+
+        waiting = [...openers.values()].some((one) => one.face === UNTHROWN);
+    };
+
+    const pickOpeners = async () =>
+    {
+        const old = [...openers.values()].map((one) => one.die);
+
+        openers.clear();
+        waiting = false;
+        live();
+
+        await Promise.all(old.map((die, index) =>
+            stage.animate(die.node, [{ offset: 0, scale: '1' }, { offset: 1, opacity: 0, scale: '0.6' }], { duration: PICK_MS, delay: index * 40, fill: 'both', quiet: 'out' }).done.then(() => drop(die))));
+    };
+
     const wait = () =>
     {
+        if (shown.opening.length > 0)
+        {
+            drawOpeners();
+            live();
+
+            return;
+        }
+
         if (waiting && invited !== 'roll')
         {
             void pick();
@@ -987,6 +1079,28 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         dim();
         wait();
         options.onRoll?.(seed, faces, true);
+    };
+
+    const throwOpener = async (seat: number, face: number, side: Side, seed: number) =>
+    {
+        options.onRoll?.(seed, [face], false);
+        dropOpener(seat);
+
+        const die = lay(face, seat, 2, OPENING_SEED);
+        const random = seeded(seed);
+        const far = reach();
+        const near = side === 'near';
+        const from = { x: (near ? 1 : -1) * (0.6 + random() * 2.4), y: (near ? 1 : -1) * (far + random() * 1.1) };
+
+        openers.set(seat, { die, face });
+        waiting = [...openers.values()].some((one) => one.face === UNTHROWN);
+        live();
+
+        await die.toss(stage, seed, face, from, {
+            impact: (power) => options.sound()?.play('die-land', { gain: 0.35 + 0.65 * power, pan: pan(DICE_X) })
+        }).done;
+
+        options.onRoll?.(seed, [face], true);
     };
 
     const swap = async (faces: readonly number[], seed: number) =>
@@ -1075,6 +1189,12 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             await swap(felt.dice, felt.seed);
         }
 
+        if (shown.opening.join() !== felt.opening.join())
+        {
+            shown = { ...shown, opening: [...felt.opening] };
+            drawOpeners();
+        }
+
         shown = { ...shown, score: { ...felt.score }, round: felt.round, turn: felt.turn };
         dim();
         wait();
@@ -1088,7 +1208,22 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         shown = next.shown;
 
-        if (beat.kind === 'cast')
+        if (beat.kind === 'throw')
+        {
+            tell();
+            await throwOpener(beat.seat, beat.face, beat.side, seedOf(at.id, at.rev, beat.nth));
+        }
+        else if (beat.kind === 'tie')
+        {
+            await pickOpeners();
+            wait();
+        }
+        else if (beat.kind === 'start')
+        {
+            tell();
+            await Promise.all([pickOpeners(), swap(beat.faces, seedOf(at.id, at.rev))]);
+        }
+        else if (beat.kind === 'cast')
         {
             if (beat.sides[0] === beat.sides[1])
             {
@@ -1207,6 +1342,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         unstick();
         unflag();
         alive.clear();
+        openers.clear();
         els.clear();
         tags.clear();
         marks.clear();
@@ -1223,7 +1359,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
 
         history: HISTORY,
 
-        before: (sight) => ({ ...sight, view: { ...sight.view, dice: [], spent: [], turn: null } }),
+        before: (sight) => ({ ...sight, view: { ...sight.view, dice: [], opening: [], spent: [], turn: null } }),
 
         reset(sight)
         {
@@ -1247,6 +1383,8 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             drawCube(shown.cube);
             wanted = { spent: felt.spent, seed: felt.seed };
             show(felt.dice, felt.seed);
+            drawOpeners();
+            live();
             tell();
         },
 

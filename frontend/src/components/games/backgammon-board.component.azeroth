@@ -184,6 +184,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
+    derived throwing = view !== null && !over && mine !== undefined && view.phase === 'opening' && !(view.opening ?? []).some((one) => one.seat === mine);
+
     derived onTurn = view === null || over
         ? -1
         : (facts === null ? view.turn : (facts.turn === null ? -1 : (facts.turn === 'near' ? viewer : 1 - viewer)));
@@ -207,7 +209,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     effect
     {
-        const yours = myTurn;
+        const yours = myTurn || throwing;
 
         untrack(() => chime(yours && props.match.mine !== undefined));
     }
@@ -310,6 +312,16 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 : locale.t('backgammon.doubled.them', { name: nameOf(view.turn), cube: offered });
         }
 
+        if (view.phase === 'opening')
+        {
+            if (mine === undefined)
+            {
+                return locale.t('backgammon.opening.watch');
+            }
+
+            return throwing ? locale.t('backgammon.opening.throw') : locale.t('backgammon.opening.wait', { name: nameOf(1 - mine) });
+        }
+
         if (!myTurn)
         {
             return locale.t('match.turn.theirs', { name: nameOf(view.turn) });
@@ -356,7 +368,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived barOpen = view !== null && !result;
 
-    derived rolling = myTurn && view!.phase === 'roll';
+    derived rolling = (myTurn && view!.phase === 'roll') || throwing;
 
     derived mayDouble = rolling && view!.doubling;
 
@@ -386,6 +398,11 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived invite = ((): Invite =>
     {
+        if (throwing)
+        {
+            return 'throw';
+        }
+
         if (rolling)
         {
             return 'roll';

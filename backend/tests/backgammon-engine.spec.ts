@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BAR, CHECKERS, OFF, START, facing } from '../src/domains/match/backgammon/board.ts';
-import { apply, autoplay, create, legalMoves, type Die, type Outcome } from '../src/domains/match/backgammon/engine.ts';
+import { UNTHROWN, apply, autoplay, create, legalMoves, type Die, type Outcome } from '../src/domains/match/backgammon/engine.ts';
 import type { BackgammonAction, BackgammonEvent, BackgammonState } from '../src/domains/match/backgammon/state.ts';
 import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 
@@ -60,24 +60,73 @@ function layout(points: Record<number, number>)
     return checkers;
 }
 
-const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => create(target, cube, scripted(faces)).state;
+const thrown = (state: BackgammonState, seat: number, face: number) => applied(apply(state, { kind: 'roll', seat }, scripted([face]))).state;
+
+const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => thrown(thrown(create(target, cube).state, 0, faces[0]), 1, faces[1]);
+
+const boardOf = (state: BackgammonState) =>
+{
+    const board = backgammonEngine.view(state, null);
+
+    return board.kind === 'backgammon' ? board : null;
+};
 
 function finishAfter(state: BackgammonState, seat: number)
 {
     return backgammonEngine.finish(applied(apply(state, { kind: 'forfeit', seat, reason: 'resign' }, scripted([1]))).state);
 }
 
-describe('the opening roll', () =>
+describe('the opening', () =>
 {
-    it('gives the first move to the higher of one die each, and that player plays both', () =>
+    it('starts every game with each player to throw one die of their own, and nothing thrown for anybody', () =>
     {
-        const state = opened(3, true, [5, 2]);
+        const { state, events } = create(3, true);
 
-        expect(state.turn).toBe(0);
-        expect(state.dice).toEqual([5, 2]);
-        expect(state.phase).toBe('move');
+        expect(state.phase).toBe('opening');
+        expect(state.thrown).toEqual([UNTHROWN, UNTHROWN]);
+        expect(state.dice).toEqual([]);
         expect(state.rev).toBe(1);
         expect(state.round).toBe(1);
+        expect(events).toEqual([]);
+        expect(legalMoves(state, 0)).toEqual([{ kind: 'roll', seat: 0 }]);
+        expect(legalMoves(state, 1)).toEqual([{ kind: 'roll', seat: 1 }]);
+        expect(boardOf(state)).toMatchObject({ phase: 'opening', dice: [], opening: [] });
+    });
+
+    it('lets either seat throw first, and points the clock at the one still to throw', () =>
+    {
+        const first = applied(apply(create(3, true).state, { kind: 'roll', seat: 1 }, scripted([4])));
+
+        expect(first.events).toEqual([{ e: 'throw', seat: 1, die: 4 }]);
+        expect(first.state.phase).toBe('opening');
+        expect(first.state.thrown).toEqual([UNTHROWN, 4]);
+        expect(backgammonEngine.turnOf(first.state)).toBe(0);
+        expect(boardOf(first.state)).toMatchObject({ opening: [{ seat: 1, die: 4 }] });
+
+        const other = applied(apply(create(3, true).state, { kind: 'roll', seat: 0 }, scripted([2])));
+
+        expect(backgammonEngine.turnOf(other.state)).toBe(1);
+    });
+
+    it('takes one throw from each seat, and refuses a second', () =>
+    {
+        const once = thrown(create(3, true).state, 0, 5);
+
+        expect(apply(once, { kind: 'roll', seat: 0 }, scripted([3]))).toEqual({ ok: false, reason: 'already-rolled' });
+        expect(legalMoves(once, 0)).toEqual([]);
+        expect(legalMoves(once, 1)).toEqual([{ kind: 'roll', seat: 1 }]);
+    });
+
+    it('gives the first move to the higher die, and that player plays both', () =>
+    {
+        const begun = applied(apply(thrown(create(3, true).state, 0, 5), { kind: 'roll', seat: 1 }, scripted([2])));
+
+        expect(begun.events).toEqual([{ e: 'throw', seat: 1, die: 2 }, { e: 'opening', seat: 0, dice: [5, 2] }]);
+        expect(begun.state.turn).toBe(0);
+        expect(begun.state.dice).toEqual([5, 2]);
+        expect(begun.state.phase).toBe('move');
+        expect(begun.state.thrown).toEqual([UNTHROWN, UNTHROWN]);
+        expect(boardOf(begun.state)?.opening).toBeUndefined();
 
         const other = opened(3, true, [1, 6]);
 
@@ -85,42 +134,46 @@ describe('the opening roll', () =>
         expect(other.dice).toEqual([1, 6]);
     });
 
-    it('puts the opening roll in the stream, where the ledger keeps it', () =>
+    it('puts every throw and the start in the stream, where the ledger keeps them', () =>
     {
-        const { state, events } = backgammonEngine.create([0, 1], { die: scripted([5, 2]) }, { target: 3, cube: true, blinds: 'low', variant: 'standard' });
-
-        expect(events[0]).toEqual({ e: 'opening', seat: 0, dice: [5, 2] });
-        expect(state.turn).toBe(0);
-        expect(state.rev).toBe(1);
+        const once = applied(apply(create(3, true).state, { kind: 'roll', seat: 0 }, scripted([5])));
+        const twice = applied(apply(once.state, { kind: 'roll', seat: 1 }, scripted([2])));
 
         for (const reader of [0, 1, null])
         {
-            expect(backgammonEngine.log(events, reader)).toMatchObject({ kind: 'backgammon', moves: expect.arrayContaining([{ e: 'opening', seat: 0, dice: [5, 2] }]) });
+            expect(backgammonEngine.log(once.events, reader)).toEqual({ kind: 'backgammon', moves: [{ e: 'throw', seat: 0, die: 5 }] });
+            expect(backgammonEngine.log(twice.events, reader)).toEqual({ kind: 'backgammon', moves: [{ e: 'throw', seat: 1, die: 2 }, { e: 'opening', seat: 0, dice: [5, 2] }] });
         }
     });
 
-    it('rolls again on a tie', () =>
+    it('throws again on a tie, both of them, on a new turn of the clock', () =>
     {
-        const state = opened(3, true, [3, 3, 4, 4, 2, 5]);
+        const once = thrown(create(3, true).state, 0, 3);
+        const level = applied(apply(once, { kind: 'roll', seat: 1 }, scripted([3])));
 
-        expect(state.turn).toBe(1);
-        expect(state.dice).toEqual([2, 5]);
+        expect(level.events).toEqual([{ e: 'throw', seat: 1, die: 3 }, { e: 'tie', dice: [3, 3] }]);
+        expect(level.state.phase).toBe('opening');
+        expect(level.state.thrown).toEqual([UNTHROWN, UNTHROWN]);
+        expect(level.state.dice).toEqual([]);
+        expect(backgammonEngine.turnOf(level.state)).toBe(0);
+        expect(backgammonEngine.turnKey(level.state)).not.toBe(backgammonEngine.turnKey(once));
+
+        const begun = thrown(thrown(level.state, 1, 6), 0, 2);
+
+        expect(begun.turn).toBe(1);
+        expect(begun.dice).toEqual([2, 6]);
     });
 
-    it('still opens when every throw ties, rather than rolling forever, and never on a doublet', () =>
+    it('refuses a move, a double or an answer before both dice are thrown', () =>
     {
-        for (const face of [1, 2, 3, 4, 5, 6])
-        {
-            const state = opened(3, true, [face]);
-            const [first, second] = state.dice;
+        const state = create(3, true).state;
 
-            expect(state.phase).toBe('move');
-            expect(first).not.toBe(second);
-            expect(state.turn).toBe(first > second ? 0 : 1);
-        }
+        expect(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }] }, scripted([1]))).toEqual({ ok: false, reason: 'must-roll-first' });
+        expect(apply(state, { kind: 'double', seat: 0 }, scripted([1]))).toEqual({ ok: false, reason: 'cannot-double' });
+        expect(apply(state, { kind: 'take', seat: 1 }, scripted([1]))).toEqual({ ok: false, reason: 'no-double' });
     });
 
-    it('opens every later game of the match the same way, and says so in the log', () =>
+    it('opens every later game of the match the same way: nothing thrown, both to throw', () =>
     {
         const state: BackgammonState = {
             ...opened(3, true),
@@ -134,9 +187,10 @@ describe('the opening roll', () =>
 
         expect(next.state.round).toBe(2);
         expect(next.state.checkers).toEqual([[...START], [...START]]);
-        expect(next.state.turn).toBe(1);
-        expect(next.state.dice).toEqual([2, 4]);
-        expect(next.events).toContainEqual({ e: 'opening', seat: 1, dice: [2, 4] });
+        expect(next.state.phase).toBe('opening');
+        expect(next.state.thrown).toEqual([UNTHROWN, UNTHROWN]);
+        expect(next.state.dice).toEqual([]);
+        expect(next.events.map((event) => event.e)).toEqual(['move', 'game']);
     });
 
     it('turns a table with no target into a one-point match with a dead cube', () =>
@@ -145,21 +199,28 @@ describe('the opening roll', () =>
 
         expect(state.target).toBe(1);
         expect(state.cubed).toBe(false);
+        expect(state.phase).toBe('opening');
     });
 });
 
 describe('rolling', () =>
 {
-    it('rolls for the next player inside the move that ended the last turn when they cannot double', () =>
+    it('never rolls for anybody: the move that ends a turn leaves the next player to roll', () =>
     {
         const state = opened(1, false);
         const next = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([3, 5])));
 
         expect(next.state.turn).toBe(1);
-        expect(next.state.phase).toBe('move');
-        expect(next.state.dice).toEqual([3, 5]);
-        expect(next.events.at(-1)).toEqual({ e: 'roll', seat: 1, dice: [3, 5] });
+        expect(next.state.phase).toBe('roll');
+        expect(next.state.dice).toEqual([]);
+        expect(next.events.some((event) => event.e === 'roll')).toBe(false);
         expect(next.state.rev).toBe(state.rev + 1);
+
+        const rolled = applied(apply(next.state, { kind: 'roll', seat: 1 }, scripted([3, 5])));
+
+        expect(rolled.state.phase).toBe('move');
+        expect(rolled.state.dice).toEqual([3, 5]);
+        expect(rolled.events).toEqual([{ e: 'roll', seat: 1, dice: [3, 5] }]);
     });
 
     it('waits for a player who could double, and rolls when they ask', () =>
@@ -179,7 +240,7 @@ describe('rolling', () =>
         expect(rolled.events).toEqual([{ e: 'roll', seat: 1, dice: [3, 5] }]);
     });
 
-    it('rolls for the doubler once the double is taken, because the cube is no longer theirs to turn', () =>
+    it('leaves the doubler to roll once the double is taken', () =>
     {
         const waiting: BackgammonState = { ...opened(3, true), turn: 0, phase: 'roll', dice: [] };
         const doubled = applied(apply(waiting, { kind: 'double', seat: 0 }, scripted([1])));
@@ -193,9 +254,10 @@ describe('rolling', () =>
         expect(taken.state.cube).toBe(2);
         expect(taken.state.owner).toBe(1);
         expect(taken.state.turn).toBe(0);
-        expect(taken.state.phase).toBe('move');
-        expect(taken.state.dice).toEqual([4, 2]);
-        expect(taken.events).toEqual([{ e: 'take', seat: 1, cube: 2 }, { e: 'roll', seat: 0, dice: [4, 2] }]);
+        expect(taken.state.phase).toBe('roll');
+        expect(taken.state.dice).toEqual([]);
+        expect(taken.events).toEqual([{ e: 'take', seat: 1, cube: 2 }]);
+        expect(legalMoves(taken.state, 0)).toEqual([{ kind: 'roll', seat: 0 }]);
     });
 });
 
@@ -212,23 +274,25 @@ describe('a turn with no legal move', () =>
         dice: [6, 5]
     });
 
-    it('passes inside the same action and logs the pass', () =>
+    it('passes inside the roll that left nothing to play, logs the pass, and leaves the other player to roll', () =>
     {
-        const next = applied(apply(blocked(), { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 13, to: 8 }] }, scripted([6, 6, 2, 1])));
+        const moved = applied(apply(blocked(), { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 13, to: 8 }] }, scripted([1])));
+        const danced = applied(apply(moved.state, { kind: 'roll', seat: 1 }, scripted([6, 6])));
 
-        expect(next.events.map((event) => event.e)).toEqual(['move', 'move', 'roll', 'pass', 'roll']);
-        expect(next.events).toContainEqual({ e: 'pass', seat: 1 });
-        expect(next.state.turn).toBe(0);
-        expect(next.state.phase).toBe('move');
-        expect(next.state.dice).toEqual([2, 1]);
-        expect(next.state.rev).toBe(blocked().rev + 1);
+        expect(moved.events.map((event) => event.e)).toEqual(['move', 'move']);
+        expect(danced.events).toEqual([{ e: 'roll', seat: 1, dice: [6, 6] }, { e: 'pass', seat: 1 }]);
+        expect(danced.state.turn).toBe(0);
+        expect(danced.state.phase).toBe('roll');
+        expect(danced.state.dice).toEqual([]);
+        expect(danced.state.rev).toBe(moved.state.rev + 1);
     });
 
     it('never leaves the player on turn with nothing to do', () =>
     {
-        const next = applied(apply(blocked(), { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 13, to: 8 }] }, scripted([6, 6, 2, 1])));
+        const moved = applied(apply(blocked(), { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 13, to: 8 }] }, scripted([1])));
+        const danced = applied(apply(moved.state, { kind: 'roll', seat: 1 }, scripted([6, 6])));
 
-        expect(legalMoves(next.state, next.state.turn).length).toBeGreaterThan(0);
+        expect(legalMoves(danced.state, danced.state.turn).length).toBeGreaterThan(0);
     });
 });
 
@@ -372,13 +436,22 @@ describe('one turn on the clock', () =>
 
     it('counts a turn each time one begins, from the opening', () =>
     {
-        let state = opened(1, false);
+        let state = create(1, false).state;
 
         expect(state.turns).toBe(1);
 
-        state = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([3, 5]))).state;
+        state = thrown(state, 0, 6);
+
+        expect(state.turns).toBe(1);
+
+        state = thrown(state, 1, 1);
 
         expect(state.turns).toBe(2);
+        expect(backgammonEngine.turnOf(state)).toBe(0);
+
+        state = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([3, 5]))).state;
+
+        expect(state.turns).toBe(3);
         expect(backgammonEngine.turnOf(state)).toBe(1);
     });
 
@@ -396,8 +469,10 @@ describe('one turn on the clock', () =>
     it('gives the same seat a fresh key when both dance and the dice come back round', () =>
     {
         const stuck: BackgammonState = { ...opened(1, false), checkers: [closed, [...closed]], turn: 0, phase: 'roll', dice: [] };
-        const after = applied(apply(stuck, { kind: 'roll', seat: 0 }, scripted([3, 4]))).state;
+        const one = applied(apply(stuck, { kind: 'roll', seat: 0 }, scripted([3, 4]))).state;
+        const after = applied(apply(one, { kind: 'roll', seat: 1 }, scripted([3, 4]))).state;
 
+        expect(backgammonEngine.turnOf(one)).toBe(1);
         expect(backgammonEngine.turnOf(after)).toBe(0);
         expect(backgammonEngine.turnKey(after)).not.toBe(backgammonEngine.turnKey(stuck));
     });
@@ -440,6 +515,14 @@ describe('autoplay', () =>
         expect(apply(state, auto!, scripted([3, 5])).ok).toBe(true);
     });
 
+    it('throws for a seat still to throw in the opening, and for nobody who has', () =>
+    {
+        const once = thrown(create(3, true).state, 1, 4);
+
+        expect(autoplay(once, 0)).toEqual({ kind: 'roll', seat: 0 });
+        expect(autoplay(once, 1)).toBeNull();
+    });
+
     it('drops a double, which is the loss that is bounded', () =>
     {
         const offered: BackgammonState = { ...opened(3, true), turn: 0, phase: 'double', dice: [] };
@@ -455,7 +538,7 @@ describe('autoplay', () =>
         for (let seed = 0; seed < 100; seed += 1)
         {
             const die = dieFrom(seeded(seed));
-            let state = create(5, true, die).state;
+            let state = create(5, true).state;
 
             while (state.round === 1 && state.turns <= 2 && state.winner === null)
             {
@@ -512,6 +595,7 @@ describe('what a match leaves behind', () =>
 
 interface Coverage
 {
+    ties: number;
     doubles: number;
     takes: number;
     drops: number;
@@ -549,6 +633,11 @@ function wrong(state: BackgammonState, before: BackgammonState): string | null
         return `dice ${ state.dice.join(',') }`;
     }
 
+    if (state.thrown.some((face) => !Number.isInteger(face) || face < 0 || face > 6) || (state.phase !== 'opening' && state.thrown.some((face) => face !== UNTHROWN)))
+    {
+        return `thrown ${ state.thrown.join(',') } in ${ state.phase }`;
+    }
+
     if (state.score.some((points, seat) => points < before.score[seat]))
     {
         return 'a score went down';
@@ -571,7 +660,7 @@ describe('a match always ends', () =>
 {
     it('plays whole matches at one, three and five points, cube on and off, and keeps every rule after every action', () =>
     {
-        const seen: Coverage = { doubles: 0, takes: 0, drops: 0, passes: 0, crawford: 0, gammons: 0, forfeits: 0 };
+        const seen: Coverage = { ties: 0, doubles: 0, takes: 0, drops: 0, passes: 0, crawford: 0, gammons: 0, forfeits: 0 };
         const faults: string[] = [];
 
         for (const target of [1, 3, 5])
@@ -582,7 +671,7 @@ describe('a match always ends', () =>
                 {
                     const random = seeded(target * 1000 + (cube ? 500 : 0) + match);
                     const die = dieFrom(random);
-                    let state = create(target, cube, die).state;
+                    let state = create(target, cube).state;
                     let actions = 0;
 
                     while (state.winner === null && actions < 5000)
@@ -647,6 +736,7 @@ describe('a match always ends', () =>
 
                         for (const event of outcome.events)
                         {
+                            seen.ties += event.e === 'tie' ? 1 : 0;
                             seen.doubles += event.e === 'double' ? 1 : 0;
                             seen.takes += event.e === 'take' ? 1 : 0;
                             seen.drops += event.e === 'drop' ? 1 : 0;

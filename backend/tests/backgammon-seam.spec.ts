@@ -111,7 +111,9 @@ describe('what one seat may see of the other', () =>
         expect(board.seats.map((row) => row.seat)).toEqual([0, 1]);
         expect(board.seats.map((row) => row.checkers.reduce((total, count) => total + count, 0))).toEqual([15, 15]);
         expect(board.seats.map((row) => row.pips)).toEqual([167, 167]);
-        expect(board.dice).toHaveLength(2);
+        expect(board.phase).toBe('opening');
+        expect(board.dice).toEqual([]);
+        expect(board.opening).toEqual([]);
     });
 });
 

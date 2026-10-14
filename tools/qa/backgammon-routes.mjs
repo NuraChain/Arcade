@@ -25,6 +25,8 @@ export function countsOf(view, viewer)
 export function positionOf(counts, more = {})
 {
     return {
+        ...(more.phase === undefined ? {} : { phase: more.phase }),
+        ...(more.opening === undefined ? {} : { opening: more.opening }),
         dice: more.dice ?? [],
         seats: [
             { seat: 0, checkers: counts.near, score: more.scores?.[0] ?? 0 },

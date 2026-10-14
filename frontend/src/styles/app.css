@@ -4747,17 +4747,17 @@ svg.lobby-board
     animation: bgt-invite 1.6s ease-in-out infinite;
 }
 
-.bgt-dice[data-live='roll'] > .die3d
+.bgt-dice[data-live='roll'] > .die3d[data-blank]
 {
     animation: bgt-wait 1.6s ease-in-out infinite;
 }
 
-.bgt-dice[data-shake] > .die3d
+.bgt-dice[data-shake] > .die3d[data-blank]
 {
     animation: bgt-rattle 110ms ease-in-out infinite alternate;
 }
 
-.bgt-dice[data-shake] > .die3d + .die3d
+.bgt-dice[data-shake] > .die3d[data-blank] + .die3d[data-blank]
 {
     animation-direction: alternate-reverse;
 }
@@ -4823,8 +4823,8 @@ svg.lobby-board
 @media (prefers-reduced-motion: reduce)
 {
     .bgt-dice[data-live] > .bgt-hit,
-    .bgt-dice[data-live='roll'] > .die3d,
-    .bgt-dice[data-shake] > .die3d
+    .bgt-dice[data-live='roll'] > .die3d[data-blank],
+    .bgt-dice[data-shake] > .die3d[data-blank]
     {
         animation: none;
     }

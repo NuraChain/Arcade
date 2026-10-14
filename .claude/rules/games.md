@@ -2059,7 +2059,8 @@ and `start` writes those events as an `open` row at the opening revision - seat 
 key - in the transaction that inserts the match. Every engine opens at revision 1, so the ledger is
 gapless from 1 and `since?rev=0` reads the whole game, opening included: poker's first deal and blinds
 (the `hole` events stay in the row and `log` drops them, exactly as for every later hand), hokm's
-first `deal`, backgammon's opening roll; ludo's opening has nothing to say and its row is empty.
+first `deal`; ludo's and backgammon's openings have nothing to say and their rows are empty, because in
+backgammon each player throws their own die (*Every roll is the player's own*, under *Backgammon*).
 `start` pushes from the revision before it, so every seat is handed the opening through the same
 `game` frame as a move. It used to be thrown away: hand one began mid-hand in the feed, and a board's
 beats had no deal to draw.
@@ -2774,6 +2775,22 @@ match and for any player the current cube would already carry to the target (USB
 Crawford, no Jacoby and no beavers - and `backgammon-rules.spec.ts` holds the move generator to a
 naive enumerator written inside the spec, over hundreds of self-played positions.
 
+**Every roll is the player's own (owner, 2026-10-14).** "on backgammon the first move is
+automaticly without click": the engine rolled the opening for both players as the match was
+made, and rolled for every player who could not double inside the action that ended the turn
+before, so a game began, and most turns began, with dice nobody had thrown. Nothing is rolled
+for anybody now. A turn starts in `roll` and the player taps the dice; a take leaves the doubler
+to roll; a roll with nothing to play passes, and the other player rolls their own. A game opens
+in `opening`: each player throws ONE die of their own, in either order (`thrown` in the state,
+by seat, 0 for one not thrown; `opening` on the wire, the dice thrown so far), and a second
+throw is refused `already-rolled`. Two dice the same are a `tie` and both throw again; two that
+differ are the `opening` event, and whoever threw the higher plays both, as the rules say. The
+clock and the turn notice follow the lowest seat still to throw (`turnOf`); a tie and the start
+are new turns, so a deadline is fresh; the sweep throws for a seat that does not; `legalMoves`
+offers each seat its own throw. The rules pass (*the match opens with nothing thrown*), the play
+pass (each player taps their own die, the other browser is shown it thrown) and the motion pass
+drive it, and `backgammon-engine.spec.ts` (*the opening*, *rolling*) holds it.
+
 **The board stages a turn one hop at a time, and the SERVER's rules say which hops are left.**
 `moves.ts` exports `stage(side, roll, staged)`, which answers, for any prefix of hops in any order,
 the hops some complete legal turn still continues with - so the board highlights only checkers that
@@ -2930,14 +2947,19 @@ read counts:
   player's roll replaces them; one that ends with a player who may still double leaves the felt
   empty, and so does a game that ends and a match somebody leaves. `beatsOf` knows the end of an
   action, which is why it is handed one action at a time.
-- **An opening is one die from each side.** `dice[0]` is seat 0's and `dice[1]` seat 1's
-  (`openWith` in the engine), so the cast carries a side for each die.
-- **What comes next is in the same action.** Taking a double is followed at once by the doubler's
-  roll, and the last checker of a game by the next game's opening. Played from two snapshots, the
-  dice were thrown first and the cube travelled after them, and the next game's dice landed on the
-  finished position. The beats are in the log's order: the cube is handed over and turned before a
-  die of that action exists, and every checker is back where a game starts, the cube back in the
-  middle, before the opening is thrown.
+- **An opening is one die from each player, each thrown by its own player.** A `throw` lays its
+  die in its seat's place in the dice zone and throws it in from that player's edge; the other
+  player's die stays where it lies. A `tie` picks both up. The `opening` that names who starts is
+  a `start`: both dice are picked up and the two of them laid as the dice of the move they open.
+  The opening's dice are not a roll's dice - they are `Felt.opening`, by seat, 0 for one not yet
+  thrown - so nothing a roll's dice do changed. The reader still to throw is offered ONE blank die
+  in their own place, and only a blank die breathes and shakes.
+- **What comes next is in the same action, when anything does.** Nothing is rolled for anybody,
+  so a take leaves the doubler to roll and a game's last checker leaves the next game with nothing
+  thrown. Played from two snapshots, the dice were once thrown first and the cube travelled after
+  them; the beats are in the log's order: the cube is handed over and turned before anything else
+  of that action, and every checker is back where a game starts, the cube back in the middle,
+  before anybody throws for the next game.
 
 `backgammon-felt.spec.ts` plays whole matches through the real engine - to one, three and five
 points, doubles taken and dropped, somebody leaving in the middle - applies every logged action with
@@ -3074,9 +3096,8 @@ with, and the one that arrives with a new game, as heard. `match-store.spec.ts`,
 `presenter.spec.ts` (*the opening of a game*) and `backgammon-board.spec.ts` (*the opening roll*)
 hold it.
 
-**A roll nobody could play says so, on the dice.** The engine passes for a seat with no move and
-rolls for the next in the same action, so the dice were thrown, dimmed and taken away with no
-word of why. While the table holds them (`PASS_MS`, 1.1 s, cut to `PASS_LEAST`, half a second,
+**A roll nobody could play says so, on the dice.** The engine passes for a seat with no move in
+the action that rolled, so the dice were thrown, dimmed and taken away with no word of why. While the table holds them (`PASS_MS`, 1.1 s, cut to `PASS_LEAST`, half a second,
 when something waits: both were shorter until there were words to read in that time) a
 small pill under the dice reads "No move" (`.bgt-pass`, drawn by the table from a string the
 board hands it, and gone with the dice), and the screen reader's sentence is "Omid rolled 6 and
@@ -3146,15 +3167,16 @@ score and the pips (`Facts.turn`), and the two seats read that.
 
 - **The dice give it.** A throw gives the turn to whoever threw as the dice leave their side:
   who throws is no secret, and a ring that waited a second for the dice to land sat on the
-  player before while somebody else's dice flew. The two dice of an opening give it to the
-  higher one, and only when they have LANDED: the model is stepped as the throw begins and
-  told when it ends, like the pips of a checker in the air.
+  player before while somebody else's dice flew. An opening throw gives it to whoever is still to
+  throw; the throw that decides who starts gives it to the higher one only once it has LANDED:
+  the model is stepped as the throw begins and told when it ends, like the pips of a checker in
+  the air. A tie gives it back to the first to throw, and so does a new game when it is racked.
 - **A roll that cannot be played, a double that is offered and a double that is taken pass it**
   to the other side. A game that is called takes it from everybody until the next one is
   opened, and so does the end of the match. The table as it stood before an opening
   (`before`) has nobody on turn.
-- **A move says nothing about who is next**, and the log has nothing else to say it with when
-  nobody rolls for the next player (somebody who may double is not rolled for). So the turn is
+- **A move says nothing about who is next**, and the log has nothing else to say it with, because
+  nobody is rolled for. So the turn is
   put right from the view when everything told has been played (`mend`), which is the moment
   the last checker lands. `same` counts the turn, so a board that differs from the table only
   in whose turn it is still gets put right.

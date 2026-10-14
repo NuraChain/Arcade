@@ -1387,7 +1387,7 @@ export const hokmBoard = object({
 
 export const backgammonBoard = object({
     kind: literal('backgammon'),
-    phase: enumOf(['roll', 'move', 'double']),
+    phase: enumOf(['opening', 'roll', 'move', 'double']),
     turn: number({ int: true, min: 0, max: 1 }),
     dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }),
     seats: array(object({
@@ -1402,7 +1402,11 @@ export const backgammonBoard = object({
     doubling: boolean(),
     crawford: boolean(),
     target: number({ int: true, min: 1, max: 99 }),
-    round: number({ int: true, min: 1, max: 999 })
+    round: number({ int: true, min: 1, max: 999 }),
+    opening: array(object({
+        seat: number({ int: true, min: 0, max: 1 }),
+        die: number({ int: true, min: 1, max: 6 })
+    }), { max: 2 }).optional()
 });
 
 const pokerSeat = number({ int: true, min: 0, max: 8 });
@@ -1562,7 +1566,7 @@ export const hokmLog = object({
 });
 
 export const backgammonMove = object({
-    e: enumOf(['opening', 'roll', 'move', 'pass', 'double', 'take', 'drop', 'game', 'forfeit', 'finish']),
+    e: enumOf(['throw', 'tie', 'opening', 'roll', 'move', 'pass', 'double', 'take', 'drop', 'game', 'forfeit', 'finish']),
     seat: number({ int: true, min: 0, max: 1 }).optional(),
     dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }).optional(),
     from: number({ int: true, min: 0, max: 25 }).optional(),

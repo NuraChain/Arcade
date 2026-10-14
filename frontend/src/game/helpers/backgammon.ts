@@ -6,7 +6,7 @@ export type Outcome = 'hit' | 'enter' | 'enterHit' | 'off';
 
 export interface Moment
 {
-    phase: 'roll' | 'move' | 'double';
+    phase: 'opening' | 'roll' | 'move' | 'double';
     side: Side;
     dice: readonly number[];
     staged: readonly Hop[];

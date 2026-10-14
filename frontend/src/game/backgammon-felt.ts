@@ -21,6 +21,7 @@ export interface Felt
     near: readonly number[];
     far: readonly number[];
     dice: readonly number[];
+    opening: readonly number[];
     spent: readonly boolean[];
     seed: number;
     cube: Cube;
@@ -34,6 +35,7 @@ export interface Shown
     viewer: number;
     men: Table;
     dice: readonly number[];
+    opening: readonly number[];
     cube: Cube;
     score: Score;
     round: number;
@@ -42,8 +44,10 @@ export interface Shown
 
 export interface Position
 {
+    phase?: string;
     turn: number;
     dice: readonly number[];
+    opening?: readonly { seat: number; die: number }[];
     seats: readonly { seat: number; checkers: readonly number[]; score: number }[];
     cubed: boolean;
     cube: number;
@@ -66,6 +70,9 @@ export interface Told
 }
 
 export type Beat =
+    | { kind: 'throw'; side: Side; seat: number; face: number; nth: number }
+    | { kind: 'tie' }
+    | { kind: 'start'; side: Side; faces: readonly number[] }
     | { kind: 'cast'; sides: readonly Side[]; faces: readonly number[]; nth: number }
     | { kind: 'hop'; move: Move; die: number }
     | { kind: 'pass'; side: Side }
@@ -92,17 +99,27 @@ const twice = (faces: readonly number[]) => faces.length === 2 && faces[0] === f
 
 const facing = (side: Side): Side => (side === 'near' ? 'far' : 'near');
 
+export const UNTHROWN = 0;
+
+const UNOPENED: readonly number[] = [UNTHROWN, UNTHROWN];
+
+const sideOfSeat = (viewer: number, seat: number): Side => (seat === viewer ? 'near' : 'far');
+
 export function feltOf(position: Position, viewer: number, over: boolean, seed: number): Felt
 {
     const rowOf = (seat: number) => position.seats.find((row) => row.seat === seat)?.checkers ?? [];
     const scoreOf = (seat: number) => position.seats.find((row) => row.seat === seat)?.score ?? 0;
     const dice = over ? [] : position.dice.slice(0, 2);
+    const opening = over || position.phase !== 'opening'
+        ? []
+        : UNOPENED.map((_, seat) => position.opening?.find((one) => one.seat === seat)?.die ?? UNTHROWN);
 
     return {
         viewer,
         near: rowOf(viewer),
         far: rowOf(1 - viewer),
         dice,
+        opening,
         spent: spentBy(dice, []),
         seed,
         cube: {
@@ -122,6 +139,7 @@ export function shownOf(felt: Felt, serial = 0): Shown
         viewer: felt.viewer,
         men: fromCounts({ near: felt.near, far: felt.far }, serial),
         dice: [...felt.dice],
+        opening: [...felt.opening],
         cube: felt.cube,
         score: { ...felt.score },
         round: felt.round,
@@ -141,6 +159,7 @@ export function sameAs(shown: Shown, felt: Felt)
     return shown.viewer === felt.viewer
         && same(shown.men, { near: felt.near, far: felt.far })
         && shown.dice.join() === felt.dice.join()
+        && shown.opening.join() === felt.opening.join()
         && shown.cube.on === felt.cube.on
         && shown.cube.value === felt.cube.value
         && shown.cube.owner === felt.cube.owner
@@ -169,9 +188,19 @@ export function beatsOf(moves: readonly Told[], viewer: number)
     {
         const side = sideOf(move.seat);
 
-        if (move.e === 'opening' && move.dice !== undefined)
+        if (move.e === 'throw' && move.seat !== undefined && move.die !== undefined)
         {
-            beats.push({ kind: 'cast', sides: [sideOf(0), sideOf(1)], faces: move.dice, nth: 0 });
+            beats.push({ kind: 'throw', side, seat: move.seat, face: move.die, nth: 0 });
+            fresh = true;
+        }
+        else if (move.e === 'tie')
+        {
+            beats.push({ kind: 'tie' });
+            fresh = true;
+        }
+        else if (move.e === 'opening' && move.dice !== undefined)
+        {
+            beats.push({ kind: 'start', side, faces: move.dice });
             fresh = true;
             cleared = false;
         }
@@ -235,7 +264,7 @@ export function beatsOf(moves: readonly Told[], viewer: number)
     {
         const beat = beats[index];
 
-        if (beat.kind === 'cast')
+        if (beat.kind === 'cast' || beat.kind === 'throw')
         {
             beat.nth = after;
             after += 1;
@@ -247,6 +276,31 @@ export function beatsOf(moves: readonly Told[], viewer: number)
 
 export function step(shown: Shown, beat: Beat): Stepped
 {
+    if (beat.kind === 'throw')
+    {
+        const opening = shown.opening.length === UNOPENED.length ? [...shown.opening] : [...UNOPENED];
+
+        opening[beat.seat] = beat.face;
+
+        const waiting = opening.indexOf(UNTHROWN);
+
+        return {
+            shown: { ...shown, opening, turn: waiting < 0 ? shown.turn : sideOfSeat(shown.viewer, waiting) },
+            moved: null,
+            transfers: NOBODY
+        };
+    }
+
+    if (beat.kind === 'tie')
+    {
+        return { shown: { ...shown, opening: [...UNOPENED], turn: sideOfSeat(shown.viewer, 0) }, moved: null, transfers: NOBODY };
+    }
+
+    if (beat.kind === 'start')
+    {
+        return { shown: { ...shown, opening: [], dice: [...beat.faces], turn: beat.side }, moved: null, transfers: NOBODY };
+    }
+
     if (beat.kind === 'cast')
     {
         const [one, two] = beat.sides;
@@ -294,7 +348,14 @@ export function step(shown: Shown, beat: Beat): Stepped
         const racked = settle(shown.men, { near: START, far: START });
 
         return {
-            shown: { ...shown, men: racked.table, cube: { on: shown.cube.on, value: 1, owner: null }, round: shown.round + 1 },
+            shown: {
+                ...shown,
+                men: racked.table,
+                cube: { on: shown.cube.on, value: 1, owner: null },
+                round: shown.round + 1,
+                opening: [...UNOPENED],
+                turn: sideOfSeat(shown.viewer, 0)
+            },
             moved: null,
             transfers: racked.transfers
         };

@@ -1,6 +1,6 @@
 import { OFF, pips } from '../backgammon/board.ts';
 import { mayDouble } from '../backgammon/cube.ts';
-import { SEATS, apply, autoplay, create, legalMoves, type Die } from '../backgammon/engine.ts';
+import { SEATS, UNTHROWN, apply, autoplay, create, legalMoves, type Die } from '../backgammon/engine.ts';
 import type { BackgammonAction, BackgammonEvent, BackgammonState } from '../backgammon/state.ts';
 import { sideOf } from '../sides.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
@@ -19,8 +19,8 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
 
     formats: SEATS.map((seats) => ({ seats, variant: 'standard' })),
 
-    create: (_seats: readonly number[], draws: Draws, table: TableConfig) =>
-        create(table.target > 0 ? table.target : 1, table.cube, roller(draws)),
+    create: (_seats: readonly number[], _draws: Draws, table: TableConfig) =>
+        create(table.target > 0 ? table.target : 1, table.cube),
 
     parse: (play: MatchPlay, seat: number): BackgammonAction | null =>
     {
@@ -103,7 +103,10 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
             doubling: state.phase === 'roll' && mayDouble(state, state.turn),
             crawford: state.crawford === 'now',
             target: state.target,
-            round: state.round
+            round: state.round,
+            ...(state.phase === 'opening'
+                ? { opening: state.thrown.flatMap((die, seat) => (die === UNTHROWN ? [] : [{ seat, die }])) }
+                : {})
         };
 
         return state.owner === null ? board : { ...board, owner: state.owner };

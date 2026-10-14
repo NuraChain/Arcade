@@ -255,7 +255,7 @@ describe('the opening', () =>
         }
     });
 
-    it('carries the opening of every game that has one: the deal, the blinds, the Hakem and the roll', () =>
+    it('carries the opening of every game that deals one, and none for a game whose players throw their own', () =>
     {
         const kinds = (engine: Engine, format: Format) => engine
             .create(Array.from({ length: format.seats }, (_, seat) => seat), { die: seeded(9) }, { target: 0, cube: true, blinds: 'low', variant: format.variant })
@@ -264,7 +264,7 @@ describe('the opening', () =>
         expect(kinds(ludoEngine, { seats: 4, variant: 'standard' })).toEqual([]);
         expect(kinds(ludoEngine, { seats: 4, variant: 'teams' })).toEqual([]);
         expect(kinds(hokmEngine, { seats: 4, variant: 'teams' })).toEqual(['deal']);
-        expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })[0]).toBe('opening');
+        expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })).toEqual([]);
         expect(kinds(pokerEngine, { seats: 6, variant: 'standard' })).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
     });
 });

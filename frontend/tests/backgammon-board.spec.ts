@@ -869,48 +869,133 @@ describe('the backgammon table on the page', () =>
     });
 });
 
-describe('the opening roll', () =>
+describe('the opening', () =>
 {
     const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';
 
-    const begun = (over: Partial<MatchView> = {}) => match({ dice: [6, 1] }, 0, { rev: 1, ...over });
+    const blanks = (container: HTMLElement) => container.querySelectorAll('.bg-layer .bgt-dice > .die3d[data-blank]').length;
 
-    const opening = (id: string, opens: () => boolean): EventBatch =>
-        ({ seq: 1, id, events: [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], live: true, jump: false, opens });
+    const faces = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.bg-layer .bgt-dice > .die3d:not([data-blank])')].map((die) => die.dataset.face);
 
-    it('is thrown for a game opened with the frame that began it, and nothing is told of it until it has landed', async () =>
+    const tossed = (animate: ReturnType<typeof vi.spyOn>) => animate.mock.contexts.some((one: unknown) => (one as Element).classList.contains('die3d-body'));
+
+    const opening = (thrown: NonNullable<Backgammon['opening']> = [], over: Partial<MatchView> = {}, mine: number | null = 0) =>
+    {
+        const first = thrown.some((one) => one.seat === 0) ? 1 : 0;
+
+        return match({ phase: 'opening', dice: [], opening: thrown, turn: first }, mine, { rev: 1 + thrown.length, turn: first, ...over });
+    };
+
+    const begins = (id: string, opens: () => boolean): EventBatch =>
+        ({ seq: 1, id, events: [happened(1, -1, [])], live: true, jump: false, opens });
+
+    it('opens with nothing thrown for anybody, and offers the reader their own die to throw', async () =>
     {
         const animate = vi.spyOn(Element.prototype, 'animate');
-        const table = await live(begun(), opening('match-bg', () => true));
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const table = await live(opening(), begins('match-bg', () => true));
+
+        await elapse(600);
+
+        expect(tossed(animate), 'a die was thrown for somebody at the start of a game').toBe(false);
+        expect(faces(table.container)).toEqual([]);
+        expect(blanks(table.container)).toBe(1);
+        expect(zone(table.container).dataset.live).toBe('roll');
+        expect(said(table.container)).toBe('Tap your die to throw it. The higher one starts.');
+
+        tapDice(table.container);
+        await flush();
+
+        expect(play).toHaveBeenCalledWith({ kind: 'backgammon', verb: 'roll' });
+    });
+
+    it('throws the other player\'s die from their side when they throw it, leaves it there, and still offers the reader theirs', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const table = await live(opening());
+
+        animate.mockClear();
+        table.tell(opening([{ seat: 1, die: 4 }]), [happened(2, 1, [{ e: 'throw', seat: 1, die: 4 }])]);
+        await flush();
+
+        expect(tossed(animate), 'the other player\'s die was not thrown').toBe(true);
+
+        await elapse(1600);
+
+        expect(faces(table.container)).toEqual(['4']);
+        expect(blanks(table.container)).toBe(1);
+        expect(said(table.container)).toBe('Tap your die to throw it. The higher one starts.');
+    });
+
+    it('waits for the other player once the reader has thrown, and offers nothing more to throw', async () =>
+    {
+        const table = await live(opening([{ seat: 0, die: 5 }]));
+
+        expect(faces(table.container)).toEqual(['5']);
+        expect(blanks(table.container)).toBe(0);
+        expect(zone(table.container).hasAttribute('data-live')).toBe(false);
+        expect(said(table.container)).toBe('Waiting for omid.k to throw.');
+    });
+
+    it('tells somebody watching that each player throws, and offers them nothing to throw', async () =>
+    {
+        const table = await live(opening([], {}, null));
+
+        expect(blanks(table.container)).toBe(0);
+        expect(zone(table.container).hasAttribute('data-live')).toBe(false);
+        expect(said(table.container)).toBe('Each player throws one die. The higher one starts.');
+    });
+
+    it('starts the game with both dice once the die that decides it has landed, and tells the roll only then', async () =>
+    {
+        const table = await live(opening([{ seat: 1, die: 4 }]));
+
+        table.tell(match({ dice: [6, 4] }, 0, { rev: 3 }), [happened(3, 0, [{ e: 'throw', seat: 0, die: 6 }, { e: 'opening', seat: 0, dice: [6, 4] }])]);
+        await flush();
 
         expect(stageOf(table.container).getAttribute('data-presenting')).toBe('true');
-        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body')), 'no die was thrown').toBe(true);
-        expect(lit(table.container), 'checkers were lit before the opening roll had landed').toBe(0);
+        expect(lit(table.container), 'checkers were lit before the die that decides who starts had landed').toBe(0);
         expect(said(table.container)).not.toContain('rolled');
-        expect(table.container.querySelector('svg[viewBox="0 0 1000 820"]')!.hasAttribute('data-drags')).toBe(false);
 
-        await elapse(1500);
+        await elapse(2000);
 
         expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
-        expect(dice(table.container)).toEqual(['6', '1']);
+        expect(dice(table.container)).toEqual(['6', '4']);
+        expect(blanks(table.container)).toBe(0);
         expect(lit(table.container)).toBeGreaterThan(0);
-        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
-        expect(men(table.container)).toHaveLength(30);
+        expect(said(table.container)).toBe('You rolled 6 and 4. Move your checkers.');
     });
 
-    it('is thrown once: a board drawn again with the same frame has its dice down and says so at once', async () =>
+    it('picks both dice up on a tie and offers the reader their die again', async () =>
     {
-        const animate = vi.spyOn(Element.prototype, 'animate');
-        const table = await live(begun(), opening('match-bg', () => false));
+        const table = await live(opening([{ seat: 1, die: 3 }]));
 
-        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
-        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'))).toBe(false);
-        expect(dice(table.container)).toEqual(['6', '1']);
-        expect(lit(table.container)).toBeGreaterThan(0);
-        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+        table.tell(opening([], { rev: 3 }), [happened(3, 0, [{ e: 'throw', seat: 0, die: 3 }, { e: 'tie', dice: [3, 3] }])]);
+        await elapse(2400);
+
+        expect(faces(table.container)).toEqual([]);
+        expect(blanks(table.container)).toBe(1);
+        expect(said(table.container)).toBe('Tap your die to throw it. The higher one starts.');
     });
 
-    it('is thrown for the next game at the same table when the result of the game before has left it, and not under it', async () =>
+    it('rings whoever is still to throw, and the player who starts once the die that says so has landed', async () =>
+    {
+        const table = await live(opening([{ seat: 1, die: 4 }], { remainingMs: 20_000 }));
+        const worn = () => [...table.container.querySelectorAll('.bg-rail')].map((rail) => [rail.querySelector('.table-plate')?.hasAttribute('data-turn') === true, rail.querySelector('.bg-clock') !== null]);
+
+        expect(worn()).toEqual([[false, false], [true, true]]);
+
+        table.tell(match({ dice: [2, 4], turn: 1 }, 0, { rev: 3, turn: 1, remainingMs: 20_000 }), [happened(3, 0, [{ e: 'throw', seat: 0, die: 2 }, { e: 'opening', seat: 1, dice: [2, 4] }])]);
+        await elapse(300);
+
+        expect(worn()[0][0], 'who starts was shown while the die that decides it was in the air').toBe(false);
+
+        await elapse(2000);
+
+        expect(worn()).toEqual([[true, true], [false, false]]);
+    });
+
+    it('opens the next game at the same table once the result of the game before has left it, with nothing thrown for anybody', async () =>
     {
         const animate = vi.spyOn(Element.prototype, 'animate');
         const table = await live(match({ dice: [], phase: 'roll' }, 0, {
@@ -923,61 +1008,47 @@ describe('the opening roll', () =>
                 { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost' }
             ] as MatchView['players']
         }));
-        const next = begun({ id: 'match-next' });
         const result = () => table.container.querySelector('.table-result');
-        const thrown = () => animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'));
 
         expect(result()).not.toBeNull();
 
         animate.mockClear();
-        table.tell(next, [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], { opens: () => true });
+        table.tell(opening([], { id: 'match-next' }), [happened(1, -1, [])], { opens: () => true });
         await flush();
 
         expect(stageOf(table.container).getAttribute('data-presenting'), 'a table waiting to open behind its result said it was idle').toBe('true');
         expect(result()?.getAttribute('data-leaving'), 'the result of the game before stood over the opening of this one, or was gone in one frame').toBe('true');
-        expect(result()?.querySelectorAll('.table-result-card li'), 'the result went telling of a game that had only just begun').toHaveLength(2);
-        expect(lit(table.container)).toBe(0);
-        expect(said(table.container), 'a sentence about the game before was read out over the opening of this one').toBe('');
+        expect(blanks(table.container), 'the next game\'s die was offered under the result of the last').toBe(0);
 
-        await elapse(RESULT_OUT - 1);
+        await elapse(RESULT_OUT - 10);
 
-        expect([result() === null, thrown()], 'the dice that open the next game were thrown under the result of the last one').toEqual([false, false]);
+        expect(blanks(table.container), 'the next game\'s die was offered under the result of the last').toBe(0);
 
-        await elapse(1);
+        await elapse(610);
 
-        expect([result(), thrown()], 'the dice waited longer than the result took to leave').toEqual([null, true]);
-
-        await elapse(1500);
-
+        expect(result()).toBeNull();
+        expect(tossed(animate), 'a die was thrown for somebody at the start of the next game').toBe(false);
         expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
-        expect(dice(table.container)).toEqual(['6', '1']);
-        expect(said(table.container)).toBe('You rolled 6 and 1. Move your checkers.');
+        expect(blanks(table.container)).toBe(1);
+        expect(said(table.container)).toBe('Tap your die to throw it. The higher one starts.');
     });
 
-    it('names nobody as on turn until the two dice that say who starts have landed', async () =>
-    {
-        const table = await live(begun({ remainingMs: 20_000 }), opening('match-bg', () => true));
-        const worn = () => [...table.container.querySelectorAll('.bg-rail')].map((rail) => [rail.querySelector('.table-plate')?.hasAttribute('data-turn') === true, rail.querySelector('.bg-clock') !== null]);
-
-        expect(worn(), 'who starts was shown while the dice that decide it were in the air').toEqual([[false, false], [false, false]]);
-
-        await elapse(1500);
-
-        expect(worn()).toEqual([[false, false], [true, true]]);
-    });
-
-    it('is left alone on a board that is already showing the game: the dice stay where they lie', async () =>
+    it('is drawn as it stands, with nothing thrown again, for a board shown again in its opening', async () =>
     {
         const animate = vi.spyOn(Element.prototype, 'animate');
-        const table = await live(begun());
+        const table = await live(opening([{ seat: 1, die: 4 }]), begins('match-bg', () => false));
+
+        expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
+        expect(tossed(animate)).toBe(false);
+        expect(faces(table.container)).toEqual(['4']);
 
         animate.mockClear();
-        table.tell(begun(), [happened(1, 0, [{ e: 'opening', seat: 0, dice: [6, 1] }])], { opens: () => true });
+        table.tell(opening([{ seat: 1, die: 4 }]), [happened(1, -1, [])], { opens: () => true });
         await flush();
 
         expect(stageOf(table.container).hasAttribute('data-presenting')).toBe(false);
-        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('die3d-body'))).toBe(false);
-        expect(dice(table.container)).toEqual(['6', '1']);
+        expect(tossed(animate)).toBe(false);
+        expect(faces(table.container)).toEqual(['4']);
     });
 });
 

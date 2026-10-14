@@ -209,8 +209,6 @@ try
         throw new Error('no Start button');
     }
 
-    await watchOpening(dana);
-    await watchOpening(mina);
     await start.click();
 
     record('the starter sees the board', await waitFor(async () => await dana.page.locator(board).count() > 0));
@@ -224,17 +222,49 @@ try
         seats.set((await player.api('GET', `/matches/${ matchId }`)).body.mine, player);
     }
 
-    const rolled = (await dana.api('GET', `/matches/${ matchId }`)).body.view.dice.slice(0, 2).join();
+    for (const player of [dana, mina])
+    {
+        await idle(player);
+        record(`${ player.handle } is offered their own die to throw, and nothing is thrown for anybody`, await waitFor(async () =>
+            await player.page.locator(`${ dice } > .die3d[data-blank]`).count() === 1 && await player.page.locator(`${ dice } > .die3d:not([data-blank])`).count() === 0, 8000));
+    }
+
+    let ties = 0;
+    let opening = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+    for (let throws = 0; opening.view.phase === 'opening' && throws < 12; throws += 1)
+    {
+        const thrower = seats.get(opening.view.turn);
+        const other = thrower === dana ? mina : dana;
+
+        await idle(thrower);
+        await idle(other);
+        await watchOpening(other);
+        record(`${ thrower.handle } throws their own die by tapping it on the table`, await tapDice(thrower, 'roll'));
+
+        const thrown = await waitFor(async () => (await dana.api('GET', `/matches/${ matchId }`)).body.rev > opening.rev, 8000);
+
+        record(`${ thrower.handle }'s throw reaches the server`, thrown);
+        await idle(other);
+
+        const seen = await other.page.evaluate(() => window.__opening);
+
+        record(`${ other.handle } is shown ${ thrower.handle }'s die being thrown, not one that was already down`, seen?.flew === true, JSON.stringify(seen));
+
+        const after = (await dana.api('GET', `/matches/${ matchId }`)).body;
+
+        ties += after.view.phase === 'opening' && (after.view.opening ?? []).length === 0 ? 1 : 0;
+        opening = after;
+    }
+
+    const rolled = opening.view.dice.slice(0, 2).join();
 
     for (const player of [dana, mina])
     {
         await idle(player);
-
-        const seen = await player.page.evaluate(() => window.__opening);
-
-        record(`${ player.handle } is shown the first roll being thrown, not dice that were already down`, seen?.first?.presenting === true && seen.flew === true, JSON.stringify(seen));
-        record(`${ player.handle }'s dice come to rest on the faces that were rolled`, await faces(player) === rolled, `${ await faces(player) } for ${ rolled }`);
-        record(`${ player.handle } is not shown who starts until the two dice that say so have landed, and is shown it then`, seen?.early === false && await player.page.locator('.bg-rail .table-plate[data-turn]').count() === 1, JSON.stringify(seen));
+        record(`${ player.handle }'s dice come to rest on the two that were thrown, the higher one's player to play both`, opening.view.phase === 'move' && await faces(player) === rolled
+            && opening.view.turn === (opening.view.dice[0] > opening.view.dice[1] ? 0 : 1), `${ await faces(player) } for ${ rolled }, ${ ties } ties`);
+        record(`${ player.handle } is shown one player on turn, whoever starts`, await player.page.locator('.bg-rail .table-plate[data-turn]').count() === 1);
         await watchGames(player);
     }
 
@@ -269,11 +299,11 @@ try
 
         record(`${ mover.handle } has no button for a move in the page, shown or hidden, and no sentence under the board`, await shown(mover) === 0 && await worded(mover) === 0, `${ await shown(mover) } buttons, ${ await worded(mover) } lines`);
 
-        if (view.phase === 'roll')
+        if (view.phase === 'roll' || view.phase === 'opening')
         {
             const cube = mover.page.locator('.bg-layer .bgt-cube[data-live]');
 
-            if (!doubled && view.doubling && await cube.count() > 0)
+            if (!doubled && view.phase === 'roll' && view.doubling && await cube.count() > 0)
             {
                 doubled = true;
                 verb = 'double';
@@ -365,7 +395,9 @@ try
             {
                 const own = view.seats.find((row) => row.seat === current.turn).checkers;
                 const theirs = view.seats.find((row) => row.seat !== current.turn).checkers;
-                const play = view.phase === 'double' ? { kind: 'backgammon', verb: 'take' } : { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] };
+                const play = view.phase === 'opening'
+                    ? { kind: 'backgammon', verb: 'roll' }
+                    : (view.phase === 'double' ? { kind: 'backgammon', verb: 'take' } : { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] });
 
                 await mover.api('POST', `/matches/${ matchId }/play`, { key: `bgk-${ step }-${ matchId }`, rev: current.rev, play });
 
@@ -474,7 +506,7 @@ try
             {
                 const own = view.seats.find((row) => row.seat === current.turn).checkers;
                 const theirs = view.seats.find((row) => row.seat !== current.turn).checkers;
-                const play = view.phase === 'roll'
+                const play = view.phase === 'roll' || view.phase === 'opening'
                     ? { kind: 'backgammon', verb: 'roll' }
                     : (view.phase === 'double' ? { kind: 'backgammon', verb: 'take' } : { kind: 'backgammon', verb: 'move', hops: turns({ me: [...own], them: [...theirs] }, view.dice)[0] });
 
@@ -506,7 +538,7 @@ try
 
         round = view.round;
 
-        if (view.phase === 'roll')
+        if (view.phase === 'roll' || view.phase === 'opening')
         {
             play = { kind: 'backgammon', verb: 'roll' };
         }
