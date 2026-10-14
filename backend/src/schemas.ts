@@ -1106,6 +1106,8 @@ export const tableSummary = object({
     /** The game being played here, absent until somebody starts one. */
     matchId: string().optional(),
 
+    lastMatchId: string().optional(),
+
     yourTurn: boolean().optional(),
 
     /**

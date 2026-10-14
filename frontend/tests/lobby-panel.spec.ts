@@ -13,7 +13,7 @@ import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import type { TableSummary } from '../src/api.ts';
+import type { MatchView, TableSummary } from '../src/api.ts';
 import { ApiError, client, server } from './fake-api.ts';
 
 type Rendered = HTMLElement;
@@ -628,5 +628,220 @@ describe('the button that says ready', () =>
 
             expect(pressed.textContent?.trim()).toBe('I’m ready');
         });
+    });
+});
+
+describe('the lobby of a table where a game has ended', () =>
+{
+    interface Asked
+    {
+        params: { id: string };
+    }
+
+    const matches = client.matches as unknown as { view?: (asked: Asked) => Promise<MatchView> };
+
+    const ended = (winner: number, id = 'match-last') => ({
+        id,
+        tableId: 'table-teams',
+        game: 'ludo',
+        rev: 31,
+        seats: 2,
+        players: [0, 1].map((seat) => ({ seat, who: WHO[seat], timeouts: 0, result: seat === winner ? 'won' : 'lost' })),
+        mine: 0,
+        outcome: 'won',
+        startedAt: new Date(0).toISOString(),
+        finishedAt: new Date(60_000).toISOString(),
+        view: {
+            kind: 'ludo',
+            moves: [],
+            controls: 0,
+            seats: ['red', 'yellow'].map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: seat === winner ? 57 : -1 })), home: seat === winner ? 4 : 0, out: false, side: seat }))
+        }
+    }) as MatchView;
+
+    const reads = (answer: (asked: Asked) => MatchView) =>
+    {
+        const read = vi.fn(async (asked: Asked) => answer(asked));
+
+        matches.view = read;
+
+        return read;
+    };
+
+    const asked = (read: ReturnType<typeof reads>) => read.mock.calls.map(([one]) => one.params.id);
+
+    const two = (extra: Partial<TableSummary> = {}) => table({
+        game: 'ludo',
+        seats: 2,
+        teams: false,
+        chairs: [{ seat: 0, who: 'alex', ready: false, host: true }, { seat: 1, who: 'sara.k', ready: false }] as TableSummary['chairs'],
+        taken: 2,
+        ...extra
+    });
+
+    const held = (first: TableSummary) =>
+    {
+        const [current, setCurrent] = createSignal(first);
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return current();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+
+        return { container, setCurrent };
+    };
+
+    const said = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-last-game]');
+
+    const landed = async () =>
+    {
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await settle();
+    };
+
+    afterEach(() =>
+    {
+        delete matches.view;
+        vi.restoreAllMocks();
+    });
+
+    it('says how the last game there ended, under everything a waiting room is for', async () =>
+    {
+        const read = reads(() => ended(1));
+        const container = shown(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(asked(read)).toEqual(['match-last']);
+        expect(said(container)?.querySelector('p')?.textContent).toBe('The last game here');
+        expect(said(container)?.querySelector('[aria-live="polite"]')?.textContent).toBe(`${ usePeople().byHandle('sara.k')?.displayName ?? 'sara.k' } won.`);
+        expect(said(container)?.querySelector('button'), 'a game that is over offers to be played again from the past').toBeNull();
+        expect(container.querySelector('section')?.lastElementChild, 'it stands above something a waiting room is for').toBe(said(container));
+    });
+
+    it('says it as the reader\'s own when they won it', async () =>
+    {
+        reads(() => ended(0));
+
+        const container = shown(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(said(container)?.querySelector('[aria-live="polite"]')?.textContent).toBe('You won.');
+    });
+
+    it('asks for it once, however often the table is looked at again, and again when another game has ended', async () =>
+    {
+        const read = reads((one) => ended(1, one.params.id));
+        const { container, setCurrent } = held(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        const first = said(container);
+
+        expect(first).not.toBeNull();
+
+        setCurrent(two({ lastMatchId: 'match-last', chairs: [{ seat: 0, who: 'alex', ready: true, host: true }, { seat: 1, who: 'sara.k', ready: false }] as TableSummary['chairs'] }));
+        await landed();
+
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(said(container), 'the result was drawn again for a chair that changed').toBe(first);
+
+        setCurrent(two({ lastMatchId: 'match-newer' }));
+        await landed();
+
+        expect(asked(read)).toEqual(['match-last', 'match-newer']);
+        expect(said(container), 'the game that ended since is not told of').not.toBeNull();
+    });
+
+    it('tells of no game but the one the table names: not the one before, while the one that ended since is still being read', async () =>
+    {
+        let answer: (match: MatchView) => void = () => undefined;
+
+        matches.view = async (one) => (one.params.id === 'match-last'
+            ? ended(1)
+            : await new Promise<MatchView>((resolve) =>
+            {
+                answer = resolve;
+            }));
+
+        const { container, setCurrent } = held(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(said(container)?.querySelector('[aria-live="polite"]')?.textContent).toBe(`${ usePeople().byHandle('sara.k')?.displayName ?? 'sara.k' } won.`);
+
+        setCurrent(two({ id: 'table-other', code: 'other1', lastMatchId: 'match-newer' }));
+        await landed();
+
+        expect(said(container), 'another table was told of the game that ended at the one before').toBeNull();
+
+        answer(ended(0, 'match-newer'));
+        await landed();
+
+        expect(said(container)?.querySelector('[aria-live="polite"]')?.textContent).toBe('You won.');
+    });
+
+    it('has nothing to say, and asks for nothing, at a table where no game the reader played in has ended', async () =>
+    {
+        const read = reads(() => ended(1));
+        const container = shown(two());
+
+        await landed();
+
+        expect(read).not.toHaveBeenCalled();
+        expect(said(container)).toBeNull();
+    });
+
+    it('says nothing of one table\'s game at another table, when the room is shown a table where none has ended', async () =>
+    {
+        reads(() => ended(1));
+
+        const { container, setCurrent } = held(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(said(container)).not.toBeNull();
+
+        setCurrent(two({ id: 'table-other', code: 'other1' }));
+        await landed();
+
+        expect(said(container), 'the game that ended at the table before is told of at this one').toBeNull();
+    });
+
+    it('leaves the room as it is when the game cannot be read: it is a courtesy, and the room does not fail with it', async () =>
+    {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const read = reads(() =>
+        {
+            throw new ApiError(404, 'not-found', 'No game there.', undefined);
+        });
+        const container = shown(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(said(container)).toBeNull();
+        expect(container.querySelector('[aria-live="polite"]')?.textContent?.trim()).not.toBe('');
+        expect([...container.querySelectorAll('button')].map((one) => one.textContent?.trim())).toContain(useLocale().t('play.lobby.ready'));
+    });
+
+    it('names it in Persian', async () =>
+    {
+        reads(() => ended(1));
+        useLocale().setLocale('fa');
+
+        const container = shown(two({ lastMatchId: 'match-last' }));
+
+        await landed();
+
+        expect(said(container)?.querySelector('p')?.textContent).toBe('آخرین بازی این میز');
+        useLocale().setLocale('en');
     });
 });

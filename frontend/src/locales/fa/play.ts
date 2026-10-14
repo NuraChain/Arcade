@@ -111,6 +111,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.lobby.invite': 'دعوت',
     'play.lobby.copyLink': 'کپی لینک',
     'play.lobby.copied': 'لینک کپی شد',
+    'play.lobby.last': 'آخرین بازی این میز',
     'play.lobby.leave': 'ترک میز',
     'play.lobby.host': 'میزبان',
     'play.lobby.invited': 'دعوت‌شده',

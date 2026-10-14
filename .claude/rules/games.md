@@ -485,6 +485,23 @@ with one more name on them (`tableChanged` for everybody there and whoever was t
 hub needed nothing: every table ring re-asks `voiceAllowed`, and somebody with no chair is not
 allowed.
 
+**A table opened again says how its last game ended.** A finished game is shown where it ended,
+with the result over it, and a table that was left and opened again showed the waiting room and
+no word of what had happened there (A3 of the graphics audit). A table's `matchId` is the game
+BEING PLAYED there (`m.finished_at is null`), so nothing named the one before. The summary
+carries `lastMatchId` now: the newest game that has ended at the table, and only to somebody who
+played in it, so nobody is handed an id that `GET /matches/:id` would refuse them. A stranger at
+a public table is told nothing. The lobby reads that game once (`createResource` over a
+`derived`, so a chair changing does not ask again) and draws the same `MatchResult` the board
+shows, under everything a waiting room is for and with no Play again: the room's own Ready is how
+the next game starts. **It tells of no game but the one its table names**: what was read is
+checked against `lastMatchId`, because the room is one instance for whichever table the page is
+shown, and a resource keeps what it read last while it reads again. Without the check a table
+opened from another told of the other's game until its own arrived. It is a courtesy, so when
+the game cannot be read the room is as it was. `table-last-game.db.spec.ts` holds the field
+against Postgres (who is told, which game, another table's games) and `lobby-panel.spec.ts` the
+room.
+
 **The control is a cross in the corner of the chair, and it is the lobby's one control without
 words.** A chair is half a phone wide, so `SeatCard` draws an `IconButton` there (44px under a
 finger, clear of the name) labelled "Take Sara out of the table", under a `derived` boolean of its

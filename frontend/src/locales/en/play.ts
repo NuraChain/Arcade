@@ -108,6 +108,7 @@ export const play = {
     'play.lobby.invite': 'Invite',
     'play.lobby.copyLink': 'Copy link',
     'play.lobby.copied': 'Link copied',
+    'play.lobby.last': 'The last game here',
     'play.lobby.leave': 'Leave table',
     'play.lobby.host': 'Host',
     'play.lobby.invited': 'Invited',

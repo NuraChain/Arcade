@@ -98,6 +98,8 @@ export interface TableRow
     /** The game running here, or null when nobody has started one. */
     match_id: string | null;
 
+    last_match_id: string | null;
+
     removed: boolean;
 
     kept_out: string[];
@@ -178,6 +180,14 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect(
         `(select m.id from matches m where m.table_id = t.id and m.finished_at is null)`,
         'match_id'
+    )
+    .addSelect(
+        `(select m.id from matches m
+           where m.table_id = t.id
+             and m.finished_at = (select max(x.finished_at) from matches x where x.table_id = t.id)
+             and exists (select 1 from match_players p where p.match_id = m.id and p.user_id = :me)
+           limit 1)`,
+        'last_match_id'
     )
     .addSelect(`(select u.handle::text from users u where u.id = t.host_id)`, 'host')
     .addSelect(

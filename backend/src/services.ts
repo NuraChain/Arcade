@@ -606,6 +606,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.matchId = row.match_id;
         }
+        if (row.last_match_id !== null)
+        {
+            summary.lastMatchId = row.last_match_id;
+        }
         if (row.room_id !== null)
         {
             summary.roomId = row.room_id;
