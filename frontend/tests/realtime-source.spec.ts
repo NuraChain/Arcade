@@ -70,7 +70,7 @@ describe('the socket, as the one place a frame is sent', () =>
     it('refuses a frame given a ceiling while more than that is still waiting to leave, and sends it once the socket has caught up', () =>
     {
         const one = wired();
-        const sound = { t: 'sound', table: 't-1', to: ['j2'], codec: 'law', at: 1, data: 'AQID' } as const;
+        const sound = { t: 'sound' as const, table: 't-1', to: ['j2'], codec: 'law' as const, at: 1, data: 'AQID' };
 
         one.wire().readyState = OPEN;
         one.wire().bufferedAmount = 9000;
