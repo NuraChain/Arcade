@@ -5935,6 +5935,35 @@ poker reader's at 236x295, under both floors, so `watchFold` folds it whenever t
 its floor with the sheet closed, and unfolds it only when the screen's height changes - folding grows
 the board, so a fold re-judged on every layout would fold and unfold forever.
 
+**On a wide head the title's own line keeps its room, and the strip of other tables takes what is
+left.** On one row the strip held 45% of the head and would not shrink, so with four other tables
+the title was left a word and a half: at 1280 with the chat open "Turn-based" was cut to nothing
+and read "T.", and the code, which may not shrink, lay 34px over the strip, where a press on it went
+to the strip. Nothing had seen it: the fit pass's players have one other table, and the matrix,
+whose fixture has four, measures size and never asks what a pointer would hit. Now the title is
+`flex: 0 1 22rem` beside a strip (it is a size container, so it cannot be sized by its content, and
+22rem is the back arrow, the mark and the longest line), the strip is `flex-1 min-w-0` and stands at
+the row's end, the row does not wrap from 42rem, and the title's line is `overflow-x-clip`: what
+cannot fit is cut at the line's edge and never lies over a neighbour, while the code's 44px box
+keeps its height (`overflow: hidden` would cut that too). Between 42rem and 56rem of head a table
+in the strip is its mark alone with a dot when it waits on the reader, as the folded strip has
+it, and its game, code and "Your go" stay in the page for a screen reader (`data-words`:
+`contents`, then `sr-only`, then `contents` again); with the words drawn the strip showed half of
+one table.
+
+**Inside the title, everything asks the title how much room there is, never the head.** The
+code, its dot and the words of a voice table used to ask the outer container (`@2xl/head`,
+`@md/head`) from inside the title's own (`@container/title`). In Chromium such an answer is kept
+from when the page was drawn: at 1024, where opening the chat card takes the head from 888px to
+496, the code stayed hidden after the card was closed and stayed drawn after it was opened, for
+as long as nothing else restyled the page. The strip's own rules ask the head from OUTSIDE the
+title and were always right, which is how it was told apart. They ask the title now
+(`@min-[21rem]/title`, `@min-[26rem]/title`), so the code is also drawn on a two-row head whose
+title has the room. `play-header.spec.ts` refuses any class inside the title that names the head;
+the browser run that toggles the card after a load at 1024, 1280 and 834 and resizes with no
+reload holds the rest. **The same shape anywhere else is the same fault**: a rule inside one size
+container that asks about an outer one.
+
 **The title row keeps the game's name on a phone, whatever else is in it.** A table with voice puts
 the call in that row, and the row gave way in the wrong order: every control is `shrink-0` and the
 name was the one thing that could shrink. At 390 the "Join voice" button was 118 px of the row and
