@@ -258,7 +258,7 @@ export const useRecovery = createStore((): RecoveryApi =>
                 {
                     // The server accepted the signature, so the phrase is right and this is the
                     // archive being wrong rather than the person. Saying `failed` keeps those two
-                    // apart, which is the whole reason the vault carries a check value.
+                    // apart.
                     return 'failed';
                 }
 

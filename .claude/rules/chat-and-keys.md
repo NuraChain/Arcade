@@ -884,6 +884,14 @@ verifies and decrypts nothing, and the wrapped archive key and its check value a
 phrase that has never been here. Holding the whole table gets an attacker no closer to a message
 than holding none of it.
 
+**Nothing compares the check value.** It was made so a wrong phrase and a corrupt archive would
+not be the same message, and the server's verdict on the phrase's signature already keeps them
+apart: refused, the phrase is wrong; accepted and the archive will not open, the archive is.
+`checkValueOf` is still written with every vault and served with its state, and `phraseMatches`
+is called only by `recovery.spec.ts`, where it proves the wrapping key comes out the same twice.
+Dropping the column is a change to a database another working tree shares, so it waits for the
+owner (`docs/superpowers/specs/2026-10-14-repository-audit.md`).
+
 **Writing a vault needs a live device of the account on the session**, so a stolen cookie alone
 cannot replace somebody's phrase.
 
