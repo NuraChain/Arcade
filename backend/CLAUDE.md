@@ -196,10 +196,11 @@ same rule bit `push_subscriptions`: the entity never declared `unique: true` on 
 synchronized schema had no constraint for `on conflict (endpoint)` to find and every push
 subscription was a 500.
 
-**Reference data** is content the product cannot run without: the games, their rules, the
-achievement definitions, and the three demo personas. `backend/src/db/seed-reference.ts` upserts it on every boot, so a changed
+**Reference data** is content the product cannot run without: the games, their rules and the
+achievement definitions. `backend/src/db/seed-reference.ts` upserts it on every boot, so a changed
 blurb ships without a schema change. It is not development fixtures — those are a separate file that
-refuses to run outside development.
+refuses to run outside development. Nothing else is written into a production database by the
+server itself: every person, table, message and score is made by the people using it.
 
 A seed that upserts into a table real people also write to needs a guard, and the demo personas
 were that case: their `on conflict (handle)` ended in `where users.kind = 'demo'`, because without

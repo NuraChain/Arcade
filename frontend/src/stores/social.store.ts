@@ -79,9 +79,8 @@ export interface SocialApi
  * Who this account knows, according to the SERVER.
  *
  * Everything here is a handle: friends, blocks, both directions of a request, the people a
- * suggestion names. The browser's mock is no longer a social graph - it is a profile cache
- * (portrait, favourite game, region, statistics) that this store joins to by handle, because no
- * domain owns those fields yet.
+ * suggestion names. A person's name, bio and hue are the people store's, asked of the server by
+ * handle; nothing about a person is made up in the browser.
  *
  * Nothing is kept in `localStorage` any more. Blocks, mutes and reports belong to the account,
  * and a block that only exists in one browser is a block the other device does not honour.
