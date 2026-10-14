@@ -1287,7 +1287,9 @@ first, so resigning, leaving or closing a table, deleting a message, removing a 
 somebody or ending a friendship was one Enter away from the press that asked about it. A
 `destructive` question marks Cancel `autofocus`, which `firstTabbable` prefers; the answer is
 still drawn first and is still the larger. A question that loses nothing leaves the keyboard on
-its answer. `confirm-sheet.spec.ts` holds both.
+its answer. Handing a group over is not one of those: the reader cannot take it back, so it is
+asked as `destructive` too (`groups.spec.ts`, *handing the group over*). `confirm-sheet.spec.ts`
+holds both.
 
 **A tooltip belongs to a KEYBOARD focus, not to every focus.** `onFocusIn` fires for a programmatic
 `.focus()` too, and every sheet moves focus to its close button as it opens - so each one opened with

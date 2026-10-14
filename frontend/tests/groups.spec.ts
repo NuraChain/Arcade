@@ -82,6 +82,29 @@ describe('the group page', () =>
         expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
     });
 
+    it('asks before handing the group over as it asks before anything the reader cannot take back', async () =>
+    {
+        const held = server.groups.find((one) => one.slug === 'friday-night-crew')!;
+
+        held.owner = 'alex';
+        held.role = 'owner';
+        useOverlay().reset();
+
+        const container = opened('friday-night-crew');
+        const handOver = () => [...container.querySelectorAll(`ul[aria-label="${ useLocale().t('groups.members') }"] li`)]
+            .find((row) => row.textContent?.includes('Sara Kamali'))
+            ?.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('groups.transfer') }"]`);
+
+        await vi.waitFor(() => expect(handOver()).toBeDefined(), { timeout: 4000 });
+
+        fire(handOver()!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props, 'the group can be handed over by one stray Enter').toMatchObject({ confirm: useLocale().t('groups.transfer'), destructive: true });
+        useOverlay().reset();
+    });
+
     it('opens what can be done with a member at a press on them, and draws no More beside the row', async () =>
     {
         const container = opened('friday-night-crew');

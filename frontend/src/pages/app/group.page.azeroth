@@ -216,7 +216,8 @@ export default component GroupPage()
             {
                 title: locale.t('groups.transferTitle', { name: who }),
                 lead: locale.t('groups.transferLead'),
-                confirm: locale.t('groups.transfer')
+                confirm: locale.t('groups.transfer'),
+                destructive: true
             },
             { label: locale.t('groups.transferTitle', { name: who }) }
         ).closed;
