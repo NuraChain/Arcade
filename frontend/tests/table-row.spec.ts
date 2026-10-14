@@ -92,10 +92,10 @@ describe('a table in a list', () =>
         expect(['flex-wrap', 'h-[1lh]', 'overflow-hidden', 'content-start'].map((one) => seats.classList.contains(one))).toEqual([true, true, true, true]);
         expect([seated.textContent, seated.classList.contains('shrink-0')]).toEqual(['2/4 seated', true]);
         expect([voice.getAttribute('aria-label'), voice.classList.contains('shrink-0')]).toEqual(['Voice on', true]);
-        expect(age.textContent).toBe(useLocale().relative(0));
+        expect(age.textContent).toBe(useLocale().relative(0, { style: 'short' }));
         expect(['min-w-16', 'flex-1'].map((one) => age.classList.contains(one)), 'the age would stay as a stub of a letter or two, or would not take the room there is').toEqual([true, true]);
         expect(age.querySelector('[aria-hidden="true"]'), 'the dot before the age stays behind when the age goes').not.toBeNull();
-        expect(age.querySelector('.truncate')?.textContent).toBe(useLocale().relative(0));
+        expect(age.querySelector('.truncate')?.textContent).toBe(useLocale().relative(0, { style: 'short' }));
     });
 
     it('keeps the mark it drew when the table is read again', () =>

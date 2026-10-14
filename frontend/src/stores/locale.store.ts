@@ -97,7 +97,7 @@ export interface LocaleApi
     ordinal(key: MessageKey, count: number): string;
 
     n(value: number, options?: Intl.NumberFormatOptions): string;
-    relative(at: number | Date, now?: number): string;
+    relative(at: number | Date, options?: { now?: number; style?: 'long' | 'short' }): string;
     date(at: number | Date, options?: Intl.DateTimeFormatOptions): string;
     list(items: readonly string[], options?: Intl.ListFormatOptions): string;
     text(value: LocalizedText | string): string;
@@ -150,11 +150,12 @@ export const useLocale = createStore((): LocaleApi =>
         plural: (key, count, vars) => t(key, { ...vars, count }),
         ordinal: (key, count) => say(key, { count }, ordinals()),
         n,
-        relative: (at, now) =>
+        relative: (at, options = {}) =>
         {
             const stamp = at instanceof Date ? at.getTime() : at;
-            const { unit, value } = relativeUnit(stamp - (now ?? runtime().clock.now()));
-            return cached('relative', tag(), null, () => new Intl.RelativeTimeFormat(tag(), { numeric: 'auto' })).format(value, unit);
+            const style = options.style ?? 'long';
+            const { unit, value } = relativeUnit(stamp - (options.now ?? runtime().clock.now()));
+            return cached('relative', tag(), { style }, () => new Intl.RelativeTimeFormat(tag(), { numeric: 'auto', style })).format(value, unit);
         },
         date: (at, options) =>
             cached('date', tag(), options, () => new Intl.DateTimeFormat(tag(), options)).format(at),

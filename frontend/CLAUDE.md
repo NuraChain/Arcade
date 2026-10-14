@@ -969,6 +969,11 @@ the back arrow then went back in history from the page the visit began on, which
 router writes on every entry); a pop it could not measure (`0`, an entry from before the router)
 is still one step back. `app-stores.spec.ts` holds both, Back and Forward through the real router.
 
+**A row with little room says how long ago in the short form.** `locale.relative` takes
+`{ now, style }`; a table's row says "15 min. ago" where "15 minutes ago" was clipped at 390 on a
+team table's row, behind its seats and its voice mark. Lists with room keep the long form.
+`format.spec.ts` holds both styles in both languages.
+
 **A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
 Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans
