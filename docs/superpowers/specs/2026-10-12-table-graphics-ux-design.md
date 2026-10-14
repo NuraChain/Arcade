@@ -152,6 +152,16 @@ one line that is the game's own (pawns home, pips and points, tricks and cards, 
 drawn in two sizes, with a name and without, and the table chooses. A plate never lies on the
 playing surface where something is played; on poker's rail and Hokm's frame it may.
 
+A seat is pressed for its person (the owner, 2026-10-13: "when you click on user it should have
+option for example see profiel or etc"). One button lies over everything on the plate of anybody
+but the reader and opens the sheet about that person, their profile first. It is the plate that
+is pressed and never the felt, so no move is made by it and no room is taken from a board (D10,
+D11), and it is not a stop for the Tab key: a key reaches the same sheet from the Players list
+beside the table (D14). Measured on the built server in the four games at thirteen sizes, a
+plate is 28px to 43px high in Ludo at 320 and 768, for Hokm's partner, for poker's flat plate
+and for every plate on a phone on its side. Under a finger the press reaches 44px above and
+below such a plate, and the band that adds holds nothing else to press.
+
 ### 3.2 Ludo
 
 - A mark at every lit pawn's landing square (L1, D17): a ring in the pawn's colour, a different
@@ -417,6 +427,7 @@ makes false. The numbers continue the motion spec's commit list.
 | P6, round the board | 6.5 `fix(games)` the games page's opening lines | A1 |
 | | 6.6 `feat(lobby)` the lobby shows its table | A2, A3 |
 | | 6.7 `refactor(plates)` one seat | S6 |
+| | 6.8 `feat(tables)` a person at a table can be pressed | the owner, 2026-10-13 |
 | P7 | the static gate, every pass, and this audit made again at the six sizes | all |
 
 The owner's request for web notifications with their switches is a separate piece of work with

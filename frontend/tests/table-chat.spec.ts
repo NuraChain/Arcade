@@ -12,6 +12,7 @@ import '../src/locales/app-catalogue.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
@@ -139,6 +140,38 @@ describe('the players beside a table’s chat, while a call is on', () =>
 
         return { tableId, container, hers };
     };
+
+    it('offers what can be done about somebody else at a press on their name, which takes their whole row and leaves the controls on it their own', async () =>
+    {
+        const { container, hers } = await atTheTable();
+        const mine = container.querySelector<HTMLElement>(`ul[aria-label="${ useLocale().t('play.tab.players') }"] > li`)!;
+        const presses = (row: HTMLElement) => [...row.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')];
+        const press = presses(hers())[0];
+
+        expect(presses(mine), 'the reader is offered a sheet about themselves').toEqual([]);
+        expect(mine.textContent).toContain('You');
+        expect(presses(hers()).map((one) => [one.type, one.getAttribute('aria-label'), one.textContent?.trim(), one.getAttribute('dir')]))
+            .toEqual([['button', 'More about Sara Kamali', 'Sara Kamali', 'auto']]);
+        expect(press.hasAttribute('tabindex'), 'a key cannot reach it').toBe(false);
+
+        expect(hers().classList.contains('relative'), 'the press would spread past its row').toBe(true);
+        expect(['before:absolute', 'before:inset-0'].every((one) => press.classList.contains(one))).toBe(true);
+
+        const kept = [hers().querySelector<HTMLElement>('button[aria-pressed]')!, hers().querySelector<HTMLElement>('[role="slider"]')!.closest<HTMLElement>('.basis-full')!, hers().querySelector<HTMLElement>('span[title].text-ui-2xs')!];
+
+        expect(kept.map((one) => one.classList.contains('relative')), 'something on the row is under the press').toEqual([true, true, true]);
+        expect(kept.every((one) => (press.compareDocumentPosition(one) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0), 'something on the row is drawn before the press').toBe(true);
+
+        useOverlay().reset();
+        fire(press, 'click');
+        fire(press, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items().map((entry) => [entry.id, entry.label, entry.props.personId])).toEqual([['person-menu', 'More', 'sara.k']]);
+
+        useOverlay().reset();
+    });
 
     it('keeps the button that silences somebody, and the reader on it, while the call around them changes', async () =>
     {

@@ -12,6 +12,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
 import { elapse } from './poker-mounted.ts';
@@ -178,7 +179,7 @@ describe('PokerBoard', () =>
         expect(hand.lastElementChild?.lastElementChild?.getAttribute('data-lamp')).toBe('true');
         expect(container.querySelectorAll('[role="note"]'), 'the tip is drawn in two places').toHaveLength(1);
         expect([...container.querySelectorAll('.poker-hand button')].map((one) => one.textContent?.trim())).toEqual(['Fold', 'Call 20', 'Raise']);
-        expect([...container.querySelectorAll('button')].every((one) => one.closest('.poker-hand') !== null)).toBe(true);
+        expect([...container.querySelectorAll('button:not(.table-plate-press)')].every((one) => one.closest('.poker-hand') !== null)).toBe(true);
     });
 
     it('draws no seconds on the plate of another seat that is on turn: the ring is its clock, and a screen reader is told the time', () =>
@@ -199,7 +200,7 @@ describe('PokerBoard', () =>
 
         expect(container.querySelectorAll('.poker-hand .card-face')).toHaveLength(2);
         expect(container.querySelector('ul.poker-hole')?.getAttribute('aria-label')).toBe('Your cards');
-        expect(container.querySelectorAll('button')).toHaveLength(0);
+        expect(container.querySelectorAll('button:not(.table-plate-press)')).toHaveLength(0);
     });
 
     it('raises to what the reader chose, and to the pot on the pot button', () =>
@@ -266,11 +267,29 @@ describe('PokerBoard', () =>
         expect(split.container.textContent).toContain('side pot 350');
     });
 
+    it('lets every plate be pressed but the reader\'s own', () =>
+    {
+        useSession().establish({ id: HANDLES[0], handle: HANDLES[0], displayName: 'Reader', bio: '', hue: 210, isMinor: false });
+
+        try
+        {
+            const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }) }) as Rendered);
+            const plates = [...container.querySelectorAll('.table-plate')].map((plate) => [plate.querySelector('.table-plate-name')?.textContent?.trim(), plate.querySelector('.table-plate-press')?.getAttribute('aria-label') ?? null]);
+
+            expect(plates.filter(([, press]) => press === null), 'the plate nobody is offered is not the reader\'s own, or is not the only one').toEqual([['You', null]]);
+            expect(plates.filter(([, press]) => press !== null).map(([name, press]) => press === `More about ${ name }`)).toEqual([true, true, true, true, true]);
+        }
+        finally
+        {
+            useSession().reset();
+        }
+    });
+
     it('gives a spectator the table and nothing to press', () =>
     {
         const { container } = renderTest(() => PokerBoard({ events: NO_EVENTS, match: match({ toCall: 20 }, null) }) as Rendered);
 
-        expect(container.querySelectorAll('button').length).toBe(0);
+        expect(container.querySelectorAll('button:not(.table-plate-press)').length).toBe(0);
         expect(container.textContent).not.toContain('Your cards');
     });
 

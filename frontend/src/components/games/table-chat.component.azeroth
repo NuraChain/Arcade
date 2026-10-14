@@ -4,6 +4,7 @@ import { attachStick } from '../../lib/stick.ts';
 import { threadRows } from '../../lib/thread.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
 import QuietNote from '../chat/quiet-note.component.azeroth';
@@ -457,7 +458,7 @@ export default component TableChat(props: {
                     <For each={ players } key={ (row) => row.seat } let={ row }>
                         <li
                             class={ () => [
-                                'flex flex-wrap items-center gap-3 rounded-tile border px-3 py-2.5 transition-colors',
+                                'relative flex flex-wrap items-center gap-3 rounded-tile border px-3 py-2.5 transition-colors',
                                 row.turn ? 'border-accent/60 bg-accent/10' : 'border-line bg-sunk/60'
                             ].join(' ') }
                             aria-current={ row.turn ? 'true' : undefined }
@@ -473,7 +474,20 @@ export default component TableChat(props: {
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                                 <span class="flex min-w-0 items-center gap-1.5">
-                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.who) }</span>
+                                    <Show when={ row.who !== lobby.me() } fallback={ <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.who) }</span> }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class="min-w-0 cursor-pointer truncate text-start text-ui-sm font-semibold text-text before:absolute before:inset-0 before:rounded-tile hover:before:bg-white/5"
+                                                dir="auto"
+                                                aria-haspopup="dialog"
+                                                aria-label={ locale.t('actions.about', { name: nameOf(row.who) }) }
+                                                onClick={ () => aboutPerson(row.who) }
+                                            >
+                                                { nameOf(row.who) }
+                                            </button>
+                                        }
+                                    </Show>
                                     <Show when={ row.host }>
                                         { () => <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                     </Show>
@@ -485,7 +499,7 @@ export default component TableChat(props: {
                             <Show when={ calling(row.who) } let={ caller }>
                                 <span
                                     class={ () => [
-                                        'flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
+                                        'relative flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
                                         !caller.talk || caller.link === 'failed' ? 'bg-danger/12 text-danger' : (caller.speaking ? 'bg-live/15 text-live' : 'bg-raised text-muted')
                                     ].join(' ') }
                                     title={ voiceLine(row.who) }
@@ -517,7 +531,7 @@ export default component TableChat(props: {
                                 }
                             </Show>
                             <Show when={ hearable(row.who) } let={ who }>
-                                <div class="basis-full">
+                                <div class="relative basis-full">
                                     <Slider
                                         value={ voice.volumeOf(who) }
                                         min={ 0 }

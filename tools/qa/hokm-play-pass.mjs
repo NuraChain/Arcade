@@ -28,6 +28,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
+import { platesPressed } from './plate.mjs';
 import { tableBody } from './tables.mjs';
 import { chainUnreached } from './unreached.mjs';
 
@@ -257,6 +258,14 @@ try
             await loaded(mina.page, '.hokm-table') > 0);
     }
 
+    console.log('\n[2b] a plate is pressed, and it is not a move');
+    {
+        for (const player of [dana, mina])
+        {
+            await platesPressed(record, player.page, player.handle);
+        }
+    }
+
     // ---------------------------------------------------------------- 3. trump, by the one seat
     console.log('\n[3] the trump call, offered to the Hâkem and to nobody else');
     {
@@ -479,7 +488,7 @@ try
 
         record('cards were played by clicking', clicked === CLICKED_CARDS, `${ clicked } played`);
 
-        const beside = await dana.page.evaluate(() => [...document.querySelectorAll('main .table-stage button')]
+        const beside = await dana.page.evaluate(() => [...document.querySelectorAll('main .table-stage button:not(.table-plate-press)')]
             .filter((one) => one.closest('.card-hold, .hokm-rail, .table-result') === null)
             .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? ''));
         const drawn = await dana.page.evaluate(() => document.querySelector('main .table-grid > .table-bar') !== null

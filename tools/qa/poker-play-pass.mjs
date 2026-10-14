@@ -1,4 +1,5 @@
 import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
+import { platesPressed } from './plate.mjs';
 import { BASE, clearTables, launch, pressable, recorder, seat, solid, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
@@ -78,6 +79,12 @@ try
     for (const player of [dana, mina])
     {
         seats.set((await player.api('GET', `/matches/${ matchId }`)).body.mine, player);
+    }
+
+    console.log('\n[2b] a plate is pressed, and it is not a move');
+    for (const player of [dana, mina])
+    {
+        await platesPressed(record, player.page, player.handle);
     }
 
     console.log('\n[3] actions taken by pressing the controls');
@@ -380,7 +387,7 @@ try
         bar: document.querySelector('main .table-grid > .table-bar') !== null,
         said: [...document.querySelectorAll('main .table-fit > p')].filter((one) => !one.classList.contains('sr-only')).length,
         corner: document.querySelectorAll('main .table-corner, main .poker-chips').length,
-        strays: [...document.querySelectorAll('main .table-stage button')].filter((one) => one.closest('.poker-hand, .poker-last, .table-result') === null).length
+        strays: [...document.querySelectorAll('main .table-stage button:not(.table-plate-press)')].filter((one) => one.closest('.poker-hand, .poker-last, .table-result') === null).length
     }));
 
     record('no bar of buttons or sentences is drawn under the table', !beside.bar && beside.said === 0);

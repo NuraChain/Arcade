@@ -1,3 +1,4 @@
+import { platesPressed } from './plate.mjs';
 import { BASE, clearTables, launch, pressable, recorder, seat, solid, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 import { stage, turns } from '../../backend/src/domains/match/backgammon/moves.ts';
@@ -168,7 +169,7 @@ const stopHeld = async (player) => await player.page.evaluate(() =>
     return held !== null && held.classList.contains('bg-stop') ? { key: held.dataset.stop ?? '', says: held.getAttribute('aria-label') ?? '' } : null;
 });
 
-const shown = async (player) => await player.page.locator('main .table-stage button').evaluateAll((buttons) =>
+const shown = async (player) => await player.page.locator('main .table-stage button:not(.table-plate-press)').evaluateAll((buttons) =>
     buttons.filter((button) => button.closest('.bg-ask, .table-result') === null).length);
 
 const staged = async (player) => Number(await player.page.locator('main .table-stage').getAttribute('data-staged'));
@@ -235,6 +236,12 @@ try
         record(`${ player.handle }'s dice come to rest on the faces that were rolled`, await faces(player) === rolled, `${ await faces(player) } for ${ rolled }`);
         record(`${ player.handle } is not shown who starts until the two dice that say so have landed, and is shown it then`, seen?.early === false && await player.page.locator('.bg-rail .table-plate[data-turn]').count() === 1, JSON.stringify(seen));
         await watchGames(player);
+    }
+
+    console.log('\n[2b] a plate is pressed, and it is not a move');
+    for (const player of [dana, mina])
+    {
+        await platesPressed(record, player.page, player.handle);
     }
 
     console.log('\n[3] turns played on the table itself');

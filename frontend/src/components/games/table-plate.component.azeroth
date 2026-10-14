@@ -2,8 +2,11 @@ import { onCleanup, untrack, type Child } from 'azerothjs';
 
 import Avatar from '../ui/avatar.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { runtime } from '../../lib/runtime.ts';
+import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { PlateTone } from './plate-tag.ts';
@@ -36,6 +39,10 @@ export default component TablePlate(props: {
     const people = usePeople();
     const voice = useVoice();
     const device = useDevice();
+    const account = useAccount();
+    const locale = useLocale();
+
+    derived theirs = account.user()?.handle !== props.who;
 
     const STILL_OVER_MS = 10 * 60 * 1000;
 
@@ -163,6 +170,9 @@ export default component TablePlate(props: {
         </Show>
         <Show when={ props.bubble } let={ said }>
             <span class="table-plate-bubble" dir="auto" role="status">{ said }</span>
+        </Show>
+        <Show when={ theirs }>
+            { () => <button type="button" class="table-plate-press" tabindex="-1" aria-haspopup="dialog" aria-label={ locale.t('actions.about', { name: props.name }) } onClick={ () => aboutPerson(props.who) }></button> }
         </Show>
     </div>
 }

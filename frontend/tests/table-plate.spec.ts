@@ -1,15 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import TablePlate from '../src/components/games/table-plate.component.azeroth';
 import { plateTag } from '../src/components/games/plate-tag.ts';
+import PersonActions from '../src/components/social/person-actions.component.azeroth';
 import * as turns from '../../backend/src/domains/match/turns.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
@@ -395,5 +397,120 @@ describe('the seat plate every table draws', () =>
         expect(plateTag(locale, { seat: 1, who: 'sara.k', result: 'void' } as MatchPlayer, true)?.text).toBe(void_);
 
         locale.setLocale('en');
+    });
+});
+
+describe('a plate that is pressed', () =>
+{
+    const reading = () =>
+    {
+        useSession().reset();
+        useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, isMinor: false });
+        useOverlay().reset();
+        useLocale().setLocale('en');
+    };
+
+    const press = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('.table-plate-press');
+
+    afterEach(() =>
+    {
+        useOverlay().reset();
+        useSession().reset();
+        useLocale().setLocale('en');
+    });
+
+    it('lays one button over everything on the plate of somebody else, named for them, and leaves it out of the keys\' way: a key reaches the same sheet from the list of players', () =>
+    {
+        reading();
+
+        const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid', turn: true, tag: 'Missed 1', bubble: 'gg', facts: document.createElement('i'), trail: document.createElement('b') }) as Rendered);
+        const plate = container.querySelector<HTMLElement>('.table-plate')!;
+        const over = press(container)!;
+
+        expect(plate.querySelectorAll('button')).toHaveLength(1);
+        expect(plate.lastElementChild, 'something on the plate is drawn over the press').toBe(over);
+        expect([over.type, over.getAttribute('tabindex'), over.getAttribute('aria-haspopup'), over.getAttribute('aria-label'), over.textContent])
+            .toEqual(['button', '-1', 'dialog', 'More about Omid', '']);
+    });
+
+    it('opens what can be done about that person, and one sheet however often it is pressed', async () =>
+    {
+        reading();
+
+        const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid' }) as Rendered);
+
+        fire(press(container)!, 'click');
+        fire(press(container)!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items().map((entry) => [entry.id, entry.component, entry.label, entry.props.personId]))
+            .toEqual([['person-menu', PersonActions, 'More', 'omid.k']]);
+    });
+
+    it('is about whoever the plate is showing now, when the seat it draws changes hands', async () =>
+    {
+        reading();
+
+        const [who, setWho] = createSignal('omid.k');
+        const { container } = renderTest(() => TablePlate({
+            get who()
+            {
+                return who();
+            },
+            get name()
+            {
+                return who() === 'omid.k' ? 'Omid' : 'Mina';
+            }
+        }) as Rendered);
+        const over = press(container)!;
+
+        setWho('mina');
+        await Promise.resolve();
+
+        expect(press(container), 'the press was built again').toBe(over);
+        expect(over.getAttribute('aria-label')).toBe('More about Mina');
+
+        fire(over, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props.personId).toBe('mina');
+    });
+
+    it('is not laid over the reader\'s own plate, and comes and goes with whose plate it is', async () =>
+    {
+        reading();
+
+        const [who, setWho] = createSignal('alex');
+        const { container } = renderTest(() => TablePlate({
+            get who()
+            {
+                return who();
+            },
+            name: 'You'
+        }) as Rendered);
+
+        expect(container.querySelector('button')).toBeNull();
+
+        setWho('omid.k');
+        await Promise.resolve();
+
+        expect(press(container)).not.toBeNull();
+
+        setWho('alex');
+        await Promise.resolve();
+
+        expect(container.querySelector('button')).toBeNull();
+    });
+
+    it('is named in Persian too', () =>
+    {
+        reading();
+        useLocale().setLocale('fa');
+
+        const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'امید' }) as Rendered);
+
+        expect(press(container)!.getAttribute('aria-label')).toBe('بیشتر درباره‌ی امید');
     });
 });

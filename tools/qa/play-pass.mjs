@@ -28,6 +28,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { DIE_SIZE, dieRest } from '../../frontend/src/game/board/ludo-board.ts';
 import { CELL } from '../../frontend/src/game/layout.ts';
+import { backFromProfile, platesPressed } from './plate.mjs';
 import { solid } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 import { chainUnreached } from './unreached.mjs';
@@ -428,6 +429,16 @@ try
         record('and only one board layer is drawn', fallback === 0, `${ fallback } fallback tokens`);
     }
 
+    console.log('\n[2b] a plate is pressed, and it is not a move');
+    {
+        for (const player of [dana, mina])
+        {
+            await platesPressed(record, player.page, player.handle);
+        }
+
+        await backFromProfile(record, dana.page, dana.handle);
+    }
+
     // ---------------------------------------------------------------- 3. turns taken by clicking
     console.log('\n[3] turns taken by pressing the buttons a person presses');
     {
@@ -493,7 +504,7 @@ try
 
             const pawn = actor.page.locator('.board-canvas .lp[data-movable] .lp-pawn').first();
 
-            listed += await actor.page.locator('main .table-stage ul, main .table-stage button:not(.board-roll)').count();
+            listed += await actor.page.locator('main .table-stage ul, main .table-stage button:not(.board-roll, .table-plate-press)').count();
 
             if (await pawn.count() > 0)
             {

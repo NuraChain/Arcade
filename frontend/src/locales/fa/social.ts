@@ -40,6 +40,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.notFound': 'چنین کسی نداریم.',
 
     'actions.title': 'بیشتر',
+    'actions.about': 'بیشتر درباره‌ی {name}',
     'actions.mute': 'بی‌صدا کردن {name}',
     'actions.unmute': 'باصدا کردن {name}',
     'actions.muted': '{name} بی‌صدا شد. دیگر اعلانی از او نمی‌گیری.',

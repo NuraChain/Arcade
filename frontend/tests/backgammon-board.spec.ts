@@ -31,6 +31,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
@@ -284,12 +285,30 @@ describe('BackgammonBoard', () =>
         expect(waiting.container.textContent).toContain('Waiting for');
     });
 
-    it('draws a spectator the board and gives them nothing to press', () =>
+    it('draws a spectator the board and gives them nothing to press but the two people playing', () =>
     {
         const { container } = still(match({}, null));
 
         expect(container.querySelector('svg[viewBox="0 0 1000 820"]')).not.toBeNull();
-        expect(container.querySelectorAll('button').length).toBe(0);
+        expect([...container.querySelectorAll('button')].map((one) => one.className)).toEqual(['table-plate-press', 'table-plate-press']);
+    });
+
+    it('lets the other player\'s plate be pressed, and not the reader\'s own', () =>
+    {
+        useSession().establish({ id: 'dana.w', handle: 'dana.w', displayName: 'Reader', bio: '', hue: 210, isMinor: false });
+
+        try
+        {
+            const { container } = still(match({}));
+            const plates = [...container.querySelectorAll('.table-plate')].map((plate) => [plate.querySelector('.table-plate-name')?.textContent?.trim(), plate.querySelector('.table-plate-press')?.getAttribute('aria-label') ?? null]);
+
+            expect(plates.filter(([, press]) => press === null), 'the plate nobody is offered is not the reader\'s own, or is not the only one').toEqual([['You', null]]);
+            expect(plates.filter(([, press]) => press !== null).map(([name, press]) => press === `More about ${ name }`)).toEqual([true]);
+        }
+        finally
+        {
+            useSession().reset();
+        }
     });
 
     it('draws the board left to right in every language, because it is a printed object', () =>
@@ -1849,7 +1868,7 @@ describe('moves made on the table itself', () =>
 
         for (const container of [rolling.container, moving.container])
         {
-            expect([...container.querySelectorAll('.table-stage button')].map((one) => one.textContent?.trim()), 'a move is offered as a button').toEqual([]);
+            expect([...container.querySelectorAll('.table-stage button:not(.table-plate-press)')].map((one) => one.textContent?.trim()), 'a move is offered as a button').toEqual([]);
             expect(container.querySelector('.bg-keys'), 'the helper panel is still there').toBeNull();
             expect(container.querySelector('.table-stage ul')).toBeNull();
             expect([...container.querySelectorAll('.table-stage [role="button"]')].filter((one) => one.parentElement?.classList.contains('bg-cursor') !== true), 'something a key can press is not on the board').toEqual([]);
@@ -1858,7 +1877,7 @@ describe('moves made on the table itself', () =>
         hop(moving.container, 13, 7);
         await elapse(1200);
 
-        expect(moving.container.querySelectorAll('.table-stage button')).toHaveLength(0);
+        expect(moving.container.querySelectorAll('.table-stage button:not(.table-plate-press)')).toHaveLength(0);
         expect(staged(moving.container)).toBe(1);
     });
 

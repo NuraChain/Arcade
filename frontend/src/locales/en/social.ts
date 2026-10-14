@@ -37,6 +37,7 @@ export const social = {
     'person.notFound': 'No such person.',
 
     'actions.title': 'More',
+    'actions.about': 'More about {name}',
     'actions.mute': 'Mute {name}',
     'actions.unmute': 'Unmute {name}',
     'actions.muted': '{name} muted. You won’t get notifications from them.',

@@ -263,6 +263,6 @@ describe('the ludo helpers, and the switch for each', () =>
         const container = await show(ludo(SIX, true));
 
         expect(container.querySelector('[role="note"]')).toBeNull();
-        expect(container.querySelectorAll('.table-stage button')).toHaveLength(0);
+        expect(container.querySelectorAll('.table-stage button:not(.table-plate-press)')).toHaveLength(0);
     });
 });

@@ -14,6 +14,7 @@ import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { NO_EVENTS, useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
@@ -779,7 +780,7 @@ describe('playing a card with a finger', () =>
         vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ events: NO_EVENTS, match: turn() }) as Rendered);
         const beside = () => [...container.querySelectorAll('button')]
-            .filter((one) => !one.classList.contains('card-hold'))
+            .filter((one) => !one.classList.contains('card-hold') && !one.classList.contains('table-plate-press'))
             .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? '');
 
         expect(beside()).toEqual(['Sort']);
@@ -1583,7 +1584,7 @@ describe('the two-handed draw', () =>
     const stock = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button.hokm-stock-press');
 
     const beside = (container: HTMLElement) => [...container.querySelectorAll('button')]
-        .filter((one) => !one.classList.contains('card-hold'))
+        .filter((one) => !one.classList.contains('card-hold') && !one.classList.contains('table-plate-press'))
         .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? '');
 
     it('lays the drawn card on the felt for the drawer alone, and makes the card and the stock the two choices', () =>
@@ -2364,7 +2365,7 @@ describe('the clock on a plate, and the two things beside the hand', () =>
         expect(container.querySelector('.table-fit')!.children.length, 'something lies in the table\'s cell beside the table').toBe(1);
         expect(foot.classList.contains('table-hand')).toBe(true);
         expect([...foot.children].map((one) => one.classList[one.classList.length - 1])).toEqual(['hokm-rail', 'hokm-hands']);
-        expect(container.querySelector('.hokm-table button'), 'a tool is drawn on the felt').toBeNull();
+        expect(container.querySelector('.hokm-table button:not(.table-plate-press)'), 'a tool is drawn on the felt').toBeNull();
     });
 
     it('puts Sort at one end of that row and the tip\'s lamp at the other', () =>
@@ -2473,6 +2474,24 @@ describe('the clock on a plate, and the two things beside the hand', () =>
         expect(sort().getAttribute('aria-pressed')).toBe('true');
     });
 
+    it('lets every plate be pressed but the reader\'s own', () =>
+    {
+        useSession().establish({ id: 'سارا1', handle: 'سارا1', displayName: 'Reader', bio: '', hue: 210, isMinor: false });
+
+        try
+        {
+            const { container } = renderTest(() => HokmBoard({ events: NO_EVENTS, match: match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0 }) }) as Rendered);
+            const plates = [...container.querySelectorAll('.table-plate')].map((plate) => [plate.querySelector('.table-plate-name')?.textContent?.trim(), plate.querySelector('.table-plate-press')?.getAttribute('aria-label') ?? null]);
+
+            expect(plates.filter(([, press]) => press === null), 'the plate nobody is offered is not the reader\'s own, or is not the only one').toEqual([['You', null]]);
+            expect(plates.filter(([, press]) => press !== null).map(([name, press]) => press === `More about ${ name }`)).toEqual([true, true, true]);
+        }
+        finally
+        {
+            useSession().reset();
+        }
+    });
+
     it('gives somebody watching no tool, no tip, no clock and no room kept for any', () =>
     {
         const seen = match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0 });
@@ -2480,7 +2499,7 @@ describe('the clock on a plate, and the two things beside the hand', () =>
 
         expect(container.querySelector('.table-grid > .hokm-foot > .hokm-rail')).not.toBeNull();
         expect(container.querySelector('.hokm-foot')!.hasAttribute('data-tools')).toBe(false);
-        expect(container.querySelectorAll('button').length).toBe(0);
+        expect(container.querySelectorAll('button:not(.table-plate-press)').length).toBe(0);
         expect(container.querySelector('[role="note"]')).toBeNull();
         expect(container.querySelector('.hokm-clock')).toBeNull();
     });

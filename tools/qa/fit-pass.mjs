@@ -877,7 +877,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         const drawn = (one) =>
         {
             const rect = box(one);
-            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            const hit = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2).find((under) => !under.classList.contains('table-plate-press')) ?? null;
 
             return hit !== null && one.contains(hit);
         };
@@ -1228,8 +1228,9 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         }
 
         const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        const chosen = button.classList.contains('table-plate-press') && hit !== null && hit.closest('.poker-raise') !== null;
 
-        if (hit !== null && !button.contains(hit) && !hit.contains(button) && !underChat(hit, button))
+        if (hit !== null && !button.contains(hit) && !hit.contains(button) && !underChat(hit, button) && !chosen)
         {
             found.push({ kind: 'covered', what: `${ describe(button) } under ${ describe(hit) }` });
         }

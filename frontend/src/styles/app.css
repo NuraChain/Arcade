@@ -896,6 +896,38 @@ html:has(.site-drawer[open])
     outline-offset: 2px;
 }
 
+.table-plate-press
+{
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    border-radius: inherit;
+    cursor: pointer;
+}
+
+.table-plate-press:active
+{
+    background: rgb(255 255 255 / 0.12);
+}
+
+@media (hover: hover)
+{
+    .table-plate-press:hover
+    {
+        background: rgb(255 255 255 / 0.07);
+    }
+}
+
+@media (pointer: coarse)
+{
+    .table-plate-press::before
+    {
+        content: '';
+        position: absolute;
+        inset: min(0px, (100% - 2.75rem) / 2) 0;
+    }
+}
+
 .table-plate-avatar
 {
     position: relative;

@@ -70,6 +70,29 @@ with a listener of their own ask it first: `play-pass`, `hokm-play-pass`, `tour-
 counted: a 500 from `/api/chain/` is a fault of ours. The chain's own pass (`chain-pass.mjs`) runs
 against a chain it starts and does not use it.
 
+**Each play pass presses a plate.** `plate.mjs` (`platesPressed(record, page, who)`) is asked once
+in each game's play pass, in both browsers, as soon as the table is live: every plate but the
+reader's own carries a press named for its person; the press covers its plate and is what a
+pointer at its middle hits; a press on one opens the sheet with the profile first and that person
+in its header; and the table's revision is the same once the sheet has closed, because a plate is
+not a move. Four checks a browser, so each pass counts eight more than it did. The passes' own
+guards against a button that makes a move (`main .table-stage button`) leave `.table-plate-press`
+out by name. The matrix holds the size of the press for a finger, and the fit pass that nothing
+lies over it at every size. One thing may: the raise chooser the reader opened covers plates on
+a phone, and the fit pass lets a press lie under it as it lets a bet, because the chooser is the
+reader's own and goes when they are done. And the press is clear glass over the plate, so where
+the fit pass asks whether a clock or a tag on a plate is DRAWN, by what a pointer at its middle
+would hit, it looks through the press to what lies under it. The first run with the press failed
+twenty-four poker cells for the chooser and thirteen of Ludo's for the clock on somebody else's
+plate, and for nothing else.
+
+**The Ludo play pass also leaves the table by a plate and comes back.** `backFromProfile` reloads
+the table, opens the profile of the person pressed and wants the back arrow to bring the table
+back, two checks. The reload is the point: the router stamps the first page opened after a reload
+with the key of the page that was reloaded, the shell once took the profile for the table it had
+been on, and the arrow went to Friends. A page opened by a link has no stamp to collide with. Only
+a pass that keeps nothing in the page across a reload may ask it, which is why it is Ludo's.
+
 ## The responsive matrix
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both

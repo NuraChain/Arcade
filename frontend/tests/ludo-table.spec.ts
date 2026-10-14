@@ -17,6 +17,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
@@ -145,13 +146,31 @@ describe('the ludo table', () =>
         expect(roll).toHaveBeenCalledTimes(1);
     });
 
+    it('lets the other player\'s plate be pressed, and not the reader\'s own', async () =>
+    {
+        useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Reader', bio: '', hue: 210, isMinor: false });
+
+        try
+        {
+            const container = await show(ludo({}));
+            const plates = [...container.querySelectorAll('.table-plate')].map((plate) => [plate.querySelector('.table-plate-name')?.textContent?.trim(), plate.querySelector('.table-plate-press')?.getAttribute('aria-label') ?? null]);
+
+            expect(plates.filter(([, press]) => press === null), 'the plate nobody is offered is not the reader\'s own, or is not the only one').toEqual([['You', null]]);
+            expect(plates.filter(([, press]) => press !== null).map(([name, press]) => press === `More about ${ name }`)).toEqual([true]);
+        }
+        finally
+        {
+            useSession().reset();
+        }
+    });
+
     it('offers a move nowhere but on the pawn: no list, no button, and no sentence on show', async () =>
     {
         const container = await show(ludo({}, { die: 6, moves: [0] }));
         const bar = container.querySelector('.table-bar') as HTMLElement;
         const drawn = [...bar.children].filter((one) => !one.classList.contains('sr-only'));
 
-        expect(container.querySelectorAll('.table-stage button'), 'a move is offered as a button').toHaveLength(0);
+        expect(container.querySelectorAll('.table-stage button:not(.table-plate-press)'), 'a move is offered as a button').toHaveLength(0);
         expect(container.querySelector('.table-stage ul')).toBeNull();
         expect(bar.querySelector('p[aria-live="polite"]')?.classList.contains('sr-only')).toBe(true);
         expect(drawn.map((one) => one.className), 'something is drawn at the foot of the table').toEqual([]);

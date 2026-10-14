@@ -2332,6 +2332,42 @@ the production build) and was drawn cut. `match-quit.db.spec.ts` holds each of t
 the real routes, the sweep's three missed turns included, and `envelope.spec.ts` that the word
 never travels without the result.
 
+**A plate can be pressed, and it is not a move.** The owner: "when you click on user it should
+have option for example see profiel or etc". At a table the person is their plate, so `TablePlate`
+lays one transparent button over everything on the plate of anybody but the reader
+(`.table-plate-press`, the last child, so nothing drawn on a plate lies over it), and it opens the
+sheet about that person, their profile first. A plate is not the felt: nothing a game is played
+with lies under one, the revision does not change, and the press takes no room from a board (D10,
+D11). `lib/person-menu.ts` (`aboutPerson`) fetches the sheet at the press, so no board carries
+it, opens one sheet however often it is pressed and says so when it cannot be fetched.
+
+- **It is out of the Tab key's way** (`tabindex="-1"`): a table is played from the keyboard by a
+  cursor on the table (D14), and four to nine more stops in front of it would be a tax on every
+  turn. A key reaches the same sheet from the Players list beside the table, where a name is the
+  button and its `::before` covers the row; the mark of the call, the button that silences and the
+  volume are positioned and come after it, so they stay their own.
+- **Whose plate is the reader's is asked of the account, not of the board**, so no board can get
+  it wrong and a watcher can press every plate. The board specs sign nobody in, so every plate in
+  them is pressed: the guards that count the buttons on a table, in the specs and in the four play
+  passes, leave `.table-plate-press` out by name, and one test in each board spec signs the reader
+  in and wants "You" to be the one plate nobody is offered.
+- **Under a finger it reaches 44px.** Ludo's plate at 320 and 768, Hokm's partner, poker's flat
+  plate and every plate on a phone on its side are shorter (28px to 43px), so under a coarse
+  pointer the press has a `::before` that reaches 44px above and below it and no wider. Measured
+  in the four games at thirteen sizes on the built server, that band holds nothing else to press.
+  No dressing of the plate may clip it (`overflow`, `clip-path`, `contain`) or take away the box it
+  is laid against.
+- **It lies over what a seat pins to its plate.** Hokm pins the turn's clock to the edge of a
+  plate, a third of a rem inside it and above it (`z-index: 1`). In Persian that clock is wide
+  enough to reach the middle of the plate across the table, and a finger there was on the clock,
+  which answers nothing: the matrix found it in every Persian phone cell and in no English one.
+  The press is `z-index: 2`, and the plate has no `z-index` of its own, so the press rises above
+  the clock inside the seat.
+
+`table-plate.spec.ts`, `person-menu.spec.ts`, `table-chat.spec.ts` and
+`backend/tests/table-plate-press-art.spec.ts` hold it; `tools/qa/plate.mjs` presses a plate in
+both browsers of each play pass.
+
 **A plate's tag is a word or two, because a plate is narrow.** A tag that does not fit is cut with
 an ellipsis, and the narrowest plate in the product has about 57px for one: a poker plate on a
 phone, four rem wide. A Ludo yard's badge has 79px on a phone held sideways and 91px on a wide
