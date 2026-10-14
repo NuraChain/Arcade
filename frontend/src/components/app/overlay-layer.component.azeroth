@@ -13,6 +13,8 @@ import { OVERLAY_HIDDEN, OVERLAY_PANEL, OVERLAY_RESTING, OVERLAY_SCRIM } from '.
 
 const HALF = 0.46;
 
+const origins = new WeakMap<Element, () => HTMLElement | null>();
+
 export default component OverlayLayer(props: { entry: OverlayEntry })
 {
     const overlay = useOverlay();
@@ -28,7 +30,10 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
     let panel: HTMLElement | null = null;
     let body: HTMLElement | null = null;
     let returnTo: HTMLElement | null = null;
+    let before: () => HTMLElement | null = () => null;
     let points: number[] = [];
+
+    const origin = () => (returnTo !== null && returnTo.isConnected ? returnTo : before());
 
     derived hidden = props.entry.phase === 'opening' || props.entry.phase === 'closing';
 
@@ -78,19 +83,17 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
 
     mount
     {
+        const within = document.activeElement?.closest('[role="dialog"]') ?? null;
+
         returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        before = (within === null ? undefined : origins.get(within)) ?? before;
         requestAnimationFrame(() => overlay.opened(props.entry.id));
         if (panel !== null)
         {
+            origins.set(panel, origin);
             focusQuietly(firstTabbable(body ?? panel) ?? panel);
         }
-        return () =>
-        {
-            if (returnTo !== null && returnTo.isConnected)
-            {
-                focusQuietly(returnTo);
-            }
-        };
+        return () => queueMicrotask(() => focusQuietly(origin()));
     }
 
     <div class="absolute inset-0 pointer-events-auto" data-overlay-layer={ props.entry.id } data-kind={ kind }>

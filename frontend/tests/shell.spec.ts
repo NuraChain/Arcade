@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { RouterProvider, Routes, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
+import { RouterProvider, Routes, createEffect, createMemoryHistory, createRoot, createRouter, createSignal, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
 import { NAV, RAIL, lit } from '../src/components/app/nav-items.ts';
@@ -274,6 +274,129 @@ describe('OverlayHost', () =>
         expect(document.body.querySelector('[data-overlay-layer]')).toBeNull();
         expect(overlay.blocking()).toBe(false);
         unmount();
+    });
+
+    const beneath = (first: 'page' | 'host') =>
+    {
+        const overlay = useOverlay();
+        const under = document.createElement('div');
+        const opener = document.createElement('button');
+        const held: boolean[] = [];
+        const focus = opener.focus.bind(opener);
+        const inert = () => createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                under.toggleAttribute('inert', overlay.blocking());
+            });
+
+            return dispose;
+        });
+        const host = () => renderTest(() => OverlayHost({}) as Rendered).unmount;
+
+        opener.type = 'button';
+        opener.textContent = 'opens it';
+        under.appendChild(opener);
+        document.body.appendChild(under);
+        vi.spyOn(opener, 'focus').mockImplementation((options) =>
+        {
+            held.push(under.hasAttribute('inert'));
+
+            if (!under.hasAttribute('inert'))
+            {
+                focus(options);
+            }
+        });
+
+        const made = first === 'page' ? { stop: inert(), unmount: host() } : { unmount: host(), stop: inert() };
+
+        opener.focus();
+        held.length = 0;
+
+        return {
+            opener,
+            held,
+            leave: () =>
+            {
+                made.unmount();
+                made.stop();
+                under.remove();
+            }
+        };
+    };
+
+    const gone = async () =>
+    {
+        clock.advance(OVERLAY_SETTLE);
+        await settle();
+    };
+
+    it.each(['page', 'host'] as const)('gives the keyboard back to what opened it, at a moment the page under it can take it, whichever of the two hears first that it closed (the %s)', async (first) =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath(first);
+        const handle = overlay.open(Probe, {}, { label: 'Probe' });
+
+        await settle();
+
+        expect(document.activeElement?.textContent).toBe('ok');
+
+        handle.close();
+        await gone();
+
+        expect(held, 'it was handed back while the page was still inert, or more than once').toEqual([false]);
+        expect(document.activeElement).toBe(opener);
+        leave();
+    });
+
+    it('gives it back to what opened the first of two, when the second was opened from the first as the first closed', async () =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath('host');
+        const first = overlay.open(Probe, {}, { label: 'First' });
+
+        await settle();
+        first.close();
+
+        const second = overlay.open(Probe, {}, { label: 'Second' });
+
+        await settle();
+        await gone();
+
+        expect(overlay.items().map((entry) => entry.label)).toEqual(['Second']);
+        expect(document.activeElement).not.toBe(opener);
+
+        second.close();
+        await gone();
+
+        expect(held[held.length - 1], 'it was handed back while the page was still inert').toBe(false);
+        expect(document.activeElement).toBe(opener);
+        leave();
+    });
+
+    it('gives it back to the first of two, and not to the page, when the second closes over the first', async () =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath('host');
+
+        overlay.open(Probe, {}, { label: 'First' });
+        await settle();
+
+        const inside = document.activeElement;
+        const second = overlay.open(Probe, {}, { label: 'Second' });
+
+        await settle();
+
+        expect(document.activeElement).not.toBe(inside);
+
+        second.close();
+        await gone();
+
+        expect(overlay.items().map((entry) => entry.label)).toEqual(['First']);
+        expect(document.activeElement).toBe(inside);
+        expect(held, 'the page under both was asked to take it').toEqual([]);
+        expect(opener.isConnected).toBe(true);
+        leave();
     });
 
     it('keeps a non-dismissible layer open through Escape and the scrim', async () =>

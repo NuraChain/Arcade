@@ -1184,6 +1184,20 @@ and after any change to a page's outer branches.
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can
 perform is not a defence. It carries a tooltip with the whole value and a copy button now.
 
+**An overlay hands the keyboard back when the page under it can take it, and to something that is
+still there.** A layer used to refocus whatever had the keyboard when it opened, in its own
+cleanup. The shell is `inert` while anything is open, a browser ignores `focus()` on something
+inert, and whether the shell had stopped being inert by then was the order in which two effects
+heard about one write. It differed by page: on Friends the More button got the keyboard back, and
+at a table nothing did, so closing any sheet there left a keyboard at the top of the page.
+`overlay-layer` hands it back in a microtask, once everything that listens to the write has heard
+it (measured at a table on the built server: inert at the cleanup, not inert one microtask later).
+A sheet opened from another as that one closes - Report and Block, from the sheet about a person -
+remembered a button that was gone by the time it closed. Each layer leaves `origin` for its dialog
+in a `WeakMap`, and a layer opened from inside a dialog falls back to it when its own opener has
+left the page; a second sheet over a first that stays still goes back to the first.
+`shell.spec.ts` holds all three, with the page told first and with the host told first.
+
 **A tooltip belongs to a KEYBOARD focus, not to every focus.** `onFocusIn` fires for a programmatic
 `.focus()` too, and every sheet moves focus to its close button as it opens - so each one opened with
 the word "Close" floating over its own first paragraph, which on the table sheet covered the sentence
