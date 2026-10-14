@@ -51,6 +51,13 @@ connection and the pages.
 To update: `git pull`, `npm ci`, `npm run build`, `npm run schema:sync`, then
 `sudo scripts/service-restart.sh`.
 
+Back up the database, because it is the only thing here that cannot be built again: every
+account, friendship, table, game, sealed message and uploaded picture lives in it. The build, the
+games, their rules and the achievements come back from the repository. `pg_dump` it on a schedule
+and keep the copies somewhere else; to restore, create an empty database, load the dump with
+`psql`, and start the service. Keep the `.env` beside the dumps as well: under a new
+`SESSION_SECRET` no message sent before the change can be reported any more.
+
 A production database holds nothing made up. The server writes the games, their rules and the
 achievements on every start; every person, table, message and score is made by the people using
 it. The test accounts the project uses are written only in development.
