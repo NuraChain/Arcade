@@ -68,6 +68,36 @@ describe('a table in a list', () =>
         expect(persian).not.toBe('2 v 2');
     });
 
+    it('gives up what matters least first where a row is narrow: the code before the mark of two against two, and both before the game\'s name', () =>
+    {
+        const lines = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('a > span:nth-child(2) > span')];
+        const said = (line: HTMLElement) => [...line.children].map((one) => (one as HTMLElement).dataset.format ?? one.textContent);
+        const [name] = lines(row(table()));
+
+        expect(said(name), 'what wraps off a line is what stands last on it').toEqual(['Hokm', 'teams', 'row001']);
+        expect(['flex-wrap', 'h-[1lh]', 'overflow-hidden', 'content-start'].map((one) => name.classList.contains(one)), 'a part that does not fit would be drawn on a second line').toEqual([true, true, true, true]);
+        expect([...name.children].map((one) => one.classList.contains('truncate') || one.classList.contains('shrink-0')), 'a part could be squeezed where it should have left whole').toEqual([true, true, true]);
+
+        cleanup();
+
+        expect(said(lines(row(table({ teams: false })))[0])).toEqual(['Hokm', 'row001']);
+    });
+
+    it('keeps who is seated and the mark of a voice table on a narrow row, and lets the table\'s age go', () =>
+    {
+        const [, seats] = [...row(table({ voice: 'table' })).querySelectorAll<HTMLElement>('a > span:nth-child(2) > span')];
+        const [seated, voice, age] = [...seats.children] as HTMLElement[];
+
+        expect(seats.children).toHaveLength(3);
+        expect(['flex-wrap', 'h-[1lh]', 'overflow-hidden', 'content-start'].map((one) => seats.classList.contains(one))).toEqual([true, true, true, true]);
+        expect([seated.textContent, seated.classList.contains('shrink-0')]).toEqual(['2/4 seated', true]);
+        expect([voice.getAttribute('aria-label'), voice.classList.contains('shrink-0')]).toEqual(['Voice on', true]);
+        expect(age.textContent).toBe(useLocale().relative(0));
+        expect(['min-w-16', 'flex-1'].map((one) => age.classList.contains(one)), 'the age would stay as a stub of a letter or two, or would not take the room there is').toEqual([true, true]);
+        expect(age.querySelector('[aria-hidden="true"]'), 'the dot before the age stays behind when the age goes').not.toBeNull();
+        expect(age.querySelector('.truncate')?.textContent).toBe(useLocale().relative(0));
+    });
+
     it('keeps the mark it drew when the table is read again', () =>
     {
         const Stub = (): HTMLElement => document.createElement('div');

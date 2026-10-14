@@ -187,6 +187,23 @@ played with whom until the score moved.
   for the other and for somebody not sitting. One under the other on a phone, side by side from a
   36rem container. The groups are a keyed list of keyed lists, so a chair that fills is the same
   card with somebody in it, and `lobby-panel.spec.ts` reads the table again to hold that.
+- **A row gives up its least part first, and names no width to do it.** A row holds the game's
+  name, the table's code, the "2 v 2" mark, who is seated, the table's age and its state, and
+  only the name and the age could shrink. On a 320px phone a team table's row ran off the page
+  (the row is 262px inside; the icon, the state and the arrow leave about 90px for a line whose
+  code and mark alone take 96), a backgammon table read "Back…" beside a code that was whole, and
+  every age read "2…". Each of the row's two lines is now `flex-wrap` inside `h-[1lh]` and
+  `overflow-hidden`: a part that does not fit goes WHOLE to a second line that is never drawn.
+  What leaves first is what stands last, so the order in the markup is the order of worth: name,
+  mark, code on the first line; seated, the voice mark, the age on the second. The age is the one
+  part that still shortens (`min-w-16 flex-1` round its dot and its `truncate`): with 4rem it reads
+  "27 minu…", with less it would be a stub and goes. A first breakpoint-shaped fix (`@container`
+  on the link, the code `hidden` under `@xs`) was thrown away before it was committed: it hid a
+  code that fitted at 360 and did nothing for the name or the age. `1lh` is no older than what
+  Tailwind 4 already asks of a browser, and one that lacks it draws the second line, which is the
+  row as it was. The code is still in the page for a screen reader. Nothing had seen the overflow:
+  the matrix had no team table. It keeps one waiting now (`teamTable` in `tools/qa/matrix.mjs`),
+  and the fault was found because another pass died and left one behind.
 - **A row in a list and the play header say "2 v 2"** where they said a head count.
 - **A plate wears its side.** `TablePlate` takes `team`: a pip on the avatar in the side's colour
   and, for a screen reader, "Partner", "Opponent", or "Team 2" for somebody watching. The reader's

@@ -35,17 +35,15 @@ export default component TableRow(props: { table: TableSummary })
             <GameIcon game={ game.id } class="h-9 w-9" />
         </span>
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="flex min-w-0 items-baseline gap-1.5 text-ui-sm">
+            <span class="flex h-[1lh] min-w-0 flex-wrap content-start items-baseline gap-x-1.5 overflow-hidden text-ui-sm">
                 <span class="truncate font-semibold text-text">{ locale.t(game.nameKey) }</span>
-                <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
                 <Show when={ paired }>
                     <span class="shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-format="teams">{ locale.t('create.format.teams') }</span>
                 </Show>
+                <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
             </span>
-            <span class="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted">
+            <span class="flex h-[1lh] min-w-0 flex-wrap content-start items-center gap-x-1.5 overflow-hidden text-ui-xs text-muted">
                 <span class="shrink-0"><span class="tally">{ `${ locale.n(props.table.taken) }/${ locale.n(props.table.seats) }` }</span> { locale.t('home.table.seated') }</span>
-                <span class="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" aria-hidden="true"></span>
-                <span class="truncate">{ locale.relative(Date.parse(props.table.createdAt)) }</span>
                 <Show when={ props.table.voice !== 'off' }>
                     { () =>
                         <span class="flex shrink-0 items-center text-accent" role="img" aria-label={ locale.t('voice.tableHas') }>
@@ -53,6 +51,10 @@ export default component TableRow(props: { table: TableSummary })
                         </span>
                     }
                 </Show>
+                <span class="flex min-w-16 flex-1 items-center gap-1.5">
+                    <span class="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" aria-hidden="true"></span>
+                    <span class="truncate">{ locale.relative(Date.parse(props.table.createdAt)) }</span>
+                </span>
             </span>
         </span>
         <Badge dot text={ locale.t(state.key) } tone={ state.tone } />

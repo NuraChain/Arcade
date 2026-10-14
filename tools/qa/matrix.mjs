@@ -316,6 +316,31 @@ async function audit(page)
     });
 }
 
+/**
+ * A table of two against two that is still waiting for its players.
+ *
+ * Its row on the home page is the widest a row gets: the game, the code, the "2 v 2" mark and the
+ * state. The matrix had no such table, so its home cells were green over a row that ran off a 320px
+ * phone, and it was found only because another pass died and left a team table behind. Reused when
+ * a run before left one, as the playable tables are.
+ */
+async function teamTable(browser, storageState)
+{
+    const mine = await browser.newContext({ storageState });
+    const seated = await mine.request.get(`${ BASE }/api/tables/mine`);
+    const already = seated.ok() ? (await seated.json()).tables.find((one) => one.teams === true && one.matchId === undefined) : undefined;
+    const made = already === undefined
+        ? await mine.request.post(`${ BASE }/api/tables/`, { data: tableBody({ game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', teams: true }) })
+        : null;
+
+    await mine.close();
+
+    if (made !== null && !made.ok())
+    {
+        throw new Error(`qa: could not open a team table (${ made.status() })`);
+    }
+}
+
 async function main()
 {
     mkdirSync(OUT, { recursive: true });
@@ -343,6 +368,8 @@ async function main()
         poker: await playableTable(browser, storageState, 'poker'),
         hokm: await playableTable(browser, storageState, 'hokm')
     };
+
+    await teamTable(browser, storageState);
 
     const partner = await browser.newContext({ storageState: await signedIn(browser, PARTNER_HANDLE) });
 
