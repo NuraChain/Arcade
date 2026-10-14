@@ -31,7 +31,7 @@ describe('a name written in the other script', () =>
 
     it('reaches the two lists the fault was seen in', () =>
     {
-        expect(read('components/games/leaderboard.component.azeroth')).toContain('<span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row) }</span>');
+        expect(read('components/games/leaderboard.component.azeroth')).toContain('<span class="truncate text-ui-sm font-semibold text-text transition-colors group-hover:text-accent" dir="auto">{ nameOf(row) }</span>');
         expect(read('components/games/match-result.component.azeroth')).toContain('<span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">');
         expect(read('components/games/table-plate.component.azeroth')).toContain('<span class="table-plate-name" dir="auto">');
     });

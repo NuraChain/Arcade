@@ -23,7 +23,8 @@ import type {
     MuteSubject,
     NftItem,
     PersonSummary,
-    Privacy
+    Privacy,
+    Standing
 } from '../../backend/src/schemas.ts';
 import {
     FRIENDSHIP_FIXTURES,
@@ -316,7 +317,7 @@ export const server =
     ladders: {} as Record<string, unknown>,
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
-    standings: [] as { handle: string; rating: number; played: number; won: number }[],
+    standings: [] as Standing[],
     history: [] as MatchHistoryEntry[],
 
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
@@ -510,6 +511,7 @@ export const server =
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
+        server.standings = [];
         server.history = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,

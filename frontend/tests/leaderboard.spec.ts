@@ -11,6 +11,7 @@ import { routes } from '../src/routes.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -90,6 +91,32 @@ describe('the leaderboard page', () =>
 
         expect(ludo.getAttribute('aria-pressed')).toBe('true');
         expect(server.calls.filter((call) => call === 'catalogue.leaderboard').length).toBeGreaterThan(before);
+    });
+
+    it('opens what can be done about somebody on the board at a press on their row', async () =>
+    {
+        server.standings = [
+            { handle: 'sara.k', person: { handle: 'sara.k', displayName: 'Sara Kamali', hue: 340 }, rating: 1620, played: 40, won: 24, rank: 1, xp: 5200 },
+            { handle: 'mina', person: { handle: 'mina', displayName: 'Mina Sadeghi', hue: 280 }, rating: 1480, played: 31, won: 15, rank: 2, xp: 3900 }
+        ];
+        useOverlay().reset();
+
+        const container = await show();
+        const rows = () => [...container.querySelectorAll<HTMLButtonElement>('ol > li > button')];
+
+        await vi.waitFor(() => expect(rows()).toHaveLength(2), { timeout: 4000 });
+
+        const mina = rows().find((one) => one.textContent?.includes('Mina Sadeghi'))!;
+
+        expect(rows().every((one) => one.getAttribute('aria-haspopup') === 'dialog'), 'a row does not say it opens something').toBe(true);
+        expect(rows().every((one) => one.type === 'button' && !one.hasAttribute('role')), 'a row is not a button to a screen reader').toBe(true);
+
+        fire(mina, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({ personId: 'mina' });
+        useOverlay().reset();
     });
 
     it('says a board nobody is on yet is empty, not that it failed to load', async () =>

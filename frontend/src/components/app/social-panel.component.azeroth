@@ -1,9 +1,10 @@
-import { Link, useNavigate } from 'azerothjs';
+import { useNavigate } from 'azerothjs';
 
 import type { Notification } from '../../api.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { sayOf, targetOf } from '../../lib/notifications.ts';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -86,14 +87,14 @@ export default component SocialPanel()
                     <ul class="flex flex-col">
                         <For each={ friends } key={ (person) => person.id } let={ person }>
                             <li class="border-b border-line last:border-b-0">
-                                <Link to={ `/app/people/${ person.handle }` } class="group flex min-h-14 items-center gap-3 py-2.5">
+                                <button type="button" class="group flex min-h-14 w-full cursor-pointer items-center gap-3 py-2.5 text-start" aria-haspopup="dialog" onClick={ () => aboutPerson(person.id) }>
                                     <Avatar person={ person } size="md" presence={ presence.dot(person.id) } ringOn="void" />
                                     <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ person.displayName }</span>
+                                        <span class="truncate text-ui-sm font-semibold text-text transition-colors group-hover:text-accent" dir="auto">{ person.displayName }</span>
                                         <span class="truncate text-ui-xs text-muted">{ presence.dot(person.id) === 'away' ? locale.t('common.away') : locale.t('common.online') }</span>
                                     </span>
-                                    <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint transition-colors group-hover:text-muted" />
-                                </Link>
+                                    <Icon name="more" size={ 16 } class="shrink-0 text-faint transition-colors group-hover:text-muted" />
+                                </button>
                             </li>
                         </For>
                     </ul>

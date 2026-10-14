@@ -1060,6 +1060,15 @@ among a group's members, or any list that holds the reader - is offered their pr
 handle and nothing more: it used to offer them a message to themselves, and to mute, report and
 block themselves. `person-actions.spec.ts` holds the order, each relation and both languages.
 
+**Somebody drawn in a list is pressed for that sheet.** The owner asked for it: pressing a person
+should offer what can be done with them, their profile first. A leaderboard row - on the page and
+on a game's - did nothing at a press. A friend online on Home and in the side panel, a person
+Discover suggests and the picture beside a message in a group each went straight to that person's
+page. Each is one button now, `aria-haspopup="dialog"`, that opens the sheet through `aboutPerson`
+(`lib/person-menu.ts`, which loads the sheet at the press), as a plate and a chair at a table do;
+the chevron that said a row went somewhere is a quiet "more" mark. `person-press.spec.ts` and
+`leaderboard.spec.ts` hold them.
+
 **Everything the reader does about another person is shown the same way**: a friend request
 sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
 store lays its guesses over ONE shape made from the graph (`Known`: who is a friend, who is

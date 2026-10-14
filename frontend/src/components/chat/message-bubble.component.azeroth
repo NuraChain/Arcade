@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'azerothjs';
+import { useNavigate } from 'azerothjs';
 
 import type { Message, MessageLock } from '../../data/chat.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -7,6 +7,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { attachSwipeReply } from '../../lib/swipe-reply.ts';
 import { QUICK_REACTIONS } from '../../data/emoji.ts';
 import { isEmoji } from '../../lib/body.ts';
@@ -275,9 +276,16 @@ export default component MessageBubble(props: {
                         <span class="flex w-8 shrink-0 self-end">
                             <Show when={ last }>
                                 { () =>
-                                    <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } data-inline class="shrink-0" aria-label={ person === null ? props.message.from : locale.text(person.displayName) }>
+                                    <button
+                                        type="button"
+                                        data-inline
+                                        class="shrink-0 cursor-pointer rounded-full"
+                                        aria-haspopup="dialog"
+                                        aria-label={ locale.t('actions.about', { name: person === null ? props.message.from : locale.text(person.displayName) }) }
+                                        onClick={ () => aboutPerson(props.message.from) }
+                                    >
                                         <Avatar person={ person } size="sm" />
-                                    </Link>
+                                    </button>
                                 }
                             </Show>
                         </span>
