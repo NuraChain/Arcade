@@ -29,7 +29,6 @@ export const app = {
     'shell.activity.empty': 'Friend requests, invitations and messages land here.',
     'shell.friends.empty': 'None of your friends are online right now.',
 
-
     'common.cancel': 'Cancel',
     'common.more': 'More',
     'common.retry': 'Try again',
