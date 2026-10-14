@@ -504,14 +504,16 @@ export const useRealtime = createStore((): RealtimeApi =>
                 cancelProbe();
                 close = null;
                 setPresence(null);
-                announce('down');
 
                 if (TERMINAL.has(code))
                 {
                     wanted = false;
                     setStalled(true);
+                    announce('down');
                     return;
                 }
+
+                announce('down');
 
                 // A socket that stood up for a while and then dropped starts its backoff from the
                 // beginning: the last failure says nothing about this one.

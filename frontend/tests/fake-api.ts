@@ -2264,4 +2264,24 @@ export const client =
     }
 };
 
+const refusals = new Set<() => void>();
+
+export function onUnauthorized(listener: () => void)
+{
+    refusals.add(listener);
+
+    return () =>
+    {
+        refusals.delete(listener);
+    };
+}
+
+export function answeredUnauthorized()
+{
+    for (const listener of [...refusals])
+    {
+        listener();
+    }
+}
+
 export { ApiError, applyFieldErrors };

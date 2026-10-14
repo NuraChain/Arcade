@@ -95,10 +95,36 @@ async function loadManifest(): Promise<Manifest>
 
 export const REQUEST_MS = 15_000;
 
-const timed = (request: Request) =>
-    fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(REQUEST_MS)]) });
+const refusals = new Set<() => void>();
+
+export function onUnauthorized(listener: () => void)
+{
+    refusals.add(listener);
+
+    return () =>
+    {
+        refusals.delete(listener);
+    };
+}
+
+const heard = async (request: Request) =>
+{
+    const response = await (typeof AbortSignal.any === 'function'
+        ? fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(REQUEST_MS)]) })
+        : fetch(request));
+
+    if (response.status === 401)
+    {
+        for (const listener of [...refusals])
+        {
+            listener();
+        }
+    }
+
+    return response;
+};
 
 export const client = createClient<Api>(await loadManifest(), {
     baseUrl: '/api',
-    ...(typeof window !== 'undefined' && typeof AbortSignal.any === 'function' ? { fetch: timed } : {})
+    ...(typeof window !== 'undefined' ? { fetch: heard } : {})
 });

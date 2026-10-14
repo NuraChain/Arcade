@@ -6,6 +6,7 @@ import {
     detect,
     discoverWallets,
     failureOf,
+    permitted,
     personalSign,
     rdnsOf,
     readAccounts,
@@ -58,6 +59,13 @@ export interface WalletApi
     reach(): Promise<string | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
+
+    /**
+     * The account this wallet offered here has gone: it now offers another, or this site was
+     * disconnected from it. A wallet that is only locked is still connected and says nothing, and
+     * nor does one that cannot say which of the two it is.
+     */
+    onLeft(listener: (address: string) => void): () => void;
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -86,16 +94,47 @@ export const useWallet = createStore((): WalletApi =>
         return injected;
     };
 
+    const leaving = new Set<(address: string) => void>();
+
+    const left = (gone: string) =>
+    {
+        for (const listener of [...leaving])
+        {
+            listener(gone);
+        }
+    };
+
     const onAccounts = (...args: unknown[]) =>
     {
         const accounts = Array.isArray(args[0]) ? (args[0] as string[]) : [];
+        const was = untrack(address);
+        const wallet = injected;
+
         if (accounts.length === 0)
         {
             setAddress(null);
             setStatus('idle');
+
+            if (was !== null && wallet !== null)
+            {
+                void permitted(wallet).then((still) =>
+                {
+                    if (still === false)
+                    {
+                        left(was);
+                    }
+                });
+            }
+
             return;
         }
+
         setAddress(accounts[0]);
+
+        if (was !== null && was.toLowerCase() !== accounts[0].toLowerCase())
+        {
+            left(was);
+        }
     };
 
     const onChain = (...args: unknown[]) =>
@@ -385,6 +424,16 @@ export const useWallet = createStore((): WalletApi =>
             setChainId('');
             setStatus('idle');
             setFailure(null);
+        },
+
+        onLeft(listener)
+        {
+            leaving.add(listener);
+
+            return () =>
+            {
+                leaving.delete(listener);
+            };
         },
 
         /**

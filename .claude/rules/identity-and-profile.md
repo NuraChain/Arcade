@@ -313,6 +313,30 @@ a second later and is not worth a sentence, so the page holds as it always did f
 It needs no button: the page is already asking, and it opens by itself.
 `session.refresh()` went with this; nothing had ever called it.
 
+**A session that ends while a page is open sends the person to sign in.** The guards run only when
+a page is opened, so a session signed out in another tab, ended everywhere from another device or
+run out left the open page where it was: every request answered 401, and Friends said "No friends
+yet". Three things now ask the server whether anybody is still signed in here (`confirm` in the
+session store): a 401 on any request (`onUnauthorized` in `api.ts`, from the one fetch every call
+goes through), the socket closed as terminal (4401 is "Session ended"; the realtime store now says
+it has stalled BEFORE it announces the drop, so a listener reads both), and a `me` nudge whose
+read comes back empty. Only the server's answer ends it, never a 401 alone, because a 401 is also
+a signature that did not match. Ended, the store forgets the account and the keys, and the shell
+(`watchSignedOut` in `components/app/sign-out.ts`) LOADS `/sign-in?next=` the page it was on, so
+signing in comes back to it.
+
+**So does the wallet leaving.** The wallet store tells the shell when the account its wallet
+offered here has gone (`onLeft`): the wallet switched to another account, or the site was
+disconnected from it (`accountsChanged` with nothing, and `wallet_getPermissions` naming no
+account permission). If that account is the session's, the shell signs out, on the server too,
+and loads sign-in the same way. A wallet that only LOCKS also says it has no accounts but keeps
+the site's permission, and keeps the session: a lock is not leaving, and MetaMask locks on its
+own. A wallet that cannot say which of the two it is (no `wallet_getPermissions`) keeps it too,
+and so does a change in a wallet whose account was never the session's, so a second extension
+cannot sign anybody out. Seen on the production build with an injected wallet: a lock keeps the
+page, a switch and a disconnect each end the session on the server and land on sign-in with the
+page to come back to, and a sign-out in another tab moves the open page within seconds.
+
 **The landing page's way in is a wallet chooser, and it is a dynamic import.**
 `stores/connect.store.ts` is one boolean shared by the site header and the two landing CTAs;
 `components/layout/connect-dialog.component.azeroth` is fetched the first time somebody asks for

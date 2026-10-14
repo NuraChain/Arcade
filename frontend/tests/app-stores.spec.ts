@@ -12,13 +12,13 @@ import { LIFELINE_MS, RESTORED_MS, UNREACHED_MS, useConnection } from '../src/st
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
-import { useRealtime } from '../src/stores/realtime.store.ts';
+import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { ASK_AGAIN_MAX_MS, ASK_AGAIN_MS, useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
-import { ApiError, client, server } from './fake-api.ts';
+import { answeredUnauthorized, ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -193,6 +193,92 @@ describe('session', () =>
         await session.signOut();
 
         expect(useSettings().settings().voiceLevels, 'the next person at this browser would read who the last one turned down').toEqual({});
+    });
+
+    describe('that ends somewhere else while this tab still shows it', () =>
+    {
+        let stops: (() => void)[] = [];
+        let ended = vi.fn<() => void>();
+
+        beforeEach(() =>
+        {
+            ended = vi.fn<() => void>();
+            stops = [useRealtime().start(), useSession().start(), useSession().onEnded(ended)];
+            socket.accept();
+            useSession().establish(DARYA);
+            server.account = DARYA;
+        });
+
+        afterEach(() =>
+        {
+            for (const stop of stops.reverse())
+            {
+                stop();
+            }
+        });
+
+        it('is ended here once the server says nobody is signed in, after a request was refused', async () =>
+        {
+            server.account = null;
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+            expect(useAccount().user()).toBeNull();
+        });
+
+        it('is kept when the server still knows the person, because a refusal is also a signature that did not match', async () =>
+        {
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).not.toHaveBeenCalled();
+            expect(useSession().signedIn()).toBe(true);
+        });
+
+        it('asks once however many requests are refused together', async () =>
+        {
+            server.account = null;
+            server.calls.length = 0;
+            answeredUnauthorized();
+            answeredUnauthorized();
+            answeredUnauthorized();
+            await flush();
+
+            expect(server.calls.filter((call) => call === 'auth.me')).toHaveLength(1);
+            expect(ended).toHaveBeenCalledTimes(1);
+        });
+
+        it('is ended when the socket is closed because the session is over', async () =>
+        {
+            server.account = null;
+            socket.drop(4401);
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+        });
+
+        it('is ended when the account is read again on a nudge and is gone', async () =>
+        {
+            server.account = null;
+            socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'me', at: 0 });
+            clock.advance(NUDGE_WINDOW_MS);
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+        });
+
+        it('is ended when somebody else has signed in at this browser since', async () =>
+        {
+            server.account = { ...DARYA, id: 'u-mina', handle: 'mina', displayName: 'Mina' };
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('ends every session at once and reports how many it closed', async () =>

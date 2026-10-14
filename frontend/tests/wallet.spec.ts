@@ -30,6 +30,7 @@ let clock: ManualClock;
 
 interface FakeOptions
 {
+    permissions?: unknown[] | 'refused';
     accounts?: string[];
     chainId?: string;
     rejectAccounts?: boolean;
@@ -73,6 +74,15 @@ function fakeProvider(options: FakeOptions = {}): Eip1193Provider & { calls: str
                 signed.push(String((params as unknown[] | undefined)?.[0] ?? ''));
                 return '0xsignature';
             }
+            if (method === 'wallet_getPermissions')
+            {
+                if (options.permissions === 'refused')
+                {
+                    throw { code: -32601, message: 'The method does not exist.' };
+                }
+
+                return options.permissions ?? null;
+            }
             if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain')
             {
                 return null;
@@ -107,6 +117,112 @@ afterEach(() =>
     useSession().reset();
     forgetWallets();
     delete (window as unknown as { ethereum?: unknown }).ethereum;
+});
+
+describe('a wallet whose account goes while the page is open', () =>
+{
+    const OTHER = '0x2B5AD5c4795c026514f8317c7a215E218DcCD6cF';
+
+    const live = async (options: FakeOptions = {}) =>
+    {
+        const provider = fakeProvider(options);
+        const heard: ((...args: unknown[]) => void)[] = [];
+        const gone: string[] = [];
+
+        provider.on = (event: string, listener: (...args: unknown[]) => void) =>
+        {
+            if (event === 'accountsChanged')
+            {
+                heard.push(listener);
+            }
+        };
+        (window as unknown as { ethereum?: unknown }).ethereum = provider;
+        useWallet().reset();
+
+        const stop = useWallet().start();
+        const off = useWallet().onLeft((address) => gone.push(address));
+
+        await flush();
+
+        return {
+            gone,
+            say: async (accounts: string[]) =>
+            {
+                for (const listener of heard)
+                {
+                    listener(accounts);
+                }
+
+                await flush();
+            },
+            stop: () =>
+            {
+                off();
+                stop();
+            }
+        };
+    };
+
+    const flush = async () =>
+    {
+        for (let step = 0; step < 8; step += 1)
+        {
+            await Promise.resolve();
+        }
+    };
+
+    it('says which account left when the wallet offers another one instead', async () =>
+    {
+        const wallet = await live();
+
+        await wallet.say([OTHER]);
+
+        expect(wallet.gone).toEqual([ADDRESS]);
+        expect(useWallet().address()).toBe(OTHER);
+        wallet.stop();
+    });
+
+    it('says which account left when this site was disconnected from the wallet', async () =>
+    {
+        const wallet = await live({ permissions: [] });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([ADDRESS]);
+        wallet.stop();
+    });
+
+    it('says nothing when the wallet is only locked, because the site is still connected to it', async () =>
+    {
+        const wallet = await live({ permissions: [{ parentCapability: 'eth_accounts' }] });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([]);
+        expect(useWallet().address()).toBeNull();
+        wallet.stop();
+    });
+
+    it('says nothing when the wallet cannot say whether it is locked or disconnected', async () =>
+    {
+        const wallet = await live({ permissions: 'refused' });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([]);
+        wallet.stop();
+    });
+
+    it('says nothing about an account it had not offered, or one offered again in another case', async () =>
+    {
+        const wallet = await live({ accounts: [] });
+
+        await wallet.say([OTHER]);
+        await wallet.say([OTHER.toLowerCase()]);
+
+        expect(wallet.gone).toEqual([]);
+        wallet.stop();
+    });
 });
 
 describe('addresses', () =>

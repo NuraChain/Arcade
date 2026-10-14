@@ -1,7 +1,7 @@
 import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { rememberBeenHere } from '../lib/been-here.ts';
-import { ApiError, client, type Account } from '../api.ts';
+import { ApiError, client, onUnauthorized, type Account } from '../api.ts';
 import { keyStore } from '../lib/device-keys.ts';
 import { forgetEpochKeys } from '../lib/epoch-keys.ts';
 import { setHeldUp } from '../lib/held-up.ts';
@@ -28,6 +28,13 @@ export interface SessionApi
 
     signOut(): Promise<void>;
     signOutEverywhere(): Promise<number>;
+
+    /**
+     * The session ended while this tab still showed it: signed out in another tab, everywhere from
+     * another device, or run out. Told once the server has said nobody is signed in here, never on
+     * a refusal alone, because a 401 is also a signature that did not match.
+     */
+    onEnded(listener: () => void): () => void;
 
     start(): () => void;
     reset(): void;
@@ -123,6 +130,46 @@ export const useSession = createStore((): SessionApi =>
         settled = Promise.resolve();
     };
 
+    const endings = new Set<() => void>();
+    let asking = false;
+
+    const end = () =>
+    {
+        forget();
+        void surrenderKeys();
+
+        for (const listener of [...endings])
+        {
+            listener();
+        }
+    };
+
+    const confirm = () =>
+    {
+        const held = untrack(account);
+
+        if (held === null || asking)
+        {
+            return;
+        }
+
+        asking = true;
+
+        void client.auth.me()
+            .then((state) =>
+            {
+                if (untrack(account)?.id === held.id && state.account?.id !== held.id)
+                {
+                    end();
+                }
+            })
+            .catch(() => undefined)
+            .finally(() =>
+            {
+                asking = false;
+            });
+    };
+
     return {
         account,
         signedIn: () => account() !== null,
@@ -150,33 +197,68 @@ export const useSession = createStore((): SessionApi =>
             return result.ended;
         },
 
+        onEnded(listener)
+        {
+            endings.add(listener);
+
+            return () =>
+            {
+                endings.delete(listener);
+            };
+        },
+
         start()
         {
-            return useRealtime().onNudge((scope, id) =>
-            {
-                if (scope === 'me' && (id === undefined || id === 'profile'))
+            const live = useRealtime();
+            const stops = [
+                onUnauthorized(confirm),
+                live.onStatus((status) =>
                 {
-                    const asked = untrack(account)?.id;
+                    if (status === 'down' && untrack(live.stalled))
+                    {
+                        confirm();
+                    }
+                }),
+                live.onNudge((scope, id) =>
+                {
+                    if (scope === 'me' && (id === undefined || id === 'profile'))
+                    {
+                        const asked = untrack(account)?.id;
 
-                    void client.auth.me()
-                        .then((state) =>
-                        {
-                            const current = untrack(account);
-                            const next = state.account;
-
-                            if (next == null || current === null || current.id !== asked || next.id !== asked)
+                        void client.auth.me()
+                            .then((state) =>
                             {
-                                return;
-                            }
+                                const current = untrack(account);
+                                const next = state.account;
 
-                            if (JSON.stringify(next) !== JSON.stringify(current))
-                            {
-                                setAccount(next);
-                            }
-                        })
-                        .catch(() => undefined);
+                                if (current === null || current.id !== asked)
+                                {
+                                    return;
+                                }
+
+                                if (next == null || next.id !== asked)
+                                {
+                                    end();
+                                    return;
+                                }
+
+                                if (JSON.stringify(next) !== JSON.stringify(current))
+                                {
+                                    setAccount(next);
+                                }
+                            })
+                            .catch(() => undefined);
+                    }
+                })
+            ];
+
+            return () =>
+            {
+                for (const stop of stops)
+                {
+                    stop();
                 }
-            });
+            };
         },
 
         reset()
@@ -184,6 +266,8 @@ export const useSession = createStore((): SessionApi =>
             setAccount(null);
             setHeldUp(false);
             settled = null;
+            endings.clear();
+            asking = false;
         }
     };
 });

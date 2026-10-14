@@ -103,6 +103,30 @@ const UNAUTHORIZED = 4100;
 const UNRECOGNISED_CHAIN = 4902;
 const ALREADY_PENDING = -32002;
 
+export async function permitted(provider: Eip1193Provider)
+{
+    try
+    {
+        const granted = await provider.request({ method: 'wallet_getPermissions' });
+
+        if (!Array.isArray(granted))
+        {
+            return null;
+        }
+
+        return granted.some((one: { parentCapability?: unknown } | null) =>
+        {
+            const capability = String(one?.parentCapability ?? '');
+
+            return capability === 'eth_accounts' || capability.startsWith('endowment:caip25');
+        });
+    }
+    catch
+    {
+        return null;
+    }
+}
+
 export function detect(): Eip1193Provider | null
 {
     if (typeof window === 'undefined')
