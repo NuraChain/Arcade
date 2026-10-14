@@ -22,7 +22,8 @@ export const play = {
     'games.live.tablesLabel': { one: 'table open', other: 'tables open' },
     'home.friends.title': 'Friends online',
 
-    'games.lead': 'Pick a game and sit down. The ones still being built say so on the card.',
+    'games.lead': 'Pick a game and sit down.',
+    'games.leadSoon': 'The ones still being built say so on the card.',
     'games.filter.all': 'All',
     'games.soon': 'Coming soon',
     'games.soonLead': 'The rules, the table and the lobby are here. The game itself is still being built — it will open for play the day it is finished.',

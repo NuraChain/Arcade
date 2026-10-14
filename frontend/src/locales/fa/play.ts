@@ -25,7 +25,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'games.live.tablesLabel': { one: 'میز باز', other: 'میز باز' },
     'home.friends.title': 'دوستان آنلاین',
 
-    'games.lead': 'یک بازی انتخاب کن و بنشین. آن‌هایی که هنوز در حال ساخت‌اند روی کارتشان نوشته شده.',
+    'games.lead': 'یک بازی انتخاب کن و بنشین.',
+    'games.leadSoon': 'آن‌هایی که هنوز در حال ساخت‌اند روی کارتشان نوشته شده.',
     'games.filter.all': 'همه',
     'games.soon': 'به‌زودی',
     'games.soonLead': 'قوانین، میز و لابی آماده است. خود بازی هنوز در حال ساخت است — همان روزی که تمام شود برای بازی باز می‌شود.',

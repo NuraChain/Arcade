@@ -727,6 +727,14 @@ down, under both. The featured cards went (the Games page has them, and "See all
 "Continue playing" follows the hero at every width, before the games. `home.spec.ts` (*straight
 after the opening*) holds the order.
 
+**A phone sees every game at once.** The Games page laid its cards one to a row on a phone, each a
+picture, a name, a description, two counts and a button: 2.6 screens to choose among four games,
+and Discover's "Where people are playing" the same. `GameGrid` lays two to a row under its wide
+breakpoints, and a card keeps the game's description only while it is wide enough to read it
+(`@[13rem]`: each of the grid's rows is a container, so it is the card's own width that is asked).
+The page's lead says the ones still being built are marked only while one is. `games-page.spec.ts`
+holds the lead and the shape.
+
 **"See all" opens the whole of what the section showed the first few of.** The owner pressed it
 beside Discover's "People you may know" and was shown their own friends: the link named the Friends
 page and the page opened on its first tab. Read across the app, four were off the same way and one
