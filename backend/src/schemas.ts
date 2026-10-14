@@ -1211,8 +1211,6 @@ export const partyEnded = object({
     by: string().optional()
 });
 
-export type PartyEnded = Infer<typeof partyEnded>;
-
 export const partyState = object({
     party: partyView.optional(),
     invites: array(partyInvite),

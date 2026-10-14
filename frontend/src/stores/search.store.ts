@@ -266,8 +266,3 @@ export const useSearch = createStore((): SearchApi =>
         }
     };
 });
-
-export function groupFor(id: string)
-{
-    return useGroups().byId(id);
-}

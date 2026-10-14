@@ -81,5 +81,3 @@ export interface BoardHandle extends Table<Felt, Told>
 
     dispose(): void;
 }
-
-export type BoardFactory = (options: BoardOptions) => Promise<BoardHandle>;

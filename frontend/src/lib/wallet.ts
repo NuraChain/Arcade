@@ -219,16 +219,6 @@ export function shortAddress(address: string, lead = 6, tail = 4)
     return `${ address.slice(0, lead) }…${ address.slice(-tail) }`;
 }
 
-export function addressHue(address: string)
-{
-    let hash = 0;
-    for (let index = 2; index < address.length; index += 1)
-    {
-        hash = (hash * 31 + address.charCodeAt(index)) % 360;
-    }
-    return hash;
-}
-
 export async function requestAccounts(provider: Eip1193Provider): Promise<string[]>
 {
     const accounts = await provider.request({ method: 'eth_requestAccounts' });

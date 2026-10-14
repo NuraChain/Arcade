@@ -105,5 +105,3 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
         }
     };
 }
-
-export type WatchService = ReturnType<typeof createWatchService>;

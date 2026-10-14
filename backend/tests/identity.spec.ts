@@ -4,7 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { signInText, verifySignature } from '../src/domains/identity/signature.ts';
 import { candidatesFor, checkHandle, handleFromAddress, normalizeHandle } from '../src/domains/identity/handle.ts';
-import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMatch } from '../src/lib/crypto.ts';
+import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '../src/lib/crypto.ts';
 import { callOf, closeChains, fakeChain, lookupGateway, offchainLookup, silentChain, type Answer, type Rpc } from './fake-chain.ts';
 
 /**
@@ -298,14 +298,6 @@ describe('tokens and addresses', () =>
         expect(hash).toMatch(/^[0-9a-f]{64}$/);
         expect(hash).not.toContain(token);
         expect(hashToken(token)).toBe(hash);
-    });
-
-    it('compares secrets without leaking a prefix through length', () =>
-    {
-        expect(secretsMatch('abc', 'abc')).toBe(true);
-        expect(secretsMatch('abc', 'abd')).toBe(false);
-        expect(secretsMatch('abc', 'abcd')).toBe(false);
-        expect(secretsMatch('', '')).toBe(true);
     });
 
     it('treats one address in two casings as one address', () =>

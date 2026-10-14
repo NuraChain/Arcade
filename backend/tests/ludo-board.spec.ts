@@ -15,7 +15,6 @@ import {
     coloursFor,
     obstacle,
     ringIndex,
-    yardCells,
     type Cell,
     type LudoColour,
     type Obstacle,
@@ -213,33 +212,6 @@ describe('the home column', () =>
             {
                 expect(seen.has(key(cell)), `${ colour } ${ key(cell) }`).toBe(false);
                 seen.add(key(cell));
-            }
-        }
-    });
-});
-
-describe('the yards', () =>
-{
-    it('park four tokens inside each corner block', () =>
-    {
-        const corners: Record<LudoColour, readonly [number, number]> = {
-            red: [0, 0],
-            green: [9, 0],
-            yellow: [9, 9],
-            blue: [0, 9]
-        };
-
-        for (const colour of COLOURS)
-        {
-            const cells = yardCells(colour);
-            const [col, row] = corners[colour];
-
-            expect(cells, colour).toHaveLength(4);
-
-            for (const cell of cells)
-            {
-                expect(cell.col >= col && cell.col < col + 6, colour).toBe(true);
-                expect(cell.row >= row && cell.row < row + 6, colour).toBe(true);
             }
         }
     });

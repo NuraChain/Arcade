@@ -59,13 +59,6 @@ const HOME_WALK: Readonly<Record<LudoColour, Segment>> = {
     blue: { from: [7, 13], step: [0, -1], count: HOME_RUN }
 };
 
-const YARD_CORNER: Readonly<Record<LudoColour, readonly [number, number]>> = {
-    red: [0, 0],
-    green: [9, 0],
-    yellow: [9, 9],
-    blue: [0, 9]
-};
-
 function trace(segments: readonly Segment[])
 {
     const cells: Cell[] = [];
@@ -101,18 +94,6 @@ export const HOME_CELLS: Readonly<Record<LudoColour, readonly Cell[]>> = {
     yellow: trace([HOME_WALK.yellow]),
     blue: trace([HOME_WALK.blue])
 };
-
-export function yardCells(colour: LudoColour): readonly Cell[]
-{
-    const [col, row] = YARD_CORNER[colour];
-
-    return [
-        { col: col + 2, row: row + 2 },
-        { col: col + 4, row: row + 2 },
-        { col: col + 2, row: row + 4 },
-        { col: col + 4, row: row + 4 }
-    ];
-}
 
 export function ringIndex(colour: LudoColour, progress: number)
 {

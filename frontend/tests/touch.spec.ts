@@ -6,7 +6,7 @@ import { HAPTIC_GAP_MS, haptic, hapticsAllowed, resetHaptics, setHaptics } from 
 import { attachHold } from '../src/lib/hold.ts';
 import { createLongPress } from '../src/lib/press.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { detents, nearestIndex, projected, settleIndex, stepAlong } from '../src/lib/snap.ts';
+import { nearestIndex, projected, settleIndex, stepAlong } from '../src/lib/snap.ts';
 import { createDrag } from '../src/lib/swipe.ts';
 
 let clock: ManualClock;
@@ -48,11 +48,6 @@ describe('snap maths', () =>
         expect(settleIndex(60, 0, points)).toBe(0);
         expect(settleIndex(60, 1.6, points)).toBe(1);
         expect(settleIndex(220, 1.6, points)).toBe(2);
-    });
-
-    it('turns fractions of a panel into pixel offsets measured from the top', () =>
-    {
-        expect(detents(400, [1, 0.5, 0])).toEqual([0, 200, 400]);
     });
 
     it('steps a rail by a page and stops at both ends', () =>

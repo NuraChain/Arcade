@@ -71,11 +71,6 @@ export function indexOfSeat(state: LudoState, seat: number)
     return state.players.findIndex((player) => player.seat === seat);
 }
 
-export function isOver(state: LudoState)
-{
-    return state.winner !== null;
-}
-
 function clone(state: LudoState): LudoState
 {
     return {

@@ -982,5 +982,3 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         }
     };
 }
-
-export type MatchService = ReturnType<typeof createMatchService>;

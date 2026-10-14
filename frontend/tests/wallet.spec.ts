@@ -5,7 +5,6 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetKeyStore, setKeyStore, type DeviceKeys, type KeyStore } from '../src/lib/device-keys.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
-    addressHue,
     announcedWallets,
     detect,
     discoverWallets,
@@ -241,14 +240,6 @@ describe('addresses', () =>
         expect(short.endsWith('976F')).toBe(true);
         expect(short.length).toBeLessThan(ADDRESS.length);
         expect(shortAddress('not-an-address')).toBe('not-an-address');
-    });
-
-    it('gives every address a stable hue', () =>
-    {
-        expect(addressHue(ADDRESS)).toBe(addressHue(ADDRESS));
-        expect(addressHue(ADDRESS)).toBeGreaterThanOrEqual(0);
-        expect(addressHue(ADDRESS)).toBeLessThan(360);
-        expect(addressHue('0x0000000000000000000000000000000000000001')).not.toBe(addressHue(ADDRESS));
     });
 });
 
