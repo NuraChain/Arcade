@@ -2572,6 +2572,29 @@ moved one game a commit, and each takes the turn from what its own log can say:
   count it. Seen before the change: the ring on the next seat while a raise was in the air, and
   on a plate that said Folded while a finished hand was still being paid.
 
+**As built (P6), the stage changes size.** A flight's two ends are measured on the screen when
+it starts, so a table that changed size under one (the chat card opening beside it, a phone
+turned over, full screen) sent it to where its target used to be, and the piece jumped to its
+place when it landed. The presenter is given the box its table is played in (`frame`) and
+watches it: a change of more than a pixel (`BOX_SLACK`) while the queue is busy is a snap, the
+same one a hidden tab and a broken scene take, so what is in the air stops and the table is drawn
+as the board stands. The first size a box reports is where it starts and not a change. A size is
+held against the last one acted on, so a box that grows a pixel at a time is still seen to have
+grown. A table at rest is left alone, because everything that rests is placed by the stylesheet
+or by the board's own observer (poker's puck and bets). It is the OUTER box, the stage, that is
+watched: the room the page gives the table. What the game itself opens and closes inside it (a
+hand row, a lamp) is not a change of that box, and may not be made one: a table that snapped
+whenever its own hand row came and went would cut the very scenes that open it.
+`presenter.spec.ts` holds the rule, and one test in each board's spec holds that the board gives
+its presenter its own box and is drawn as it stands when that box changes under a move.
+
+**As built (P6), a sheet covers the board.** Nothing was built: it is as this section's table
+says. Only Ludo's canvas pauses its CSS loops under a blocking sheet. No board reads the overlay,
+so the queue, its sounds and its timers run on. Seen on the built server: with the sheet about a
+person open over a Hokm table and the shell inert, the opponent named trump over the api;
+`data-presenting` was true for 450 ms under the sheet, the felt said Spades with the sheet still
+open, and Escape put the focus back on the plate that had opened it.
+
 ## 7. Spectators
 
 D3: a watcher gets the real motion, thirty seconds late, from delayed events on the watch read. A

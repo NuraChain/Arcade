@@ -4551,6 +4551,18 @@ the stage as its layer and to the renderer as its home, so the first hidden tab,
 the dice, the cube and the stack counts off the page for the rest of the board's life, with every
 gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now.
 
+**A table whose box changes size under a move is drawn as the board stands.** A flight is
+measured on the screen when it starts, so a table that changed size under one (the chat card
+opening beside the board, a phone turned over, full screen) sent it to where its target used to
+be. Each board gives its presenter the box it is played in (`presenter.frame(root)`), and the
+presenter watches it: more than a pixel of change (`BOX_SLACK`) while the queue is busy is the
+snap a hidden tab takes. The FIRST size is not a change, a size is held against the last one acted
+on (a box that grows a pixel at a time is still seen to grow), a table at rest is left alone, and
+`dispose` lets the box go. Watch the OUTER box only, the stage: what a game opens and closes
+inside it (a hand row, a lamp) must never be a reason, or the scene that opens a row would cut
+itself. A spec speaks for the browser through `tests/fake-boxes.ts` (`watchedBoxes()`: happy-dom
+lays nothing out), which every board's spec uses for its one test of this.
+
 **A copy that flies between two places is `launch`, in a layer the game names.**
 `stage/flight.ts` puts the copy where it ENDS and runs it there with a fill, so a clock that is late
 never shows it landed and gone back; it takes the copy out when it lands and then tells whoever

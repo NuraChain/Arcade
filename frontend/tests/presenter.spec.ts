@@ -3,8 +3,9 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { manualClock } from '../src/lib/clock.ts';
 import { FAST, HASTE } from '../src/game/stage/director.ts';
 import type { Batch } from '../src/game/stage/feed.ts';
-import { createPresenter, SETTLE, type Sight, type Table } from '../src/game/stage/presenter.ts';
+import { BOX_SLACK, createPresenter, SETTLE, type Sight, type Table } from '../src/game/stage/presenter.ts';
 import { createStage } from '../src/game/stage/stage.ts';
+import { watchedBoxes } from './fake-boxes.ts';
 
 interface Move
 {
@@ -124,6 +125,7 @@ const hide = () => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(
 afterEach(() =>
 {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 describe('a table, shown for the first time', () =>
@@ -927,6 +929,178 @@ describe('the opening of a game', () =>
         presenter.see(batch([2]));
 
         expect(calls.slice(3)).toEqual(['play 2:e2']);
+    });
+});
+
+describe('a table whose box changes size', () =>
+{
+    it('is drawn again where the board stands when that happens under what it is playing', async () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter, calls, clock, batch, at, elapse, opened } = setup();
+        const box = document.createElement('div');
+
+        presenter.frame(box);
+        boxes.size(box, 800, 600);
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(100);
+
+        expect(boxes.watching(box)).toBe(1);
+        expect(presenter.presenting()).toBe(true);
+
+        boxes.size(box, 640, 600);
+
+        expect(calls, 'a move measured on a table of one size went on being played on another').toEqual(['play 6:e6', 'reset m1@6']);
+        expect(presenter.presenting()).toBe(false);
+        expect(clock.pending()).toBe(0);
+
+        await elapse(ACT_MS);
+        expect(calls).toEqual(['play 6:e6', 'reset m1@6']);
+    });
+
+    it('takes the first size it is told as where it starts, and a pixel either way as no change', async () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const box = document.createElement('div');
+
+        presenter.frame(box);
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(100);
+
+        boxes.size(box, 800, 600);
+        boxes.size(box, 800 + BOX_SLACK, 600 - BOX_SLACK);
+        boxes.size(box, 800 - BOX_SLACK, 600 + BOX_SLACK);
+
+        expect(calls, 'the first measure, or the browser rounding one, stopped a move').toEqual(['play 6:e6']);
+        expect(presenter.presenting()).toBe(true);
+
+        boxes.size(box, 800, 600 + BOX_SLACK + 0.5);
+
+        expect(calls, 'a box that grew a pixel at a time was never seen to have grown').toEqual(['play 6:e6', 'reset m1@6']);
+    });
+
+    it('measures a height as it measures a width', async () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const box = document.createElement('div');
+
+        presenter.frame(box);
+        boxes.size(box, 800, 600);
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(100);
+        boxes.size(box, 800, 420);
+
+        expect(calls).toEqual(['play 6:e6', 'reset m1@6']);
+    });
+
+    it('leaves alone a table that is playing nothing, and one with no game on it yet', async () =>
+    {
+        const boxes = watchedBoxes();
+        const idle = setup();
+        const box = document.createElement('div');
+
+        idle.presenter.frame(box);
+        boxes.size(box, 800, 600);
+        idle.opened();
+        boxes.size(box, 500, 600);
+
+        expect(idle.calls, 'a table at rest was drawn again for a box that changed').toEqual([]);
+
+        const empty = setup();
+        const other = document.createElement('div');
+
+        empty.presenter.frame(other);
+        boxes.size(other, 800, 600);
+        empty.presenter.act(async (ctx) => await ctx.stage.wait(400));
+        boxes.size(other, 500, 600);
+
+        expect(empty.calls, 'a table with no game was drawn from nothing').toEqual([]);
+        expect(empty.presenter.presenting()).toBe(true);
+    });
+
+    it('plays the next move as any other once it has been drawn again', async () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const box = document.createElement('div');
+
+        presenter.frame(box);
+        boxes.size(box, 800, 600);
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(100);
+        boxes.size(box, 640, 600);
+        at(7);
+        presenter.see(batch([7]));
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['play 6:e6', 'reset m1@6', 'play 7:e7', 'played 7']);
+    });
+
+    it('stops watching a box when it is given another, when it is given none, and when it is taken away', () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter } = setup();
+        const first = document.createElement('div');
+        const second = document.createElement('div');
+
+        presenter.frame(first);
+        presenter.frame(second);
+
+        expect([boxes.watching(first), boxes.watching(second)]).toEqual([0, 1]);
+
+        presenter.frame(null);
+
+        expect(boxes.watching(second)).toBe(0);
+        expect(boxes.all).toHaveLength(2);
+
+        presenter.frame(second);
+        presenter.dispose();
+
+        expect(boxes.watching(second)).toBe(0);
+    });
+
+    it('forgets the size of the box before when it is given another', async () =>
+    {
+        const boxes = watchedBoxes();
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const first = document.createElement('div');
+        const second = document.createElement('div');
+
+        presenter.frame(first);
+        boxes.size(first, 800, 600);
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(100);
+        presenter.frame(second);
+        boxes.size(second, 300, 200);
+
+        expect(calls, 'the first measure of a new box was held against the last of the old').toEqual(['play 6:e6']);
+    });
+
+    it('plays on in a browser that cannot watch a box', async () =>
+    {
+        vi.stubGlobal('ResizeObserver', undefined);
+
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        presenter.frame(document.createElement('div'));
+        opened();
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['play 6:e6', 'played 6']);
     });
 });
 

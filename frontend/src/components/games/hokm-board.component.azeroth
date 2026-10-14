@@ -2278,6 +2278,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             const report = (error: unknown) => console.error(error);
             rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
             presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
+            presenter.frame(arena);
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;

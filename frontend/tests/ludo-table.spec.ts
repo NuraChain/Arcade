@@ -28,6 +28,7 @@ import * as turns from '../../backend/src/domains/match/turns.ts';
 import { matchView } from '../../backend/src/schemas.ts';
 import { client } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
+import { watchedBoxes } from './fake-boxes.ts';
 
 type Rendered = HTMLElement;
 
@@ -895,6 +896,37 @@ describe('the ludo table, played from what happened', () =>
 
         return { before, after: stepped(before, { kind: 'move', seat: 1, piece: 3 }) };
     };
+
+    it('is drawn as the board stands when its box changes size under a pawn that is walking', async () =>
+    {
+        quiet();
+
+        const boxes = watchedBoxes();
+
+        try
+        {
+            const { before, after } = closing();
+            const { container, tell } = await live(seen(before, 0, 1));
+
+            expect(boxes.watching(stageOf(container)), 'the table\'s box is not the one that is watched').toBe(1);
+
+            boxes.size(stageOf(container), 900, 700);
+            tell(wonBy(after.state, 0, 2), [happened(2, 1, after.moves)]);
+            await flush();
+
+            expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+
+            boxes.size(stageOf(container), 900, 520);
+            await flush();
+
+            expect(stageOf(container).hasAttribute('data-presenting'), 'a walk measured on a board of one size went on being walked on another').toBe(false);
+            expect(dots(container, 1), 'the pawn was not counted home on the board as it stands').toBe(4);
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
+    });
 
     it('walks what the other seat did, counts a pawn home when it is home, and shows the result only then', async () =>
     {

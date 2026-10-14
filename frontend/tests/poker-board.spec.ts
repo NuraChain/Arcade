@@ -15,6 +15,7 @@ import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
+import { watchedBoxes } from './fake-boxes.ts';
 import { elapse } from './poker-mounted.ts';
 import type { MatchView } from '../src/api.ts';
 import { seatBets, type Box } from '../src/game/chip-spot.ts';
@@ -1281,6 +1282,34 @@ describe('a table that shows what has happened on it', () =>
         expect(container.querySelector('.table-result')).not.toBeNull();
         expect(container.querySelector('.poker-hand'), 'the reader’s row was still under the result').toBeNull();
         expect(stack(container, 0)).toBe('4,520');
+    });
+
+    it('is drawn as the table stands when its box changes size under what is being shown', async () =>
+    {
+        const boxes = watchedBoxes();
+
+        try
+        {
+            const { container, read } = await seated(waiting());
+            const stage = container.querySelector('.poker-stage')!;
+
+            expect(boxes.watching(stage), 'the table\'s box is watched for its arrangement and not for what is in the air').toBe(2);
+
+            boxes.size(stage, 900, 600);
+            await read(waiting({ turn: 2 }, { rev: 8, turn: 2 }), heard(1, told(8, 1, { e: 'check', seat: 1 })));
+
+            expect(presenting(container)).toBe('true');
+
+            boxes.size(stage, 700, 600);
+            await elapse(10);
+
+            expect(presenting(container), 'a move measured on a table of one size went on being played on another').toBeNull();
+            expect(stage.getAttribute('data-rev')).toBe('8');
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('says a seat missed its turn only when the table has shown what was played for it', async () =>

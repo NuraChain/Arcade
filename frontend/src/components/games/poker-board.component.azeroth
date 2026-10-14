@@ -1183,6 +1183,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         });
 
         presenter = made;
+        made.frame(root);
         untrack(() => made.see(props.events));
         shape();
 

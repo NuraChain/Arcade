@@ -28,6 +28,7 @@ import {
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { watchedBoxes } from './fake-boxes.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
@@ -390,6 +391,34 @@ describe('the backgammon table on the page', () =>
         expect(dice(container)).toEqual(['6', '1']);
         expect(cube(container)?.textContent).toBe('64');
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+    });
+
+    it('is drawn as the board stands when its box changes size under a move in the air', async () =>
+    {
+        const boxes = watchedBoxes();
+
+        try
+        {
+            const { container, tell } = await live(theirs());
+
+            expect(boxes.watching(stageOf(container)), 'the table\'s box is not the one that is watched').toBe(1);
+
+            boxes.size(stageOf(container), 900, 600);
+            tell(answered(), theirMove());
+            await flush();
+
+            expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+
+            boxes.size(stageOf(container), 700, 600);
+            await flush();
+
+            expect(stageOf(container).hasAttribute('data-presenting'), 'a move measured on a table of one size went on being played on another').toBe(false);
+            expect(dice(container)).toEqual(['3', '2']);
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('plays what the other player did, says it is busy while it does, and ends on the new board', async () =>

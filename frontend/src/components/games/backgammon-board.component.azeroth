@@ -214,6 +214,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived hints = settings.settings().hintMoves;
 
+    let root: HTMLElement | null = null;
+
     let layer: HTMLElement | null = null;
     let men: BackgammonTable | null = null;
     let presenter: Presenter<Told> | null = null;
@@ -674,6 +676,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 }
             });
             presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
+            presenter.frame(root);
             unwatch = presenter.watch((busy) =>
             {
                 presenting = busy;
@@ -1276,7 +1279,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
         };
     });
 
-    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } data-staged={ hops.length } class="table-stage bg-stage">
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } data-staged={ hops.length } class="table-stage bg-stage" ref={ (element) => root = element }>
         <div class="table-grid bg-grid">
             <Show when={ ready }>
                 { () =>

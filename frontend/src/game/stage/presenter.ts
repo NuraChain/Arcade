@@ -45,6 +45,7 @@ export interface Presenter<M>
     see(batch: Batch): void;
     act(scene: Scene, estimate?: number): void;
     predict(prediction: Prediction<M> | null): void;
+    frame(box: Element | null): void;
     presenting(): boolean;
     watch(listener: (presenting: boolean) => void): () => void;
     dispose(): void;
@@ -55,6 +56,8 @@ export const FAST_OVER = 1500;
 export const LIVE_OVER = 2;
 
 export const SETTLE = 400;
+
+export const BOX_SLACK = 1;
 
 const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
@@ -248,6 +251,26 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         }
     };
 
+    let boxed: ResizeObserver | null = null;
+    let held: readonly [number, number] | null = null;
+
+    const reboxed = (width: number, height: number) =>
+    {
+        const before = held;
+
+        if (before !== null && Math.abs(before[0] - width) <= BOX_SLACK && Math.abs(before[1] - height) <= BOX_SLACK)
+        {
+            return;
+        }
+
+        held = [width, height];
+
+        if (before !== null && matchId !== null && director.busy())
+        {
+            snap(options.sight());
+        }
+    };
+
     let late: (() => void) | null = null;
 
     const bound = () =>
@@ -290,6 +313,19 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
             prediction = next;
         },
 
+        frame(box)
+        {
+            boxed?.disconnect();
+            boxed = null;
+            held = null;
+
+            if (box !== null && typeof ResizeObserver !== 'undefined')
+            {
+                boxed = new ResizeObserver(([entry]) => reboxed(entry.contentRect.width, entry.contentRect.height));
+                boxed.observe(box);
+            }
+        },
+
         presenting: () => director.busy(),
 
         watch: (listener) => director.watch(listener),
@@ -301,6 +337,8 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
                 document.removeEventListener('visibilitychange', away);
             }
 
+            boxed?.disconnect();
+            boxed = null;
             director.cancel();
         }
     };
