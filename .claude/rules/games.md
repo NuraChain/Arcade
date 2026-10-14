@@ -4465,13 +4465,23 @@ one and `dispose` gives it back, and the last one back SUSPENDS the context rath
 switching tables never has to unlock audio again. The spec is
 `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`; the rules that cost something:
 
-- **`pointerdown` is not a gesture on an iPhone.** The context is created and resumed inside
-  `pointerup`, `touchend`, `click` or `keydown`. The old engine armed on `pointerdown` and never
-  called `resume()`, so every table was silent on iOS and Chrome logged "The AudioContext was not
-  allowed to start" on a cold deep link - which the matrix counts as a failure.
-- **The cue of the unlocking tap still plays.** `resume()` is asynchronous, so the tap that unlocks
-  would otherwise lose its own sound; a `resuming` flag lets cues be scheduled while it is on its way.
-  Outside that window nothing is scheduled on a context that is not running.
+- **`pointerdown` is not a gesture on an iPhone.** The context is resumed inside `pointerup`,
+  `touchend`, `click` or `keydown`. The old engine armed on `pointerdown` and never called
+  `resume()`, so every table was silent on iOS and Chrome logged "The AudioContext was not allowed
+  to start" on a cold deep link - which the matrix counts as a failure.
+- **No press waits for the context to be made.** Making one took 120 ms on Windows, and it was made
+  in a capture listener that ran before the press's own handler, so the first roll after every page
+  load left 125 ms late. Where the page has already been pressed
+  (`navigator.userActivation.hasBeenActive`), a board's handle makes it at the next idle moment
+  after the board appears, and it starts running with no console line: in the product that is
+  every table reached by a press, so the first roll finds it made. Where it has not (a deep link
+  pressed for the first time) the tap starts a timer and the tap's own handlers run first: a timer
+  of up to a second started inside a gesture carries the gesture in WebKit and Gecko, and Chromium's
+  sticky activation covers it. A context that already exists is resumed inside the tap, as before.
+- **The cue of the unlocking tap still plays.** Cues asked for while a tap's context is on its way
+  are kept, four at most, and played as soon as it is made; `resume()` is asynchronous, so a
+  `resuming` flag lets cues be scheduled while it is on its way. Outside those windows nothing is
+  scheduled on a context that is not running.
 - **An interruption re-arms it.** A call, Siri or a screen lock puts WebKit into `interrupted`; the
   `statechange` listener puts the tap listeners back, and a context still not running 300ms after a tap
   is rebuilt, because WebKit's can get stuck there.

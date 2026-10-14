@@ -319,9 +319,10 @@ describe('the sound layer', () =>
         expect(unpack(new TextEncoder().encode('RIFF0000').buffer).size).toBe(0);
     });
 
-    const tap = (name = 'pointerup') =>
+    const tap = async (name = 'pointerup') =>
     {
         window.dispatchEvent(new Event(name));
+        await new Promise((resolve) => setTimeout(resolve, 0));
     };
 
     const flush = async () =>
@@ -344,18 +345,18 @@ describe('the sound layer', () =>
         vi.unstubAllGlobals();
     });
 
-    it('opens nothing before a real tap, and a touch starting is not one', () =>
+    it('opens nothing before a real tap, and a touch starting is not one', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
 
         sound.play('turn');
-        tap('pointerdown');
+        await tap('pointerdown');
 
         expect(fake.made()).toBe(0);
         expect(fake.oscillators()).toBe(0);
 
-        tap('pointerup');
+        await tap('pointerup');
 
         expect(fake.made()).toBe(1);
         expect(fake.last()?.resumed).toBe(1);
@@ -363,18 +364,66 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('plays the cue of the tap that unlocked it, while the resume is still on its way', () =>
+    it('opens its context only once the tap\'s own handlers have run, and plays the cue they asked for while the resume is on its way', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
+        const made: number[] = [];
+        const handler = () =>
+        {
+            made.push(fake.made());
+            sound.play('turn');
+        };
 
-        tap('keydown');
-        sound.play('turn');
+        window.addEventListener('keydown', handler);
+        await tap('keydown');
+        window.removeEventListener('keydown', handler);
 
-        expect(fake.last()?.state).toBe('suspended');
-        expect(fake.oscillators()).toBeGreaterThan(0);
+        expect(made, 'the tap waited for a context to be made before its own handler could answer it').toEqual([0]);
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.resumed).toBe(1);
+        expect(fake.oscillators(), 'the cue the tap asked for was lost').toBeGreaterThan(0);
 
         sound.dispose();
+    });
+
+    it('opens its context at a quiet moment on a page that has already been used, and never on a page nobody has touched', async () =>
+    {
+        const fake = stub('running');
+        const activation = { hasBeenActive: false };
+        const idle: (() => void)[] = [];
+
+        vi.stubGlobal('navigator', { ...navigator, userActivation: activation });
+        vi.stubGlobal('requestIdleCallback', (callback: () => void) => idle.push(callback));
+
+        const untouched = createSound(true);
+
+        idle.splice(0).forEach((run) => run());
+
+        expect(fake.made(), 'a context was opened on a page nobody had touched').toBe(0);
+
+        untouched.dispose();
+        activation.hasBeenActive = true;
+
+        const used = createSound(true);
+
+        expect(fake.made(), 'the context was made while the board was still being drawn').toBe(0);
+
+        idle.splice(0).forEach((run) => run());
+
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.state).toBe('running');
+
+        await tap('pointerup');
+
+        expect(fake.made(), 'a tap made a second context').toBe(1);
+        expect(fake.last()?.resumed, 'a running context was asked to resume').toBe(0);
+
+        used.play('turn');
+
+        expect(fake.oscillators()).toBeGreaterThan(0);
+
+        used.dispose();
     });
 
     it('stays quiet while suspended with no resume pending, and asks for a tap again', async () =>
@@ -382,7 +431,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         expect(fake.last()?.state).toBe('running');
@@ -396,7 +445,7 @@ describe('the sound layer', () =>
 
         expect(fake.oscillators()).toBe(before);
 
-        tap('touchend');
+        await tap('touchend');
 
         expect(context.resumed).toBe(2);
 
@@ -409,7 +458,7 @@ describe('the sound layer', () =>
         const ludo = createSound(true);
         const hokm = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         ludo.dispose();
@@ -428,7 +477,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         sound.play('die-land');
@@ -451,7 +500,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
         await flush();
 
@@ -473,7 +522,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
@@ -496,7 +545,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         sound.play('tick');
@@ -509,14 +558,14 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('asks for the ambient audio session, which follows the silent switch and mixes with music', () =>
+    it('asks for the ambient audio session, which follows the silent switch and mixes with music', async () =>
     {
         const session = { type: 'auto' };
         vi.stubGlobal('navigator', { ...navigator, audioSession: session });
         stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
 
         expect(session.type).toBe('ambient');
 
@@ -528,7 +577,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(false);
 
-        tap();
+        await tap();
         await flush();
         sound.play('win');
 
@@ -541,7 +590,7 @@ describe('the sound layer', () =>
 
         const bare = createSound(true);
 
-        tap();
+        await tap();
 
         expect(() => bare.play('token-capture')).not.toThrow();
 

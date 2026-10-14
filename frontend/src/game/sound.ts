@@ -63,6 +63,8 @@ interface Engine
     resuming: boolean;
     parked: boolean;
     armed: boolean;
+    waking: boolean;
+    early: { cue: Cue; options: PlayOptions }[];
     turn: Map<Cue, number>;
     voices: Map<Cue, { active: number; last: number }>;
 }
@@ -124,6 +126,10 @@ const APART = 0.035;
 
 const STALL_MS = 300;
 
+const WARM_MS = 1500;
+
+const EARLY_MOST = 4;
+
 const LOUD = 0.004;
 
 type ContextMaker = typeof AudioContext;
@@ -138,6 +144,8 @@ const fresh = (): Engine => ({
     resuming: false,
     parked: false,
     armed: false,
+    waking: false,
+    early: [],
     turn: new Map(),
     voices: new Map()
 });
@@ -187,7 +195,7 @@ function arm()
 
     for (const name of GESTURES)
     {
-        window.addEventListener(name, unlock, { capture: true, passive: true });
+        window.addEventListener(name, wake, { capture: true, passive: true });
     }
 }
 
@@ -202,7 +210,7 @@ function disarm()
 
     for (const name of GESTURES)
     {
-        window.removeEventListener(name, unlock, { capture: true });
+        window.removeEventListener(name, wake, { capture: true });
     }
 }
 
@@ -274,6 +282,80 @@ function settle(context: AudioContext)
     if (context.state !== 'closed' && !engine.parked && engine.handles > 0)
     {
         arm();
+    }
+}
+
+function activated()
+{
+    const scope = globalThis as unknown as { navigator?: { userActivation?: { hasBeenActive?: boolean } } };
+
+    return scope.navigator?.userActivation?.hasBeenActive === true;
+}
+
+function later(run: () => void, idle: boolean)
+{
+    const at = engine;
+    const go = () =>
+    {
+        if (engine === at)
+        {
+            run();
+        }
+    };
+    const scope = globalThis as unknown as { requestIdleCallback?: (callback: () => void, options: { timeout: number }) => number };
+
+    if (idle && typeof scope.requestIdleCallback === 'function')
+    {
+        scope.requestIdleCallback(go, { timeout: WARM_MS });
+        return;
+    }
+
+    setTimeout(go, 0);
+}
+
+function warm()
+{
+    if (engine.context !== null || engine.handles === 0 || engine.listening === 0 || !activated())
+    {
+        return;
+    }
+
+    engine.context = build();
+
+    if (engine.context?.state === 'running')
+    {
+        disarm();
+    }
+
+    load();
+}
+
+function woken()
+{
+    const early = engine.early;
+
+    engine.waking = false;
+    engine.early = [];
+    unlock();
+
+    for (const one of early)
+    {
+        play(one.cue, one.options);
+    }
+}
+
+function wake()
+{
+    if (engine.context !== null && engine.context.state !== 'closed')
+    {
+        unlock();
+        return;
+    }
+
+    if (!engine.waking)
+    {
+        engine.waking = true;
+        later(woken, false);
     }
 }
 
@@ -448,6 +530,11 @@ function play(cue: Cue, options: PlayOptions)
 
     if (context === null || buses === null)
     {
+        if (context === null && engine.waking && engine.early.length < EARLY_MOST)
+        {
+            engine.early.push({ cue, options });
+        }
+
         return;
     }
 
@@ -522,6 +609,11 @@ export function createSound(enabled: boolean): SoundHandle
     if (context === null || context.state !== 'running')
     {
         arm();
+    }
+
+    if (context === null && on)
+    {
+        later(warm, true);
     }
 
     if (context !== null && engine.parked)
