@@ -128,6 +128,14 @@ export interface RealtimeApi
 
     hold(): () => void;
 
+    /**
+     * Asks the socket for an answer now, and opens a new one if none comes within the grace.
+     *
+     * For the moments a socket is most likely to have died without a word: the tab coming back,
+     * the network coming back, and a move whose answer is late.
+     */
+    check(): void;
+
     signal(table: string, to: string, join: string, kind: SignalFrame['kind'], data: string): void;
 
     /**
@@ -277,6 +285,18 @@ export const useRealtime = createStore((): RealtimeApi =>
         announce('down');
         attempt = 0;
         open();
+    };
+
+    const check = () =>
+    {
+        if (status() !== 'connected')
+        {
+            return;
+        }
+
+        cancelProbe();
+        probe = runtime().clock.after(PROBE_GRACE_MS, recycle);
+        ping();
     };
 
     const armProbe = () =>
@@ -528,8 +548,13 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         const resume = () =>
         {
-            if (!wanted || close !== null || (document.visibilityState === 'hidden' && holds === 0))
+            if (!wanted || (document.visibilityState === 'hidden' && holds === 0))
             {
+                return;
+            }
+            if (close !== null)
+            {
+                check();
                 return;
             }
             if (runtime().clock.now() < suppressUntil)
@@ -700,6 +725,8 @@ export const useRealtime = createStore((): RealtimeApi =>
                 }
             };
         },
+
+        check,
 
         signal: (table, to, join, kind, data) => active.send({ t: 'signal', table, to, join, kind, data }),
 

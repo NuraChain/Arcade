@@ -2180,8 +2180,10 @@ reader, never one payload filtered. Nothing waits for a window: a push leaves th
 transaction commits.
 
 The HTTP routes stay, and not as a shim: the browser sends a play over HTTP, under the SAME key, when
-the socket is not connected or no ack came within three seconds, and the idempotency ledger makes the
-second copy answer `already`. The API passes play hundreds of turns through them. A browser whose socket
+the socket is not connected or no ack came within a second and a half (`ACK_MS`; it was three, the
+wait a press over a dead socket costs), and the idempotency ledger makes the second copy answer
+`already`. A late ack also asks the socket for an answer (`check`), so a dead one is replaced four
+seconds later instead of at the next probe. The API passes play hundreds of turns through them. A browser whose socket
 keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
 a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching -
 but is RUNG once a move is old enough to show them (`WATCH_DELAY_MS` and a second, `gameWatched` in the

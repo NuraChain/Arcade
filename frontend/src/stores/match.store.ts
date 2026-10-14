@@ -110,7 +110,7 @@ const mintKey = () =>
         : `${ runtime().clock.now().toString(36) }-${ keys.toString(36) }`;
 };
 
-export const ACK_MS = 3000;
+export const ACK_MS = 1500;
 
 export const POLL_MS = 3000;
 
@@ -405,6 +405,7 @@ export const useBoard = createStore((): BoardApi =>
             const late = runtime().clock.after(ACK_MS, () =>
             {
                 waiting.delete(key);
+                useRealtime().check();
                 resolve(null);
             });
 

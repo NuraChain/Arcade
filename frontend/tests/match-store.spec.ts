@@ -131,6 +131,42 @@ describe('playing over the socket', () =>
         expect(useBoard().match()?.rev).toBe(2);
     });
 
+    it('asks over HTTP once a second and a half has gone by with no ack', async () =>
+    {
+        const rolling = useBoard().roll();
+        await settle();
+
+        clock.advance(1499);
+        await settle();
+
+        expect(http).not.toHaveBeenCalled();
+
+        clock.advance(2);
+        await rolling;
+
+        expect(http).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks the socket for an answer when the ack of a play is late, and opens a new one when none comes', async () =>
+    {
+        socket.deaf = true;
+
+        const rolling = useBoard().roll();
+        await settle();
+
+        const before = socket.pings;
+
+        clock.advance(ACK_MS + 1);
+        await rolling;
+
+        expect(socket.pings - before, 'a socket that had let a play go unanswered was trusted').toBe(1);
+
+        clock.advance(PROBE_GRACE_MS + 1);
+
+        expect(socket.closed).toEqual([1000]);
+        expect(socket.opens).toBe(2);
+    });
+
     it('says why the server refused the play, and does not quietly send it again', async () =>
     {
         const toast = vi.spyOn(useToasts(), 'show');

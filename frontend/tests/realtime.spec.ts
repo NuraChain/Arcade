@@ -6,6 +6,7 @@ import {
     BACKOFF_MS,
     IDLE_MS,
     NUDGE_WINDOW_MS,
+    PROBE_GRACE_MS,
     STEADY_MS,
     useRealtime
 } from '../src/stores/realtime.store.ts';
@@ -305,6 +306,60 @@ describe('the realtime store', () =>
         clock.advance(NUDGE_WINDOW_MS);
 
         expect(heard.sort()).toEqual(['chat:', 'game:', 'me:', 'social:', 'table:']);
+    });
+
+    it('asks its socket for an answer the moment the tab is shown again, and opens a new one when none comes', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        hide();
+        clock.advance(5000);
+        socket.deaf = true;
+        show();
+
+        expect(socket.pings, 'a socket that may have died while the tab was away was trusted').toBe(1);
+
+        clock.advance(PROBE_GRACE_MS - 1);
+        expect(socket.opens).toBe(1);
+
+        clock.advance(2);
+        expect(socket.closed).toEqual([1000]);
+        expect(socket.opens).toBe(2);
+    });
+
+    it('keeps a socket that answers when the tab is shown again', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        hide();
+        clock.advance(5000);
+        show();
+        clock.advance(PROBE_GRACE_MS * 3);
+
+        expect(socket.pings).toBe(1);
+        expect(socket.closed).toEqual([]);
+        expect(socket.opens).toBe(1);
+    });
+
+    it('asks its socket for an answer when the network comes back, and opens a new one when none comes', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+        socket.deaf = true;
+
+        window.dispatchEvent(new Event('online'));
+
+        expect(socket.pings).toBe(1);
+
+        clock.advance(PROBE_GRACE_MS + 1);
+
+        expect(socket.closed).toEqual([1000]);
+        expect(socket.opens).toBe(2);
     });
 
     it('treats two online events as one reconnection', () =>

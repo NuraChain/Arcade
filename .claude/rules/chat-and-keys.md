@@ -1378,6 +1378,15 @@ pongs also give the round trip and the server clock's offset, from the fastest o
 server's own heartbeat is 15 s with a 10 s pong timeout. The fake socket answers pings the way the
 server does and has a `deaf` switch for the case where it does not.
 
+**Any socket is asked at once when it is most likely to have died** (`check`): when the tab is shown
+again, when the network comes back, and when a play's ack is late. A ping goes out and the same four
+seconds decide. A socket is killed without a word by a phone that slept or a laptop that changed
+network, and the browser keeps it open; only a held socket was ever probed, so on any other page it
+was trusted until a reload, and at a table the next roll waited out the ten seconds. The `check`
+specs in `realtime.spec.ts` and `match-store.spec.ts` hold it, and in a real browser a socket
+silenced by `routeWebSocket` is replaced four seconds after the tab comes back or `online` fires,
+while one that answers is kept.
+
 `stores/connection.store.ts` reports only what it can see: the socket's own status plus
 `navigator.onLine`. The `latency` it used to publish was never measured by any request, and the
 fixed 1800ms "reconnecting" animation had nothing to do with a reconnection. It deliberately does
