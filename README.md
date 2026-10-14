@@ -26,7 +26,9 @@ connection and the pages.
    - `PORT`: the local port the proxy forwards to. The server listens on `127.0.0.1` only.
 3. `npm run build`
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and
-   after every update that changes them.
+   after every update that changes them. It makes the database match the entities exactly, so a
+   column an entity no longer has is dropped with everything in it: once the database holds
+   anything, take a dump first (below).
 5. `sudo scripts/service-install.sh` installs a systemd service, and refuses while the build or a
    filled-in `.env` is missing, or when root owns the clone. The service runs as the clone's
    owner, can write nothing but its own `/tmp`, and cannot gain privileges. Then
@@ -51,8 +53,8 @@ connection and the pages.
    }
    ```
 
-To update: `git pull`, `npm ci`, `npm run build`, `npm run schema:sync`, then
-`sudo scripts/service-restart.sh`.
+To update: `git pull`, `npm ci`, `npm run build`, `pg_dump` the database, `npm run schema:sync`,
+then `sudo scripts/service-restart.sh`.
 
 Back up the database, because it is the only thing here that cannot be built again: every
 account, friendship, table, game, sealed message and uploaded picture lives in it. The build, the
