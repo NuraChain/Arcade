@@ -9,7 +9,8 @@ It needs Node 24.11 or newer, PostgreSQL with the `citext` and `pgcrypto` extens
 and nginx (or another proxy) in front for TLS. One process serves the api, the realtime
 connection and the pages.
 
-1. Clone the repository and run `npm ci` at its root.
+1. As an ordinary account, not root (`sudo adduser nura`, say), clone the repository and run
+   `npm ci` at its root. The service runs as whoever owns the clone.
 2. Copy `.env.example` to `.env` and fill it in. Every name has to be present; an empty value
    switches an optional feature off (push notifications, STUN and TURN for voice, the chain, the explorer,
    the admin). For production:
@@ -27,7 +28,9 @@ connection and the pages.
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and
    after every update that changes them.
 5. `sudo scripts/service-install.sh` installs a systemd service, and refuses while the build or a
-   filled-in `.env` is missing. Then `sudo scripts/service-start.sh`; the logs are in `.logs/`.
+   filled-in `.env` is missing, or when root owns the clone. The service runs as the clone's
+   owner, can write nothing but its own `/tmp`, and cannot gain privileges. Then
+   `sudo scripts/service-start.sh`; the logs are in `.logs/`.
 6. Point the proxy at `http://127.0.0.1:$PORT`, upgrading the WebSocket on `/ws`:
 
    ```nginx

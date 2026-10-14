@@ -21,6 +21,8 @@ SERVICE_NAME="nura-games"
 # there is only ever one unit.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_PATH="$ROOT/backend"
+SERVICE_USER="$(stat -c '%U' "$ROOT")"
+SERVICE_GROUP="$(stat -c '%G' "$ROOT")"
 
 # This backend COMPILES, which is the one thing that differs from the Explorer service and the one
 # thing that will strand a deploy silently. `typeorm` sitting in `dependencies` is what decides it:
@@ -42,6 +44,7 @@ refuse()
   REFUSED=1
 }
 
+[ "$SERVICE_USER" != "root" ] || refuse "the checkout belongs to root, and the service runs as whoever owns the checkout - clone it as an ordinary account (one made with 'sudo adduser nura', say) and install from that clone"
 [ -f "$SERVICE_PATH/$SERVICE_PATH_APP" ] || refuse ".dist-backend/main.js is missing - run 'npm run build' first"
 [ -f "$ROOT/.dist-frontend/index.html" ] || refuse ".dist-frontend is missing - run 'npm run build' first"
 [ -f "$ROOT/.dist-server/entry.server.js" ] || refuse ".dist-server/entry.server.js is missing - run 'npm run build' first"
@@ -79,6 +82,7 @@ echo "note: run 'npm run schema:sync --workspace backend' before the first start
 
 # systemd does not create the directory it is told to log into.
 mkdir -p "$ROOT/.logs"
+chown "$SERVICE_USER:$SERVICE_GROUP" "$ROOT/.logs"
 
 echo "> Installing systemd service (${SERVICE_FILE})..."
 
@@ -88,6 +92,11 @@ Description=Nura Games
 After=network.target postgresql.service
 
 [Service]
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
 RestartSec=5
 Restart=always
 # Without this the server runs its DEVELOPMENT path, which seeds the wallet fixtures and trusts no

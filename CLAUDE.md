@@ -61,6 +61,13 @@ only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Po
 build, SSR bundle, `.env`, `PUBLIC_ORIGIN` or `SESSION_SECRET` (it only warned, so a service could be
 installed that crash-looped or signed nothing), and warns on `DATABASE_SYNC=true`. The steps from a
 clean clone to a running service are in `README.md`, where whoever runs the server will look.
+The unit runs as whoever owns the clone and the installer refuses a clone root owns (it ran as root,
+so any fault in the process was a fault with the whole machine), with `NoNewPrivileges`, `PrivateTmp`
+and `ProtectSystem=strict`. That last one holds because the server writes nothing to disk: its logs
+are files systemd opens, and the kit's page and image caches are in memory. A `FilePageCache` or
+anything else that writes would need a `ReadWritePaths=` in the unit. Checked under WSL's systemd: the
+unit passes `systemd-analyze verify`, and a transient service with the same settings reads `.env`,
+writes only its own `/tmp`, and its log files are written.
 
 **The database** is Postgres and the ENTITIES are its only description: no migrations, `syncSchema()`
 whenever `DATABASE_SYNC=true` (development), never TypeORM's own `synchronize: true`. A schema change is: drop the
