@@ -1651,6 +1651,12 @@ Three sizing traps: a grid item needs `min-w-0` to shrink around `truncate`; an 
 needs `min-w-0` too; and a `<button>` shrink-wraps even at `display: flex`, so a class list shared with
 a `<div>` must state `w-full`.
 
+**A name that IS the thing is not truncated.** Home's four game tiles cut "Backgammon" to
+"Backgam…" from 320 to 390: it needs 72px and a tile gives 52 to 70. The tile's name breaks onto a
+second line instead (`hyphens-auto wrap-break-word`); a browser with a hyphenation dictionary breaks
+it with a hyphen and one without breaks it at the edge, and either way the whole name is read.
+`home.spec.ts` (*break onto a second line*) holds it.
+
 ## RTL
 
 English and Persian. **Logical properties only** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,

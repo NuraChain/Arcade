@@ -133,6 +133,15 @@ describe('the home page', () =>
         expect(order().filter((one) => one !== 'home-friends'), 'the reader\'s tables come after a list of games, or the games are listed twice').toEqual(['home-hero', 'home-continue', 'home-games', 'home-recent']);
     });
 
+    it('lets a game\'s name in its tile break onto a second line rather than be cut short', async () =>
+    {
+        const container = await show();
+        const names = [...container.querySelectorAll('section[aria-labelledby="home-games"] li a > span:first-of-type')];
+
+        expect(names.length).toBe(4);
+        expect(names.every((one) => one.classList.contains('hyphens-auto') && one.classList.contains('wrap-break-word') && !one.classList.contains('truncate')), '"Backgammon" is cut to "Backgam…" on a phone').toBe(true);
+    });
+
     it('says where finished games will appear instead of drawing an empty box', async () =>
     {
         const container = await show();
