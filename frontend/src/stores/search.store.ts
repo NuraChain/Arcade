@@ -171,7 +171,7 @@ export const useSearch = createStore((): SearchApi =>
         const want = (kind: SearchScope) => scope() === 'all' || scope() === kind;
 
         const held = social.people();
-        const others = told()
+        const others = [...new Set([...social.friends(), ...told()])]
             .map((handle) => known.byHandle(handle))
             .filter((person): person is Person => person !== null && !held.some((one) => one.id === person.id));
 

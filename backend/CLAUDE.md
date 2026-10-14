@@ -338,6 +338,13 @@ messages this browser has opened, and what somebody types there must not reach t
 the answer is a trigram index on the two folded expressions, built by hand in `syncSchema` beside
 the others.
 
+**The reader's friends are ranked by the box whatever is searched.** What the box ranks without
+asking was the directory (sixty accounts in handle order) and whoever the server had found before,
+so a friend's name typed into "everything" found nobody wherever the directory's sixty were other
+people: on the QA database, "Sara Kamali" answered "Nothing" to Sara's friend. The friends list is
+in the browser already (the graph), so `search.store` ranks it too, and nothing typed is sent.
+`people-search.spec.ts` (*the reader's own friends*) holds it.
+
 ## Groups
 
 `backend/src/domains/group/` owns them, and three of its rules are INDEXES rather than application

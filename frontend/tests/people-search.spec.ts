@@ -102,6 +102,20 @@ describe('looking for a person', () =>
         expect(handles(), 'the premise: he is past what the directory holds').toEqual([]);
     });
 
+    it('finds the reader\'s own friends by name while everything is searched, though the directory never held them, and asks nobody', async () =>
+    {
+        const asked = () => server.calls.filter((one) => one === 'social.search').length;
+
+        expect(useSocial().people().map((one) => one.handle), 'the directory already holds the friend this is about').not.toContain('omid.j');
+        expect(useSocial().friends()).toContain('omid.j');
+
+        useSearch().setQuery('Omid');
+        await paused();
+
+        expect(handles(), 'a friend typed by name is nobody to the search box').toContain('omid.j');
+        expect(asked(), 'what was typed went to the server').toBe(0);
+    });
+
     it('asks the server once the reader chooses People, after a pause in the typing, and finds somebody the directory never held', async () =>
     {
         const search = useSearch();
