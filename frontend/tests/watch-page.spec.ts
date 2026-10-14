@@ -182,6 +182,21 @@ describe('the live games page', () =>
         expect(reads()).toBe(before);
     });
 
+    it('keeps a game\'s name whole on its row and lets the time it started give way', async () =>
+    {
+        server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() - 60_000).toISOString() }];
+        await connected();
+        pulse(3, 'one-game-on');
+
+        const container = await show();
+        const first = container.querySelector('ul li span span');
+        const [name, since] = [...(first?.children ?? [])];
+
+        expect(name?.textContent).toBe('Hokm');
+        expect([name?.classList.contains('shrink-0'), name?.classList.contains('truncate')], 'the game\'s name gives way first').toEqual([true, false]);
+        expect([since?.classList.contains('truncate'), since?.textContent], 'the time it started does not give way, or says it at length').toEqual([true, 'started 1 min. ago']);
+    });
+
     it('goes on saying how long ago a game started without reading anything', async () =>
     {
         server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() - 60_000).toISOString() }];
@@ -191,12 +206,12 @@ describe('the live games page', () =>
         const container = await show();
         const before = reads();
 
-        expect(container.textContent).toContain('1 minute ago');
+        expect(container.textContent).toContain('1 min. ago');
 
         clock.advance(4 * 60_000);
         await settle();
 
-        expect(container.textContent).toContain('5 minutes ago');
+        expect(container.textContent).toContain('5 min. ago');
         expect(reads()).toBe(before);
     });
 
@@ -217,7 +232,7 @@ describe('the live games page', () =>
 
         expect(newest).toContain('started now');
         expect(newest).not.toMatch(/started in /);
-        expect(older).toContain('2 minutes ago');
+        expect(older).toContain('2 min. ago');
     });
 
     it('does not say so either when this browser’s clock is behind the server’s', async () =>

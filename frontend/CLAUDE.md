@@ -972,7 +972,10 @@ is still one step back. `app-stores.spec.ts` holds both, Back and Forward throug
 **A row with little room says how long ago in the short form.** `locale.relative` takes
 `{ now, style }`; a table's row says "15 min. ago" where "15 minutes ago" was clipped at 390 on a
 team table's row, behind its seats and its voice mark. Lists with room keep the long form.
-`format.spec.ts` holds both styles in both languages.
+`format.spec.ts` holds both styles in both languages. The watch list's row put "started 15 minutes
+ago" beside the game's name and let the NAME give way, so a phone read "Backg… started 15 minutes
+ago"; the name keeps its width now and the time says it short and gives way instead
+(`watch-page.spec.ts`, *keeps a game's name whole*).
 
 **A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
