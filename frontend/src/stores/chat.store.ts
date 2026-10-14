@@ -27,6 +27,7 @@ interface Typist
 {
     who: string;
     until: number;
+    after: string;
 }
 
 let active: ChatSource = createApiSource();
@@ -337,9 +338,11 @@ export const useChat = createStore((): ChatApi =>
         const current = untrack(typists);
         const kept = (current[conversationId] ?? []).filter((entry) => entry.who !== who && entry.until > now);
 
-        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS }] });
+        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS, after: untrack(() => lastOf(conversationId))?.id ?? '' }] });
         sweepSoon();
     };
+
+    const answered = (entry: Typist, last: Message | undefined) => last !== undefined && last.from === entry.who && last.id !== entry.after;
 
     const announced = new Map<string, number>();
 
@@ -406,7 +409,9 @@ export const useChat = createStore((): ChatApi =>
         typing(id)
         {
             const now = runtime().clock.now();
-            return (typists()[id] ?? []).filter((entry) => entry.until > now).map((entry) => entry.who);
+            const last = lastOf(id);
+
+            return (typists()[id] ?? []).filter((entry) => entry.until > now && !answered(entry, last)).map((entry) => entry.who);
         },
 
         draft: (id) => drafts()[id] ?? '',

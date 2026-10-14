@@ -349,6 +349,37 @@ describe('typing', () =>
         stop();
     });
 
+    it('takes somebody out of the indicator the moment a message of theirs is the newest in the room, and not before', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+        await settle();
+
+        const row = server.conversations.find((one) => one.id === 'c-sara')!;
+        const theirs = server.messages.find((one) => one.conversationId === 'c-sara' && one.kind === 'text' && one.from === 'sara.k' && one.id !== row.last?.id)!;
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        socket.deliver({ v: 1, t: 'typing', n: 2, who: 'reza.t', id: 'c-sara' });
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara').sort(), 'a read that brought nothing new ended somebody\'s typing').toEqual(['reza.t', 'sara.k']);
+
+        row.last = { ...theirs };
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara'), 'the message has come and they are still typing it').toEqual(['reza.t']);
+
+        socket.deliver({ v: 1, t: 'typing', n: 3, who: 'sara.k', id: 'c-sara' });
+
+        expect(chat.typing('c-sara').sort(), 'typing again after a message is typing again').toEqual(['reza.t', 'sara.k']);
+
+        stop();
+    });
+
     it('says it is typing at a rate the gateway will not hang up on', () =>
     {
         const chat = useChat();

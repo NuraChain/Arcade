@@ -35,6 +35,7 @@ meant one person pinning a thread pinned it for everybody in it. Unread is a cou
 after my own watermark - which is also the only way to count them once the bodies are sealed and
 the server cannot read one.
 
+
 **A message is words XOR a line.** `body` for what somebody typed, `payload` `{ key, params }` for
 the three kinds the server authors, and a CHECK constraint so a row can never be both or neither.
 The browser renders a line through `lib/lines.ts`, which declares the keys it knows; an unknown
@@ -1341,7 +1342,10 @@ from outside, and `presence.dot()` draws nothing for either.
 in which conversation, and when — that is on the same list as who talked to whom and how large it
 was, and it belongs in the privacy copy alongside them. A notice carries its own 4s expiry because
 nobody ever sends "I stopped": the tab may have closed, the socket may have dropped, or they may
-have walked away.
+have walked away. A line from them ends it at once: the indicator leaves out anybody whose line has
+become the newest in the room since their notice came (`answered` in the chat store), where it went
+on saying they were typing the line that had already arrived, for up to four seconds. Seen in the
+clean production run; `realtime-stores.spec.ts` (*typing*) holds it.
 
 The client half is `services/realtime.source.ts` (the only module that constructs a `WebSocket`)
 and `stores/realtime.store.ts` (one connection, jittered backoff seeded from `runtime().seed`, a
