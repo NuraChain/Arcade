@@ -84,10 +84,6 @@ export const app = {
     'connection.unreached': 'Live updates are not getting through. This page checks for changes every few seconds.',
     'connection.restored': 'Back online.',
 
-    'keys.banner.absent': 'This browser can’t read your messages yet.',
-    'keys.banner.absentAction': 'Give it keys',
-    'keys.banner.dismiss': 'Not now',
-
     'state.errorTitle': 'Couldn’t load this.',
     'state.errorLead': 'If this keeps happening, check your connection.'
 };

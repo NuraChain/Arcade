@@ -84,7 +84,7 @@ export default component SealNotice(props: { stop: SendBlock | null })
                 </span>
                 <Show when={ keyless }>
                     <span class="shrink-0">
-                        <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
+                        <Button variant="primary" size="sm" leading="wallet" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
                             { locale.t('devices.enrol') }
                         </Button>
                     </span>

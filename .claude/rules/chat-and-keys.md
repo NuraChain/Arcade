@@ -397,7 +397,11 @@ session opens, the SAME verified proof records the device through `device.enrol`
 live, attested by the wallet that signed, and the session bound - but only when `namesDevice` holds
 and the proof's address is the account's wallet, so a sign-in that named no device is never stored
 as an attestation. A `ConflictError` there (keys revoked, or somebody else's) does not fail the
-sign-in; the browser falls back to the separate enrolment, which mints fresh keys. The standalone
+sign-in; the browser falls back to the separate enrolment, which mints fresh keys. It rarely gets
+there: when the message the server issues names the keys this browser already held, those keys
+are not a live device of this account, so the browser makes fresh ones and asks for the message
+again, and the one signature adds them. A browser whose keys are this account's is asked for the
+short text and keeps them. The standalone
 enrolment route stays for a signed-in browser that lost its keys, with its own sentence (`Let this
 browser read and send your messages on Nura Games (<site>).`).
 

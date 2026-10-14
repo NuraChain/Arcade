@@ -18,6 +18,7 @@ import {
     type Eip1193Provider,
     type WalletFailure
 } from '../lib/wallet.ts';
+import { namesDevice } from '../../../backend/src/domains/device/resource.ts';
 import { client, ApiError, type Account } from '../api.ts';
 import { useDevice } from './device.store.ts';
 import { useLocale } from './locale.store.ts';
@@ -107,7 +108,7 @@ export const useWallet = createStore((): WalletApi =>
         console.warn('[wallet]', step, reason);
     };
 
-    const browserKeys = async (): Promise<DeviceKeys | null> =>
+    const heldKeys = async (): Promise<DeviceKeys | null> =>
     {
         const store = keyStore();
         if (!store.available())
@@ -116,7 +117,25 @@ export const useWallet = createStore((): WalletApi =>
         }
         try
         {
-            return await store.load() ?? await store.mint();
+            return await store.load();
+        }
+        catch (error)
+        {
+            why('keys', error);
+            return null;
+        }
+    };
+
+    const newKeys = async (): Promise<DeviceKeys | null> =>
+    {
+        const store = keyStore();
+        if (!store.available())
+        {
+            return null;
+        }
+        try
+        {
+            return await store.mint();
         }
         catch (error)
         {
@@ -263,12 +282,21 @@ export const useWallet = createStore((): WalletApi =>
 
             setStatus('signing');
 
-            const keys = await browserKeys();
+            const held = await heldKeys();
+            let keys = held ?? await newKeys();
 
             let challenge;
             try
             {
                 challenge = await client.auth.challenge({ input: { address: account, ...(keys === null ? {} : { device: keys.id }) } });
+
+                const fresh = held !== null && namesDevice(challenge.message, held.id) ? await newKeys() : null;
+
+                if (fresh !== null)
+                {
+                    keys = fresh;
+                    challenge = await client.auth.challenge({ input: { address: account, device: fresh.id } });
+                }
             }
             catch (error)
             {

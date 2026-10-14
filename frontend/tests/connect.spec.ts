@@ -209,7 +209,7 @@ describe('the wallet chooser', () =>
         expect(row.tagName).toBe('BUTTON');
 
         fire(row, 'click');
-        await settle();
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalled(), { timeout: 4000 });
 
         expect(server.calls).toContain('auth.challenge');
         expect(server.calls).toContain('auth.wallet');
@@ -236,7 +236,7 @@ describe('the wallet chooser', () =>
         expect(rows[2].textContent).toContain('Not in this browser');
 
         fire(rows[0].querySelector('button')!, 'click');
-        await settle();
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalled(), { timeout: 4000 });
 
         expect(server.received?.providerRdns).toBe('net.nurachain.wallet');
         expect(navigate).toHaveBeenCalledWith('/app');

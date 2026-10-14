@@ -150,7 +150,7 @@ for (const size of SIZES)
         // ---------------------------------------------------------- enrol
         await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
 
-        const enrol = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+        const enrol = page.getByRole('button', { name: /^(Connect wallet|اتصال کیف پول)$/ }).first();
 
         if (await enrol.count() > 0)
         {
@@ -205,7 +205,7 @@ for (const size of SIZES)
 
             await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
 
-            const again = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+            const again = page.getByRole('button', { name: /^(Connect wallet|اتصال کیف پول)$/ }).first();
 
 
 

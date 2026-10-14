@@ -1034,7 +1034,7 @@ try
         const page = keys.page;
         await go(page, `/app/chats/${ direct.id }`);
 
-        const give = page.getByRole('button', { name: /Give it keys|Give this browser keys/ }).first();
+        const give = page.getByRole('button', { name: /^Connect wallet$/ }).first();
         record('a browser with no keys is offered them', await soon(async () => await give.isVisible(), 10000));
         await give.click();
 

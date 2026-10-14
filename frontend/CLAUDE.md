@@ -477,42 +477,32 @@ a laptop opened on a phone showed the padlock, enabled the box, and threw
 pure function - tampered first because it is the only state that means something is wrong, then this
 browser because it is the one the reader can fix, then everybody else - and a spec pins the order.
 
-**Enrolment is offered where somebody is stuck, not only where it lives.** The seal notice carries a
-button when this browser is what is in the way, and `enrol` NEVER rejects - it reports through
-`failure()` - so every outcome is read back and spoken. A browser is live the moment it enrols, so
-there is no second step to point anybody at.
+**A browser's keys come with the wallet, and nothing asks for them on every page.** The owner:
+"we have get device key i think we can remove it and when user connect wallet it should
+automaticly add it". Connecting the wallet already added the browser in the same signature
+(*Signing in and authorising the browser are ONE signature* in `chat-and-keys.md`), and it now does
+so whatever keys the browser held: when the server's message names the keys this browser already
+had, they are not this account's (revoked, somebody else's, never added), so `connect()` makes
+fresh ones and asks for the message again before the wallet signs. `wallet.spec.ts` (*connecting
+a wallet adds this browser*) holds the three cases and the browser that cannot hold keys.
 
-**The status strips are a chunk of their own.** `strips.component` draws the connection strip, the
-key strip and the strip that says a search for players is on (`looking-strip`, *A waiting table IS
-the search* in `games.md`), and starts the connection store; the shell fetches it one promise after itself
-through `strips-loader.ts`, the cues loader's shape. The shell stood at 12,225 of its 12,288 bytes,
-neither strip is drawn unless something is wrong, and a direct `import()` in the shell would have
-put the chunk table back into it, which is what a loader module is for.
+So the strip that sat on every route ("This browser can't read your messages yet. Give it keys")
+is gone, with its dismissal and the three words it said. It was reached only by a session whose
+browser holds no keys of its own: a cookie this browser kept while its stored keys went (a
+cleared site, Safari's week, another port of localhost in development). Such a session is asked
+where it is stuck, above a composer it cannot send from, and on the devices page, both in the
+wallet's words: "Connect wallet". `enrolment.store.ts` keeps the one routine both would otherwise
+copy, a sequence of DECISIONS (a locked wallet says something different from a refused
+signature), and `give` NEVER rejects: `enrol` reports through `failure()`, so every outcome is
+read back and spoken. A browser is live the moment it is added, so there is no second step to
+point anybody at.
 
-**And it is offered before anybody is stuck, because both other doors need you to already be
-there.** `keys-banner.component.azeroth` sits in the shell where `ConnectionBanner` does, on every
-route, and says this browser cannot read your messages yet. The seal notice is above a composer
-somebody with no keys cannot reach the point of using, and the devices page is a page nobody opens
-unprompted - so the product's answer to "why can nobody hear me" was a screen you had to already
-know about. It carries the button, because enrolling is one step and it happens there. It once read
-`TEXT[gap!]` inside a branch guarded by `asking()`, and the text binding re-ran with `gap` already
-null in the tick before the branch went, so `locale.t(undefined)` fell through every lookup into the
-plural path and the error boundary took the whole page the moment enrolment finished.
-`keys-banner.spec.ts` walks absent and gone.
-
-**The routine behind that button lives in `enrolment.store.ts`, and it lives there because there are
-now two of them.** It is a sequence of DECISIONS - a locked wallet says something different from a
-refused signature - and it was written out inside `chat.page`. The moment a second surface offered the same button, a second copy of those
-decisions would have been a second chance to say the wrong one, which is the argument `policy.ts`
-makes about the social rules and the same shape.
-
-`gap()` is deliberately silent for two states. A GUEST gets nothing, because a guest has no wallet
-to attest with, so a key here would unblock this browser and leave them blocked on the other half -
-a button that lies about what it fixes. `unsupported` gets nothing either: there is nothing behind
-the button on a browser with no secure storage, and a strip that cannot be acted on is furniture
-that never goes away. Dismissal is held for the session and never written down - a key gap is not a
-preference, and a flag in `localStorage` would silence it for good on the one machine where the
-answer matters.
+**The status strips are a chunk of their own.** `strips.component` draws the connection strip
+and the strip that says a search for players is on (`looking-strip`, *A waiting table IS the
+search* in `games.md`), and starts the connection store; the shell fetches it one promise after
+itself through `strips-loader.ts`, the cues loader's shape. The shell stood at 12,225 of its
+12,288 bytes, neither strip is drawn unless something is wrong, and a direct `import()` in the
+shell would have put the chunk table back into it, which is what a loader module is for.
 
 **A `<Show>`'s `fallback` is built exactly when the guard is FALSE**, which is precisely the moment
 the thing the guard protects may be gone. Closing a table did it: `table` went null, `seated` flipped

@@ -135,12 +135,12 @@ export const me = {
 
     'devices.title': 'Devices',
     'devices.lead': 'The browsers and apps signed in to this account. Each one holds its own keys, and signing one out burns them.',
-    'devices.enrol': 'Give this browser keys',
+    'devices.enrol': 'Connect wallet',
     'devices.live': 'Signed in',
     'devices.retired': 'Signed out',
     'devices.retiredLead': 'These keys are burned. The same machine can come back, but it comes back as a new device.',
     'devices.empty': 'No devices yet',
-    'devices.emptyLead': 'Nothing here holds keys. Give this browser a set and it will be the first.',
+    'devices.emptyLead': 'Nothing here holds keys. Connect your wallet and this browser will be the first.',
     'devices.unnamed': 'Unnamed device',
     'devices.thisOne': 'This one',
     'devices.revoke': 'Sign out',
@@ -173,8 +173,8 @@ export const me = {
 
     'devices.self.unsupported': 'This browser cannot hold keys',
     'devices.self.unsupportedLead': 'It has nowhere secure to keep them — a private window, or a page served without HTTPS. Everything else works; this browser just cannot be a device.',
-    'devices.self.absent': 'This browser has no keys yet',
-    'devices.self.absentLead': 'Give it a set and it joins the list. They are made here and the private half never leaves.',
+    'devices.self.absent': 'This browser is not added yet',
+    'devices.self.absentLead': 'Connect your wallet and it joins the list. Its keys are made here and the private half never leaves.',
     'devices.self.ready': 'This browser is set up',
     'devices.self.readyLead': 'It holds its own keys, so it can read and send your messages.',
 

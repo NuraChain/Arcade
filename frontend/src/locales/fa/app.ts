@@ -87,10 +87,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'connection.unreached': 'ارتباط زنده برقرار نشد. این صفحه هر چند ثانیه خودش سر می‌زند.',
     'connection.restored': 'دوباره آنلاین شدی.',
 
-    'keys.banner.absent': 'این مرورگر هنوز نمی‌تواند پیام‌هایت را بخواند.',
-    'keys.banner.absentAction': 'کلید بگیرد',
-    'keys.banner.dismiss': 'الان نه',
-
     'state.errorTitle': 'این بخش بارگذاری نشد.',
     'state.errorLead': 'اگر ادامه داشت، اتصالت را بررسی کن.'
 };

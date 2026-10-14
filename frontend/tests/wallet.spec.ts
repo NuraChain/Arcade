@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { NURA_CHAIN, chainIsConfigured } from '../src/data/chain.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetKeyStore, setKeyStore, type DeviceKeys, type KeyStore } from '../src/lib/device-keys.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
     addressHue,
@@ -340,6 +341,115 @@ describe('wallet store', () =>
             addSpy.mockRestore();
             removeSpy.mockRestore();
         }
+    });
+});
+
+describe('connecting a wallet adds this browser', () =>
+{
+    const memoryKeys = () =>
+    {
+        const store: KeyStore & { minted: number; held: DeviceKeys | null } = {
+            minted: 0,
+            held: null,
+            available: () => true,
+            async load()
+            {
+                return store.held;
+            },
+            async secrets()
+            {
+                return null;
+            },
+            async mint()
+            {
+                store.minted += 1;
+                store.held = { id: `device-${ store.minted }`, exchangeKey: `exchange-${ store.minted }`, signingKey: `signing-${ store.minted }` };
+
+                return store.held;
+            },
+            async forget()
+            {
+                store.held = null;
+            }
+        };
+
+        return store;
+    };
+
+    let keys: ReturnType<typeof memoryKeys>;
+
+    beforeEach(() =>
+    {
+        keys = memoryKeys();
+        setKeyStore(keys);
+    });
+
+    afterEach(() =>
+    {
+        resetKeyStore();
+    });
+
+    const signs = (provider: ReturnType<typeof fakeProvider>) => provider.calls.filter((method) => method === 'personal_sign').length;
+
+    it('makes keys for a browser that has none, and names them in the one message the wallet signs', async () =>
+    {
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted).toBe(1);
+        expect(signs(provider)).toBe(1);
+        expect(provider.signed[0]).toContain(`Browser key: ${ keys.held?.id }`);
+        expect(server.received?.device?.id).toBe(keys.held?.id);
+    });
+
+    it('keeps keys this account already has here, and asks for no device in what the wallet signs', async () =>
+    {
+        const held = await keys.mint();
+
+        server.addDevice({ id: held.id, exchangeKey: held.exchangeKey, signingKey: held.signingKey });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted, 'keys this account holds were thrown away').toBe(1);
+        expect(signs(provider)).toBe(1);
+        expect(provider.signed[0]).not.toContain('Browser key:');
+        expect(server.calls.filter((call) => call === 'auth.challenge')).toHaveLength(1);
+    });
+
+    it('makes new keys before the wallet signs when the ones here are not this account’s, so one signature still adds the browser', async () =>
+    {
+        const stale = await keys.mint();
+
+        server.addDevice({ id: stale.id, exchangeKey: stale.exchangeKey, signingKey: stale.signingKey, revoked: true });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted, 'the keys the server would refuse were kept').toBe(2);
+        expect(keys.held?.id).not.toBe(stale.id);
+        expect(signs(provider), 'the browser was added with a second signature').toBe(1);
+        expect(provider.signed[0]).toContain(`Browser key: ${ keys.held?.id }`);
+        expect(provider.signed[0]).not.toContain(stale.id);
+        expect(server.received?.device?.id).toBe(keys.held?.id);
+    });
+
+    it('makes nothing for a browser that cannot hold keys, and still signs in', async () =>
+    {
+        setKeyStore({ ...memoryKeys(), available: () => false });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        expect(await useWallet().connect()).toEqual(walletAccount(ADDRESS));
+        expect(provider.signed[0]).not.toContain('Browser key:');
+        expect(server.received?.device).toBeUndefined();
     });
 });
 

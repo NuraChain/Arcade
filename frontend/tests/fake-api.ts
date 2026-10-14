@@ -2140,11 +2140,12 @@ export const client =
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
             const nonce = `nonce-${ server.calls.length }`;
+            const live = server.devices.some((one) => one.id === input.device && !one.revoked);
             server.issued = {
                 address: input.address,
                 nonce,
                 ...(input.device === undefined ? {} : { device: input.device }),
-                message: input.device === undefined
+                message: input.device === undefined || live
                     ? `Sign in to Nura Games (nura.games).\n\nNonce: ${ nonce }`
                     : `Sign in to Nura Games (nura.games) and let this browser read and send your messages.\n\nBrowser key: ${ input.device }\nNonce: ${ nonce }`
             };

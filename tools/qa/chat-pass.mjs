@@ -337,12 +337,10 @@ const pressable = async (page, name) =>
 async function enrol(who)
 {
     /*
-     * Two doors say the same thing and either may be the one on screen: the shell's keys banner
-     * offers "Give it keys" on every route, and the seal notice above a composer this browser
-     * cannot use offers "Give this browser keys". Whichever is there, pressing it is the real
-     * enrolment - the same button a person presses, signing with the injected wallet.
+     * The seal notice above a composer this browser cannot use offers "Connect wallet". Pressing
+     * it is the real enrolment - the same button a person presses, signing with the injected wallet.
      */
-    const button = await pressable(who.page, /Give it keys|Give this browser keys/i);
+    const button = await pressable(who.page, /^Connect wallet$/i);
 
     if (button === null)
     {

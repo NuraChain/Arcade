@@ -324,7 +324,8 @@ describe('what the thread says about it', () =>
                 .container.textContent ?? '';
         };
 
-        expect(said('absent')).toContain('no keys of its own');
+        expect(said('absent')).toContain('not added to your account yet');
+        expect(said('absent')).toContain('Connect your wallet');
         expect(said('unsupported')).toContain('nowhere secure');
     });
 
