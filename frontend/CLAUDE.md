@@ -1030,6 +1030,25 @@ keyboard was dropped on the page. Not added, on purpose: a choice of page size (
 people and tables, not a ledger) and a field to type a page into (the numbered pager always shows
 the first and the last).
 
+**Every filter is in the address too, and so are a search's words.** The owner asked for the
+search box and the filters to be as complete as the pager. The games page's kind (`category`),
+the notifications' kind (`kind`), the search page's words and scope (`q`, `scope`), the
+leaderboard's game and stretch of time (`game`, `window`, on a game's page as well) and the scope
+of a profile's achievements (`scope`) were each held in a component or a store, so a reload, or
+Back from wherever a result led, forgot them. `useAddress()` in `lib/page-param.ts` reads a word
+(`text`: the first of a word given twice, nothing for none) and writes several at once with
+`replace`, each in its place, an empty one left out, and nothing at all when the address already
+says it; `usePageParams` is built on it, and `reset(words)` writes new words and the first page in
+one step. A filter's default is never written (All, a month, everywhere), and a word the page does
+not have is its default. Where a filter lives in a store (the search's words and scope, the
+notifications' kind), the page reads the address into the store in `mount` and writes both where
+a person changes it, so the address is the truth on arrival: the search page opened from the nav
+is empty whatever was searched for last, and Back brings the search back with its page. The chat
+list's tab is the exception and stays in module memory: a thread is another route, and the tab
+has to outlive it (*On a desktop the list stays beside the thread*). `page-param.spec.ts`,
+`games-page.spec.ts`, `notifications-page.spec.ts`, `people-search.spec.ts`, `leaderboard.spec.ts`
+and `record.spec.ts` hold each.
+
 **Escape clears a search field that has words, and only then closes what it sits in.** A field
 with `clearable` answers Escape by clearing itself and marking the event answered
 (`preventDefault`), and the overlay host leaves an Escape that something already answered. The

@@ -393,4 +393,73 @@ describe('a search kept in the address', () =>
         expect(router.location().query.people, 'new words kept the page of the old ones').toBeUndefined();
         expect(router.location().query.messages).toBeUndefined();
     });
+
+    const at = (path: string) =>
+    {
+        const table: Route[] = [{ path: '/app/search', component: (): HTMLElement => SearchPage() as HTMLElement }];
+        const router = createRouter({ routes: table, history: createMemoryHistory(path), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+        return { container, router };
+    };
+
+    const typeIn = async (container: HTMLElement, text: string) =>
+    {
+        const field = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+
+        field.value = text;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        await settle();
+    };
+
+    it('writes what is typed and the scope chosen into the address, with replace', async () =>
+    {
+        const { container, router } = at('/app/search');
+
+        await settle();
+        await typeIn(container, 'sara');
+
+        expect(router.location().fullPath).toBe('/app/search?q=sara');
+        expect(router.location().navigationKind, 'every letter typed was a step Back would walk').toBe('replace');
+
+        fire(pressable(container, useLocale().t('search.scope.people'))!, 'click');
+        await settle();
+
+        expect(router.location().fullPath).toBe('/app/search?q=sara&scope=people');
+
+        fire(pressable(container, useLocale().t('search.scope.all'))!, 'click');
+        await settle();
+
+        expect(router.location().fullPath).toBe('/app/search?q=sara');
+
+        await typeIn(container, '');
+
+        expect(router.location().fullPath, 'a field cleared left its words in the address').toBe('/app/search');
+    });
+
+    it('opens on the words and the scope the address names', async () =>
+    {
+        const { container } = at('/app/search?q=sara&scope=people');
+
+        await settle();
+        await paused();
+
+        expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe('sara');
+        expect(useSearch().scope()).toBe('people');
+        expect(pressable(container, useLocale().t('search.scope.people'))!.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('opens empty where the address names nothing, whatever was searched for last', async () =>
+    {
+        useSearch().setQuery('omid');
+        useSearch().setScope('groups');
+
+        const { container } = at('/app/search');
+
+        await settle();
+
+        expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe('');
+        expect(useSearch().query()).toBe('');
+        expect(useSearch().scope()).toBe('all');
+    });
 });

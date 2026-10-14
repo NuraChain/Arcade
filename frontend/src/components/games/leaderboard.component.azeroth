@@ -9,6 +9,7 @@ import Segmented from '../ui/segmented.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import type { Standing } from '../../api.ts';
 import { client } from '../../api.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { aboutPerson } from '../../lib/person-menu.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -26,8 +27,9 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
 {
     const locale = useLocale();
     const account = useAccount();
+    const address = useAddress();
 
-    state window = 'month' as LeaderboardWindow;
+    derived window = WINDOWS.find((one) => one.id === address.text('window'))?.id ?? 'month';
 
     const board = createResource(
         () => ({ game: props.game, window }),
@@ -109,7 +111,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
                 label={ locale.t('board.window') }
                 value={ window }
                 items={ WINDOWS.map((one) => ({ id: one.id, label: locale.t(one.key) })) }
-                onChange={ (id) => window = id as LeaderboardWindow }
+                onChange={ (id) => address.write({ window: id === 'month' ? '' : id }) }
             />
         </div>
 

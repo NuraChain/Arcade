@@ -46,6 +46,17 @@ const show = async () =>
     return container;
 };
 
+const open = async (path: string) =>
+{
+    const page = GamesPage as unknown as () => HTMLElement;
+    const table: Route[] = [{ path: '/app/games', component: page }];
+    const router = createRouter({ routes: table, history: createMemoryHistory(path), scroll: false });
+    const { container } = renderTest(() => RouterProvider({ router, children: page }) as Rendered);
+
+    await settle();
+    return { container, router };
+};
+
 beforeEach(() =>
 {
     cleanup();
@@ -113,5 +124,63 @@ describe('the games page', () =>
         expect(grid.className.split(' '), 'a phone gets one card to a row').toContain('grid-cols-2');
         expect([...grid.querySelectorAll(':scope > li')].every((one) => one.classList.contains('@container')), 'a card cannot ask how wide it is').toBe(true);
         expect(words?.className.split(' ')).toEqual(['hidden', 'text-ui-sm', 'text-muted', '@[13rem]:line-clamp-2']);
+    });
+
+    describe('the kind of game chosen', () =>
+    {
+        const games = () => ['hokm', 'poker', 'backgammon', 'ludo'].map((id) => Object.assign({}, summary(id, 'available'), { category: id === 'hokm' || id === 'poker' ? 'cards' : 'board' }));
+
+        const chip = (container: HTMLElement, key: 'games.filter.all' | 'games.category.cards' | 'games.category.board') =>
+            [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((one) => one.textContent?.includes(useLocale().t(key)))!;
+
+        it('is read from the address, so a reload and Back come back to it', async () =>
+        {
+            server.games = games();
+            useCatalogue().reset();
+
+            const { container } = await open('/app/games?category=board');
+
+            await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
+
+            expect(container.querySelectorAll('ul li article')).toHaveLength(2);
+            expect(chip(container, 'games.category.board').getAttribute('aria-pressed')).toBe('true');
+            expect(chip(container, 'games.filter.all').getAttribute('aria-pressed')).toBe('false');
+        });
+
+        it('is written into the address with replace, and All takes it out', async () =>
+        {
+            server.games = games();
+            useCatalogue().reset();
+
+            const { container, router } = await open('/app/games');
+
+            await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
+
+            chip(container, 'games.category.cards').click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/games?category=cards');
+            expect(router.location().navigationKind).toBe('replace');
+            expect(container.querySelectorAll('ul li article')).toHaveLength(2);
+
+            chip(container, 'games.filter.all').click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/games');
+            expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+        });
+
+        it('shows every game for a kind it does not have', async () =>
+        {
+            server.games = games();
+            useCatalogue().reset();
+
+            const { container } = await open('/app/games?category=chess');
+
+            await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
+
+            expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+            expect(chip(container, 'games.filter.all').getAttribute('aria-pressed')).toBe('true');
+        });
     });
 });

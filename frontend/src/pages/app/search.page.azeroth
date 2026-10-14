@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { useHead, useNavigate, useQuery } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -24,7 +24,7 @@ import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.
 import { useSocial } from '../../stores/social.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import { pagingFor, visible } from '../../lib/pagination.ts';
-import { usePageParams } from '../../lib/page-param.ts';
+import { useAddress, usePageParams } from '../../lib/page-param.ts';
 import { useDevice } from '../../stores/device.store.ts';
 
 const PEOPLE_PAGE = 8;
@@ -62,18 +62,13 @@ export default component SearchPage()
     derived paging = pagingFor(device.posture() === 'phone');
     const { navigate } = useNavigate();
 
-    const asked = useQuery();
+    const address = useAddress();
 
     mount
     {
         social.want('people');
-
-        const term = asked().q;
-
-        if (typeof term === 'string' && term.trim() !== '')
-        {
-            search.setQuery(term);
-        }
+        search.setScope(SEARCH_SCOPES.find((one) => one === address.text('scope')) ?? 'all');
+        search.setQuery(address.text('q'));
     }
 
     useHead({ title: () => locale.t('app.nav.search') });
@@ -122,14 +117,14 @@ export default component SearchPage()
     const widen = () =>
     {
         search.setScope('people');
-        pages.reset();
+        pages.reset({ scope: 'people' });
     };
 
     const run = (term: string) =>
     {
         search.setQuery(term);
         search.remember(term);
-        pages.reset();
+        pages.reset({ q: term.trim() });
     };
 
     <Page label={ locale.t('app.nav.search') }>
@@ -140,7 +135,7 @@ export default component SearchPage()
                 onInput={ (value) =>
                 {
                     search.setQuery(value);
-                    pages.reset();
+                    pages.reset({ q: value.trim() });
                 } }
                 placeholder={ locale.t('search.placeholder') }
                 label={ locale.t('app.nav.search') }
@@ -156,7 +151,7 @@ export default component SearchPage()
             onChange={ (id) =>
             {
                 search.setScope(id as SearchScope);
-                pages.reset();
+                pages.reset({ scope: id === 'all' ? '' : id });
             } }
             items={ SEARCH_SCOPES.map((scope) => ({ id: scope, label: locale.t(`search.scope.${ scope }`) })) }
         />

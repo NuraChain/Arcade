@@ -144,6 +144,72 @@ describe('the leaderboard page', () =>
         expect(container.textContent).not.toContain('Could not load the leaderboard.');
     });
 
+    describe('the game and the stretch of time chosen', () =>
+    {
+        const at = async (path: string) =>
+        {
+            const page = LeaderboardPage as unknown as () => HTMLElement;
+            const table: Route[] = [{ path: '/app/leaderboard', component: page }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(path), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: page }) as Rendered);
+
+            await settle();
+            return { container, router };
+        };
+
+        const game = (container: HTMLElement, name: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Choose a game"] button')].find((button) => button.textContent?.includes(name))!;
+
+        const stretch = (container: HTMLElement, key: 'board.today' | 'board.month') =>
+            [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button[aria-pressed]')].find((button) => button.textContent?.trim() === useLocale().t(key))!;
+
+        it('opens on the game and the stretch of time the address names', async () =>
+        {
+            const { container } = await at('/app/leaderboard?game=ludo&window=today');
+
+            expect(game(container, 'Ludo').getAttribute('aria-pressed')).toBe('true');
+            expect(stretch(container, 'board.today').getAttribute('aria-pressed')).toBe('true');
+            expect(server.boardsAsked).toEqual(['ludo today']);
+        });
+
+        it('writes each into the address with replace, and keeps the one that did not change', async () =>
+        {
+            const { container, router } = await at('/app/leaderboard');
+
+            fire(game(container, 'Ludo'), 'click');
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/leaderboard?game=ludo');
+            expect(router.location().navigationKind).toBe('replace');
+
+            fire(stretch(container, 'board.today'), 'click');
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/leaderboard?game=ludo&window=today');
+
+            fire(game(container, 'Hokm'), 'click');
+            await settle();
+
+            expect(router.location().fullPath, 'another game took the stretch of time back to a month').toBe('/app/leaderboard?game=hokm&window=today');
+            expect(stretch(container, 'board.today').getAttribute('aria-pressed')).toBe('true');
+            expect(server.boardsAsked.at(-1)).toBe('hokm today');
+
+            fire(stretch(container, 'board.month'), 'click');
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/leaderboard?game=hokm');
+        });
+
+        it('shows the first game and a month for words it does not have', async () =>
+        {
+            const { container } = await at('/app/leaderboard?game=chess&window=decade');
+
+            expect(game(container, 'Hokm').getAttribute('aria-pressed')).toBe('true');
+            expect(stretch(container, 'board.month').getAttribute('aria-pressed')).toBe('true');
+            expect(server.boardsAsked).toEqual(['hokm month']);
+        });
+    });
+
     it('points every sidebar destination at a route that exists', () =>
     {
         const declared = routes.flatMap((route) => (route.children ?? []).map((child) => `${ route.path }${ child.path === '' ? '' : `/${ child.path }` }`));

@@ -318,6 +318,7 @@ export const server =
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
     standings: [] as Standing[],
+    boardsAsked: [] as string[],
     history: [] as MatchHistoryEntry[],
 
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
@@ -512,6 +513,7 @@ export const server =
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
         server.standings = [];
+        server.boardsAsked = [];
         server.history = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
@@ -842,9 +844,10 @@ export const client =
             server.calls.push('catalogue.live');
             return { games: server.live.map((row) => ({ ...row })) };
         },
-        async leaderboard(input: { params: { game: string } })
+        async leaderboard(input: { params: { game: string }; query?: { window?: string } })
         {
             server.calls.push('catalogue.leaderboard');
+            server.boardsAsked.push(`${ input.params.game } ${ input.query?.window ?? '' }`);
             return { game: input.params.game, standings: server.standings.map((row) => ({ ...row })) };
         }
     },

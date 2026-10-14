@@ -4,7 +4,13 @@ export interface PageParams<K extends string>
 {
     page(key: K): number;
     turn(key: K, page: number): void;
-    reset(): void;
+    reset(words?: Readonly<Record<string, string>>): void;
+}
+
+export interface Address
+{
+    text(key: string): string;
+    write(values: Readonly<Record<string, number | string>>): void;
 }
 
 export function pageOf(raw: string | string[] | undefined)
@@ -14,28 +20,32 @@ export function pageOf(raw: string | string[] | undefined)
     return Number.isInteger(asked) && asked > 1 ? asked : 1;
 }
 
-export function addressWith(path: string, query: Readonly<Record<string, string | string[]>>, pages: Readonly<Record<string, number>>)
+export function textOf(raw: string | string[] | undefined)
+{
+    return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+}
+
+export function addressWith(path: string, query: Readonly<Record<string, string | string[]>>, values: Readonly<Record<string, number | string>>)
 {
     const params = new URLSearchParams();
 
     for (const [name, value] of Object.entries(query))
     {
-        if (name in pages)
-        {
-            continue;
-        }
-
         for (const one of Array.isArray(value) ? value : [value])
         {
             params.append(name, one);
         }
     }
 
-    for (const [name, page] of Object.entries(pages))
+    for (const [name, value] of Object.entries(values))
     {
-        if (page > 1)
+        if (typeof value === 'number' ? value > 1 : value !== '')
         {
-            params.set(name, String(page));
+            params.set(name, String(value));
+        }
+        else
+        {
+            params.delete(name);
         }
     }
 
@@ -44,27 +54,39 @@ export function addressWith(path: string, query: Readonly<Record<string, string 
     return search === '' ? path : `${ path }?${ search }`;
 }
 
-export function usePageParams<K extends string>(keys: readonly K[]): PageParams<K>
+export function useAddress(): Address
 {
     const query = useQuery();
     const route = useRoute();
     const { replace } = useNavigate();
 
-    const go = (pages: Readonly<Record<string, number>>) =>
-    {
-        const now = query();
+    const holds = (now: Readonly<Record<string, string | string[]>>, key: string, value: number | string) =>
+        typeof value === 'number' ? pageOf(now[key]) === value : textOf(now[key]) === value;
 
-        if (Object.entries(pages).every(([key, page]) => pageOf(now[key]) === page))
+    return {
+        text: (key) => textOf(query()[key]),
+        write: (values) =>
         {
-            return;
-        }
+            const now = query();
 
-        void replace(addressWith(route().pathname, now, pages));
+            if (Object.entries(values).every(([key, value]) => holds(now, key, value)))
+            {
+                return;
+            }
+
+            void replace(addressWith(route().pathname, now, values));
+        }
     };
+}
+
+export function usePageParams<K extends string>(keys: readonly K[]): PageParams<K>
+{
+    const query = useQuery();
+    const address = useAddress();
 
     return {
         page: (key) => pageOf(query()[key]),
-        turn: (key, page) => go({ [key]: page }),
-        reset: () => go(Object.fromEntries(keys.map((key) => [key, 1])))
+        turn: (key, page) => address.write({ [key]: page }),
+        reset: (words = {}) => address.write({ ...words, ...Object.fromEntries(keys.map((key) => [key, 1])) })
     };
 }

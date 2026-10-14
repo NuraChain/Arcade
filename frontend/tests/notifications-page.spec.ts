@@ -189,6 +189,69 @@ describe('the notifications page', () =>
         expect(container.textContent).not.toContain(locale.t('notifications.emptyKind'));
     });
 
+    describe('the kind chosen', () =>
+    {
+        const openedAt = async (path: string) =>
+        {
+            const routes: Route[] = [{ path: '/app/notifications', component: (): HTMLElement => NotificationsPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(path), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return { container, router };
+        };
+
+        it('is written into the address with replace, and All takes it out', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            const { container, router } = await openedAt('/app/notifications');
+            const locale = useLocale();
+
+            chipOf(container, locale.t('notifications.kind.messages'))!.click();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(1), { timeout: 4000 });
+            expect(router.location().fullPath).toBe('/app/notifications?kind=messages');
+            expect(router.location().navigationKind).toBe('replace');
+            expect(server.calls).toContain('notifications.list:messages');
+
+            chipOf(container, locale.t('notifications.kind.all'))!.click();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+            expect(router.location().fullPath).toBe('/app/notifications');
+        });
+
+        it('is read from the address, so a reload and Back open on it', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+            server.calls.length = 0;
+
+            const { container } = await openedAt('/app/notifications?kind=messages');
+            const locale = useLocale();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(1), { timeout: 4000 });
+            expect(chipOf(container, locale.t('notifications.kind.messages'))!.getAttribute('aria-pressed')).toBe('true');
+            expect(server.calls).toContain('notifications.list:messages');
+        });
+
+        it('is no kind at all for a word the page does not have', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            const { container } = await openedAt('/app/notifications?kind=toString');
+            const locale = useLocale();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+            expect(useNotifications().notice()).toBeNull();
+            expect(chipOf(container, locale.t('notifications.kind.all'))!.getAttribute('aria-pressed')).toBe('true');
+        });
+    });
+
     it('says there is nothing new to somebody with no notifications, with no filter to choose from', async () =>
     {
         const container = await opened();

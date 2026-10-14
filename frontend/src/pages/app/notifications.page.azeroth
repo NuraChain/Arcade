@@ -12,6 +12,7 @@ import SectionHeading from '../../components/ui/section-heading.component.azerot
 import type { Notification } from '../../api.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { targetOf } from '../../lib/notifications.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
@@ -38,8 +39,17 @@ export default component NotificationsPage()
 
     derived kinds = [ 'all', ...NOTICES ].map((id) => ({ id, label: locale.t(`notifications.kind.${ id as Notice | 'all' }`) }));
 
+    const address = useAddress();
+
+    const choose = (id: string) =>
+    {
+        notifications.only(NOTICES.find((one) => one === id) ?? null);
+        address.write({ kind: id === 'all' ? '' : id });
+    };
+
     mount
     {
+        notifications.only(NOTICES.find((one) => one === address.text('kind')) ?? null);
         return () => notifications.only(null);
     }
 
@@ -90,7 +100,7 @@ export default component NotificationsPage()
         />
 
         <Show when={ filterable }>
-            { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ (id) => notifications.only(id === 'all' ? null : id as Notice) } /> }
+            { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ choose } /> }
         </Show>
 
         <Show

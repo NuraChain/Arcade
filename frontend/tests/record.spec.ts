@@ -118,6 +118,58 @@ describe('achievements on a record', () =>
         expect(container.textContent).not.toContain('Family played');
     });
 
+    describe('the scope chosen', () =>
+    {
+        const shownAt = async (path: string) =>
+        {
+            const Stub = (): HTMLElement => document.createElement('div');
+            const routes: Route[] = [{ path: '/app/me', component: Stub }];
+            const router = createRouter({ routes, history: createMemoryHistory(path), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => PersonRecord({ handle: 'alex', show: ['achievements'] }) }) as Rendered);
+
+            await settle();
+            return { container, router };
+        };
+
+        const chip = (container: HTMLElement, name: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((one) => one.textContent?.includes(name))!;
+
+        it('is written into the address with replace, beside the tab, and Everywhere takes it out', async () =>
+        {
+            const { container, router } = await shownAt('/app/me?tab=achievements');
+
+            chip(container, 'Ludo').click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/me?tab=achievements&scope=ludo');
+            expect(router.location().navigationKind).toBe('replace');
+            expect(container.textContent).toContain('Win 15 games of Ludo.');
+
+            chip(container, useLocale().t('achievements.everywhere')).click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/me?tab=achievements');
+            expect(container.textContent).toContain('Family played');
+        });
+
+        it('is read from the address, so a reload and Back open on it', async () =>
+        {
+            const { container } = await shownAt('/app/me?scope=ludo');
+
+            expect(chip(container, 'Ludo').getAttribute('aria-pressed')).toBe('true');
+            expect(container.textContent).toContain('Win 15 games of Ludo.');
+            expect(container.textContent).not.toContain('Family played');
+        });
+
+        it('is everywhere for a scope the record does not hold', async () =>
+        {
+            const { container } = await shownAt('/app/me?scope=chess');
+
+            expect(chip(container, useLocale().t('achievements.everywhere')).getAttribute('aria-pressed')).toBe('true');
+            expect(container.textContent).toContain('Family played');
+        });
+    });
+
     it('shows the next rung and how far along it is, and says so when a ladder is climbed', async () =>
     {
         const container = await show();
