@@ -1509,6 +1509,13 @@ The client half of the same audits, each a thing that outlived what it belonged 
   whoever signed in next - the archive defect in *Reading chat* was one case of it, and a list of stores
   to reset would be one entry short the day somebody adds a store. The session is forgotten first, the
   server and the keyring are told, and then the tab starts again from nothing.
+- **Nobody signed in reads no chat.** The chat store keyed its list and its open thread on the
+  reader, with `'you'` standing in for nobody, so forgetting the session at sign-out was a new key:
+  both were read again, the list while the session still stood and the thread's signers just after
+  the server had ended it, a 401 in the console of every sign-out with a thread open. The notify
+  pass found it. Both keys are null while nobody is signed in (`signedIn`, a memo of a boolean:
+  the account is a new object at every read, and a key that read it was a new key each time).
+  `realtime-stores.spec.ts` (*a chat store whose reader has signed out*) holds it.
 - **A voice join that has been overtaken stops its own microphone.** `join` is counted, and every await
   asks whether it is still the latest; a superseded one stops the tracks it was granted instead of
   writing them over the live ones, which is how a second join to the same table used to leave a

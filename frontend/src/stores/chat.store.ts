@@ -139,8 +139,10 @@ export const useChat = createStore((): ChatApi =>
 
     const [pages, setPages] = createSignal(1);
 
+    const signedIn = createMemo(() => account.user() !== null);
+
     const list = createResource(
-        () => ({ scope: scope(), pages: pages() }),
+        () => (signedIn() ? { scope: scope(), pages: pages() } : null),
         async (current, signal) =>
         {
             const answer = await active.conversations(current.scope, signal, current.pages);
@@ -151,7 +153,7 @@ export const useChat = createStore((): ChatApi =>
     );
 
     const thread = createResource(
-        () => (openId() === '' ? null : { id: openId(), scope: scope(), depth: depth() }),
+        () => (openId() === '' || !signedIn() ? null : { id: openId(), scope: scope(), depth: depth() }),
         async (current, signal) => ({ ...await active.thread(current.id, current.scope, signal, current.depth), id: current.id }),
         { name: 'chat.thread' }
     );

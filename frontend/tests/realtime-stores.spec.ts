@@ -410,6 +410,26 @@ describe('a long chat list', () =>
     });
 });
 
+describe('a chat store whose reader has signed out', () =>
+{
+    it('asks the server for nothing once nobody is signed in, the open thread included', async () =>
+    {
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+        await settle();
+        server.calls = [];
+
+        useSession().reset();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls.filter((call) => call.startsWith('chat.')), 'the chat was read again for nobody, with a session the server had ended').toEqual([]);
+    });
+});
+
 describe('the social doorbell', () =>
 {
     it('re-reads the graph, and only the graph', async () =>

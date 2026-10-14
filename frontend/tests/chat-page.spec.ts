@@ -126,7 +126,7 @@ describe('a thread that is read again', () =>
 
         useOverlay().reset();
 
-        await vi.waitFor(() => expect(picture()?.querySelector('[role="img"]')).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(picture()?.querySelector('[role="img"]') ?? null).not.toBeNull(), { timeout: 4000 });
 
         expect(container.querySelector('header a[href^="/app/people/"]'), 'the picture is still a link to their page').toBeNull();
 
