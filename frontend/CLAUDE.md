@@ -1049,6 +1049,15 @@ has to outlive it (*On a desktop the list stays beside the thread*). `page-param
 `games-page.spec.ts`, `notifications-page.spec.ts`, `people-search.spec.ts`, `leaderboard.spec.ts`
 and `record.spec.ts` hold each.
 
+**A row of chips shows the one that is chosen.** With the filter in the address a page can open on
+any chip, and a phone shows three or four of a row: the leaderboard opened on Ludo at 390 showed
+Hokm, Poker and half of Backgammon, with nothing on screen saying whose board it was. The clean
+production run found it. `Rail` brings its pressed or current child into view when it mounts and
+whenever another is chosen (a `MutationObserver` on `aria-pressed` and `aria-current`), clear of
+its fade and sideways only, so the page never moves; a chip already in view stays where it is, as
+a tab does in `Tabs`. Every `FilterBar`, the leaderboard's games and the settings sections get it.
+`primitives.spec.ts` (*Rail*) holds it.
+
 **Escape clears a search field that has words, and only then closes what it sits in.** A field
 with `clearable` answers Escape by clearing itself and marking the event answered
 (`preventDefault`), and the overlay host leaves an Escape that something already answered. The

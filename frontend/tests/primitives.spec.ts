@@ -7,6 +7,7 @@ import Badge from '../src/components/ui/badge.component.azeroth';
 import FilterBar from '../src/components/ui/filter-bar.component.azeroth';
 import LoadMore from '../src/components/ui/load-more.component.azeroth';
 import Pagination from '../src/components/ui/pagination.component.azeroth';
+import Rail from '../src/components/ui/rail.component.azeroth';
 import SearchInput from '../src/components/ui/search-input.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
 import Tooltip from '../src/components/ui/tooltip.component.azeroth';
@@ -533,6 +534,75 @@ describe('FilterBar', () =>
 
         fire(chips[2], 'click');
         expect(onChange).toHaveBeenCalledWith('board');
+    });
+});
+
+describe('Rail', () =>
+{
+    const box = (left: number, width: number) => ({ x: left, y: 0, left, top: 0, right: left + width, bottom: 40, width, height: 40, toJSON: () => ({}) }) as DOMRect;
+
+    const chips = (pressed: number) => Array.from({ length: 6 }, (_, at) =>
+    {
+        const chip = document.createElement('button');
+
+        chip.dataset.at = String(at);
+        chip.setAttribute('aria-pressed', at === pressed ? 'true' : 'false');
+        chip.textContent = 'Chip ' + String(at);
+
+        return chip;
+    });
+
+    it('brings the chosen chip into view as it arrives and when another is chosen, clear of the fade, and leaves one in view alone', async () =>
+    {
+        const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            return this.classList.contains('rail-x') ? box(0, 320) : box(Number((this as HTMLElement).dataset.at ?? 0) * 110, 100);
+        });
+        const moves: number[] = [];
+        const row = chips(5);
+        const { container } = renderTest(() => Rail({ label: 'Games', children: row }) as Rendered);
+        const scroller = container.querySelector<HTMLElement>('.rail-x')!;
+
+        Object.defineProperty(scroller, 'scrollTo', { value: (options: ScrollToOptions) => moves.push(options.left ?? 0) });
+        await settle();
+
+        expect(moves, 'the sixth chip, 550 to 650 in a row 320 wide with 56 of fade, is 386 past what shows').toEqual([386]);
+
+        row[5].setAttribute('aria-pressed', 'false');
+        row[3].setAttribute('aria-pressed', 'true');
+        await settle();
+
+        expect(moves, 'another chosen is brought into view').toEqual([386, 166]);
+
+        row[3].setAttribute('aria-pressed', 'false');
+        row[1].setAttribute('aria-pressed', 'true');
+        await settle();
+
+        expect(moves, 'a chip already in view is left where it is').toEqual([386, 166]);
+
+        measured.mockRestore();
+    });
+
+    it('reads a page chosen in a list of links the same way', async () =>
+    {
+        const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            return this.classList.contains('rail-x') ? box(0, 320) : box(Number((this as HTMLElement).dataset.at ?? 0) * 110, 100);
+        });
+        const moves: number[] = [];
+        const row = chips(-1);
+
+        row[4].setAttribute('aria-current', 'true');
+
+        const { container } = renderTest(() => Rail({ label: 'Sections', children: row }) as Rendered);
+        const scroller = container.querySelector<HTMLElement>('.rail-x')!;
+
+        Object.defineProperty(scroller, 'scrollTo', { value: (options: ScrollToOptions) => moves.push(options.left ?? 0) });
+        await settle();
+
+        expect(moves).toEqual([276]);
+
+        measured.mockRestore();
     });
 });
 
