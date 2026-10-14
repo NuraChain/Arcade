@@ -4,7 +4,6 @@ export const play = {
     'home.hero.accent': 'amazing today',
     'home.hero.body': 'Join a quick match or open your own table and play with friends.',
     'home.hero.pulse': { one: 'person at the tables right now', other: 'people at the tables right now' },
-    'home.featured.title': 'Featured games',
     'home.continue.heading': 'Continue playing',
     'home.recent.title': 'Recent games',
     'home.recent.empty': 'Games you finish show up here, with what they did to your rating.',

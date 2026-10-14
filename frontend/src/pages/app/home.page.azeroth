@@ -4,7 +4,6 @@ import type { MatchHistoryEntry } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import BrandLogo from '../../components/layout/brand-logo.component.azeroth';
 import BrandMark from '../../components/layout/brand-mark.component.azeroth';
-import GameCard from '../../components/games/game-card.component.azeroth';
 import GameTile from '../../components/games/game-tile.component.azeroth';
 import TableRow from '../../components/games/table-row.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -144,6 +143,17 @@ export default component HomePage()
                 </div>
             </section>
 
+            <Show when={ sitting }>
+                <section aria-labelledby="home-continue">
+                    <SectionHeading id="home-continue" title={ locale.t('home.continue.heading') } />
+                    <ul class="grid gap-2.5 @2xl:grid-cols-2">
+                        <For each={ seated } key={ (table) => table.id } let={ table }>
+                            <li class="min-w-0"><TableRow table={ table } /></li>
+                        </For>
+                    </ul>
+                </section>
+            </Show>
+
             <section class="@3xl:hidden" aria-labelledby="home-games">
                 <SectionHeading id="home-games" title={ locale.t('app.nav.games') } more={ locale.t('common.seeAll') } to="/app/games" />
                 <ul class="grid grid-cols-4 gap-2">
@@ -153,68 +163,46 @@ export default component HomePage()
                 </ul>
             </section>
 
-            <section class="hidden @xl:block" aria-labelledby="home-featured">
-                <SectionHeading id="home-featured" title={ locale.t('home.featured.title') } more={ locale.t('common.seeAll') } to="/app/games" />
-                <ul class="grid grid-cols-2 gap-4 @3xl:grid-cols-4">
-                    <For each={ games } key={ (game) => game.id } let={ game }>
-                        <li class="flex min-w-0"><GameCard game={ game } class="flex-1" /></li>
-                    </For>
-                </ul>
-            </section>
-
-            <div class="grid gap-8 @3xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @3xl:gap-6">
-                <Show when={ sitting }>
-                    <section aria-labelledby="home-continue">
-                        <SectionHeading id="home-continue" title={ locale.t('home.continue.heading') } />
-                        <ul class="grid gap-2.5 @2xl:grid-cols-2 @3xl:grid-cols-1 @5xl:grid-cols-2">
-                            <For each={ seated } key={ (table) => table.id } let={ table }>
-                                <li class="min-w-0"><TableRow table={ table } /></li>
+            <section aria-labelledby="home-recent">
+                <SectionHeading id="home-recent" title={ locale.t('home.recent.title') } more={ locale.t('common.seeAll') } to="/app/me?tab=games" />
+                <Show
+                    when={ played }
+                    fallback={
+                        <div class="flex items-center gap-3 rounded-panel border border-dashed border-line px-4 py-5">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/12 text-accent">
+                                <Icon name="history" size={ 18 } />
+                            </span>
+                            <p class="text-ui-sm text-muted">{ locale.t('home.recent.empty') }</p>
+                        </div>
+                    }
+                >
+                    { () =>
+                        <ul class="flex flex-col rounded-panel border border-line bg-field px-3.5">
+                            <For each={ recent } key={ (row) => row.id } let={ row }>
+                                <li class="flex min-h-14 items-center gap-3 border-b border-line py-2.5 last:border-b-0">
+                                    <span class={ () => [
+                                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                                        RESULT_TINT[row.result]
+                                    ].join(' ') }>
+                                        <Icon name={ RESULT_ICON[row.result] } size={ 16 } />
+                                    </span>
+                                    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                        <span class="truncate text-ui-sm text-text">{ said(row) }</span>
+                                        <span class="truncate text-ui-xs text-faint">{ locale.relative(Date.parse(row.finishedAt)) }</span>
+                                    </span>
+                                    <Show when={ moved(row) !== null }>
+                                        { () =>
+                                            <span class={ () => [ 'tally shrink-0 text-ui-sm font-semibold', moved(row)! > 0 ? 'text-win' : 'text-muted' ].join(' ') }>
+                                                { `${ moved(row)! > 0 ? '+' : '' }${ locale.n(moved(row)!) }` }
+                                            </span>
+                                        }
+                                    </Show>
+                                </li>
                             </For>
                         </ul>
-                    </section>
+                    }
                 </Show>
-
-                <section class={ () => sitting ? '' : '@3xl:col-span-2' } aria-labelledby="home-recent">
-                    <SectionHeading id="home-recent" title={ locale.t('home.recent.title') } more={ locale.t('common.seeAll') } to="/app/me?tab=games" />
-                    <Show
-                        when={ played }
-                        fallback={
-                            <div class="flex items-center gap-3 rounded-panel border border-dashed border-line px-4 py-5">
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/12 text-accent">
-                                    <Icon name="history" size={ 18 } />
-                                </span>
-                                <p class="text-ui-sm text-muted">{ locale.t('home.recent.empty') }</p>
-                            </div>
-                        }
-                    >
-                        { () =>
-                            <ul class="flex flex-col rounded-panel border border-line bg-field px-3.5">
-                                <For each={ recent } key={ (row) => row.id } let={ row }>
-                                    <li class="flex min-h-14 items-center gap-3 border-b border-line py-2.5 last:border-b-0">
-                                        <span class={ () => [
-                                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                                            RESULT_TINT[row.result]
-                                        ].join(' ') }>
-                                            <Icon name={ RESULT_ICON[row.result] } size={ 16 } />
-                                        </span>
-                                        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                                            <span class="truncate text-ui-sm text-text">{ said(row) }</span>
-                                            <span class="truncate text-ui-xs text-faint">{ locale.relative(Date.parse(row.finishedAt)) }</span>
-                                        </span>
-                                        <Show when={ moved(row) !== null }>
-                                            { () =>
-                                                <span class={ () => [ 'tally shrink-0 text-ui-sm font-semibold', moved(row)! > 0 ? 'text-win' : 'text-muted' ].join(' ') }>
-                                                    { `${ moved(row)! > 0 ? '+' : '' }${ locale.n(moved(row)!) }` }
-                                                </span>
-                                            }
-                                        </Show>
-                                    </li>
-                                </For>
-                            </ul>
-                        }
-                    </Show>
-                </section>
-            </div>
+            </section>
 
             <Show when={ !panelShown }>
                 <section aria-labelledby="home-friends">

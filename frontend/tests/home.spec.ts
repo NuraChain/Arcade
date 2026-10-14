@@ -121,6 +121,18 @@ describe('the home page', () =>
         expect(row.textContent, 'a chair that filled is not on the row that was kept').toContain('2/4');
     });
 
+    it('puts the tables the reader sits at straight after the opening, and lists the games once', async () =>
+    {
+        await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 4 }, []);
+
+        const container = await show();
+        const order = () => [...container.querySelectorAll('section[aria-labelledby]')].map((one) => one.getAttribute('aria-labelledby'));
+
+        await vi.waitFor(() => expect(order()).toContain('home-continue'), { timeout: 4000 });
+
+        expect(order().filter((one) => one !== 'home-friends'), 'the reader\'s tables come after a list of games, or the games are listed twice').toEqual(['home-hero', 'home-continue', 'home-games', 'home-recent']);
+    });
+
     it('says where finished games will appear instead of drawing an empty box', async () =>
     {
         const container = await show();

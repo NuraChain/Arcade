@@ -713,6 +713,13 @@ they are on the game's page and in Home's hero, where the choice can be made. `G
 `GameGrid` take no handler at all now, so a card cannot be given one by accident;
 `play.spec.ts` presses the card and wants a navigation and no request.
 
+**Home lists the games once, and the reader's own tables come first.** On a wide screen Home drew
+the four games twice in a row - as tiles, then as four large "Featured games" cards - and the
+tables the reader sits at ("Continue playing", one of them waiting for them) began about 1,470px
+down, under both. The featured cards went (the Games page has them, and "See all" goes there), and
+"Continue playing" follows the hero at every width, before the games. `home.spec.ts` (*straight
+after the opening*) holds the order.
+
 **"See all" opens the whole of what the section showed the first few of.** The owner pressed it
 beside Discover's "People you may know" and was shown their own friends: the link named the Friends
 page and the page opened on its first tab. Read across the app, four were off the same way and one

@@ -7,7 +7,6 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'home.hero.accent': 'به‌یادماندنی',
     'home.hero.body': 'به یک بازی سریع بپیوند یا میز خودت را باز کن و با دوستانت بازی کن.',
     'home.hero.pulse': { one: 'نفر همین حالا سر میزهاست', other: 'نفر همین حالا سر میزها هستند' },
-    'home.featured.title': 'بازی‌های ویژه',
     'home.continue.heading': 'ادامهٔ بازی',
     'home.recent.title': 'بازی‌های اخیر',
     'home.recent.empty': 'بازی‌هایی که تمام می‌کنی این‌جا می‌آیند، همراه با اثرشان بر امتیازت.',
