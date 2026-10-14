@@ -585,6 +585,18 @@ describe('the ludo table, two against two', () =>
         expect(rolled.querySelector('.table-stage ul')).toBeNull();
     });
 
+    it('still says who is helping once the table has drawn the board, from the pawns the table shows', async () =>
+    {
+        const locale = useLocale();
+        const container = await show(pairs({}, handedOver()));
+
+        await drawn(container);
+        await settle();
+
+        expect(container.querySelectorAll('.lp').length, 'the table drew the board').toBeGreaterThan(0);
+        expect(tagsOf(container)).toEqual([locale.t('card.helping'), null, locale.t('card.partner'), null]);
+    });
+
     it('tags nobody as helping while a reader moves their own tokens', async () =>
     {
         const locale = useLocale();
@@ -1571,6 +1583,7 @@ describe('the ludo table, played from what happened', () =>
         const moved = stepped(start, { kind: 'move', seat: 1, piece: 0 });
         const table = await live(seen(start, 0, 5));
         const current = () => [...table.container.querySelectorAll('.yard-badge')].map((badge) => badge.querySelector('.table-plate')?.getAttribute('aria-current') ?? null);
+        const helping = () => [...table.container.querySelectorAll('.yard-badge .table-plate-tag')].filter((tag) => tag.textContent === useLocale().t('card.helping')).length;
 
         expect(current()).toEqual([null, 'true']);
 
@@ -1578,6 +1591,7 @@ describe('the ludo table, played from what happened', () =>
         await elapse(150);
 
         expect(current(), 'the turn left a player whose pawn was still walking').toEqual([null, 'true']);
+        expect(helping(), 'a seat of a game with no partners was said to be helping while its pawn walked').toBe(0);
 
         await elapse(3000);
 

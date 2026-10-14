@@ -27,6 +27,7 @@ import { coachOf, goalsOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts'
 import type { Tip } from '../../game/helpers/tip.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
+import { TOKENS_PER_PLAYER } from '../../../../backend/src/domains/match/ludo/board.ts';
 import { partnerOf, variantOf } from '../../../../backend/src/domains/match/sides.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi; border-radius: ${ (FRAME_ROUND * 100).toFixed(3) }%`;
@@ -182,6 +183,10 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
     };
 
     derived shownTurn = facts === null ? game.turn : (facts.turn ?? undefined);
+
+    derived shownControls = facts === null || shownTurn === undefined
+        ? ludo.controls
+        : ((facts.home[shownTurn] ?? 0) === TOKENS_PER_PLAYER ? (partnerOf(shownTurn, { seats: game.seats, variant: variantOf(sided) }) ?? shownTurn) : shownTurn);
 
     derived dieAt = (seat: number) =>
     {
@@ -519,7 +524,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
                                 corner={ entry.corner }
                                 mine={ mine }
                                 active={ entry.player.seat === shownTurn }
-                                controls={ ludo.controls }
+                                controls={ shownControls }
                                 colours={ entry.colours }
                                 partner={ entry.player.seat === partner }
                                 die={ dieAt(entry.player.seat) }

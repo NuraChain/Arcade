@@ -1842,7 +1842,13 @@ What reads them:
   `controls` is not that seat. A result or a missed turn still takes the tag, and then the mark says
   "Partner" to a screen reader instead, so it is said once either way. Who the reader's partner is,
   is `partnerOf(seat, format)`: it lands in `match/sides.ts` beside `sideOf`, with the board as its
-  first caller.
+  first caller. **Whose tokens move is read from what the table has shown**, as the turn on the
+  plates is (6.2): the shown turn's own seat, or its partner once the table shows that seat's four
+  home (`shownControls` in `match-board`). The plates were handed the view's `controls` beside the
+  shown turn, so while a move was still walking and the server had passed the turn on, the seat
+  that had moved was tagged "Helping", at a table of two with no partners. The four-game walk at the
+  end of the clean production run caught it; `ludo-table.spec.ts` holds the walking moment and a
+  table of two sides read from the pawns the table shows.
 - **At a ludo table the mark is the side's own two colours.** The pip every table shares is blue
   for one side and amber for the other, and here a colour is a player: red and yellow wore the blue
   player's colour, and green and blue one that reads as yellow, in the only mark somebody watching
