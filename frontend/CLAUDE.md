@@ -201,7 +201,8 @@ dots, badges, status pills and the search pill.
 
 **The kit, and the one of each that pages reuse.** Lists of rows sit on ONE card divided by
 hairlines (`divide-y divide-line rounded-panel border border-line bg-field`), never as a stack of
-separate tiles; a row with nothing to act on ends in a chevron. A status is `Badge dot text tone`
+separate tiles; a row that leads somewhere ends in a chevron, and a person's row with nothing
+beside it ends in the "more" mark, because it opens the sheet about them. A status is `Badge dot text tone`
 (the pill: the dot carries the colour, the word stays neutral). Presence dots: online `live`, away
 `gold`, offline `faint`, unknown nothing. A person's header is `ProfileHeader`, used by both the
 reader's own page and anybody else's. It is a cover band tinted by the person's hue with the picture
@@ -1098,7 +1099,8 @@ Discover suggests and the picture beside a message in a group each went straight
 page. Each is one button now, `aria-haspopup="dialog"`, that opens the sheet through `aboutPerson`
 (`lib/person-menu.ts`, which loads the sheet at the press), as a plate and a chair at a table do;
 the chevron that said a row went somewhere is a quiet "more" mark. `person-press.spec.ts` and
-`leaderboard.spec.ts` hold them.
+`leaderboard.spec.ts` hold them. The leaderboard also marks the reader's own row, a light ground
+and "You" beside the name, because a reader looks for themselves first.
 
 **A person's row is the press, and nothing beside it says More.** `FriendRow` - a friend, a
 request, a group's member, a search result, somebody blocked or muted in Settings - linked the

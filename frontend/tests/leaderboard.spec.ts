@@ -119,6 +119,23 @@ describe('the leaderboard page', () =>
         useOverlay().reset();
     });
 
+    it('marks the reader\'s own row, and nobody else\'s', async () =>
+    {
+        server.standings = [
+            { handle: 'sara.k', person: { handle: 'sara.k', displayName: 'Sara Kamali', hue: 340 }, rating: 1620, played: 40, won: 24, rank: 1, xp: 5200 },
+            { handle: 'alex', person: { handle: 'alex', displayName: 'Alex Morgan', hue: 32 }, rating: 1500, played: 22, won: 12, rank: 2, xp: 4100 }
+        ];
+
+        const container = await show();
+        const rows = () => [...container.querySelectorAll<HTMLElement>('ol > li')];
+        const marked = (row: HTMLElement) => [...row.querySelectorAll('span')].some((one) => one.textContent === useLocale().t('common.you') && !one.classList.contains('hidden'));
+
+        await vi.waitFor(() => expect(rows()).toHaveLength(2), { timeout: 4000 });
+
+        expect(rows().map(marked), 'the reader has to look for themselves').toEqual([false, true]);
+        expect(rows().map((row) => row.classList.contains('bg-accent/8'))).toEqual([false, true]);
+    });
+
     it('says a board nobody is on yet is empty, not that it failed to load', async () =>
     {
         const container = await show();

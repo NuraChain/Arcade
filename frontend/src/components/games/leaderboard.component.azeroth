@@ -10,6 +10,7 @@ import Skeleton from '../ui/skeleton.component.azeroth';
 import type { Standing } from '../../api.ts';
 import { client } from '../../api.ts';
 import { aboutPerson } from '../../lib/person-menu.ts';
+import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { GameId } from '../../data/games.ts';
 import type { LeaderboardWindow } from '../../api.ts';
@@ -24,6 +25,7 @@ const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'bo
 export default component Leaderboard(props: { game: GameId; titled?: boolean; seeAll?: boolean })
 {
     const locale = useLocale();
+    const account = useAccount();
 
     state window = 'month' as LeaderboardWindow;
 
@@ -135,7 +137,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
                 <Panel pad="none" class="px-2 py-1">
                     <ol class="flex flex-col">
                         <For each={ standings } key={ (row) => row.handle } let={ row }>
-                            <li class="border-b border-line last:border-b-0">
+                            <li class={ () => [ 'border-b border-line last:border-b-0', row.handle === account.user()?.handle ? '-mx-2 rounded-tile bg-accent/8 px-2' : '' ].join(' ') }>
                                 <button type="button" class="group flex min-h-14 w-full cursor-pointer items-center gap-3 px-2 py-2 text-start" aria-haspopup="dialog" onClick={ () => aboutPerson(row.handle) }>
                                     <span class={ () => [
                                         'tally flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ui-sm font-bold',
@@ -145,7 +147,10 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
                                     </span>
                                     <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="sm" />
                                     <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <span class="truncate text-ui-sm font-semibold text-text transition-colors group-hover:text-accent" dir="auto">{ nameOf(row) }</span>
+                                        <span class="flex min-w-0 items-center gap-1.5">
+                                            <span class="truncate text-ui-sm font-semibold text-text transition-colors group-hover:text-accent" dir="auto">{ nameOf(row) }</span>
+                                            <span class={ () => [ 'shrink-0 rounded-full bg-accent/15 px-1.5 text-ui-2xs font-semibold text-accent', row.handle === account.user()?.handle ? '' : 'hidden' ].join(' ') }>{ locale.t('common.you') }</span>
+                                        </span>
                                         <span class="truncate text-ui-xs text-muted">
                                             { locale.t('board.line', {
                                                 played: locale.plural('board.played', row.played),
