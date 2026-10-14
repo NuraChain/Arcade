@@ -1302,6 +1302,18 @@ fails silently - the page still works, it just pays for the whole typed api clie
 top-level await on `/api/_manifest`, on a route prerendered to a file precisely so it needs no
 server.
 
+**Each table's chunk and the stage under them have a ceiling too.** A table is the component a
+game is played in (`components/games/boards.ts`), and the stage is the chunk that holds
+`game/stage/stage.ts`, which every table waits on. The four tables were 8.4, 17.0, 17.5 and
+21.2 KB gzip and the stage 8.9 KB when the ceilings were set: 24 KB a table, 11 KB the stage.
+Which chunk holds a module is read from the build's own list (`.vite/chunks.json`), because the
+bundler cuts the stage kit into several chunks (`stage`, `curves`, `die`, `flight`, `route`) and
+folds a module with one user into that user: `chips` into poker's table, `celebrate` into Ludo's
+renderer, `feed` into the match store. The tables come from their registry as the scenes do, so
+a fifth game is measured by the same rule. The build is refused as well for a registry with no
+table, for a table or a stage that is in no chunk or in the landing page's first set, and for a
+stage folded into one table. Each of the five was lowered or broken once and seen to refuse.
+
 **It asks which modules, never which chunk names, because the `boot` group renames everything it
 swallows.** The rules used to match `^api-`, `^landing-`, `^session\.store-` against the initial
 chunks, and once everything the entry reaches became one `boot-*` chunk no name could match: a static

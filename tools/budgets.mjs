@@ -71,6 +71,12 @@ const WORLD_BUDGET = 200 * KB;
 
 const BOARD_BUDGET = 16 * KB;
 
+/** Any one table's own chunk: the component a game is played in. */
+const TABLE_BUDGET = 24 * KB;
+
+/** The chunk that holds the stage every table plays on, and what the tables share beside it. */
+const STAGE_BUDGET = 11 * KB;
+
 const gzip = (name) => gzipSync(readFileSync(join(ASSETS, name))).length;
 
 const size = (bytes) => `${ (bytes / KB).toFixed(1) } KB`;
@@ -228,6 +234,83 @@ if (existsSync(SCENES))
     }
 }
 
+// ---------------------------------------------------------------- the tables, and the stage under them
+//
+// A table is the component a game is played in, and the stage is what every one of them plays on.
+// The tables come from their registry, as the scenes do, so a fifth game is measured by the same
+// rule. Which chunk holds a module is read from the build's own list, never guessed from a name:
+// the bundler cuts the stage kit into several chunks and folds a module with one user into it.
+const BOARDS = join(ROOT, 'frontend', 'src', 'components', 'games', 'boards.ts');
+const STAGE = 'src/game/stage/stage.ts';
+
+const tableBytes = [];
+
+let stageBytes = null;
+
+if (chunkModules !== null && existsSync(BOARDS))
+{
+    const holding = (module) => Object.keys(chunkModules).find((chunk) => chunkModules[chunk].includes(module))?.replace(/^assets\//, '');
+    const tables = [...readFileSync(BOARDS, 'utf8').matchAll(/chunk\(\(\) => import\('\.\/([^']+)'\)\)/g)].map((one) => `src/components/games/${ one[1] }`);
+
+    if (tables.length === 0)
+    {
+        problems.push('components/games/boards.ts registers no table, so the table checks measured nothing');
+    }
+
+    for (const module of tables)
+    {
+        const chunk = holding(module);
+
+        if (chunk === undefined)
+        {
+            problems.push(`${ module } is in no chunk of the client build - has it moved?`);
+            continue;
+        }
+
+        tableBytes.push(gzip(chunk));
+
+        if (initial.includes(chunk))
+        {
+            problems.push(`${ chunk } holds a table and is in the landing page's initial set`);
+        }
+
+        if (gzip(chunk) > TABLE_BUDGET)
+        {
+            problems.push(`${ chunk } is ${ size(gzip(chunk)) }, over the ${ size(TABLE_BUDGET) } table budget`);
+        }
+    }
+
+    const stage = holding(STAGE);
+
+    if (stage === undefined)
+    {
+        problems.push(`${ STAGE } is in no chunk of the client build - has it moved?`);
+    }
+    else
+    {
+        stageBytes = gzip(stage);
+
+        if (tables.some((module) => holding(module) === stage))
+        {
+            problems.push(`${ stage } holds the stage and a table: every table waits on the stage, so it has to be a chunk they share`);
+        }
+
+        if (initial.includes(stage))
+        {
+            problems.push(`${ stage } holds the stage and is in the landing page's initial set`);
+        }
+
+        if (stageBytes > STAGE_BUDGET)
+        {
+            problems.push(`${ stage } is ${ size(stageBytes) }, over the ${ size(STAGE_BUDGET) } stage budget`);
+        }
+    }
+}
+else if (chunkModules !== null)
+{
+    problems.push('components/games/boards.ts is missing, so no table was measured - this check cannot pass by finding nothing');
+}
+
 // ---------------------------------------------------------------- class bindings that never update
 let classBindsRead = 0;
 
@@ -349,6 +432,8 @@ console.log(`  kept lazy    ${ MUST_BE_LAZY.length } rules over the ${ initialMo
 console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)) } / ${ size(SHELL_BUDGET) }`);
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
 console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
+console.log(`  tables       ${ tableBytes.length } chunks, largest ${ size(Math.max(0, ...tableBytes)) } / ${ size(TABLE_BUDGET) }`);
+console.log(`  stage        ${ stageBytes === null ? 'absent' : size(stageBytes) } / ${ size(STAGE_BUDGET) }`);
 console.log(`  sounds       ${ sounds.length } pack, ${ size(soundTotal) } / ${ size(SOUND_BUDGET) }`);
 console.log(`  world        ${ size(worldBytes) } / ${ size(WORLD_BUDGET) }`);
 console.log(`  posters      ${ posterBytes.map(size).join(', ') }`);
