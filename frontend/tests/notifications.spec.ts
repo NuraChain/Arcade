@@ -3,7 +3,7 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 
 import type { Notification } from '../src/api.ts';
 import NotificationRow from '../src/components/social/notification-row.component.azeroth';
-import { targetOf } from '../src/lib/notifications.ts';
+import { sayOf, targetOf } from '../src/lib/notifications.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -88,6 +88,19 @@ describe('where a notice leads', () =>
     {
         expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1', game: 'ludo' } }))).toBe('/app/games');
         expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1' } }))).toBe('/app/games');
+    });
+});
+
+describe('what a notice says', () =>
+{
+    const turn = (ref: Notification['ref']): Notification => ({ id: 'one', kind: 'turn', ref, count: 1, read: false, at: new Date(0).toISOString() });
+
+    it.each([['en', 'Your turn at Hokm', 'Your turn'], ['fa', 'نوبت توست در حکم', 'نوبت توست']] as const)('names the game a turn is in, and says a whole sentence for a row that names none, in %s', (language, named, bare) =>
+    {
+        useLocale().setLocale(language);
+
+        expect(sayOf(turn({ tableId: 't-1', game: 'hokm' }), '', useLocale())).toBe(named);
+        expect(sayOf(turn({ tableId: 't-1' }), '', useLocale()), 'a turn whose row names no game ends in a gap').toBe(bare);
     });
 });
 

@@ -138,7 +138,7 @@ export const useCues = createStore((): CuesApi =>
             }
         };
 
-        const gameSays = (key: 'notify.system.turn' | 'quickMatch.started', game: string) =>
+        const gameSays = (key: 'notify.turn' | 'quickMatch.started', game: string) =>
             locale.t(key, { game: locale.t(catalogue.byId(game as GameId).nameKey) });
 
         const announceChat = (id: string, from: string) => named(from, (who) =>
@@ -279,15 +279,9 @@ export const useCues = createStore((): CuesApi =>
                 {
                     const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, who, locale) };
                     const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
-                    const game = item.kind === 'turn' ? untrack(lobby.seated).find((one) => one.id === item.ref.tableId)?.game : undefined;
 
                     toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
-                    system(
-                        game === undefined ? told.text : gameSays('notify.system.turn', game),
-                        rowTag(item),
-                        targetOf(item) ?? '/app/notifications',
-                        true
-                    );
+                    system(told.text, rowTag(item), targetOf(item) ?? '/app/notifications', true);
                     chime();
                 });
             }
@@ -363,7 +357,7 @@ export const useCues = createStore((): CuesApi =>
                 return;
             }
 
-            const text = gameSays('notify.system.turn', match.game);
+            const text = gameSays('notify.turn', match.game);
             const target = `/app/play/${ match.tableId }`;
 
             system(text, `turn:${ match.tableId }`, target, false);

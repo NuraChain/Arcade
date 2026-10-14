@@ -1117,9 +1117,10 @@ says nothing of what the server pushes (a message, a friend request, a row: `pus
 `tellSystem`) and leaves it to the worker; it still says the two things no push carries, a turn
 at a live table and a game starting. With no subscription the page says all of it. Without this
 a server with push keys alerted twice for one message, once from the socket and once from the
-push, for everybody with the tab in the background. One difference is left: a `turn` row has no
-game in its `ref`, so the worker says "It is your go" where the page, which has the lobby, says
-"Your turn at Ludo", under one tag and to one target.
+push, for everybody with the tab in the background. A `turn` row carries its game in `ref`, so
+the list, the toast, the page's system notice and the worker all say one sentence, "Your turn at
+Ludo" (`notify.turn`), under one tag and to one target; the page's second wording,
+`notify.system.turn`, went with the difference that kept it.
 
 `push-worker.spec.ts` (*a push*) runs the worker's real source against a fake scope with a
 cache and an api. `cues.spec.ts` holds the contract between the two files (*the worker and the
@@ -1227,6 +1228,18 @@ the notice was a way for a stranger to reach a minor.
 `friend-request` row under that pair's dedupe key, and only that kind: a `friend-accepted` under the
 same key is a different fact and stays. A request that is no longer pending and still sits in the
 bell with Accept on it is a button that can only fail.
+
+**A turn notice lasts as long as the go.** `turn:<matchId>` is written for whoever the go passed
+to at a `turns` table and said only "It is your go", with no game: a row the server wrote with the
+table alone, though `ref.game` was always allowed. Nothing took it back, so a reader who moved from
+the board, or whose game ended, kept "It is your go" in the bell for good, and the fixture account
+held thirty-five of them. `nudgeTurn` now runs after every move, sweep, walk-out and host's start
+(the host's start told nobody before; Quick play's did), withdraws the notice of every player who is
+not on turn, everybody's once the game has ended, and tells the one who is, naming the game.
+`retract` rings a reader only when a row actually went. A turn row that names no game (`ref.game`
+is optional to the type, as every kind shares it) says "Your turn" (`notify.turnAnywhere`) rather
+than a sentence with a gap at its end. `turn-notice.db.spec.ts` plays turns against a real
+Postgres and resigns one; `notifications.spec.ts` (*what a notice says*) holds the two sentences.
 
 ## Realtime — `nura-rt/v1`
 

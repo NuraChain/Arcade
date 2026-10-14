@@ -364,11 +364,11 @@ describe('a push', () =>
 
     it('says a row with nobody in it without asking who nobody is', async () =>
     {
-        const worker = fakeWorker(SOURCE, [], world([row('a', 5, { kind: 'turn', actor: undefined, ref: { tableId: 't-a' } })]));
+        const worker = fakeWorker(SOURCE, [], world([row('a', 5, { kind: 'turn', actor: undefined, ref: { tableId: 't-a', game: 'backgammon' } })]));
 
         const [notice] = await worker.push();
 
-        expect(notice.title).toBe('It is your go');
+        expect(notice.title).toBe('Your turn at Backgammon');
         expect(notice.options).toMatchObject({ tag: 'turn:t-a', data: { target: '/app/play/t-a' } });
         expect(worker.asked).toEqual([LISTED]);
     });

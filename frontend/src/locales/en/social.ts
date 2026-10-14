@@ -310,9 +310,9 @@ export const social = {
     'notify.groupAdded': '{who} added you to a group',
     'notify.tableInvite': '{who} saved you a seat',
     'notify.tableRemoved': '{who} took you out of a {game} table',
-    'notify.turn': 'It is your go',
+    'notify.turn': 'Your turn at {game}',
+    'notify.turnAnywhere': 'Your turn',
     'notify.message': { one: '{who} sent you a message', other: '{count} new messages from {who}' },
-    'notify.system.turn': 'Your turn at {game}',
     'notify.system.general': 'Something new in Nura Games',
 
     'notify.device.title': 'Notifications on this device',

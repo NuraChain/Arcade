@@ -349,7 +349,7 @@ describe('the cues store', () =>
         await settle();
 
         expect(await pressed({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 'table-9' }, dedupeKey: 'invite:table-9' })).toEqual({ label: 'Go to the table', to: '/app/play/table-9' });
-        expect(await pressed({ kind: 'turn', ref: { tableId: 'table-4' }, dedupeKey: 'turn:table-4' })).toEqual({ label: 'Go to the table', to: '/app/play/table-4' });
+        expect(await pressed({ kind: 'turn', ref: { tableId: 'table-4', game: 'ludo' }, dedupeKey: 'turn:table-4' })).toEqual({ label: 'Go to the table', to: '/app/play/table-4' });
         expect(await pressed({ kind: 'group-added', actor: 'sara.k', ref: { groupId: 'friday-night' }, dedupeKey: 'group:friday-night' })).toEqual({ label: 'View', to: '/app/groups/friday-night' });
         expect(await pressed({ kind: 'friend-accepted', actor: 'sara.k', dedupeKey: 'accepted:sara.k' })).toEqual({ label: 'View', to: '/app/people/sara.k' });
     });
@@ -678,18 +678,18 @@ describe('the cues store', () =>
             useLobby().open(here);
             await settle();
 
-            server.notify({ kind: 'turn', ref: { tableId: here }, dedupeKey: `turn:${ here }` });
+            server.notify({ kind: 'turn', ref: { tableId: here, game: 'ludo' }, dedupeKey: `turn:${ here }` });
             await useNotifications().refresh();
             await settle();
 
             expect(useNotifications().latest()[0]).toMatchObject({ kind: 'turn', read: false });
             expect(said()).toEqual([]);
 
-            server.notify({ kind: 'turn', ref: { tableId: 't-7' }, dedupeKey: 'turn:t-7' });
+            server.notify({ kind: 'turn', ref: { tableId: 't-7', game: 'hokm' }, dedupeKey: 'turn:t-7' });
             await useNotifications().refresh();
             await settle();
 
-            expect(said()).toEqual(['It is your go']);
+            expect(said()).toEqual(['Your turn at Hokm']);
         });
 
         it('is announced while the page shows only another kind', async () =>
@@ -790,7 +790,7 @@ describe('the cues store', () =>
             server.notify(invite);
             server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
             server.notify({ kind: 'friend-accepted', actor: 'parisa', dedupeKey: 'accepted:parisa' });
-            server.notify({ kind: 'turn', ref: { tableId: 't-2' }, dedupeKey: 'turn:t-2' });
+            server.notify({ kind: 'turn', ref: { tableId: 't-2', game: 'hokm' }, dedupeKey: 'turn:t-2' });
 
             for (const row of server.notifications.slice(0, 3))
             {
@@ -1513,7 +1513,7 @@ describe('what the browser is told when nobody is looking at the page', () =>
         const tableId = await playingAt('turns');
 
         browser.hide(true);
-        server.notify({ kind: 'turn', ref: { tableId }, dedupeKey: `turn:${ tableId }` });
+        server.notify({ kind: 'turn', ref: { tableId, game: 'ludo' }, dedupeKey: `turn:${ tableId }` });
         await useNotifications().refresh();
         await settle();
 
@@ -2095,7 +2095,7 @@ describe('the worker and the page, of the same thing', () =>
         { kind: 'table-removed', actor: 'sara.k', ref: { tableId: 't-1', game: 'backgammon' } },
         { kind: 'group-added', actor: 'sara.k', ref: { groupId: 'g-1' } },
         { kind: 'friend-accepted', actor: 'sara.k', ref: {} },
-        { kind: 'turn', ref: { tableId: 't-2' } }
+        { kind: 'turn', ref: { tableId: 't-2', game: 'hokm' } }
     ];
 
     for (const lang of ['en', 'fa'] as const)

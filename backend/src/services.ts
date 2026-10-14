@@ -210,8 +210,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const retract = async (userId: string, kind: Notification['kind'], dedupeKey: string) =>
     {
-        await notify.retract(userId, kind, dedupeKey);
-        live?.selfChanged(userId, 'notifications');
+        if (await notify.retract(userId, kind, dedupeKey))
+        {
+            live?.selfChanged(userId, 'notifications');
+        }
     };
 
     const asNotification = (row: NotificationRow) =>
@@ -890,11 +892,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      */
     const nudgeTurn = async (load: MatchLoad, actor: string | null) =>
     {
-        if (load.match.finishedAt !== null)
-        {
-            return;
-        }
-
         const room = await table.roomOf(load.match.tableId);
 
         if (room === null || room.mode !== 'turns')
@@ -902,8 +899,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             return;
         }
 
-        const seat = match.turnOf(load.match.game, load.state);
+        const key = `turn:${ load.match.id }`;
+        const seat = load.match.finishedAt === null ? match.turnOf(load.match.game, load.state) : null;
         const next = load.players.find((one) => one.seat === seat);
+
+        for (const one of load.players)
+        {
+            if (one.user_id !== next?.user_id)
+            {
+                await retract(one.user_id, 'turn', key);
+            }
+        }
 
         if (next === undefined || next.user_id === actor)
         {
@@ -914,8 +920,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             userId: next.user_id,
             kind: 'turn',
             actorId: null,
-            ref: { tableId: load.match.tableId },
-            dedupeKey: `turn:${ load.match.id }`
+            ref: { tableId: load.match.tableId, game: load.match.game },
+            dedupeKey: key
         });
     };
 
@@ -933,12 +939,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         if (answer.applied === 'now')
         {
             await courtesy('game push', () => pushMatch(matchId, answer.before));
+            await courtesy('turn notice', () => nudgeTurn(answer.load, me));
 
-            if (answer.load.match.finishedAt === null)
-            {
-                await courtesy('turn notice', () => nudgeTurn(answer.load, me));
-            }
-            else
+            if (answer.load.match.finishedAt !== null)
             {
                 await courtesy('result line', () => declareResult(matchId));
                 live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
@@ -1002,11 +1005,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 continue;
             }
 
-            if (load.match.finishedAt === null)
-            {
-                await courtesy('turn notice', () => nudgeTurn(load, null));
-            }
-            else
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+
+            if (load.match.finishedAt !== null)
             {
                 await courtesy('result line', () => declareResult(expired.matchId));
                 live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
@@ -2133,11 +2134,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                     const load = await match.peek(walked.matchId);
 
-                    if (load !== null && load.match.finishedAt === null)
+                    if (load !== null)
                     {
                         await courtesy('turn notice', () => nudgeTurn(load, me));
                     }
-                    else if (load !== null)
+
+                    if (load !== null && load.match.finishedAt !== null)
                     {
                         await courtesy('result line', () => declareResult(walked.matchId));
                     }
@@ -2300,7 +2302,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { match: asMatch(found.load), events: logged(found.events) };
             },
 
-            start: async (me, tableId) => asMatch(await match.shownTo(await startPushed(me, tableId))),
+            start: async (me, tableId) =>
+            {
+                const load = await startPushed(me, tableId);
+
+                await courtesy('turn notice', () => nudgeTurn(load, me));
+
+                return asMatch(await match.shownTo(load));
+            },
 
             play: async (me, matchId, input) =>
                 await played(me, matchId, { play: input.play, key: input.key, rev: input.rev }),

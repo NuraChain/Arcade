@@ -28,9 +28,17 @@ export function sayOf(item: Notification, who: string, locale: Pick<LocaleApi, '
 {
     const game = GAMES.find((one) => one.id === item.ref.game);
 
-    return item.kind === 'message'
-        ? locale.plural('notify.message', item.count, { who })
-        : locale.t(SAYS[item.kind], { who, game: game === undefined ? '' : locale.t(game.nameKey) });
+    if (item.kind === 'message')
+    {
+        return locale.plural('notify.message', item.count, { who });
+    }
+
+    if (item.kind === 'turn' && game === undefined)
+    {
+        return locale.t('notify.turnAnywhere');
+    }
+
+    return locale.t(SAYS[item.kind], { who, game: game === undefined ? '' : locale.t(game.nameKey) });
 }
 
 export function targetOf(item: Notification): string | null

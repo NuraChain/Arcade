@@ -313,9 +313,9 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'notify.groupAdded': '{who} تو را به یک گروه اضافه کرد',
     'notify.tableInvite': '{who} یک صندلی برایت نگه داشت',
     'notify.tableRemoved': '{who} تو را از یک میز {game} بلند کرد',
-    'notify.turn': 'نوبت توست',
+    'notify.turn': 'نوبت توست در {game}',
+    'notify.turnAnywhere': 'نوبت توست',
     'notify.message': { one: '{who} برایت پیام فرستاد', other: '{count} پیام تازه از {who}' },
-    'notify.system.turn': 'نوبت توست در {game}',
     'notify.system.general': 'خبر تازه در بازی‌های نورا',
 
     'notify.device.title': 'اعلان‌ها روی این دستگاه',

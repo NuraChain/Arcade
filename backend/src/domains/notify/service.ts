@@ -125,7 +125,9 @@ export function createNotifyService(db: DataSource, social: SocialService)
 
         async retract(userId: string, kind: NotificationKind, dedupeKey: string)
         {
-            await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
+            const gone = await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
+
+            return (gone.affected ?? 0) > 0;
         },
 
         /**
