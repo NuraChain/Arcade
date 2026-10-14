@@ -2,9 +2,10 @@ import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
+import { hearsOpus } from '../services/voice.relay.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
-import { useRealtime, type SignalFrame, type VoiceFrame } from './realtime.store.ts';
+import { useRealtime, type SignalFrame, type SoundFrame, type VoiceFrame } from './realtime.store.ts';
 import { useSettings } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
@@ -141,6 +142,7 @@ export const useVoice = createStore((): VoiceApi =>
     let unstir: (() => void) | null = null;
     let mutedBeforeDeaf = true;
     let unhold: (() => void) | null = null;
+    let opus = false;
 
     const me = () => untrack(account.user)?.id ?? '';
 
@@ -266,7 +268,15 @@ export const useVoice = createStore((): VoiceApi =>
         setRoster(frame.peers);
         setMine(frame.mine);
 
-        call?.sync(frame.mine, frame.peers.filter((peer) => peer.talk && peer.join !== frame.mine).map((peer) => ({ who: peer.who, join: peer.join })));
+        call?.sync(frame.mine, frame.peers.filter((peer) => peer.talk && peer.join !== frame.mine).map((peer) => ({ who: peer.who, join: peer.join, opus: peer.opus })));
+    };
+
+    const sounded = (frame: SoundFrame) =>
+    {
+        if (frame.table === untrack(table))
+        {
+            call?.heard(frame.join, frame.codec, frame.at, frame.data);
+        }
     };
 
     const signalled = (frame: SignalFrame) =>
@@ -393,7 +403,7 @@ export const useVoice = createStore((): VoiceApi =>
 
         if (current !== null)
         {
-            realtime.voice(current, true, untrack(muted));
+            realtime.voice(current, true, untrack(muted), opus);
         }
     };
 
@@ -442,7 +452,7 @@ export const useVoice = createStore((): VoiceApi =>
 
             if (untrack(table) !== null)
             {
-                realtime.voice(untrack(table)!, false, true);
+                realtime.voice(untrack(table)!, false, true, opus);
                 teardown();
             }
 
@@ -452,12 +462,14 @@ export const useVoice = createStore((): VoiceApi =>
             unhold = realtime.hold();
 
             const round = ++joins;
-            const ice = await client.voice.ice().catch(() => ({ servers: [] }));
+            const [ice, hears] = await Promise.all([client.voice.ice().catch(() => ({ servers: [] })), hearsOpus()]);
 
             if (round !== joins || untrack(table) !== next)
             {
                 return;
             }
+
+            opus = hears;
 
             const Context = typeof AudioContext === 'undefined' ? null : AudioContext;
             context = Context === null ? null : new Context();
@@ -481,6 +493,9 @@ export const useVoice = createStore((): VoiceApi =>
                     ...(server.credential === undefined ? {} : { credential: server.credential })
                 })),
                 send: (to, join, signal) => realtime.signal(next, to, join, signal.kind, signal.data),
+                relay: (to, codec, at, data) => realtime.sound(next, to, codec, at, data),
+                opus,
+                after: (ms, run) => runtime().clock.after(ms, run),
                 onLink: (who, link) =>
                 {
                     if (link === 'connected' || link === null)
@@ -531,7 +546,7 @@ export const useVoice = createStore((): VoiceApi =>
             gate();
             await call.setMic(stream);
 
-            realtime.voice(next, true, quiet);
+            realtime.voice(next, true, quiet, opus);
             setJoining(false);
         },
 
@@ -541,7 +556,7 @@ export const useVoice = createStore((): VoiceApi =>
 
             if (current !== null)
             {
-                realtime.voice(current, false, true);
+                realtime.voice(current, false, true, opus);
             }
 
             teardown();
@@ -679,6 +694,7 @@ export const useVoice = createStore((): VoiceApi =>
             const stops = [
                 realtime.onVoice(onVoice),
                 realtime.onSignal(signalled),
+                realtime.onSound(sounded),
                 realtime.onStatus((status) =>
                 {
                     const current = untrack(table);
@@ -686,7 +702,7 @@ export const useVoice = createStore((): VoiceApi =>
                     if (status === 'connected' && current !== null && !untrack(joining))
                     {
                         call?.sync('', []);
-                        realtime.voice(current, true, untrack(muted));
+                        realtime.voice(current, true, untrack(muted), opus);
                     }
                 })
             ];

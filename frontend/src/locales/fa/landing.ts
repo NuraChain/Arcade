@@ -51,7 +51,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.together.tables.title': 'بازی از دل هر گفت‌وگو',
     'landing.together.tables.body': 'از خود گفت‌وگو یک میز باز کن. فقط آدم‌های همان گفت‌وگو می‌توانند بنشینند.',
     'landing.together.voice.title': 'صدا سر میز',
-    'landing.together.voice.body': 'هنگام بازی حرف بزنید. صدا مستقیم بین بازیکنان می‌رود و مرورگر آن را رمزگذاری می‌کند.',
+    'landing.together.voice.body': 'هنگام بازی حرف بزنید. صدا هر وقت بشود مستقیم بین بازیکنان می‌رود و در راه رمزگذاری می‌شود.',
 
     'landing.compete.title': 'هر نتیجه به حساب می‌آید',
     'landing.compete.lead': 'در جدول‌ها بالا برو، امتیازت را جابه‌جا کن و در مسیر مدال جمع کن.',

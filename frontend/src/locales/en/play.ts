@@ -83,7 +83,7 @@ export const play = {
     'create.chat': 'Table chat',
     'create.chatHint': 'Let everyone at the table talk. Turn it off for a quiet game.',
     'create.voice': 'Voice chat',
-    'create.voiceHint': 'Players can join a voice call at the table. The sound goes directly between them.',
+    'create.voiceHint': 'Players can join a voice call at the table. The sound goes straight between them whenever it can.',
     'create.voiceTeam': 'Only teammates hear each other',
     'create.voiceTeamHint': 'Each side has a call of its own, and the other side hears nothing of it.',
     'create.blinds': 'Blinds',
@@ -558,5 +558,5 @@ export const play = {
     'voice.autoJoinHint': 'At a table that has voice on, join the call as soon as you sit down.',
     'voice.volume': 'Voice volume',
     'voice.volumeHint': 'How loud other players are. Muting one person is on the table itself.',
-    'voice.privacy': 'The sound goes directly between players and is encrypted by the browser. This server only introduces you, and never carries it.'
+    'voice.privacy': 'The sound goes straight between players whenever their connections allow, encrypted by the browser. When two players cannot reach each other, this server passes the sound on over their secure connection and keeps none of it.'
 };

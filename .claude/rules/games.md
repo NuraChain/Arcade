@@ -1274,7 +1274,8 @@ is only ever seen by somebody with the product open: nothing wakes a closed tab 
 `docs/superpowers/specs/2026-09-23-table-voice-design.md` is the design. A host turns voice on at
 create (`tables.voice`, off by default); seated players join a peer-to-peer call - one
 `RTCPeerConnection` per pair, Opus only, a full mesh of at most seven links per browser - and this
-server does nothing but introduce them.
+server introduces them, and carries the sound itself between two who cannot reach each other
+(*A call that cannot connect directly is carried by this server*).
 
 **A table's voice is a word from a list, not a switch.** `tables.voice` was a boolean, and the owner
 asked for a call that can be for the whole table or for a player's own side. The column and the wire
@@ -1371,14 +1372,63 @@ candidates arrive in bursts.
 **What the encryption claim is, precisely.** Media is DTLS-SRTP between the browsers. The DTLS
 fingerprints ride inside SDP this server relays, so a server that wanted to could sit in the middle;
 the chat is end-to-end because every line is signed by a device the reader verifies, and voice
-introductions are not signed yet. The copy therefore says the sound goes directly between players
-and is encrypted by the browser - not "end-to-end" - until each fingerprint is signed with the
-device key the sealing already verifies.
+introductions are not signed yet. A call this server carries is not DTLS-SRTP at all: it rides the
+page's own connection, encrypted to nginx, and this server reads it to pass it on. The copy
+therefore says the sound goes straight between players whenever it can and is encrypted on its
+way - never "end-to-end", and no longer "this server never carries it" - until each fingerprint is
+signed with the device key the sealing already verifies.
 
 **ICE comes from configuration and a TURN secret never reaches a browser.** `GET /api/voice/ice`
 answers `VOICE_STUN_URLS`, and for `VOICE_TURN_URLS` a TURN REST username that expires in an hour
-with its HMAC. With nothing configured the list is empty: one network works, two NATs do not, and
-the roster says "could not connect".
+with its HMAC. With nothing configured the list is empty: one network connects directly, and two
+NATs are carried by this server.
+
+**A call that cannot connect directly is carried by this server.** The owner asked, of the boot
+warning that voice had no STUN or TURN server: "can we handle it without this?" It can. Each end
+waits `RELAY_AFTER_MS` (three seconds) for its line, or less when the line fails, and then sends
+its microphone to the other through the realtime socket as `sound` frames, and plays what comes
+back. The line is hung up then. A line that has not connected in three seconds will not, and one
+left trying fails again and again, and Firefox logs "ICE failed, add a STUN server" each time it
+gives up. Somebody who comes back as a new joining is tried on a line again.
+
+- **One frame every 60 ms.** An `AudioWorklet` taps the microphone (`services/voice.relay.ts`,
+  loaded from a Blob, which needs a secure page, as the microphone does). A frame is Opus at
+  24 kbps through WebCodecs where both ends can write and read it, and G.711 μ-law at 16 kHz where
+  either cannot: the `voice` frame says `opus`, the roster carries it, and a sender picks the
+  codec its targets all hear. A frame of pure silence is not sent, and nothing is sent while muted
+  or between presses of the talk key.
+- **The hub forwards it and nothing more.** `hub.sound` sends a frame only to joinings it names in
+  the sender's own call who may talk with the sender, never back to the sender and never from one
+  who has said they are muted. It is metered by the `sound` budget, 250 frames in ten seconds,
+  where a call sends about seventeen a second. It is the one LOSSY send in the hub (`sounded`): a
+  frame goes only when the socket has nothing waiting, so sound never queues behind a move and a
+  move never waits behind sound, and a socket that cannot keep up loses sound and is never closed
+  for it. The browser does the same on its side: a frame is dropped rather than sent behind 8 KB the
+  socket has not sent yet (`SOUND_BACKLOG`).
+- **The receiver plays it 120 ms behind** (`JITTER_MS`), each frame straight after the one before,
+  starts again that far behind when the frames fell behind the clock, and lets a frame fall rather
+  than play it more than 400 ms late (`LAG_MOST_MS`). What it plays is a `MediaStream` from the
+  call's own `AudioContext`, handed to the same audio element a line's stream is, so the volume,
+  turning somebody past full, the speaker, deafening and the speaking ring all work unchanged.
+- **Hearing somebody through the server is answered the same way at once**, whatever is left of
+  the wait and whatever the line says: they have hung theirs up. A signal for a line that was hung
+  up is let fall, and an answer that the hanging up cut short does not call the call failed.
+- **A carried call counts as connected.** The Players list never says "Could not connect" for it.
+  That sentence is left for a call nothing can carry (no audio context, or no socket).
+
+`voice-relay.spec.ts` holds the codecs, the jitter, the tap and the codec choice;
+`voice-rtc.spec.ts` (*a call the server carries*) the wait, the failure, the answer, the line
+hung up and the call nothing can carry; `voice.spec.ts` (*a call the server carries*) the store;
+`realtime-hub.spec.ts` and `voice-frames.spec.ts` the server. Seen in two real browsers on the
+built server with every candidate taken out of both ends, so no line could ever connect: each hears
+the other's tone through the server within four seconds of joining, "Speaking" lights, nobody is
+called unreachable after the ten seconds that would have said so, a mute sends nothing, every frame
+sent arrives (205 of 205 and 62 of 62), and with Opus taken out of one browser both ends speak
+μ-law, and Chromium talks to Firefox the same way, with nothing in either console. Two things it
+costs, stated. Some browsers' echo cancelling covers what a line plays and not
+what Web Audio does, so a carried voice may echo for a reader on speakers, as a voice turned past
+full may. And this server carries about 40 kbps for each speaker and each listener in Opus, and
+about 180 in μ-law.
 
 **The microphone is asked for when somebody presses Join, never before**, and refused or missing it
 joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn that off in settings.
@@ -1485,10 +1535,10 @@ page (all three call it again), and one reloads (out, and back with all three on
 runs on Firefox as well (`QA_BROWSER=firefox`): thirty-seven checks on each. **The "ICE failed"
 the owner's Firefox logged was looked for and not found again**: twenty runs of a tracing
 diagnostic with two Firefox processes and no STUN connected every time, as did four whole passes.
-What that line means on two networks is what it says - with `VOICE_STUN_URLS` and
-`VOICE_TURN_URLS` empty there is no path between two machines that are not on one network, and
-the server now says so at boot and the page says who it could not reach (*A call that cannot
-reach somebody says so*).
+What that line meant on two networks was what it said - with `VOICE_STUN_URLS` and
+`VOICE_TURN_URLS` empty there was no direct path between two machines that are not on one
+network - and such a call is now carried by this server (*A call that cannot connect directly is
+carried by this server*).
 
 ### Voice while the game plays
 
@@ -1591,9 +1641,10 @@ as long as that lasts, and the page says once who it is and that it is the netwo
 not the microphone. The wait is counted on NOT CONNECTED, never on `failed`: the side that called
 restarts ICE the moment a connection fails, so a line that will never work reads failed for an
 instant and connecting for the next half minute, for ever - the "Connecting" that never ended.
-Connecting takes the words back, and so does the person leaving. The server says at boot when it has
-neither a STUN nor a TURN server, because two players on two networks then cannot connect at all and
-nothing else would say why.
+Connecting takes the words back, and so does the person leaving. A call this server carries counts
+as connected, so the words are now for a call nothing can carry. The server says at boot, as
+information, when it has neither a STUN nor a TURN server: a call between two networks is then
+carried by this server, and STUN would let more of them talk directly.
 
 **A `<Show>` with a thunk child rebuilds whenever its `when` re-evaluates, so a control inside one
 that reads a roster loses its focus.** The per-person volume slider sat in a `when` that read the

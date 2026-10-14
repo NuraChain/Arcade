@@ -102,6 +102,11 @@ beforeAll(async () =>
         {
             noted.push('resync');
             base.resync(connection);
+        },
+        sound(...given: Parameters<typeof base.sound>)
+        {
+            noted.push(`sound ${ given[1] } ${ given[2].join('+') } ${ given[3] } ${ given[4] } ${ given[5] }`);
+            base.sound(...given);
         }
     };
 
@@ -388,6 +393,29 @@ describe('a bound socket', () =>
         expect(refusals).toEqual([['k1', 403, 'not-your-turn'], ['k2', 422, 'validation-failed']]);
         expect(noted).not.toContain('played k2');
         talker.end();
+    });
+
+    it('hands sound to the hub as it came, and hangs up on a socket that sends more than any call makes', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2', 'j3'], codec: 'opus', at: 0, data: 'AQID' });
+        await settle(100);
+
+        expect(noted).toContain('sound t-1 j2+j3 opus 0 AQID');
+
+        for (let at = 1; at < 250; at += 1)
+        {
+            talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2'], codec: 'law', at, data: 'AQID' });
+        }
+
+        await settle(200);
+        expect(noted.filter((line) => line.startsWith('sound t-1'))).toHaveLength(250);
+
+        talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2'], codec: 'law', at: 250, data: 'AQID' });
+
+        expect((await talker.closed).code).toBe(4429);
     });
 
     it('does not bind a socket whose session turns out to be dead', async () =>

@@ -34,7 +34,7 @@ const THROTTLES: Record<string, number> = { sync: 5000, presence: 2000, typing: 
 
 const BUDGET_WINDOW_MS = 10_000;
 
-const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, ping: 10 };
+const BUDGETS: Record<string, number> = { voice: 30, signal: 120, sound: 250, play: 40, ping: 10 };
 
 const HEARTBEAT_MS = 15_000;
 
@@ -233,7 +233,13 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
                 if (frame.t === 'voice')
                 {
-                    deps.hub.voice(connection, frame.table, frame.on, frame.muted);
+                    deps.hub.voice(connection, frame.table, frame.on, frame.muted, frame.opus);
+                    return;
+                }
+
+                if (frame.t === 'sound')
+                {
+                    deps.hub.sound(connection, frame.table, frame.to, frame.codec, frame.at, frame.data);
                     return;
                 }
 

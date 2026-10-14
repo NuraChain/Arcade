@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { createVoiceCall, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
+import type { Codec, RelayKit } from '../src/services/voice.relay.ts';
+import { RELAY_AFTER_MS, createVoiceCall, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
 
 interface Line
 {
@@ -64,6 +65,11 @@ function fakeConnection()
 
         async setLocalDescription()
         {
+            if (connection.closed)
+            {
+                throw new Error('closed');
+            }
+
             made += 1;
             local = connection.signalingState === 'have-remote-offer'
                 ? { type: 'answer', sdp: `answer-${ made }` }
@@ -185,9 +191,9 @@ function side(handle: string, own: string, context?: AudioContext)
     };
 }
 
-const MINA = { who: 'mina', join: 'm1' };
+const MINA = { who: 'mina', join: 'm1', opus: false };
 
-const DANA = { who: 'dana', join: 'd1' };
+const DANA = { who: 'dana', join: 'd1', opus: false };
 
 const asking = () => side('dana', 'd1');
 
@@ -406,8 +412,8 @@ describe('a call between two players', () =>
         const first = side('zed', 'a1');
         const second = side('abe', 'b1');
 
-        first.sees({ who: 'abe', join: 'b1' });
-        second.sees({ who: 'zed', join: 'a1' });
+        first.sees({ who: 'abe', join: 'b1', opus: false });
+        second.sees({ who: 'zed', join: 'a1', opus: false });
 
         expect(first.connection.lines.length).toBe(1);
         expect(second.connection.lines.length).toBe(0);
@@ -514,7 +520,7 @@ describe('a call between two players', () =>
 
         asks.sees(MINA);
         asks.connection.onicecandidate?.({ candidate: { candidate: 'first' } });
-        asks.sees({ who: 'mina', join: 'm2' });
+        asks.sees({ who: 'mina', join: 'm2', opus: false });
         asks.connection.onicecandidate?.({ candidate: { candidate: 'second' } });
         asks.connection.onicecandidate?.({ candidate: null });
 
@@ -544,7 +550,7 @@ describe('a call between two players', () =>
 
         expect(asks.connections.length).toBe(1);
 
-        asks.sees({ who: 'mina', join: 'm2' });
+        asks.sees({ who: 'mina', join: 'm2', opus: false });
 
         expect(asks.connections.map((one) => one.closed)).toEqual([true, false]);
         expect(asks.links).toEqual([['mina', 'connecting'], ['mina', null], ['mina', 'connecting']]);
@@ -560,7 +566,7 @@ describe('a call between two players', () =>
 
         waits.sees(DANA);
         await waits.call.receive('d1', said('offer'));
-        waits.sees({ who: 'dana', join: 'd2' });
+        waits.sees({ who: 'dana', join: 'd2', opus: false });
 
         expect(waits.connections.map((one) => [one.closed, one.lines.length])).toEqual([[true, 1], [false, 0]]);
 
@@ -587,7 +593,7 @@ describe('a call between two players', () =>
 
         asks.sees(MINA);
         asks.connection.becomes('connected');
-        asks.sees({ who: 'nina', join: 'm1' });
+        asks.sees({ who: 'nina', join: 'm1', opus: false });
 
         expect(asks.connections.map((one) => one.closed)).toEqual([false]);
         expect(asks.links).toEqual([['mina', 'connecting'], ['mina', 'connected'], ['mina', null], ['nina', 'connected']]);
@@ -621,7 +627,7 @@ describe('a call between two players', () =>
 
         const answered = asks.call.receive('m1', said('answer'));
 
-        asks.sees({ who: 'mina', join: 'm2' });
+        asks.sees({ who: 'mina', join: 'm2', opus: false });
         first.release();
         await answered;
 
@@ -668,11 +674,425 @@ describe('a call between two players', () =>
     {
         const waits = waiting();
 
-        waits.sees({ who: 'dana', join: 'd2' });
+        waits.sees({ who: 'dana', join: 'd2', opus: false });
         await waits.call.receive('d1', said('offer'));
 
         expect(waits.connections.length).toBe(1);
         expect(waits.connection.applied).toEqual([]);
         expect(waits.sent).toEqual([]);
+    });
+});
+
+interface Carried
+{
+    stream: { carried: number };
+    took: [Codec, number, string][];
+    closed: boolean;
+}
+
+function carried(options: { relay?: boolean; context?: boolean; opus?: boolean } = {})
+{
+    const targets: { join: string; opus: boolean }[][] = [];
+    const tracks: (MediaStreamTrack | null)[] = [];
+    const mutes: boolean[] = [];
+    const speaks: boolean[] = [];
+    const inbound: Carried[] = [];
+    const sounds: { to: string[]; codec: Codec; at: number; data: string }[] = [];
+    const links: [string, PeerLink | null][] = [];
+    const connections: ReturnType<typeof fakeConnection>[] = [];
+    const timers: { ms: number; run: () => void; off: boolean }[] = [];
+    const sources = new Map<HTMLMediaElement, unknown>();
+    const context = fakeContext();
+    let closed = 0;
+
+    const kit = (): RelayKit => ({
+        outbound(send, opus)
+        {
+            speaks.push(opus);
+            send(['probe'], 'law', 0, 'AA==');
+
+            return {
+                to: (next) =>
+                {
+                    targets.push(next.map((one) => ({ ...one })));
+                },
+                setTrack: (track) =>
+                {
+                    tracks.push(track);
+                },
+                setMuted: (muted) =>
+                {
+                    mutes.push(muted);
+                },
+                close: () =>
+                {
+                    closed += 1;
+                }
+            };
+        },
+        inbound()
+        {
+            const one: Carried = { stream: { carried: inbound.length }, took: [], closed: false };
+
+            inbound.push(one);
+
+            return {
+                stream: one.stream as unknown as MediaStream,
+                take: (codec, at, data) =>
+                {
+                    one.took.push([codec, at, data]);
+                },
+                close: () =>
+                {
+                    one.closed = true;
+                }
+            };
+        }
+    });
+
+    const played = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined);
+    const carriedTo = vi.spyOn(HTMLMediaElement.prototype, 'srcObject', 'set').mockImplementation(function (this: HTMLMediaElement, value: unknown)
+    {
+        sources.set(this, value);
+    });
+
+    const call = createVoiceCall({
+        me: () => 'dana',
+        iceServers: [],
+        send: () => undefined,
+        onLink: (who, link) => links.push([who, link]),
+        onLevel: () => undefined,
+        context: () => (options.context === false ? null : context as unknown as AudioContext),
+        ...(options.relay === false ? {} : { relay: (to: string[], codec: Codec, at: number, data: string) => sounds.push({ to, codec, at, data }) }),
+        opus: options.opus ?? true,
+        kit,
+        after: (ms, run) =>
+        {
+            const timer = { ms, run, off: false };
+
+            timers.push(timer);
+
+            return () =>
+            {
+                timer.off = true;
+            };
+        },
+        connect: () =>
+        {
+            const made = fakeConnection();
+
+            connections.push(made);
+
+            return made as unknown as RTCPeerConnection;
+        }
+    });
+
+    return {
+        call,
+        targets,
+        tracks,
+        mutes,
+        speaks,
+        inbound,
+        sounds,
+        links,
+        connections,
+        timers,
+        sources,
+        closed: () => closed,
+
+        sees(...peers: VoiceJoin[])
+        {
+            call.sync('d1', peers);
+        },
+
+        lapse()
+        {
+            for (const timer of timers.splice(0))
+            {
+                if (!timer.off)
+                {
+                    timer.run();
+                }
+            }
+        },
+
+        arrive(sound: unknown)
+        {
+            (connections.at(-1)!.ontrack as unknown as (event: { track: unknown; streams: unknown[] }) => void)({ track: {}, streams: [sound] });
+        },
+
+        heard: () => sources.get(document.body.querySelector('audio')!),
+
+        done()
+        {
+            call.close();
+            played.mockRestore();
+            carriedTo.mockRestore();
+        },
+
+        get connection()
+        {
+            return connections[connections.length - 1];
+        }
+    };
+}
+
+const MINA_OPUS = { who: 'mina', join: 'm1', opus: true };
+
+describe('a call the server carries when two players cannot reach each other', () =>
+{
+    it('waits for the line, then carries the call through the server and counts it connected', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            await one.call.setMic(stream);
+            one.sees(MINA_OPUS);
+
+            expect(one.timers.map((timer) => timer.ms)).toEqual([RELAY_AFTER_MS]);
+            expect(one.targets, 'the call was carried before the line had its chance').toEqual([]);
+
+            one.lapse();
+
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
+            expect(one.speaks).toEqual([true]);
+            expect(one.tracks).toEqual([microphone]);
+            expect(one.mutes).toEqual([true]);
+            expect(one.sounds).toEqual([{ to: ['probe'], codec: 'law', at: 0, data: 'AA==' }]);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+            expect(one.connection.closed, 'the line was left trying after the server took the call').toBe(true);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('never carries a call whose line connects in time, and carries one whose line drops and does not come back', () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.connection.becomes('connected');
+            one.lapse();
+
+            expect(one.targets).toEqual([]);
+            expect(one.connection.closed).toBe(false);
+            expect(one.links).toEqual([['mina', 'connecting'], ['mina', 'connected']]);
+
+            one.connection.becomes('disconnected');
+
+            expect(one.links.at(-1)).toEqual(['mina', 'connecting']);
+
+            one.lapse();
+
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+            expect(one.connection.closed).toBe(true);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('carries the call at once when the line fails, and hangs the line up rather than try it again', () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.connection.becomes('failed');
+
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+            expect(one.connection.restarts, 'a line the server carries for was tried again').toBe(0);
+            expect(one.connection.closed).toBe(true);
+            expect(one.timers.every((timer) => timer.off), 'the wait for the line was left running').toBe(true);
+
+            one.connection.becomes('connecting');
+
+            expect(one.links.at(-1), 'a carried call read as connecting when its old line spoke').toEqual(['mina', 'connected']);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('plays what the server carries from somebody and carries its own back at once, hanging up a line that said it worked', () =>
+    {
+        const one = carried();
+        const LINE = { line: true };
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.arrive(LINE);
+            one.connection.becomes('connected');
+
+            expect(one.heard()).toBe(LINE);
+
+            one.call.heard('m1', 'law', 0, 'AQID');
+            one.call.heard('m1', 'law', 1, 'BAUG');
+
+            expect(one.inbound).toHaveLength(1);
+            expect(one.inbound[0].took).toEqual([['law', 0, 'AQID'], ['law', 1, 'BAUG']]);
+            expect(one.heard(), 'what the server carried was not what was heard').toBe(one.inbound[0].stream);
+            expect(one.targets.at(-1), 'somebody heard through the server was not answered the same way').toEqual([{ join: 'm1', opus: true }]);
+            expect(one.connection.closed, 'a line the other end had hung up was kept').toBe(true);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('lets sound fall from a joining it does not know', () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.call.heard('x9', 'law', 0, 'AQID');
+
+            expect(one.inbound).toEqual([]);
+            expect(one.targets).toEqual([]);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('takes no signal for a line it has hung up for the server, and calls nothing failed that the hanging up cut short', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.connection.hold();
+
+            const answered = one.call.receive('m1', said('answer'));
+
+            one.lapse();
+            one.connection.release();
+            await answered;
+            await one.connection.onnegotiationneeded?.();
+            await one.call.receive('m1', said('offer'));
+
+            expect(one.connection.applied, 'a signal reached a line that was hung up').toEqual([]);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('speaks Opus to somebody only while the roster says they can hear it', () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.lapse();
+            one.sees({ ...MINA_OPUS, opus: false });
+
+            expect(one.targets.map((targets) => targets.map((target) => target.opus))).toEqual([[true], [false]]);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('hands what carries the call the microphone it has and whether it is muted', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.lapse();
+            one.call.setMuted(false);
+            await one.call.setMic(stream);
+
+            expect(one.mutes.at(-1)).toBe(false);
+            expect(one.tracks.at(-1), 'a microphone granted during the call was not carried').toBe(microphone);
+
+            await one.call.setMic(null);
+
+            expect(one.tracks.at(-1)).toBeNull();
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('stops carrying and hearing somebody who leaves, and closes what carried the call with the call', () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS, { who: 'sara', join: 's1', opus: false });
+            one.lapse();
+            one.call.heard('m1', 'law', 0, 'AQID');
+
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }, { join: 's1', opus: false }]);
+
+            one.sees({ who: 'sara', join: 's1', opus: false });
+
+            expect(one.inbound[0].closed).toBe(true);
+            expect(one.targets.at(-1)).toEqual([{ join: 's1', opus: false }]);
+
+            one.call.close();
+
+            expect(one.closed()).toBe(1);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('waits for the line as it always did where nothing can carry the call', () =>
+    {
+        for (const options of [{ relay: false }, { context: false }])
+        {
+            const one = carried(options);
+
+            try
+            {
+                one.sees(MINA_OPUS);
+                one.lapse();
+                one.call.heard('m1', 'law', 0, 'AQID');
+
+                expect(one.targets).toEqual([]);
+                expect(one.inbound).toEqual([]);
+                expect(one.links.at(-1)).toEqual(['mina', 'connecting']);
+
+                one.connection.becomes('failed');
+
+                expect(one.links.at(-1)).toEqual(['mina', 'failed']);
+                expect(one.connection.restarts).toBe(1);
+                expect(one.connection.closed).toBe(false);
+            }
+            finally
+            {
+                one.done();
+            }
+        }
     });
 });

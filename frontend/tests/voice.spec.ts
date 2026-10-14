@@ -5,7 +5,7 @@ import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import type { VoiceCall, VoiceCallDeps, VoiceSignal } from '../src/services/voice.rtc.ts';
 import { keyName } from '../src/lib/talk-key.ts';
-import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
+import { IDLE_MS, SOUND_BACKLOG, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
@@ -19,6 +19,7 @@ interface FakeCall
     deps: VoiceCallDeps;
     synced: { mine: string; peers: { who: string; join: string }[] }[];
     received: { join: string; signal: VoiceSignal }[];
+    sounds: { join: string; codec: string; at: number; data: string }[];
     muted: boolean[];
     mic: (MediaStream | null)[];
     volumes: Record<string, number>;
@@ -30,7 +31,7 @@ let calls: FakeCall[] = [];
 
 const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
 {
-    const call: FakeCall = { deps, synced: [], received: [], muted: [], mic: [], volumes: {}, sinks: [], closed: false };
+    const call: FakeCall = { deps, synced: [], received: [], sounds: [], muted: [], mic: [], volumes: {}, sinks: [], closed: false };
     calls.push(call);
 
     return {
@@ -49,6 +50,10 @@ const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
         receive: async (join, signal) =>
         {
             call.received.push({ join, signal });
+        },
+        heard: (join, codec, at, data) =>
+        {
+            call.sounds.push({ join, codec, at, data });
         },
         setVolume: (who, volume) =>
         {
@@ -147,13 +152,13 @@ describe('voice at a table', () =>
         await useVoice().join(TABLE);
 
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
-            { who: 'alex', muted: true, talk: true, join: 'j1' },
-            { who: 'sara.k', muted: false, talk: true, join: 'j2' },
-            { who: 'mina', muted: false, talk: false, join: 'j3' }
+            { who: 'alex', muted: true, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: false },
+            { who: 'mina', muted: false, talk: false, join: 'j3', opus: false }
         ] });
         await settle();
 
-        expect(calls[0].synced.at(-1)).toEqual({ mine: 'j1', peers: [{ who: 'sara.k', join: 'j2' }] });
+        expect(calls[0].synced.at(-1)).toEqual({ mine: 'j1', peers: [{ who: 'sara.k', join: 'j2', opus: false }] });
         expect(useVoice().people().map((person) => [person.who, person.me, person.talk])).toEqual([
             ['alex', true, true],
             ['sara.k', false, true],
@@ -166,12 +171,12 @@ describe('voice at a table', () =>
         await useVoice().join(TABLE);
 
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
-            { who: 'alex.renamed', muted: true, talk: true, join: 'j1' },
-            { who: 'sara.k', muted: false, talk: true, join: 'j2' }
+            { who: 'alex.renamed', muted: true, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: false }
         ] });
         await settle();
 
-        expect(calls[0].synced.at(-1)).toEqual({ mine: 'j1', peers: [{ who: 'sara.k', join: 'j2' }] });
+        expect(calls[0].synced.at(-1)).toEqual({ mine: 'j1', peers: [{ who: 'sara.k', join: 'j2', opus: false }] });
         expect(useVoice().people().map((person) => [person.who, person.me, person.link])).toEqual([
             ['alex.renamed', true, 'connected'],
             ['sara.k', false, null]
@@ -231,8 +236,8 @@ describe('voice at a table', () =>
         await useVoice().join(TABLE);
 
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
-            { who: 'alex', muted: false, talk: true, join: 'j1' },
-            { who: 'sara.k', muted: false, talk: true, join: 'j2' }
+            { who: 'alex', muted: false, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: false }
         ] });
         await settle();
 
@@ -266,14 +271,14 @@ describe('voice at a table', () =>
         socket.accept();
         await settle();
 
-        expect(voiceFrames()).toEqual([{ t: 'voice', table: TABLE, on: true, muted: true }]);
+        expect(voiceFrames()).toEqual([{ t: 'voice', table: TABLE, on: true, muted: true, opus: false }]);
     });
 
     const room = async () =>
     {
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
-            { who: 'alex', muted: false, talk: true, join: 'j1' },
-            { who: 'sara.k', muted: false, talk: true, join: 'j2' }
+            { who: 'alex', muted: false, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: false }
         ] });
         await settle();
     };
@@ -483,8 +488,8 @@ describe('voice at a table', () =>
             joined: true,
             mine: 'join-alex',
             peers: [
-                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+                { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                { who: 'sara.k', muted: false, talk: true, join: 'join-sara', opus: false }
             ]
         });
         await settle();
@@ -595,8 +600,8 @@ describe('voice at a table', () =>
             joined: true,
             mine: 'join-alex',
             peers: [
-                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+                { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                { who: 'sara.k', muted: false, talk: true, join: 'join-sara', opus: false }
             ]
         });
         await settle();
@@ -678,5 +683,122 @@ describe('voice at a table', () =>
         {
             delete (document as { visibilityState?: unknown }).visibilityState;
         }
+    });
+});
+
+describe('a call the server carries', () =>
+{
+    const soundFrames = () => socket.sent.filter((frame) => frame.t === 'sound');
+
+    const hearing = (yes: boolean) => ({ isConfigSupported: async () => ({ supported: yes }) });
+
+    it('says whether this browser can hear Opus when it joins, when it mutes and when it comes back', async () =>
+    {
+        vi.stubGlobal('AudioEncoder', hearing(true));
+        vi.stubGlobal('AudioDecoder', hearing(true));
+
+        try
+        {
+            await useVoice().join(TABLE);
+
+            expect(voiceFrames().at(-1)).toMatchObject({ on: true, opus: true });
+            expect(calls[0].deps.opus).toBe(true);
+
+            useVoice().toggleMute();
+            expect(voiceFrames().at(-1)).toMatchObject({ muted: false, opus: true });
+
+            socket.drop();
+            useRealtime().start();
+            socket.accept();
+            await settle();
+
+            expect(voiceFrames().at(-1)).toMatchObject({ on: true, opus: true });
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('says it cannot hear Opus where the browser cannot read it', async () =>
+    {
+        vi.stubGlobal('AudioEncoder', hearing(true));
+        vi.stubGlobal('AudioDecoder', hearing(false));
+
+        try
+        {
+            await useVoice().join(TABLE);
+
+            expect(voiceFrames().at(-1)).toMatchObject({ on: true, opus: false });
+            expect(calls[0].deps.opus).toBe(false);
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('tells the call who among the people it may talk with can hear Opus', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
+            { who: 'alex', muted: true, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: true },
+            { who: 'mina', muted: false, talk: true, join: 'j3', opus: false }
+        ] });
+        await settle();
+
+        expect(calls[0].synced.at(-1)).toEqual({ mine: 'j1', peers: [{ who: 'sara.k', join: 'j2', opus: true }, { who: 'mina', join: 'j3', opus: false }] });
+    });
+
+    it('hands the call the sound carried for this table, and lets sound for another fall', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        socket.deliver({ v: 1, t: 'sound', n: 4, table: TABLE, join: 'j2', codec: 'law', at: 3, data: 'AQID' });
+        socket.deliver({ v: 1, t: 'sound', n: 5, table: 'other', join: 'j2', codec: 'opus', at: 4, data: 'BAUG' });
+        await settle();
+
+        expect(calls[0].sounds).toEqual([{ join: 'j2', codec: 'law', at: 3, data: 'AQID' }]);
+    });
+
+    it('sends what the call carries to the server for the joinings it names, and drops it rather than queue it behind a socket that has fallen behind', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        calls[0].deps.relay!(['j2', 'j3'], 'opus', 7, 'AQID');
+
+        expect(soundFrames()).toEqual([{ t: 'sound', table: TABLE, to: ['j2', 'j3'], codec: 'opus', at: 7, data: 'AQID' }]);
+
+        socket.backlog = SOUND_BACKLOG + 1;
+        calls[0].deps.relay!(['j2'], 'opus', 8, 'BAUG');
+
+        expect(soundFrames(), 'sound was queued behind a socket that could not keep up').toHaveLength(1);
+
+        socket.backlog = 0;
+        calls[0].deps.relay!(['j2'], 'opus', 9, 'BwgJ');
+
+        expect(soundFrames().map((frame) => (frame.t === 'sound' ? frame.at : -1))).toEqual([7, 9]);
+    });
+
+    it('waits for a line on the product clock', async () =>
+    {
+        const clock = manualClock(900_000);
+        setRuntime({ clock, seed: 9 });
+        const ran = vi.fn();
+
+        await useVoice().join(TABLE);
+
+        calls[0].deps.after!(1000, ran);
+
+        clock.advance(999);
+        expect(ran).not.toHaveBeenCalled();
+        clock.advance(1);
+        expect(ran).toHaveBeenCalledTimes(1);
+
+        calls[0].deps.after!(1000, ran)();
+        clock.advance(2000);
+        expect(ran, 'a wait that was called off ran anyway').toHaveBeenCalledTimes(1);
     });
 });

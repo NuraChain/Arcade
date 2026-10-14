@@ -493,9 +493,9 @@ describe('an edge change', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, 't-1', true, false);
+        world.hub.voice(alex.connection, 't-1', true, false, false);
         await settle();
-        world.hub.voice(sara.connection, 't-1', true, false);
+        world.hub.voice(sara.connection, 't-1', true, false, false);
         await settle();
 
         world.apart.add(['alex', 'sara.k'].sort().join('|'));
@@ -572,7 +572,7 @@ describe('a table change', () =>
         world.seated.add('alex@t-1');
         const alex = await connect('alex');
 
-        world.hub.voice(alex.connection, 't-1', true, false);
+        world.hub.voice(alex.connection, 't-1', true, false, false);
         await settle();
 
         world.seated.delete('alex@t-1');
@@ -1040,20 +1040,129 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, true);
+        world.hub.voice(sara.connection, TABLE, true, true, false);
         await rest();
 
         expect(lastVoice(alex.wire)).toMatchObject({ joined: true, peers: [{ who: 'alex', muted: false, talk: true }, { who: 'sara.k', muted: true, talk: true }] });
         expect(world.hub.voiceOf(TABLE)).toEqual(['alex', 'sara.k']);
     });
 
+    it('names on the roster whether each caller can hear Opus, and what they say when it changes', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false, true);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false, false);
+        await rest();
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => [peer.who, peer.opus])).toEqual([['alex', true], ['sara.k', false]]);
+
+        world.hub.voice(sara.connection, TABLE, true, true, true);
+        await rest();
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => [peer.who, peer.opus])).toEqual([['alex', true], ['sara.k', true]]);
+    });
+
+    it('carries sound only to the joinings it names in the same call who may talk with the sender, and never back to the sender', async () =>
+    {
+        seat('alex', 'sara.k', 'mina');
+        world.apart.add(['alex', 'mina'].sort().join('|'));
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const mina = await connect('mina');
+        const outside = await connect('omid.k');
+
+        for (const one of [alex, sara, mina])
+        {
+            world.hub.voice(one.connection, TABLE, true, false, true);
+            await rest();
+        }
+
+        world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'alex'), joinOf(alex.wire, 'sara.k'), joinOf(alex.wire, 'mina'), 'no-such-joining'], 'opus', 7, 'AQID');
+        world.hub.sound(outside.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'opus', 8, 'BAUG');
+        await rest();
+
+        expect(sara.wire.framesOf('sound')).toEqual([expect.objectContaining({ table: TABLE, join: joinOf(sara.wire, 'alex'), codec: 'opus', at: 7, data: 'AQID' })]);
+        expect(mina.wire.framesOf('sound'), 'sound crossed to somebody the sender may not talk with').toEqual([]);
+        expect(alex.wire.framesOf('sound'), 'sound came back to the one who sent it').toEqual([]);
+        expect(outside.wire.framesOf('sound')).toEqual([]);
+    });
+
+    it('carries no sound from a caller who has said they are muted', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, true, true);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false, true);
+        await rest();
+        world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'law', 1, 'AQID');
+        await rest();
+
+        expect(sara.wire.framesOf('sound')).toEqual([]);
+    });
+
+    it('drops sound for a socket that has stopped reading rather than queueing it, and never closes the socket for it', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false, true);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false, true);
+        await rest();
+
+        const before = sara.wire.framesOf('sound').length;
+
+        sara.wire.stalled = true;
+
+        for (let frame = 0; frame < 400; frame += 1)
+        {
+            world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'law', frame, 'AQID');
+        }
+
+        await rest();
+
+        expect(sara.wire.closed, 'a slow reader was hung up on for the sound it could not keep up with').toBeNull();
+        expect(sara.wire.framesOf('sound').length).toBe(before);
+    });
+
+    it('lets sound wait behind nothing: a frame the socket still has to send goes first, and the sound that came meanwhile is dropped', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false, true);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false, true);
+        await rest();
+
+        sara.wire.backpressure = true;
+        world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'law', 1, 'AQID');
+        world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'law', 2, 'AQID');
+        world.hub.voice(alex.connection, TABLE, true, true, true);
+        await rest();
+        world.hub.sound(alex.connection, TABLE, [joinOf(alex.wire, 'sara.k')], 'law', 3, 'AQID');
+        await rest();
+
+        expect(sara.wire.framesOf('sound').map((frame) => (frame.t === 'sound' ? frame.at : -1))).toEqual([1]);
+        expect(lastVoice(sara.wire)?.peers.find((peer) => peer.who === 'alex')?.muted, 'the roster waiting behind the sound was lost').toBe(true);
+    });
+
     it('refuses somebody who is not seated at a table with voice on', async () =>
     {
         const stranger = await connect('omid.k');
 
-        world.hub.voice(stranger.connection, TABLE, true, false);
+        world.hub.voice(stranger.connection, TABLE, true, false, false);
         await rest();
 
         expect(lastVoice(stranger.wire)).toMatchObject({ joined: false, peers: [] });
@@ -1071,7 +1180,7 @@ describe('voice at a table', () =>
 
         for (const one of [alex, sara, mina])
         {
-            world.hub.voice(one.connection, TABLE, true, false);
+            world.hub.voice(one.connection, TABLE, true, false, false);
             await rest();
         }
 
@@ -1106,7 +1215,7 @@ describe('voice at a table', () =>
 
             for (const one of people)
             {
-                world.hub.voice(one.connection, TABLE, true, false);
+                world.hub.voice(one.connection, TABLE, true, false, false);
                 await rest();
             }
 
@@ -1123,6 +1232,12 @@ describe('voice at a table', () =>
 
             expect(sara.wire.framesOf('signal'), 'a signal crossed to the other side').toEqual([]);
             expect(mina.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', data: '{"sdp":"beside"}' })]);
+
+            world.hub.sound(sara.connection, TABLE, [joinOf(alex.wire, 'alex'), joinOf(sara.wire, 'omid.k')], 'opus', 1, 'AQID');
+            await rest();
+
+            expect(alex.wire.framesOf('sound'), 'sound crossed to the other side').toEqual([]);
+            expect(omid.wire.framesOf('sound')).toEqual([expect.objectContaining({ join: joinOf(omid.wire, 'sara.k'), data: 'AQID' })]);
         });
 
         it('takes everybody out when the call becomes the table\'s, carries nobody into it, and puts all four in one when they join again', async () =>
@@ -1132,7 +1247,7 @@ describe('voice at a table', () =>
 
             for (const one of people)
             {
-                world.hub.voice(one.connection, TABLE, true, false);
+                world.hub.voice(one.connection, TABLE, true, false, false);
                 await rest();
             }
 
@@ -1145,7 +1260,7 @@ describe('voice at a table', () =>
 
             for (const one of people)
             {
-                world.hub.voice(one.connection, TABLE, true, false);
+                world.hub.voice(one.connection, TABLE, true, false, false);
                 await rest();
             }
 
@@ -1164,7 +1279,7 @@ describe('voice at a table', () =>
 
             for (const one of [alex, sara])
             {
-                world.hub.voice(one.connection, OTHER, true, false);
+                world.hub.voice(one.connection, OTHER, true, false, false);
                 await rest();
             }
 
@@ -1172,7 +1287,7 @@ describe('voice at a table', () =>
 
             for (const one of [alex, sara])
             {
-                world.hub.voice(one.connection, TABLE, true, false);
+                world.hub.voice(one.connection, TABLE, true, false, false);
                 await rest();
             }
 
@@ -1194,7 +1309,7 @@ describe('voice at a table', () =>
 
             for (const one of [alex, mina, sara])
             {
-                world.hub.voice(one.connection, TABLE, true, false);
+                world.hub.voice(one.connection, TABLE, true, false, false);
                 await rest();
             }
 
@@ -1202,7 +1317,7 @@ describe('voice at a table', () =>
 
             const again = await connect('alex');
 
-            world.hub.voice(again.connection, TABLE, true, false);
+            world.hub.voice(again.connection, TABLE, true, false, false);
             await rest();
 
             expect(lastVoice(alex.wire)?.joined, 'the first tab was left in the old side\'s call').toBe(false);
@@ -1217,9 +1332,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, false);
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         expect(lastVoice(alex.wire)?.peers.map((peer) => peer.who)).toEqual(['alex', 'sara.k']);
@@ -1228,13 +1343,13 @@ describe('voice at a table', () =>
 
         const named = joinOf(sara.wire, 'alex');
 
-        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, true);
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, true, false);
         await rest();
 
         expect(joinOf(sara.wire, 'alex'), 'a mute in capitals was taken for a new joining').toBe(named);
         expect(lastVoice(sara.wire)?.peers.find((peer) => peer.who === 'alex')?.muted).toBe(true);
 
-        world.hub.voice(alex.connection, TABLE.toUpperCase(), false, true);
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), false, true, false);
         await rest();
 
         expect(lastVoice(sara.wire)?.peers.map((peer) => peer.who), 'a leave in capitals left them in the call').toEqual(['sara.k']);
@@ -1246,9 +1361,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         const first = joinOf(alex.wire, 'sara.k');
@@ -1259,7 +1374,7 @@ describe('voice at a table', () =>
         expect(first).not.toBe(host);
         expect(joinOf(sara.wire, 'sara.k')).toBe(first);
 
-        world.hub.voice(sara.connection, TABLE, true, true);
+        world.hub.voice(sara.connection, TABLE, true, true, false);
         await rest();
 
         expect(joinOf(alex.wire, 'sara.k')).toBe(first);
@@ -1269,7 +1384,7 @@ describe('voice at a table', () =>
 
         const back = await connect('sara.k');
 
-        world.hub.voice(back.connection, TABLE, true, false);
+        world.hub.voice(back.connection, TABLE, true, false, false);
         await rest();
 
         expect(joinOf(alex.wire, 'sara.k')).not.toBe('');
@@ -1284,10 +1399,10 @@ describe('voice at a table', () =>
         const sara = await connect('sara.k');
         const stranger = await connect('omid.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
-        world.hub.voice(stranger.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
+        world.hub.voice(stranger.connection, TABLE, true, false, false);
         await rest();
 
         expect(lastVoice(alex.wire)?.mine).toBe(joinOf(alex.wire, 'alex'));
@@ -1302,9 +1417,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         const here = [joinOf(alex.wire, 'alex'), joinOf(alex.wire, 'sara.k')];
@@ -1314,7 +1429,7 @@ describe('voice at a table', () =>
 
         const again = await connect('alex');
 
-        world.hub.voice(again.connection, TABLE, true, false);
+        world.hub.voice(again.connection, TABLE, true, false, false);
         await rest();
 
         expect(here[0]).not.toBe(joinOf(again.wire, 'alex'));
@@ -1328,9 +1443,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await new Promise((resolve) => setTimeout(resolve, 0));
         world.hub.signal(sara.connection, TABLE, 'alex', joinOf(sara.wire, 'alex'), 'offer', '{"sdp":"first"}');
         await rest();
@@ -1350,9 +1465,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         const before = joinOf(alex.wire, 'sara.k');
@@ -1373,15 +1488,15 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         const over = joinOf(alex.wire, 'sara.k');
         const tab = await connect('sara.k');
 
-        world.hub.voice(tab.connection, TABLE, true, false);
+        world.hub.voice(tab.connection, TABLE, true, false, false);
         await rest();
 
         world.hub.signal(alex.connection, TABLE, 'sara.k', over, 'offer', '{"sdp":"old"}');
@@ -1398,10 +1513,10 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, true);
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         const named = alex.wire.framesOf('voice').flatMap((frame) => (frame.t === 'voice' ? frame.peers.filter((peer) => peer.who === 'sara.k').map((peer) => peer.join) : []));
@@ -1418,10 +1533,10 @@ describe('voice at a table', () =>
         const sara = await connect('sara.k');
         const mina = await connect('mina');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
-        world.hub.voice(mina.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
+        world.hub.voice(mina.connection, TABLE, true, false, false);
         await rest();
 
         const everybody = [['alex', true], ['sara.k', true], ['mina', true]];
@@ -1437,8 +1552,8 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         expect(world.hub.voiceOf(TABLE)).toEqual(['alex', 'sara.k']);
@@ -1452,10 +1567,10 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
-        world.hub.voice(sara.connection, TABLE, false, true);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
+        world.hub.voice(sara.connection, TABLE, false, true, false);
         await rest();
 
         expect(world.hub.voiceOf(TABLE)).toEqual(['alex']);
@@ -1469,9 +1584,9 @@ describe('voice at a table', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(alex.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false, false);
         await rest();
 
         world.hub.release(sara.connection);
@@ -1487,9 +1602,9 @@ describe('voice at a table', () =>
         const first = await connect('alex');
         const second = await connect('alex');
 
-        world.hub.voice(first.connection, TABLE, true, false);
+        world.hub.voice(first.connection, TABLE, true, false, false);
         await rest();
-        world.hub.voice(second.connection, TABLE, true, false);
+        world.hub.voice(second.connection, TABLE, true, false, false);
         await rest();
 
         expect(lastVoice(first.wire)).toMatchObject({ joined: false });

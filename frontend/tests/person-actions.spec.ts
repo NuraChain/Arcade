@@ -105,8 +105,8 @@ describe('how loud somebody in the call is, from the sheet about them', () =>
             joined: true,
             mine: 'join-alex',
             peers: [
-                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                { who: 'sara.k', muted: sara.muted ?? false, talk: sara.talk ?? true, join: 'join-sara' }
+                { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                { who: 'sara.k', muted: sara.muted ?? false, talk: sara.talk ?? true, join: 'join-sara', opus: false }
             ]
         });
         await settle();
@@ -135,6 +135,7 @@ describe('how loud somebody in the call is, from the sheet about them', () =>
             setMuted: () => undefined,
             sync: () => undefined,
             receive: async () => undefined,
+            heard: () => undefined,
             setVolume: () => undefined,
             setSink: () => undefined,
             close: () => undefined

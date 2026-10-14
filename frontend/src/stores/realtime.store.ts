@@ -9,6 +9,8 @@ export type VoiceFrame = Extract<ServerFrame, { t: 'voice' }>;
 
 export type SignalFrame = Extract<ServerFrame, { t: 'signal' }>;
 
+export type SoundFrame = Extract<ServerFrame, { t: 'sound' }>;
+
 export type NudgeScope = Extract<ServerFrame, { t: 'nudge' }>['scope'];
 
 export type GameFrame = Extract<ServerFrame, { t: 'game' }>;
@@ -57,6 +59,8 @@ export const PROBE_MS = 10_000;
 export const PROBE_GRACE_MS = 4000;
 
 const CLOCK_SAMPLES = 8;
+
+export const SOUND_BACKLOG = 8192;
 
 /**
  * Close codes this client must not retry.
@@ -112,6 +116,8 @@ export interface RealtimeApi
 
     onSignal(listener: (frame: SignalFrame) => void): () => void;
 
+    onSound(listener: (frame: SoundFrame) => void): () => void;
+
     onGame(listener: (frame: GameFrame) => void): () => void;
 
     onReply(listener: (frame: ReplyFrame) => void): () => void;
@@ -124,7 +130,7 @@ export interface RealtimeApi
 
     toLocal(serverAt: number): number;
 
-    voice(table: string, on: boolean, muted: boolean): void;
+    voice(table: string, on: boolean, muted: boolean, opus: boolean): void;
 
     hold(): () => void;
 
@@ -137,6 +143,8 @@ export interface RealtimeApi
     check(): void;
 
     signal(table: string, to: string, join: string, kind: SignalFrame['kind'], data: string): void;
+
+    sound(table: string, to: string[], codec: SoundFrame['codec'], at: number, data: string): void;
 
     /**
      * Every status change, in order.
@@ -185,6 +193,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const typists = new Set<(who: string, conversationId: string) => void>();
     const voices = new Set<(frame: VoiceFrame) => void>();
     const signals = new Set<(frame: SignalFrame) => void>();
+    const sounds = new Set<(frame: SoundFrame) => void>();
     const games = new Set<(frame: GameFrame) => void>();
     const replies = new Set<(frame: ReplyFrame) => void>();
     const pulses = new Set<(frame: PulseFrame) => void>();
@@ -434,6 +443,15 @@ export const useRealtime = createStore((): RealtimeApi =>
             return;
         }
 
+        if (frame.t === 'sound')
+        {
+            for (const listener of sounds)
+            {
+                listener(frame);
+            }
+            return;
+        }
+
         if (frame.t === 'typing')
         {
             for (const typist of typists)
@@ -667,6 +685,12 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => signals.delete(listener);
         },
 
+        onSound(listener)
+        {
+            sounds.add(listener);
+            return () => sounds.delete(listener);
+        },
+
         onGame(listener)
         {
             games.add(listener);
@@ -691,7 +715,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         toLocal: (serverAt) => serverAt - offset,
 
-        voice: (table, on, muted) => active.send({ t: 'voice', table, on, muted }),
+        voice: (table, on, muted, opus) => active.send({ t: 'voice', table, on, muted, opus }),
 
         hold()
         {
@@ -731,6 +755,14 @@ export const useRealtime = createStore((): RealtimeApi =>
         check,
 
         signal: (table, to, join, kind, data) => active.send({ t: 'signal', table, to, join, kind, data }),
+
+        sound(table, to, codec, at, data)
+        {
+            if (status() === 'connected')
+            {
+                active.send({ t: 'sound', table, to, codec, at, data }, SOUND_BACKLOG);
+            }
+        },
 
         onTyping(listener)
         {
@@ -784,6 +816,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             typists.clear();
             voices.clear();
             signals.clear();
+            sounds.clear();
             games.clear();
             replies.clear();
             pulses.clear();

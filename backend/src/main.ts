@@ -154,9 +154,9 @@ if (!serving)
 
 if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
 {
-    log.warn('voice has no STUN or TURN server - a call connects only between players on one network', {
+    log.info('voice has no STUN or TURN server - a call between two networks is carried by this server', {
         reason: 'VOICE_STUN_URLS and VOICE_TURN_URLS are empty',
-        fix: 'set VOICE_STUN_URLS, and VOICE_TURN_URLS with VOICE_TURN_SECRET for players behind strict routers'
+        direct: 'set VOICE_STUN_URLS to let more players talk to each other directly'
     });
 }
 

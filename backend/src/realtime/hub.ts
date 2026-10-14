@@ -4,7 +4,7 @@ import { maySeeOnline, type Party, type Relation } from '../domains/social/polic
 import type { Principal } from '../http/auth.ts';
 import { keyedQueue } from '../lib/keyed-queue.ts';
 import type { MatchEvent, MatchView, Pulse } from '../schemas.ts';
-import { game, hello, nudge, presence, pulse, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
+import { game, hello, nudge, presence, pulse, signal, sound, typing, voice, type Codec, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
 
 /**
  * What the hub needs from a socket.
@@ -88,6 +88,7 @@ interface Caller
 {
     socket: Held;
     muted: boolean;
+    opus: boolean;
     join: string;
     table: string;
 }
@@ -132,8 +133,9 @@ export interface Hub
     seen(userId: string): void;
 
     typingIn(connection: Connection, conversationId: string): void;
-    voice(connection: Connection, tableId: string, on: boolean, muted: boolean): void;
+    voice(connection: Connection, tableId: string, on: boolean, muted: boolean, opus: boolean): void;
     signal(connection: Connection, tableId: string, to: string, join: string, kind: SignalKind, data: string): void;
+    sound(connection: Connection, tableId: string, to: readonly string[], codec: Codec, at: number, data: string): void;
     voiceOf(tableId: string): string[];
     setState(connection: Connection, state: PresenceState): void;
     resync(connection: Connection): void;
@@ -219,7 +221,8 @@ export function createHub(deps: HubDeps): Hub
                 who: other.socket.handle,
                 muted: other.muted,
                 talk: other.socket.userId === member.socket.userId || talks.get(pairOf(member.socket.userId, other.socket.userId)) === true,
-                join: other.join
+                join: other.join,
+                opus: other.opus
             }));
 
             emit(member.socket, (n) => voice(n, member.table, true, member.join, peers));
@@ -391,6 +394,31 @@ export function createHub(deps: HubDeps): Hub
         }
 
         pump(connection);
+    };
+
+    const sounded = (connection: Held, build: (n: number) => ServerFrame) =>
+    {
+        if (!connection.alive || connection.pumping || connection.outbox.length > 0)
+        {
+            return;
+        }
+
+        connection.n += 1;
+
+        if (connection.wire.send(JSON.stringify(build(connection.n))))
+        {
+            return;
+        }
+
+        connection.pumping = true;
+
+        void connection.wire.drain()
+            .catch((error: unknown) => deps.report(error, 'realtime.sound'))
+            .finally(() =>
+            {
+                connection.pumping = false;
+                pump(connection);
+            });
     };
 
     const connectionsOf = (userId: string): Held[] => [...(byUser.get(userId) ?? [])];
@@ -966,7 +994,7 @@ export function createHub(deps: HubDeps): Hub
                 .catch((error) => deps.report(error, 'realtime.typing'));
         },
 
-        voice(connection, tableId, on, muted)
+        voice(connection, tableId, on, muted, opus)
         {
             const socket = held(connection);
 
@@ -990,6 +1018,7 @@ export function createHub(deps: HubDeps): Hub
                     if (holding !== undefined && current !== undefined)
                     {
                         current.muted = muted;
+                        current.opus = opus;
                         roster(holding);
                         return;
                     }
@@ -1030,7 +1059,7 @@ export function createHub(deps: HubDeps): Hub
                         emit(previous.socket, (n) => voice(n, previous.table, false, '', []));
                     }
 
-                    room.set(socket.userId, { socket, muted, join: randomBytes(9).toString('base64url'), table: tableId });
+                    room.set(socket.userId, { socket, muted, opus, join: randomBytes(9).toString('base64url'), table: tableId });
                     rooms.set(call, room);
                     roster(call);
                 })
@@ -1057,6 +1086,31 @@ export function createHub(deps: HubDeps): Hub
             }
 
             emit(target.socket, (n) => signal(n, target.table, socket.handle, sender.join, kind, data));
+        },
+
+        sound(connection, tableId, to, codec, at, data)
+        {
+            const socket = held(connection);
+            const call = callHolding(tableId, socket);
+            const room = call === undefined ? undefined : rooms.get(call);
+            const sender = room?.get(socket.userId);
+
+            if (room === undefined || sender === undefined || sender.muted)
+            {
+                return;
+            }
+
+            for (const join of new Set(to))
+            {
+                const target = [...room.values()].find((member) => member.join === join);
+
+                if (target === undefined || talks.get(pairOf(socket.userId, target.socket.userId)) !== true)
+                {
+                    continue;
+                }
+
+                sounded(target.socket, (n) => sound(n, target.table, sender.join, codec, at, data));
+            }
         },
 
         voiceOf(tableId)

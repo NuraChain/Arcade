@@ -81,6 +81,7 @@ beforeEach(() =>
         setMuted: () => undefined,
         sync: () => undefined,
         receive: async () => undefined,
+        heard: () => undefined,
         setVolume: () => undefined,
         setSink: () => undefined,
         close: () => undefined
@@ -114,8 +115,8 @@ describe('the players beside a table’s chat, while a call is on', () =>
             joined: true,
             mine: 'join-alex',
             peers: [
-                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                { who: 'sara.k', muted: sara.muted ?? false, talk: true, join: 'join-sara' }
+                { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                { who: 'sara.k', muted: sara.muted ?? false, talk: true, join: 'join-sara', opus: false }
             ]
         });
     };
@@ -263,6 +264,7 @@ describe('the players beside a table’s chat, while a call is on', () =>
                 setMuted: () => undefined,
                 sync: () => undefined,
                 receive: async () => undefined,
+                heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 close: () => undefined

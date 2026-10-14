@@ -276,6 +276,7 @@ describe('the seat plate every table draws', () =>
                 setMuted: () => undefined,
                 sync: () => undefined,
                 receive: async () => undefined,
+                heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 close: () => undefined
@@ -295,8 +296,8 @@ describe('the seat plate every table draws', () =>
                 joined: true,
                 mine: 'join-alex',
                 peers: [
-                    { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                    { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+                    { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                    { who: 'sara.k', muted: false, talk: true, join: 'join-sara', opus: false }
                 ]
             });
 

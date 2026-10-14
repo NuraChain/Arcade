@@ -33,6 +33,9 @@ export const socket =
     /** Set to model a server that has stopped answering without closing the socket. */
     deaf: false,
 
+    /** Bytes the socket has not sent yet; a frame sent with a ceiling under this is refused. */
+    backlog: 0,
+
     /** The live connection's handlers, or null between connections. */
     live: null as RealtimeHandlers | null,
 
@@ -50,6 +53,7 @@ export const socket =
         socket.sent = [];
         socket.pings = 0;
         socket.deaf = false;
+        socket.backlog = 0;
         socket.live = null;
         socket.open = false;
     },
@@ -107,9 +111,9 @@ export function createFakeSource(): RealtimeSource
             };
         },
 
-        send(frame)
+        send(frame, most)
         {
-            if (socket.live === null || !socket.open)
+            if (socket.live === null || !socket.open || (most !== undefined && socket.backlog > most))
             {
                 return false;
             }

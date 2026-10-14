@@ -14,7 +14,7 @@ export interface RealtimeSource
     /** Opens one connection. The returned function closes it from THIS side, cleanly. */
     open(handlers: RealtimeHandlers): () => void;
 
-    send(frame: ClientFrame): boolean;
+    send(frame: ClientFrame, most?: number): boolean;
 }
 
 /**
@@ -87,9 +87,9 @@ export function createSocketSource(): RealtimeSource
             };
         },
 
-        send(frame)
+        send(frame, most)
         {
-            if (socket === null || socket.readyState !== WebSocket.OPEN)
+            if (socket === null || socket.readyState !== WebSocket.OPEN || (most !== undefined && socket.bufferedAmount > most))
             {
                 return false;
             }

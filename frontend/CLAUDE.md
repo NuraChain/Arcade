@@ -94,7 +94,7 @@ that game's close-up, pushed a further 7% from the copy by the lens. A finger do
 tap on the button.
 
 **Every claim on the page is one the product backs.** No counts, no waits, no seasons, no fairness,
-no chess. Voice is "encrypted by the browser" and never end-to-end; poker is live only; a level unlocks
+no chess. Voice goes "straight between players whenever it can" and is "encrypted on its way", never end-to-end; poker is live only; a level unlocks
 nothing. `reference-parity.spec.ts` pins every game seed `available` because `/` prints "Live" on all
 four without asking the server. The components on `/` are built only from pieces with no path to
 `api.ts` - `GameCard` and `GameTile` reach `catalogue.store` and are not allowed there.

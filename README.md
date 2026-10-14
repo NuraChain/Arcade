@@ -11,7 +11,7 @@ connection and the pages.
 
 1. Clone the repository and run `npm ci` at its root.
 2. Copy `.env.example` to `.env` and fill it in. Every name has to be present; an empty value
-   switches an optional feature off (push notifications, the voice relay, the chain, the explorer,
+   switches an optional feature off (push notifications, STUN and TURN for voice, the chain, the explorer,
    the admin). For production:
    - `NODE_ENV=production`, `SERVE_PAGES=true`, `DATABASE_SYNC=false`;
    - `DATABASE_URL` pointing at an empty database;

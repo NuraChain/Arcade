@@ -48,7 +48,7 @@ export const landing = {
     'landing.together.tables.title': 'A game from any chat',
     'landing.together.tables.body': 'Open a table right from a conversation. Only the people in it can sit down.',
     'landing.together.voice.title': 'Voice at the table',
-    'landing.together.voice.body': 'Talk while you play. The sound goes directly between players and is encrypted by the browser.',
+    'landing.together.voice.body': 'Talk while you play. The sound goes straight between players whenever it can, and is encrypted on its way.',
 
     'landing.compete.title': 'Every result counts',
     'landing.compete.lead': 'Climb the leaderboards, move your rating and collect medals as you go.',
