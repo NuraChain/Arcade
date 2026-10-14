@@ -2585,17 +2585,22 @@ and 0.07 to nothing in 181 ms before Invite faded in.
 it starts, so a table that changed size under one (the chat card opening beside it, a phone
 turned over, full screen) sent it to where its target used to be, and the piece jumped to its
 place when it landed. The presenter is given the box its table is played in (`frame`) and
-watches it: a change of more than a pixel (`BOX_SLACK`) while the queue is busy is a snap, the
-same one a hidden tab and a broken scene take, so what is in the air stops and the table is drawn
-as the board stands. The first size a box reports is where it starts and not a change. A size is
-held against the last one acted on, so a box that grows a pixel at a time is still seen to have
-grown. A table at rest is left alone, because everything that rests is placed by the stylesheet
-or by the board's own observer (poker's puck and bets). It is the OUTER box, the stage, that is
-watched: the room the page gives the table. What the game itself opens and closes inside it (a
-hand row, a lamp) is not a change of that box, and may not be made one: a table that snapped
-whenever its own hand row came and went would cut the very scenes that open it.
-`presenter.spec.ts` holds the rule, and one test in each board's spec holds that the board gives
-its presenter its own box and is drawn as it stands when that box changes under a move.
+watches it: a change of more than a pixel (`BOX_SLACK`) while the queue is busy lands every run
+in the air at once (`stage.land()`), at its end and with its landing heard, and the scene goes
+on, measuring what it does next on the table as it now is. That is §6's rule as written. It was
+built first as a snap, the one a hidden tab and a broken scene take, which threw away everything
+the table had still to show: the P7 run of the poker motion pass turns the table through nine
+sizes while a showdown is held, and the first of them took the shown hands, their names and the
+pot's push off the table. The first size a box reports is where it starts and not a change. A
+size is held against the last one acted on, so a box that grows a pixel at a time is still seen
+to have grown. Waits, holds and a table at rest are left alone, because everything that rests is
+placed by the stylesheet or by the board's own observer (poker's puck, bets and shown hands). It
+is the OUTER box, the stage, that is watched: the room the page gives the table. What the game
+itself opens and closes inside it (a hand row, a lamp) is not a change of that box, and may not
+be made one: a table that landed its flights whenever its own hand row came and went would cut
+the very scenes that open it. `presenter.spec.ts` holds the rule, `stage-kit.spec.ts` the
+landing, and one test in each board's spec holds that the board gives its presenter its own box,
+lands what is in the air when that box changes under a move, and plays the rest.
 
 **As built (P6), a sheet covers the board.** Nothing was built: it is as this section's table
 says. Only Ludo's canvas pauses its CSS loops under a blocking sheet. No board reads the overlay,

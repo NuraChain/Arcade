@@ -298,6 +298,31 @@ describe('the stage', () =>
         host.remove();
     });
 
+    it('lands every run in the air at once, at its end and with its landing, and leaves the waits and timers be', async () =>
+    {
+        const { stage, clock, elapse } = rig();
+        const piece = document.createElement('div');
+        const fired: string[] = [];
+
+        void stage.wait(300).then(() => fired.push('wait'));
+        stage.after(300, () => fired.push('timer'));
+        void stage.animate(piece, [{ translate: '0px' }, { translate: '100px' }], { duration: 400, landed: () => fired.push('landed') }).done.then(() => fired.push('run'));
+        void stage.animate(piece, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 300 }).done.then(() => fired.push('later'));
+
+        await elapse(100);
+        stage.land();
+        await flush();
+
+        expect(fired, 'a run was left in the air, or ended without its landing').toEqual(['landed', 'run', 'later']);
+        expect(piece.getAnimations().filter((one) => one.playState === 'running')).toEqual([]);
+        expect(clock.pending(), 'the wait and the timer were taken away with the runs').toBe(2);
+
+        stage.land();
+        await elapse(200);
+
+        expect([...fired].sort()).toEqual(['landed', 'later', 'run', 'timer', 'wait']);
+    });
+
     it('says so when a timer throws, and goes on to the next one', async () =>
     {
         const { stage, failed, elapse } = rig();

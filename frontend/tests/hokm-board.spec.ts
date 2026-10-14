@@ -435,9 +435,10 @@ describe('the table in motion', () =>
         expect(container.querySelector('.hokm-trick[data-card="30"]')?.getAttribute('data-landing'), 'the next lead did not wait for the felt to be cleared').toBe('true');
     });
 
-    it('is drawn as the felt stands when its box changes size under cards in the air', async () =>
+    it('lands the cards in the air when its box changes size, and plays the rest of the trick', async () =>
     {
         const boxes = watchedBoxes();
+        const animate = vi.spyOn(Element.prototype, 'animate');
 
         try
         {
@@ -447,15 +448,24 @@ describe('the table in motion', () =>
             expect(boxes.watching(stage), 'the table\'s box is watched for its arrangement and not for what is in the air').toBe(2);
 
             boxes.size(stage, 900, 600);
+            animate.mockClear();
             send(TRICK);
             await elapse(TIMING.SEQ_GAP);
 
+            const flying = animate.mock.results.map((one) => one.value as Animation);
+
             expect(stage.getAttribute('data-presenting')).toBe('true');
+            expect(flying.some((one) => one.playState === 'running'), 'no card was in the air').toBe(true);
 
             boxes.size(stage, 700, 600);
             await flush();
 
-            expect(stage.hasAttribute('data-presenting'), 'cards measured on a felt of one size went on flying over another').toBe(false);
+            expect(flying.filter((one) => one.playState === 'running'), 'cards measured on a felt of one size went on flying over another').toEqual([]);
+            expect(stage.getAttribute('data-presenting'), 'the rest of the trick was thrown away').toBe('true');
+
+            await elapse(5000);
+
+            expect(stage.hasAttribute('data-presenting')).toBe(false);
             expect(container.querySelectorAll('.hokm-trick').length, 'the trick the last card took was left lying').toBe(0);
         }
         finally

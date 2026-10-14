@@ -393,9 +393,10 @@ describe('the backgammon table on the page', () =>
         expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
     });
 
-    it('is drawn as the board stands when its box changes size under a move in the air', async () =>
+    it('lands what is in the air when its box changes size under a move, and plays the rest of it', async () =>
     {
         const boxes = watchedBoxes();
+        const animate = vi.spyOn(Element.prototype, 'animate');
 
         try
         {
@@ -404,15 +405,24 @@ describe('the backgammon table on the page', () =>
             expect(boxes.watching(stageOf(container)), 'the table\'s box is not the one that is watched').toBe(1);
 
             boxes.size(stageOf(container), 900, 600);
+            animate.mockClear();
             tell(answered(), theirMove());
             await flush();
 
+            const flying = animate.mock.results.map((one) => one.value as Animation);
+
             expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+            expect(flying.some((one) => one.playState === 'running'), 'nothing was in the air').toBe(true);
 
             boxes.size(stageOf(container), 700, 600);
             await flush();
 
-            expect(stageOf(container).hasAttribute('data-presenting'), 'a move measured on a table of one size went on being played on another').toBe(false);
+            expect(flying.filter((one) => one.playState === 'running'), 'a move measured on a table of one size went on flying over another').toEqual([]);
+            expect(stageOf(container).getAttribute('data-presenting'), 'the rest of the move was thrown away').toBe('true');
+
+            await elapse(4000);
+
+            expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
             expect(dice(container)).toEqual(['3', '2']);
         }
         finally

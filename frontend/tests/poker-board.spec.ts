@@ -1284,9 +1284,10 @@ describe('a table that shows what has happened on it', () =>
         expect(stack(container, 0)).toBe('4,520');
     });
 
-    it('is drawn as the table stands when its box changes size under what is being shown', async () =>
+    it('lands what is in the air when its box changes size under what is being shown, and plays the rest', async () =>
     {
         const boxes = watchedBoxes();
+        const animate = vi.spyOn(Element.prototype, 'animate');
 
         try
         {
@@ -1296,14 +1297,23 @@ describe('a table that shows what has happened on it', () =>
             expect(boxes.watching(stage), 'the table\'s box is watched for its arrangement and not for what is in the air').toBe(2);
 
             boxes.size(stage, 900, 600);
+            animate.mockClear();
             await read(waiting({ turn: 2 }, { rev: 8, turn: 2 }), heard(1, told(8, 1, { e: 'check', seat: 1 })));
 
+            const moving = animate.mock.results.map((one) => one.value as Animation);
+
             expect(presenting(container)).toBe('true');
+            expect(moving.some((one) => one.playState === 'running'), 'nothing on the table was moving').toBe(true);
 
             boxes.size(stage, 700, 600);
             await elapse(10);
 
-            expect(presenting(container), 'a move measured on a table of one size went on being played on another').toBeNull();
+            expect(moving.map((one) => one.playState), 'what was measured on a table of one size went on moving over another').not.toContain('running');
+            expect(moving.map((one) => one.playState), 'what was in the air was thrown away rather than landed').not.toContain('idle');
+
+            await elapse(600);
+
+            expect(presenting(container)).toBeNull();
             expect(stage.getAttribute('data-rev')).toBe('8');
         }
         finally

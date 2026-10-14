@@ -34,6 +34,7 @@ export interface Stage
     animate(element: Element, frames: Keyframe[], timing: Timing): Run;
     after(ms: number, run: () => void): () => void;
     wait(ms: number): Promise<void>;
+    land(): void;
     clear(): void;
 }
 
@@ -272,6 +273,14 @@ export function createStage(options: StageOptions): Stage
         {
             schedule(ms, resolve);
         }),
+
+        land()
+        {
+            for (const live of [...lives])
+            {
+                live.end(false, false);
+            }
+        },
 
         clear()
         {

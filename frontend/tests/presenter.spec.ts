@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { manualClock } from '../src/lib/clock.ts';
-import { FAST, HASTE } from '../src/game/stage/director.ts';
+import { FAST, HASTE, type Scene } from '../src/game/stage/director.ts';
 import type { Batch } from '../src/game/stage/feed.ts';
 import { BOX_SLACK, createPresenter, SETTLE, type Sight, type Table } from '../src/game/stage/presenter.ts';
 import { createStage } from '../src/game/stage/stage.ts';
@@ -934,74 +934,95 @@ describe('the opening of a game', () =>
 
 describe('a table whose box changes size', () =>
 {
-    it('is drawn again where the board stands when that happens under what it is playing', async () =>
+    const flying = (clock: { now(): number }) =>
+    {
+        const heard: string[] = [];
+        const piece = document.createElement('div');
+
+        const play: Scene = async (ctx) =>
+        {
+            await ctx.stage.animate(piece, [{ translate: '0px' }, { translate: '100px' }], { duration: 400, landed: () => heard.push(`landed at ${ clock.now() }`) }).done;
+            heard.push(`on at ${ clock.now() }`);
+            await ctx.stage.wait(300);
+            heard.push(`done at ${ clock.now() }`);
+        };
+
+        return { heard, play };
+    };
+
+    it('lands what is in the air at once when that happens under what it is playing, and plays the rest of it', async () =>
     {
         const boxes = watchedBoxes();
-        const { presenter, calls, clock, batch, at, elapse, opened } = setup();
+        const { presenter, calls, clock, elapse, opened } = setup();
         const box = document.createElement('div');
+        const { heard, play } = flying(clock);
 
         presenter.frame(box);
         boxes.size(box, 800, 600);
         opened();
-        at(6);
-        presenter.see(batch([6]));
+        presenter.act(play, 700);
         await elapse(100);
 
         expect(boxes.watching(box)).toBe(1);
-        expect(presenter.presenting()).toBe(true);
+        expect(heard).toEqual([]);
 
         boxes.size(box, 640, 600);
+        await flush();
 
-        expect(calls, 'a move measured on a table of one size went on being played on another').toEqual(['play 6:e6', 'reset m1@6']);
+        expect(heard, 'a move measured on a table of one size went on being played on another').toEqual(['landed at 1100', 'on at 1100']);
+        expect(calls, 'the table was drawn again, and what it had still to show was thrown away').toEqual([]);
+        expect(presenter.presenting()).toBe(true);
+
+        await elapse(300);
+
+        expect(heard.at(-1)).toBe('done at 1400');
         expect(presenter.presenting()).toBe(false);
-        expect(clock.pending()).toBe(0);
-
-        await elapse(ACT_MS);
-        expect(calls).toEqual(['play 6:e6', 'reset m1@6']);
     });
 
     it('takes the first size it is told as where it starts, and a pixel either way as no change', async () =>
     {
         const boxes = watchedBoxes();
-        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const { presenter, clock, elapse, opened } = setup();
         const box = document.createElement('div');
+        const { heard, play } = flying(clock);
 
         presenter.frame(box);
         opened();
-        at(6);
-        presenter.see(batch([6]));
+        presenter.act(play, 700);
         await elapse(100);
 
         boxes.size(box, 800, 600);
         boxes.size(box, 800 + BOX_SLACK, 600 - BOX_SLACK);
         boxes.size(box, 800 - BOX_SLACK, 600 + BOX_SLACK);
+        await flush();
 
-        expect(calls, 'the first measure, or the browser rounding one, stopped a move').toEqual(['play 6:e6']);
-        expect(presenter.presenting()).toBe(true);
+        expect(heard, 'the first measure, or the browser rounding one, landed a move').toEqual([]);
 
         boxes.size(box, 800, 600 + BOX_SLACK + 0.5);
+        await flush();
 
-        expect(calls, 'a box that grew a pixel at a time was never seen to have grown').toEqual(['play 6:e6', 'reset m1@6']);
+        expect(heard, 'a box that grew a pixel at a time was never seen to have grown').toEqual(['landed at 1100', 'on at 1100']);
     });
 
     it('measures a height as it measures a width', async () =>
     {
         const boxes = watchedBoxes();
-        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const { presenter, clock, elapse, opened } = setup();
         const box = document.createElement('div');
+        const { heard, play } = flying(clock);
 
         presenter.frame(box);
         boxes.size(box, 800, 600);
         opened();
-        at(6);
-        presenter.see(batch([6]));
+        presenter.act(play, 700);
         await elapse(100);
         boxes.size(box, 800, 420);
+        await flush();
 
-        expect(calls).toEqual(['play 6:e6', 'reset m1@6']);
+        expect(heard).toEqual(['landed at 1100', 'on at 1100']);
     });
 
-    it('leaves alone a table that is playing nothing, and one with no game on it yet', async () =>
+    it('leaves alone a table that is playing nothing, and a move with nothing in the air', async () =>
     {
         const boxes = watchedBoxes();
         const idle = setup();
@@ -1014,36 +1035,25 @@ describe('a table whose box changes size', () =>
 
         expect(idle.calls, 'a table at rest was drawn again for a box that changed').toEqual([]);
 
-        const empty = setup();
+        const { presenter, calls, batch, at, elapse, opened } = setup();
         const other = document.createElement('div');
 
-        empty.presenter.frame(other);
+        presenter.frame(other);
         boxes.size(other, 800, 600);
-        empty.presenter.act(async (ctx) => await ctx.stage.wait(400));
-        boxes.size(other, 500, 600);
-
-        expect(empty.calls, 'a table with no game was drawn from nothing').toEqual([]);
-        expect(empty.presenter.presenting()).toBe(true);
-    });
-
-    it('plays the next move as any other once it has been drawn again', async () =>
-    {
-        const boxes = watchedBoxes();
-        const { presenter, calls, batch, at, elapse, opened } = setup();
-        const box = document.createElement('div');
-
-        presenter.frame(box);
-        boxes.size(box, 800, 600);
         opened();
         at(6);
         presenter.see(batch([6]));
         await elapse(100);
-        boxes.size(box, 640, 600);
+        boxes.size(other, 500, 600);
+
+        expect(presenter.presenting(), 'a hold on the table was cut short for a box that changed').toBe(true);
+
+        await elapse(ACT_MS - 100);
         at(7);
         presenter.see(batch([7]));
         await elapse(ACT_MS);
 
-        expect(calls).toEqual(['play 6:e6', 'reset m1@6', 'play 7:e7', 'played 7']);
+        expect(calls, 'the move was not played to its end, or the next one not after it').toEqual(['play 6:e6', 'played 6', 'play 7:e7', 'played 7']);
     });
 
     it('stops watching a box when it is given another, when it is given none, and when it is taken away', () =>
@@ -1072,20 +1082,21 @@ describe('a table whose box changes size', () =>
     it('forgets the size of the box before when it is given another', async () =>
     {
         const boxes = watchedBoxes();
-        const { presenter, calls, batch, at, elapse, opened } = setup();
+        const { presenter, clock, elapse, opened } = setup();
         const first = document.createElement('div');
         const second = document.createElement('div');
+        const { heard, play } = flying(clock);
 
         presenter.frame(first);
         boxes.size(first, 800, 600);
         opened();
-        at(6);
-        presenter.see(batch([6]));
+        presenter.act(play, 700);
         await elapse(100);
         presenter.frame(second);
         boxes.size(second, 300, 200);
+        await flush();
 
-        expect(calls, 'the first measure of a new box was held against the last of the old').toEqual(['play 6:e6']);
+        expect(heard, 'the first measure of a new box was held against the last of the old').toEqual([]);
     });
 
     it('plays on in a browser that cannot watch a box', async () =>

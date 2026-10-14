@@ -265,9 +265,9 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
 
         held = [width, height];
 
-        if (before !== null && matchId !== null && director.busy())
+        if (before !== null && director.busy())
         {
-            snap(options.sight());
+            options.stage.land();
         }
     };
 

@@ -897,7 +897,7 @@ describe('the ludo table, played from what happened', () =>
         return { before, after: stepped(before, { kind: 'move', seat: 1, piece: 3 }) };
     };
 
-    it('is drawn as the board stands when its box changes size under a pawn that is walking', async () =>
+    it('lands a pawn that is walking when its box changes size, and plays the rest of the move', async () =>
     {
         quiet();
 
@@ -907,20 +907,30 @@ describe('the ludo table, played from what happened', () =>
         {
             const { before, after } = closing();
             const { container, tell } = await live(seen(before, 0, 1));
+            const animate = vi.mocked(Element.prototype.animate);
 
             expect(boxes.watching(stageOf(container)), 'the table\'s box is not the one that is watched').toBe(1);
 
             boxes.size(stageOf(container), 900, 700);
+            animate.mockClear();
             tell(wonBy(after.state, 0, 2), [happened(2, 1, after.moves)]);
             await flush();
 
+            const walking = animate.mock.results.map((one) => one.value as Animation);
+
             expect(stageOf(container).getAttribute('data-presenting')).toBe('true');
+            expect(walking.some((one) => one.playState === 'running'), 'no pawn was walking').toBe(true);
 
             boxes.size(stageOf(container), 900, 520);
             await flush();
 
-            expect(stageOf(container).hasAttribute('data-presenting'), 'a walk measured on a board of one size went on being walked on another').toBe(false);
-            expect(dots(container, 1), 'the pawn was not counted home on the board as it stands').toBe(4);
+            expect(walking.filter((one) => one.playState === 'running'), 'a walk measured on a board of one size went on being walked on another').toEqual([]);
+            expect(stageOf(container).getAttribute('data-presenting'), 'the rest of the move was thrown away').toBe('true');
+
+            await elapse(6000);
+
+            expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+            expect(dots(container, 1), 'the pawn was not counted home').toBe(4);
         }
         finally
         {
