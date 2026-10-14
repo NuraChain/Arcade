@@ -33,7 +33,6 @@ export const social = {
     'person.blockedTitle': 'You blocked {name}.',
     'person.blockedLead': 'They can’t message you, join your tables, or find you in search.',
     'person.minor': 'Account with teen safety on',
-    'person.tab.overview': 'Overview',
     'person.notFound': 'No such person.',
 
     'actions.title': 'More',

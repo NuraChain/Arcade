@@ -32,14 +32,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'shell.activity.empty': 'درخواست‌های دوستی، دعوت‌ها و پیام‌ها این‌جا می‌آیند.',
     'shell.friends.empty': 'هیچ‌کدام از دوستانت الان آنلاین نیستند.',
 
-    'signIn.continue': 'نشستن به نام {name}',
-    'signIn.handle': 'نام تو',
-    'signIn.handleHint': 'دست‌کم سه حرف یا رقم. دوستانت این نام را سر میز می‌بینند.',
-    'signIn.handleShort': 'نام باید دست‌کم سه حرف یا رقم داشته باشد.',
-    'signIn.handleShape': 'حرف و رقم، و در میانش . _ یا - . نمی‌تواند با اینها شروع یا تمام شود.',
-    'signIn.handleReserved': 'این نام برای خودِ محصول نگه داشته شده. یکی دیگر بردار.',
-    'signIn.handleRefused': 'این نام پذیرفته نشد. یکی دیگر بردار.',
-    'signIn.failed': 'نشد. اتصالت را ببین و دوباره تلاش کن.',
 
     'common.cancel': 'لغو',
     'common.more': 'بیشتر',
@@ -53,7 +45,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.online': 'آنلاین',
     'common.away': 'دور از دسترس',
     'common.players': { one: '{count} بازیکن', other: '{count} بازیکن' },
-    'common.friendsOnline': { one: '{count} دوست آنلاین', other: '{count} دوست آنلاین' },
     'common.unread': { one: '{count} خوانده‌نشده', other: '{count} خوانده‌نشده' },
     'common.requests': { one: '{count} درخواست دوستی', other: '{count} درخواست دوستی' },
     'common.notices': { one: '{count} اعلان تازه', other: '{count} اعلان تازه' },

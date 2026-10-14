@@ -29,14 +29,6 @@ export const app = {
     'shell.activity.empty': 'Friend requests, invitations and messages land here.',
     'shell.friends.empty': 'None of your friends are online right now.',
 
-    'signIn.continue': 'Sit down as {name}',
-    'signIn.handle': 'Your name',
-    'signIn.handleHint': 'Three letters or digits or more. Friends see this at the table.',
-    'signIn.handleShort': 'A name needs at least three letters or digits.',
-    'signIn.handleShape': 'Letters and digits, with . _ or - inside. It cannot start or end with one.',
-    'signIn.handleReserved': 'That name is kept for the product itself. Try another.',
-    'signIn.handleRefused': 'That name was turned down. Try another.',
-    'signIn.failed': 'That did not work. Check your connection and try again.',
 
     'common.cancel': 'Cancel',
     'common.more': 'More',
@@ -50,7 +42,6 @@ export const app = {
     'common.online': 'Online',
     'common.away': 'Away',
     'common.players': { one: '{count} player', other: '{count} players' },
-    'common.friendsOnline': { one: '{count} friend online', other: '{count} friends online' },
     'common.unread': { one: '{count} unread', other: '{count} unread' },
     'common.requests': { one: '{count} friend request', other: '{count} friend requests' },
     'common.notices': { one: '{count} new notification', other: '{count} new notifications' },

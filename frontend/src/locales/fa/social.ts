@@ -36,7 +36,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedTitle': '{name} را مسدود کرده‌ای.',
     'person.blockedLead': 'نمی‌تواند به تو پیام بدهد، سر میزت بنشیند یا تو را در جست‌وجو پیدا کند.',
     'person.minor': 'حساب با محافظت نوجوان',
-    'person.tab.overview': 'نمای کلی',
     'person.notFound': 'چنین کسی نداریم.',
 
     'actions.title': 'بیشتر',

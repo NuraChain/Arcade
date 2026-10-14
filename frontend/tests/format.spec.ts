@@ -80,7 +80,7 @@ describe('locale store formatting', () =>
     it('interpolates in the reader’s digits', () =>
     {
         const locale = useLocale();
-        expect(locale.t('signIn.continue', { name: 'Sara' })).toBe('Sit down as Sara');
+        expect(locale.t('page.go', { page: '3' })).toBe('Page 3');
         expect(locale.plural('common.players', 1)).toBe('1 player');
         expect(locale.plural('common.players', 4)).toBe('4 players');
         locale.setLocale('fa');
