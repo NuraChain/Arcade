@@ -114,6 +114,27 @@ export function cubeY(owner: 'near' | 'far' | null)
     return owner === 'near' ? BOTTOM - CUBE_EDGE : TOP + CUBE_EDGE;
 }
 
+export interface Spike
+{
+    point: number;
+    path: string;
+    shade: 'a' | 'b';
+}
+
+export const SPIKES: readonly Spike[] = Array.from({ length: 24 }, (_, index) =>
+{
+    const point = index + 1;
+    const column = columnOf(point);
+    const base = column.row === 'top' ? TOP : BOTTOM;
+    const tip = column.row === 'top' ? TOP + POINT_HEIGHT : BOTTOM - POINT_HEIGHT;
+
+    return {
+        point,
+        path: `${ column.x },${ base } ${ column.x + POINT_WIDTH },${ base } ${ column.x + POINT_WIDTH / 2 },${ tip }`,
+        shade: point % 2 === 0 ? 'a' : 'b'
+    };
+});
+
 export interface Patch
 {
     x: number;

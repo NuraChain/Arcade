@@ -403,6 +403,15 @@ puck's motion (5.4).
   the seats where they will be at the table, and what is being waited for in one line (A2).
 - A table opened again after its game ended says how it ended (A3), with P6's result work.
 
+**As built (A2).** The lobby is the table: each game's own art in a box of its own, the chairs
+where the seats will be (a Ludo seat at its colour's corner, the reader at the foot of the others,
+partners across, sides ringed as plates mark them), one status line and the one action under it.
+Measured on the built server at 320, 390 and 1280 in both languages for Ludo 2, 4 and 2 v 2,
+Hokm 2 v 2, poker 2 and 9 and backgammon: no two chairs overlap and none leaves the table; a
+crowded table keeps its tags for a screen reader; the Invite chair is as large as the chair; the
+host's cross reaches 44px under a finger. On a wide table Ludo's board takes the height (390px at
+1280) with the chairs in the corners beside it.
+
 ## 4. Order of work
 
 Each item lands with its specs, its fit pass floor, its browser passes on the production build

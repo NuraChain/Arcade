@@ -36,17 +36,15 @@ import {
     FRAME,
     HEIGHT,
     MIDDLE,
-    POINT_HEIGHT,
-    POINT_WIDTH,
     RADIUS,
     TOP,
     TRAY,
     TRAY_LEFT,
     WIDTH,
-    columnOf,
     cubeY,
     patchOf,
     pointAt,
+    SPIKES,
     type Patch
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
@@ -71,13 +69,6 @@ const placed = (patch: Patch) =>
     `left: ${ (patch.x / WIDTH * 100).toFixed(3) }%; top: ${ (patch.y / HEIGHT * 100).toFixed(3) }%; width: ${ (patch.w / WIDTH * 100).toFixed(3) }%; height: ${ (patch.h / HEIGHT * 100).toFixed(3) }%`;
 
 const DICE_PLACE = `left: ${ (DICE_X / WIDTH * 100).toFixed(3) }%; top: 50%`;
-
-interface Spike
-{
-    point: number;
-    path: string;
-    shade: 'a' | 'b';
-}
 
 interface Staged
 {
@@ -120,19 +111,6 @@ const HURRY_MS = 8000;
 const MOUSE_SLOP = 4;
 
 const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
-
-const SPIKES: readonly Spike[] = POINTS.map((point) =>
-{
-    const column = columnOf(point);
-    const base = column.row === 'top' ? TOP : BOTTOM;
-    const tip = column.row === 'top' ? TOP + POINT_HEIGHT : BOTTOM - POINT_HEIGHT;
-
-    return {
-        point,
-        path: `${ column.x },${ base } ${ column.x + POINT_WIDTH },${ base } ${ column.x + POINT_WIDTH / 2 },${ tip }`,
-        shade: point % 2 === 0 ? 'a' : 'b'
-    };
-});
 
 const covered = (moves: readonly Told[], mine: readonly Hop[]) =>
     (mine.every((hop, index) => moves[index]?.e === 'move' && moves[index].from === hop.from && moves[index].to === hop.to) ? mine.length : null);

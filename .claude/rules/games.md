@@ -502,6 +502,43 @@ the game cannot be read the room is as it was. `table-last-game.db.spec.ts` hold
 against Postgres (who is told, which game, another table's games) and `lobby-panel.spec.ts` the
 room.
 
+**A waiting room is the table about to be played.** The lobby was a form: a heading that said the
+game's name a second time under the play header, a grid of cards, a row of buttons, and most of a
+desktop page empty under it (A2 of the graphics audit). It is the table now, drawn in the game's
+own art: `.lobby-top` is a `container-type: size` box, so `.poker-table` and `.hokm-table` draw
+their rail, felt, cloth and medal from it exactly as they do at a game (their `> *` rules only set
+variables), Ludo is the wooden table with `/board/ludo-board.svg` on it, and backgammon is a small
+svg from `backgammon-layout.ts`, whose `SPIKES` the board now takes from there too. The box is
+`direction: ltr`, as every table is.
+
+- **Each chair stands where its seat will be** (`lobby-seats.ts`): a Ludo seat at the corner of
+  the colour it will play, whoever reads; every other table from the reader's chair at its foot,
+  the next to play on the reader's right at Hokm and on their LEFT at poker (`aroundStadium` walks
+  the other way), a watcher's table from seat 0. `lobby-seats.spec.ts` reads the boards' own
+  `CORNER`, `FOUR` and `aroundStadium` through `import.meta.glob(..., { query: '?raw' })`, so the
+  lobby cannot drift from a board.
+- **A chair** (`SeatCard`) is a face, a first name, a tag and three marks: the host's crown, a tick
+  for ready that turns where it is (`data-on`, the node kept), and on a table two sides play at
+  the ring in the side's colour, as a plate marks its side. The full name is where the person is
+  acted on: the press that opens what can be done about them (a focusable button: a lobby is not a
+  board played by a cursor, so the plate's `tabindex="-1"` does not apply), the host's cross. An
+  empty chair is the host's Invite, as large as the chair. Over six seats the tag is said, not
+  drawn (`data-crowd`).
+- **A person arrives and leaves by opacity and movement** (6.3 of the motion spec): a chair that
+  fills draws its person with `chair-in`; one that empties keeps the person drawn, `inert`, for
+  `CHAIR_OUT` (180 ms) with `chair-out`, then the empty chair arrives. Less motion asked for: at
+  once, both ways. The chairs and the list are the nodes they were across every read.
+- **Under the table**: one status line (what is being waited for, or for somebody standing, that
+  they are only looking, and how many seats are free), then the ONE action that matters (Take a
+  seat, I'm ready, Start the game with the ready toggle still under it), then Copy link, Leave and,
+  for the host, Close. The play page's own start panel, standing panel and close button moved in
+  as props (`onStart`, `onSit`, `removed`, `onClose`), and the room is shown to `lobbyOpen ||
+  standing`: somebody standing sees the table as it stands. Every word is the one it was, so every
+  pass that presses one by name still finds it.
+
+`lobby-panel.spec.ts`, `lobby-seats.spec.ts` and `backend/tests/lobby-table-art.spec.ts` hold it;
+the matrix has a `play-lobby` page on its waiting team table.
+
 **The control is a cross in the corner of the chair, and it is the lobby's one control without
 words.** A chair is half a phone wide, so `SeatCard` draws an `IconButton` there (44px under a
 finger, clear of the name) labelled "Take Sara out of the table", under a `derived` boolean of its

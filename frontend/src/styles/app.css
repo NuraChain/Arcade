@@ -990,12 +990,371 @@ html:has(.site-drawer[open])
     display: flex;
 }
 
-@container (min-width: 36rem)
+.lobby
 {
-    .lobby-side + .lobby-side
+    container: lobby / inline-size;
+    inline-size: 100%;
+    max-inline-size: 46rem;
+    align-self: center;
+}
+
+.lobby-table
+{
+    --chair-w: 4.75rem;
+    --chair-h: 5rem;
+
+    position: relative;
+    isolation: isolate;
+    direction: ltr;
+    inline-size: 100%;
+    aspect-ratio: 5 / 6;
+}
+
+.lobby-table[data-crowd]
+{
+    --chair-w: 4.25rem;
+    --chair-h: 3.75rem;
+}
+
+@container lobby (min-width: 34rem)
+{
+    .lobby-table
     {
-        padding-inline-start: 1rem;
-        border-inline-start: 4px solid var(--line);
+        --chair-w: 6.5rem;
+        --chair-h: 5.25rem;
+
+        aspect-ratio: 16 / 9;
+    }
+
+    .lobby-table[data-crowd]
+    {
+        --chair-w: 5.5rem;
+        --chair-h: 5.25rem;
+    }
+}
+
+.lobby-top
+{
+    position: absolute;
+    inset: calc(var(--chair-h) / 2) calc(var(--chair-w) / 2);
+    container-type: size;
+    isolation: isolate;
+}
+
+.lobby-table:is([data-game='ludo'], [data-game='backgammon']) .lobby-top
+{
+    inset: calc(var(--chair-h) + 0.5rem) 0;
+    display: grid;
+    place-items: center;
+}
+
+@container lobby (min-width: 34rem)
+{
+    .lobby-table[data-game='ludo'] .lobby-top
+    {
+        inset: 0.75rem calc(var(--chair-w) + 0.75rem);
+    }
+}
+
+.lobby-table[data-game='ludo']
+{
+    border-radius: var(--radius-hero);
+    background:
+        radial-gradient(ellipse 70% 60% at 50% 42%, rgb(255 184 110 / 0.16), transparent 70%),
+        radial-gradient(ellipse 85% 80% at 50% 50%, transparent 52%, rgb(6 3 1 / 0.62) 100%),
+        #3A2110 url('/board/ludo-table.webp') center / cover no-repeat;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(0 0 0 / 0.45), 0 24px 48px -28px rgb(0 0 0 / 0.9);
+}
+
+.lobby-board
+{
+    display: block;
+    max-inline-size: 100%;
+    block-size: 100%;
+    aspect-ratio: 1;
+    border-radius: 6%;
+    background: url('/board/ludo-board.svg') center / contain no-repeat;
+    box-shadow: 0 1.5rem 2.5rem -1.25rem rgb(0 0 0 / 0.85), 0 3px 8px rgb(0 0 0 / 0.45);
+}
+
+svg.lobby-board
+{
+    aspect-ratio: 1000 / 820;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    filter: drop-shadow(0 1.25rem 1.5rem rgb(0 0 0 / 0.6));
+}
+
+.lobby-ring
+{
+    position: absolute;
+    inset: calc(var(--chair-h) / 2) calc(var(--chair-w) / 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.lobby-seat
+{
+    position: absolute;
+    top: calc(var(--y) * 100%);
+    left: calc(var(--x) * 100%);
+    inline-size: var(--chair-w);
+    block-size: var(--chair-h);
+    translate: -50% -50%;
+}
+
+.lobby-chair
+{
+    --ring: rgb(255 255 255 / 0.2);
+
+    position: relative;
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+    place-items: center;
+}
+
+.lobby-chair[data-state='ready']
+{
+    --ring: var(--live);
+}
+
+.lobby-chair[data-state='invited']
+{
+    --ring: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+.lobby-chair[data-side='0']
+{
+    --ring: var(--accent);
+}
+
+.lobby-chair[data-side='1']
+{
+    --ring: var(--gold);
+}
+
+.lobby-chair-seat
+{
+    display: flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1875rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    animation: chair-in 220ms var(--ease-ui, ease);
+}
+
+.lobby-chair[data-leaving] .lobby-chair-seat
+{
+    animation: chair-out 180ms var(--ease-ui, ease) forwards;
+}
+
+@keyframes chair-in
+{
+    from
+    {
+        opacity: 0;
+        scale: 0.86;
+        translate: 0 0.375rem;
+    }
+}
+
+@keyframes chair-out
+{
+    to
+    {
+        opacity: 0;
+        scale: 0.9;
+    }
+}
+
+.lobby-chair-seat[data-invites]
+{
+    inline-size: 100%;
+    block-size: 100%;
+    justify-content: center;
+    border-radius: 0.875rem;
+    cursor: pointer;
+}
+
+.lobby-chair-face
+{
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--ring), 0 6px 14px -4px rgb(0 0 0 / 0.7);
+    transition: box-shadow 200ms ease;
+}
+
+.lobby-chair[style*='--ink'] .lobby-chair-face
+{
+    box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--ink), 0 6px 14px -4px rgb(0 0 0 / 0.7);
+}
+
+.lobby-chair-face[data-speaking]
+{
+    outline: 2px solid var(--live);
+    outline-offset: 5px;
+}
+
+.lobby-chair-face[data-open]
+{
+    display: grid;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    place-items: center;
+    border: 1.5px dashed rgb(255 255 255 / 0.35);
+    background: rgb(8 13 25 / 0.72);
+    box-shadow: none;
+    color: var(--faint);
+}
+
+.lobby-chair-seat[data-invites] .lobby-chair-face[data-open]
+{
+    border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+    color: var(--accent);
+}
+
+.lobby-chair-host,
+.lobby-chair-tick
+{
+    position: absolute;
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    place-items: center;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--void);
+}
+
+.lobby-chair-host
+{
+    top: -0.25rem;
+    left: -0.25rem;
+    background: var(--gold);
+    color: var(--bright-ink);
+}
+
+.lobby-chair-tick
+{
+    bottom: -0.25rem;
+    left: -0.25rem;
+    background: var(--live);
+    color: var(--bright-ink);
+    opacity: 0;
+    scale: 0.4;
+    transition: opacity 160ms ease, scale 200ms var(--ease-ui, ease);
+}
+
+.lobby-chair-tick[data-on]
+{
+    opacity: 1;
+    scale: 1;
+}
+
+.lobby-chair-name
+{
+    max-inline-size: 100%;
+    overflow: hidden;
+    padding-inline: 0.375rem;
+    border-radius: 999px;
+    background: rgb(8 13 25 / 0.86);
+    color: var(--text);
+    font-size: var(--text-ui-xs);
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lobby-chair-seat[data-invites] .lobby-chair-name
+{
+    color: var(--accent);
+}
+
+.lobby-chair[data-state='open'] .lobby-chair-name,
+.lobby-chair[data-state='invited'] .lobby-chair-name
+{
+    color: var(--muted);
+}
+
+.lobby-table[data-crowd] .lobby-chair .table-plate-tag
+{
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.lobby-chair-press
+{
+    position: absolute;
+    inset: 0;
+    border-radius: 0.875rem;
+    cursor: pointer;
+}
+
+.lobby-chair-press:active
+{
+    background: rgb(255 255 255 / 0.12);
+}
+
+@media (hover: hover)
+{
+    .lobby-chair-press:hover,
+    .lobby-chair-seat[data-invites]:hover .lobby-chair-face
+    {
+        background: rgb(255 255 255 / 0.08);
+    }
+}
+
+.lobby-chair-out
+{
+    position: absolute;
+    z-index: 2;
+    top: -0.5rem;
+    right: -0.25rem;
+    display: flex;
+}
+
+.lobby-chair-out > button::before
+{
+    content: '';
+    position: absolute;
+    inset: min(0px, (100% - 2.75rem) / 2);
+}
+
+.lobby-acts
+{
+    display: flex;
+    inline-size: 100%;
+    max-inline-size: 26rem;
+    flex-direction: column;
+    align-self: center;
+    gap: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .lobby-chair-seat,
+    .lobby-chair[data-leaving] .lobby-chair-seat
+    {
+        animation: none;
+    }
+
+    .lobby-chair-tick
+    {
+        transition: none;
     }
 }
 

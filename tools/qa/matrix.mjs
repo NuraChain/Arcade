@@ -58,6 +58,7 @@ const ROUTES = [
     { id: 'play-backgammon', path: '/app/play/:backgammon' },
     { id: 'play-poker', path: '/app/play/:poker' },
     { id: 'play-hokm', path: '/app/play/:hokm' },
+    { id: 'play-lobby', path: '/app/play/:lobby' },
     { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -333,12 +334,18 @@ async function teamTable(browser, storageState)
         ? await mine.request.post(`${ BASE }/api/tables/`, { data: tableBody({ game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', teams: true }) })
         : null;
 
-    await mine.close();
-
     if (made !== null && !made.ok())
     {
+        await mine.close();
+
         throw new Error(`qa: could not open a team table (${ made.status() })`);
     }
+
+    const id = already?.id ?? (await made.json()).id;
+
+    await mine.close();
+
+    return id;
 }
 
 async function main()
@@ -369,7 +376,7 @@ async function main()
         hokm: await playableTable(browser, storageState, 'hokm')
     };
 
-    await teamTable(browser, storageState);
+    tables.lobby = await teamTable(browser, storageState);
 
     const partner = await browser.newContext({ storageState: await signedIn(browser, PARTNER_HANDLE) });
 
@@ -452,7 +459,8 @@ async function main()
                         .replace(':ludo', tables.ludo)
                         .replace(':backgammon', tables.backgammon)
                         .replace(':poker', tables.poker)
-                        .replace(':hokm', tables.hokm);
+                        .replace(':hokm', tables.hokm)
+                        .replace(':lobby', tables.lobby);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 

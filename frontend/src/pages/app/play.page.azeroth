@@ -4,7 +4,6 @@ import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import PlayHeader from '../../components/games/play-header.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
-import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
@@ -27,7 +26,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { TOAST_ACTION_DURATION, useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
-import type { MatchView, TableSummary } from '../../api.ts';
+import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
@@ -81,7 +80,7 @@ export default component PlayPage()
 
     state watchLost = false;
 
-    let Lobby: ((props: { table: TableSummary; onInvite: () => void; onCopyLink: () => void; onLeave: () => void }) => MountNode) | null = null;
+    let Lobby: typeof import('../../components/games/lobby-panel.component.azeroth').default | null = null;
 
     let lobbyAsked = false;
 
@@ -348,6 +347,10 @@ export default component PlayPage()
     derived watching = !seated && table !== null && (table.matchId !== undefined || spectated?.match.tableId === table.id);
 
     derived standing = !seated && !showing && table !== null && table.matchId === undefined && !watching;
+
+    derived roomOpen = lobbyOpen || standing;
+
+    derived startable = !showing && ready && seated;
 
     derived watched = watchReady ? spectated : null;
 
@@ -714,7 +717,7 @@ export default component PlayPage()
 
     effect
     {
-        if (!lobbyAsked && (lobbyOpen || lobby.seated().some((one) => one.id === mine && one.matchId === undefined)))
+        if (!lobbyAsked && (roomOpen || lobby.seated().some((one) => one.id === mine && one.matchId === undefined)))
         {
             drawLobby();
         }
@@ -986,16 +989,6 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ !showing && ready && seated }>
-                        { () =>
-                            <Panel pad="md" stack="sm" class="items-center text-center">
-                                <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
-                                <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
-                                    { locale.t('match.start') }
-                                </Button>
-                            </Panel>
-                        }
-                    </Show>
 
                     <Show when={ watching }>
                         { () =>
@@ -1017,56 +1010,27 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ lobbyOpen && lobbyReady }>
+                    <Show when={ roomOpen && lobbyReady }>
                         { () =>
                             <Dynamic
                                 component={ Lobby! }
                                 props={ () => ({
                                     table: shown,
+                                    starting,
+                                    removed,
+                                    onStart: startable ? () => void begin() : undefined,
+                                    onSit: standing && seatOffered ? () => void sitDown() : undefined,
                                     onInvite: () => invite(shown.id),
                                     onCopyLink: () => void copyLink(),
-                                    onLeave: () => void leave(null)
+                                    onLeave: () => void leave(null),
+                                    onClose: amHost && lobbyOpen ? () => void end() : undefined
                                 }) }
                             />
                         }
                     </Show>
 
-                    <Show when={ lobbyOpen && lobbyLost }>
+                    <Show when={ roomOpen && lobbyLost }>
                         { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
-                    </Show>
-
-                    <Show when={ standing }>
-                        { () =>
-                            <Panel pad="lg" stack="md" class="items-center text-center">
-                                <p class="text-ui-lg text-text">{ locale.t(removed ? 'play.table.removed' : 'play.table.watching') }</p>
-                                <p class="max-w-[44ch] text-ui-base text-muted">
-                                    { locale.plural('play.lobby.emptySeats', shown.seats - shown.taken) }
-                                </p>
-                                <Show when={ seatOffered }>
-                                    { () =>
-                                        <Button
-                                            variant="primary"
-                                            size="lg"
-                                            leading="seat"
-                                            disabled={ shown.taken >= shown.seats }
-                                            onClick={ () => void sitDown() }
-                                        >
-                                            { locale.t('play.table.sitDown') }
-                                        </Button>
-                                    }
-                                </Show>
-                            </Panel>
-                        }
-                    </Show>
-
-                    <Show when={ amHost && lobbyOpen }>
-                        { () =>
-                            <div class="flex">
-                                <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
-                                    { locale.t('play.close.confirm') }
-                                </Button>
-                            </div>
-                        }
                     </Show>
 
                 </div>

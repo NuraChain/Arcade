@@ -3,11 +3,13 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import LobbyPanel from '../src/components/games/lobby-panel.component.azeroth';
+import { CHAIR_OUT } from '../src/components/games/seat-card.component.azeroth';
 import { defaultTable } from '../src/data/tables.ts';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
+import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
@@ -52,9 +54,11 @@ const table = (extra: Partial<TableSummary> = {}): TableSummary => ({
 const shown = (held: TableSummary) =>
     renderTest(() => LobbyPanel({ table: held, onInvite: () => undefined, onCopyLink: () => undefined, onLeave: () => undefined }) as Rendered).container;
 
-const sides = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('ul')].map((list) => ({
-    says: list.getAttribute('aria-label'),
-    seats: [...list.querySelectorAll(':scope > li')].map((chair) => chair.textContent ?? '')
+const chairsOf = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('ul > li')].map((chair) => ({
+    at: [chair.style.getPropertyValue('--x'), chair.style.getPropertyValue('--y')].map((one) => Number(Number(one).toFixed(2))),
+    side: chair.querySelector<HTMLElement>('.lobby-chair')?.dataset.side,
+    says: chair.querySelector('.lobby-chair-seat > .sr-only')?.textContent ?? null,
+    text: chair.textContent ?? ''
 }));
 
 beforeEach(() =>
@@ -191,7 +195,7 @@ describe('a chair the host can take somebody out of', () =>
 
         cleanup();
 
-        expect(named(shown(table()))).toEqual(['reza.t', 'sara.k', 'parisa'].map(labelFor));
+        expect(named(shown(table())), 'the chairs are not in the order of their seats').toEqual(['sara.k', 'reza.t', 'parisa'].map(labelFor));
     });
 
     it('is offered to nobody else: a player who is not the host, a host with no chair, somebody only looking', () =>
@@ -258,7 +262,19 @@ describe('a chair the host can take somebody out of', () =>
         expect(server.calls.filter((call) => call === 'tables.remove')).toHaveLength(1);
         expect(held.chairs[1].who).toBeUndefined();
         expect(server.keptOut[id]).toEqual(['sara.k']);
-        expect(container.querySelectorAll('ul > li')[1].textContent).toContain(useLocale().t('play.lobby.open'));
+
+        const chair = container.querySelectorAll('ul > li')[1];
+
+        expect(chair.querySelector('.lobby-chair')?.getAttribute('data-leaving'), 'the person was gone from the chair at once, with nothing seen to leave').toBe('true');
+        expect(chair.querySelector('.lobby-chair-name')?.textContent).toBe('Sara');
+        expect(chair.querySelector('.lobby-chair-seat')?.hasAttribute('inert'), 'somebody leaving the table could still be pressed').toBe(true);
+
+        (runtime().clock as ManualClock).advance(CHAIR_OUT);
+        await settle();
+
+        expect(chair.querySelector('.lobby-chair')?.hasAttribute('data-leaving')).toBe(false);
+        expect(chair.textContent).toContain(useLocale().t('play.lobby.open'));
+        expect(container.querySelectorAll('ul > li')[1], 'the chair was drawn again for the person leaving it').toBe(chair);
         expect(said()).toEqual([]);
     });
 
@@ -353,39 +369,41 @@ describe('a chair the host can take somebody out of', () =>
 
 describe('the lobby of a table two sides will play at', () =>
 {
-    it('seats partners together under their side, and calls the reader\'s own theirs', () =>
+    it('seats partners across the table from each other, the reader at its foot, and says whose side each chair is on', () =>
     {
-        const found = sides(shown(table()));
+        const found = chairsOf(shown(table()));
 
-        expect(found.map((one) => one.says)).toEqual(['Your team', 'Team 2']);
-        expect(found.map((one) => one.seats.length)).toEqual([2, 2]);
-        expect(found[0].seats[1]).toContain('reza.t');
-        expect(found[1].seats[0]).toContain('sara.k');
-        expect(found[1].seats[1]).toContain('parisa');
+        expect(found.map((one) => one.at), 'a chair is not where it will be at the table').toEqual([[0.5, 1], [1, 0.5], [0.5, 0], [0, 0.5]]);
+        expect(found.map((one) => one.side)).toEqual(['0', '1', '0', '1']);
+        expect(found.map((one) => one.says)).toEqual(['Your team', 'Team 2', 'Your team', 'Team 2']);
+        expect(found[2].text).toContain('reza.t');
     });
 
-    it('keeps the sides where they are for the other side, and names that one theirs', () =>
+    it('turns the table for whoever reads it, and names their side theirs', () =>
     {
-        const found = sides(shown(table({ mine: 3 })));
+        const found = chairsOf(shown(table({ mine: 3 })));
 
-        expect(found.map((one) => one.says)).toEqual(['Team 1', 'Your team']);
+        expect(found[3].at).toEqual([0.5, 1]);
+        expect(found[0].at, 'the next to play is not on the reader\'s right').toEqual([1, 0.5]);
+        expect(found.map((one) => one.says)).toEqual(['Team 1', 'Your team', 'Team 1', 'Your team']);
     });
 
-    it('numbers both sides for somebody who is not sitting', () =>
+    it('numbers both sides for somebody who is not sitting, and draws the table from its first chair', () =>
     {
         const { mine: _mine, ...unseated } = table();
-        const found = sides(shown(unseated as TableSummary));
+        const found = chairsOf(shown(unseated as TableSummary));
 
-        expect(found.map((one) => one.says)).toEqual(['Team 1', 'Team 2']);
+        expect(found.map((one) => one.says)).toEqual(['Team 1', 'Team 2', 'Team 1', 'Team 2']);
+        expect(found[0].at).toEqual([0.5, 1]);
     });
 
     it('names the sides in Persian', () =>
     {
         useLocale().setLocale('fa');
 
-        const found = sides(shown(table()));
+        const found = chairsOf(shown(table()));
 
-        expect(found.map((one) => one.says)).toEqual([useLocale().t('team.yours'), useLocale().t('team.n', { n: useLocale().n(2) })]);
+        expect(found.map((one) => one.says)).toEqual([useLocale().t('team.yours'), useLocale().t('team.n', { n: useLocale().n(2) }), useLocale().t('team.yours'), useLocale().t('team.n', { n: useLocale().n(2) })]);
         expect(found[0].says).not.toBe('Your team');
     });
 
@@ -404,33 +422,20 @@ describe('the lobby of a table two sides will play at', () =>
             onLeave: () => undefined
         }) as Rendered);
         const drawn = () => [...container.querySelectorAll<HTMLElement>('ul > li')];
-        const named = () => [...container.querySelectorAll<HTMLElement>('.lobby-side > p')];
-        const lists = [...container.querySelectorAll<HTMLElement>('ul')];
-        const labels = named();
+        const list = container.querySelector('ul');
         const before = drawn();
 
-        expect(labels).toHaveLength(2);
-
-        expect(sides(container)[0].seats[1]).not.toContain('reza.t');
+        expect(chairsOf(container)[2].text).not.toContain('reza.t');
 
         setHeld(table({ chairs: chairs(3), taken: 3 }));
 
-        expect(sides(container)[0].seats[1]).toContain('reza.t');
+        expect(chairsOf(container)[2].text).toContain('reza.t');
         expect(drawn()).toHaveLength(4);
-
-        for (const [at, list] of [...container.querySelectorAll<HTMLElement>('ul')].entries())
-        {
-            expect(list, `side ${ at } was drawn again`).toBe(lists[at]);
-        }
+        expect(container.querySelector('ul'), 'the chairs were drawn again').toBe(list);
 
         for (const [at, chair] of drawn().entries())
         {
             expect(chair, `chair ${ at } was drawn again`).toBe(before[at]);
-        }
-
-        for (const [at, label] of named().entries())
-        {
-            expect(label, `the name of side ${ at } was drawn again`).toBe(labels[at]);
         }
     });
 
@@ -453,7 +458,7 @@ describe('the lobby of a table two sides will play at', () =>
         const tag = inside.find((one) => one.childElementCount === 0 && one.textContent?.trim() === useLocale().t('play.lobby.notReady'));
 
         expect(tag, 'the chair says its player is not ready').toBeDefined();
-        expect(chair.textContent).toContain(useLocale().t('play.lobby.host'));
+        expect(chair.querySelector('.lobby-chair-host')?.getAttribute('aria-label'), 'the host is not marked on their chair').toBe(useLocale().t('play.lobby.host'));
 
         setHeld(table({ chairs: chairs(false) }));
 
@@ -465,13 +470,15 @@ describe('the lobby of a table two sides will play at', () =>
         expect(tag!.textContent?.trim()).toBe(useLocale().t('play.lobby.readyTag'));
     });
 
-    it('draws one row of chairs, as before, at a table where every seat plays for itself', () =>
+    it('says no side for a chair at a table where every seat plays for itself, and puts each at its colour\'s corner', () =>
     {
-        const found = sides(shown(table({ game: 'ludo', teams: false })));
+        const container = shown(table({ game: 'ludo', teams: false }));
+        const found = chairsOf(container);
 
-        expect(found).toHaveLength(1);
-        expect(found[0].says).toBe(useLocale().t('create.seats'));
-        expect(found[0].seats).toHaveLength(4);
+        expect(container.querySelectorAll('ul')).toHaveLength(1);
+        expect(container.querySelector('ul')?.getAttribute('aria-label')).toBe(useLocale().t('create.seats'));
+        expect(found.map((one) => [one.side, one.says])).toEqual([[undefined, null], [undefined, null], [undefined, null], [undefined, null]]);
+        expect(found.map((one) => one.at)).toEqual([[0, 0], [1, 0], [1, 1], [0, 1]]);
     });
 });
 
@@ -628,6 +635,203 @@ describe('the button that says ready', () =>
 
             expect(pressed.textContent?.trim()).toBe('I’m ready');
         });
+    });
+});
+
+describe('the lobby as the table about to be played', () =>
+{
+    const room = (container: HTMLElement) => container.querySelector<HTMLElement>('.lobby-table');
+
+    const top = (container: HTMLElement) => container.querySelector<HTMLElement>('.lobby-top');
+
+    const pressed = (container: HTMLElement) => [...container.querySelectorAll<HTMLButtonElement>('.lobby-acts button')].map((one) => one.textContent?.trim() ?? '');
+
+    const button = (container: HTMLElement, text: string) => [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === text);
+
+    const status = (container: HTMLElement) => container.querySelector('.lobby [aria-live="polite"]')?.textContent?.trim();
+
+    const drawn = (extra: Partial<Parameters<typeof LobbyPanel>[0]>, held: TableSummary = table()) =>
+        renderTest(() => LobbyPanel({ table: held, onInvite: () => undefined, onCopyLink: () => undefined, onLeave: () => undefined, ...extra }) as Rendered).container;
+
+    const ready = () => table({ status: 'ready', chairs: WHO.map((who, seat) => ({ seat, who, ready: true, ...(seat === 0 ? { host: true } : {}) })) as TableSummary['chairs'] });
+
+    afterEach(() =>
+    {
+        vi.restoreAllMocks();
+        useOverlay().reset();
+        usePeople().reset();
+    });
+
+    it('is drawn in the art of the game that is about to be played', () =>
+    {
+        const hokm = shown(table());
+
+        expect([room(hokm)?.dataset.game, top(hokm)?.classList.contains('hokm-table')]).toEqual(['hokm', true]);
+
+        cleanup();
+
+        const poker = shown(table({ game: 'poker', seats: 6, teams: false, chairs: [{ seat: 0, who: 'alex', ready: false, host: true }, ...[1, 2, 3, 4, 5].map((seat) => ({ seat, ready: false }))] as TableSummary['chairs'], taken: 1 }));
+
+        expect(top(poker)?.classList.contains('poker-table')).toBe(true);
+
+        cleanup();
+
+        const ludo = shown(table({ game: 'ludo', teams: false }));
+
+        expect(top(ludo)?.querySelector('span.lobby-board'), 'a Ludo table with no board on it').not.toBeNull();
+
+        cleanup();
+
+        const backgammon = shown(table({ game: 'backgammon', seats: 2, teams: false, chairs: [{ seat: 0, who: 'alex', ready: false, host: true }, { seat: 1, ready: false }] as TableSummary['chairs'], taken: 1 }));
+        const board = top(backgammon)?.querySelector('svg.lobby-board');
+
+        expect(board?.querySelectorAll('polygon').length, 'a backgammon board without its twenty-four points').toBe(24);
+        expect(top(backgammon)?.getAttribute('aria-hidden'), 'a picture of a table was read out').toBe('true');
+    });
+
+    it('crowds a table of more than six chairs, and no other', () =>
+    {
+        const many = (seats: number) => table({ game: 'poker', seats, teams: false, chairs: Array.from({ length: seats }, (_, seat) => (seat === 0 ? { seat, who: 'alex', ready: false, host: true } : { seat, ready: false })) as TableSummary['chairs'], taken: 1 });
+
+        expect(room(shown(many(9)))?.dataset.crowd).toBe('true');
+
+        cleanup();
+
+        expect(room(shown(many(6)))?.hasAttribute('data-crowd')).toBe(false);
+    });
+
+    it('offers the start where the table can start, says so, and still lets the reader take their ready back', () =>
+    {
+        const started = vi.fn();
+        const container = drawn({ onStart: started }, ready());
+
+        expect(status(container)).toBe(useLocale().t('match.startHint'));
+        expect(pressed(container).slice(0, 2)).toEqual([useLocale().t('match.start'), useLocale().t('play.lobby.readyTag')]);
+
+        fire(button(container, useLocale().t('match.start'))!, 'click');
+
+        expect(started).toHaveBeenCalledTimes(1);
+
+        cleanup();
+
+        expect(pressed(drawn({}, ready())), 'a table nobody may start offered its start').not.toContain(useLocale().t('match.start'));
+    });
+
+    it('shows somebody standing the table as it stands, says they are only looking, and offers a seat while there is one', () =>
+    {
+        const sat = vi.fn();
+        const three = WHO.map((who, seat) => (seat < 3 ? { seat, who, ready: false, ...(seat === 0 ? { host: true } : {}) } : { seat, ready: false })) as TableSummary['chairs'];
+        const { mine: _mine, ...standing } = table({ chairs: three, taken: 3 });
+        const container = drawn({ onSit: sat }, standing as TableSummary);
+
+        expect(status(container)).toBe(useLocale().t('play.table.watching'));
+        expect(container.textContent).toContain(useLocale().plural('play.lobby.emptySeats', 1));
+        expect(pressed(container)).toEqual([useLocale().t('play.table.sitDown'), useLocale().t('play.lobby.copyLink')]);
+        expect(container.querySelectorAll('ul > li'), 'somebody standing is not shown who sits there').toHaveLength(4);
+
+        fire(button(container, useLocale().t('play.table.sitDown'))!, 'click');
+
+        expect(sat).toHaveBeenCalledTimes(1);
+
+        cleanup();
+
+        const { mine: _also, ...full } = table();
+
+        expect(button(drawn({ onSit: sat }, full as TableSummary), useLocale().t('play.table.sitDown'))?.disabled, 'a full table offered a seat').toBe(true);
+
+        cleanup();
+
+        const removed = drawn({ removed: true }, standing as TableSummary);
+
+        expect(status(removed)).toBe(useLocale().t('play.table.removed'));
+        expect(button(removed, useLocale().t('play.table.sitDown')), 'a seat was offered to somebody who would be refused it').toBeUndefined();
+    });
+
+    it('offers the host the closing of the table, and nobody else', () =>
+    {
+        const closed = vi.fn();
+        const container = drawn({ onClose: closed });
+
+        fire(button(container, useLocale().t('play.close.confirm'))!, 'click');
+
+        expect(closed).toHaveBeenCalledTimes(1);
+
+        cleanup();
+
+        expect(button(drawn({}), useLocale().t('play.close.confirm'))).toBeUndefined();
+    });
+
+    it('opens what can be done about a person from their chair, and offers nothing of the kind about the reader', async () =>
+    {
+        const container = shown(table());
+        const presses = [...container.querySelectorAll<HTMLButtonElement>('.lobby-chair-press')];
+
+        expect(presses.map((one) => one.getAttribute('aria-label'))).toEqual(['sara.k', 'reza.t', 'parisa'].map((name) => useLocale().t('actions.about', { name })));
+        expect(presses.every((one) => one.getAttribute('aria-haspopup') === 'dialog' && !one.hasAttribute('tabindex')), 'a chair is not a stop for the keyboard').toBe(true);
+
+        fire(presses[0], 'click');
+
+        await vi.waitFor(() => expect(useOverlay().top()?.id).toBe('person-menu'), { timeout: 4000 });
+        expect(useOverlay().top()?.props).toMatchObject({ personId: 'sara.k' });
+    });
+
+    it('turns the ready tick on a chair where it stands', () =>
+    {
+        const [held, setHeld] = createSignal(table());
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+        const tick = container.querySelector<HTMLElement>('ul > li .lobby-chair-tick')!;
+
+        expect(tick.hasAttribute('data-on')).toBe(false);
+
+        setHeld(table({ chairs: WHO.map((who, seat) => ({ seat, who, ready: seat === 0, ...(seat === 0 ? { host: true } : {}) })) as TableSummary['chairs'] }));
+
+        expect(container.querySelector('ul > li .lobby-chair-tick'), 'the tick was drawn again to say ready').toBe(tick);
+        expect(tick.getAttribute('data-on')).toBe('true');
+    });
+
+    it('empties a chair at once when less motion is asked for', () =>
+    {
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const [held, setHeld] = createSignal(table());
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+
+        setHeld(table({ chairs: WHO.map((who, seat) => (seat === 1 ? { seat, ready: false } : { seat, who, ready: false, ...(seat === 0 ? { host: true } : {}) })) as TableSummary['chairs'], taken: 3 }));
+
+        const chair = container.querySelectorAll('ul > li')[1];
+
+        expect(chair.querySelector('.lobby-chair')?.hasAttribute('data-leaving'), 'a person lingered in a chair with less motion asked for').toBe(false);
+        expect(chair.textContent).not.toContain('sara.k');
+    });
+
+    it('names a person in their chair by their first name, and in full wherever they are acted on', async () =>
+    {
+        void usePeople().want(['sara.k']);
+        await vi.waitFor(() => expect(usePeople().byHandle('sara.k')?.displayName).toBe('Sara Kamali'));
+
+        const container = shown(table());
+        const chair = container.querySelectorAll('ul > li')[1];
+
+        expect(chair.querySelector('.lobby-chair-name')?.textContent).toBe('Sara');
+        expect(chair.querySelector('.lobby-chair-press')?.getAttribute('aria-label')).toBe(useLocale().t('actions.about', { name: 'Sara Kamali' }));
+        expect(chair.querySelector('.lobby-chair-out button')?.getAttribute('aria-label')).toBe(useLocale().t('play.lobby.remove', { name: 'Sara Kamali' }));
+        expect(container.querySelectorAll('ul > li')[0].querySelector('.lobby-chair-name')?.textContent).toBe(useLocale().t('common.you'));
     });
 });
 

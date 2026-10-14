@@ -2572,6 +2572,15 @@ moved one game a commit, and each takes the turn from what its own log can say:
   count it. Seen before the change: the ring on the next seat while a raise was in the air, and
   on a plate that said Folded while a finished hand was still being paid.
 
+**As built (P6), a chair fills or empties.** The chairs are keyed by seat and keep their nodes
+across every read. A chair that fills draws its person with a 220 ms `chair-in` (opacity,
+`scale`, `translate`); one that empties keeps its person drawn and `inert` for 180 ms with
+`chair-out`, then the empty chair arrives the same way; the tick that says ready turns where it
+is. All of it is the stylesheet's, none of it is the presenter's: a lobby has no events, only two
+reads of the table, as this section's table said. Seen on the built server: Reza sat down over
+the api and his chair drew him moving; the host took Omid out and his chair faded through 0.31
+and 0.07 to nothing in 181 ms before Invite faded in.
+
 **As built (P6), the stage changes size.** A flight's two ends are measured on the screen when
 it starts, so a table that changed size under one (the chat card opening beside it, a phone
 turned over, full screen) sent it to where its target used to be, and the piece jumped to its

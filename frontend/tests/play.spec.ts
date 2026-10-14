@@ -1142,7 +1142,7 @@ describe('PlayPage', () =>
             expect(saying(container, 'play.table.removed'), 'the page does not say the host took the reader out').toBeDefined();
             expect(saying(container, 'play.table.watching')).toBeUndefined();
             expect(sitDown(container), 'a seat is offered to somebody who would be refused it').toBeUndefined();
-            expect(lobbyOf(container)).toBeNull();
+            expect(lobbyOf(container), 'the table the reader was taken out of is not shown to them as it stands').not.toBeNull();
             expect(container.querySelector('h1')).toBe(heading);
             expect(useLocale().t('play.table.removed')).not.toBe(useLocale().t('play.table.watching'));
         });

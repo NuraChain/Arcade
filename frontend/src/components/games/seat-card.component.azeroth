@@ -1,17 +1,26 @@
+import { onCleanup, untrack } from 'azerothjs';
+
 import type { TableSeat } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { aboutPerson } from '../../lib/person-menu.ts';
+import { runtime } from '../../lib/runtime.ts';
 import { useAccount } from '../../stores/account.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
-import Avatar from '../ui/avatar.component.azeroth';
-import Badge from '../ui/badge.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
 import { useVoice } from '../../stores/voice.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+
+export const CHAIR_OUT = 180;
 
 export default component SeatCard(props: {
     seat: TableSeat;
     me: string;
+    team?: string;
+    side?: number;
+    ink?: string;
     canInvite: boolean;
     canRemove: boolean;
     onInvite?: () => void;
@@ -23,106 +32,142 @@ export default component SeatCard(props: {
     const people = usePeople();
     const voice = useVoice();
     const account = useAccount();
+    const device = useDevice();
 
-    derived filled = props.seat.who !== undefined;
+    state gone = '';
+
+    let sat = untrack(() => props.seat.who ?? '');
+
+    let forget: () => void = () => undefined;
+
+    effect
+    {
+        const now = props.seat.who ?? '';
+        const before = sat;
+
+        sat = now;
+
+        untrack(() =>
+        {
+            forget();
+            forget = () => undefined;
+
+            if (before !== '' && now === '' && !device.reducedMotion())
+            {
+                gone = before;
+                forget = runtime().clock.after(CHAIR_OUT, () => gone = '');
+            }
+            else
+            {
+                gone = '';
+            }
+        });
+    }
+
+    onCleanup(() => forget());
+
+    derived leaving = gone !== '';
+
+    derived who = leaving ? gone : (props.seat.who ?? '');
+
+    derived filled = who !== '';
 
     derived pending = !filled && props.seat.invited !== undefined;
 
-    derived handle = props.seat.who ?? props.seat.invited ?? null;
+    derived handle = filled ? who : (props.seat.invited ?? '');
 
-    derived mine = props.seat.who !== undefined && props.seat.who === props.me;
+    derived mine = filled && who === props.me;
 
-    derived hosting = props.seat.host;
+    derived hosting = !leaving && props.seat.host === true;
 
     derived inviting = props.canInvite;
 
-    derived removable = props.canRemove && filled && !mine;
+    derived removable = props.canRemove && filled && !mine && !leaving;
+
+    derived pressable = filled && !mine && !leaving;
 
     derived person = mine
         ? account.user()
-        : (handle === null ? null : (people.byHandle(handle) ?? null));
+        : (handle === '' ? null : (people.byHandle(handle) ?? null));
 
-    derived name = mine
+    derived fullName = mine
         ? locale.t('common.you')
-        : (person === null ? (handle ?? '') : person.displayName);
+        : (person === null ? handle : person.displayName);
 
-    derived tag = ((): { text: string; tone: string } | null =>
-    {
-        if (pending)
-        {
-            return { text: locale.t('play.lobby.invited'), tone: 'bg-accent/15 text-accent' };
-        }
-        if (!filled)
-        {
-            return null;
-        }
-        return props.seat.ready
-            ? { text: locale.t('play.lobby.readyTag'), tone: 'bg-live/15 text-live' }
-            : { text: locale.t('play.lobby.notReady'), tone: 'bg-raised text-muted' };
-    })();
+    derived name = mine || person === null ? fullName : (person.displayName.split(' ')[0] || fullName);
 
-    derived shell = [
-        'relative flex h-full w-full min-w-0 flex-col items-center justify-center gap-2 rounded-panel border p-3 text-center transition-colors duration-200',
-        'min-h-[9.5rem]',
-        filled && props.seat.ready ? 'border-live/50 bg-live/5 shadow-glow-live' : '',
-        filled && !props.seat.ready ? 'border-line bg-field' : '',
-        !filled && pending ? 'border-dashed border-accent/50 bg-field' : '',
-        !filled && !pending ? 'border-dashed border-line bg-void/40' : ''
-    ].filter(Boolean).join(' ');
+    derived ready = filled && !leaving && props.seat.ready;
 
-    <Show
-        when={ filled || pending }
-        fallback={
-            <Show
-                when={ inviting }
-                fallback={
-                    <div class={ shell } aria-label={ locale.t('play.lobby.open') }>
-                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-faint">
-                            <Icon name="seat" size={ 22 } />
-                        </span>
-                        <span class="text-ui-sm font-semibold text-muted">{ locale.t('play.lobby.open') }</span>
-                    </div>
-                }
-            >
-                { () =>
-                    <button type="button" class={ () => [ shell, 'cursor-pointer hover:border-accent/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
-                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-accent">
-                            <Icon name="friend-add" size={ 22 } />
-                        </span>
-                        <span class="text-ui-sm font-semibold text-accent">{ locale.t('play.lobby.invite') }</span>
-                        <span class="text-ui-xs text-faint">{ locale.t('play.lobby.open') }</span>
-                    </button>
-                }
-            </Show>
-        }
+    derived says = pending
+        ? locale.t('play.lobby.invited')
+        : (ready ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.notReady'));
+
+    derived standing = pending ? 'invited' : (ready ? 'ready' : 'waiting');
+
+    <div
+        class="lobby-chair"
+        data-state={ filled || pending ? standing : 'open' }
+        data-leaving={ leaving ? 'true' : undefined }
+        data-side={ props.side }
+        style={ props.ink === undefined ? undefined : `--ink: ${ props.ink }` }
     >
-        { () =>
-            <div class={ shell }>
-                <Show when={ hosting }>
-                    <Badge dot text={ locale.t('play.lobby.host') } tone="accent" class="absolute start-2 top-2" />
-                </Show>
-                <Show when={ removable }>
-                    { () =>
-                        <span class="absolute end-1 top-1 z-10 flex">
-                            <IconButton icon="close" size="sm" label={ locale.t('play.lobby.remove', { name }) } onClick={ () => props.onRemove?.() } />
+        <Show
+            when={ filled || pending }
+            fallback={
+                <Show
+                    when={ inviting }
+                    fallback={
+                        <span class="lobby-chair-seat" role="img" aria-label={ locale.t('play.lobby.open') }>
+                            <span class="lobby-chair-face" data-open="true"><Icon name="seat" size={ 18 } /></span>
+                            <span class="lobby-chair-name" aria-hidden="true">{ locale.t('play.lobby.open') }</span>
                         </span>
                     }
+                >
+                    { () =>
+                        <button type="button" class="lobby-chair-seat" data-invites="true" onClick={ () => props.onInvite?.() }>
+                            <span class="lobby-chair-face" data-open="true"><Icon name="friend-add" size={ 18 } /></span>
+                            <span class="lobby-chair-name">{ locale.t('play.lobby.invite') }</span>
+                            <span class="sr-only">{ locale.t('play.lobby.open') }</span>
+                        </button>
+                    }
                 </Show>
-                <span class={ () => [ 'flex rounded-full transition-shadow duration-150', props.seat.who !== undefined && voice.speaking(props.seat.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }>
-                    <Avatar
-                        person={ person }
-                        size="lg"
-                        presence={ pending || person === null ? null : presence.dot(person.id) }
-                        class={ pending ? 'opacity-60' : '' }
-                    />
-                </span>
-                <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') } dir="auto">{ name }</span>
-                <Show when={ tag } let={ mark }>
-                    <span class={ () => [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', mark.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
-                        { mark.text }
+            }
+        >
+            { () =>
+                <span class="lobby-chair-seat" inert={ leaving }>
+                    <span class="lobby-chair-face" data-speaking={ filled && voice.speaking(who) ? 'true' : undefined }>
+                        <Avatar
+                            person={ person }
+                            size="md"
+                            ringOn="void"
+                            presence={ pending || person === null ? null : presence.dot(person.id) }
+                        />
+                        <Show when={ hosting }>
+                            <span class="lobby-chair-host" role="img" aria-label={ locale.t('play.lobby.host') }>
+                                <Icon name="crest-crown" size={ 10 } />
+                            </span>
+                        </Show>
+                        <span class="lobby-chair-tick" data-on={ ready ? 'true' : undefined } aria-hidden="true">
+                            <Icon name="selected" size={ 10 } />
+                        </span>
                     </span>
-                </Show>
-            </div>
-        }
-    </Show>
+                    <span class="lobby-chair-name" dir="auto">{ name }</span>
+                    <span class="table-plate-tag" data-tone={ ready ? 'live' : 'neutral' }>{ says }</span>
+                    <Show when={ props.team } let={ side }>
+                        <span class="sr-only">{ side }</span>
+                    </Show>
+                    <Show when={ pressable }>
+                        { () => <button type="button" class="lobby-chair-press" aria-haspopup="dialog" aria-label={ locale.t('actions.about', { name: fullName }) } onClick={ () => aboutPerson(who) }></button> }
+                    </Show>
+                    <Show when={ removable }>
+                        { () =>
+                            <span class="lobby-chair-out">
+                                <IconButton icon="close" size="sm" label={ locale.t('play.lobby.remove', { name: fullName }) } onClick={ () => props.onRemove?.() } />
+                            </span>
+                        }
+                    </Show>
+                </span>
+            }
+        </Show>
+    </div>
 }

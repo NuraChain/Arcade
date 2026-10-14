@@ -1,22 +1,26 @@
 import { createResource } from 'azerothjs';
 
 import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
-import type { GameId } from '../../data/games.ts';
 import type { TableSummary } from '../../api.ts';
 import { client } from '../../api.ts';
+import { BAR_LEFT, BAR_WIDTH, BOTTOM, FIELD_LEFT, FIELD_RIGHT, FRAME, HEIGHT, MIDDLE, SPIKES, TOP, TRAY, TRAY_LEFT, WIDTH } from '../../game/backgammon-layout.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
 import { looking } from '../../lib/looking.ts';
 import { whyRefused } from '../../lib/open-table.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import { lobbySeats } from './lobby-seats.ts';
 import MatchResult from './match-result.component.azeroth';
 import SeatCard from './seat-card.component.azeroth';
+
+const LUDO_INK: readonly string[] = ['red', 'green', 'yellow', 'blue'];
+
+const CROWD = 6;
 
 /**
  * The table, as it stands.
@@ -28,14 +32,18 @@ import SeatCard from './seat-card.component.azeroth';
  */
 export default component LobbyPanel(props: {
     table: TableSummary;
+    starting?: boolean;
+    removed?: boolean;
+    onStart?: () => void;
+    onSit?: () => void;
     onInvite: () => void;
     onCopyLink: () => void;
     onLeave: () => void;
+    onClose?: () => void;
 })
 {
     const locale = useLocale();
     const lobby = useLobby();
-    const catalogue = useCatalogue();
     const people = usePeople();
     const overlay = useOverlay();
 
@@ -44,6 +52,8 @@ export default component LobbyPanel(props: {
     derived mine = props.table.mine === undefined
         ? null
         : (props.table.chairs.find((chair) => chair.seat === props.table.mine) ?? null);
+
+    derived seated = mine !== null;
 
     derived amHost = mine?.host === true;
 
@@ -72,17 +82,23 @@ export default component LobbyPanel(props: {
 
     derived searching = looking(props.table);
 
-    derived status = searching
-        ? locale.t('play.lobby.looking', { here: locale.n(props.table.taken), seats: locale.n(props.table.seats) })
-        : (empty > 0
-            ? locale.plural('play.lobby.emptySeats', empty)
-            : (meNotReady
-                ? locale.t('play.lobby.youNotReady')
-                : (waitingOn.length > 0
-                    ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
-                    : locale.t('play.lobby.allReady'))));
+    derived startable = props.onStart !== undefined;
 
-    derived gameName = locale.t(catalogue.byId(props.table.game as GameId).nameKey);
+    derived status = !seated
+        ? locale.t(props.removed === true ? 'play.table.removed' : 'play.table.watching')
+        : (startable
+            ? locale.t('match.startHint')
+            : (searching
+                ? locale.t('play.lobby.looking', { here: locale.n(props.table.taken), seats: locale.n(props.table.seats) })
+                : (empty > 0
+                    ? locale.plural('play.lobby.emptySeats', empty)
+                    : (meNotReady
+                        ? locale.t('play.lobby.youNotReady')
+                        : (waitingOn.length > 0
+                            ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
+                            : locale.t('play.lobby.allReady'))))));
+
+    derived room = !seated && empty > 0 ? locale.plural('play.lobby.emptySeats', empty) : '';
 
     const sideAt = (seat: number) => sideOf(seat, { seats: props.table.seats, variant: 'teams' });
 
@@ -90,13 +106,30 @@ export default component LobbyPanel(props: {
 
     derived sided = props.table.teams;
 
-    derived groups = sided
-        ? [0, 1].map((side) => ({
-            key: `side-${ side }`,
-            says: side === home ? locale.t('team.yours') : locale.t('team.n', { n: locale.n(side + 1) }),
-            chairs: props.table.chairs.filter((chair) => sideAt(chair.seat) === side)
-        }))
-        : [{ key: 'all', says: locale.t('create.seats'), chairs: props.table.chairs }];
+    const teamOf = (seat: number) =>
+    {
+        if (!sided)
+        {
+            return undefined;
+        }
+
+        const side = sideAt(seat);
+
+        return side === home ? locale.t('team.yours') : locale.t('team.n', { n: locale.n(side + 1) });
+    };
+
+    derived spots = lobbySeats(props.table.game, props.table.seats, props.table.mine);
+
+    const placed = (seat: number) =>
+    {
+        const spot = spots.find((one) => one.seat === seat);
+
+        return spot === undefined ? undefined : `--x: ${ spot.x.toFixed(4) }; --y: ${ spot.y.toFixed(4) }`;
+    };
+
+    const inkOf = (seat: number) => (props.table.game === 'ludo'
+        ? `var(--ludo-${ LUDO_INK[(props.table.seats === 2 ? seat * 2 : seat) % LUDO_INK.length] })`
+        : undefined);
 
     const takeOut = async (handle: string | undefined) =>
     {
@@ -141,54 +174,102 @@ export default component LobbyPanel(props: {
         void attempt(lobby.ready(props.table.id, mine?.ready !== true), undefined, (error) => whyRefused(error, 'common.actionFailed'));
     };
 
-    <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
-        <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-                <p class="label text-ui-xs text-faint">{ locale.t('play.title.lobby') }</p>
-                <h2 class="title text-ui-2xl text-text">{ gameName }</h2>
+    <section class="lobby flex flex-col gap-4" aria-label={ locale.t('play.title.lobby') }>
+        <div class="lobby-table" data-game={ props.table.game } data-crowd={ props.table.seats > CROWD ? 'true' : undefined }>
+            <div class={ () => (props.table.game === 'poker' ? 'lobby-top poker-table' : (props.table.game === 'hokm' ? 'lobby-top hokm-table' : 'lobby-top')) } aria-hidden="true">
+                <Show when={ props.table.game === 'ludo' }>
+                    { () => <span class="lobby-board"></span> }
+                </Show>
+                <Show when={ props.table.game === 'backgammon' }>
+                    { () =>
+                        <svg class="lobby-board" viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }>
+                            <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
+                            <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />
+                            <rect x={ BAR_LEFT } y={ TOP - 6 } width={ BAR_WIDTH } height={ BOTTOM - TOP + 12 } fill="var(--nard-frame)" />
+                            <rect x={ TRAY_LEFT } y={ TOP } width={ TRAY } height={ BOTTOM - TOP } rx="8" fill="var(--nard-tray)" />
+                            <line x1={ TRAY_LEFT + 8 } y1={ MIDDLE } x2={ TRAY_LEFT + TRAY - 8 } y2={ MIDDLE } stroke="var(--nard-frame)" stroke-width="4" />
+                            <For each={ [...SPIKES] } key={ (spike) => spike.point } let={ spike }>
+                                <polygon points={ spike.path } fill={ spike.shade === 'a' ? 'var(--nard-point-a)' : 'var(--nard-point-b)' } />
+                            </For>
+                            <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
+                        </svg>
+                    }
+                </Show>
             </div>
-            <p class="flex items-center gap-2 text-ui-base text-muted" aria-live="polite">
-                <Show when={ full } fallback={ <Icon name="clock" size={ 15 } /> }>
-                    { () => <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span> }
+            <ul class="lobby-ring" aria-label={ locale.t('create.seats') }>
+                <For each={ props.table.chairs } key={ (chair) => chair.seat } let={ chair }>
+                    <li class="lobby-seat" style={ () => placed(chair.seat) }>
+                        <SeatCard
+                            seat={ chair }
+                            me={ me }
+                            team={ teamOf(chair.seat) }
+                            side={ sided ? sideAt(chair.seat) : undefined }
+                            ink={ inkOf(chair.seat) }
+                            canInvite={ amHost }
+                            canRemove={ amHost }
+                            onInvite={ () => props.onInvite() }
+                            onRemove={ () => void takeOut(chair.who) }
+                        />
+                    </li>
+                </For>
+            </ul>
+        </div>
+
+        <div class="flex flex-col items-center gap-1 text-center">
+            <p class="flex items-center justify-center gap-2 text-ui-base text-muted" aria-live="polite">
+                <Show when={ seated && full } fallback={ <Icon name="clock" size={ 15 } class="shrink-0" /> }>
+                    { () => <span class="live-dot h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true"></span> }
                 </Show>
                 <span>{ status }</span>
             </p>
+            <Show when={ room !== '' }>
+                { () => <p class="text-ui-sm text-faint">{ room }</p> }
+            </Show>
         </div>
 
-        <div class="@container">
-            <div class="flex flex-col gap-4 @xl:flex-row @xl:gap-4">
-                <For each={ groups } key={ (group) => group.key } let={ group }>
-                    <div class={ () => sided ? 'lobby-side flex min-w-0 flex-1 flex-col gap-2' : 'flex min-w-0 flex-1 flex-col' }>
-                        <Show when={ sided }>
-                            <p class="label text-ui-xs text-faint" aria-hidden="true">{ group.says }</p>
-                        </Show>
-                        <ul class={ () => sided ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3 sm:grid-cols-4' } aria-label={ group.says }>
-                            <For each={ group.chairs } key={ (chair) => chair.seat } let={ chair }>
-                                <li class="flex min-w-0">
-                                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } canRemove={ amHost } onInvite={ () => props.onInvite() } onRemove={ () => void takeOut(chair.who) } />
-                                </li>
-                            </For>
-                        </ul>
+        <div class="lobby-acts">
+            <Show when={ startable }>
+                { () =>
+                    <Button variant="primary" size="lg" block leading="play" loading={ props.starting === true } onClick={ () => props.onStart?.() }>
+                        { locale.t('match.start') }
+                    </Button>
+                }
+            </Show>
+            <Show when={ seated }>
+                { () =>
+                    <Button
+                        variant={ mine?.ready === true ? 'live' : 'primary' }
+                        size="lg"
+                        block
+                        leading={ mine?.ready === true ? 'check-circle' : 'zap' }
+                        onClick={ sayReady }
+                    >
+                        { mine?.ready === true ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.ready') }
+                    </Button>
+                }
+            </Show>
+            <Show when={ !seated && props.onSit !== undefined }>
+                { () =>
+                    <Button variant="primary" size="lg" block leading="seat" disabled={ full } onClick={ () => props.onSit?.() }>
+                        { locale.t('play.table.sitDown') }
+                    </Button>
+                }
+            </Show>
+            <div class="flex flex-wrap gap-2">
+                <Button variant="outline" size="lg" leading="copy" class="grow basis-[9rem] whitespace-nowrap" onClick={ () => props.onCopyLink() }>{ locale.t('play.lobby.copyLink') }</Button>
+                <Show when={ seated }>
+                    { () => <Button variant="destructive" size="lg" leading="sign-out" class="grow basis-[9rem] whitespace-nowrap" onClick={ () => props.onLeave() }>{ locale.t('play.lobby.leave') }</Button> }
+                </Show>
+            </div>
+            <Show when={ props.onClose !== undefined }>
+                { () =>
+                    <div class="flex justify-center">
+                        <Button variant="destructive" size="sm" leading="close" onClick={ () => props.onClose?.() }>
+                            { locale.t('play.close.confirm') }
+                        </Button>
                     </div>
-                </For>
-            </div>
-        </div>
-
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-                variant={ mine?.ready === true ? 'live' : 'primary' }
-                size="lg"
-                block
-                leading={ mine?.ready === true ? 'check-circle' : 'zap' }
-                disabled={ mine === null }
-                onClick={ sayReady }
-            >
-                { mine?.ready === true ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.ready') }
-            </Button>
-            <div class="flex gap-2 sm:shrink-0">
-                <Button variant="outline" size="lg" leading="copy" class="flex-1 sm:flex-none" onClick={ () => props.onCopyLink() }>{ locale.t('play.lobby.copyLink') }</Button>
-                <Button variant="destructive" size="lg" leading="sign-out" class="flex-1 sm:flex-none" onClick={ () => props.onLeave() }>{ locale.t('play.lobby.leave') }</Button>
-            </div>
+                }
+            </Show>
         </div>
 
         <Show when={ lastGame } let={ game }>
