@@ -149,7 +149,20 @@ unmetered: with a ceiling of two, `/%61pi/thing` answered 200 four times. `route
 the router that picks requests by their path has to ask the same function. The socket server
 matches `/ws` exactly and upgrades no other spelling, the cross-site rule above looks at every
 write whatever its path, and the framework's file server keeps a decoded path inside its root.
-`rate-limit.spec.ts` (*a path the router reads another way*) holds it.
+`rate-limit.spec.ts` (*a path the router reads another way*) holds it, and the framework register
+has the reproduction (entry 42: a wrapper is handed no way to read the path the router will match).
+
+**Signing in has a budget of its own.** The two routes a caller who is not signed in can write
+with are `/auth/challenge`, which stores a challenge row, and `/auth/wallet`, which makes an
+account the first time an address signs. Under the api's ceiling alone one address could store
+600 challenges a minute (they are swept a day after they expire) and make 300 accounts.
+`signInRateLimit` gives the two together a twentieth of `API_RATE_MAX`, never under ten: 30 a
+minute at 600, which is ten sign-ins, and a thousand under the passes' 20000, which mint wallets
+by the dozen. It is derived and not a variable of its own so that raising the ceiling for a load
+run raises it too. The browser says a 429 at either step in its own words (`busy`: "Too many
+sign-ins from this network"), where it used to say the server could not be reached.
+`rate-limit.spec.ts` (*the sign-in budget*) holds the share, the two routes, a refusal however the
+path is spelled, and the line of `main.ts` that puts it on the server.
 
 **There is no Content-Security-Policy for scripts, on purpose.** Signing in is a wallet, and
 wallets put their provider into the page: an extension's content script, Nura Wallet's in-app

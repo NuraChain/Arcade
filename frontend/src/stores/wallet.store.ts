@@ -71,6 +71,11 @@ export interface WalletApi
     reset(): void;
 }
 
+function serverFailure(error: unknown)
+{
+    return error instanceof ApiError && error.status === 429 ? 'busy' : 'unavailable';
+}
+
 export const useWallet = createStore((): WalletApi =>
 {
     const [status, setStatus] = createSignal<WalletStatus>('idle');
@@ -340,7 +345,7 @@ export const useWallet = createStore((): WalletApi =>
             catch (error)
             {
                 why('auth.challenge', error);
-                setFailure('unavailable');
+                setFailure(serverFailure(error));
                 setStatus('error');
                 return null;
             }
@@ -377,7 +382,7 @@ export const useWallet = createStore((): WalletApi =>
             catch (error)
             {
                 why('auth.wallet', error);
-                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : 'unavailable');
+                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : serverFailure(error));
                 setStatus('error');
                 return null;
             }

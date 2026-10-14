@@ -25,6 +25,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.error.noWallet': 'کیف پولی در این مرورگر پیدا نشد.',
     'wallet.error.unauthorized': 'کیف پولت قفل است یا به این سایت اجازه نداده. بازش کن، قفلش را باز کن و دوباره امتحان کن.',
     'wallet.error.unavailable': 'به سرور وصل نشد. کمی بعد دوباره امتحان کن.',
+    'wallet.error.busy': 'تلاش برای ورود از این شبکه زیاد بوده. یک دقیقه دیگر دوباره امتحان کن.',
     'wallet.error.unknown': 'نشد. دوباره امتحان کن.',
     'wallet.retry': 'دوباره',
     'wallet.address': 'نشانی کیف پول',

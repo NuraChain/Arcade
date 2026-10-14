@@ -455,6 +455,15 @@ that only matches an unconsumed, unexpired row and takes the stored message from
 clause. Two requests replaying one signature race in the database and exactly one wins. Verifying
 first would leave a window where both passed.
 
+**An address has about ten sign-ins a minute, and is told when it has spent them.** The challenge
+stores a row and the first signature of an address makes an account, both before anybody is signed
+in, so the two routes share a budget of their own beside the api's (a twentieth of `API_RATE_MAX`,
+30 requests a minute at 600: `backend/CLAUDE.md`, *Signing in has a budget of its own*). A connect
+makes two requests, three when it has to make fresh keys. A 429 at either step is `busy` in the
+wallet store, "Too many sign-ins from this network. Try again in a minute." on the sign-in page and
+in the chooser, where it used to be `unavailable` and said the server could not be reached.
+`wallet.spec.ts` and `connect.spec.ts` hold both steps, both places and the Persian sentence.
+
 **A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
 `candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.
 

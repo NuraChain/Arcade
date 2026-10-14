@@ -13,7 +13,7 @@ export interface Eip1193Provider
     providers?: Eip1193Provider[];
 }
 
-export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'unknown';
+export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'busy' | 'unknown';
 
 export interface AnnouncedWallet
 {

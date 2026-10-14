@@ -72,3 +72,26 @@ export function apiRateLimit(options: { limit?: number; windowMs?: number; trust
         trustProxy: options.trustProxy ?? false
     }));
 }
+
+export const SIGN_IN_SHARE = 20;
+
+export const SIGN_IN_LEAST = 10;
+
+export function isSignIn(pathname: string)
+{
+    return pathname === '/api/auth/challenge' || pathname === '/api/auth/wallet';
+}
+
+export function signInLimit(apiLimit: number)
+{
+    return Math.max(SIGN_IN_LEAST, Math.floor(apiLimit / SIGN_IN_SHARE));
+}
+
+export function signInRateLimit(options: { apiLimit: number; trustProxy: boolean })
+{
+    return forPaths(isSignIn, rateLimit({
+        limit: signInLimit(options.apiLimit),
+        windowMs: 60_000,
+        trustProxy: options.trustProxy
+    }));
+}

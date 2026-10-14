@@ -37,7 +37,7 @@ import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
 import { runtime } from '../src/lib/runtime.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'chain-unreachable';
+export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'chain-unreachable';
 
 interface GroupWire
 {
@@ -2170,6 +2170,10 @@ export const client =
             {
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
+            if (server.refuse === 'challenge-busy')
+            {
+                throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
+            }
             const nonce = `nonce-${ server.calls.length }`;
             const live = server.devices.some((one) => one.id === input.device && !one.revoked);
             server.issued = {
@@ -2194,6 +2198,10 @@ export const client =
             if (server.refuse === 'wallet-unreachable')
             {
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
+            }
+            if (server.refuse === 'wallet-busy')
+            {
+                throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
             }
             server.account = walletAccount(input.address);
             return { account: server.account };

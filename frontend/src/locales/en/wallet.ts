@@ -22,6 +22,7 @@ export const wallet = {
     'wallet.error.noWallet': 'No wallet found in this browser.',
     'wallet.error.unauthorized': 'Your wallet is locked or hasn’t allowed this site. Open it, unlock it and try again.',
     'wallet.error.unavailable': 'Couldn’t reach the server. Try again in a moment.',
+    'wallet.error.busy': 'Too many sign-ins from this network. Try again in a minute.',
     'wallet.error.unknown': 'That didn’t work. Try again.',
     'wallet.retry': 'Try again',
     'wallet.address': 'Wallet address',

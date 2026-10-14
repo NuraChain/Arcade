@@ -377,6 +377,25 @@ describe('wallet store', () =>
         expect(wallet.failure()).toBe('unavailable');
     });
 
+    it('says a sign-in the server is refusing for now is too many, at either step', async () =>
+    {
+        const wallet = useWallet();
+        wallet.adopt(fakeProvider());
+
+        server.refuse = 'challenge-busy';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.status()).toBe('error');
+        expect(wallet.failure()).toBe('busy');
+
+        server.refuse = 'wallet-busy';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.failure()).toBe('busy');
+
+        server.refuse = null;
+        expect(await wallet.connect()).not.toBeNull();
+        expect(wallet.failure()).toBeNull();
+    });
+
     it('forgets the account on disconnect', async () =>
     {
         const wallet = useWallet();

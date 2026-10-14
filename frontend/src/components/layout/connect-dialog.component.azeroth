@@ -59,6 +59,7 @@ const ERRORS: Record<WalletFailure, MessageKey> = {
     'pending': 'wallet.error.pending',
     'chain': 'wallet.error.chain',
     'unavailable': 'wallet.error.unavailable',
+    'busy': 'wallet.error.busy',
     'unknown': 'wallet.error.unknown'
 };
 

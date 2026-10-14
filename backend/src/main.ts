@@ -17,7 +17,7 @@ import { syncSchema } from './db/schema.ts';
 import { loadServerConfig } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
 import { headersFor } from './http/headers.ts';
-import { apiRateLimit } from './http/rate-limit.ts';
+import { apiRateLimit, signInRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
 import { createFranking } from './domains/chat/franking.ts';
@@ -212,7 +212,8 @@ const handler = pipeline(
 
     // Scoped to /api and /ws. Wrapping the whole handler would meter the forty static assets a
     // cold page load pulls, and a visitor would start taking 429s on their own JavaScript.
-    apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' })
+    apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' }),
+    signInRateLimit({ apiLimit: config.apiRateMax, trustProxy: config.env === 'production' })
 );
 
 const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' });
