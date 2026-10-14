@@ -1593,7 +1593,7 @@ export const client =
                 .filter((table) => fits(table) && !table.chairs.some(mine) && free(table).length > 0)
                 .sort((a, b) => free(a).length - free(b).length)[0];
 
-            const table = joined ?? newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] });
+            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] }), { quick: true });
             const seat = joined === undefined
                 ? 0
                 : chairFor(free(table).map((chair) => chair.seat), table.chairs.filter((chair) => chair.who !== undefined).map((chair) => chair.seat), table.teams);
@@ -1723,7 +1723,7 @@ export const client =
             const table = mustTable(params.id);
             const sitting = (who: string) => table.chairs.some((chair) => chair.who === who);
 
-            if (table.host !== server.me || !sitting(server.me))
+            if (table.host !== server.me || !sitting(server.me) || table.quick === true)
             {
                 throw noTable();
             }

@@ -57,6 +57,8 @@ export default component LobbyPanel(props: {
 
     derived amHost = mine?.host === true;
 
+    derived removing = amHost && props.table.quick !== true;
+
     derived empty = props.table.seats - props.table.taken;
 
     derived full = empty === 0;
@@ -212,7 +214,7 @@ export default component LobbyPanel(props: {
                             side={ sided ? sideAt(chair.seat) : undefined }
                             ink={ inkOf(chair.seat) }
                             canInvite={ amHost }
-                            canRemove={ amHost }
+                            canRemove={ removing }
                             onInvite={ () => props.onInvite() }
                             onRemove={ () => void takeOut(chair.who) }
                         />

@@ -620,6 +620,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.removed = true;
         }
+        if (row.quick)
+        {
+            summary.quick = true;
+        }
         if (row.kept_out.length > 0)
         {
             summary.keptOut = row.kept_out;

@@ -347,6 +347,35 @@ describe.skipIf(!active)('a host taking somebody out of a chair, against a real 
             expect(await db.getRepository(Notification).countBy({ kind: 'table-removed' })).toBe(0);
         });
 
+        it('answers the host of a table quick play opened in the bytes of a table that is not there, because nobody chose who sits there', async () =>
+        {
+            const [opener, joiner] = await crowd(2);
+            const opened = await ports.table.quick(opener.id, { game: 'ludo', voice: 'off' });
+            const joined = await ports.table.quick(joiner.id, { game: 'ludo', voice: 'off' });
+            const hosted = await seated(2);
+
+            expect(joined.id, 'the second search opened a table of its own').toBe(opened.id);
+            expect((await ports.table.view(opener.id, opened.id))?.quick).toBe(true);
+            expect((await ports.table.view(hosted.host.id, hosted.tableId))?.quick, 'a table the host opened says it is quick play\'s').toBeUndefined();
+
+            expect(await sent(ports.table.remove(opener.id, opened.id, joiner.handle))).toEqual(NO_TABLE);
+            expect(await sitting(opened.id)).toEqual([opener.id, joiner.id]);
+            expect(await removals()).toBe(0);
+
+            expect(await sent(ports.table.remove(hosted.host.id, hosted.tableId, hosted.guests[0].handle)), 'a table the host opened lost its removal').toEqual(DONE);
+        });
+
+        it('lets the host of a table they opened take out somebody quick play seated there', async () =>
+        {
+            const hosted = await seated(1);
+            const searcher = (await crowd(1))[0];
+            const found = await ports.table.quick(searcher.id, { game: 'ludo', voice: 'off' });
+
+            expect(found.id, 'quick play did not fill the table the host opened').toBe(hosted.tableId);
+            expect(await sent(ports.table.remove(hosted.host.id, hosted.tableId, searcher.handle))).toEqual(DONE);
+            expect(await sitting(hosted.tableId)).toEqual([hosted.host.id]);
+        });
+
         it('answers whoever may not ask at once, however long the table is held', async () =>
         {
             const { tableId, guests: [guest, other] } = await seated(3);

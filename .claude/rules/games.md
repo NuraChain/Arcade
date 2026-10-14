@@ -435,6 +435,21 @@ person, when), and the chair that was HELD for them is let go. `invited_id` is t
 keeps, so that somebody can come back; kept here it would be a chair nobody else can take and, at a
 table by invitation, the very thing that still lets them see it.
 
+**Nobody is taken out of a table quick play opened.** The owner: "when i create table if someone
+that i dont want to be my table i should kick him not on quick play only on create table". The
+host of a table is whoever opened it, and quick play opens one for the first searcher who finds
+nothing, so that searcher was a host like any other and could take out the strangers quick play
+seated beside them, at a table nobody chose. `quick_tables` names the tables quick play opened, one
+row written in the transaction that opens it, and `remove` answers the host of one in the bytes of
+a table that is not there, before anything is locked; the summary says `quick: true` to everybody,
+and the lobby hands the chairs no cross there (`removing`). A table opened from the create form, a
+chat or a group is the host's, and quick play SEATING somebody at one does not change that: its
+host may take out a searcher as anybody else. It is a table of its own and not a column on
+`tables` because another worktree runs on the same development database, and a required column
+there would be a rebuild that stops its server; a row that only exists for quick play's tables
+needs no rebuild and nothing to fill. `table-removal.db.spec.ts` (*who may ask*) holds both
+halves against Postgres, and `lobby-panel.spec.ts` the control.
+
 **Whoever was taken out cannot sit at that table again while it lives**, or at a public table a
 removal would last as long as it takes to press "Take a seat". `claimSeat` refuses them `kept-out`,
 asked inside its transaction after the per-person lock, where a second request of theirs that was

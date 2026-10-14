@@ -198,6 +198,15 @@ describe('a chair the host can take somebody out of', () =>
         expect(named(shown(table())), 'the chairs are not in the order of their seats').toEqual(['sara.k', 'reza.t', 'parisa'].map(labelFor));
     });
 
+    it('is offered to nobody at a table quick play opened, its host included, because nobody chose who sits there', () =>
+    {
+        expect(named(shown(mixed({ quick: true })))).toEqual([]);
+
+        cleanup();
+
+        expect(named(shown(mixed({ quick: false }))), 'a table the host opened lost its control').toEqual([labelFor('sara.k')]);
+    });
+
     it('is offered to nobody else: a player who is not the host, a host with no chair, somebody only looking', () =>
     {
         const others = [{ seat: 0, who: 'sara.k', ready: true, host: true }, { seat: 1, who: 'reza.t', ready: false }, { seat: 2, ready: false }, { seat: 3, ready: false }] as TableSummary['chairs'];

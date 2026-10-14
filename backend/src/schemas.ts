@@ -1121,6 +1121,8 @@ export const tableSummary = object({
 
     removed: boolean().optional(),
 
+    quick: boolean().optional(),
+
     keptOut: array(string()).optional(),
 
     createdAt: string()

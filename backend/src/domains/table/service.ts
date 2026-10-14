@@ -11,6 +11,7 @@ import type { TablePrivacy, TableStatus } from '../../schemas.ts';
 import { keyedQueue } from '../../lib/keyed-queue.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { QuickTable } from '../../entities/quick-table.entity.ts';
 import { TableRemoval } from '../../entities/table-removal.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { User } from '../../entities/user.entity.ts';
@@ -90,6 +91,7 @@ export interface TableRow
     mine: number | null;
 
     is_host: boolean;
+    quick: boolean;
     conversation_id: string | null;
 
     /** The conversation this table was opened IN, or null for one opened from the games pages. */
@@ -195,6 +197,7 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
         'mine'
     )
     .addSelect('(t.host_id = :me)', 'is_host')
+    .addSelect('(exists (select 1 from quick_tables q where q.table_id = t.id))', 'quick')
     .addSelect(
         `(select count(*)::int from table_seats s where s.table_id = t.id and s.user_id is not null)`,
         'taken'
@@ -628,6 +631,8 @@ export function createTableService(db: DataSource, social: SocialService)
                     voice: ask.voice,
                     roomId: null
                 }, [], true);
+
+                await tx.getRepository(QuickTable).insert({ tableId: opened });
 
                 return { id: opened, seated: true };
             };
@@ -1203,7 +1208,7 @@ export function createTableService(db: DataSource, social: SocialService)
         {
             const seen = await mustSee(me, tableId);
 
-            if (!seen.is_host || seen.mine === null)
+            if (!seen.is_host || seen.mine === null || seen.quick)
             {
                 throw new NotFoundError('No table there.');
             }
