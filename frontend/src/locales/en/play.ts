@@ -230,6 +230,8 @@ export const play = {
     'match.result.show': 'Show the result',
     'match.result.board': 'See the board',
     'play.table.chatLead': 'Everyone at this table can read what you say here.',
+    'play.table.apart': 'You have blocked somebody at this table.',
+    'play.table.apartLead': 'Its chat is hidden from both of you while the block stands. The game goes on.',
     'play.table.quiet': 'Chat is off at this table.',
     'play.table.quietLead': 'The host opened a quiet game. Results and invitations still show here.',
     'play.menu.title': 'This table',

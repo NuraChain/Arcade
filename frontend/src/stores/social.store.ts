@@ -32,6 +32,7 @@ export interface SocialApi
 
     relation(id: string): Relation;
     isBlocked(id: string): boolean;
+    apart(id: string): boolean;
     reasonFor(id: string): ReturnType<typeof reasonFor>;
     visible(ids: readonly string[]): string[];
     people(): Person[];
@@ -420,6 +421,7 @@ export const useSocial = createStore((): SocialApi =>
 
         relation,
         isBlocked: (id) => blocked().includes(id),
+        apart: (id) => blocked().includes(id) || known().blocked.includes(id),
 
         reasonFor(id)
         {

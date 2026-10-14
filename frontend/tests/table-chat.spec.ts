@@ -19,8 +19,9 @@ import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSeal } from '../src/stores/seal.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import { useSocial } from '../src/stores/social.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
-import { client, server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -46,6 +47,11 @@ let stopVoice: () => void = () => undefined;
 const shown = (conversationId: string) =>
 {
     const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
+
+    if (!server.conversations.some((row) => row.id === conversationId))
+    {
+        server.conversations.push({ id: conversationId, kind: 'group', members: ['alex', 'sara.k'], pinned: false, unread: 0 } as never);
+    }
 
     return renderTest(() => RouterProvider({ router, children: () => TableChat({ conversationId }) }) as Rendered).container;
 };
@@ -294,6 +300,213 @@ describe('the players beside a table’s chat, while a call is on', () =>
 
         expect(hers().querySelector('button[aria-pressed]')).toBeNull();
         expect(hers().querySelector('[title]')).toBeNull();
+    });
+});
+
+describe('a table’s chat that cannot be read', () =>
+{
+    const seated = async () =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2 }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: true, host: false };
+        held.taken = 2;
+        lobby.open(tableId);
+        await lobby.refresh();
+        await settle();
+    };
+
+    const read = () => server.calls.filter((one) => one === 'chat.messages' || one === 'chat.devices');
+
+    const said = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-unread]');
+
+    const foot = (container: HTMLElement) => container.querySelector('textarea')?.closest('.hidden') ?? null;
+
+    const notice = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.dataset.yield !== undefined) ?? null;
+
+    beforeEach(() =>
+    {
+        useSocial().reset();
+    });
+
+    afterEach(() =>
+    {
+        useSocial().reset();
+        vi.restoreAllMocks();
+    });
+
+    it('says the reader has blocked somebody sitting there, asks the server for none of it while that stands, and reads it again when the block is lifted', async () =>
+    {
+        await seated();
+        await useSocial().block('sara.k');
+        await settle();
+        server.calls = [];
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['You have blocked somebody at this table.', 'Its chat is hidden from both of you while the block stands. The game goes on.']);
+        expect(said(container)!.querySelector('button'), 'trying again is offered where it would be refused again').toBeNull();
+        expect(container.textContent).not.toContain('No messages yet');
+        expect(foot(container), 'something can be said into a chat that is hidden').not.toBeNull();
+        expect(notice(container), 'a notice about keys stands under a chat nobody can write in for another reason').toBeNull();
+        expect(read(), 'the chat was asked for while it is hidden').toEqual([]);
+        expect(useChat().openId()).toBe('');
+
+        await useSocial().unblock('sara.k');
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(read()).toContain('chat.messages');
+        expect(useChat().openId()).toBe('conv-a');
+    });
+
+    it('puts the chat away the moment somebody sitting there is blocked, and asks for none of it when the server says something has changed', async () =>
+    {
+        await seated();
+
+        const room = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1)!;
+        const container = shown(room.id);
+        const lines = () => container.querySelectorAll('ul[aria-live] > li').length;
+
+        await vi.waitFor(() => expect(lines()).toBeGreaterThan(1), { timeout: 4000 });
+
+        expect(said(container)).toBeNull();
+        expect(useChat().openId()).toBe(room.id);
+
+        await useSocial().block('sara.k');
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect(lines(), 'what was read before the block is still drawn under the sentence').toBe(1);
+        expect(useChat().openId()).toBe('');
+
+        server.calls = [];
+        await useChat().refresh();
+        await settle();
+
+        expect(server.calls, 'nothing was asked about at all').toContain('chat.list');
+        expect(read(), 'the chat was asked for while the block hides it').toEqual([]);
+    });
+
+    it('goes on saying so while a block is being lifted, and asks for the chat only once the server has lifted it', async () =>
+    {
+        await seated();
+        await useSocial().block('sara.k');
+        await settle();
+
+        const container = shown('conv-a');
+        const lift = client.social.unblock.bind(client.social);
+        let lifted: () => void = () => undefined;
+
+        await settle();
+        vi.spyOn(client.social, 'unblock').mockImplementation(async (asked) =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                lifted = resolve;
+            });
+
+            return await lift(asked);
+        });
+        server.calls = [];
+
+        const freed = useSocial().unblock('sara.k');
+
+        await settle();
+
+        expect(useSocial().isBlocked('sara.k'), 'the guess was not made').toBe(false);
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect(read(), 'the chat was asked for while the server still hides it').toEqual([]);
+
+        lifted();
+        await freed;
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(read()).toContain('chat.messages');
+    });
+
+    it('is not put away for a block of somebody who is not at the table', async () =>
+    {
+        await seated();
+        await useSocial().block('mina');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(useChat().openId()).toBe('conv-a');
+    });
+
+    it('says so when the read is refused, with nothing to say into it, and reads it when asked to try again', async () =>
+    {
+        await seated();
+        server.conversationDevices['conv-a'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
+        vi.spyOn(client.chat, 'messages').mockRejectedValueOnce(new ApiError(404, 'not-found', 'No conversation with that id.', undefined));
+
+        const container = shown('conv-a');
+
+        await vi.waitFor(() => expect(server.calls, 'the room was never asked who can read it').toContain('chat.devices'), { timeout: 4000 });
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('lost');
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['Could not load this conversation.']);
+        expect(container.textContent).not.toContain('No messages yet');
+        expect(foot(container), 'something can be said into a chat that could not be read').not.toBeNull();
+        expect(notice(container), 'a notice about keys stands under a chat that could not be read').toBeNull();
+
+        fire(pressable(container, 'Try again'), 'click');
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(notice(container), 'the notice about keys did not come back with the chat').not.toBeNull();
+    });
+
+    it('keeps what it has read when a later read is refused, and goes on offering to say something', async () =>
+    {
+        await seated();
+
+        const room = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1)!;
+        const container = shown(room.id);
+        const lines = () => container.querySelectorAll('ul[aria-live] > li').length;
+
+        await vi.waitFor(() => expect(lines()).toBeGreaterThan(1), { timeout: 4000 });
+
+        const before = lines();
+
+        vi.spyOn(client.chat, 'messages').mockRejectedValueOnce(new ApiError(503, 'unavailable', 'Try again in a moment.', undefined));
+        await useChat().refresh().catch(() => undefined);
+        await settle();
+
+        expect(useChat().threadError(), 'the read was not refused').not.toBeNull();
+        expect(lines()).toBe(before);
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+    });
+
+    it('says both in Persian', async () =>
+    {
+        await seated();
+        useLocale().setLocale('fa');
+        await useSocial().block('sara.k');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['کسی را سر این میز مسدود کرده‌ای.', 'تا وقتی مسدود است، گفتگوی این میز برای هر دوی شما پنهان می‌ماند. بازی ادامه دارد.']);
+        useLocale().setLocale('en');
     });
 });
 

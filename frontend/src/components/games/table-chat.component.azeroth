@@ -23,11 +23,13 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
@@ -56,6 +58,7 @@ export default component TableChat(props: {
     const toasts = useToasts();
     const overlay = useOverlay();
     const voice = useVoice();
+    const social = useSocial();
 
     derived voiced = voice.people();
 
@@ -112,11 +115,20 @@ export default component TableChat(props: {
 
     let opened = '';
 
+    derived apart = (lobby.table()?.chairs ?? []).some((chair) => chair.who !== undefined && social.apart(chair.who));
+
     effect
     {
         const id = props.conversationId;
 
-        if (id !== '')
+        if (apart)
+        {
+            if (opened !== '' && untrack(chat.openId) === opened)
+            {
+                chat.closeThread();
+            }
+        }
+        else if (id !== '')
         {
             opened = id;
             chat.openThread(id);
@@ -287,13 +299,17 @@ export default component TableChat(props: {
 
     derived quiet = table?.chat === false;
 
-    derived noticed = !quiet && !seal.loading() && stop !== null;
+    derived lost = chat.threadError() !== null && messages.length === 0;
+
+    derived unread = apart || lost;
+
+    derived noticed = !quiet && !unread && !seal.loading() && stop !== null;
 
     derived shut = !quiet && stop !== null;
 
     derived inviting = !shut;
 
-    derived hushed = messages.length === 0 && !chat.threadLoading();
+    derived hushed = messages.length === 0 && !unread && !chat.threadLoading();
 
     derived match = board.match();
 
@@ -365,6 +381,19 @@ export default component TableChat(props: {
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
                     <ul ref={ (element) => watch(element) } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto' ].join(' ') } aria-live="polite">
+                        <Show when={ unread }>
+                            { () =>
+                                <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center" data-unread={ apart ? 'apart' : 'lost' }>
+                                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
+                                        <Icon name="chat-off" size={ 20 } />
+                                    </span>
+                                    <p class="text-ui-sm font-semibold text-text">{ locale.t(apart ? 'play.table.apart' : 'chat.loadFailed') }</p>
+                                    <Show when={ apart } fallback={ <Button variant="outline" size="sm" onClick={ () => void chat.refresh() }>{ locale.t('common.retry') }</Button> }>
+                                        { () => <p class="text-ui-xs text-muted">{ locale.t('play.table.apartLead') }</p> }
+                                    </Show>
+                                </li>
+                            }
+                        </Show>
                         <Show when={ hushed }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
@@ -416,7 +445,7 @@ export default component TableChat(props: {
                         }
                     </Show>
 
-                    <div class={ () => quiet ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
+                    <div class={ () => quiet || unread ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
                         <Show when={ stop === null }>
                             { () =>
                                 <Rail class="-mx-3 mb-2" inner="px-3">

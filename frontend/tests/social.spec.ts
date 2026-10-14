@@ -1027,6 +1027,36 @@ describe('what the reader did about somebody, shown before the server has said s
         });
     });
 
+    it('says two people are apart from the moment one blocks the other until the server has lifted it, which is longer than the guess lasts', async () =>
+    {
+        const social = await known();
+
+        expect(social.apart('sara.k')).toBe(false);
+
+        await holding('block', async ({ answer }) =>
+        {
+            const blocking = social.block('sara.k');
+
+            expect(social.apart('sara.k'), 'not from the moment it was asked for').toBe(true);
+
+            answer();
+            await blocking;
+            expect(social.apart('sara.k')).toBe(true);
+        });
+
+        await holding('unblock', async ({ answer }) =>
+        {
+            const freed = social.unblock('sara.k');
+
+            expect(social.isBlocked('sara.k'), 'the guess was not made').toBe(false);
+            expect(social.apart('sara.k'), 'the guess was taken for the server\'s word').toBe(true);
+
+            answer();
+            await freed;
+            expect(social.apart('sara.k')).toBe(false);
+        });
+    });
+
     it('shows nothing twice when the graph is read again after the server has done it and before it has answered', async () =>
     {
         const social = await known();

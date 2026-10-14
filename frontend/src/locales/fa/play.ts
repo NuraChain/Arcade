@@ -233,6 +233,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.result.show': 'نمایش نتیجه',
     'match.result.board': 'دیدن صفحه',
     'play.table.chatLead': 'هرکسی که سر این میز است می‌تواند حرف‌هایت را بخواند.',
+    'play.table.apart': 'کسی را سر این میز مسدود کرده‌ای.',
+    'play.table.apartLead': 'تا وقتی مسدود است، گفتگوی این میز برای هر دوی شما پنهان می‌ماند. بازی ادامه دارد.',
     'play.table.quiet': 'گفتگو سر این میز خاموش است.',
     'play.table.quietLead': 'میزبان یک بازی بی‌صدا باز کرده. نتیجه‌ها و دعوت‌ها همچنان این‌جا می‌آیند.',
     'play.menu.title': 'این میز',

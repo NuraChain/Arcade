@@ -74,6 +74,30 @@ address bar into a server error. `membership()` checks the shape before the quer
 **A block hides the thread, not just the person.** The membership row stays - unblocking has to
 give the conversation back - so the list and every read filter on the block instead.
 
+**At a table that is the table's chat, for both of them, while the game goes on - and the chat
+says so.** Somebody can be blocked from their plate, so this is one press away. `table-chat` drew
+a refused read as "No messages yet" over a composer that could not send, which is the empty list
+a refused fetch must never be. It has two states for it now (`data-unread`), and nothing to say
+into in either.
+
+- `apart`: the READER has blocked somebody sitting there, which the browser knows without
+  asking. The chat says that, and that it is hidden from both while the block stands. The thread
+  is closed, so nothing asks the server for it: opening such a table used to log five 404s.
+- It comes back when the SERVER has lifted the block. `social.apart(id)` is true while the guess
+  or the server's last word says blocked: a block shows at once, and a lift shows when it is
+  true. `isBlocked` follows the guess alone, and with it the chat was asked for in the same turn
+  as the unblock was sent, ahead of it, and refused twice. A lift the server refuses never shows
+  the chat at all.
+- `lost`: the read was refused for any other reason. It says the conversation could not be loaded
+  and offers to try again, which is all the OTHER side of a block is told: the reason is not
+  theirs to learn, and a 404 is no more of an oracle with a sentence over it. What had been read
+  stays when a later read fails.
+
+The one read that goes out in the flush that makes the guess of a block is sent before the block
+itself is, so it is answered. `table-chat.spec.ts` and `social.spec.ts` hold all of it, in both
+languages. The chat spec's fixtures used to mount the chat on rooms the fake server refuses to
+read and never noticed; `shown()` gives the server the room now.
+
 **Nothing invents a message any more.** The store used to run an ambient timer that wrote lines
 from people who were not there, and a per-send timer that typed a reply back; both are deleted.
 Until the realtime work lands, the only thing that produces a message is somebody sending one, and
