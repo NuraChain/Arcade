@@ -33,43 +33,42 @@ SERVICE_PATH_APP="../.dist-backend/main.js"
 SERVICE_DIR="${SERVICE_DIR:-/etc/systemd/system}"
 SERVICE_FILE="$SERVICE_DIR/${SERVICE_NAME}.service"
 
-# Three things a missing build turns into a restart loop at 3am. Say so here instead.
-if [ ! -f "$SERVICE_PATH/$SERVICE_PATH_APP" ]; then
-  echo "warning: .dist-backend/main.js is missing - run 'npm run build' before starting" >&2
-fi
+# A service installed without these restarts in a loop at 3am, or runs open. Refuse here instead.
+REFUSED=0
 
-if [ ! -f "$ROOT/.dist-frontend/index.html" ]; then
-  echo "warning: .dist-frontend is missing - the server would answer the api and 404 every page" >&2
-fi
+refuse()
+{
+  echo "error: $1" >&2
+  REFUSED=1
+}
 
-if [ ! -f "$ROOT/.dist-server/entry.server.js" ]; then
-  echo "warning: .dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
-fi
+[ -f "$SERVICE_PATH/$SERVICE_PATH_APP" ] || refuse ".dist-backend/main.js is missing - run 'npm run build' first"
+[ -f "$ROOT/.dist-frontend/index.html" ] || refuse ".dist-frontend is missing - run 'npm run build' first"
+[ -f "$ROOT/.dist-server/entry.server.js" ] || refuse ".dist-server/entry.server.js is missing - run 'npm run build' first"
 
 if [ ! -f "$ROOT/.env" ]; then
-  echo "warning: .env is missing at the repository root - the service would boot against the defaults" >&2
+  refuse ".env is missing at the repository root - copy .env.example to .env and fill it in"
 else
-  # Three values decide whether this process is a SERVER or half of a development pair, and every
-  # one of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
-  # `PUBLIC_ORIGIN` pointing anywhere but the real origin makes the realtime gate refuse every
-  # socket and makes every wallet signature a claim about somewhere else; `NODE_ENV` short of
-  # production runs `syncSchema` on every boot; and a `SESSION_SECRET` that is empty is the only
-  # thing standing between a cookie and a forged session.
-  # Only an EXPLICIT false is worth saying anything about: absent means "serve them", because under
-  # NODE_ENV=production this process is the server. Warning on absent would fire for the correct
-  # configuration, which is the same noise the schema note above was fixed for.
+  # PUBLIC_ORIGIN is the site in every sign-in message, the realtime origin check and the cookie's
+  # site at once; an empty SESSION_SECRET is the only thing between a cookie and a forged session.
+  grep -q '^PUBLIC_ORIGIN=https\?://' "$ROOT/.env" ||
+    refuse "PUBLIC_ORIGIN is not set to the address people use, such as https://play.example.com"
+
+  grep -qE '^SESSION_SECRET=.+' "$ROOT/.env" ||
+    refuse "SESSION_SECRET is empty - set it to a long random string, such as the output of 'openssl rand -hex 32'"
+
+  # Only an explicit false is worth a word: this process serves the client unless told not to.
   ! grep -q '^SERVE_PAGES=false' "$ROOT/.env" ||
     echo "warning: SERVE_PAGES=false - this process answers the api and 404s every page unless something else serves the client" >&2
 
-  grep -q '^PUBLIC_ORIGIN=https\?://' "$ROOT/.env" ||
-    echo "warning: PUBLIC_ORIGIN is unset - the realtime origin gate refuses every socket without it" >&2
-
-  grep -qE '^SESSION_SECRET=.+' "$ROOT/.env" ||
-    echo "warning: SESSION_SECRET is empty - sessions cannot be signed" >&2
+  ! grep -q '^DATABASE_SYNC=true' "$ROOT/.env" ||
+    echo "warning: DATABASE_SYNC=true builds the schema on every start - production runs 'npm run schema:sync' on purpose instead" >&2
 fi
 
+[ "$REFUSED" -eq 0 ] || exit 1
+
 # The schema is built from the entities, and production does it as a DELIBERATE act rather than as a
-# side effect of starting - `main.ts` runs the sync only under NODE_ENV=development. A first deploy
+# side effect of starting - `main.ts` runs the sync only when DATABASE_SYNC=true. A first deploy
 # that skips it boots against a database with no tables, and an entity change deployed without it
 # runs against the old shape.
 #
@@ -91,8 +90,8 @@ After=network.target postgresql.service
 [Service]
 RestartSec=5
 Restart=always
-# Without this the server runs its DEVELOPMENT path, which includes building the schema from the
-# entities on every boot - a thing production does on purpose or not at all.
+# Without this the server runs its DEVELOPMENT path, which seeds the wallet fixtures and trusts no
+# proxy. It wins over whatever .env says, because .env never overrides the process's environment.
 Environment=NODE_ENV=production
 WorkingDirectory=$SERVICE_PATH
 # Quoted: systemd splits ExecStart on whitespace, and an interpreter installed under a path with

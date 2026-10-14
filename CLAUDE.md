@@ -56,7 +56,9 @@ only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Po
 
 **On a VPS it runs under systemd** via `scripts/service-*.sh`, with `WorkingDirectory` = `backend/`;
 `main.ts` reads the root `.env` whatever the working directory. The install script refuses a missing
-build, SSR bundle, `PUBLIC_ORIGIN` or `SESSION_SECRET`.
+build, SSR bundle, `.env`, `PUBLIC_ORIGIN` or `SESSION_SECRET` (it only warned, so a service could be
+installed that crash-looped or signed nothing), and warns on `DATABASE_SYNC=true`. The steps from a
+clean clone to a running service are in `README.md`, where whoever runs the server will look.
 
 **The database** is Postgres and the ENTITIES are its only description: no migrations, `syncSchema()`
 whenever `DATABASE_SYNC=true` (development), never TypeORM's own `synchronize: true`. A schema change is: drop the
