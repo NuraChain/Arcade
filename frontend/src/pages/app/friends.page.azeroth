@@ -5,7 +5,6 @@ import PageHeader from '../../components/app/page-header.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
 import GroupForm from '../../components/social/group-form.component.azeroth';
-import PersonActions from '../../components/social/person-actions.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -134,10 +133,6 @@ export default component FriendsPage()
         void chat.openDirect(person.id).then((id) => navigate(`/app/chats/${ id }`));
     };
 
-    const more = (person: Person) =>
-    {
-        overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
-    };
 
     const makeGroup = () =>
     {
@@ -218,23 +213,14 @@ export default component FriendsPage()
                                 <li>
                                     <FriendRow
                                         person={ person }
-                                        onHold={ () => more(person) }
                                         actions={
                                             <>
-                                                <Show
-                                                    when={ roomy }
-                                                    fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => play(person) } /> }
-                                                >
-                                                    { () =>
-                                                        <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => play(person) }>
-                                                            { locale.t('person.play') }
-                                                        </Button>
-                                                    }
-                                                </Show>
+                                                <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => play(person) }>
+                                                    { locale.t('person.play') }
+                                                </Button>
                                                 <Show when={ roomy }>
                                                     { () => <IconButton icon="chats" label={ locale.t('person.message') } variant="ghost" size="sm" onClick={ () => message(person) } /> }
                                                 </Show>
-                                                <IconButton icon="more" label={ locale.t('actions.title') } variant="ghost" size="sm" onClick={ () => more(person) } />
                                             </>
                                         }
                                     />

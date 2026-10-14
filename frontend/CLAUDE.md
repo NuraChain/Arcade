@@ -1077,6 +1077,17 @@ page. Each is one button now, `aria-haspopup="dialog"`, that opens the sheet thr
 the chevron that said a row went somewhere is a quiet "more" mark. `person-press.spec.ts` and
 `leaderboard.spec.ts` hold them.
 
+**A person's row is the press, and nothing beside it says More.** `FriendRow` - a friend, a
+request, a group's member, a search result, somebody blocked or muted in Settings - linked the
+person to their page, and the friends list and a group's members added a More button beside it
+for the sheet, the friends list a long press as well. The person in the row is now the button that
+opens the sheet, so that More and the hold went, and what stays beside a person is what the row is
+for: play, message, accept, withdraw, unblock, hand over, remove. A friend's Play says "Play" on
+a phone too, where it was a lightning bolt beside the More. A row with nothing beside it ends in
+the "more" mark. The head of a thread with one other person keeps its More, named "More
+about {name}" (`actions.about`), and its picture opens the same sheet. `friends-page.spec.ts`,
+`groups.spec.ts` and `chat-page.spec.ts` hold it.
+
 **Everything the reader does about another person is shown the same way**: a friend request
 sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
 store lays its guesses over ONE shape made from the graph (`Known`: who is a friend, who is

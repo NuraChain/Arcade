@@ -392,6 +392,8 @@ export default component ChatPage()
 
     const goBack = () => leave({ back, replace }, shell.depth(), '/app/chats');
 
+    const about = (personId: string) => overlay.open(PersonActions, { personId }, { label: locale.t('actions.title') });
+
     derived split = device.posture() === 'sidebar';
 
     derived crowd = group !== null || others.length > 1 || conversation?.kind === 'game';
@@ -440,9 +442,9 @@ export default component ChatPage()
                                     let={ crew }
                                     fallback={
                                         <Show when={ other } let={ peer } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
-                                            <Link to={ () => `/app/people/${ peer.handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
+                                            <button type="button" class="flex h-11 w-10 shrink-0 cursor-pointer items-center justify-center" aria-haspopup="dialog" onClick={ () => about(peer.id) }>
                                                 <Avatar person={ peer } size="sm" presence={ presence.dot(peer.id) } />
-                                            </Link>
+                                            </button>
                                         </Show>
                                     }
                                 >
@@ -465,9 +467,9 @@ export default component ChatPage()
                                 <Show when={ other } let={ peer }>
                                     <IconButton
                                         icon="more"
-                                        label={ locale.t('actions.title') }
+                                        label={ locale.t('actions.about', { name: peer.displayName }) }
                                         variant="ghost"
-                                        onClick={ () => overlay.open(PersonActions, { personId: peer.id }, { label: locale.t('actions.title') }) }
+                                        onClick={ () => about(peer.id) }
                                     />
                                 </Show>
                             </header>

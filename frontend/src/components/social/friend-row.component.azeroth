@@ -1,8 +1,6 @@
-import { Link } from 'azerothjs';
-
 import type { Person } from '../../data/person.ts';
-import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -13,22 +11,10 @@ export default component FriendRow(props: {
     subtitle?: string;
     actions?: Child;
     class?: string;
-    onHold?: () => void;
 })
 {
     const locale = useLocale();
     const presence = usePresence();
-
-    let row: HTMLElement | null = null;
-
-    mount
-    {
-        if (row === null || props.onHold === undefined)
-        {
-            return;
-        }
-        return attachHold(row, () => props.onHold?.());
-    }
 
     derived state = presence.of(props.person.id);
 
@@ -40,19 +26,12 @@ export default component FriendRow(props: {
         ? `@${ props.person.handle }`
         : (state.state === 'away' ? locale.t('common.away') : locale.t('common.online')));
 
-    <div
-        ref={ (element) => row = element }
-        class={ [
-            'group flex min-h-16 items-center gap-3 px-2 py-2.5 transition-colors duration-150 coarse:min-h-16',
-            props.onHold === undefined ? '' : 'holdable',
-            props.class ?? ''
-        ].filter(Boolean).join(' ') }
-    >
-        <Link to={ `/app/people/${ props.person.handle }` } class="flex min-h-11 min-w-0 flex-1 items-center gap-3" prefetch="hover">
+    <div class={ [ 'flex min-h-16 items-center gap-3 px-2 py-2.5 transition-colors duration-150 coarse:min-h-16', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <button type="button" class="group flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 text-start" aria-haspopup="dialog" onClick={ () => aboutPerson(props.person.id) }>
             <Avatar person={ props.person } size="md" presence={ presence.dot(props.person.id) } />
             <span class="flex min-w-0 flex-1 flex-col">
                 <span class="flex items-center gap-1.5">
-                    <span class="truncate text-ui-md font-semibold text-text group-hover:text-accent" dir="auto">{ props.person.displayName }</span>
+                    <span class="truncate text-ui-md font-semibold text-text transition-colors group-hover:text-accent" dir="auto">{ props.person.displayName }</span>
                     <Show when={ minor }>
                         { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
                     </Show>
@@ -60,9 +39,9 @@ export default component FriendRow(props: {
                 <span class="truncate text-ui-sm text-muted" dir="auto">{ status }</span>
             </span>
             <Show when={ !acting }>
-                <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint transition-colors group-hover:text-muted" />
+                <Icon name="more" size={ 16 } class="shrink-0 text-faint transition-colors group-hover:text-muted" />
             </Show>
-        </Link>
+        </button>
         <Show when={ acting }>
             <span class="flex shrink-0 items-center gap-1.5">{ props.actions }</span>
         </Show>

@@ -8,7 +8,6 @@ import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupAdd from '../../components/social/group-add.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
 import GroupForm from '../../components/social/group-form.component.azeroth';
-import PersonActions from '../../components/social/person-actions.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
@@ -337,38 +336,25 @@ export default component GroupPage()
                                 <FriendRow
                                     person={ person }
                                     subtitle={ person.id === crew.owner ? locale.t('groups.owner') : undefined }
-                                    actions={
-                                        <span class="flex items-center gap-1">
-                                            <Show when={ owns && person.id !== me }>
-                                                { () =>
-                                                    <>
-                                                        <IconButton
-                                                            icon="crest-crown"
-                                                            label={ locale.t('groups.transfer') }
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={ () => void handOver(crew, person) }
-                                                        />
-                                                        <IconButton
-                                                            icon="close"
-                                                            label={ locale.t('groups.remove') }
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            tone="danger"
-                                                            onClick={ () => void removeMember(crew, person) }
-                                                        />
-                                                    </>
-                                                }
-                                            </Show>
+                                    actions={ owns && person.id !== me
+                                        ? <span class="flex items-center gap-1">
                                             <IconButton
-                                                icon="more"
-                                                label={ locale.t('actions.title') }
+                                                icon="crest-crown"
+                                                label={ locale.t('groups.transfer') }
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={ () => overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') }) }
+                                                onClick={ () => void handOver(crew, person) }
+                                            />
+                                            <IconButton
+                                                icon="close"
+                                                label={ locale.t('groups.remove') }
+                                                variant="ghost"
+                                                size="sm"
+                                                tone="danger"
+                                                onClick={ () => void removeMember(crew, person) }
                                             />
                                         </span>
-                                    }
+                                        : undefined }
                                 />
                             </li>
                         </For>

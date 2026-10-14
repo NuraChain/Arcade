@@ -19,6 +19,13 @@ import { PEOPLE_FIXTURES } from './fixtures.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
+const personOf = (container: HTMLElement, handle: string) =>
+{
+    const name = PEOPLE_FIXTURES.find((one) => one.handle === handle)?.displayName ?? handle;
+
+    return [...container.querySelectorAll<HTMLButtonElement>('li button[aria-haspopup="dialog"]')].find((one) => one.textContent?.includes(name)) ?? null;
+};
+
 const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
@@ -151,7 +158,7 @@ describe('the friends page', () =>
 
     const fieldOf = (container: HTMLElement) => container.querySelector('input[type="search"]') as HTMLInputElement;
 
-    const rowOf = (container: HTMLElement, handle: string) => container.querySelector(`a[href="/app/people/${ handle }"]`)?.closest('li') ?? null;
+    const rowOf = (container: HTMLElement, handle: string) => personOf(container, handle)?.closest('li') ?? null;
 
     const type = async (field: HTMLInputElement, text: string) =>
     {
@@ -337,6 +344,25 @@ describe('the friends page', () =>
         expect(rowOf(container, 'hamed.z')).toBe(stays);
     });
 
+    it('opens what can be done with a friend at a press on them, and draws no More beside the row', async () =>
+    {
+        useOverlay().reset();
+
+        const container = await opened();
+        const sara = personOf(container, 'sara.k')!;
+
+        expect(sara.getAttribute('aria-haspopup'), 'the friend does not say it opens something').toBe('dialog');
+        expect(container.querySelector('li a[href^="/app/people/"]'), 'a friend is still a link to their page').toBeNull();
+        expect([...container.querySelectorAll('li button')].filter((one) => one.querySelector('svg') !== null && /^More/.test(one.getAttribute('aria-label') ?? '')), 'a row still has a More beside the person who is the More').toEqual([]);
+
+        fire(sara, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({ personId: 'sara.k' });
+        useOverlay().reset();
+    });
+
     it('opens the sheet to play with a friend from their row, with a team-up on offer, and opens no table by itself', async () =>
     {
         useOverlay().reset();
@@ -370,12 +396,12 @@ describe('a friend request answered on the friends page', () =>
         const router = createRouter({ routes: table, history: createMemoryHistory('/app/friends?tab=requests'), scroll: false });
         const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
 
-        await vi.waitFor(() => expect(container.querySelector('a[href="/app/people/mahsa"]')).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(personOf(container, 'mahsa')).not.toBeNull(), { timeout: 4000 });
 
         return container;
     };
 
-    const rowOf = (container: HTMLElement, handle: string) => container.querySelector(`a[href="/app/people/${ handle }"]`)?.closest('li') ?? null;
+    const rowOf = (container: HTMLElement, handle: string) => personOf(container, handle)?.closest('li') ?? null;
 
     const press = (row: Element | null, label: string) =>
         fire([...(row?.querySelectorAll('button') ?? [])].find((one) => one.textContent?.trim() === label)!, 'click');

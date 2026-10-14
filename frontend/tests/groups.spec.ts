@@ -11,11 +11,13 @@ import GroupPage from '../src/pages/app/group.page.azeroth';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
+import { PEOPLE_FIXTURES } from './fixtures.ts';
 import '../src/locales/app-catalogue.ts';
 
 let clock: ReturnType<typeof manualClock>;
@@ -78,6 +80,35 @@ describe('the group page', () =>
 
         expect(container.textContent).toContain(useLocale().t('groups.notFound'));
         expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+    });
+
+    it('opens what can be done with a member at a press on them, and draws no More beside the row', async () =>
+    {
+        const container = opened('friday-night-crew');
+        const members = () => container.querySelector(`ul[aria-label="${ useLocale().t('groups.members') }"]`);
+
+        await vi.waitFor(() => expect(members()?.querySelectorAll('li').length).toBeGreaterThan(2), { timeout: 4000 });
+        await settle();
+        useOverlay().reset();
+
+        for (const row of members()!.querySelectorAll('li'))
+        {
+            const drawn = PEOPLE_FIXTURES.filter((one) => row.textContent?.includes(one.displayName));
+            const person = row.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+
+            expect(drawn, 'a member\'s row draws one person').toHaveLength(1);
+            expect(person?.textContent, 'a member is not a press').toContain(drawn[0].displayName);
+            expect([...row.querySelectorAll('button')].filter((one) => /^More/.test(one.getAttribute('aria-label') ?? '')), `${ drawn[0].displayName }'s row still has a More beside them`).toEqual([]);
+
+            fire(person!, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+            expect(useOverlay().items()[0].props).toMatchObject({ personId: drawn[0].handle });
+            useOverlay().reset();
+        }
+
+        expect(members()!.querySelector('a[href^="/app/people/"]'), 'a member is still a link to their page').toBeNull();
     });
 
     it('does not say it could not load a group it is still loading', () =>

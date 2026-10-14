@@ -141,7 +141,7 @@ describe('a page whose lists are read again and answer as they did', () =>
     it('keeps a row somebody still matches while the search is typed on, on Search', async () =>
     {
         const container = opened('/app/search?q=sar', '/app/search', SearchPage);
-        const row = () => container.querySelector('a[href="/app/people/sara.k"]')?.closest('li') ?? null;
+        const row = () => [...container.querySelectorAll('li button[aria-haspopup="dialog"]')].find((one) => one.textContent?.includes('Sara Kamali'))?.closest('li') ?? null;
 
         await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
         await settle();

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import ChatPage from '../src/pages/app/chat.page.azeroth';
@@ -11,6 +11,7 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
@@ -18,6 +19,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
+import { PEOPLE_FIXTURES } from './fixtures.ts';
 
 type Rendered = HTMLElement;
 
@@ -101,6 +103,46 @@ describe('a thread that is read again', () =>
 
         expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
         expect(lost(container, drawn), 'drawn again for the answer it already had').toEqual([]);
+    });
+
+    it('names the button over a thread with one other person after that person', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const other = PEOPLE_FIXTURES.find((one) => one.handle === thread.members.find((handle) => handle !== 'alex'))!;
+        const container = opened(thread.id, 'sidebar');
+        const about = () => [...container.querySelectorAll('header button')].find((one) => one.getAttribute('aria-label') === useLocale().t('actions.about', { name: other.displayName }));
+
+        await vi.waitFor(() => expect(about(), `the header offers what can be done about ${ other.displayName } by name`).toBeDefined(), { timeout: 4000 });
+
+        expect([...container.querySelectorAll('header button')].filter((one) => one.getAttribute('aria-label') === useLocale().t('actions.title')), 'the header has a button named just "More"').toEqual([]);
+    });
+
+    it('opens what can be done with the other person of a thread at a press on their picture', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const other = thread.members.find((handle) => handle !== 'alex')!;
+        const container = opened(thread.id, 'sidebar');
+        const picture = () => container.querySelector<HTMLButtonElement>('header button[aria-haspopup="dialog"]');
+
+        useOverlay().reset();
+
+        await vi.waitFor(() => expect(picture()?.querySelector('[role="img"]')).not.toBeNull(), { timeout: 4000 });
+
+        expect(container.querySelector('header a[href^="/app/people/"]'), 'the picture is still a link to their page').toBeNull();
+
+        fire(picture()!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({ personId: other });
+        useOverlay().reset();
+
+        fire([...container.querySelectorAll<HTMLButtonElement>('header button')].find((one) => one.getAttribute('aria-label')?.startsWith('More about'))!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props, 'the More beside the picture opens something else').toMatchObject({ personId: other });
+        useOverlay().reset();
     });
 
     it('keeps the picture and the words of a thread nobody has written in', async () =>
