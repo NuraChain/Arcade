@@ -1060,9 +1060,10 @@ throughout, and the sentence in both languages; `play.spec.ts` Play again on the
 **The sheet about a person leads with their profile, and offers the one friend action that is
 true for them.** It began with Message and offered a friend nothing but to be removed, so a
 stranger could not be added from it and a request could not be taken back or accepted. The order
-is the profile, a message, then add, cancel the request or accept theirs (by `relation`, as the
-person's page does), the handle, mute, report, and the two that are asked about first: remove from
-friends and block. Somebody blocked is offered no message and no friend action, as on their page:
+is the profile, a game together for a friend ("Play with {name}", which opens the sheet that
+chooses one, team-ups offered, as a friend's row does), a message, then add, cancel the request
+or accept theirs (by `relation`, as the person's page does), the handle, mute, report, and the two
+that are asked about first: remove from friends and block. Somebody blocked is offered no message and no friend action, as on their page:
 a message to them has nowhere to go. Somebody who opens it about themselves - from their own row
 among a group's members, or any list that holds the reader - is offered their profile and their
 handle and nothing more: it used to offer them a message to themselves, and to mute, report and

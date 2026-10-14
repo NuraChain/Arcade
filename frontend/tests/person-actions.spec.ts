@@ -112,6 +112,30 @@ describe('what can be done about a person', () =>
         expect(friendly(offered(await sheet('sara.k')))).toEqual(['Remove Sara from friends']);
     });
 
+    it('offers a friend a game together, after their profile, and opens the sheet that chooses the game', async () =>
+    {
+        const container = await sheet('sara.k');
+
+        expect(offered(container).slice(0, 3)).toEqual(['View profile', 'Play with Sara', 'Message']);
+
+        fire(action(container, 'Play with Sara')!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items().map((one) => one.id)).toContain('play-with'), { timeout: 4000 });
+
+        expect(useOverlay().items().find((one) => one.id === 'play-with')?.props, 'the game is chosen for somebody else, or alone').toMatchObject({ personId: 'sara.k', teamable: true });
+        expect(closed, 'the sheet about Sara stayed open under the one that chooses a game').toEqual([undefined]);
+    });
+
+    it('offers a game together to a friend and to nobody else', async () =>
+    {
+        for (const who of ['mina', 'maya.c', 'mahsa'])
+        {
+            expect(offered(await sheet(who)).filter((one) => one.startsWith('Play with')), `${ who } was offered a game as a friend`).toEqual([]);
+
+            cleanup();
+        }
+    });
+
     it('offers no way to reach somebody the reader has blocked: no message and no friend action, only their profile, their handle and the way back', async () =>
     {
         await useSocial().block('mina');
