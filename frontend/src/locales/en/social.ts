@@ -257,6 +257,7 @@ export const social = {
     'groups.create': 'New group',
     'groups.createTitle': 'Start a group',
     'groups.createLead': 'A name, a crest, and whoever you play with. You can change all of it later.',
+    'groups.createSubmit': 'Create group',
     'groups.name': 'Name',
     'groups.nameHint': 'What everyone will call it.',
     'groups.nameShort': 'Give the group a name.',

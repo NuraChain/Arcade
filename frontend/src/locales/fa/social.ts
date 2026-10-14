@@ -260,6 +260,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'groups.create': 'گروه تازه',
     'groups.createTitle': 'یک گروه بساز',
     'groups.createLead': 'یک نام، یک نشان، و هرکسی که با او بازی می‌کنی. بعداً همه‌اش عوض می‌شود.',
+    'groups.createSubmit': 'ساخت گروه',
     'groups.name': 'نام',
     'groups.nameHint': 'چیزی که همه صدایش می‌کنند.',
     'groups.nameShort': 'به گروه یک نام بده.',

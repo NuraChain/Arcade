@@ -436,6 +436,18 @@ describe('the group form', () =>
         expect(close).toHaveBeenCalled();
     });
 
+    it('names its button for what it makes, as the table form does, in either language', () =>
+    {
+        const submit = (container: HTMLElement) => container.querySelector('form button[type="submit"]')?.textContent?.trim();
+
+        expect(submit(open().container)).toBe('Create group');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        expect(submit(open().container)).toBe('ساخت گروه');
+    });
+
     it('offers every crest and no others', () =>
     {
         const { container } = open();
