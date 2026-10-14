@@ -392,6 +392,17 @@ async function main()
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/start`);
         }
     };
+
+    const stopDealing = async (page) =>
+    {
+        const seen = await page.request.get(`${ BASE }/api/tables/${ tables.poker }`);
+        const matchId = seen.ok() ? (await seen.json()).matchId : undefined;
+
+        if (matchId !== undefined)
+        {
+            await page.request.post(`${ BASE }/api/matches/${ matchId }/resign`, { data: { key: `matrix-${ matchId }` } });
+        }
+    };
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -479,6 +490,11 @@ async function main()
                     if (SHOTS && problems.length > 0)
                     {
                         await page.screenshot({ path: join(OUT, `${ label }.png`), fullPage: false }).catch(() => undefined);
+                    }
+
+                    if (route.id === 'play-poker')
+                    {
+                        await stopDealing(page);
                     }
 
                     rows.push({ label, problems: problems.length });

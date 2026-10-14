@@ -3879,6 +3879,13 @@ tour account's ready, then the start. `fit-pass.mjs` readies every player before
 finished table for the same reason, and looks before every cell, which is sooner than a second sweep
 can come round.
 
+**And it ends that game as soon as the poker cell is measured** (`stopDealing`, a resignation).
+Left running, its clock handed the turn to the tour account every minute while the matrix was
+measuring other pages, and the cues store said "Your turn at Poker" over whichever one it was. On
+a table page that toast is held at the top, over the seat across, and a run on 2026-10-14 failed
+`en-430l-play-backgammon` because a probe of the opponent's plate landed on it. The page was
+right and so was the toast; the matrix had a game going that nobody was watching.
+
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
