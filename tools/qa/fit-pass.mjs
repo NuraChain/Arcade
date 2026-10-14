@@ -103,7 +103,21 @@ const browser = await launch();
 
 const dana = await seat(browser, 'dana.w');
 
-const helper = await walletSeat(browser, `Fit helper ${ Math.floor(Math.random() * 100000) }`);
+/**
+ * How many waiting tables one helper sits at before another takes over.
+ *
+ * An account may sit at fifty tables (`SEATED_MAX`), and the helper takes a chair at one waiting
+ * table for every player the pass has ever shown a table to. With eighteen specs that is more
+ * than fifty: the fifty-first claim was refused, nobody read its answer, the table of one would
+ * not start, and the pass died on a 409 in its last spec with `ludo-4-teams` never measured.
+ */
+const HELPED_MOST = 40;
+
+const helperCalled = () => walletSeat(browser, `Fit helper ${ Math.floor(Math.random() * 100000) }`);
+
+let helper = await helperCalled();
+
+let helped = 0;
 
 const views = new Map();
 
@@ -260,9 +274,23 @@ const waitOn = async (player) =>
 {
     const tableId = await create(player, WAITING, 'a table waiting on a player');
 
-    await helper.api('POST', `/tables/${ tableId }/seat`);
+    if (helped >= HELPED_MOST)
+    {
+        helper = await helperCalled();
+        helped = 0;
+    }
 
-    for (const one of [player, helper])
+    helped += 1;
+
+    const beside = helper;
+    const sat = await beside.api('POST', `/tables/${ tableId }/seat`);
+
+    if (!sat.ok)
+    {
+        throw new Error(`fit-pass: the helper could not sit at a waiting table (${ sat.status }) ${ JSON.stringify(sat.body).slice(0, 160) }`);
+    }
+
+    for (const one of [player, beside])
     {
         await one.api('POST', `/tables/${ tableId }/ready`, { ready: true });
     }
@@ -271,7 +299,7 @@ const waitOn = async (player) =>
 
     if (!started.ok)
     {
-        throw new Error(`fit-pass: a waiting table would not start (${ started.status })`);
+        throw new Error(`fit-pass: a waiting table would not start (${ started.status }) ${ JSON.stringify(started.body).slice(0, 160) }`);
     }
 
     const matchId = started.body.id;
@@ -279,16 +307,16 @@ const waitOn = async (player) =>
 
     for (let step = 0; step < 40; step += 1)
     {
-        const state = await matchOf(helper, matchId);
+        const state = await matchOf(beside, matchId);
 
         if (state.turn === theirs)
         {
-            return { tableId, players: [player, helper] };
+            return { tableId, players: [player, beside] };
         }
 
         const move = (state.view.moves ?? []).length > 0 ? { kind: 'ludo', verb: 'move', piece: state.view.moves[0] } : { kind: 'ludo', verb: 'roll' };
 
-        await play(helper, matchId, state.rev, move, `fit-wait-${ step }-${ matchId }`);
+        await play(beside, matchId, state.rev, move, `fit-wait-${ step }-${ matchId }`);
     }
 
     throw new Error('fit-pass: a waiting table never came round to its player');

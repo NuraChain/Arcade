@@ -93,6 +93,19 @@ with the key of the page that was reloaded, the shell once took the profile for 
 been on, and the arrow went to Friends. A page opened by a link has no stamp to collide with. Only
 a pass that keeps nothing in the page across a reload may ask it, which is why it is Ludo's.
 
+**The fit pass's helper hands over before it runs out of chairs.** The pass keeps a table waiting
+on every player it shows a table to (the header says so, and the pass measures that), and one
+helper account took the other chair at each. An account may sit at fifty tables (`SEATED_MAX`).
+The specs seat fifty-two players beside the fixture, so the helper is asked for fifty-three
+chairs; it was asked for exactly fifty until `ludo-4-rolled` brought three more, and the specs
+were run a game at a time after that, so no run reached the end. The fifty-first claim was
+refused, nobody read its answer, a table of one would not start, and the pass died on a 409 in
+its last spec with `ludo-4-teams` never measured. A helper is replaced after forty tables
+(`HELPED_MOST`), and a refused claim or start says what it was answered. **A spec added to the
+pass is a reason to run the WHOLE pass once**, not only its own cells. A pass that dies leaves
+its tables in `dana.w`'s list: the matrix that ran next found a real overflow that way, and
+nothing should count on it.
+
 ## The responsive matrix
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both
