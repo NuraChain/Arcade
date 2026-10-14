@@ -35,7 +35,6 @@
         "@azerothjs/devtools": "2.1.0",
         "@azerothjs/eslint-plugin": "2.1.0",
         "@azerothjs/language-server": "2.1.0",
-        "@azerothjs/logger": "2.1.0",
         "@azerothjs/testing": "2.1.0",
         "@azerothjs/typescript-plugin": "2.1.0",
         "@eslint/js": "^10.0.1",

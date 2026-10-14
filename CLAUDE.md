@@ -125,7 +125,7 @@ Allman braces, 4-space indent, single quotes, no trailing comma, LF. `npm run ch
 
 ## The framework is a dependency
 
-`azerothjs` and the thirteen `@azerothjs/*` packages are pinned EXACTLY at `2.1.0` in all three
+`azerothjs` and the twelve `@azerothjs/*` packages are pinned EXACTLY at `2.1.0` in all three
 manifests; a framework fix arrives by bumping the pin, deliberately. `npm ls azerothjs` must show ONE
 node - two runtimes are two signal graphs and effects silently stop firing (`resolve.dedupe` in the
 vite config is for the same reason). TypeScript stays `^6.0.3`: 7 ships no JS compiler API for the
