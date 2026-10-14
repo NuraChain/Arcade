@@ -140,7 +140,7 @@ function fakeConnection()
     return connection;
 }
 
-function side(handle: string, own: string)
+function side(handle: string, own: string, context?: AudioContext)
 {
     const connections: ReturnType<typeof fakeConnection>[] = [];
     const sent: { to: string; join: string; signal: VoiceSignal }[] = [];
@@ -154,6 +154,7 @@ function side(handle: string, own: string)
         send: (to, join, signal) => sent.push({ to, join, signal }),
         onLink: (who, link) => links.push([who, link]),
         onLevel: (who, level) => levels.push([who, level]),
+        ...(context === undefined ? {} : { context: () => context }),
         connect: () =>
         {
             const made = fakeConnection();
@@ -191,6 +192,195 @@ const DANA = { who: 'dana', join: 'd1' };
 const asking = () => side('dana', 'd1');
 
 const waiting = () => side('mina', 'm1');
+
+interface Node
+{
+    kind: string;
+    into: Node[];
+    off: boolean;
+    gain?: { value: number };
+    stream?: unknown;
+}
+
+function fakeContext()
+{
+    const nodes: Node[] = [];
+    const node = (kind: string, extra: Partial<Node> = {}) =>
+    {
+        const one: Node & { connect(next: Node): Node; disconnect(): void; getFloatTimeDomainData(): void; fftSize: number } = {
+            kind,
+            into: [],
+            off: false,
+            fftSize: 0,
+            ...extra,
+            connect(next)
+            {
+                one.into.push(next);
+                return next;
+            },
+            disconnect()
+            {
+                one.off = true;
+            },
+            getFloatTimeDomainData: () => undefined
+        };
+
+        nodes.push(one);
+        return one;
+    };
+
+    const context = {
+        nodes,
+        createMediaStreamSource: (stream: unknown) => node('source', { stream }),
+        createGain: () => node('gain', { gain: { value: 1 } }),
+        createMediaStreamDestination: () => node('out', { stream: { boosted: true } }),
+        createAnalyser: () => node('analyser')
+    };
+
+    return context;
+}
+
+describe('how loud one person is heard', () =>
+{
+    const SOUND = { heard: 'mina' };
+
+    const heard = (context?: ReturnType<typeof fakeContext>) =>
+    {
+        const asks = side('dana', 'd1', context as unknown as AudioContext | undefined);
+        const sources = new Map<HTMLMediaElement, unknown>();
+        const played = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined);
+        const carried = vi.spyOn(HTMLMediaElement.prototype, 'srcObject', 'set').mockImplementation(function (this: HTMLMediaElement, value: unknown)
+        {
+            sources.set(this, value);
+        });
+
+        asks.sees(MINA);
+
+        const arrive = () => (asks.connection.ontrack as unknown as (event: { track: unknown; streams: unknown[] }) => void)({ track: {}, streams: [SOUND] });
+        const players = () => [...document.body.querySelectorAll('audio')];
+
+        return { asks, sources, arrive, players, done: () =>
+        {
+            asks.call.close();
+            played.mockRestore();
+            carried.mockRestore();
+        } };
+    };
+
+    it('plays somebody at their volume on the element itself while they are no louder than full', () =>
+    {
+        const context = fakeContext();
+        const one = heard(context);
+
+        try
+        {
+            one.arrive();
+            one.asks.call.setVolume('mina', 0.5);
+
+            expect(one.players()).toHaveLength(1);
+            expect(one.players()[0].volume).toBeCloseTo(0.5);
+            expect(one.sources.get(one.players()[0])).toBe(SOUND);
+            expect(context.nodes.filter((node) => node.kind === 'gain'), 'a gain was built for somebody turned down').toHaveLength(0);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('turns somebody above full through a gain, keeps the sound flowing beside it, and goes back to the element below it', () =>
+    {
+        const context = fakeContext();
+        const one = heard(context);
+
+        try
+        {
+            one.arrive();
+            one.asks.call.setVolume('mina', 1.6);
+
+            const gain = context.nodes.find((node) => node.kind === 'gain')!;
+            const out = context.nodes.find((node) => node.kind === 'out')!;
+            const [speaker, hold] = one.players();
+
+            expect(gain.gain!.value).toBeCloseTo(1.6);
+            expect(context.nodes.some((node) => node.kind === 'source' && node.stream === SOUND && node.into.includes(gain)), 'the gain is not fed her sound').toBe(true);
+            expect(gain.into).toContain(out);
+            expect(one.sources.get(speaker), 'what is heard is not the turned-up sound').toBe(out.stream);
+            expect(speaker.volume).toBe(1);
+            expect(hold.muted, 'the sound kept flowing for the gain was heard as well').toBe(true);
+            expect(one.sources.get(hold)).toBe(SOUND);
+
+            one.asks.call.setVolume('mina', 0.8);
+
+            expect(one.players(), 'the element that kept the sound flowing was left behind').toHaveLength(1);
+            expect(one.sources.get(one.players()[0])).toBe(SOUND);
+            expect(one.players()[0].volume).toBeCloseTo(0.8);
+            expect(gain.off).toBe(true);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('plays somebody turned above full before their sound arrived at that volume when it comes', () =>
+    {
+        const context = fakeContext();
+        const one = heard(context);
+
+        try
+        {
+            one.asks.call.setVolume('mina', 2);
+            one.arrive();
+
+            expect(context.nodes.find((node) => node.kind === 'gain')?.gain?.value).toBe(2);
+            expect(one.sources.get(one.players()[0])).toBe(context.nodes.find((node) => node.kind === 'out')!.stream);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('leaves nothing playing when somebody turned above full hangs up', () =>
+    {
+        const context = fakeContext();
+        const one = heard(context);
+
+        try
+        {
+            one.arrive();
+            one.asks.call.setVolume('mina', 1.5);
+            one.asks.sees();
+
+            expect(one.players()).toHaveLength(0);
+            expect(context.nodes.filter((node) => node.kind !== 'analyser').every((node) => node.off || node.kind === 'out')).toBe(true);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('plays somebody at full, and no louder, where there is nothing to turn them up with', () =>
+    {
+        const one = heard();
+
+        try
+        {
+            one.arrive();
+            one.asks.call.setVolume('mina', 1.7);
+
+            expect(one.players()).toHaveLength(1);
+            expect(one.players()[0].volume).toBe(1);
+            expect(one.sources.get(one.players()[0])).toBe(SOUND);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+});
 
 describe('a call between two players', () =>
 {

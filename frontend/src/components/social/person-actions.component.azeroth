@@ -9,8 +9,10 @@ import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
+import { LOUDEST, useVoice } from '../../stores/voice.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
+import Slider from '../ui/slider.component.azeroth';
 import ReportSheet from './report-sheet.component.azeroth';
 import { copyText } from '../../lib/clipboard.ts';
 import { attempt } from '../../lib/attempt.ts';
@@ -41,9 +43,16 @@ export default component PersonActions(props: OverlayProps & {
     const chat = useChat();
     const overlay = useOverlay();
     const people = usePeople();
+    const voice = useVoice();
     const { navigate } = useNavigate();
 
     derived person = people.byHandle(props.personId) ?? null;
+
+    derived hearing = voice.table() !== null && voice.people().some((one) => one.who === props.personId && !one.me && one.talk);
+
+    derived level = voice.volumeOf(props.personId);
+
+    derived silenced = level === 0;
 
     derived name = person === null ? props.personId : person.displayName.split(' ')[0];
 
@@ -211,6 +220,28 @@ export default component PersonActions(props: OverlayProps & {
             </span>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
         </header>
+        <Show when={ hearing }>
+            <section class="mx-1 mb-1 flex items-end gap-2 rounded-tile border border-line bg-field px-3 pb-1 pt-2.5" aria-label={ locale.t('voice.title') }>
+                <Slider
+                    class="min-w-0 flex-1"
+                    value={ level }
+                    min={ 0 }
+                    max={ LOUDEST }
+                    ticks={ [1] }
+                    step={ 0.05 }
+                    label={ locale.t('voice.volumeOf', { name }) }
+                    valueText={ locale.n(level, { style: 'percent' }) }
+                    onChange={ (value) => voice.setLevel(props.personId, value) }
+                />
+                <IconButton
+                    icon={ silenced ? 'sound-off' : 'sound' }
+                    label={ locale.t(silenced ? 'voice.unsilence' : 'voice.silence', { name }) }
+                    variant="ghost"
+                    pressed={ silenced }
+                    onClick={ () => voice.silence(props.personId) }
+                />
+            </section>
+        </Show>
         <ul class="flex flex-col gap-0.5">
             <For each={ actions } key={ (action) => action.id } let={ action }>
                 <li>

@@ -8,7 +8,7 @@ import { keyName } from '../src/lib/talk-key.ts';
 import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -356,6 +356,54 @@ describe('voice at a table', () =>
         expect(useVoice().volumeOf('sara.k')).toBeCloseTo(0.4);
         expect(useVoice().volumeOf('mina')).toBe(1);
         expect(useVoice().people().find((person) => person.who === 'sara.k')?.volume).toBeCloseTo(0.4);
+    });
+
+    it('keeps a person\'s volume on this device for the next call, and writes nothing for somebody at full', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+
+        useVoice().setLevel('sara.k', 0.4);
+        useVoice().setLevel('mina', 1);
+
+        expect(useSettings().settings().voiceLevels).toEqual({ 'sara.k': 0.4 });
+
+        useVoice().leave();
+        await useVoice().join(TABLE);
+        await room();
+        calls.at(-1)!.deps.onLink('sara.k', 'connected');
+
+        expect(calls.at(-1)!.volumes['sara.k'], 'the next call played her at full again').toBeCloseTo(0.4);
+        expect(useVoice().volumeOf('sara.k')).toBeCloseTo(0.4);
+    });
+
+    it('hears a person again at the volume they had before they were silenced', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+
+        useVoice().setLevel('sara.k', 0.6);
+        useVoice().silence('sara.k');
+
+        expect(useVoice().volumeOf('sara.k')).toBe(0);
+        expect(calls[0].volumes['sara.k']).toBe(0);
+
+        useVoice().silence('sara.k');
+
+        expect(useVoice().volumeOf('sara.k'), 'unmuting her put her back at full').toBeCloseTo(0.6);
+        expect(calls[0].volumes['sara.k']).toBeCloseTo(0.6);
+    });
+
+    it('holds a volume between nothing and the loudest there is', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+
+        useVoice().setLevel('sara.k', -3);
+        expect(useVoice().volumeOf('sara.k')).toBe(0);
+
+        useVoice().setLevel('sara.k', 40);
+        expect(useVoice().volumeOf('sara.k')).toBe(LOUDEST);
     });
 
     it('stops the microphone a superseded join was granted, rather than leaving it live with nothing holding it', async () =>

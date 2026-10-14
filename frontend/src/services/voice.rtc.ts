@@ -44,12 +44,22 @@ interface Peer
     connection: RTCPeerConnection;
     sender: RTCRtpSender | null;
     audio: HTMLAudioElement | null;
+    stream: MediaStream | null;
+    boost: Boost | null;
     meter: (() => void) | null;
     making: boolean;
     ignoring: boolean;
     settling: boolean;
     polite: boolean;
     volume: number;
+}
+
+interface Boost
+{
+    source: MediaStreamAudioSourceNode;
+    gain: GainNode;
+    out: MediaStreamAudioDestinationNode;
+    hold: HTMLAudioElement;
 }
 
 const LEVEL_MS = 120;
@@ -130,6 +140,66 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
     };
 
+    const unboost = (peer: Peer) =>
+    {
+        if (peer.boost === null)
+        {
+            return;
+        }
+
+        peer.boost.source.disconnect();
+        peer.boost.gain.disconnect();
+        peer.boost.hold.srcObject = null;
+        peer.boost.hold.remove();
+        peer.boost = null;
+    };
+
+    const play = (peer: Peer) =>
+    {
+        if (peer.audio === null || peer.stream === null)
+        {
+            return;
+        }
+
+        const context = deps.context?.() ?? null;
+        const loud = peer.volume > 1 && context !== null;
+
+        if (loud && peer.boost === null)
+        {
+            const hold = document.createElement('audio');
+            const source = context.createMediaStreamSource(peer.stream);
+            const gain = context.createGain();
+            const out = context.createMediaStreamDestination();
+
+            hold.muted = true;
+            hold.autoplay = true;
+            hold.hidden = true;
+            hold.srcObject = peer.stream;
+            document.body.append(hold);
+            void hold.play().catch(() => undefined);
+            source.connect(gain).connect(out);
+            peer.boost = { source, gain, out, hold };
+            peer.audio.srcObject = out.stream;
+            void peer.audio.play().catch(() => undefined);
+        }
+        else if (!loud && peer.boost !== null)
+        {
+            unboost(peer);
+            peer.audio.srcObject = peer.stream;
+            void peer.audio.play().catch(() => undefined);
+        }
+
+        if (peer.boost === null)
+        {
+            peer.audio.volume = Math.min(Math.max(peer.volume, 0), 1);
+        }
+        else
+        {
+            peer.boost.gain.gain.value = peer.volume;
+            peer.audio.volume = 1;
+        }
+    };
+
     const drop = (join: string) =>
     {
         const peer = peers.get(join);
@@ -139,6 +209,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
         peers.delete(join);
         peer.meter?.();
+        unboost(peer);
         if (peer.audio !== null)
         {
             peer.audio.srcObject = null;
@@ -170,6 +241,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             connection,
             sender: null,
             audio: null,
+            stream: null,
+            boost: null,
             meter: null,
             making: false,
             ignoring: false,
@@ -247,7 +320,6 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 const audio = document.createElement('audio');
                 audio.autoplay = true;
                 audio.hidden = true;
-                audio.volume = peer.volume;
                 document.body.append(audio);
                 peer.audio = audio;
 
@@ -257,8 +329,11 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 }
             }
 
+            unboost(peer);
+            peer.stream = stream;
             peer.audio.srcObject = stream;
             void peer.audio.play().catch(() => undefined);
+            play(peer);
 
             const context = deps.context?.() ?? null;
             peer.meter?.();
@@ -429,10 +504,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             if (peer !== undefined)
             {
                 peer.volume = volume;
-                if (peer.audio !== null)
-                {
-                    peer.audio.volume = volume;
-                }
+                play(peer);
             }
         },
 

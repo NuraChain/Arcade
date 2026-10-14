@@ -25,7 +25,7 @@ import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-import { useVoice } from '../../stores/voice.store.ts';
+import { LOUDEST, useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
@@ -564,7 +564,8 @@ export default component TableChat(props: {
                                     <Slider
                                         value={ voice.volumeOf(who) }
                                         min={ 0 }
-                                        max={ 1 }
+                                        max={ LOUDEST }
+                                        ticks={ [1] }
                                         step={ 0.05 }
                                         label={ locale.t('voice.volumeOf', { name: nameOf(who) }) }
                                         valueText={ locale.n(voice.volumeOf(who), { style: 'percent' }) }

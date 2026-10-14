@@ -184,6 +184,17 @@ describe('session', () =>
         expect(account.user()).toBeNull();
     });
 
+    it('forgets how loud the reader made anybody in a call, when the session ends', async () =>
+    {
+        const session = useSession();
+        session.establish(DARYA);
+        useSettings().update({ voiceLevels: { 'sara.k': 0.4, mina: 0 } });
+
+        await session.signOut();
+
+        expect(useSettings().settings().voiceLevels, 'the next person at this browser would read who the last one turned down').toEqual({});
+    });
+
     it('ends every session at once and reports how many it closed', async () =>
     {
         const session = useSession();

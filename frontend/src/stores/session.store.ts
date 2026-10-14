@@ -11,6 +11,7 @@ import { forgetArchive } from '../services/chat.source.ts';
 import { forgetWallets } from '../lib/wallet.ts';
 import { forgetSearchTerms } from '../lib/search-terms.ts';
 import { useRealtime } from './realtime.store.ts';
+import { useSettings } from './settings.store.ts';
 
 export const ASK_AGAIN_MS = 1000;
 
@@ -52,6 +53,7 @@ const surrenderKeys = async () =>
     // next person to sign in on this tab could search the last person's conversations.
     forgetArchive();
     forgetSearchTerms();
+    useSettings().update({ voiceLevels: {} });
 
     await forgetEpochKeys().catch(() => undefined);
     await keyStore().forget().catch(() => undefined);

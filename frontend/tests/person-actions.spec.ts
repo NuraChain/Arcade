@@ -12,7 +12,11 @@ import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
+import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { ApiError, client, server } from './fake-api.ts';
+import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
 
@@ -83,6 +87,132 @@ afterEach(() =>
     useToasts().reset();
     useSocial().reset();
     usePeople().reset();
+});
+
+describe('how loud somebody in the call is, from the sheet about them', () =>
+{
+    let stop: () => void = () => undefined;
+    let frames = 0;
+
+    const call = async (sara: { talk?: boolean; muted?: boolean } = {}) =>
+    {
+        frames += 1;
+        socket.deliver({
+            v: 1,
+            t: 'voice',
+            n: frames,
+            table: 'table-1',
+            joined: true,
+            mine: 'join-alex',
+            peers: [
+                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
+                { who: 'sara.k', muted: sara.muted ?? false, talk: sara.talk ?? true, join: 'join-sara' }
+            ]
+        });
+        await settle();
+    };
+
+    const join = async () =>
+    {
+        await useVoice().join('table-1');
+        await call();
+    };
+
+    const slider = (container: HTMLElement) => container.querySelector<HTMLElement>('[role="slider"]');
+
+    const silencer = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('section button[aria-pressed]');
+
+    beforeEach(() =>
+    {
+        useSettings().reset();
+        useRealtime().reset();
+        socket.reset();
+        useRealtime().start();
+        socket.accept();
+        setVoiceMedia(() => ({ getUserMedia: async () => ({ getTracks: () => [], getAudioTracks: () => [] }) }) as unknown as MediaDevices);
+        setVoiceCall(() => ({
+            setMic: async () => undefined,
+            setMuted: () => undefined,
+            sync: () => undefined,
+            receive: async () => undefined,
+            setVolume: () => undefined,
+            setSink: () => undefined,
+            close: () => undefined
+        }));
+        useVoice().reset();
+        stop = useVoice().start();
+    });
+
+    afterEach(() =>
+    {
+        stop();
+        useVoice().reset();
+        setVoiceCall(null);
+        setVoiceMedia(null);
+        useRealtime().reset();
+        useSettings().reset();
+    });
+
+    it('offers how loud they are, and silencing them, while the reader and they are both in the call', async () =>
+    {
+        await join();
+
+        const container = await sheet('sara.k');
+        const control = slider(container)!;
+
+        expect(control, 'nothing to turn her up or down with').not.toBeNull();
+        expect(control.getAttribute('aria-valuenow')).toBe('1');
+
+        control.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+        await settle();
+
+        expect(useVoice().volumeOf('sara.k')).toBeCloseTo(0.95);
+        expect(control.getAttribute('aria-valuenow')).toBe('0.95');
+
+        silencer(container)!.click();
+        await settle();
+
+        expect(useVoice().volumeOf('sara.k')).toBe(0);
+        expect(silencer(container)!.getAttribute('aria-pressed')).toBe('true');
+
+        silencer(container)!.click();
+        await settle();
+
+        expect(useVoice().volumeOf('sara.k'), 'heard again at full, not at the volume she had').toBeCloseTo(0.95);
+    });
+
+    it('offers nothing about a call to a reader who is in none', async () =>
+    {
+        const container = await sheet('sara.k');
+
+        expect(slider(container)).toBeNull();
+        expect(silencer(container)).toBeNull();
+    });
+
+    it('offers nothing about a call for somebody the reader cannot talk with in it', async () =>
+    {
+        await useVoice().join('table-1');
+        await call({ talk: false });
+
+        const container = await sheet('sara.k');
+
+        expect(slider(container)).toBeNull();
+    });
+
+    it('keeps the slider, and the keyboard on it, while the call around her changes', async () =>
+    {
+        await join();
+
+        const container = await sheet('sara.k');
+        const control = slider(container)!;
+
+        control.focus();
+        await call({ muted: true });
+        await call({ muted: false });
+
+        expect(slider(container), 'the slider was drawn again').toBe(control);
+        expect(document.activeElement).toBe(control);
+    });
 });
 
 describe('what can be done about a person', () =>

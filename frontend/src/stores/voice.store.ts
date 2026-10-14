@@ -71,6 +71,8 @@ const QUIET = 0.04;
 
 export const TALK_KEY = 'KeyV';
 
+export const LOUDEST = 2;
+
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
 
 export function setVoiceMedia(next: (() => MediaDevices | null) | null)
@@ -129,7 +131,7 @@ export const useVoice = createStore((): VoiceApi =>
             }));
         }
     };
-    const [volumes, setVolumes] = createSignal<Readonly<Record<string, number>>>({});
+    const before = new Map<string, number>();
     const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
     const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
 
@@ -144,7 +146,7 @@ export const useVoice = createStore((): VoiceApi =>
 
     const master = () => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
 
-    const own = (who: string) => untrack(volumes)[who] ?? 1;
+    const own = (who: string) => untrack(settings.settings).voiceLevels[who] ?? 1;
 
     const heard = (who: string) => (untrack(deaf) ? 0 : master() * own(who));
 
@@ -331,7 +333,7 @@ export const useVoice = createStore((): VoiceApi =>
         const self = mine();
         const state = links();
         const speaking = loud();
-        const own = volumes();
+        const own = settings.settings().voiceLevels;
         const lost = unreached();
 
         return roster().map((peer) => ({
@@ -356,7 +358,10 @@ export const useVoice = createStore((): VoiceApi =>
 
     const setLevel = (who: string, value: number) =>
     {
-        setVolumes((current) => ({ ...current, [who]: Math.min(Math.max(value, 0), 1) }));
+        const level = Math.min(Math.max(value, 0), LOUDEST);
+        const others = Object.entries(untrack(settings.settings).voiceLevels).filter(([one]) => one !== who);
+
+        settings.update({ voiceLevels: Object.fromEntries(level === 1 ? others : [...others, [who, level]]) });
         call?.setVolume(who, heard(who));
     };
 
@@ -426,7 +431,7 @@ export const useVoice = createStore((): VoiceApi =>
             return person.muted ? 'muted' : 'live';
         },
 
-        volumeOf: (who) => volumes()[who] ?? 1,
+        volumeOf: (who) => settings.settings().voiceLevels[who] ?? 1,
 
         async join(next)
         {
@@ -591,7 +596,15 @@ export const useVoice = createStore((): VoiceApi =>
 
         silence(who)
         {
-            setLevel(who, own(who) === 0 ? 1 : 0);
+            if (own(who) === 0)
+            {
+                setLevel(who, before.get(who) ?? 1);
+                before.delete(who);
+                return;
+            }
+
+            before.set(who, own(who));
+            setLevel(who, 0);
         },
 
         setLevel,
@@ -699,7 +712,7 @@ export const useVoice = createStore((): VoiceApi =>
         reset()
         {
             teardown();
-            setVolumes({});
+            before.clear();
             setInputs([]);
             setOutputs([]);
         }

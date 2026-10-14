@@ -18,6 +18,7 @@ export interface Settings
     voiceTalkKey: string;
     voiceMic: string;
     voiceSpeaker: string;
+    voiceLevels: Record<string, number>;
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
@@ -44,6 +45,7 @@ export function defaultSettings(): Settings
         voiceTalkKey: 'KeyV',
         voiceMic: '',
         voiceSpeaker: '',
+        voiceLevels: {},
         hintMoves: true,
         hintOutcome: true,
         hintRules: true,

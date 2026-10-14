@@ -192,6 +192,72 @@ const loudness = (page) => page.evaluate(() =>
     return audio === undefined ? -1 : audio.volume;
 });
 
+const boosted = (page) => page.evaluate(() =>
+{
+    const playing = [...document.querySelectorAll('audio')].filter((one) => one.srcObject !== null);
+    const hold = playing.find((one) => one.muted);
+    const heard = playing.find((one) => !one.muted);
+
+    return hold === undefined || heard === undefined || heard.srcObject === hold.srcObject ? null : { volume: heard.volume };
+});
+
+const measured = (page) => page.evaluate(async () =>
+{
+    const playing = [...document.querySelectorAll('audio')].filter((one) => one.srcObject !== null);
+    const hold = playing.find((one) => one.muted);
+    const heard = playing.find((one) => !one.muted);
+
+    if (hold === undefined || heard === undefined)
+    {
+        return null;
+    }
+
+    const context = new AudioContext();
+
+    await context.resume();
+
+    const tap = (stream) =>
+    {
+        const analyser = context.createAnalyser();
+
+        analyser.fftSize = 2048;
+        context.createMediaStreamSource(stream).connect(analyser);
+        return analyser;
+    };
+
+    const raw = tap(hold.srcObject);
+    const out = tap(heard.srcObject);
+    const samples = new Float32Array(2048);
+
+    const rms = (analyser) =>
+    {
+        analyser.getFloatTimeDomainData(samples);
+
+        let sum = 0;
+
+        for (const one of samples)
+        {
+            sum += one * one;
+        }
+
+        return Math.sqrt(sum / samples.length);
+    };
+
+    let a = 0;
+    let b = 0;
+
+    for (let step = 0; step < 40; step += 1)
+    {
+        await new Promise((done) => setTimeout(done, 50));
+        a += rms(raw);
+        b += rms(out);
+    }
+
+    await context.close();
+
+    return { raw: Number((a / 40).toFixed(4)), heard: Number((b / 40).toFixed(4)), ratio: Number((b / Math.max(a, 1e-9)).toFixed(3)) };
+});
+
 const linked = (page) => page.evaluate(async () =>
 {
     const calls = (window.__calls ?? []).filter((one) => one.connectionState !== 'closed');
@@ -357,7 +423,52 @@ await slider.first().focus();
 await dana.page.keyboard.press('Home');
 record('turning one person down reaches their audio and nobody else\'s', await until(async () => (await loudness(dana.page)) === 0), String(await loudness(dana.page)));
 await dana.page.keyboard.press('End');
-record('turning them back up restores it', await until(async () => (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+record('turning them up past full plays them through a gain, and the element itself at full', await until(async () => (await boosted(dana.page))?.volume === 1), JSON.stringify(await boosted(dana.page)));
+
+for (let step = 0; step < 20; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+record('turning them back to full plays them from the element alone again', await until(async () => (await boosted(dana.page)) === null && (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+await dana.page.keyboard.press('Escape');
+await dana.page.locator('.table-plate', { hasText: 'Mina' }).locator('.table-plate-press').first().click();
+
+const sheetSlider = dana.page.getByRole('dialog').getByRole('slider', { name: /How loud Mina/ });
+
+record('pressing a plate in the call offers how loud that person is, in the sheet about them', await until(async () => (await sheetSlider.count()) > 0));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-sheet.png' });
+
+await mina.page.getByRole('button', { name: 'Unmute your microphone' }).click();
+await sheetSlider.focus();
+await dana.page.keyboard.press('End');
+
+for (let step = 0; step < 10; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+await until(async () => (await boosted(dana.page)) !== null);
+
+const loudened = await measured(dana.page);
+
+record('turned up to one and a half from the sheet, she is heard about one and a half times as loud as she sends', loudened !== null && loudened.raw > 0.001 && loudened.ratio > 1.3 && loudened.ratio < 1.7, JSON.stringify(loudened));
+
+const kept = await dana.page.evaluate(() => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels ?? null);
+
+record('this browser remembers how loud she is', kept !== null && Math.abs((kept.mina ?? 0) - 1.5) < 0.001, JSON.stringify(kept));
+
+for (let step = 0; step < 10; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+record('back at full from the sheet, she plays from the element alone', await until(async () => (await boosted(dana.page)) === null && (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+await mina.page.getByRole('button', { name: 'Mute your microphone' }).click();
+await dana.page.keyboard.press('Escape');
+await until(async () => (await dana.page.getByRole('dialog').count()) === 0);
 
 await dana.page.getByRole('button', { name: 'Stop hearing everybody' }).click();
 record('deafening silences everybody for the one who deafened', await until(async () => (await loudness(dana.page)) === 0));

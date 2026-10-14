@@ -20,7 +20,7 @@ import { useSeal } from '../src/stores/seal.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { LOUDEST, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -177,6 +177,16 @@ describe('the players beside a table’s chat, while a call is on', () =>
         expect(useOverlay().items().map((entry) => [entry.id, entry.label, entry.props.personId])).toEqual([['person-menu', 'More', 'sara.k']]);
 
         useOverlay().reset();
+    });
+
+    it('offers to turn somebody up past full as well as down, with full marked on the way', async () =>
+    {
+        const { hers } = await atTheTable();
+        const slider = hers().querySelector<HTMLElement>('[role="slider"]')!;
+
+        expect(slider.getAttribute('aria-valuemin')).toBe('0');
+        expect(slider.getAttribute('aria-valuemax'), 'nobody can be heard louder than they send').toBe(String(LOUDEST));
+        expect(slider.querySelectorAll('span[style*="inset-inline-start: 50%"]').length, 'full is not marked on the way').toBeGreaterThan(0);
     });
 
     it('keeps the button that silences somebody, and the reader on it, while the call around them changes', async () =>

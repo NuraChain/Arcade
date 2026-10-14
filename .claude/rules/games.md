@@ -1465,6 +1465,36 @@ this person for me" is a volume of nought and the slider in the players list is 
 The heard volume is master times personal, times nought while deafened, applied on every link as it
 connects.
 
+**A person is turned up or down from wherever they are pressed, past full too, and this browser
+remembers.** The owner: "we cannot increate or decrease seperetly user volum". The slider lived only
+in the Players tab inside the table's chat, went no higher than full, and was forgotten when the
+call ended. Now:
+
+- **The sheet about a person carries it.** Pressing a plate, a chair or a row in the Players list
+  opens the sheet about that person (`aboutPerson`), and while the reader and that person are both in
+  the call, and may talk, the sheet leads with "How loud Mina is for you" and the button that
+  silences her for the reader. It asks a `derived` boolean (`hearing`), so the roster changing under
+  it, which it does at every word anybody says, keeps the slider and the keyboard on it.
+- **From nothing to twice as loud** (`LOUDEST`, 2), with full marked on the way. An audio element
+  stops at a volume of 1, so somebody turned past full is played through a `GainNode` on the call's
+  own `AudioContext`: `MediaStreamSource` to the gain to a `MediaStreamDestination`, whose stream the
+  element plays at 1. A muted element keeps her raw stream playing beside it, because Chromium has
+  been known to hand Web Audio silence for a remote stream that no element plays. At full and below
+  she is the element alone, as before, so nothing changes for anybody nobody turned up. That keeps
+  the browser's echo cancelling where it has always been: on some browsers it covers what an element
+  plays and not what Web Audio does, so a reader with speakers who turns somebody past full may hear
+  that one person echo. Without an `AudioContext` the element alone plays her, at full.
+- **Kept on this device, by handle** (`settings.voiceLevels`), and only where it differs from full,
+  so the next call, at any table, hears her as the reader left her: a link that connects is told its
+  level, as it always was. Silencing remembers the level she had, and hearing her again puts it back
+  rather than full. The levels are a list of other people's handles, so signing out forgets them
+  (`surrenderKeys`), as it forgets search terms.
+
+`voice.spec.ts`, `voice-rtc.spec.ts` (*how loud one person is heard*), `person-actions.spec.ts`
+(*how loud somebody in the call is*), `table-chat.spec.ts` and `app-stores.spec.ts` hold it; the
+voice pass turns Mina past full from the sheet in two real browsers and MEASURES her: at 150% the
+sound the reader hears is about one and a half times the sound she sends (1.46 on the first run).
+
 **The microphone and the speaker are CHOICES, never requirements.** The mic is asked for with
 `deviceId: { ideal }`, so a headset that has been unplugged falls back to the default instead of
 failing the join; the speaker is `setSinkId` on every peer's audio element, offered only where the
