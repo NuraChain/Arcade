@@ -107,25 +107,33 @@ export default component PersonActions(props: OverlayProps & {
                     void chat.openDirect(props.personId).then((id) => navigate(`/app/chats/${ id }`));
                 }
             }];
-        const list: Action[] = [
+        const profile: Action = {
+            id: 'profile',
+            icon: 'me',
+            label: locale.t('chat.viewProfile'),
+            run: () =>
             {
-                id: 'profile',
-                icon: 'me',
-                label: locale.t('chat.viewProfile'),
-                run: () =>
-                {
-                    props.close();
-                    navigate(`/app/people/${ person?.handle ?? props.personId }`);
-                }
-            },
+                props.close();
+                navigate(`/app/people/${ person?.handle ?? props.personId }`);
+            }
+        };
+        const copy: Action = {
+            id: 'handle',
+            icon: 'at',
+            label: locale.t('actions.copyHandle'),
+            run: () => void copyHandle()
+        };
+
+        if (relation === 'me')
+        {
+            return [profile, copy];
+        }
+
+        const list: Action[] = [
+            profile,
             ...message,
             ...befriend,
-            {
-                id: 'handle',
-                icon: 'at',
-                label: locale.t('actions.copyHandle'),
-                run: () => void copyHandle()
-            },
+            copy,
             {
                 id: 'mute',
                 icon: muted ? 'sound' : 'sound-off',

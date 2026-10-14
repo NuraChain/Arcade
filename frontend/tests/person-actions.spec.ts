@@ -120,6 +120,14 @@ describe('what can be done about a person', () =>
         expect(offered(await sheet('mina'))).toEqual(['View profile', 'Copy @handle', 'Mute Mina', 'Report Mina', 'Unblock Mina']);
     });
 
+    it('offers somebody looking at themselves their profile and their handle, and nothing they would do to somebody else', async () =>
+    {
+        const mine = offered(await sheet('alex'));
+
+        expect(mine).toEqual([useLocale().t('chat.viewProfile'), useLocale().t('actions.copyHandle')]);
+        expect(mine.some((one) => /Message|Mute|Report|Block|Add/.test(one)), 'the reader was offered to message, mute, report or block themselves').toBe(false);
+    });
+
     it('asks to be friends at the press, says the request went and closes the sheet', async () =>
     {
         const container = await sheet('mina');

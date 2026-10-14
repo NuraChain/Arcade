@@ -1055,8 +1055,10 @@ stranger could not be added from it and a request could not be taken back or acc
 is the profile, a message, then add, cancel the request or accept theirs (by `relation`, as the
 person's page does), the handle, mute, report, and the two that are asked about first: remove from
 friends and block. Somebody blocked is offered no message and no friend action, as on their page:
-a message to them has nowhere to go. `person-actions.spec.ts` holds the order, each relation and
-both languages.
+a message to them has nowhere to go. Somebody who opens it about themselves - from their own row
+among a group's members, or any list that holds the reader - is offered their profile and their
+handle and nothing more: it used to offer them a message to themselves, and to mute, report and
+block themselves. `person-actions.spec.ts` holds the order, each relation and both languages.
 
 **Everything the reader does about another person is shown the same way**: a friend request
 sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
