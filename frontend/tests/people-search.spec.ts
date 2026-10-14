@@ -370,3 +370,27 @@ describe('a search that the server is not asked', () =>
         expect(handles(), 'an @ made a handle this browser holds unfindable').toContain('sara.k');
     });
 });
+
+describe('a search kept in the address', () =>
+{
+    it('opens on the page the address names, and goes back to the first when the words change', async () =>
+    {
+        const table: Route[] = [{ path: '/app/search', component: (): HTMLElement => SearchPage() as HTMLElement }];
+        const router = createRouter({ routes: table, history: createMemoryHistory('/app/search?q=sara&people=2&messages=3'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+        await settle();
+        await paused();
+
+        expect(router.location().fullPath, 'the page a reload asked for was thrown away').toBe('/app/search?q=sara&people=2&messages=3');
+
+        const field = container.querySelector<HTMLInputElement>('input')!;
+
+        field.value = 'omid';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        await settle();
+
+        expect(router.location().query.people, 'new words kept the page of the old ones').toBeUndefined();
+        expect(router.location().query.messages).toBeUndefined();
+    });
+});

@@ -24,6 +24,7 @@ import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.
 import { useSocial } from '../../stores/social.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { useDevice } from '../../stores/device.store.ts';
 
 const PEOPLE_PAGE = 8;
@@ -77,20 +78,16 @@ export default component SearchPage()
 
     useHead({ title: () => locale.t('app.nav.search') });
 
-    state peoplePage = 1;
-    state messagePage = 1;
+    const pages = usePageParams(['people', 'messages']);
+
+    derived peoplePage = pages.page('people');
+
+    derived messagePage = pages.page('messages');
+
 
     derived results = search.results();
 
     derived query = search.query();
-
-    effect
-    {
-        search.query();
-        search.scope();
-        peoplePage = 1;
-        messagePage = 1;
-    }
 
     derived recents = search.recents();
 
@@ -122,12 +119,17 @@ export default component SearchPage()
 
     derived settled = !looking && !unanswered;
 
-    const widen = () => search.setScope('people');
+    const widen = () =>
+    {
+        search.setScope('people');
+        pages.reset();
+    };
 
     const run = (term: string) =>
     {
         search.setQuery(term);
         search.remember(term);
+        pages.reset();
     };
 
     <Page label={ locale.t('app.nav.search') }>
@@ -135,7 +137,11 @@ export default component SearchPage()
             <h1 class="sr-only">{ locale.t('app.nav.search') }</h1>
             <SearchInput
                 value={ query }
-                onInput={ (value) => search.setQuery(value) }
+                onInput={ (value) =>
+                {
+                    search.setQuery(value);
+                    pages.reset();
+                } }
                 placeholder={ locale.t('search.placeholder') }
                 label={ locale.t('app.nav.search') }
                 autofocus
@@ -147,7 +153,11 @@ export default component SearchPage()
             label={ locale.t('search.scope.all') }
             class="mb-5"
             value={ search.scope() }
-            onChange={ (id) => search.setScope(id as SearchScope) }
+            onChange={ (id) =>
+            {
+                search.setScope(id as SearchScope);
+                pages.reset();
+            } }
             items={ SEARCH_SCOPES.map((scope) => ({ id: scope, label: locale.t(`search.scope.${ scope }`) })) }
         />
 
@@ -230,7 +240,7 @@ export default component SearchPage()
                                         page={ peoplePage }
                                         mode={ paging }
                                         label={ locale.t('search.scope.people') }
-                                        onPage={ (page) => peoplePage = page }
+                                        onPage={ (page) => pages.turn('people', page) }
                                     />
                                 </section>
                             </Show>
@@ -306,7 +316,7 @@ export default component SearchPage()
                                         page={ messagePage }
                                         mode={ paging }
                                         label={ locale.t('search.scope.chats') }
-                                        onPage={ (page) => messagePage = page }
+                                        onPage={ (page) => pages.turn('messages', page) }
                                     />
                                 </section>
                             </Show>

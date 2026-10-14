@@ -1,4 +1,4 @@
-import { createResource, untrack, useHead, useQuery } from 'azerothjs';
+import { createResource, untrack, useHead, useNavigate, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -13,6 +13,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { GAMES, type GameId } from '../../data/games.ts';
 import { client } from '../../api.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -32,12 +33,9 @@ export default component WatchPage()
     const realtime = useRealtime();
 
     const query = useQuery();
+    const { replace } = useNavigate();
 
-    state picked = (() =>
-    {
-        const asked = untrack(query).game;
-        return typeof asked === 'string' && GAMES.some((game) => game.id === asked) ? asked : 'all';
-    })();
+    derived picked = typeof query().game === 'string' && GAMES.some((game) => game.id === query().game) ? query().game as string : 'all';
 
     const tables = createResource(
         () => picked,
@@ -49,7 +47,9 @@ export default component WatchPage()
 
     const device = useDevice();
 
-    state page = 1;
+    const pages = usePageParams(['page']);
+
+    derived page = pages.page('page');
 
     derived paging = pagingFor(device.posture() === 'phone');
 
@@ -129,8 +129,7 @@ export default component WatchPage()
         <div class="flex flex-col gap-4">
             <FilterBar items={ choices } value={ picked } label={ locale.t('watch.page.filter') } onChange={ (id) =>
             {
-                picked = id;
-                page = 1;
+                void replace(id === 'all' ? '/app/watch' : `/app/watch?game=${ id }`);
             } } />
 
             <Show when={ loading }>
@@ -188,7 +187,7 @@ export default component WatchPage()
                     </ul>
                 }
             </Show>
-            <Pagination total={ rows.length } size={ WATCH_PAGE } page={ page } mode={ paging } label={ locale.t('watch.page.title') } onPage={ (next) => page = next } />
+            <Pagination total={ rows.length } size={ WATCH_PAGE } page={ page } mode={ paging } label={ locale.t('watch.page.title') } onPage={ (next) => pages.turn('page', next) } />
         </div>
     </Page>
 }

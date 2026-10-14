@@ -245,6 +245,39 @@ describe('the live games page', () =>
         expect(container.textContent).not.toMatch(/started in /);
     });
 
+    it('keeps the game and the page it shows in the address, and opens on them', async () =>
+    {
+        server.watching = Array.from({ length: 30 }, (_, at) => row(`table-ludo-${ String(at).padStart(2, '0') }`, 'ludo'));
+
+        const page = WatchPage as unknown as () => HTMLElement;
+        const router = createRouter({ routes: [{ path: '/app/watch', component: page }], history: createMemoryHistory('/app/watch?game=ludo&page=2'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: page }) as Rendered);
+        const press = (label: string) => fire([...container.querySelectorAll<HTMLElement>('button')].find((one) => one.getAttribute('aria-label') === label || one.textContent?.trim() === label)!, 'click');
+
+        await settle();
+
+        expect(container.textContent, 'the page in the address was not the page shown').toContain('13–24 of 30');
+
+        press('Next page');
+        await settle();
+
+        expect(router.location().fullPath).toBe('/app/watch?game=ludo&page=3');
+        expect(container.textContent).toContain('25–30 of 30');
+
+        press('Previous page');
+        press('Previous page');
+        await settle();
+
+        expect(router.location().fullPath, 'the first page was written into the address').toBe('/app/watch?game=ludo');
+
+        press('Next page');
+        await settle();
+        press('Poker');
+        await settle();
+
+        expect(router.location().fullPath, 'a game chosen kept the page of the game before').toBe('/app/watch?game=poker');
+    });
+
     it('narrows the list to one game and says so when nobody is playing it', async () =>
     {
         server.watching = [row('table-hokm', 'hokm')];

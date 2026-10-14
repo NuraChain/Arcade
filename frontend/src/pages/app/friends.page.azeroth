@@ -25,6 +25,7 @@ import { useSocial } from '../../stores/social.store.ts';
 import { playWith } from '../../lib/play-with.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { namesOf, narrowed, SEARCH_FROM } from '../../services/search.service.ts';
 import { addFriend } from '../../lib/add-friend.ts';
 
@@ -48,9 +49,11 @@ export default component FriendsPage()
 
     useHead({ title: () => locale.t('app.nav.friends') });
 
-    state listPage = 1;
+    const pages = usePageParams(['page']);
+
+    derived listPage = pages.page('page');
     state query = '';
-    state suggestPage = 1;
+    derived suggestPage = pages.page('page');
 
     derived tab = TABS.find((one) => one === address().tab) ?? 'all';
 
@@ -59,9 +62,7 @@ export default component FriendsPage()
     effect
     {
         void tab;
-        listPage = 1;
         query = '';
-        suggestPage = 1;
     }
 
     derived roomy = device.posture() !== 'phone';
@@ -179,7 +180,7 @@ export default component FriendsPage()
                     onInput={ (value) =>
                     {
                         query = value;
-                        listPage = 1;
+                        pages.turn('page', 1);
                     } }
                     placeholder={ locale.t('create.search') }
                     label={ locale.t('create.search') }
@@ -240,7 +241,7 @@ export default component FriendsPage()
                     page={ listPage }
                     mode={ paging }
                     label={ locale.t('friends.tab.all') }
-                    onPage={ (page) => listPage = page }
+                    onPage={ (page) => pages.turn('page', page) }
                 />
             }
         </Show>
@@ -390,7 +391,7 @@ export default component FriendsPage()
                     page={ suggestPage }
                     mode={ paging }
                     label={ locale.t('friends.tab.suggestions') }
-                    onPage={ (page) => suggestPage = page }
+                    onPage={ (page) => pages.turn('page', page) }
                 />
             }
         </Show>

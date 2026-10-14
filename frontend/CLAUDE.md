@@ -1011,6 +1011,25 @@ left to right, the Persian "۱ تا ۱۰ از ۴۰" read backwards. `LoadMore` i
 notifications, match history, the leaderboard - which used to be three differently sized buttons
 written three times.
 
+**A list's page is in the address, and so is the watch list's game.** The owner asked for
+"the completly pagination that mmake user work easy" on every size of screen. The pager had most
+of it; what it did not have was a page that a reload or Back kept: every list held its page in
+local state, so a reader on page three of their friends who opened a profile and came back was
+on page one. `usePageParams(keys)` in `lib/page-param.ts` reads each list's page from the query
+and writes it with `replace`, so Back leaves the page rather than walking its pages, as a tab
+does. The friends page and a group's members use `page`, the search page `people` and
+`messages`, Settings `blocked`, `muted` and `reports`, the watch list `page` beside its
+`game`, which is the address's too now. The first page is never written. A page that sets its
+query from the address on mount resets its pages where a PERSON changes the search (typing, a
+scope, a recent search), never in an effect: an effect also runs when the mount sets the query, and
+threw away the page a reload asked for. `page-param.spec.ts` holds the reading and the writing,
+`watch-page.spec.ts` and `people-search.spec.ts` a page opened on its page through the real router.
+A phone's growing list says how far it has come ("Showing 16 of 40"), and its "Show more" asks a
+derived boolean: it sat in a branch over the count, so every press drew the button again and a
+keyboard was dropped on the page. Not added, on purpose: a choice of page size (these are lists of
+people and tables, not a ledger) and a field to type a page into (the numbered pager always shows
+the first and the last).
+
 **Primitives** live in `components/ui/`. `Tooltip` wraps every `IconButton` automatically, so an
 icon-only control has a visible name on a mouse and a long-press name on a finger; it portals to
 `.anchor-root` and must never go through the overlay stack, whose `blocking()` drives `inert`.

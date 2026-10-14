@@ -22,6 +22,8 @@ export default component Pagination(props: {
 
     derived remaining = Math.max(0, props.total - shown);
 
+    derived more = remaining > 0;
+
     derived paged = view.pages > 1;
 
     derived growing = props.mode === 'more';
@@ -101,8 +103,9 @@ export default component Pagination(props: {
             }
         >
             { () =>
-                <div class={ [ 'pt-3', props.class ?? '' ].filter(Boolean).join(' ') }>
-                    <Show when={ remaining > 0 }>
+                <div class={ [ 'flex flex-col gap-2 pt-3', props.class ?? '' ].filter(Boolean).join(' ') }>
+                    <p class="text-center text-ui-xs text-faint">{ locale.t('page.shown', { shown: locale.n(shown), total: locale.n(props.total) }) }</p>
+                    <Show when={ more }>
                         { () =>
                             <Button variant="outline" block leading="chevron-down" onClick={ () => props.onPage(view.page + 1) }>
                                 { props.moreLabel ?? locale.t('page.more', { count: locale.n(remaining) }) }

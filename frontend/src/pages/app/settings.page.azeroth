@@ -26,6 +26,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -86,9 +87,13 @@ export default component SettingsPage()
         }
     };
 
-    state blockedPage = 1;
-    state mutedPage = 1;
-    state reportsPage = 1;
+    const pages = usePageParams(['blocked', 'muted', 'reports']);
+
+    derived blockedPage = pages.page('blocked');
+
+    derived mutedPage = pages.page('muted');
+
+    derived reportsPage = pages.page('reports');
 
     derived allBlocked = social.blocked()
         .map((id) => people.byHandle(id))
@@ -375,7 +380,7 @@ export default component SettingsPage()
                                         page={ blockedPage }
                                         mode={ paging }
                                         label={ locale.t('settings.safety.blocked') }
-                                        onPage={ (page) => blockedPage = page }
+                                        onPage={ (page) => pages.turn('blocked', page) }
                                     />
                                 </div>
 
@@ -410,7 +415,7 @@ export default component SettingsPage()
                                         page={ mutedPage }
                                         mode={ paging }
                                         label={ locale.t('settings.safety.muted') }
-                                        onPage={ (page) => mutedPage = page }
+                                        onPage={ (page) => pages.turn('muted', page) }
                                     />
                                 </div>
 
@@ -451,7 +456,7 @@ export default component SettingsPage()
                                         page={ reportsPage }
                                         mode={ paging }
                                         label={ locale.t('settings.safety.reports') }
-                                        onPage={ (page) => reportsPage = page }
+                                        onPage={ (page) => pages.turn('reports', page) }
                                     />
                                 </div>
                             </div>

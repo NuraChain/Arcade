@@ -31,6 +31,7 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { namesOf, narrowed, SEARCH_FROM } from '../../services/search.service.ts';
 import { useDevice } from '../../stores/device.store.ts';
 
@@ -91,7 +92,9 @@ export default component GroupPage()
     const device = useDevice();
 
     state query = '';
-    state memberPage = 1;
+    const pages = usePageParams(['page']);
+
+    derived memberPage = pages.page('page');
 
     derived paging = pagingFor(device.posture() === 'phone');
 
@@ -318,7 +321,7 @@ export default component GroupPage()
                                 onInput={ (value) =>
                                 {
                                     query = value;
-                                    memberPage = 1;
+                                    pages.turn('page', 1);
                                 } }
                                 placeholder={ locale.t('groups.searchMembers') }
                                 label={ locale.t('groups.searchMembers') }
@@ -366,7 +369,7 @@ export default component GroupPage()
                         page={ memberPage }
                         mode={ paging }
                         label={ locale.t('groups.members') }
-                        onPage={ (page) => memberPage = page }
+                        onPage={ (page) => pages.turn('page', page) }
                     />
                 </section>
 

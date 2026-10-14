@@ -371,6 +371,43 @@ describe('Pagination', () =>
         fire(button, 'click');
         expect(onPage).toHaveBeenCalledWith(2);
     });
+    it('says how far a growing list has come, and keeps its button under the keyboard as it grows', async () =>
+    {
+        const [page, setPage] = createSignal(1);
+        const { container } = renderTest(() => Pagination({
+            total: 40,
+            size: 8,
+            get page()
+            {
+                return page();
+            },
+            mode: 'more',
+            label: 'More',
+            onPage: setPage
+        }) as Rendered);
+
+        await settle();
+
+        const button = container.querySelector('button') as HTMLButtonElement;
+
+        expect(container.textContent).toContain('Showing 8 of 40');
+
+        button.focus();
+        fire(button, 'click');
+        await settle();
+
+        expect(container.textContent).toContain('Showing 16 of 40');
+        expect(container.querySelector('button'), 'the button was drawn again as the list grew').toBe(button);
+        expect(document.activeElement, 'the keyboard was dropped off a list that grew').toBe(button);
+        expect(button.textContent).toContain('24');
+
+        setPage(5);
+        await settle();
+
+        expect(container.textContent).toContain('Showing 40 of 40');
+        expect(container.querySelector('button'), 'a list with nothing left offered more').toBeNull();
+    });
+
     it('says which page of how many on a narrow column, where a row of numbers does not fit', async () =>
     {
         const { container } = renderTest(() => Pagination({ total: 120, size: 10, page: 4, label: 'Pages', onPage: noop }) as Rendered);

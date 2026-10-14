@@ -67,6 +67,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'page.of': '{page} از {pages}',
     'page.go': 'صفحهٔ {page}',
     'page.more': 'نمایش {count} مورد دیگر',
+    'page.shown': '{shown} از {total} نمایش داده شده',
 
     'toast.dismiss': 'بستن',
     'toast.region': 'اعلان‌ها',

@@ -64,6 +64,7 @@ export const app = {
     'page.of': '{page} of {pages}',
     'page.go': 'Page {page}',
     'page.more': 'Show {count} more',
+    'page.shown': 'Showing {shown} of {total}',
 
     'toast.dismiss': 'Dismiss',
     'toast.region': 'Notifications',
