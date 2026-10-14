@@ -938,6 +938,14 @@ replace is not, and it answers whether this was another entry than the last, whi
 the shell closes what was open over the page. `app-stores.spec.ts` builds the collision with the
 real router.
 
+**A pop is counted by the distance the router measured.** Every pop used to be one step back. The
+browser's Forward is a pop too, so going back and forward again left the count one short, and a
+jump of three pages back from the browser's long-press list left two pages that were not there:
+the back arrow then went back in history from the page the visit began on, which leaves the site.
+`location.delta` is the pop's own distance (negative back, positive forward, from the stamps the
+router writes on every entry); a pop it could not measure (`0`, an entry from before the router)
+is still one step back. `app-stores.spec.ts` holds both, Back and Forward through the real router.
+
 **A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
 Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans

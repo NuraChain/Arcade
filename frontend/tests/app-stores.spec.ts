@@ -912,7 +912,7 @@ describe('shell', () =>
     it('counts the pages opened in this visit and the ones gone back from, and never the page the visit began on', () =>
     {
         const shell = useShell();
-        const at = (key: string, fullPath: string, navigationKind: 'push' | 'replace' | 'pop') => shell.arrive({ key, fullPath, navigationKind });
+        const at = (key: string, fullPath: string, navigationKind: 'push' | 'replace' | 'pop') => shell.arrive({ key, fullPath, navigationKind, delta: navigationKind === 'pop' ? -1 : 0 });
 
         shell.reset();
 
@@ -933,6 +933,66 @@ describe('shell', () =>
         expect(shell.depth()).toBe(0);
         expect(at('az9', '/app/me', 'push'), 'a visit that began again was counted from where the last one stood').toBe(false);
         expect(shell.depth()).toBe(0);
+    });
+
+    it('counts a jump of several pages back as that many, and a page gone forward to as one more', () =>
+    {
+        const shell = useShell();
+        const at = (key: string, fullPath: string, navigationKind: 'push' | 'pop', delta: number) => shell.arrive({ key, fullPath, navigationKind, delta });
+
+        shell.reset();
+        at('az1', '/app', 'push', 0);
+        at('az2', '/app/games', 'push', 0);
+        at('az3', '/app/games/ludo', 'push', 0);
+        at('az4', '/app/play/t1', 'push', 0);
+
+        expect(shell.depth()).toBe(3);
+
+        at('az1', '/app', 'pop', -3);
+
+        expect(shell.depth(), 'a jump back to where the visit began left a page behind it, and Back would leave the site').toBe(0);
+
+        at('az2', '/app/games', 'pop', 1);
+
+        expect(shell.depth(), 'a page gone forward to was counted as a page gone back from').toBe(1);
+
+        at('az4', '/app/play/t1', 'pop', 2);
+
+        expect(shell.depth()).toBe(3);
+
+        at('az3', '/app/games/ludo', 'pop', 0);
+
+        expect(shell.depth(), 'a pop the router could not measure is no longer a step back').toBe(2);
+    });
+
+    it('counts the browser\'s own Back and Forward the way the router measured them', async () =>
+    {
+        const routes = [{ path: '/a', component: blank }, { path: '/b', component: blank }, { path: '/c', component: blank }];
+        const history = createMemoryHistory('/a');
+        const router = createRouter({ routes, history, scroll: false });
+        const shell = useShell();
+
+        shell.reset();
+        shell.arrive(router.location());
+
+        for (const path of ['/b', '/c'])
+        {
+            router.navigate(path);
+            await hops();
+            shell.arrive(router.location());
+        }
+
+        history.back();
+        await hops();
+        shell.arrive(router.location());
+
+        expect([router.location().pathname, shell.depth()]).toEqual(['/b', 1]);
+
+        history.forward();
+        await hops();
+        shell.arrive(router.location());
+
+        expect([router.location().pathname, router.location().delta, shell.depth()], 'Forward was counted as Back').toEqual(['/c', 1, 2]);
     });
 
     it('counts the first page opened after a reload, which the router stamps with the key of the page that was reloaded', async () =>

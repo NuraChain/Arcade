@@ -21,6 +21,7 @@ export interface Arrival
     key: string;
     fullPath: string;
     navigationKind: 'push' | 'replace' | 'pop';
+    delta: number;
 }
 
 export interface ShellApi
@@ -55,7 +56,9 @@ export const useShell = createStore((): ShellApi =>
 
             if (begun && location.navigationKind !== 'replace')
             {
-                setDepth((current) => Math.max(0, current + (location.navigationKind === 'push' ? 1 : -1)));
+                const step = location.navigationKind === 'push' ? 1 : (location.delta === 0 ? -1 : location.delta);
+
+                setDepth((current) => Math.max(0, current + step));
             }
 
             return begun;
