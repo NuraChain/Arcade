@@ -654,12 +654,6 @@ html:has(.site-drawer[open])
     row-gap: 0.5rem;
 }
 
-.table-top
-{
-    grid-area: top;
-    min-inline-size: 0;
-}
-
 @property --fit-min
 {
     syntax: '<length>';
