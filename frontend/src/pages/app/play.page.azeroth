@@ -361,15 +361,7 @@ export default component PlayPage()
 
     derived sheetVisible = !floating && hasChat && chatOpen;
 
-    derived aloft = !floating || cardOpen;
-
-    effect
-    {
-        if (aloft)
-        {
-            onCleanup(toasts.lift());
-        }
-    }
+    onCleanup(toasts.lift());
 
     derived halfSheet = sheetVisible && !sideways && !chatWide;
 

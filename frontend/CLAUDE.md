@@ -1152,7 +1152,12 @@ and dice and, once it is open, the chat's field; the bottom corner of a wide scr
 card's composer sits. A page that needs the toasts elsewhere holds them at the top with
 `toasts.lift()`, which answers the release: the holds are counted, so two holders do not let go of
 each other's, and one taken before a `reset()` cannot undo one taken after. The table's page holds
-it always on a phone and, on a wide screen, while the chat card is open.
+it for as long as it is mounted, at every width. It used to let go on a wide screen while the chat
+card was closed, from when a board stood in the middle of the page with room round it. A table
+takes all the room it is given now, so that corner is the table's: measured at 1280 on a Hokm
+table, a toast there lay over the hand's Sort button in Persian and over the coach's lamp in
+English, with the reader's cards beside it, for as long as it stood. The invitation card already
+went to the head of the page at a table for the same reason.
 
 **An offer in a toast is taken back when it stops being true.** A table with voice offers the call
 in a toast with a Join button, and a toast outlives whatever raised it. The host switched voice off

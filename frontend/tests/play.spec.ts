@@ -2617,11 +2617,11 @@ describe('PlayPage', () =>
             expect(useToasts().lifted(), 'the page took the toasts’ place with it').toBe(false);
         });
 
-        it('keeps its corner on a wide screen until the chat is open there, and takes it back when the chat is closed', async () =>
+        it('is at the top on a wide screen too, with the chat open or closed: its corner is the chat\'s field or a corner of the table', async () =>
         {
-            await at('sidebar', false);
+            const drawn = await at('sidebar', false);
 
-            expect(useToasts().lifted()).toBe(false);
+            expect(useToasts().lifted(), 'a toast lay over the corner of a table that takes all the room it is given').toBe(true);
 
             useSettings().update({ railOpen: true });
             await settle();
@@ -2631,7 +2631,12 @@ describe('PlayPage', () =>
             useSettings().update({ railOpen: false });
             await settle();
 
-            expect(useToasts().lifted()).toBe(false);
+            expect(useToasts().lifted(), 'closing the chat let the toasts down onto the table').toBe(true);
+
+            drawn.unmount();
+            await settle();
+
+            expect(useToasts().lifted(), 'the page took the toasts’ place with it').toBe(false);
         });
     });
 
