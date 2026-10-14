@@ -271,7 +271,7 @@ export default component PlayPage()
             offer = toasts.show({
                 kind: 'info',
                 icon: 'voice',
-                text: locale.t('voice.offered'),
+                text: locale.t(untrack(lobby.table)?.voice === 'team' ? 'voice.offeredTeam' : 'voice.offered'),
                 action: { label: locale.t('voice.join'), run: () => void voice.join(id) },
                 dedupe: `voice-offer-${ id }`
             });
@@ -291,7 +291,23 @@ export default component PlayPage()
 
         void lobby.setVoice(current.id, on ? 'table' : 'off')
             .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
-            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed')), dedupe: 'table-voice' }));
+            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed', 'voice.refused.playing')), dedupe: 'table-voice' }));
+    };
+
+    const switchScope = () =>
+    {
+        const current = untrack(lobby.table);
+
+        if (current === null || current.voice === 'off')
+        {
+            return;
+        }
+
+        const next = current.voice === 'team' ? 'table' : 'team';
+
+        void lobby.setVoice(current.id, next)
+            .then(() => toasts.show({ kind: 'success', text: locale.t(next === 'team' ? 'voice.nowTeam' : 'voice.nowTable'), dedupe: 'table-voice' }))
+            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed', 'voice.refused.playing')), dedupe: 'table-voice' }));
     };
 
     derived behind = seated && table?.matchId !== undefined && board.match()?.id !== table?.matchId;
@@ -356,7 +372,11 @@ export default component PlayPage()
 
     derived callAt = talkable ? table?.id : undefined;
 
-    derived hostVoice = amHost && table !== null && table.status !== 'closed' ? table.voice !== 'off' : undefined;
+    derived settledCall = table !== null && table.status !== 'closed' && !(table.teams && table.matchId !== undefined);
+
+    derived hostVoice = amHost && settledCall ? table!.voice !== 'off' : undefined;
+
+    derived hostScope = amHost && settledCall && table!.teams && table!.voice !== 'off' ? table!.voice === 'team' : undefined;
 
     derived railOpen = settings.settings().railOpen;
 
@@ -923,6 +943,8 @@ export default component PlayPage()
                                     voice={ callAt }
                                     hostVoice={ hostVoice }
                                     onHostVoice={ switchVoice }
+                                    hostScope={ hostScope }
+                                    onHostScope={ switchScope }
                                 />
                                 <Show when={ floating && hasChat && !cardOpen }>
                                     { () =>

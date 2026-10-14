@@ -10,6 +10,7 @@ import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useRealtime } from './realtime.store.ts';
 import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
+import { scopeFor } from '../../../backend/src/domains/table/voices.ts';
 
 export interface LobbyApi
 {
@@ -268,6 +269,8 @@ export const useLobby = createStore((): LobbyApi =>
          * undefined is one an over-eager serialiser turns into null - which is the same request
          * with a different meaning, because that field decides the privacy.
          */
+        const teams = teamsOf(catalogue.rules(game).partners, config.seats, config.teams);
+
         return {
             game,
             seats: config.seats,
@@ -277,8 +280,8 @@ export const useLobby = createStore((): LobbyApi =>
             cube: config.cube,
             blinds: config.blinds,
             chat: config.chat,
-            voice: config.voice,
-            teams: teamsOf(catalogue.rules(game).partners, config.seats, config.teams),
+            voice: scopeFor(config.voice, teams),
+            teams,
             invitees: [...invitees],
             ...(config.roomId === undefined ? {} : { roomId: config.roomId })
         };

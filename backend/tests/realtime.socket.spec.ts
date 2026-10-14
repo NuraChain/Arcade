@@ -86,7 +86,7 @@ beforeAll(async () =>
         aliveSessions: async (ids) => new Set(ids),
         touchSeen: () => undefined,
         report: () => undefined,
-        voiceAllowed: async () => false,
+        voiceCall: async () => null,
         mayTalk: async () => false,
         pulse: async () => ({ games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' })
     });

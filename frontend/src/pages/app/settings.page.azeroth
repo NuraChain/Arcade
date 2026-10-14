@@ -520,6 +520,13 @@ export default component SettingsPage()
                                 onChange={ (checked) => settings.update({ voiceTables: checked }) }
                             />
                             <Toggle
+                                checked={ current.voiceTeam }
+                                label={ locale.t('voice.team') }
+                                description={ locale.t('voice.teamHint') }
+                                disabled={ !current.voiceTables }
+                                onChange={ (checked) => settings.update({ voiceTeam: checked }) }
+                            />
+                            <Toggle
                                 checked={ current.voicePushToTalk }
                                 label={ locale.t('voice.pushToTalk') }
                                 description={ locale.t('voice.pushToTalkHint', { key: keyName(current.voiceTalkKey) }) }

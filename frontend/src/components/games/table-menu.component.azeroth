@@ -21,6 +21,8 @@ export default component TableMenu(props: OverlayProps & {
     full: boolean;
     voice?: boolean;
     onVoice?: () => void;
+    team?: boolean;
+    onTeam?: () => void;
     deaf?: boolean;
     onDeafen?: () => void;
     onFullscreen?: () => void;
@@ -76,6 +78,16 @@ export default component TableMenu(props: OverlayProps & {
                 icon: props.voice ? 'voice-off' : 'voice',
                 label: locale.t(props.voice ? 'voice.hostOff' : 'voice.hostOn'),
                 run: () => props.onVoice?.()
+            });
+        }
+
+        if (props.team !== undefined && props.onTeam !== undefined)
+        {
+            list.push({
+                id: 'voice-team',
+                icon: props.team ? 'people' : 'shield',
+                label: locale.t(props.team ? 'voice.toTable' : 'voice.toTeam'),
+                run: () => props.onTeam?.()
             });
         }
 

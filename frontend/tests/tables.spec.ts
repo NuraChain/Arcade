@@ -267,6 +267,51 @@ describe('the create form', () =>
         expect(server.tables.map((table) => table.voice)).toEqual(['off', 'table']);
     });
 
+    it('offers a call for each side only where the table being made has two, and sends what is shown', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+        const switchOf = (container: HTMLElement, words: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((one) => one.textContent?.includes(words)) ?? null;
+        const chipOf = (container: HTMLElement, label: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim().startsWith(label))!;
+        const sides = useLocale().t('create.voiceTeam');
+
+        const form = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(switchOf(form, 'Voice chat')!, 'click');
+        await settle();
+
+        expect(switchOf(form, sides), 'a call for each side at a table of one').toBeNull();
+
+        fire(chipOf(form, '2 v 2'), 'click');
+        await settle();
+
+        expect(switchOf(form, sides), 'no call for each side at a table of two sides').not.toBeNull();
+
+        fire(switchOf(form, sides)!, 'click');
+        await settle();
+        fire(form.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        cleanup();
+
+        const changed = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(switchOf(changed, 'Voice chat')!, 'click');
+        fire(chipOf(changed, '2 v 2'), 'click');
+        await settle();
+        fire(switchOf(changed, sides)!, 'click');
+        fire(chipOf(changed, '4 players'), 'click');
+        await settle();
+
+        expect(switchOf(changed, sides), 'a call for each side was left on a table of one').toBeNull();
+
+        fire(changed.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        expect(server.tables.map((table) => [table.teams, table.voice])).toEqual([[true, 'team'], [false, 'table']]);
+    });
+
     it('still says it, as a plain no, for a game that leaves the choice to whoever opens the table', async () =>
     {
         const ludo = GAMES.find((game) => game.id === 'ludo')!;

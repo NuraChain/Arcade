@@ -676,6 +676,64 @@ for (const one of four)
     await one.context.request.post(`${ BASE }/api/tables/${ round.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);
 }
 
+const sideTable = await dana.context.request.post(`${ BASE }/api/tables`, {
+    data: tableBody({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', voice: 'team', teams: true })
+});
+const sided = await sideTable.json();
+
+record('a host can open a table of two sides whose call is for each side', sideTable.ok() && sided.voice === 'team', sideTable.ok() ? '' : String(sideTable.status()));
+
+for (const one of four.slice(1))
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ sided.id }/seat`);
+}
+
+for (const one of four)
+{
+    await one.page.goto(`${ BASE }/app/play/${ sided.id }`);
+    await one.page.waitForLoadState('networkidle');
+}
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+const partnered = () => until(async () => (await Promise.all(four.map((one) => mesh(one.page)))).every((seen) => meshed(seen, 1)), 30_000);
+
+record('at a table whose call is for each side, everybody is connected to their partner and to nobody else', await partnered(), await toldOf(four));
+
+await players(dana.page);
+
+const across = await pillOf(dana.page, 'Mina');
+const beside = await pillOf(dana.page, 'Omid');
+
+record('the players list shows the partner in the call and an opponent in no call at all',
+    beside.some((one) => one === 'Speaking' || one === 'In voice' || one === 'Muted') && !across.some((one) => one === 'Speaking' || one === 'In voice' || one === 'Muted' || one === 'Connecting'),
+    JSON.stringify({ omid: beside, mina: across }));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-sides.png' });
+
+await dana.page.getByRole('button', { name: 'Let the whole table hear each other' }).first().click();
+
+record('the host making it the whole table\'s call between games takes everybody out, and carries nobody into it',
+    await until(async () => (await Promise.all(four.map((one) => mesh(one.page)))).every((seen) => seen.length === 0)
+        && (await Promise.all(four.map((one) => one.page.getByRole('button', { name: 'Join voice' }).count()))).every((count) => count > 0), 20_000),
+    await toldOf(four));
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+record('and once they join again, all four are in one call, each connected to the other three', await together(four), await toldOf(four));
+
+await dana.context.request.post(`${ BASE }/api/tables/${ sided.id }/voice`, { data: { voice: 'off' } }).catch(() => undefined);
+
+for (const one of four)
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ sided.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);
+}
+
 const errors = [...dana.errors, ...mina.errors, ...omid.errors, ...sara.errors];
 record('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));
 

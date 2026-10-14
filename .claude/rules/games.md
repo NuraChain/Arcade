@@ -1282,10 +1282,55 @@ take that shape first, with today's two answers and no change in what anybody he
 play and parties are never written against the boolean: `VOICE_SCOPES` in `table/voices.ts` is `off`
 and `table`, the module imports nothing so the browser reads the same list, `tables_voice_known`
 holds the column to it, the wire's `voiceScope` is `enumOf` that list, and the host's switch posts
-`{ voice }` where it posted `{ on }`. `team` joins the list only in the commit that teaches the hub
-to keep two sides apart: a word nothing can enforce is a promise the product would be making.
+`{ voice }` where it posted `{ on }`. `team` joined the list in the commit that taught the hub to
+keep two sides apart (below): a word nothing can enforce is a promise the product would be making.
 `table-voices.spec.ts` holds the CHECK, the wire and the list to one set, and refuses a yes or a no
 at the door.
+
+**At a table of two sides the call can be for each side.** The owner asked for it on 2026-10-07
+("voice should have more setting") and again on 2026-10-14 ("make complete voice chat"). `team` is
+the third word, and only a table of two sides may hold it: `tables_voice_team` (`voice <> 'team' or
+teams`) makes anything else unrepresentable, `create` refuses it at a table without sides as a 422
+on `voice` against the NORMALISED sides, and the browser never sends it there, because `asInput`
+resolves every table's preference with `scopeFor` once its sides are final (a quick search's
+preference is resolved the same way where quick play opens a table). `callOf(scope, table, side)`
+names the call: none, the table, or the table and the side.
+
+- **The hub keeps CALLS, not rooms.** `voiceCall(userId, tableId)` replaced `voiceAllowed`: one
+  query for the reader's chair, the table's scope, its sides and its status, answering the call
+  the reader may be in or nothing, with the side from the one `sideOf`. A member keeps the spelling
+  of the table its browser sent, and every frame says that, never the call: the browser drops a
+  frame for a table it did not join. A join first takes the person out of every other call of that
+  table; joins to one table still run one at a time; a signal travels only inside a call; and a
+  ring rechecks every call of the table and drops whoever's call changed. A change of scope is never
+  a move: nobody is carried from one audience into another, and nobody is joined again without
+  pressing Join.
+- **The scope a game begins under is the scope it ends under.** At a table of two sides nothing
+  about voice changes while a game is on (`playing`, "The call stays as it is until this game
+  ends."): not the side call on, not off, not widened to everyone, because each would hand one
+  side's microphones to the other, or a private line to one side, in the middle of a hand. A table
+  without sides still switches off and on at any time. Between games a change to or from `team`
+  un-readies every chair: readiness is consent to the next game, and who hears whom is part of what
+  was agreed to. `setVoice` asks for the host's chair, takes the table's lock, reads the table under
+  it, and writes nothing for the scope the table already has.
+- **What the reader sees.** The create form adds "Only teammates hear each other" under "Voice
+  chat" while the table being made has two sides and voice is on. The host gets one more control in
+  the dock and the table menu ("Let only teammates hear each other", "Let the whole table hear each
+  other"), shown only between games; the on/off switch hides during a game at such a table too. The
+  header's and a row's mark say "Team voice", the offer says "Your team has a call of its own", and
+  Settings has "At a table of two sides, only my teammate" under "Open my tables with voice on",
+  which makes that the preference a table opens with.
+
+`table-voices.spec.ts` (`scopeFor`, `callOf`), `realtime-hub.spec.ts` (*at a table whose call is for
+each side*: two calls, no roster or signal across, not even between two who share a call at another
+table and so may talk, a change of scope that drops everybody and carries nobody, a change of side,
+a table named in capitals joined, muted and left in either spelling), `table-voice.db.spec.ts` (the call a
+chair answers at each scope, the refusals, nothing changed under a game, the chairs un-readied),
+`play.spec.ts` and `tables.spec.ts` hold it; the voice pass seats four at a table of two sides and
+wants each connected to their partner and to nobody else, then all four in one call once the host
+widens it between games and they join again. **The other worktree shares the development
+database**, and its boot rewrites `tables_voice_known` back to two words, which fails on any row
+left at `team`: a pass that opens such a table sets its voice back before it leaves.
 
 Two things here had no test and would have passed every gate while broken. `voiceAllowed`'s
 predicate is SQL in a string - `t.voice = true` - that no compiler reads, and no spec had ever run

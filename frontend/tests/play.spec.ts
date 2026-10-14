@@ -1038,6 +1038,88 @@ describe('PlayPage', () =>
             expect(held.voice).toBe('off');
         });
 
+        describe('at a table of two sides', () =>
+        {
+            const sides = async (voice: 'table' | 'team') =>
+            {
+                const id = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 4, teams: true, voice }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                held.chairs[1].who = 'sara.k';
+                held.chairs[2].who = 'mina';
+                held.chairs[3].who = 'reza.t';
+                useToasts().reset();
+
+                const container = opened(id);
+
+                await vi.waitFor(() => expect(pressable(container, 'play.close.confirm')).toBeDefined(), { timeout: 4000 });
+
+                return { container, held };
+            };
+
+            const button = (container: HTMLElement, key: 'voice.toTeam' | 'voice.toTable' | 'voice.hostOff') =>
+                container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t(key) }"]`);
+
+            it('lets the host give each side a call of its own between games, and the whole table one again, and says each', async () =>
+            {
+                const { container, held } = await sides('table');
+
+                fire(button(container, 'voice.toTeam')!, 'click');
+                await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.nowTeam')]), { timeout: 4000 });
+                expect(held.voice).toBe('team');
+
+                await vi.waitFor(() => expect(button(container, 'voice.toTable')).not.toBeNull(), { timeout: 4000 });
+                fire(button(container, 'voice.toTable')!, 'click');
+                await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.nowTable')]), { timeout: 4000 });
+                expect(held.voice).toBe('table');
+            });
+
+            it('offers the host no change of the call while a game is on there', async () =>
+            {
+                const { container, held } = await sides('team');
+
+                expect(button(container, 'voice.toTable')).not.toBeNull();
+
+                held.matchId = 'live-sides';
+                await useLobby().refresh();
+
+                await vi.waitFor(() => expect(button(container, 'voice.toTable')).toBeNull(), { timeout: 4000 });
+                expect(button(container, 'voice.hostOff'), 'voice could be switched off under the game').toBeNull();
+            });
+
+            it.each(['en', 'fa'] as const)('says the call stays until the game ends when the server keeps it, in %s', async (language) =>
+            {
+                useLocale().setLocale(language);
+
+                const { container } = await sides('table');
+
+                await swapped('voice', async () =>
+                {
+                    throw new ApiError(409, 'playing', 'The call a game began under stays until it ends.', undefined);
+                }, async () =>
+                {
+                    fire(button(container, 'voice.toTeam')!, 'click');
+
+                    await vi.waitFor(() => expect(said()).toContainEqual(['warning', useLocale().t('voice.refused.playing')]), { timeout: 4000 });
+                });
+            });
+
+            it('offers no call for each side at a table of one side each, though its call is on', async () =>
+            {
+                const id = await useLobby().host('backgammon', { ...defaultTable('backgammon'), voice: 'table' }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                held.chairs[1].who = 'sara.k';
+
+                const container = opened(id);
+
+                await vi.waitFor(() => expect(button(container, 'voice.hostOff')).not.toBeNull(), { timeout: 4000 });
+
+                expect(button(container, 'voice.toTeam')).toBeNull();
+                expect(button(container, 'voice.toTable')).toBeNull();
+            });
+        });
+
         it('says a game is still being played only when that is why the table would not close', async () =>
         {
             const { container, held } = await hosting(false);

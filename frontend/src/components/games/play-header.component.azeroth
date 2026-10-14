@@ -75,8 +75,8 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                         { () =>
                                             <span class="flex shrink-0 items-center gap-1 text-accent">
                                                 <Icon name="voice" size={ 12 } />
-                                                <span class="hidden @min-[26rem]/title:inline">{ locale.t('voice.tableHas') }</span>
-                                                <span class="sr-only @min-[26rem]/title:hidden">{ locale.t('voice.tableHas') }</span>
+                                                <span class="hidden @min-[26rem]/title:inline">{ locale.t(props.table.voice === 'team' ? 'voice.teamHas' : 'voice.tableHas') }</span>
+                                                <span class="sr-only @min-[26rem]/title:hidden">{ locale.t(props.table.voice === 'team' ? 'voice.teamHas' : 'voice.tableHas') }</span>
                                             </span>
                                         }
                                     </Show>

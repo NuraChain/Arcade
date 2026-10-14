@@ -1802,6 +1802,29 @@ export const client =
                 throw tableRefusal('table-closed', 'That table has closed.');
             }
 
+            if (input.voice === 'team' && !table.teams)
+            {
+                throw new ApiError(422, 'validation-failed', 'That is not a table this game makes.', { voice: 'A call for one side needs a table of two sides.' });
+            }
+
+            if (table.voice === input.voice)
+            {
+                return table;
+            }
+
+            if (table.teams && table.matchId !== undefined)
+            {
+                throw tableRefusal('playing', 'The call a game began under stays until it ends.');
+            }
+
+            if (table.voice === 'team' || input.voice === 'team')
+            {
+                for (const chair of table.chairs)
+                {
+                    chair.ready = false;
+                }
+            }
+
             table.voice = input.voice;
             return table;
         }

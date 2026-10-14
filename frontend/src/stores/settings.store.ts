@@ -14,6 +14,7 @@ export interface Settings
     voiceAutoJoin: boolean;
     voiceVolume: number;
     voiceTables: boolean;
+    voiceTeam: boolean;
     voicePushToTalk: boolean;
     voiceTalkKey: string;
     voiceMic: string;
@@ -41,6 +42,7 @@ export function defaultSettings(): Settings
         voiceAutoJoin: false,
         voiceVolume: 1,
         voiceTables: false,
+        voiceTeam: false,
         voicePushToTalk: false,
         voiceTalkKey: 'KeyV',
         voiceMic: '',

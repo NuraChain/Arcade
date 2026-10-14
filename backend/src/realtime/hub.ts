@@ -48,7 +48,7 @@ export interface HubDeps
 
     report(error: unknown, where: string): void;
 
-    voiceAllowed(userId: string, tableId: string): Promise<boolean>;
+    voiceCall(userId: string, tableId: string): Promise<string | null>;
 
     mayTalk(a: string, b: string): Promise<boolean>;
 
@@ -82,6 +82,14 @@ interface Held extends Connection
     bytes: number;
     pumping: boolean;
     n: number;
+}
+
+interface Caller
+{
+    socket: Held;
+    muted: boolean;
+    join: string;
+    table: string;
 }
 
 const OUTBOX_FRAMES = 256;
@@ -177,7 +185,16 @@ export function createHub(deps: HubDeps): Hub
 
     const held = (connection: Connection) => connection as Held;
 
-    const rooms = new Map<string, Map<string, { socket: Held; muted: boolean; join: string }>>();
+    const rooms = new Map<string, Map<string, Caller>>();
+
+    const callsOf = (tableId: string) =>
+    {
+        const id = tableId.toLowerCase();
+
+        return [...rooms.keys()].filter((call) => call === id || call.startsWith(`${ id }#`));
+    };
+
+    const callHolding = (tableId: string, socket: Held) => callsOf(tableId).find((call) => rooms.get(call)?.get(socket.userId)?.socket.id === socket.id);
 
     const arrivals = keyedQueue();
 
@@ -185,9 +202,9 @@ export function createHub(deps: HubDeps): Hub
 
     const pairOf = (a: string, b: string) => (a < b ? `${ a }|${ b }` : `${ b }|${ a }`);
 
-    const roster = (tableId: string) =>
+    const roster = (call: string) =>
     {
-        const room = rooms.get(tableId);
+        const room = rooms.get(call);
 
         if (room === undefined)
         {
@@ -205,7 +222,7 @@ export function createHub(deps: HubDeps): Hub
                 join: other.join
             }));
 
-            emit(member.socket, (n) => voice(n, tableId, true, member.join, peers));
+            emit(member.socket, (n) => voice(n, member.table, true, member.join, peers));
         }
     };
 
@@ -228,9 +245,9 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const leave = (tableId: string, connectionId: string, tell: boolean) =>
+    const leave = (call: string, connectionId: string, tell: boolean) =>
     {
-        const room = rooms.get(tableId);
+        const room = rooms.get(call);
 
         if (room === undefined)
         {
@@ -248,16 +265,16 @@ export function createHub(deps: HubDeps): Hub
 
             if (tell)
             {
-                emit(member.socket, (n) => voice(n, tableId, false, '', []));
+                emit(member.socket, (n) => voice(n, member.table, false, '', []));
             }
 
             if (room.size === 0)
             {
-                rooms.delete(tableId);
+                rooms.delete(call);
             }
             else
             {
-                roster(tableId);
+                roster(call);
             }
 
             forget(userId);
@@ -515,16 +532,19 @@ export function createHub(deps: HubDeps): Hub
 
     const recheck = async (tableId: string) =>
     {
-        const members = [...(rooms.get(tableId)?.values() ?? [])];
-        const verdicts = await Promise.all(members.map((member) => deps.voiceAllowed(member.socket.userId, tableId)));
-
-        members.forEach((member, index) =>
+        for (const call of callsOf(tableId))
         {
-            if (!verdicts[index])
+            const members = [...(rooms.get(call)?.values() ?? [])];
+            const verdicts = await Promise.all(members.map((member) => deps.voiceCall(member.socket.userId, member.table)));
+
+            members.forEach((member, index) =>
             {
-                leave(tableId, member.socket.id, true);
-            }
-        });
+                if (verdicts[index] !== call)
+                {
+                    leave(call, member.socket.id, true);
+                }
+            });
+        }
     };
 
     const unwatch = (userId: string, tableId: string) =>
@@ -777,9 +797,9 @@ export function createHub(deps: HubDeps): Hub
             const socket = held(connection);
             socket.alive = false;
 
-            for (const tableId of [...rooms.keys()])
+            for (const call of [...rooms.keys()])
             {
-                leave(tableId, socket.id, false);
+                leave(call, socket.id, false);
             }
 
             const sockets = byUser.get(socket.userId);
@@ -951,32 +971,48 @@ export function createHub(deps: HubDeps): Hub
             const socket = held(connection);
 
             void arrivals
-                .run(tableId, async () =>
+                .run(tableId.toLowerCase(), async () =>
                 {
+                    const holding = callHolding(tableId, socket);
+
                     if (!on)
                     {
-                        leave(tableId, socket.id, true);
+                        if (holding !== undefined)
+                        {
+                            leave(holding, socket.id, true);
+                        }
+
                         return;
                     }
 
-                    const current = rooms.get(tableId)?.get(socket.userId);
+                    const current = holding === undefined ? undefined : rooms.get(holding)?.get(socket.userId);
 
-                    if (current !== undefined && current.socket.id === socket.id)
+                    if (holding !== undefined && current !== undefined)
                     {
                         current.muted = muted;
-                        roster(tableId);
+                        roster(holding);
                         return;
                     }
 
-                    const allowed = await deps.voiceAllowed(socket.userId, tableId);
+                    const call = await deps.voiceCall(socket.userId, tableId);
 
-                    if (!allowed || !socket.alive)
+                    if (call === null || !socket.alive)
                     {
                         emit(socket, (n) => voice(n, tableId, false, '', []));
                         return;
                     }
 
-                    const others = [...(rooms.get(tableId)?.values() ?? [])].filter((member) => member.socket.userId !== socket.userId);
+                    for (const other of callsOf(tableId).filter((one) => one !== call))
+                    {
+                        const member = rooms.get(other)?.get(socket.userId);
+
+                        if (member !== undefined)
+                        {
+                            leave(other, member.socket.id, true);
+                        }
+                    }
+
+                    const others = [...(rooms.get(call)?.values() ?? [])].filter((member) => member.socket.userId !== socket.userId);
                     const verdicts = await Promise.all(others.map((other) => deps.mayTalk(socket.userId, other.socket.userId)));
 
                     if (!socket.alive)
@@ -986,17 +1022,17 @@ export function createHub(deps: HubDeps): Hub
 
                     others.forEach((other, index) => talks.set(pairOf(socket.userId, other.socket.userId), verdicts[index]));
 
-                    const room = rooms.get(tableId) ?? new Map<string, { socket: Held; muted: boolean; join: string }>();
+                    const room = rooms.get(call) ?? new Map<string, Caller>();
                     const previous = room.get(socket.userId);
 
                     if (previous !== undefined)
                     {
-                        emit(previous.socket, (n) => voice(n, tableId, false, '', []));
+                        emit(previous.socket, (n) => voice(n, previous.table, false, '', []));
                     }
 
-                    room.set(socket.userId, { socket, muted, join: randomBytes(9).toString('base64url') });
-                    rooms.set(tableId, room);
-                    roster(tableId);
+                    room.set(socket.userId, { socket, muted, join: randomBytes(9).toString('base64url'), table: tableId });
+                    rooms.set(call, room);
+                    roster(call);
                 })
                 .catch((error) => deps.report(error, 'realtime.voice'));
         },
@@ -1004,10 +1040,11 @@ export function createHub(deps: HubDeps): Hub
         signal(connection, tableId, to, join, kind, data)
         {
             const socket = held(connection);
-            const room = rooms.get(tableId);
+            const call = callHolding(tableId, socket);
+            const room = call === undefined ? undefined : rooms.get(call);
             const sender = room?.get(socket.userId);
 
-            if (room === undefined || sender === undefined || sender.socket.id !== socket.id)
+            if (room === undefined || sender === undefined)
             {
                 return;
             }
@@ -1019,12 +1056,12 @@ export function createHub(deps: HubDeps): Hub
                 return;
             }
 
-            emit(target.socket, (n) => signal(n, tableId, socket.handle, sender.join, kind, data));
+            emit(target.socket, (n) => signal(n, target.table, socket.handle, sender.join, kind, data));
         },
 
         voiceOf(tableId)
         {
-            return [...(rooms.get(tableId)?.values() ?? [])].map((member) => member.socket.handle);
+            return callsOf(tableId).flatMap((call) => [...(rooms.get(call)?.values() ?? [])].map((member) => member.socket.handle));
         },
 
         setState(connection, state)

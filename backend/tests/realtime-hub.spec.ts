@@ -74,6 +74,7 @@ interface World
     errors: string[];
     seq: number;
     seated: Set<string>;
+    sides: Map<string, number>;
     apart: Set<string>;
     pulse: Pulse;
     asked: number;
@@ -95,6 +96,7 @@ function build()
         errors: [],
         seq: 0,
         seated: new Set(),
+        sides: new Map(),
         apart: new Set(),
         pulse: { games: [], watching: '' },
         asked: 0,
@@ -120,7 +122,18 @@ function build()
         aliveSessions: async (ids) => new Set(ids.filter((id) => state.alive.has(id))),
         touchSeen: (ids) => state.touched.push(...ids),
         report: (_error, where) => state.errors.push(where),
-        voiceAllowed: async (userId, tableId) => state.seated.has(`${ userId }@${ tableId }`),
+        voiceCall: async (userId, tableId) =>
+        {
+            const chair = `${ userId }@${ tableId }`;
+            const side = state.sides.get(chair);
+
+            if (!state.seated.has(chair))
+            {
+                return null;
+            }
+
+            return side === undefined ? tableId.toLowerCase() : `${ tableId.toLowerCase() }#${ side }`;
+        },
         mayTalk: async (a, b) => !state.apart.has([a, b].sort().join('|')),
         pulse: async () =>
         {
@@ -1070,6 +1083,161 @@ describe('voice at a table', () =>
         expect(sara.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', join: joinOf(sara.wire, 'alex'), kind: 'offer', data: '{"sdp":"a"}' })]);
         expect(mina.wire.framesOf('signal')).toEqual([]);
         expect(lastVoice(mina.wire)?.peers.find((peer) => peer.who === 'alex')?.talk).toBe(false);
+    });
+
+    describe('at a table whose call is for each side', () =>
+    {
+        const sided = (sides: Record<string, number>) =>
+        {
+            for (const [handle, side] of Object.entries(sides))
+            {
+                world.seated.add(`${ handle }@${ TABLE }`);
+                world.sides.set(`${ handle }@${ TABLE }`, side);
+            }
+        };
+
+        const rosterOf = (wire: FakeWire) => lastVoice(wire)?.peers.map((peer) => peer.who) ?? [];
+
+        it('keeps the two sides in two calls: nobody is told of the other side\'s call, and no signal crosses it', async () =>
+        {
+            sided({ alex: 0, mina: 0, 'sara.k': 1, 'omid.k': 1 });
+            const people = await Promise.all(['alex', 'mina', 'sara.k', 'omid.k'].map((handle) => connect(handle)));
+            const [alex, mina, sara, omid] = people;
+
+            for (const one of people)
+            {
+                world.hub.voice(one.connection, TABLE, true, false);
+                await rest();
+            }
+
+            expect(rosterOf(alex.wire)).toEqual(['alex', 'mina']);
+            expect(rosterOf(mina.wire)).toEqual(['alex', 'mina']);
+            expect(rosterOf(sara.wire)).toEqual(['sara.k', 'omid.k']);
+            expect(rosterOf(omid.wire)).toEqual(['sara.k', 'omid.k']);
+            expect(people.every((one) => one.wire.framesOf('voice').every((frame) => (frame as { table: string }).table === TABLE)), 'a frame named the call, not the table').toBe(true);
+            expect(world.hub.voiceOf(TABLE).sort()).toEqual(['alex', 'mina', 'omid.k', 'sara.k']);
+
+            world.hub.signal(alex.connection, TABLE, 'sara.k', joinOf(sara.wire, 'sara.k'), 'offer', '{"sdp":"across"}');
+            world.hub.signal(alex.connection, TABLE, 'mina', joinOf(alex.wire, 'mina'), 'offer', '{"sdp":"beside"}');
+            await rest();
+
+            expect(sara.wire.framesOf('signal'), 'a signal crossed to the other side').toEqual([]);
+            expect(mina.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', data: '{"sdp":"beside"}' })]);
+        });
+
+        it('takes everybody out when the call becomes the table\'s, carries nobody into it, and puts all four in one when they join again', async () =>
+        {
+            sided({ alex: 0, mina: 0, 'sara.k': 1, 'omid.k': 1 });
+            const people = await Promise.all(['alex', 'mina', 'sara.k', 'omid.k'].map((handle) => connect(handle)));
+
+            for (const one of people)
+            {
+                world.hub.voice(one.connection, TABLE, true, false);
+                await rest();
+            }
+
+            world.sides.clear();
+            world.hub.tableChanged(TABLE, []);
+            await settle();
+
+            expect(people.map((one) => lastVoice(one.wire)?.joined)).toEqual([false, false, false, false]);
+            expect(world.hub.voiceOf(TABLE)).toEqual([]);
+
+            for (const one of people)
+            {
+                world.hub.voice(one.connection, TABLE, true, false);
+                await rest();
+            }
+
+            expect(rosterOf(people[0].wire)).toEqual(['alex', 'mina', 'sara.k', 'omid.k']);
+        });
+
+        it('relays nothing to the other side, though the two share a call at another table and may talk', async () =>
+        {
+            const OTHER = 't-2';
+
+            sided({ alex: 0, 'sara.k': 1 });
+            world.seated.add(`alex@${ OTHER }`).add(`sara.k@${ OTHER }`);
+
+            const alex = await connect('alex');
+            const sara = await connect('sara.k');
+
+            for (const one of [alex, sara])
+            {
+                world.hub.voice(one.connection, OTHER, true, false);
+                await rest();
+            }
+
+            expect(lastVoice(alex.wire)?.peers.find((peer) => peer.who === 'sara.k')?.talk).toBe(true);
+
+            for (const one of [alex, sara])
+            {
+                world.hub.voice(one.connection, TABLE, true, false);
+                await rest();
+            }
+
+            expect(rosterOf(alex.wire)).toEqual(['alex']);
+            expect(rosterOf(sara.wire)).toEqual(['sara.k']);
+
+            world.hub.signal(alex.connection, TABLE, 'sara.k', joinOf(sara.wire, 'sara.k'), 'offer', '{"sdp":"across"}');
+            await rest();
+
+            expect(sara.wire.framesOf('signal'), 'a signal crossed to the other side').toEqual([]);
+        });
+
+        it('takes somebody whose side changed out of the call they were in when they join the other', async () =>
+        {
+            sided({ alex: 0, mina: 0, 'sara.k': 1 });
+            const alex = await connect('alex');
+            const mina = await connect('mina');
+            const sara = await connect('sara.k');
+
+            for (const one of [alex, mina, sara])
+            {
+                world.hub.voice(one.connection, TABLE, true, false);
+                await rest();
+            }
+
+            world.sides.set(`alex@${ TABLE }`, 1);
+
+            const again = await connect('alex');
+
+            world.hub.voice(again.connection, TABLE, true, false);
+            await rest();
+
+            expect(lastVoice(alex.wire)?.joined, 'the first tab was left in the old side\'s call').toBe(false);
+            expect(rosterOf(mina.wire), 'the old side still lists them').toEqual(['mina']);
+            expect(rosterOf(sara.wire)).toEqual(['sara.k', 'alex']);
+        });
+    });
+
+    it('puts a table named in capitals in the call of the table it names, and answers each in the spelling it used', async () =>
+    {
+        world.seated.add(`alex@${ TABLE.toUpperCase() }`).add(`sara.k@${ TABLE }`);
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => peer.who)).toEqual(['alex', 'sara.k']);
+        expect(lastVoice(alex.wire)?.table).toBe(TABLE.toUpperCase());
+        expect(lastVoice(sara.wire)?.table).toBe(TABLE);
+
+        const named = joinOf(sara.wire, 'alex');
+
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), true, true);
+        await rest();
+
+        expect(joinOf(sara.wire, 'alex'), 'a mute in capitals was taken for a new joining').toBe(named);
+        expect(lastVoice(sara.wire)?.peers.find((peer) => peer.who === 'alex')?.muted).toBe(true);
+
+        world.hub.voice(alex.connection, TABLE.toUpperCase(), false, true);
+        await rest();
+
+        expect(lastVoice(sara.wire)?.peers.map((peer) => peer.who), 'a leave in capitals left them in the call').toEqual(['sara.k']);
     });
 
     it('gives every joining a name of its own, keeps it through a mute, and gives a new one to somebody who comes back', async () =>

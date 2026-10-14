@@ -20,7 +20,7 @@ import { cubeLive } from '../match/backgammon/cube.ts';
 import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
-import type { VoiceScope } from './voices.ts';
+import { scopeFor, type VoiceScope } from './voices.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -628,7 +628,7 @@ export function createTableService(db: DataSource, social: SocialService)
                     game: ask.game,
                     privacy: 'public',
                     chat: true,
-                    voice: ask.voice,
+                    voice: scopeFor(ask.voice, want.make.teams),
                     roomId: null
                 }, [], true);
 
@@ -902,6 +902,11 @@ export function createTableService(db: DataSource, social: SocialService)
             const cube = cubeLive(input.target, rules.has_cube && input.cube);
             const blinds = rules.has_blinds ? input.blinds : 'low';
             const teams = teamsOf(rules.partners, input.seats, input.teams);
+
+            if (input.voice === 'team' && !teams)
+            {
+                throw new ValidationError({ voice: 'A call for one side needs a table of two sides.' }, 'That is not a table this game makes.');
+            }
 
             if (guests.length > input.seats - 1)
             {
@@ -1288,17 +1293,44 @@ export function createTableService(db: DataSource, social: SocialService)
         async setVoice(me: string, tableId: string, voice: VoiceScope)
         {
             const table = await mustSee(me, tableId);
-            if (!table.is_host)
+            if (!table.is_host || table.mine === null)
             {
                 throw new ForbiddenError('Only the host can turn voice on or off.');
             }
 
-            const changed = await db.getRepository(Table).update({ id: tableId, hostId: me, status: Not('closed') }, { voice });
-
-            if (changed.affected === 0)
+            if (voice === 'team' && !table.teams)
             {
-                throw tableRefusal('table-closed', 'That table has closed.');
+                throw new ValidationError({ voice: 'A call for one side needs a table of two sides.' }, 'That is not a table this game makes.');
             }
+
+            await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const held = await tx.getRepository(Table).findOne({ select: { id: true, voice: true, teams: true, status: true }, where: { id: tableId, hostId: me } });
+
+                if (held === null || held.status === 'closed')
+                {
+                    throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
+                if (held.voice === voice)
+                {
+                    return;
+                }
+
+                if (held.teams && await tx.getRepository(Match).existsBy({ tableId: held.id, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'The call a game began under stays until it ends.');
+                }
+
+                await tx.getRepository(Table).update({ id: held.id }, { voice });
+
+                if (held.voice === 'team' || voice === 'team')
+                {
+                    await tx.getRepository(TableSeat).update({ tableId: held.id }, { ready: false });
+                }
+            });
         },
 
         /**

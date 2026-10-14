@@ -23,7 +23,7 @@ import { createFranking } from './domains/chat/franking.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { createSocialService } from './domains/social/service.ts';
 import { attachRealtime } from './realtime/gateway.ts';
-import { voiceAllowed } from './domains/table/voice.ts';
+import { voiceCall } from './domains/table/voice.ts';
 import { createHub } from './realtime/hub.ts';
 import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
@@ -122,7 +122,7 @@ const hub = createHub({
 
     report: (error, where) => log.error('realtime failure', { where, error }),
 
-    voiceAllowed: (userId, tableId) => voiceAllowed(dataSource, userId, tableId),
+    voiceCall: (userId, tableId) => voiceCall(dataSource, userId, tableId),
 
     async mayTalk(a, b)
     {

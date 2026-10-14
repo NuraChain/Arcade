@@ -63,6 +63,8 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived teams = teamsOf(rules.partners, seats, paired);
 
+    derived sideCall = teams && voice !== 'off';
+
     derived teamsHint = teams ? TEAMS_HINT[props.game.id] ?? null : null;
 
     derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams } satisfies TableConfig;
@@ -228,6 +230,10 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
         <Toggle checked={ chat } label={ locale.t('create.chat') } description={ locale.t('create.chatHint') } onChange={ (checked) => chat = checked } />
 
         <Toggle checked={ voice !== 'off' } label={ locale.t('create.voice') } description={ locale.t('create.voiceHint') } onChange={ (checked) => voice = checked ? 'table' : 'off' } />
+
+        <Show when={ sideCall }>
+            <Toggle checked={ voice === 'team' } label={ locale.t('create.voiceTeam') } description={ locale.t('create.voiceTeamHint') } onChange={ (checked) => voice = checked ? 'team' : 'table' } />
+        </Show>
 
         <fieldset class="flex flex-col gap-3">
             <legend class="label mb-2 flex w-full items-center justify-between text-ui-sm text-muted">

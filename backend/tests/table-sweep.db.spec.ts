@@ -89,7 +89,7 @@ const hubAt = (clock: { at: number }) => createHub({
     aliveSessions: async (ids) => new Set(ids),
     touchSeen: () => undefined,
     report: () => undefined,
-    voiceAllowed: async () => false,
+    voiceCall: async () => null,
     mayTalk: async () => false,
     pulse: async () => ({ games: [], watching: '' })
 });
