@@ -147,6 +147,8 @@ describe('somebody drawn in a list, pressed', () =>
 
     it('opens what can be done with the person who wrote a message in a crowd, from their picture', async () =>
     {
+        await usePeople().want(['mina']);
+
         const container = await opened('/app/chats/c-1', () => MessageBubble({
             message: { id: 'm-1', conversationId: 'c-1', from: 'mina', kind: 'text', text: 'Who is in?', at: 1_400_000, ref: null },
             me: 'alex',
