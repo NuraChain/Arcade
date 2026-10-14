@@ -77,6 +77,80 @@ afterEach(() =>
     cleanup();
 });
 
+describe('a line that arrives in the thread on screen', () =>
+{
+    const hold = () =>
+    {
+        const row = server.conversations.find((one) => one.last !== undefined && one.last.kind === 'text' && one.last.from !== 'alex')!;
+        const line = server.messages.find((one) => one.id === row.last!.id)!;
+
+        server.messages = server.messages.filter((one) => one.id !== line.id);
+        row.last = server.messages.filter((one) => one.conversationId === row.id).at(-1);
+        row.unread = 0;
+
+        return { row, line };
+    };
+
+    const arrives = async ({ row, line }: ReturnType<typeof hold>) =>
+    {
+        server.messages.push(line);
+        row.last = line;
+        row.unread = 1;
+        await useChat().refresh();
+        await settle();
+    };
+
+    const reads = () => server.calls.filter((one) => one === 'chat.read').length;
+
+    const looking = (shown: boolean) =>
+    {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') });
+        document.dispatchEvent(new Event('visibilitychange'));
+    };
+
+    afterEach(() =>
+    {
+        Reflect.deleteProperty(document, 'visibilityState');
+    });
+
+    it('is read when it lands in the thread the reader has open, and the thread is read once on opening', async () =>
+    {
+        const held = hold();
+        const container = opened(held.row.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelectorAll('[data-message]').length).toBeGreaterThan(0), { timeout: 4000 });
+        await settle();
+
+        expect(reads(), 'opening the thread reads it, once').toBe(1);
+
+        await arrives(held);
+
+        await vi.waitFor(() => expect(container.querySelector(`[data-message="${ held.line.id }"]`)).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(reads(), 'the line on screen was left unread').toBe(2), { timeout: 4000 });
+        await vi.waitFor(() => expect(useChat().unread(held.row.id)).toBe(0), { timeout: 4000 });
+    });
+
+    it('waits until a page nobody is looking at is seen again', async () =>
+    {
+        const held = hold();
+        const container = opened(held.row.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelectorAll('[data-message]').length).toBeGreaterThan(0), { timeout: 4000 });
+        await settle();
+
+        looking(false);
+        await arrives(held);
+        await vi.waitFor(() => expect(container.querySelector(`[data-message="${ held.line.id }"]`)).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        expect(reads(), 'a hidden page read the line nobody saw').toBe(1);
+
+        looking(true);
+
+        await vi.waitFor(() => expect(reads(), 'seen again, the line stayed unread').toBe(2), { timeout: 4000 });
+    });
+});
+
 describe('a thread that is read again', () =>
 {
     it('keeps the pictures over it and beside it, and the day over its lines', async () =>

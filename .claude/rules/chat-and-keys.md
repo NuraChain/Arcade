@@ -35,6 +35,14 @@ meant one person pinning a thread pinned it for everybody in it. Unread is a cou
 after my own watermark - which is also the only way to count them once the bodies are sealed and
 the server cannot read one.
 
+**A line that lands in the thread on screen is read.** The chat page moved the watermark once, when
+the thread opened, so a reply that arrived while the reader was looking at it stayed unread: its row
+and the Chats tab said 1 for as long as the thread stayed open. The clean production run found it
+between two brand-new wallets. The page marks the thread again whenever the newest line from
+somebody else changes, while the page is seen (`visibilityState`) and scrolled to its newest line
+(`near`), and only once the thread has answered, so opening one is still one read. `markRead` holds
+nothing back: it dropped any mark within a second of the last, which is exactly when a quick reply
+comes. `chat-page.spec.ts` (*a line that arrives in the thread on screen*) holds it.
 
 **A message is words XOR a line.** `body` for what somebody typed, `payload` `{ key, params }` for
 the three kinds the server authors, and a CHECK constraint so a row can never be both or neither.

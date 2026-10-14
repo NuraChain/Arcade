@@ -512,18 +512,16 @@ export const useChat = createStore((): ChatApi =>
         /**
          * Moves my watermark, on the SERVER.
          *
-         * Debounced against the clock because the chat page calls it from an effect, and a write
-         * per render would be a write per keystroke somewhere else in the room.
+         * Every caller asks once for something the reader has just had in front of them (the
+         * thread opening, a line arriving in it, the table's chat opening, the menu), so nothing
+         * is held back: a mark dropped for coming within a second of the last one left a line read
+         * on screen counted as unread for as long as the thread stayed open.
          */
         async markRead(id)
         {
-            const current = untrack(seen);
             const now = runtime().clock.now();
-            if (current[id] !== undefined && now - current[id] < 1000)
-            {
-                return;
-            }
-            setSeen({ ...current, [id]: now });
+
+            setSeen((current) => ({ ...current, [id]: now }));
             await client.chat.read({ params: { id } }).catch(() => undefined);
             await revalidateList();
         },

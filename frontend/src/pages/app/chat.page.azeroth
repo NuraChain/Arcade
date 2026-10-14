@@ -68,6 +68,8 @@ export default component ChatPage()
 
     state near = true;
 
+    state looking = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+
     derived id = params().id ?? '';
 
     const opened = untrack(() => params().id ?? '');
@@ -151,8 +153,13 @@ export default component ChatPage()
     {
         const release = shell.claimTitle(() => title);
         const unstick = list === null ? null : attachStick(list, (value) => near = value);
+        const look = () => looking = document.visibilityState !== 'hidden';
+
+        document.addEventListener('visibilitychange', look);
+
         return () =>
         {
+            document.removeEventListener('visibilitychange', look);
             unstick?.();
             release();
 
@@ -244,10 +251,15 @@ export default component ChatPage()
 
     derived readable = conversation === null ? '' : id;
 
+    derived heard = [...messages].reverse().find((message) => message.from !== me)?.id ?? '';
+
+    let marked: string | null = null;
+
     effect
     {
-        if (readable !== '')
+        if (readable !== '' && !chat.threadLoading() && looking && near && heard !== marked)
         {
+            marked = heard;
             chat.markRead(readable);
         }
     }
