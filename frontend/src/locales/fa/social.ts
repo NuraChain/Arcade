@@ -56,6 +56,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'actions.unfriended': '{name} دیگر در دوستانت نیست.',
     'actions.report': 'گزارش {name}',
     'actions.copyHandle': 'کپی @نام‌کاربری',
+    'actions.accept': 'قبول درخواست دوستی {name}',
     'actions.handleCopied': 'نام کاربری کپی شد',
 
     'report.title': 'گزارش {name}',

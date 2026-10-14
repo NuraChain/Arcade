@@ -87,6 +87,83 @@ afterEach(() =>
 
 describe('what can be done about a person', () =>
 {
+    const friendly = (labels: string[]) => labels.filter((label) =>
+        label === 'Add friend' || label === 'Cancel request' || label.startsWith('Accept ') || label.includes('from friends'));
+
+    it('leads with the profile, and then a message', async () =>
+    {
+        expect(offered(await sheet('mina')).slice(0, 2)).toEqual(['View profile', 'Message']);
+    });
+
+    it('offers the one friend action that is true for the person: to add, to take back what was asked, to accept what was asked of you, or to leave', async () =>
+    {
+        expect(friendly(offered(await sheet('mina')))).toEqual(['Add friend']);
+
+        cleanup();
+
+        expect(friendly(offered(await sheet('maya.c')))).toEqual(['Cancel request']);
+
+        cleanup();
+
+        expect(friendly(offered(await sheet('mahsa')))).toEqual(['Accept Mahsa’s friend request']);
+
+        cleanup();
+
+        expect(friendly(offered(await sheet('sara.k')))).toEqual(['Remove Sara from friends']);
+    });
+
+    it('offers no way to reach somebody the reader has blocked: no message and no friend action, only their profile, their handle and the way back', async () =>
+    {
+        await useSocial().block('mina');
+
+        expect(useSocial().relation('mina')).toBe('blocked');
+        expect(offered(await sheet('mina'))).toEqual(['View profile', 'Copy @handle', 'Mute Mina', 'Report Mina', 'Unblock Mina']);
+    });
+
+    it('asks to be friends at the press, says the request went and closes the sheet', async () =>
+    {
+        const container = await sheet('mina');
+
+        server.calls = [];
+        fire(action(container, 'Add friend')!, 'click');
+
+        await vi.waitFor(() => expect(said().map(([, text]) => text)).toEqual(['Request sent']));
+
+        expect(server.calls).toContain('social.request');
+        expect(useSocial().relation('mina')).toBe('outgoing');
+        expect(closed).toHaveLength(1);
+    });
+
+    it('takes back a request that is out, and accepts one that came in', async () =>
+    {
+        fire(action(await sheet('maya.c'), 'Cancel request')!, 'click');
+
+        await vi.waitFor(() => expect(useSocial().relation('maya.c')).toBe('none'));
+
+        cleanup();
+
+        fire(action(await sheet('mahsa'), 'Accept Mahsa’s friend request')!, 'click');
+
+        await vi.waitFor(() => expect(useSocial().relation('mahsa')).toBe('friend'));
+
+        await vi.waitFor(() => expect(server.friends).toContain('mahsa'));
+    });
+
+    it('says the friend actions in Persian too', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        expect(offered(await sheet('mina'))).toContain('افزودن دوست');
+
+        cleanup();
+
+        expect(offered(await sheet('maya.c'))).toContain('لغو درخواست');
+
+        cleanup();
+
+        expect(offered(await sheet('mahsa'))).toContain('قبول درخواست دوستی Mahsa');
+    });
+
     it('offers to take a friend out of the friends list, and nobody else', async () =>
     {
         expect(offered(await sheet('sara.k'))).toContain('Remove Sara from friends');

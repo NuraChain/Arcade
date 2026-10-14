@@ -53,6 +53,7 @@ export const social = {
     'actions.unfriended': '{name} is no longer in your friends.',
     'actions.report': 'Report {name}',
     'actions.copyHandle': 'Copy @handle',
+    'actions.accept': 'Accept {name}’s friend request',
     'actions.handleCopied': 'Handle copied',
 
     'report.title': 'Report {name}',

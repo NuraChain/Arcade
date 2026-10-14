@@ -1049,6 +1049,15 @@ with the request held, refused, sent twice and answered by a table that then can
 `lobby-panel.spec.ts` (*the button that says ready*) the button, which is the same node
 throughout, and the sentence in both languages; `play.spec.ts` Play again on the page.
 
+**The sheet about a person leads with their profile, and offers the one friend action that is
+true for them.** It began with Message and offered a friend nothing but to be removed, so a
+stranger could not be added from it and a request could not be taken back or accepted. The order
+is the profile, a message, then add, cancel the request or accept theirs (by `relation`, as the
+person's page does), the handle, mute, report, and the two that are asked about first: remove from
+friends and block. Somebody blocked is offered no message and no friend action, as on their page:
+a message to them has nowhere to go. `person-actions.spec.ts` holds the order, each relation and
+both languages.
+
 **Everything the reader does about another person is shown the same way**: a friend request
 sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
 store lays its guesses over ONE shape made from the graph (`Known`: who is a friend, who is

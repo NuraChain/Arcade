@@ -50,7 +50,9 @@ export default component PersonActions(props: OverlayProps & {
 
     derived blocked = social.isBlocked(props.personId);
 
-    derived friends = social.relation(props.personId) === 'friend';
+    derived relation = social.relation(props.personId);
+
+    derived asked = social.incoming().find((request) => request.from === props.personId)?.id ?? '';
 
     const confirmBlock = async () =>
     {
@@ -86,8 +88,16 @@ export default component PersonActions(props: OverlayProps & {
 
     derived actions = (() =>
     {
-        const list: Action[] = [
-            {
+        const befriend: Action[] = relation === 'none'
+            ? [{ id: 'add', icon: 'friend-add', label: locale.t('person.add'), run: () => void attempt(social.add(props.personId), locale.t('person.added')) }]
+            : (relation === 'outgoing'
+                ? [{ id: 'withdraw', icon: 'clock', label: locale.t('person.withdraw'), run: () => void attempt(social.withdraw(props.personId)) }]
+                : (relation === 'incoming'
+                    ? [{ id: 'accept', icon: 'friend-check', label: locale.t('actions.accept', { name }), run: () => void attempt(social.accept(asked)) }]
+                    : []));
+        const message: Action[] = relation === 'blocked'
+            ? []
+            : [{
                 id: 'message',
                 icon: 'chats',
                 label: locale.t('person.message'),
@@ -96,7 +106,8 @@ export default component PersonActions(props: OverlayProps & {
                     props.close();
                     void chat.openDirect(props.personId).then((id) => navigate(`/app/chats/${ id }`));
                 }
-            },
+            }];
+        const list: Action[] = [
             {
                 id: 'profile',
                 icon: 'me',
@@ -107,6 +118,8 @@ export default component PersonActions(props: OverlayProps & {
                     navigate(`/app/people/${ person?.handle ?? props.personId }`);
                 }
             },
+            ...message,
+            ...befriend,
             {
                 id: 'handle',
                 icon: 'at',
@@ -139,7 +152,7 @@ export default component PersonActions(props: OverlayProps & {
             }
         ];
 
-        if (friends)
+        if (relation === 'friend')
         {
             list.push({
                 id: 'unfriend',
