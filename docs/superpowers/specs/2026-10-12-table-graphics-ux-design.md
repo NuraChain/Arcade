@@ -162,6 +162,17 @@ plate is 28px to 43px high in Ludo at 320 and 768, for Hokm's partner, for poker
 and for every plate on a phone on its side. Under a finger the press reaches 44px above and
 below such a plate, and the band that adds holds nothing else to press.
 
+**As built (S6, audited 2026-10-14).** The four seats are one component, `TablePlate`, and one
+anatomy: a face with the turn's ring round it, a mark on the face (colour, dealer, side), the
+name, one line that is the game's own (pawns home, pips, tricks and cards, stack), a tag, and the
+press for the person. The games choose its size and nothing else: measured on the built server,
+Hokm's plate is a 42px pill with a 32px face at every width, backgammon's a 48px pill on its rail
+at 1280 and 52px at 390, Ludo's a 79px tile in its frame's corner at 1280 and a 54px pill at 390,
+and poker's a card or a flat plate by the table's arrangement. The turn's number stands inside the
+plate in three games; Hokm pins it to the plate's edge as a chip, because its plate is the
+narrowest and a clock inside it would push the name out. That is the one place the anatomy bends,
+and it bends on purpose. No refactor came of the audit: a fifth skin would have been the finding.
+
 ### 3.2 Ludo
 
 - A mark at every lit pawn's landing square (L1, D17): a ring in the pawn's colour, a different
