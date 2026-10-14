@@ -104,6 +104,7 @@ interface TableWire
     yourTurn?: boolean;
     removed?: boolean;
     keptOut?: string[];
+    quick?: boolean;
     createdAt: string;
 }
 
