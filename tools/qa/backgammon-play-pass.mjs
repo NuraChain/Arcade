@@ -11,7 +11,7 @@ const browser = await launch();
 const dana = await seat(browser, 'dana.w');
 const mina = await seat(browser, 'mina');
 
-const board = 'svg[viewBox="0 0 1000 820"]';
+const board = '.table-stage svg[viewBox="0 0 1000 820"]';
 
 const dice = '.bg-layer .bgt-dice';
 

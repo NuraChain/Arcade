@@ -24,7 +24,7 @@ const MEN = { name: 'men', nodes: '.bg-layer .man', within: '.bg-layer' };
 
 const DICE = { name: 'dice', nodes: '.bgt-dice > .die3d', within: '.bg-layer', body: '.die3d-body' };
 
-const board = 'svg[viewBox="0 0 1000 820"]';
+const board = '.table-stage svg[viewBox="0 0 1000 820"]';
 
 mkdirSync(OUT, { recursive: true });
 

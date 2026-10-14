@@ -154,7 +154,7 @@ export async function menOf(page, layer = '.bg-layer', board = 'svg[viewBox="0 0
     return await page.evaluate(({ layer, board }) =>
     {
         const frame = document.querySelector(layer)?.getBoundingClientRect();
-        const matrix = document.querySelector(board)?.getScreenCTM() ?? null;
+        const matrix = document.querySelector(layer)?.parentElement?.querySelector(board)?.getScreenCTM() ?? null;
 
         if (frame === undefined)
         {

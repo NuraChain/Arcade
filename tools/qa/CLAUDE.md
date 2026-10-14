@@ -258,6 +258,12 @@ where a blot goes (`knockOf`) and where thirty checkers stand (`expectedOf`). `p
 WHICH node stands at each start by reading the page at rest. `differs` compares what is drawn
 with what is expected through the SVG's own screen matrix, to 1.5px.
 
+**The board is the one in the stage.** The lobby draws the backgammon table it is about to play
+with the same `viewBox`, so a bare `svg[viewBox="0 0 1000 820"]` found the waiting room first:
+"the starter sees the board" passed before the board existed and the opening was read from
+nothing. The passes ask for `.table-stage svg[...]`, and `menOf` takes the svg beside its
+`.bg-layer`, which is also where the lab puts it.
+
 `ludo-routes.mjs` does the same for ludo, from `game/layout.ts`, `ludo-felt.ts` and the server's
 own `ludo/board.ts`: where a pawn stands alone on a square, in a pair, side by side or in its home
 (`restsOf`, `differs`), and the feet of the squares a move passes (`planOf`, from the events of
