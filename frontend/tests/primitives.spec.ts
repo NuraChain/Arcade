@@ -7,6 +7,7 @@ import Badge from '../src/components/ui/badge.component.azeroth';
 import FilterBar from '../src/components/ui/filter-bar.component.azeroth';
 import LoadMore from '../src/components/ui/load-more.component.azeroth';
 import Pagination from '../src/components/ui/pagination.component.azeroth';
+import SearchInput from '../src/components/ui/search-input.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
 import Tooltip from '../src/components/ui/tooltip.component.azeroth';
 import { place, physicalSide } from '../src/lib/anchor.ts';
@@ -460,6 +461,51 @@ describe('Pagination', () =>
         expect(container.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('2');
         expect(marked()).toEqual(['2']);
         expect((container.querySelector('button[aria-label="Previous page"]') as HTMLButtonElement).disabled).toBe(false);
+    });
+});
+
+describe('SearchInput', () =>
+{
+    it('clears its words on Escape, and leaves Escape to whatever it sits in once there are none', () =>
+    {
+        const [value, setValue] = createSignal('sara');
+        const closed = vi.fn();
+        const holder = document.createElement('div');
+        const sheet = (event: KeyboardEvent) =>
+        {
+            if (event.key === 'Escape' && !event.defaultPrevented)
+            {
+                closed();
+            }
+        };
+
+        document.body.append(holder);
+
+        const { container } = renderTest(() => SearchInput({
+            get value()
+            {
+                return value();
+            },
+            onInput: setValue,
+            placeholder: 'Search',
+            label: 'Search'
+        }) as Rendered);
+
+        holder.append(container);
+        document.addEventListener('keydown', sheet);
+
+        const field = container.querySelector('input')!;
+
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+        expect(value(), 'Escape left the words in the field').toBe('');
+        expect(closed, 'what the field sits in was closed with words still in it').not.toHaveBeenCalled();
+
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+        expect(closed, 'an empty field kept Escape from what it sits in').toHaveBeenCalledTimes(1);
+        document.removeEventListener('keydown', sheet);
+        holder.remove();
     });
 });
 

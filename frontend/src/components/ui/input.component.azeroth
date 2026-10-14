@@ -66,6 +66,13 @@ export default component Input(props: {
                     event.preventDefault();
                     props.onEnter();
                 }
+
+                if (event.key === 'Escape' && props.clearable === true && props.value !== '')
+                {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    props.onInput('');
+                }
             } }
             onFocus={ () => props.onFocus?.() }
             onBlur={ () => props.onBlur?.() }

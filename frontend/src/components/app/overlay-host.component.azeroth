@@ -12,7 +12,7 @@ export default component OverlayHost()
     {
         const onKeyDown = (event: KeyboardEvent) =>
         {
-            if (event.key !== 'Escape')
+            if (event.key !== 'Escape' || event.defaultPrevented)
             {
                 return;
             }

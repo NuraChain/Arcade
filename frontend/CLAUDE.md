@@ -1030,6 +1030,12 @@ keyboard was dropped on the page. Not added, on purpose: a choice of page size (
 people and tables, not a ledger) and a field to type a page into (the numbered pager always shows
 the first and the last).
 
+**Escape clears a search field that has words, and only then closes what it sits in.** A field
+with `clearable` answers Escape by clearing itself and marking the event answered
+(`preventDefault`), and the overlay host leaves an Escape that something already answered. The
+first Escape in the invite sheet's search clears the name, and the second closes the sheet.
+`primitives.spec.ts` (*SearchInput*) and `shell.spec.ts` (*OverlayHost*) hold both halves.
+
 **Primitives** live in `components/ui/`. `Tooltip` wraps every `IconButton` automatically, so an
 icon-only control has a visible name on a mouse and a long-press name on a finger; it portals to
 `.anchor-root` and must never go through the overlay stack, whose `blocking()` drives `inert`.

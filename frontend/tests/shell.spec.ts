@@ -443,6 +443,26 @@ describe('OverlayHost', () =>
         fire(document.body.querySelector('.overlay-scrim') as HTMLElement, 'click');
         expect(overlay.top()?.phase).toBe('open');
     });
+
+    it('leaves an Escape that something inside it already answered, such as a search field clearing its words', async () =>
+    {
+        const overlay = useOverlay();
+        renderTest(() => OverlayHost({}) as Rendered);
+        overlay.open(Probe, {}, { label: 'Invite' });
+        await settle();
+
+        const answered = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+        answered.preventDefault();
+        document.dispatchEvent(answered);
+
+        expect(overlay.top()?.phase, 'a sheet closed on an Escape a field inside it had used').toBe('open');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await settle();
+
+        expect(overlay.top()?.phase ?? 'closed').not.toBe('open');
+    });
 });
 
 describe('ToastHost', () =>
