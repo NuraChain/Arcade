@@ -1204,6 +1204,29 @@ its button took two bites out of one countdown. Resuming is idempotent too, whic
 `pointercancel` say it unconditionally — a cancelled touch never reaches `pointerup`, and the toast
 used to sit there for good waiting for a resume that was never coming.
 
+**A toast keeps its time for somebody who can see it, and the keyboard can reach it.** The owner
+asked for toasts "with full Facilities"; most were there (six kinds, an action, close, a pause
+under a pointer or focus, swipe away, a capped stack, the right announcement, de-duplication).
+Four things were not:
+
+- **A hidden tab holds every countdown.** A toast counting down when the tab hides, or raised
+  while it is hidden, waits (`away` in the store) and counts on from where it stopped when the
+  tab is seen. A toast held by a pointer stays held.
+- **Alt+T takes the keyboard to the newest toast**, onto its own button when it has one, and
+  Escape in a toast closes it. Either way, and after its button or its close is pressed, the
+  keyboard goes back to where it was (`back` in the host). The region says `aria-keyshortcuts`.
+- **A toast's buttons are kept through a pause.** Focus on a button paused the toast, the pause is
+  a new toast object, and the branches round the action, the close, the detail and the picture
+  asked the object in a `when`, so the button under the keyboard was drawn again and the
+  keyboard fell to the page. They are value branches (`let=`), which swap only when the answer
+  does. Only the Alt+T spec could see it.
+- **The promise form says a refusal in words it is given.** It showed `String(error)`, which is
+  a sentence in English from wherever the error came; `failed` may be a function of the error,
+  and without one the reader is told `common.actionFailed`. Its first caller is adding this
+  browser with the wallet ("Your wallet is adding this browser…", then what happened).
+
+`shell.spec.ts` (*ToastHost*) and `primitives.spec.ts` hold all four.
+
 **A toast gets out of a sheet's way.** Toasts sit above everything, at the foot of a phone, which is
 where a sheet is: the offer to join a table's voice lay over "Turn voice off for this table" in the
 table's menu and took the tap meant for it, and "Invited Sara" lay over the next friend in the invite

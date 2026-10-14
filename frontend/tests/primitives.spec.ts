@@ -814,6 +814,19 @@ describe('toasts', () =>
         expect(toasts.items().length).toBe(1);
     });
 
+    it('says a refusal in the words it is given for that refusal, and never in the error’s own', async () =>
+    {
+        const toasts = useToasts();
+
+        await expect(toasts.promise(Promise.reject('refused'), { pending: 'working', done: () => 'done', failed: (why) => `said ${ String(why) }` })).rejects.toBe('refused');
+        expect(toasts.items()[0].text).toBe('said refused');
+
+        toasts.dismissAll();
+
+        await expect(toasts.promise(Promise.reject(new Error('An English sentence from somewhere')), { pending: 'working', done: () => 'done' })).rejects.toThrow();
+        expect(toasts.items()[0].text, 'the error’s own words were shown').toBe(useLocale().t('common.actionFailed'));
+    });
+
     it('reports how much of a toast has burned down', () =>
     {
         const toasts = useToasts();

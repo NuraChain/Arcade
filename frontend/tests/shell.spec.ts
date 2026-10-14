@@ -460,6 +460,100 @@ describe('ToastHost', () =>
         expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
     });
 
+    it('holds a toast\'s time while the tab is hidden, and counts on from where it stopped when it is seen', async () =>
+    {
+        const stop = useToasts().start();
+        const seen = vi.spyOn(document, 'visibilityState', 'get');
+
+        try
+        {
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'Invite sent' });
+            await settle();
+            clock.advance(1000);
+
+            seen.mockReturnValue('hidden');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION * 5);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length, 'a toast ran out while nobody could see it').toBe(1);
+
+            seen.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION - 1000 - 50);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length, 'a toast lost the time it had left').toBe(1);
+
+            clock.advance(100);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+        }
+        finally
+        {
+            seen.mockRestore();
+            stop();
+        }
+    });
+
+    it('holds a toast raised while the tab is hidden until somebody can see it', async () =>
+    {
+        const stop = useToasts().start();
+        const seen = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        try
+        {
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'Your turn at Ludo' });
+            await settle();
+            clock.advance(TOAST_DURATION * 5);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(1);
+
+            seen.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+        }
+        finally
+        {
+            seen.mockRestore();
+            stop();
+        }
+    });
+
+    it('takes the keyboard to the newest toast on Alt+T, and back where it was on Escape', async () =>
+    {
+        const outside = document.createElement('button');
+
+        document.body.append(outside);
+        renderTest(() => ToastHost({}) as Rendered);
+        useToasts().show({ text: 'Invite sent' });
+        useToasts().show({ kind: 'live', text: 'Mina Sadeghi saved you a seat', action: { label: 'Go to the table', run: () => undefined } });
+        await settle();
+
+        outside.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', code: 'KeyT', altKey: true, bubbles: true }));
+
+        expect(document.activeElement?.textContent?.trim(), 'the keyboard did not reach the newest toast\'s own button').toBe('Go to the table');
+
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await settle();
+
+        expect(document.body.textContent).not.toContain('Mina Sadeghi saved you a seat');
+        expect(document.activeElement, 'the keyboard was left on nothing').toBe(outside);
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', code: 'KeyT', bubbles: true }));
+
+        expect(document.activeElement, 'T alone moved the keyboard').toBe(outside);
+        outside.remove();
+    });
+
     it('gives a toast\'s own button the same room for a finger as the one that dismisses it', async () =>
     {
         renderTest(() => ToastHost({}) as Rendered);

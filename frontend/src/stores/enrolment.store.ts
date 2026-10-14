@@ -46,22 +46,25 @@ export const useEnrolment = createStore((): EnrolmentApi =>
                 return;
             }
 
-            await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
-
-            const failure = devices.failure();
-            if (failure !== null)
+            const added = async () =>
             {
-                toasts.show({
-                    kind: 'error',
-                    text: locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable'),
-                    dedupe: 'devices.enrol'
-                });
-                return;
-            }
+                await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
 
-            await seal.refresh();
+                const failure = devices.failure();
 
-            toasts.show({ kind: 'success', text: locale.t('devices.enrolled'), dedupe: 'devices.enrol' });
+                if (failure !== null)
+                {
+                    throw failure;
+                }
+
+                await seal.refresh();
+            };
+
+            await toasts.promise(added(), {
+                pending: locale.t('devices.adding'),
+                done: () => locale.t('devices.enrolled'),
+                failed: (failure) => locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable')
+            }).catch(() => undefined);
         }
     };
 });
