@@ -43,8 +43,10 @@ emitting, and Node cannot run decorators), so always build before `npm start`.
 
 **Production `.env`** needs `NODE_ENV=production`, `SERVE_PAGES=true`, `DATABASE_SYNC=false`, a real
 `SESSION_SECRET`, and `PUBLIC_ORIGIN` set to
-the origin the browser uses - it is the site in every sign-in text, the WebSocket origin check and the
-cookie's site at once.
+the origin the browser uses - it is the site in every sign-in text, the WebSocket origin check, the
+check every write is held to and the cookie's site at once. In production `loadServerConfig` refuses
+a secret under 32 characters and an origin with a path, an ending slash or plain http anywhere but
+this machine (`unsafeForProduction` in `env.ts`).
 
 **nginx sits in front and owns TLS and every cross-origin rule.** The api listens on `127.0.0.1`
 only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Policy` or

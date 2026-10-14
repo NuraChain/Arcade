@@ -115,6 +115,37 @@ Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In developm
 are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
 production one process answers everything, so there is no CORS between halves in either mode.
 
+## A write from a page on another site
+
+**It is refused before anything reads it.** Three things already stood in front of a forged
+write: the session cookie is `SameSite=Lax`, so a page on another SITE cannot send it with a post;
+the JSON reader refuses any body that is not `application/json`, so a form cannot fake one; and a
+browser will not send JSON across origins without asking first, which nothing here answers. What
+was left was a write with no body (sitting down, starting, leaving, closing, accepting) sent from
+a page on the same SITE but another origin - a sibling subdomain - where `Lax` does send the
+cookie. `sameSiteWrites` in `http/origin.ts`, the second thing `buildApp` puts on the app,
+refuses any method but `GET`, `HEAD` and `OPTIONS` when `Sec-Fetch-Site` names another site
+or the `Origin` is not ours, 403 `cross-site`. Ours is `PUBLIC_ORIGIN` or the host the request
+was sent to (`isOurs`, the union the realtime handshake already used, which now asks the same
+function). A caller with no `Origin` and no `Sec-Fetch-Site` is no browser and carries no cookie
+a page could have lent it, so it passes; the passes post that way. A blanked `Origin: null`
+passes only beside `Sec-Fetch-Site: same-origin`, which is what a same-origin form sends under
+`Referrer-Policy: no-referrer`. The framework's own `csrfProtect` adds a double-submit token on
+top, which every api pass would have had to learn to carry for no defence the origin does not
+already give. `origin.spec.ts` holds the rule and `app.spec.ts` the route: a forged close
+never reaches the table.
+
+**Production answers are pinned to https** (`headersFor` in `http/headers.ts`): HSTS for half a
+year, not forced onto sibling subdomains, sent only on an answer the proxy says went out over
+https (`trustProxy` in production, as the rate limiter has). `headers.spec.ts` holds it.
+
+**There is no Content-Security-Policy for scripts, on purpose.** Signing in is a wallet, and
+wallets put their provider into the page: an extension's content script, Nura Wallet's in-app
+browser. A script policy would stand between the page and the only way in, on wallets nobody here
+can test, while the page itself writes no user content as HTML (links in messages are http and
+https only, `lib/markdown.ts`). The images this server fetches for a page carry their own
+`default-src 'none'`.
+
 ## A request that is not well formed
 
 **It is answered, never thrown.** Postgres refuses four things a caller can put in a request, and

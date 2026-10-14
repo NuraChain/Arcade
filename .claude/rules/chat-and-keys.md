@@ -1303,9 +1303,10 @@ isSameOrigin(origin, request.headers.host) || origin === config.origin
 `config.origin` alone refuses every socket in the mandatory QA run: the browser is on `:3200`
 against the built server while `PUBLIC_ORIGIN` is `:3100`, and a refused handshake writes exactly
 one console error that `tools/qa` cannot suppress — 600 failing cells. `isSameOrigin` is
-reimplemented in `realtime/admit.ts` because `@azerothjs/ws` does not export its own copy; that is
+reimplemented in `http/origin.ts` because `@azerothjs/ws` does not export its own copy; that is
 recorded in the framework register, and the copy is not trivial (implied ports, the opaque `null`
-origin a sandboxed frame sends).
+origin a sandboxed frame sends). The union itself is `isOurs` there, which the handshake and the
+check every write passes (`backend/CLAUDE.md`, *A write from a page on another site*) both ask.
 
 **Nothing in `onConnection` may await.** The package replays the bytes that arrived in the same TCP
 segment as the handshake AFTER `onConnection` returns, so a handler assigned behind an `await`

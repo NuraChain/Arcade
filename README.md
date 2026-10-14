@@ -19,6 +19,9 @@ connection and the pages.
    - `PUBLIC_ORIGIN` and `VITE_PUBLIC_ORIGIN`: the address people use, such as
      `https://play.example.com` (it is the site in every sign-in message, the realtime origin
      check and the cookie's site);
+   - in production the server refuses to start with a `SESSION_SECRET` shorter than 32
+     characters, or a `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http
+     anywhere but this machine, and says which;
    - `PORT`: the local port the proxy forwards to. The server listens on `127.0.0.1` only.
 3. `npm run build`
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and

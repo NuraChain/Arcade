@@ -8,6 +8,44 @@ import { flag, loadConfig, num, oneOf, str, type ConfigVar } from '@azerothjs/ht
 const blank = (name: string, options: { secret?: boolean } = {}): ConfigVar<string> =>
     ({ name, parse: (raw) => raw, defaultValue: '', ...(options.secret === true ? { secret: true } : {}) });
 
+export const SECRET_LEAST = 32;
+
+const THIS_MACHINE = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+const originOf = (text: string) =>
+{
+    try
+    {
+        return new URL(text);
+    }
+    catch
+    {
+        return null;
+    }
+};
+
+export function unsafeForProduction(secret: string, origin: string)
+{
+    const refused: string[] = [];
+    const parsed = originOf(origin);
+
+    if (secret.length < SECRET_LEAST)
+    {
+        refused.push(`SESSION_SECRET is ${ secret.length } characters long, and production needs at least ${ SECRET_LEAST }, such as the output of 'openssl rand -hex 32'.`);
+    }
+
+    if (parsed === null || parsed.origin !== origin)
+    {
+        refused.push('PUBLIC_ORIGIN has to be an origin and nothing more, such as https://play.example.com, with no path and no slash at the end.');
+    }
+    else if (parsed.protocol !== 'https:' && !THIS_MACHINE.has(parsed.hostname))
+    {
+        refused.push('PUBLIC_ORIGIN has to be https in production: over http the session cookie cannot be marked Secure.');
+    }
+
+    return refused;
+}
+
 /**
  * Every environment variable this process reads, declared once, and none of them has a default.
  *
@@ -111,7 +149,19 @@ export function loadServerConfig()
         throw new Error(`The root .env does not set ${ absent.join(', ') }. Every variable in .env.example has to be written in .env, empty where a feature is off.`);
     }
 
-    return loadConfig(shape);
+    const config = loadConfig(shape);
+
+    if (config.env === 'production')
+    {
+        const refused = unsafeForProduction(config.secret, config.origin);
+
+        if (refused.length > 0)
+        {
+            throw new Error(`The root .env is not safe to run in production. ${ refused.join(' ') }`);
+        }
+    }
+
+    return config;
 }
 
 export type ServerConfig = ReturnType<typeof loadServerConfig>;

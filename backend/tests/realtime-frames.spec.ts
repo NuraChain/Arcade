@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 
-import { admit, isSameOrigin } from '../src/realtime/admit.ts';
+import { isSameOrigin } from '../src/http/origin.ts';
+import { admit } from '../src/realtime/admit.ts';
 import { addressKey, createHandshakeLimit } from '../src/realtime/handshake-limit.ts';
 import { hello, nudge, parseClientFrame, presence, pulse, REALTIME_WIRE, typing } from '../src/realtime/frames.ts';
 

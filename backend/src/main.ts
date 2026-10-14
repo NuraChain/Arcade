@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { pathToFileURL } from 'node:url';
 
-import { logRequests, pipeline, requestId, securityHeaders } from '@azerothjs/http';
+import { logRequests, pipeline, requestId } from '@azerothjs/http';
 import { handleShutdownSignals, serve } from '@azerothjs/http/node';
 import { manifestOf } from '@azerothjs/http/api';
 import type { PageRenderer, PageRoute } from '@azerothjs/kit';
@@ -16,6 +16,7 @@ import { seedReference } from './db/seed-reference.ts';
 import { syncSchema } from './db/schema.ts';
 import { loadServerConfig } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
+import { headersFor } from './http/headers.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
@@ -205,7 +206,7 @@ const app = buildApp({
 const handler = pipeline(
     app,
     requestId(),
-    securityHeaders({ crossOriginResourcePolicy: false, crossOriginOpenerPolicy: false }),
+    headersFor(config.env === 'production'),
     gzipOnTheWay,
     ...(ssr === undefined ? [] : [precompressed(config.clientDir, ['/assets/', '/world/'])]),
 

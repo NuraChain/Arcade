@@ -74,6 +74,49 @@ describe('the environment the server boots from', () =>
         expect(() => loadServerConfig()).toThrow(/WS_ACCOUNT_MAX, SERVE_PAGES/);
     });
 
+    it('refuses to run in production with a short secret or an origin a cookie cannot be secure on, naming each and never the secret', () =>
+    {
+        const secret = 'short-secret';
+
+        use({ ...FULL, NODE_ENV: 'production', SESSION_SECRET: secret, PUBLIC_ORIGIN: 'http://play.example.com' });
+
+        let said = '';
+
+        try
+        {
+            loadServerConfig();
+        }
+        catch (error)
+        {
+            said = String(error);
+        }
+
+        expect(said).toMatch(/SESSION_SECRET is 12 characters long/);
+        expect(said).toMatch(/PUBLIC_ORIGIN has to be https/);
+        expect(said, 'the refusal printed the secret').not.toContain(secret);
+
+        for (const origin of ['https://play.example.com/', 'https://play.example.com/games', 'play.example.com'])
+        {
+            use({ ...FULL, NODE_ENV: 'production', PUBLIC_ORIGIN: origin });
+
+            expect(() => loadServerConfig(), origin).toThrow(/PUBLIC_ORIGIN has to be an origin and nothing more/);
+        }
+    });
+
+    it('runs in production on https, or on this machine over http, and anywhere in development', () =>
+    {
+        for (const origin of ['https://play.example.com', 'http://localhost:5300', 'http://127.0.0.1:5300', 'http://[::1]:5300'])
+        {
+            use({ ...FULL, NODE_ENV: 'production', PUBLIC_ORIGIN: origin });
+
+            expect(loadServerConfig().origin, origin).toBe(origin);
+        }
+
+        use({ ...FULL, SESSION_SECRET: 'short', PUBLIC_ORIGIN: 'http://games.local:3100' });
+
+        expect(loadServerConfig().secret).toBe('short');
+    });
+
     it('refuses an empty value where one is needed', () =>
     {
         use({ ...FULL, SESSION_SECRET: '' });

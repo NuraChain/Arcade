@@ -296,6 +296,51 @@ describe('quick play', () =>
     });
 });
 
+describe('a write from a page on another site', () =>
+{
+    const told: unknown[][] = [];
+
+    const app = buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                close: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve();
+                }
+            }
+        } as unknown as Ports
+    });
+
+    const close = (headers: Record<string, string>) =>
+        app.handle(new Request('http://local/api/tables/7c9e6679-7425-40de-944b-e07fc1f90ae7/close', { method: 'POST', headers }));
+
+    it('is refused before anybody is asked, and the same write from this site is not', async () =>
+    {
+        const refused = await close({ 'origin': 'https://evil.example', 'sec-fetch-site': 'cross-site' });
+
+        expect(refused.status).toBe(403);
+        expect(await refused.json()).toMatchObject({ error: { code: 'cross-site' } });
+        expect(told, 'a cross-site write reached the table').toEqual([]);
+
+        const sibling = await close({ 'origin': 'http://games.localhost:3100', 'sec-fetch-site': 'same-site' });
+
+        expect(sibling.status).toBe(403);
+
+        const ours = await close({ 'origin': config.origin, 'sec-fetch-site': 'same-origin' });
+
+        expect(ours.status).toBe(200);
+        expect(told, 'a write from this site never reached the table').toHaveLength(1);
+    });
+});
+
 describe('taking somebody out of a chair', () =>
 {
     const table = {
