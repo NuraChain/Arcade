@@ -257,19 +257,6 @@ describe('a table that cannot be told what happened', () =>
         expect(calls).toEqual(['reset m1@8']);
     });
 
-    it('is drawn again, with nothing played, when the tab is not on screen', () =>
-    {
-        const { presenter, calls, batch, at, opened } = setup();
-
-        opened();
-        hide();
-        at(6);
-        presenter.see(batch([6]));
-
-        expect(calls).toEqual(['reset m1@6']);
-        expect(presenter.presenting()).toBe(false);
-    });
-
     it('stops what it is playing when the tab is hidden, and stands where the board does', async () =>
     {
         const { presenter, calls, clock, batch, at, elapse, opened } = setup();
@@ -1112,6 +1099,229 @@ describe('a table whose box changes size', () =>
         await elapse(ACT_MS);
 
         expect(calls).toEqual(['play 6:e6', 'played 6']);
+    });
+});
+
+describe('a table in a tab that is not on screen', () =>
+{
+    const show = (looking: ReturnType<typeof hide>) =>
+    {
+        looking.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+    };
+
+    it('keeps what happens there, and plays it when the tab is shown again', async () =>
+    {
+        const { presenter, calls, told, batch, at, elapse, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        await elapse(ACT_MS * 4);
+
+        expect(calls, 'a move was played, or the board drawn past it, where nobody could see it').toEqual([]);
+        expect(presenter.presenting(), 'the board was said to be level with a move it has not shown').toBe(true);
+        expect(told).toEqual([true]);
+
+        show(looking);
+
+        expect(calls).toEqual(['play 6:e6']);
+
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['play 6:e6', 'played 6']);
+        expect(presenter.presenting()).toBe(false);
+        expect(told).toEqual([true, false]);
+    });
+
+    it('plays all it kept in one go, and fast when there is a lot of it', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        for (const rev of [6, 7, 8, 9, 10])
+        {
+            at(rev);
+            presenter.see(batch([rev]));
+        }
+
+        show(looking);
+        await elapse((ACT_MS * 5) / FAST - 5);
+
+        expect(calls).toEqual(['play 6:e6 7:e7 8:e8 9:e9 10:e10']);
+
+        await elapse(5);
+
+        expect(calls).toEqual(['play 6:e6 7:e7 8:e8 9:e9 10:e10', 'played 10']);
+    });
+
+    it('keeps only the newest of it that the table has time to show, from the board as it stood before', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        for (const rev of [6, 7, 8, 9, 10, 11, 12])
+        {
+            at(rev);
+            presenter.see(batch([rev]));
+        }
+
+        expect(calls).toEqual(['reset m1@6']);
+        expect(presenter.presenting()).toBe(true);
+
+        show(looking);
+        await elapse(ACT_MS * 6);
+
+        expect(calls).toEqual(['reset m1@6', 'play 7:e7 8:e8 9:e9 10:e10 11:e11 12:e12', 'played 12']);
+    });
+
+    it('draws the board as it stands when one move is longer than the table would ever play back', () =>
+    {
+        const { presenter, calls, told, batch, at, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6], {}, 1, Array.from({ length: 7 }, (_, index) => ({ e: `e${ index }` }))));
+
+        expect(calls).toEqual(['reset m1@6']);
+        expect(presenter.presenting()).toBe(false);
+        expect(told).toEqual([]);
+
+        show(looking);
+
+        expect(calls).toEqual(['reset m1@6']);
+    });
+
+    it('draws the board as it stands over a gap, and keeps what comes after it', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        at(8);
+        presenter.see(batch([8]));
+        at(9);
+        presenter.see(batch([9]));
+
+        expect(calls).toEqual(['reset m1@8']);
+
+        show(looking);
+        await elapse(ACT_MS);
+
+        expect(calls).toEqual(['reset m1@8', 'play 9:e9', 'played 9']);
+    });
+
+    it('draws the board as it stands when it moved with nothing said about it', () =>
+    {
+        const { presenter, calls, batch, at, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        at(7);
+        presenter.see(batch([]));
+
+        expect(calls).toEqual(['reset m1@7']);
+        expect(presenter.presenting()).toBe(false);
+
+        show(looking);
+
+        expect(calls).toEqual(['reset m1@7']);
+    });
+
+    it('draws the board as it stands when the answer to the reader\'s own press comes while the tab is away', () =>
+    {
+        const { presenter, calls, batch, at, opened } = setup();
+
+        opened();
+        presenter.predict({ rev: 5, covers: () => 1 });
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6], {}, 0, [{ e: 'mine' }, { e: 'theirs' }]));
+
+        expect(calls).toEqual(['reset m1@6']);
+
+        show(looking);
+
+        expect(calls).toEqual(['reset m1@6']);
+    });
+
+    it('forgets what it kept when the table moves on to another game', () =>
+    {
+        const { presenter, calls, batch, at, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        at(1, 'm2');
+        presenter.see(batch([1], { id: 'm2' }));
+
+        expect(calls).toEqual(['reset m2@1']);
+
+        show(looking);
+
+        expect(calls).toEqual(['reset m2@1']);
+    });
+
+    it('plays what it kept before a move that arrives once the tab is back, even unannounced', async () =>
+    {
+        const { presenter, calls, batch, at, elapse, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        looking.mockReturnValue('visible');
+        at(7);
+        presenter.see(batch([7]));
+        await elapse(ACT_MS * 2);
+
+        expect(calls).toEqual(['play 6:e6', 'played 6', 'play 7:e7', 'played 7']);
+    });
+
+    it('forgets what it kept when it is taken away, and says it is done', () =>
+    {
+        const { presenter, calls, told, batch, at, opened } = setup();
+
+        opened();
+
+        const looking = hide();
+
+        at(6);
+        presenter.see(batch([6]));
+        presenter.dispose();
+
+        expect(told).toEqual([true, false]);
+
+        show(looking);
+
+        expect(calls).toEqual([]);
     });
 });
 

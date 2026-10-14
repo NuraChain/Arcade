@@ -640,8 +640,10 @@ Ten rules hold for every table. Each is followed by why.
    is past 1.5 s, with lingers never under 300 ms, unless the queue alone is already more than two
    of the game's limits long: then it snaps, and play goes on from the board. History (read
    through `since` after a gap, a reconnect or a return to the tab) is played only when the queue
-   plus the whole of it fits the game's limit, and snaps otherwise. A snap also follows a hidden
-   tab, a scene that throws (logged first), and the stage's box changing under a flight. A view
+   plus the whole of it fits the game's limit, and snaps otherwise. What arrives while the tab is
+   hidden is kept and played on the return, the newest of it that fits the limit, from the board
+   as it stood before it. A snap also follows a tab hidden while something plays, a scene that
+   throws (logged first), and the stage's box changing under a flight. A view
    that moved with no events reconciles quietly: straight slides, no cue, no capture, and a redraw
    in place of the slides above a count.
    *Why.* Judged before the arriving batch is queued, a reconnect lands on an empty queue and

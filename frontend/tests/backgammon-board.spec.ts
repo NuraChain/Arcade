@@ -471,6 +471,35 @@ describe('the backgammon table on the page', () =>
         expect(men(container)).toHaveLength(30);
     });
 
+    it('plays what the other player did while the tab was hidden once it is shown again', async () =>
+    {
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container, tell } = await live(theirs());
+        const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        document.dispatchEvent(new Event('visibilitychange'));
+        animate.mockClear();
+        tell(answered(), theirMove());
+        await elapse(4000);
+
+        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('man')), 'a checker moved where nobody could see it').toBe(false);
+        expect(stageOf(container).getAttribute('data-presenting'), 'the board was said to be level with a move it had not shown').toBe('true');
+        expect(dice(container), 'the next roll was shown before the move that came before it').toEqual(['6', '1']);
+
+        hidden.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flush();
+
+        expect(animate.mock.contexts.some((one) => (one as Element).classList.contains('man')), 'the move that was missed was not played').toBe(true);
+
+        await elapse(4000);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(dice(container)).toEqual(['3', '2']);
+        expect(cube(container)?.isConnected).toBe(true);
+        expect(men(container)).toHaveLength(30);
+    });
+
     it('draws the next match at the same table with its own dice and cube', async () =>
     {
         const { container, tell, move } = await live(theirs());

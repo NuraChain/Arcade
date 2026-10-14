@@ -3604,7 +3604,7 @@ land.
   top of the other. Everything is heard in the order it is seen,
   by somebody watching too, and with less motion every cue still fires in its place, because
   the kit turns a flight into a fade and leaves the timers alone. A table set down as it
-  stands (a jump, a hidden tab) is silent.
+  stands (a jump, a tab hidden in the middle of a scene) is silent.
 - **Two gaps, two names.** `CHIP_GAP` in the board is the 4 pixels between a bet and whatever
   it stands beside. The 45 ms between two discs is `DISC_GAP` in `game/poker-beats.ts`. They
   were one name for an hour: the import was shadowed without a word from the bundler, three
@@ -4556,8 +4556,8 @@ nothing in flight can widen a page the matrix measures.
   last-trick tile keeps it readable. A table opened mid-hand shows only the trick in progress.
 - **Pacing is the stage's clock, and what is played at all is the presenter's.** More than 1.5s
   behind plays at double speed, flights included. More than the felt's `HISTORY`, six seconds of
-  scenes, jumps to the board, and so do a gap in the log, a hidden tab and the first sight of a
-  match: a reconnect replaying half a hand at full pace is a table showing the past beside controls
+  scenes, jumps to the board, and so do a gap in the log and the first sight of a match (a hidden
+  tab keeps what it missed and plays it on return, *The presenter*, below): a reconnect replaying half a hand at full pace is a table showing the past beside controls
   showing the present. Under reduced motion a card is a 140ms fade where it lands and is shown after
   the fade; the gather, the deal and the draw are `quiet: 'skip'`, so their foley is heard and no
   copy is made; the "+1" is not made at all.
@@ -4778,8 +4778,18 @@ ask for the board as it should stand now (`sight`). In order:
 - A match it has not shown - the first, or a rematch on the same board - is drawn from nothing
   (`table.reset`) and nothing that already happened is played.
 - A batch for another match is ignored and moves nothing.
-- A batch that says `jump`, a gap in what it was told, and anything at all while the tab is hidden:
-  go straight to the board. So does a tab that is hidden while something plays.
+- A batch that says `jump` and a gap in what it was told go straight to the board. So does a tab
+  that is hidden while something plays.
+- **What arrives while the tab is hidden is kept, and played when the tab is shown again**, as one
+  catch-up: double speed past a second and a half, like any other. All the while the presenter says
+  it is presenting, so no board mends itself to the newest view under it, the result waits for it,
+  and a pass waiting on `data-presenting` waits for it too. What is kept never outgrows the game's
+  own limit: the oldest of it goes, and the board is drawn as it stood before what is left, so a
+  long absence comes back to its last few moves played. A gap, a board that moved with nothing said,
+  another game, and the answer to the reader's own press arriving while the tab is away still go
+  straight to the board. It used to be drawn as it stands at once, which is how the owner saw a roll
+  made in one tab never thrown in the other: the board took the new revision while nobody looked,
+  and once the pawn had walked no die anywhere said what had been rolled.
 - Otherwise the actions after the last revision it has shown, and no later than the board in hand,
   are played to that board. `live` ones are played, at double speed once more than a second and a
   half stands IN FRONT of the newest action: the queue, plus the earlier actions that arrived with

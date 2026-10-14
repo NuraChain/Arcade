@@ -51,6 +51,12 @@ export interface Presenter<M>
     dispose(): void;
 }
 
+interface Missed<V, M>
+{
+    acts: readonly Act<M>[];
+    sight: Sight<V>;
+}
+
 export const FAST_OVER = 1500;
 
 export const LIVE_OVER = 2;
@@ -64,19 +70,51 @@ const hidden = () => typeof document !== 'undefined' && document.visibilityState
 export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presenter<M>
 {
     const { table } = options;
+    const listeners = new Set<(presenting: boolean) => void>();
     let matchId: string | null = null;
     let heard = -1;
     let cursor = -1;
     let prediction: Prediction<M> | null = null;
+    let missed: Missed<V, M>[] = [];
+    let said = false;
+
+    const behind = () => director.busy() || missed.length > 0;
+
+    const say = () =>
+    {
+        const now = behind();
+
+        if (now === said)
+        {
+            return;
+        }
+
+        said = now;
+
+        for (const listener of [...listeners])
+        {
+            try
+            {
+                listener(now);
+            }
+            catch (error)
+            {
+                options.report(error);
+            }
+        }
+    };
 
     const snap = (sight: Sight<V> | null) =>
     {
+        missed = [];
         director.cancel();
 
         if (sight !== null)
         {
             table.reset(sight);
         }
+
+        say();
     };
 
     const director = createDirector(options.stage, options.clock, (error) =>
@@ -84,6 +122,35 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         options.report(error);
         snap(options.sight());
     });
+
+    const play = (acts: readonly Act<M>[], sight: Sight<V>, estimate: number, waiting: number) =>
+    {
+        director.enqueue((ctx) => table.play(acts, sight, ctx), {
+            estimate,
+            fast: waiting + table.estimate(acts.slice(0, -1)) > FAST_OVER,
+            cuts: true
+        });
+    };
+
+    const keep = (acts: readonly Act<M>[], sight: Sight<V>) =>
+    {
+        let from: Sight<V> | null = null;
+
+        missed.push({ acts, sight });
+
+        while (missed.length > 0 && table.estimate(missed.flatMap((one) => one.acts)) > table.history)
+        {
+            from = (missed.shift() as Missed<V, M>).sight;
+        }
+
+        if (from !== null)
+        {
+            director.cancel();
+            table.reset(from);
+        }
+
+        say();
+    };
 
     const told = (sight: Sight<V>, batch: Batch) =>
     {
@@ -109,7 +176,7 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         cursor = sight.rev;
         prediction = null;
 
-        if (!fresh.whole || hidden())
+        if (!fresh.whole || (guess !== null && hidden()))
         {
             snap(sight);
 
@@ -131,6 +198,13 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
             acts = [{ ...first, moves: first.moves.slice(covered) }, ...acts.slice(1)];
         }
 
+        if (hidden())
+        {
+            keep(acts, sight);
+
+            return true;
+        }
+
         const estimate = table.estimate(acts);
         const waiting = director.backlog();
 
@@ -141,11 +215,7 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
             return true;
         }
 
-        director.enqueue((ctx) => table.play(acts, sight, ctx), {
-            estimate,
-            fast: waiting + table.estimate(acts.slice(0, -1)) > FAST_OVER,
-            cuts: true
-        });
+        play(acts, sight, estimate, waiting);
 
         return true;
     };
@@ -195,9 +265,50 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         }
     };
 
-    const away = () =>
+    let late: (() => void) | null = null;
+
+    const bound = () =>
     {
-        if (hidden() && matchId !== null)
+        const most = director.busy() ? (options.due?.() ?? null) : null;
+
+        if (most === null)
+        {
+            late?.();
+            late = null;
+        }
+        else
+        {
+            late ??= options.clock.after(most, () => director.enqueue(() => undefined, { urgent: true }));
+        }
+    };
+
+    const release = () =>
+    {
+        if (missed.length === 0 || hidden())
+        {
+            return;
+        }
+
+        const acts = missed.flatMap((one) => one.acts);
+        const { sight } = missed[missed.length - 1];
+        const waiting = director.backlog();
+
+        missed = [];
+        play(acts, sight, table.estimate(acts), waiting);
+        say();
+        bound();
+    };
+
+    const turned = () =>
+    {
+        if (!hidden())
+        {
+            release();
+
+            return;
+        }
+
+        if (matchId !== null)
         {
             snap(options.sight());
         }
@@ -205,7 +316,7 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
 
     if (typeof document !== 'undefined')
     {
-        document.addEventListener('visibilitychange', away);
+        document.addEventListener('visibilitychange', turned);
     }
 
     const take = (batch: Batch) =>
@@ -239,6 +350,7 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         const unheard = batch.seq > heard;
 
         heard = Math.max(heard, batch.seq);
+        release();
 
         if (unheard && batch.id === sight.id && told(sight, batch))
         {
@@ -271,29 +383,14 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
         }
     };
 
-    let late: (() => void) | null = null;
-
-    const bound = () =>
-    {
-        const most = director.busy() ? (options.due?.() ?? null) : null;
-
-        if (most === null)
-        {
-            late?.();
-            late = null;
-        }
-        else
-        {
-            late ??= options.clock.after(most, () => director.enqueue(() => undefined, { urgent: true }));
-        }
-    };
-
     director.watch((busy) =>
     {
         if (!busy)
         {
             bound();
         }
+
+        say();
     });
 
     return {
@@ -326,20 +423,30 @@ export function createPresenter<V, M>(options: PresenterOptions<V, M>): Presente
             }
         },
 
-        presenting: () => director.busy(),
+        presenting: behind,
 
-        watch: (listener) => director.watch(listener),
+        watch(listener)
+        {
+            listeners.add(listener);
+
+            return () =>
+            {
+                listeners.delete(listener);
+            };
+        },
 
         dispose()
         {
             if (typeof document !== 'undefined')
             {
-                document.removeEventListener('visibilitychange', away);
+                document.removeEventListener('visibilitychange', turned);
             }
 
             boxed?.disconnect();
             boxed = null;
+            missed = [];
             director.cancel();
+            say();
         }
     };
 }

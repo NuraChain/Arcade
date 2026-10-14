@@ -1621,6 +1621,38 @@ describe('the ludo table, played from what happened', () =>
         expect(plateDie(container, 1)!.querySelector('.die3d')?.getAttribute('data-face')).toBe('4');
     });
 
+    it('throws a roll that came while the tab was hidden once the tab is shown again, and only then puts it on the roller\'s plate', async () =>
+    {
+        quiet();
+
+        const before = standing([[10, YARD, YARD, YARD], [5, YARD, YARD, YARD]], null, 1);
+        const rolled = stepped(before, { kind: 'roll', seat: 1, die: 4 });
+        const { container, tell } = await live(seen(before, 0, 1));
+        const looking = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        const animate = vi.mocked(Element.prototype.animate);
+        const tossed = () => animate.mock.contexts.some((one) => (one as Element).closest('.lb-die') !== null);
+
+        document.dispatchEvent(new Event('visibilitychange'));
+        animate.mockClear();
+        tell(seen(rolled.state, 0, 2), [happened(2, 1, rolled.moves)]);
+        await elapse(3000);
+
+        expect(tossed(), 'the die was thrown where nobody could see it').toBe(false);
+        expect(stageOf(container).getAttribute('data-presenting'), 'the board was said to be level with a roll it had not thrown').toBe('true');
+        expect(plateDie(container, 1), 'the roll was put on the plate before anybody saw it thrown').toBeNull();
+
+        looking.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flush();
+
+        expect(tossed(), 'the roll that was missed was never thrown').toBe(true);
+
+        await elapse(2800);
+
+        expect(stageOf(container).hasAttribute('data-presenting')).toBe(false);
+        expect(plateDie(container, 1)!.querySelector('.die3d')?.getAttribute('data-face')).toBe('4');
+    });
+
     it('draws a die face that follows its number, and keeps the last one when it is handed none', async () =>
     {
         const [value, setValue] = createSignal<number | undefined>(4);
