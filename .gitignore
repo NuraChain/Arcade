@@ -39,18 +39,14 @@ tools/blender/preview.png
 __pycache__/
 *.pyc
 
-tools/qa/out/
-
-# Playwright matrix screenshots and reports.
-tools/qa/out/
-
-# The register of AzerothJS defects found while building this. It is notes ABOUT a dependency,
-# not part of this product, and it is kept on the desktop rather than in the repository.
-framework-bugs.md
-
-# Browser-pass recordings
+# The matrix's screenshots and reports, the browser passes' recordings, and the one-off checks
+# that import the repository's own packages.
 tools/qa/out/
 board.png
+
+# The register of AzerothJS defects found while building this. It is notes ABOUT a dependency,
+# not part of this product, and it is kept in the framework's own checkout.
+framework-bugs.md
 
 # Scratch scripts and reference images kept at the root while working, never part of the product.
 /*.jpg
