@@ -238,6 +238,10 @@ ERC-1155 balance is what came in minus what went out - because the chain itself 
 address owns without an indexer. The name and the picture are `tokenURI`/`uri` read through
 `NURA_RPC_URL`, then the metadata JSON. With the explorer unset the answer is `configured: false`, the
 stat is not drawn and the page says the server reads no NFTs - never "this wallet is empty".
+A chain the server could not reach (503 `chain-unreachable`) is said as that, "NuraChain could not
+be reached just now", and not as the plain failure's "check your connection", which sent a reader
+whose connection was fine looking for a fault of theirs. The clean production run saw it with the
+chain away; `nfts.spec.ts` holds both sentences.
 
 **A token the chain could not name is asked about again next time.** The metadata cache keeps an
 answer for an hour. That is right when the contract answered (a revert, or nothing at all, is

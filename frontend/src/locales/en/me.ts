@@ -26,6 +26,7 @@ export const me = {
     'nfts.empty': 'No NFTs in this wallet',
     'nfts.emptyLead': 'Anything this wallet collects on {chain} shows up here.',
     'nfts.off': 'This server does not read NFTs from the chain.',
+    'nfts.unreached': '{chain} could not be reached just now. Try again in a moment.',
     'record.won': 'Won',
     'record.winRate': 'Win rate',
     'record.percent': '{value}%',

@@ -804,6 +804,10 @@ export const client =
         async nfts(input: { query: { offset?: string; limit?: string } })
         {
             server.calls.push('chain.nfts');
+            if (server.refuse === 'chain-unreachable')
+            {
+                throw new ApiError(503, 'chain-unreachable', 'We could not reach the network. Try again in a moment.', undefined);
+            }
             const offset = Number(input.query.offset ?? '0');
             const limit = Number(input.query.limit ?? '24');
             const held = server.account?.address === undefined ? [] : server.nfts.items;

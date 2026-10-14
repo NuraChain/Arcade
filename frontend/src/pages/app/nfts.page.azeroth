@@ -1,6 +1,6 @@
 import { createResource, useHead } from 'azerothjs';
 
-import { client, type NftItem } from '../../api.ts';
+import { ApiError, client, type NftItem } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -49,6 +49,10 @@ export default component NftsPage()
     derived total = first.data()?.total ?? 0;
 
     derived failed = first.error() !== null && items.length === 0;
+
+    derived trouble = first.error();
+
+    derived unreached = trouble instanceof ApiError && trouble.code === 'chain-unreachable';
 
     derived offline = first.data()?.configured === false;
 
@@ -118,7 +122,7 @@ export default component NftsPage()
         </Show>
 
         <Show when={ refused }>
-            { () => <ErrorState title={ locale.t('nfts.failed') } onRetry={ () => first.refetch() } /> }
+            { () => <ErrorState title={ locale.t('nfts.failed') } lead={ unreached ? locale.t('nfts.unreached', { chain: NURA_CHAIN.name }) : undefined } onRetry={ () => first.refetch() } /> }
         </Show>
 
         <Show when={ bare }>

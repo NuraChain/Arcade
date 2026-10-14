@@ -8,7 +8,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import type { Account, NftItem } from '../../backend/src/schemas.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -153,6 +153,42 @@ describe('the NFT page', () =>
         server.nfts = { configured: true, items: [] };
 
         expect((await page()).textContent).toContain('No NFTs in this wallet');
+    });
+
+    it('says the chain could not be reached when the server says so, in either language, and not to check a connection that works', async () =>
+    {
+        signIn();
+        server.nfts = { configured: true, items: [] };
+        server.refuse = 'chain-unreachable';
+
+        const text = (await page()).textContent ?? '';
+
+        expect(text).toContain('Could not read your NFTs');
+        expect(text).toContain('NuraChain could not be reached just now');
+        expect(text).not.toContain(useLocale().t('state.errorLead'));
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = (await page()).textContent ?? '';
+
+        expect(persian).toContain('همین حالا به NuraChain دسترسی نبود');
+        expect(persian).not.toContain(useLocale().t('state.errorLead'));
+    });
+
+    it('keeps the plain sentence for a failure that is not the chain', async () =>
+    {
+        signIn();
+        server.nfts = { configured: true, items: [] };
+
+        const asked = vi.spyOn(client.chain, 'nfts').mockRejectedValue(new ApiError(500, 'internal', 'Something broke.', undefined));
+        const text = (await page()).textContent ?? '';
+
+        asked.mockRestore();
+
+        expect(text).toContain('Could not read your NFTs');
+        expect(text).toContain(useLocale().t('state.errorLead'));
+        expect(text).not.toContain('could not be reached just now');
     });
 
     it('says so when the server reads no chain, rather than calling the wallet empty', async () =>
