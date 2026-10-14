@@ -924,6 +924,20 @@ than to a hard-coded games list. The chat thread shows its own back whenever the
 it, which includes a phone held sideways: that is rail posture with no rail and no top bar, and the
 thread was a page with no way out.
 
+**The shell tells one history entry from the next by its key AND its address.** `leave` goes back
+only when this visit has a page to go back to, so the count has to be right, and the router's
+`location.key` is not enough to keep it: keys restart at `az1` in every document while a page that
+was reloaded keeps the stamp it had, so the first page opened after a reload carries the key of the
+page it was opened from (the framework register, entry 41). The shell compared keys, took that page
+for the one it was already on and counted nothing. From a table that had been reloaded, the back
+arrow on a profile opened from a plate went to Friends instead of back to the table. A page
+arrived at by a link has no stamp to collide with, which is why nothing had shown it.
+`shell.arrive(location)` is the one place a location is taken in: an entry is
+`${ key } ${ fullPath }`, the page a visit began on is never counted, a push and a pop are and a
+replace is not, and it answers whether this was another entry than the last, which is also when
+the shell closes what was open over the page. `app-stores.spec.ts` builds the collision with the
+real router.
+
 **A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
 Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans

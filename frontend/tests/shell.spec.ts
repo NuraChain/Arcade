@@ -844,9 +844,10 @@ describe('the top bar', () =>
         useShell().reset();
         useDevice().override('sidebar');
         const { container, router } = await subPage('/app');
+        useShell().arrive(router.location());
         router.navigate('/app/games/hokm');
-        useShell().notePush();
         await settle();
+        useShell().arrive(router.location());
 
         fire(backOf(container)!, 'click');
         await settle();

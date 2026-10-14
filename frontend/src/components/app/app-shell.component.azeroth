@@ -58,8 +58,6 @@ export default component AppShell(props: { children?: MountNode })
 
     useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
 
-    let seen = untrack(() => route().key);
-
     let seenPath = untrack(() => route().pathname);
 
     effect
@@ -70,11 +68,10 @@ export default component AppShell(props: { children?: MountNode })
     effect
     {
         const location = route();
-        if (location.key === seen)
+        if (!shell.arrive(location))
         {
             return;
         }
-        seen = location.key;
         if (location.pathname !== seenPath)
         {
             seenPath = location.pathname;
@@ -83,14 +80,6 @@ export default component AppShell(props: { children?: MountNode })
                 useEmojiPop().close();
                 overlay.closeAll();
             });
-        }
-        if (location.navigationKind === 'push')
-        {
-            shell.notePush();
-        }
-        else if (location.navigationKind === 'pop')
-        {
-            shell.notePop();
         }
     }
 

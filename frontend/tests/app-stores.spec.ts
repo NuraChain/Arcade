@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
+import { createMemoryHistory, createRouter } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -896,13 +897,73 @@ describe('connection', () =>
 
 describe('shell', () =>
 {
-    it('tracks push depth and lets the latest title claim win', () =>
+    const blank = (): HTMLElement => document.createElement('div');
+
+    const hops = async () =>
+    {
+        for (let turn = 0; turn < 8; turn += 1)
+        {
+            await Promise.resolve();
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    it('counts the pages opened in this visit and the ones gone back from, and never the page the visit began on', () =>
     {
         const shell = useShell();
-        shell.notePush();
-        shell.notePush();
-        shell.notePop();
+        const at = (key: string, fullPath: string, navigationKind: 'push' | 'replace' | 'pop') => shell.arrive({ key, fullPath, navigationKind });
+
+        shell.reset();
+
+        expect(at('az1', '/app', 'push'), 'the page the visit began on was counted').toBe(false);
+        expect(shell.depth()).toBe(0);
+        expect(at('az0', '/app/before', 'pop')).toBe(true);
+        expect(shell.depth(), 'going back past where the visit began counted below nothing').toBe(0);
+
+        expect([at('az2', '/app/games', 'push'), at('az2', '/app/games', 'push'), at('az3', '/app/games/ludo', 'push'), at('az2', '/app/games', 'pop')]).toEqual([true, false, true, true]);
         expect(shell.depth()).toBe(1);
+        expect(at('az4', '/app/friends', 'replace')).toBe(true);
+        expect(shell.depth(), 'a page put in the place of another was counted').toBe(1);
+        expect([at('az5', '/app/friends', 'push'), at('az6', '/app/friends', 'push')], 'two entries of one address were taken for one').toEqual([true, true]);
+        expect(shell.depth()).toBe(3);
+
+        shell.reset();
+
+        expect(shell.depth()).toBe(0);
+        expect(at('az9', '/app/me', 'push'), 'a visit that began again was counted from where the last one stood').toBe(false);
+        expect(shell.depth()).toBe(0);
+    });
+
+    it('counts the first page opened after a reload, which the router stamps with the key of the page that was reloaded', async () =>
+    {
+        const routes = [{ path: '/table', component: blank }, { path: '/person', component: blank }];
+        const probe = createRouter({ routes, history: createMemoryHistory('/table'), scroll: false });
+
+        probe.navigate('/person');
+        await hops();
+
+        const next = `az${ Number(probe.location().key.slice(2)) + 1 }`;
+        const reloaded = createMemoryHistory('/table');
+
+        reloaded.replace('/table', { __az: { key: next, index: 0 }, state: undefined });
+
+        const router = createRouter({ routes, history: reloaded, scroll: false });
+        const shell = useShell();
+
+        shell.reset();
+        shell.arrive(router.location());
+        router.navigate('/person');
+        await hops();
+
+        expect([router.location().key, router.location().pathname], 'the router no longer gives two entries one key: this proves nothing now, and the register entry can close').toEqual([next, '/person']);
+        expect(shell.arrive(router.location()), 'the page was taken for the one that was reloaded').toBe(true);
+        expect(shell.depth()).toBe(1);
+    });
+
+    it('lets the latest title claim win', () =>
+    {
+        const shell = useShell();
         const release = shell.claimTitle(() => 'Sara');
         expect(shell.title()).toBe('Sara');
         release();
