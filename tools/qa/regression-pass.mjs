@@ -190,16 +190,11 @@ console.log('\n[3] one way in — the guest door is gone from both ends');
          * browser would show a 404 in the console and the product would look fine. The route is
          * gone from the server, and the sign-in page must not be the last caller.
          */
-        const answered = await page.evaluate(async () =>
-        {
-            const response = await fetch('/api/auth/guest', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ name: 'Nobody' })
-            });
-
-            return response.status;
-        });
+        const answered = (await fetch(`${ BASE }/api/auth/guest`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: 'Nobody' })
+        })).status;
         record('the server has no guest route left', answered === 404 || answered === 405, `POST /api/auth/guest answered ${ answered }`);
 
         const asked = [];
@@ -368,7 +363,7 @@ console.log('\n[7] Persian — the new copy exists in both languages');
 
         const names = await page.evaluate(() => [...document.querySelectorAll('ol > li [dir="auto"]')].map((name) =>
         {
-            const box = name.getBoundingClientRect();
+            const box = (name.closest('.flex-col') ?? name).getBoundingClientRect();
             const range = document.createRange();
 
             range.selectNodeContents(name);

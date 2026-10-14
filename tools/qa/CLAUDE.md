@@ -66,7 +66,7 @@ line (an error, from `/api/chain/`, with status 503), says it where it happens
 (`NOTE  dana.w could not reach the chain's network (/api/chain/nfts): not this pass's to judge`)
 and leaves it out of the count. The shared seat (`seats.mjs`) and the passes that open a profile
 with a listener of their own ask it first: `play-pass`, `hokm-play-pass`, `tour-pass`,
-`regression-pass`, `social-pass` and the matrix. Anything else those routes answer with is still
+`regression-pass`, `social-pass`, `chat-pass` and the matrix. Anything else those routes answer with is still
 counted: a 500 from `/api/chain/` is a fault of ours. The chain's own pass (`chain-pass.mjs`) runs
 against a chain it starts and does not use it.
 

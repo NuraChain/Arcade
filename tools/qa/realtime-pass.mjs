@@ -151,7 +151,11 @@ try
     record('the spectator\'s page turns into the board without a reload', await soon(async () => await omid.page.locator('.table-stage').count() > 0, 10_000));
 
     await dana.api('POST', `/matches/${ started.body?.id }/resign`, { key: randomUUID() });
-    record('the spectator\'s page leaves the board once the game is over, without a reload', await soon(async () => await omid.page.locator('.table-stage').count() === 0, 10_000));
+    const backToTable = omid.page.getByRole('button', { name: 'Back to the table', exact: true });
+
+    record('the spectator is shown the end of the game on the board, without a reload', await soon(async () => await backToTable.count() > 0 && await omid.page.locator('.table-stage').count() > 0, 40_000));
+    await backToTable.first().click().catch(() => undefined);
+    record('and leaves the board when they go back to the table', await soon(async () => await omid.page.locator('.table-stage').count() === 0, 10_000));
 
     await clearTables(dana, mina, omid);
 
@@ -162,7 +166,7 @@ try
     const players = [dana, mina];
     const press = async (page, name) => await page.getByRole('button', { name, exact: true }).first().click();
     const said = async (page, words) => await page.getByText(words, { exact: true }).count() > 0;
-    const chairOf = (page, name) => page.locator('.rounded-panel').filter({ hasText: name });
+    const chairOf = (page, name) => page.locator('.lobby-chair').filter({ has: page.getByRole('button', { name: `More about ${ name }`, exact: true }) });
     const revOf = async (page) => Number(await page.locator('.table-stage').first().getAttribute('data-rev').catch(() => null) ?? -1);
     const rollOn = (page) => page.getByRole('button', { name: 'Roll the dice', exact: true });
     const canRoll = async (page) => await rollOn(page).count() > 0 && await rollOn(page).isEnabled();
@@ -184,7 +188,7 @@ try
     record('Ready pressed in one browser shows on that chair in the other', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').getByText('Ready', { exact: true }).count() > 0));
 
     await press(dana.page, 'I’m ready');
-    record('both browsers say everyone is ready', await soon(async () => await said(dana.page, 'Everyone is ready') && await said(mina.page, 'Everyone is ready')));
+    record('both browsers say everyone is ready', await soon(async () => await said(dana.page, 'Everybody is ready. Somebody has to say go.') && await said(mina.page, 'Everybody is ready. Somebody has to say go.')));
 
     await press(dana.page, 'Start the game');
     record('Start pressed in one browser puts the board in the other without a reload', await soon(async () => await mina.page.locator('.table-stage').count() > 0, 10_000));

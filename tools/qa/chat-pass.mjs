@@ -36,6 +36,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { sql as run } from './db.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -168,7 +169,7 @@ async function seat(handle)
 
     page.on('console', (event) =>
     {
-        if (event.type() === 'error' && !event.text().includes('favicon')) { errors.push(`${ handle }: ${ event.text().slice(0, 160) }`); }
+        if (event.type() === 'error' && !event.text().includes('favicon') && !chainUnreached(event, handle)) { errors.push(`${ handle }: ${ event.text().slice(0, 160) }`); }
     });
     page.on('pageerror', (error) => errors.push(`${ handle }: ${ String(error).slice(0, 160) }`));
 
