@@ -257,16 +257,16 @@ export default component GroupPage()
                                 <Show when={ blurbed }>
                                     { () => <p class="max-w-[52ch] text-ui-md text-muted" dir="auto">{ crew.blurb }</p> }
                                 </Show>
-                                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
+                                <p class="facts text-ui-sm text-muted">
                                     <span><span class="tally">{ locale.n(crew.memberCount) }</span> { locale.plural('groups.membersLabel', crew.memberCount) }</span>
                                     <Show when={ anyOnline }>
-                                        { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="text-live"><span class="tally">{ locale.n(online.length) }</span> { locale.plural('groups.onlineLabel', online.length) }</span></span> }
+                                        { () => <span><span class="text-live"><span class="tally">{ locale.n(online.length) }</span> { locale.plural('groups.onlineLabel', online.length) }</span></span> }
                                     </Show>
                                     <Show when={ closedDoors }>
-                                        { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="flex items-center gap-1"><Icon name="lock" size={ 13 } />{ locale.t('groups.private') }</span></span> }
+                                        { () => <span class="flex items-center gap-1"><Icon name="lock" size={ 13 } />{ locale.t('groups.private') }</span> }
                                     </Show>
                                     <Show when={ game } let={ played }>
-                                        <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span>{ locale.t(catalogue.byId(played).nameKey) }</span></span>
+                                        <span>{ locale.t(catalogue.byId(played).nameKey) }</span>
                                     </Show>
                                 </p>
                             </div>

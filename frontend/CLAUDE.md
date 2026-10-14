@@ -120,6 +120,13 @@ shell, overlay, tooltip and toast CSS that Tailwind cannot see as utilities). Th
 `design.jpg` (the shell and home) and `me.jpg` (a profile); the spec that turned them into tokens
 is `docs/superpowers/specs/2026-09-22-arena-blue-redesign-design.md`.
 
+**A line of facts is `facts`, and a wrapped line never starts with a dot.** A group's "4 members ·
+1 online · Backgammon" put each dot in front of its fact, so when the line wrapped at 390 the second
+line began with a dot. `facts` (`base.css`) draws the dot before every fact and moves the line back
+over the first one with a negative inline start and a `clip-path` on the side the line starts from,
+so whichever fact begins a line shows no dot, in either direction. `facts-line.spec.ts` (server
+suite) holds the rule and its one caller.
+
 **There is one theme and nothing that could hold a second.** No `data-theme`, no theme store, no
 switch, no `prefers-color-scheme` branch, no light block. The pre-paint script in `index.html`
 stamps the language and direction and nothing else, and `theme-color` is `#0B1220`. A second theme

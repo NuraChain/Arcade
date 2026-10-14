@@ -200,6 +200,40 @@
     }
 }
 
+@utility facts
+{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.25rem;
+    margin-inline-start: -0.75rem;
+    clip-path: inset(-0.5rem -0.5rem -0.5rem 0.75rem);
+
+    &:where([dir='rtl'] *)
+    {
+        clip-path: inset(-0.5rem 0.75rem -0.5rem -0.5rem);
+    }
+
+    & > *
+    {
+        position: relative;
+        padding-inline-start: 0.75rem;
+    }
+
+    & > *::before
+    {
+        content: '';
+        position: absolute;
+        inset-inline-start: 0.3125rem;
+        inset-block-start: calc(50% - 0.125rem);
+        inline-size: 0.25rem;
+        block-size: 0.25rem;
+        border-radius: 9999px;
+        background: currentColor;
+        opacity: 0.5;
+    }
+}
+
 @utility live-dot
 {
     flex-shrink: 0;
