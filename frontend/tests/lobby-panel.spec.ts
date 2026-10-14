@@ -761,6 +761,54 @@ describe('the lobby as the table about to be played', () =>
         expect(button(drawn({}), useLocale().t('play.close.confirm'))).toBeUndefined();
     });
 
+    it('keeps the board a waiting Ludo table is drawn with when the table is read again', () =>
+    {
+        const [held, setHeld] = createSignal(table({ game: 'ludo', seats: 4 }));
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+        const board = container.querySelector('.lobby-board');
+
+        expect(board).not.toBeNull();
+
+        setHeld(table({ game: 'ludo', seats: 4 }));
+
+        expect(container.querySelector('.lobby-board'), 'the board was drawn again for an answer that changed nothing').toBe(board);
+    });
+
+    it('keeps the host’s Close the table when the table is read again and says the same', () =>
+    {
+        const [held, setHeld] = createSignal(table());
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            get onClose()
+            {
+                held();
+
+                return () => undefined;
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+        const close = button(container, useLocale().t('play.close.confirm'));
+
+        expect(close).toBeDefined();
+
+        setHeld(table());
+
+        expect(button(container, useLocale().t('play.close.confirm')), 'Close the table was drawn again for an answer that changed nothing').toBe(close);
+    });
+
     it('opens what can be done about a person from their chair, and offers nothing of the kind about the reader', async () =>
     {
         const container = shown(table());

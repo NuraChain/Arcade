@@ -1,5 +1,6 @@
 import { dragScroll } from '../../lib/drag-scroll.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import TabCount from './tab-count.component.azeroth';
 
 export interface TabItem
 {
@@ -91,9 +92,7 @@ export default component Tabs(props: {
                 } }
             >
                 { item.label }
-                <Show when={ item.count !== undefined && item.count > 0 }>
-                    { () => <span class="tally rounded-full bg-raised px-1.5 text-ui-2xs text-muted">{ locale.n(item.count!) }</span> }
-                </Show>
+                <TabCount count={ item.count } />
                 <span
                     class={ [
                         'absolute inset-x-2 bottom-0 h-0.5 rounded-full transition-all duration-200',

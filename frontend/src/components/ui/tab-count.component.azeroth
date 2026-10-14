@@ -1,0 +1,14 @@
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component TabCount(props: { count: number | undefined })
+{
+    const locale = useLocale();
+
+    derived counted = (props.count ?? 0) > 0;
+
+    derived said = locale.n(props.count ?? 0);
+
+    <Show when={ counted }>
+        { () => <span class="tally rounded-full bg-raised px-1.5 text-ui-2xs text-muted">{ said }</span> }
+    </Show>
+}

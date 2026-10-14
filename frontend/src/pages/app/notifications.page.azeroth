@@ -66,6 +66,8 @@ export default component NotificationsPage()
 
     derived further = notifications.hasMore();
 
+    derived unread = notifications.unread() > 0;
+
     const open = (item: Notification) =>
     {
         void notifications.markRead(item.id).catch(() => undefined);
@@ -82,7 +84,7 @@ export default component NotificationsPage()
         <PageHeader
             title={ locale.t('app.nav.notifications') }
             lead={ locale.t('notifications.lead') }
-            actions={ notifications.unread() > 0
+            actions={ unread
                 ? <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void attempt(notifications.markAllRead()) }>{ locale.t('notifications.markAll') }</Button>
                 : undefined }
         />

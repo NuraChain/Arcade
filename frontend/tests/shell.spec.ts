@@ -9,6 +9,7 @@ import Sidebar from '../src/components/app/sidebar.component.azeroth';
 import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
 import Page from '../src/components/app/page.component.azeroth';
+import PageHeader from '../src/components/app/page-header.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
 import TopBar from '../src/components/app/top-bar.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
@@ -19,7 +20,9 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
@@ -213,6 +216,37 @@ describe('Tabs', () =>
         fire(tabs[1] as HTMLElement, 'click');
         expect(onChange).toHaveBeenCalledWith('online');
         expect(tabs[1].querySelector('.tally')?.textContent).toBe('3');
+    });
+
+    it('keeps a tab’s count when its tabs are handed over again, and changes the number where it stands', () =>
+    {
+        const [counted, setCounted] = createSignal(3);
+        const { container } = renderTest(() => Tabs({
+            get items()
+            {
+                return [{ id: 'all', label: 'All' }, { id: 'online', label: 'Online', count: counted() }];
+            },
+            value: 'all',
+            label: 'Friends',
+            onChange: () => undefined
+        }) as Rendered);
+        const count = () => container.querySelectorAll('[role="tab"]')[1].querySelector('.tally');
+        const drawn = count();
+
+        expect(drawn?.textContent).toBe('3');
+
+        setCounted(3);
+
+        expect(count(), 'the count was drawn again for tabs that say the same').toBe(drawn);
+
+        setCounted(4);
+
+        expect(count(), 'a count that changed was drawn again rather than changed').toBe(drawn);
+        expect(drawn?.textContent).toBe('4');
+
+        setCounted(0);
+
+        expect(count(), 'a count of nothing is still drawn').toBeNull();
     });
 
     it('moves its highlight with the selection, not only its aria', async () =>
@@ -973,6 +1007,24 @@ describe('the right panel', () =>
         expect(lines()[1], 'the line about who is online was drawn again').toBe(drawn[1]);
     });
 
+    it('keeps the picture of the person a notification is about when the list is read again', async () =>
+    {
+        useSession().establish(establishAccount());
+        usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+        server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
+        useNotifications().reset();
+        const container = await mount();
+        const picture = () => container.querySelector('section[aria-labelledby="panel-activity"] li [role="img"]');
+        const drawn = picture();
+
+        expect(drawn, 'the row drew no picture of Sara').not.toBeNull();
+
+        await useNotifications().refresh();
+        await settle();
+
+        expect(picture(), 'the picture was drawn again for an answer that changed nothing').toBe(drawn);
+    });
+
     it('keeps a notification it has listed when another one arrives', async () =>
     {
         useSession().establish(establishAccount());
@@ -1009,6 +1061,46 @@ describe('the sidebar’s counts', () =>
         expect(container.querySelector('a[href="/app/friends"]')!.innerHTML).toContain('2 friend requests');
         expect(container.querySelector('a[href="/app/notifications"]')!.textContent).toContain('1');
     });
+
+    it('keeps a count it has drawn when the list behind it is read again and says the same', async () =>
+    {
+        useSession().establish(establishAccount());
+        server.tables.push({
+            id: 'table-waits',
+            code: 'wait01',
+            game: 'ludo',
+            seats: 2,
+            mode: 'turns',
+            privacy: 'public',
+            target: 1,
+            cube: false,
+            blinds: 'low',
+            chat: true,
+            voice: 'off',
+            teams: false,
+            status: 'ready',
+            chairs: [{ seat: 0, who: server.me, ready: true, host: true }, { seat: 1, who: 'sara.k', ready: true, host: false }],
+            taken: 2,
+            matchId: 'match-waits',
+            yourTurn: true,
+            createdAt: new Date(0).toISOString()
+        });
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
+        await useLobby().refresh();
+        await settle();
+
+        const waiting = () => container.querySelector('a[href="/app/games"] .tally');
+        const drawn = waiting();
+
+        expect(drawn?.textContent, 'Games counted no table waiting on the reader').toBe('1');
+
+        await useLobby().refresh();
+        await settle();
+
+        expect(waiting(), 'the count was drawn again for an answer that changed nothing').toBe(drawn);
+    });
 });
 
 describe('the sidebar’s account card', () =>
@@ -1026,6 +1118,38 @@ describe('the sidebar’s account card', () =>
         expect(name.className).toContain('truncate');
         expect(name.parentElement!.className).toContain('min-w-0');
         expect(card.textContent).not.toContain('Sign out');
+    });
+});
+
+describe('PageHeader', () =>
+{
+    it('reads what it is handed once, and keeps the box round its actions while what they come from is read again', () =>
+    {
+        const [heard, setHeard] = createSignal(0);
+        let built = 0;
+        const { container } = renderTest(() => PageHeader({
+            title: 'A page',
+            get actions()
+            {
+                heard();
+                built += 1;
+
+                const button = document.createElement('button');
+
+                button.textContent = 'Act';
+
+                return button;
+            }
+        }) as Rendered);
+        const box = container.querySelector('header > div:last-child');
+
+        expect(built, 'the actions were built and thrown away').toBe(1);
+        expect(box?.querySelector('button')).not.toBeNull();
+
+        setHeard(1);
+
+        expect(container.querySelector('header > div:last-child'), 'the box round the actions was drawn again').toBe(box);
+        expect(built, 'the actions were built twice for one read').toBe(2);
     });
 });
 

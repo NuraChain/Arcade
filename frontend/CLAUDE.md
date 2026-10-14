@@ -653,7 +653,13 @@ level in, on nine routes, in five shapes worth knowing by sight:
 - **A component that tests a prop in a `when`** (`props.person.isMinor`, `props.state !==
   'locked'`, `props.current`) re-runs it whenever the PARENT's expression for that prop does, and
   inside a keyed list that is every time the row is handed its item. The child takes a derived
-  boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`.
+  boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`,
+  `NotificationLead` (the picture of whoever a notification is about, drawn again in every row of
+  the side panel and the notifications page whenever the list was read), `NotificationRow`'s
+  unread mark, `LobbyPanel`'s close (its handler is a new function at every read of the table)
+  and the board a waiting Ludo or backgammon table is drawn with, and the count on a tab, which
+  is `TabCount` now because a row of `Tabs` is handed a new item at every read and a component
+  is a file of its own.
 - **Markup handed in as a prop is built again at every read of the prop.** A prop is a getter, and
   `facts={ <span>...</span> }` is a getter that makes a new span. `TablePlate` asked
   `props.facts !== undefined` in a `when` and drew `props.facts` in the branch, so every plate at
@@ -662,7 +668,16 @@ level in, on nine routes, in five shapes worth knowing by sight:
   the clock ticked twice a second, once from a copy that was never in the document. A component
   that tests a slot and then draws it reads it ONCE, into a `derived` (`derived facts =
   props.facts`), and tests and draws that. `table-plate.spec.ts` counts the builds, and
-  `turn-clock.spec.ts` the ticks of a clock that sits on a plate.
+  `turn-clock.spec.ts` the ticks of a clock that sits on a plate. `PageHeader` had the same
+  shape for its eyebrow, its lead and its actions, and the notifications page built "Mark all
+  read" from the unread count, so the button was drawn again at every read of the list. The
+  header reads each slot once, and the page hands it a button chosen by a `derived` boolean.
+- **A count that hides itself at nothing is not put in a branch.** `Badge` draws nothing for a
+  count of none, and the sidebar, the rail and the island still wrapped each nav count in
+  `<Show when={ countOf(item) > 0 }>`. That condition reads `lobby.waiting()`, an array that is
+  new at every read, so every count was drawn again whenever the lists behind it were read. No
+  spec saw it, and the keep pass only did once the account it signs in as had tables waiting on
+  it. `shell.spec.ts` (*the sidebar's counts*) reads the lists again and wants the same counts.
 - **A keyed list over OBJECTS hands every kept row a new item at every read**, and whatever the
   row reads off its item runs again: a `when`, and equally a prop that is markup
   (`marker={ item.crowned ? <Crown /> : undefined }`), which is built again. A list over the keys

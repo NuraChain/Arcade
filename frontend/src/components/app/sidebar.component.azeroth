@@ -40,9 +40,7 @@ export default component Sidebar()
                     <Link to={ item.to } prefetch="hover" aria-current={ lit(item, tab) ? 'page' : undefined } class={ () => [ 'nav-row', ACTIVE_ROW, 'flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text', lit(item, tab) ? 'is-active' : '' ].join(' ') }>
                         <Icon name={ item.icon } size={ 20 } />
                         <span class="min-w-0 flex-1 truncate">{ locale.t(item.labelKey) }</span>
-                        <Show when={ countOf(item) > 0 }>
-                            { () => <Badge count={ countOf(item) } tone={ toneOf(item) } label={ labelOf(item) } /> }
-                        </Show>
+                        <Badge count={ countOf(item) } tone={ toneOf(item) } label={ labelOf(item) } />
                     </Link>
                 </li>
             </For>

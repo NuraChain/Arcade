@@ -84,6 +84,12 @@ export default component LobbyPanel(props: {
 
     derived startable = props.onStart !== undefined;
 
+    derived closable = props.onClose !== undefined;
+
+    derived ludo = props.table.game === 'ludo';
+
+    derived nard = props.table.game === 'backgammon';
+
     derived status = !seated
         ? locale.t(props.removed === true ? 'play.table.removed' : 'play.table.watching')
         : (startable
@@ -177,10 +183,10 @@ export default component LobbyPanel(props: {
     <section class="lobby flex flex-col gap-4" aria-label={ locale.t('play.title.lobby') }>
         <div class="lobby-table" data-game={ props.table.game } data-crowd={ props.table.seats > CROWD ? 'true' : undefined }>
             <div class={ () => (props.table.game === 'poker' ? 'lobby-top poker-table' : (props.table.game === 'hokm' ? 'lobby-top hokm-table' : 'lobby-top')) } aria-hidden="true">
-                <Show when={ props.table.game === 'ludo' }>
+                <Show when={ ludo }>
                     { () => <span class="lobby-board"></span> }
                 </Show>
-                <Show when={ props.table.game === 'backgammon' }>
+                <Show when={ nard }>
                     { () =>
                         <svg class="lobby-board" viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }>
                             <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
@@ -261,7 +267,7 @@ export default component LobbyPanel(props: {
                     { () => <Button variant="destructive" size="lg" leading="sign-out" class="grow basis-[9rem] whitespace-nowrap" onClick={ () => props.onLeave() }>{ locale.t('play.lobby.leave') }</Button> }
                 </Show>
             </div>
-            <Show when={ props.onClose !== undefined }>
+            <Show when={ closable }>
                 { () =>
                     <div class="flex justify-center">
                         <Button variant="destructive" size="sm" leading="close" onClick={ () => props.onClose?.() }>

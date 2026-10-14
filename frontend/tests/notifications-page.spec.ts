@@ -7,6 +7,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import NotificationsPage from '../src/pages/app/notifications.page.azeroth';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
@@ -146,6 +147,27 @@ describe('the notifications page', () =>
         expect(after[1]).toBe(before[0]);
         expect(after[2]).toBe(before[1]);
         expect(before.includes(after[0])).toBe(false);
+    });
+
+    it('keeps Mark all read and the picture of each person when the list is read again and says the same', async () =>
+    {
+        usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+        arrive();
+        await useNotifications().refresh();
+
+        const container = await opened();
+        const markAll = chipOf(container, useLocale().t('notifications.markAll'));
+        const pictures = () => [...container.querySelectorAll('ul li [role="img"]')];
+        const drawn = pictures();
+
+        expect(markAll, 'there was nothing unread to mark').not.toBeNull();
+        expect(drawn.length, 'no row drew the picture of the person it is about').toBeGreaterThan(0);
+
+        await useNotifications().refresh();
+        await settle();
+
+        expect(chipOf(container, useLocale().t('notifications.markAll')), 'Mark all read was drawn again for an answer that changed nothing').toBe(markAll);
+        expect(pictures(), 'a picture was drawn again for an answer that changed nothing').toEqual(drawn);
     });
 
     it('says there is nothing of a kind under a filter with nothing in it, and keeps the filter to go back by', async () =>
