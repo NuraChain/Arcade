@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { App, json, pipeline } from '@azerothjs/http';
 
-import { apiRateLimit, isMetered } from '../src/http/rate-limit.ts';
+import { apiRateLimit, isMetered, routedPath } from '../src/http/rate-limit.ts';
 
 /**
  * The QA matrix caught this the hard way: a global limiter metered every static asset, so 600
@@ -68,5 +68,39 @@ describe('what the rate limit counts', () =>
         {
             expect((await hit(handler, '/assets/app.js')).status).toBe(200);
         }
+    });
+});
+
+describe('a path the router reads another way', () =>
+{
+    it('is decided on the path the router routes, each segment decoded', () =>
+    {
+        expect(routedPath('/%61pi/thing')).toBe('/api/thing');
+        expect(routedPath('/%61%70%69/auth/%63hallenge')).toBe('/api/auth/challenge');
+        expect(routedPath('/api/auth/challenge/')).toBe('/api/auth/challenge');
+        expect(routedPath('/api/%zz')).toBe('/api/%zz');
+        expect(routedPath('/')).toBe('/');
+        expect(routedPath('/apiary')).toBe('/apiary');
+    });
+
+    it('meters the api however its first segment is spelled', async () =>
+    {
+        for (const path of ['/%61pi/thing', '/%61%70%69/thing', '/api/thing/', '/api/thin%67'])
+        {
+            const handler = probe(2);
+
+            expect((await hit(handler, path)).status, path).toBe(200);
+            expect((await hit(handler, path)).status, path).toBe(200);
+            expect((await hit(handler, path)).status, `${ path } was not metered`).toBe(429);
+        }
+    });
+
+    it('shares one budget between every spelling of a path', async () =>
+    {
+        const handler = probe(2);
+
+        expect((await hit(handler, '/api/thing')).status).toBe(200);
+        expect((await hit(handler, '/%61pi/thing')).status).toBe(200);
+        expect((await hit(handler, '/a%70i/thing')).status).toBe(429);
     });
 });

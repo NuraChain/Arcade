@@ -15,14 +15,30 @@ export function forPaths(matches: (pathname: string) => boolean, wrapper: Handle
     {
         const wrapped = wrapper(next);
         return {
-            handle: (request) => (matches(new URL(request.url).pathname)
+            handle: (request) => (matches(routedPath(new URL(request.url).pathname))
                 ? wrapped.handle(request)
                 : next.handle(request))
         };
     };
 }
 
-/** Whether a path is metered: the api and the realtime upgrade, never pages or assets. */
+export function routedPath(pathname: string)
+{
+    const segments = pathname.split('/').filter((segment) => segment !== '').map((segment) =>
+    {
+        try
+        {
+            return decodeURIComponent(segment);
+        }
+        catch
+        {
+            return segment;
+        }
+    });
+
+    return `/${ segments.join('/') }`;
+}
+
 /**
  * Whether a path is metered.
  *

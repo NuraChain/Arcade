@@ -139,6 +139,18 @@ never reaches the table.
 year, not forced onto sibling subdomains, sent only on an answer the proxy says went out over
 https (`trustProxy` in production, as the rate limiter has). `headers.spec.ts` holds it.
 
+**A gate in front of the router decides on the path the router routes.** The router decodes each
+segment of a path before it matches it, so `/%61pi/healthz` reaches `/api/healthz` (the
+framework's `context.path` says as much), while `forPaths` asked `new URL().pathname`, which keeps
+the raw spelling. The per-address ceiling therefore let any encoded spelling of any route through
+unmetered: with a ceiling of two, `/%61pi/thing` answered 200 four times. `routedPath` in
+`http/rate-limit.ts` decodes each segment as the router does and drops the empty ones, and
+`forPaths` decides on that, so every spelling of a path shares one budget. Anything else put above
+the router that picks requests by their path has to ask the same function. The socket server
+matches `/ws` exactly and upgrades no other spelling, the cross-site rule above looks at every
+write whatever its path, and the framework's file server keeps a decoded path inside its root.
+`rate-limit.spec.ts` (*a path the router reads another way*) holds it.
+
 **There is no Content-Security-Policy for scripts, on purpose.** Signing in is a wallet, and
 wallets put their provider into the page: an extension's content script, Nura Wallet's in-app
 browser. A script policy would stand between the page and the only way in, on wallets nobody here
