@@ -11,7 +11,7 @@ const sources = (folder: string): string[] => readdirSync(new URL(folder, root),
 describe('a name written in the other script', () =>
 {
     const sheet = read('styles/base.css');
-    const rule = /\n    :where\(\.truncate\[dir='auto'\], \.table-plate-name\)\n    \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    const rule = /\n    :where\(\.truncate\[dir='auto'\], \.truncate\[dir='ltr'\], \.table-plate-name\)\n    \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
 
     it('stands on the side its row starts from, not the side its own letters do', () =>
     {
@@ -22,7 +22,7 @@ describe('a name written in the other script', () =>
 
     it('weighs nothing, so a label centred or ended on purpose stays where it was put', () =>
     {
-        const at = sheet.indexOf(':where(.truncate[dir=\'auto\'], .table-plate-name)');
+        const at = sheet.indexOf(':where(.truncate[dir=\'auto\'], .truncate[dir=\'ltr\'], .table-plate-name)');
 
         expect(sheet.startsWith('@layer base\n{')).toBe(true);
         expect(at, 'the rule is not in the sheet').toBeGreaterThan(0);
@@ -34,6 +34,14 @@ describe('a name written in the other script', () =>
         expect(read('components/games/leaderboard.component.azeroth')).toContain('<span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row) }</span>');
         expect(read('components/games/match-result.component.azeroth')).toContain('<span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">');
         expect(read('components/games/table-plate.component.azeroth')).toContain('<span class="table-plate-name" dir="auto">');
+    });
+
+    it('reaches a handle, which is written left to right on every page and still stands under its name', () =>
+    {
+        const drawn = ['components/games/create-game-form', 'components/games/invite-sheet', 'components/social/add-friend', 'components/social/group-add', 'components/social/person-actions']
+            .filter((path) => !read(`${ path }.component.azeroth`).includes('<span class="truncate text-ui-xs text-muted" dir="ltr">@{'));
+
+        expect(drawn, 'a handle under a name is out of the rule\'s reach').toEqual([]);
     });
 
     it('reaches every label that is stretched across its row', () =>
