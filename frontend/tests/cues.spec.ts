@@ -1165,6 +1165,28 @@ describe('the cues store', () =>
         expect(document.title).toBe('Chats · Nura Games');
     });
 
+    it('keeps the title a page wrote in the same turn as the count changed, as a thread does when it opens', async () =>
+    {
+        server.incoming = [];
+        document.title = 'Loading… · Nura Games';
+        useCues().start();
+        await useChat().refresh();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        const chat = useChat();
+        const unread = chat.conversations().find((one) => chat.unread(one.id) > 0)!;
+        const before = document.title;
+
+        document.title = 'Sara Kamali · Nura Games';
+        void chat.markRead(unread.id);
+        await settle();
+
+        expect(before, 'nothing was counted to begin with').toMatch(/^\d+ · Loading… · Nura Games$/);
+        expect(document.title, 'the count wrote the old title back over the one the page had just written').toMatch(/^(\d+ · )?Sara Kamali · Nura Games$/);
+    });
+
     it('leaves the title as the page wrote it when it stops', async () =>
     {
         server.incoming = [];

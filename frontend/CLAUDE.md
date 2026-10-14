@@ -1225,6 +1225,16 @@ parse a title to find its own number in it. Stopping it puts the page's title ba
 the observer. `cues.spec.ts` writes a page title under a running count, changes it, reads
 everything, and stops the store.
 
+**The count takes up the page's title before it writes, not only when its observer hears of it.**
+A `MutationObserver` answers in a microtask, and the count's own effect answers at once. Opening a
+thread does both in one turn: the page writes the thread's name, and reading the thread changes the
+count, so the count wrote "7 · Loading… · Nura Games" over the name before the observer had heard
+of it, and the observer then found the title equal to what the count last wrote and left it. Every
+thread's tab said "Loading…" (in Persian too), and one opened from the list said "Chats". `write`
+now compares the title with the string it last wrote and takes up anything else as the page's own,
+so it does not matter which of the two is told first. `cues.spec.ts` (*in the same turn as the
+count changed*) holds it.
+
 **`tools/qa/keep-pass.mjs` is the pass for a page drawn twice.** A branch that is built again
 though nothing changed looks exactly as it did, so no screenshot, no matrix cell and no spec that
 was not written for that one branch can see it; every one of them here was found by hand, by

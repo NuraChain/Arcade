@@ -310,6 +310,11 @@ export const useCues = createStore((): CuesApi =>
 
             const write = (total: number) =>
             {
+                if (document.title !== written)
+                {
+                    page = document.title;
+                }
+
                 const own = page === '' ? locale.t('app.title') : page;
 
                 written = total > 0 ? `${ locale.n(total) } · ${ own }` : own;
@@ -324,7 +329,6 @@ export const useCues = createStore((): CuesApi =>
             {
                 if (document.title !== written)
                 {
-                    page = document.title;
                     write(untrack(count));
                 }
             });
