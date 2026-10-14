@@ -473,8 +473,10 @@ achievements and a favourite game from the mock dataset, joined on the handle fo
 only. The four mock-backed stores read `account.user()?.id`, not the raw account id, because that
 join is what keeps a demo tour's friends and chats attached to it.
 
-Chain details come from `VITE_NURA_*` env vars (see `.env.example`); with none set the app signs
-in on whatever network the wallet is already on and skips the switch. The sign-in text names no
+Chain details are NuraChain's public facts, constants in `data/chain.ts`. `chainIsConfigured` asks
+for a hex chain id, and the id there is decimal (`1020`), so the app signs in on whatever network
+the wallet is already on and requests no switch; that is how it behaved with the old `VITE_NURA_*`
+variables set as `.env.example` had them. The sign-in text names no
 chain; `NURA_CHAIN_ID` is what a wallet row records and what a contract wallet is checked on.
 
 `lib/wallet.ts` discovers providers through **EIP-6963** and falls back to `window.ethereum`.

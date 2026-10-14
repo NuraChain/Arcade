@@ -19,6 +19,7 @@ export interface GatewayDeps
     hub: Hub;
     config: ServerConfig;
     log: Logger;
+    limits: { handshakes: number; sockets: number };
 }
 
 /** How long a socket may stay unidentified before it is closed. */
@@ -123,7 +124,7 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
  */
 export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 {
-    const limit = createHandshakeLimit({ max: deps.config.wsHandshakeMax });
+    const limit = createHandshakeLimit({ max: deps.limits.handshakes });
 
     const sweep = setInterval(() =>
     {
@@ -133,7 +134,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
     const detach = attachWebSockets(server, {
         path: '/ws',
-        maxConnections: deps.config.wsMaxConnections,
+        maxConnections: deps.limits.sockets,
 
         // Client frames are three small objects. Sixteen megabytes of untrusted input per socket
         // is the wrong ceiling for an endpoint that never receives a payload.

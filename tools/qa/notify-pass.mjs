@@ -1,7 +1,7 @@
 /**
  * What the browser is told when nobody is looking at Nura Games, in a real browser.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production PORT=5300 \
+ *   npm run build && API_RATE_MAX=20000 PORT=5300 \
  *     PUBLIC_ORIGIN=http://localhost:5300 npm start
  *   QA_BASE=http://localhost:5300 node tools/qa/notify-pass.mjs
  *

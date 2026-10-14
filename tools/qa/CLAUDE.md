@@ -153,7 +153,7 @@ on the first line rather than touring 640 signed-out pages.
 **The matrix is a load generator, not a visitor.** It pulls 600 pages as fast as it can from one
 address, so anything metered per IP will refuse it - and now that a page load makes real API
 calls, it does. Run it against a server started with `API_RATE_MAX` raised
-(`API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start`); the limit is configuration
+(`API_RATE_MAX=20000 npm start`); the limit is configuration
 for exactly this reason, rather than the product shipping a limit shaped around a test. That is why the rate limit is scoped to
 `/api` and `/ws` in `backend/src/http/rate-limit.ts` rather than wrapped around the whole handler:
 a page load pulls forty static assets, a file served from disk with an ETag costs almost nothing,

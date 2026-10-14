@@ -1,7 +1,7 @@
 /**
  * Two people, two browsers, one server: friends, chat and groups end to end.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start
+ *   npm run build && API_RATE_MAX=20000 npm start
  *   node tools/qa/social-pass.mjs
  *
  * Everything else that drives a browser here tests ONE session. The interesting half of a social

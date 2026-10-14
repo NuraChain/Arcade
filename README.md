@@ -11,19 +11,18 @@ connection and the pages.
 
 1. As an ordinary account, not root (`sudo adduser nura`, say), clone the repository and run
    `npm ci` at its root. The service runs as whoever owns the clone.
-2. Copy `.env.example` to `.env` and fill it in. Every name has to be present; an empty value
-   switches an optional feature off (push notifications, STUN and TURN for voice, the chain, the explorer,
-   the admin). For production:
-   - `NODE_ENV=production`, `SERVE_PAGES=true`, `DATABASE_SYNC=false`;
+2. Copy `.env.example` to `.env` and fill in the three things it needs:
    - `DATABASE_URL` pointing at an empty database;
    - `SESSION_SECRET`: a long random string, such as the output of `openssl rand -hex 32`;
-   - `PUBLIC_ORIGIN` and `VITE_PUBLIC_ORIGIN`: the address people use, such as
-     `https://play.example.com` (it is the site in every sign-in message, the realtime origin
-     check and the cookie's site);
-   - in production the server refuses to start with a `SESSION_SECRET` shorter than 32
-     characters, or a `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http
-     anywhere but this machine, and says which;
-   - `PORT`: the local port the proxy forwards to. The server listens on `127.0.0.1` only.
+   - `PUBLIC_ORIGIN`: the address people use, such as `https://play.example.com` (it is the site
+     in every sign-in message, the realtime origin check and the cookie's site).
+
+   The server refuses to start with a `SESSION_SECRET` shorter than 32 characters, or a
+   `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http anywhere but this
+   machine, and says which. The optional features (push notifications, STUN and TURN for voice,
+   the chain, the admin) stay off until their lines are filled in. It listens on `127.0.0.1:3200`
+   for the proxy; write `PORT` to choose another port. Nothing else needs writing: the server
+   runs as production whenever it is not started by `npm run dev`.
 3. `npm run build`
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and
    after every update that changes them. It makes the database match the entities exactly, so a
@@ -33,7 +32,8 @@ connection and the pages.
    filled-in `.env` is missing, or when root owns the clone. The service runs as the clone's
    owner, can write nothing but its own `/tmp`, and cannot gain privileges. Then
    `sudo scripts/service-start.sh`; the logs are in `.logs/`.
-6. Point the proxy at `http://127.0.0.1:$PORT`, upgrading the WebSocket on `/ws`:
+6. Point the proxy at `http://127.0.0.1:3200` (or the `PORT` you wrote), upgrading the WebSocket
+   on `/ws`:
 
    ```nginx
    map $http_upgrade $connection_upgrade { default upgrade; '' close; }

@@ -59,19 +59,12 @@ else
 
   grep -qE '^SESSION_SECRET=.+' "$ROOT/.env" ||
     refuse "SESSION_SECRET is empty - set it to a long random string, such as the output of 'openssl rand -hex 32'"
-
-  # Only an explicit false is worth a word: this process serves the client unless told not to.
-  ! grep -q '^SERVE_PAGES=false' "$ROOT/.env" ||
-    echo "warning: SERVE_PAGES=false - this process answers the api and 404s every page unless something else serves the client" >&2
-
-  ! grep -q '^DATABASE_SYNC=true' "$ROOT/.env" ||
-    echo "warning: DATABASE_SYNC=true builds the schema on every start - production runs 'npm run schema:sync' on purpose instead" >&2
 fi
 
 [ "$REFUSED" -eq 0 ] || exit 1
 
 # The schema is built from the entities, and production does it as a DELIBERATE act rather than as a
-# side effect of starting - `main.ts` runs the sync only when DATABASE_SYNC=true. A first deploy
+# side effect of starting - `main.ts` runs the sync only in development. A first deploy
 # that skips it boots against a database with no tables, and an entity change deployed without it
 # runs against the old shape.
 #
@@ -99,8 +92,7 @@ PrivateTmp=true
 ProtectSystem=strict
 RestartSec=5
 Restart=always
-# Without this the server runs its DEVELOPMENT path, which seeds the wallet fixtures and trusts no
-# proxy. It wins over whatever .env says, because .env never overrides the process's environment.
+# Production is also what the server takes an unset NODE_ENV to mean, and .env cannot change it.
 Environment=NODE_ENV=production
 WorkingDirectory=$SERVICE_PATH
 # Quoted: systemd splits ExecStart on whitespace, and an interpreter installed under a path with

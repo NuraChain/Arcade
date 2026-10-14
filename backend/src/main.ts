@@ -1,6 +1,7 @@
 import 'reflect-metadata';
+import './env-file.ts';
 
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { logRequests, pipeline, requestId } from '@azerothjs/http';
 import { handleShutdownSignals, serve } from '@azerothjs/http/node';
@@ -26,16 +27,12 @@ import { createSocialService } from './domains/social/service.ts';
 import { attachRealtime } from './realtime/gateway.ts';
 import { voiceCall } from './domains/table/voice.ts';
 import { createHub } from './realtime/hub.ts';
+import { HANDSHAKES_A_MINUTE, SOCKETS_MOST, SOCKETS_PER_ACCOUNT } from './realtime/limits.ts';
 import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
-try
-{
-    process.loadEnvFile(new URL('../.env', import.meta.url));
-}
-catch (error)
-{
-    throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.', { cause: error });
-}
+const CLIENT_DIR = fileURLToPath(new URL('../.dist-frontend', import.meta.url));
+
+const SSR_ENTRY = new URL('../.dist-server/entry.server.js', import.meta.url);
 
 const config = loadServerConfig();
 const log = createServerLogger(config);
@@ -101,7 +98,7 @@ const identity = createIdentityService(dataSource, {
 
 const hub = createHub({
     now: () => Date.now(),
-    accountMax: config.wsAccountMax,
+    accountMax: SOCKETS_PER_ACCOUNT,
 
     async edgesFor(userId)
     {
@@ -144,15 +141,6 @@ const ports = buildPorts(dataSource, config, hub, {
 
 const serving = config.servePages;
 
-if (!serving)
-{
-    log.warn('not serving pages - this process answers the api only', {
-        reason: 'SERVE_PAGES=false',
-        env: config.env,
-        fix: 'set SERVE_PAGES=true in the root .env, or run vite for the browser half'
-    });
-}
-
 if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
 {
     log.info('voice has no STUN or TURN server - a call between two networks is carried by this server', {
@@ -162,7 +150,7 @@ if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
 }
 
 const ssr = serving
-    ? await import(pathToFileURL(config.ssrEntry).href)
+    ? await import(SSR_ENTRY.href)
         .catch((error: unknown) =>
         {
             /*
@@ -171,7 +159,7 @@ const ssr = serving
              * rather than leaving an ERR_MODULE_NOT_FOUND pointing into `.dist-server`.
              */
             log.error('the SSR bundle is missing - run `npm run build` before starting', {
-                path: config.ssrEntry,
+                path: fileURLToPath(SSR_ENTRY),
                 error
             });
 
@@ -189,7 +177,7 @@ const app = buildApp({
         ? undefined
         : {
             routes: ssr.routes,
-            clientDir: config.clientDir,
+            clientDir: CLIENT_DIR,
             renderer: ssr.renderPage,
 
             // Embedded into every served page, so the typed client boots synchronously instead
@@ -208,7 +196,7 @@ const handler = pipeline(
     requestId(),
     headersFor(config.env === 'production'),
     gzipOnTheWay,
-    ...(ssr === undefined ? [] : [precompressed(config.clientDir, ['/assets/', '/world/'])]),
+    ...(ssr === undefined ? [] : [precompressed(CLIENT_DIR, ['/assets/', '/world/'])]),
 
     // Scoped to /api and /ws. Wrapping the whole handler would meter the forty static assets a
     // cold page load pulls, and a visitor would start taking 429s on their own JavaScript.
@@ -221,7 +209,13 @@ const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' }
 // IMMEDIATELY after `serve`, with nothing awaited in between: until the upgrade listener is
 // registered, an Upgrade-flagged request falls through to `mountPages`' catch-all, and every
 // awaited statement here widens that window from a tick into however long the await takes.
-const detachRealtime = attachRealtime(served.server, { ports, hub, config, log });
+const detachRealtime = attachRealtime(served.server, {
+    ports,
+    hub,
+    config,
+    log,
+    limits: { handshakes: HANDSHAKES_A_MINUTE, sockets: SOCKETS_MOST }
+});
 
 /**
  * Deletes what has run out.

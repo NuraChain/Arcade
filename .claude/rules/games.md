@@ -1027,7 +1027,7 @@ public table, does not say ready and hides the tab is away a minute later and st
 more, and the table closes behind them if they were alone. An account with no socket at all cannot
 wait at a live table: quick play still seats it, and the second sweep stands it up unless the game
 has started by then. That goes for a browser behind a proxy, for one turned away because
-`WS_MAX_CONNECTIONS` is spent, and for a script: an API pass must not park its accounts at a waiting
+the sockets this process holds (`SOCKETS_MOST`) are spent, and for a script: an API pass must not park its accounts at a waiting
 live table, and the matrix sits its partner down again before it restarts poker (*Poker*). A host
 stood up from a table for their friends can no longer see it, because nobody is their own friend,
 which was already true of a host who left. And five hundred chairs is all one sweep looks at: with

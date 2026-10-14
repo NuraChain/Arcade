@@ -1,45 +1,44 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { loadServerConfig } from '../src/env.ts';
+import { adopt } from '../src/env-file.ts';
+import { API_RATE, DEVELOPMENT_ORIGIN, loadServerConfig, POOL_MAX, PORT } from '../src/env.ts';
 
-const FULL: Record<string, string> = {
-    PORT: '3200',
-    NODE_ENV: 'development',
+const NAMES = [
+    'NODE_ENV', 'PORT', 'DATABASE_URL', 'DATABASE_POOL_MAX', 'SESSION_SECRET', 'PUBLIC_ORIGIN', 'NURA_CHAIN_ID',
+    'NURA_RPC_URL', 'NURA_PROFILE_ADDRESS', 'NURA_PROFILE_LENS_ADDRESS', 'NURA_EXPLORER_API', 'ADMIN_WALLET_ADDRESS',
+    'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'VOICE_STUN_URLS', 'VOICE_TURN_URLS',
+    'VOICE_TURN_SECRET'
+];
+
+const NEEDED: Record<string, string> = {
     DATABASE_URL: 'postgres://nobody@127.0.0.1:1/none',
-    DATABASE_POOL_MAX: '10',
-    DATABASE_SYNC: 'true',
     SESSION_SECRET: 'a'.repeat(64),
-    PUBLIC_ORIGIN: 'http://localhost:3100',
-    NURA_CHAIN_ID: '',
-    NURA_RPC_URL: '',
-    NURA_PROFILE_ADDRESS: '',
-    NURA_PROFILE_LENS_ADDRESS: '',
-    NURA_EXPLORER_API: '',
-    ADMIN_WALLET_ADDRESS: '',
-    API_RATE_MAX: '600',
-    WS_HANDSHAKE_MAX: '300',
-    WS_MAX_CONNECTIONS: '2000',
-    WS_ACCOUNT_MAX: '16',
-    VAPID_PUBLIC_KEY: '',
-    VAPID_PRIVATE_KEY: '',
-    VAPID_SUBJECT: '',
-    VOICE_STUN_URLS: '',
-    VOICE_TURN_URLS: '',
-    VOICE_TURN_SECRET: '',
-    CLIENT_DIR: '../.dist-frontend',
-    SSR_ENTRY: '../.dist-server/entry.server.js',
-    SERVE_PAGES: 'false'
+    PUBLIC_ORIGIN: 'https://play.example.com'
 };
 
 const saved = { ...process.env };
 
 const use = (env: Record<string, string>) =>
 {
-    for (const key of Object.keys(FULL))
+    for (const key of NAMES)
     {
         delete process.env[key];
     }
     Object.assign(process.env, env);
+};
+
+const refusal = () =>
+{
+    try
+    {
+        loadServerConfig();
+    }
+    catch (error)
+    {
+        return String(error);
+    }
+
+    return '';
 };
 
 afterEach(() =>
@@ -56,40 +55,73 @@ afterEach(() =>
 
 describe('the environment the server boots from', () =>
 {
-    it('loads when every variable is written, with the optional ones empty', () =>
+    it('boots in production from the three things only the operator knows', () =>
     {
-        use(FULL);
+        use(NEEDED);
         const config = loadServerConfig();
 
-        expect(config.port).toBe(3200);
-        expect(config.vapidPublicKey).toBe('');
-        expect(config.servePages).toBe(false);
+        expect(config.env).toBe('production');
+        expect(config.origin).toBe('https://play.example.com');
+        expect([config.port, config.apiRateMax, config.databasePoolMax]).toEqual([PORT, API_RATE, POOL_MAX]);
+        expect([config.servePages, config.databaseSync]).toEqual([true, false]);
+        expect([config.vapidPublicKey, config.voiceTurnSecret, config.chainId, config.adminWallet]).toEqual(['', '', '', '']);
     });
 
-    it('refuses to boot when any variable is missing, and names every one', () =>
+    it('takes development from the command: no pages, the schema built, and the dev server for an origin', () =>
     {
-        const { WS_ACCOUNT_MAX: _one, SERVE_PAGES: _two, ...rest } = FULL;
-        use(rest);
+        use({ NODE_ENV: 'development', DATABASE_URL: NEEDED.DATABASE_URL, SESSION_SECRET: 'short' });
+        const config = loadServerConfig();
 
-        expect(() => loadServerConfig()).toThrow(/WS_ACCOUNT_MAX, SERVE_PAGES/);
+        expect(config.env).toBe('development');
+        expect([config.servePages, config.databaseSync]).toEqual([false, true]);
+        expect(config.origin).toBe(DEVELOPMENT_ORIGIN);
+        expect(config.secret).toBe('short');
+    });
+
+    it('refuses to boot without what only the operator knows, naming each one and never a secret', () =>
+    {
+        use({});
+        const said = refusal();
+
+        expect(said).toMatch(/DATABASE_URL is required/);
+        expect(said).toMatch(/SESSION_SECRET is required/);
+        expect(said).toMatch(/PUBLIC_ORIGIN is required/);
+        expect(said).toMatch(/\.env\.example says what each one is/);
+
+        use({ NODE_ENV: 'development' });
+
+        expect(refusal()).not.toMatch(/PUBLIC_ORIGIN/);
+    });
+
+    it('takes a number the operator set over the one it has', () =>
+    {
+        use({ ...NEEDED, PORT: '5300', API_RATE_MAX: '20000', DATABASE_POOL_MAX: '4' });
+        const config = loadServerConfig();
+
+        expect([config.port, config.apiRateMax, config.databasePoolMax]).toEqual([5300, 20000, 4]);
+    });
+
+    it('turns an optional feature on when its keys are written, and leaves it off when they are empty', () =>
+    {
+        use({ ...NEEDED, VOICE_STUN_URLS: 'stun:stun.example.com', ADMIN_WALLET_ADDRESS: '' });
+        const config = loadServerConfig();
+
+        expect(config.voiceStunUrls).toBe('stun:stun.example.com');
+        expect(config.adminWallet).toBe('');
+    });
+
+    it('refuses a mode it does not know', () =>
+    {
+        use({ ...NEEDED, NODE_ENV: 'staging' });
+
+        expect(refusal()).toMatch(/NODE_ENV: expected one of development \| production \| test/);
     });
 
     it('refuses to run in production with a short secret or an origin a cookie cannot be secure on, naming each and never the secret', () =>
     {
         const secret = 'short-secret';
-
-        use({ ...FULL, NODE_ENV: 'production', SESSION_SECRET: secret, PUBLIC_ORIGIN: 'http://play.example.com' });
-
-        let said = '';
-
-        try
-        {
-            loadServerConfig();
-        }
-        catch (error)
-        {
-            said = String(error);
-        }
+        use({ ...NEEDED, SESSION_SECRET: secret, PUBLIC_ORIGIN: 'http://play.example.com' });
+        const said = refusal();
 
         expect(said).toMatch(/SESSION_SECRET is 12 characters long/);
         expect(said).toMatch(/PUBLIC_ORIGIN has to be https/);
@@ -97,30 +129,47 @@ describe('the environment the server boots from', () =>
 
         for (const origin of ['https://play.example.com/', 'https://play.example.com/games', 'play.example.com'])
         {
-            use({ ...FULL, NODE_ENV: 'production', PUBLIC_ORIGIN: origin });
+            use({ ...NEEDED, PUBLIC_ORIGIN: origin });
 
-            expect(() => loadServerConfig(), origin).toThrow(/PUBLIC_ORIGIN has to be an origin and nothing more/);
+            expect(refusal(), origin).toMatch(/PUBLIC_ORIGIN has to be an origin and nothing more/);
         }
     });
 
-    it('runs in production on https, or on this machine over http, and anywhere in development', () =>
+    it('runs in production on https, or on this machine over http', () =>
     {
         for (const origin of ['https://play.example.com', 'http://localhost:5300', 'http://127.0.0.1:5300', 'http://[::1]:5300'])
         {
-            use({ ...FULL, NODE_ENV: 'production', PUBLIC_ORIGIN: origin });
+            use({ ...NEEDED, PUBLIC_ORIGIN: origin });
 
             expect(loadServerConfig().origin, origin).toBe(origin);
         }
-
-        use({ ...FULL, SESSION_SECRET: 'short', PUBLIC_ORIGIN: 'http://games.local:3100' });
-
-        expect(loadServerConfig().secret).toBe('short');
     });
 
     it('refuses an empty value where one is needed', () =>
     {
-        use({ ...FULL, SESSION_SECRET: '' });
+        use({ ...NEEDED, SESSION_SECRET: '' });
 
-        expect(() => loadServerConfig()).toThrow(/SESSION_SECRET/);
+        expect(refusal()).toMatch(/SESSION_SECRET is required/);
+    });
+});
+
+describe('the root .env', () =>
+{
+    it('is taken in for every name but the mode, which is the command\'s', () =>
+    {
+        const into: NodeJS.ProcessEnv = {};
+
+        adopt('NODE_ENV=development\nDATABASE_URL=postgres://a@b/c\nPORT=4000\n', into);
+
+        expect(into).toEqual({ DATABASE_URL: 'postgres://a@b/c', PORT: '4000' });
+    });
+
+    it('never overrides what the process was started with', () =>
+    {
+        const into: NodeJS.ProcessEnv = { PORT: '5300' };
+
+        adopt('PORT=3200\nAPI_RATE_MAX=600\n', into);
+
+        expect(into).toEqual({ PORT: '5300', API_RATE_MAX: '600' });
     });
 });

@@ -8,27 +8,13 @@ export interface ChainConfig
     site: string;
 }
 
-function fromEnv(key: string)
-{
-    const value = (import.meta.env as Record<string, string | undefined>)[key];
-    if (value === undefined)
-    {
-        throw new Error(`${ key } is not set in the root .env.`);
-    }
-    return value;
-}
-
 export const NURA_CHAIN: ChainConfig = {
-    chainId: fromEnv('VITE_NURA_CHAIN_ID'),
-    name: fromEnv('VITE_NURA_CHAIN_NAME'),
-    currency: {
-        name: fromEnv('VITE_NURA_CURRENCY_NAME'),
-        symbol: fromEnv('VITE_NURA_CURRENCY_SYMBOL'),
-        decimals: 18
-    },
-    rpcUrls: fromEnv('VITE_NURA_RPC_URL').split(',').filter(Boolean),
-    explorerUrls: fromEnv('VITE_NURA_EXPLORER_URL').split(',').filter(Boolean),
-    site: fromEnv('VITE_NURA_SITE')
+    chainId: '1020',
+    name: 'NuraChain',
+    currency: { name: 'Nura', symbol: 'NURA', decimals: 18 },
+    rpcUrls: ['https://rpc.nurachain.net'],
+    explorerUrls: ['https://explorer.nurachain.net'],
+    site: 'https://nurachain.net'
 };
 
 export function chainIsConfigured(chain: ChainConfig = NURA_CHAIN)

@@ -57,14 +57,15 @@ let identify: (request: Request) => Promise<Principal | null>;
 
 const config = {
     env: 'test',
-    origin: 'http://localhost:3100',
-    wsHandshakeMax: 1000,
-    wsMaxConnections: 100,
-    // Generous on purpose. The per-account cap is exercised in `realtime-hub.spec.ts` against a
-    // fake, where it is one assertion; here it would only mean an earlier test's socket silently
-    // turning a later one's `hello` into a 4429.
-    wsAccountMax: 100
+    origin: 'http://localhost:3100'
 } as unknown as ServerConfig;
+
+const limits = { handshakes: 1000, sockets: 100 };
+
+// Generous on purpose. The per-account cap is exercised in `realtime-hub.spec.ts` against a
+// fake, where it is one assertion; here it would only mean an earlier test's socket silently
+// turning a later one's `hello` into a 4429.
+const ACCOUNT_SOCKETS = 100;
 
 describe.skipIf(!active)('realtime, over a real socket', () =>
 {
@@ -74,7 +75,7 @@ beforeAll(async () =>
 
     const base = createHub({
         now: () => Date.now(),
-        accountMax: config.wsAccountMax,
+        accountMax: ACCOUNT_SOCKETS,
         edgesFor: async () => ({
             party: { id: 'alex', isMinor: false, allowStrangerMessages: true, showOnline: true },
             handle: 'alex',
@@ -145,7 +146,7 @@ beforeAll(async () =>
     await new Promise<void>((resolve) => server.listen(0, resolve));
     port = (server.address() as { port: number }).port;
 
-    detach = attachRealtime(server, { ports, hub, config, log: silent });
+    detach = attachRealtime(server, { ports, hub, config, log: silent, limits });
 });
 
 afterAll(async () =>

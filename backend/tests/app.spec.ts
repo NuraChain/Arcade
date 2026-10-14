@@ -46,8 +46,6 @@ const config = {
     origin: 'http://localhost:3100',
     chainId: '',
     rpcUrl: '',
-    clientDir: '',
-    ssrEntry: '',
     servePages: false
 } as unknown as ServerConfig;
 

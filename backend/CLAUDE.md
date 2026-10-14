@@ -112,7 +112,7 @@ and can be told to refuse; specs that assert on those calls import `server` from
 derives handles with the REAL `handleFromName`, imported from the server, so the two cannot drift.
 
 Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
-are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
+are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/avatars`; in
 production one process answers everything, so there is no CORS between halves in either mode.
 
 ## A write from a page on another site
@@ -571,8 +571,8 @@ carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `backend/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
 extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
-decorator can express. `main.ts` runs it when `DATABASE_SYNC=true` - true in development, false in
-production - and `npm run schema:sync --workspace backend` is the same code as a deliberate act. A sync cannot apply a NOT NULL column or a new CHECK to rows
+decorator can express. `main.ts` runs it at every start in development and never in production,
+where `npm run schema:sync --workspace backend` is the same code as a deliberate act. A sync cannot apply a NOT NULL column or a new CHECK to rows
 that predate it - a VPS database from before `tables.chat` failed exactly that way - so boot names
 the rebuild (`drop schema public cascade; create schema public`) instead of dumping the stack,
 because nothing here migrates rows.

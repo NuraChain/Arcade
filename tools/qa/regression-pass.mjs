@@ -1,7 +1,7 @@
 /**
  * The browser pass for behaviour no other gate can see, run by hand against the BUILT server.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start
+ *   npm run build && API_RATE_MAX=20000 npm start
  *   node tools/qa/regression-pass.mjs
  *
  * `npm run qa` tours 640 cells for overflow, hit targets, a `main` landmark and a clean console;

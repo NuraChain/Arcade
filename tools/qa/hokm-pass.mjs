@@ -13,7 +13,7 @@
  * itself, and no answer ever carries a card that reader is not holding.
  *
  * Run against the BUILT server, like every other pass:
- *   PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 SERVE_PAGES=true NODE_ENV=production npm start
+ *   PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 npm start
  *   node tools/qa/hokm-pass.mjs
  */
 import { tableBody } from './tables.mjs';
