@@ -8,6 +8,7 @@ import { routeMeta } from '../src/lib/route-meta.ts';
 import Sidebar from '../src/components/app/sidebar.component.azeroth';
 import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
+import { CARRIED_FROM } from '../src/components/app/overlay-layer.component.azeroth';
 import Page from '../src/components/app/page.component.azeroth';
 import PageHeader from '../src/components/app/page-header.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
@@ -285,6 +286,35 @@ describe('OverlayHost', () =>
         panel.appendChild(button);
         return panel;
     };
+
+    it('closes a sheet when its handle is pressed, and not when the press was a drag let go short of closing', async () =>
+    {
+        const overlay = useOverlay();
+        const { unmount } = renderTest(() => OverlayHost({}) as Rendered);
+        const handle = overlay.open(Probe, {}, { label: 'Probe', kind: 'sheet' });
+        await settle();
+
+        const grip = document.body.querySelector<HTMLButtonElement>(`[data-overlay-layer='${ handle.id }'] button[aria-label]`)!;
+        const at = (type: string, y: number) => grip.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, pointerType: 'mouse', clientX: 10, clientY: y }));
+
+        grip.setPointerCapture = () => undefined;
+
+        at('pointerdown', 100);
+        at('pointermove', 100 + CARRIED_FROM + 20);
+        at('pointerup', 100 + CARRIED_FROM + 20);
+        grip.click();
+
+        expect(overlay.items()[0]?.phase, 'a drag let go short of closing closed the sheet').toBe('open');
+
+        at('pointerdown', 100);
+        at('pointerup', 100);
+        grip.click();
+
+        expect(overlay.items()[0]?.phase).toBe('closing');
+        clock.advance(OVERLAY_SETTLE);
+        await settle();
+        unmount();
+    });
 
     it('renders a dialog into the body, moves focus in, and lets Escape close it', async () =>
     {

@@ -13,6 +13,8 @@ import { OVERLAY_HIDDEN, OVERLAY_PANEL, OVERLAY_RESTING, OVERLAY_SCRIM } from '.
 
 const HALF = 0.46;
 
+export const CARRIED_FROM = 4;
+
 const origins = new WeakMap<Element, () => HTMLElement | null>();
 
 export default component OverlayLayer(props: { entry: OverlayEntry })
@@ -32,6 +34,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
     let returnTo: HTMLElement | null = null;
     let before: () => HTMLElement | null = () => null;
     let points: number[] = [];
+    let carried = false;
 
     const origin = () => (returnTo !== null && returnTo.isConnected ? returnTo : before());
 
@@ -123,9 +126,22 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                         type="button"
                         class="touch-none flex shrink-0 cursor-grab justify-center pt-2.5 pb-1"
                         aria-label={ locale.t('overlay.handle') }
-                        onClick={ () => (props.entry.dismissible ? props.entry.props.close() : undefined) }
+                        onClick={ () =>
+                        {
+                            if (carried)
+                            {
+                                carried = false;
+                                return;
+                            }
+
+                            if (props.entry.dismissible)
+                            {
+                                props.entry.props.close();
+                            }
+                        } }
                         onPointerDown={ (event) =>
                         {
+                            carried = false;
                             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
                             void motion();
                             points = stops(panel?.offsetHeight ?? 0);
@@ -149,6 +165,8 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                             }
                             const frame = drag.end(runtime().clock.now());
                             const index = settleIndex(detent + frame.offset, drag.speed(), points);
+
+                            carried = Math.abs(frame.offset) >= CARRIED_FROM;
                             settleAt(props.entry.dismissible ? index : Math.min(index, points.length - 2), detent + frame.offset);
                         } }
                         onPointerCancel={ () =>
