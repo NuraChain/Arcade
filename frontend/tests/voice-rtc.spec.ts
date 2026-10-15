@@ -115,7 +115,12 @@ function fakeConnection()
             connection.signalingState = 'have-remote-offer';
         },
 
-        addIceCandidate: async () => undefined,
+        iced: [] as unknown[],
+
+        addIceCandidate: async (candidate: unknown) =>
+        {
+            connection.iced.push(candidate);
+        },
 
         restartIce()
         {
@@ -1050,8 +1055,10 @@ describe('a call the server carries from its first moment', () =>
             await answered;
             await one.connection.onnegotiationneeded?.();
             await one.call.receive('m1', said('offer'));
+            await one.call.receive('m1', { kind: 'ice', data: JSON.stringify({ candidate: 'late' }) });
 
             expect(one.connection.applied, 'a signal reached a line that was hung up').toEqual([]);
+            expect(one.connection.iced, 'a candidate reached a line that was hung up').toEqual([]);
             expect(one.links.at(-1)).toEqual(['mina', 'connected']);
         }
         finally

@@ -357,16 +357,12 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const wait = (peer: Peer) =>
     {
-        if (peer.patience === null && !peer.hungUp && carries())
+        if (peer.patience === null && !peer.hungUp)
         {
             peer.patience = after(patienceFor(deps.rtt?.() ?? null), () =>
             {
                 peer.patience = null;
-
-                if (!peer.linked)
-                {
-                    hangUp(peer);
-                }
+                hangUp(peer);
             });
         }
     };
@@ -832,11 +828,6 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             if (!peer.flowing)
             {
                 hear(peer);
-            }
-
-            if (!peer.linked)
-            {
-                viaServer(peer);
             }
         },
 
