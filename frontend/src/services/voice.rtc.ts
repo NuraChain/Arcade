@@ -1,4 +1,5 @@
 import { createRelayKit, type Codec, type Inbound, type Outbound, type RelayKit } from './voice.relay.ts';
+import { tuneOpus } from './voice.sdp.ts';
 
 export type PeerLink = 'connecting' | 'connected' | 'failed';
 
@@ -26,7 +27,7 @@ export interface VoiceCallDeps
     onLevel(who: string, level: number): void;
     connect?(config: RTCConfiguration): RTCPeerConnection;
     context?(): AudioContext | null;
-    relay?(to: string[], codec: Codec, at: number, data: string): void;
+    relay?(to: string[], codec: Codec, at: number, data: string): boolean;
     opus?: boolean;
     kit?(context: AudioContext): RelayKit;
     after?(ms: number, run: () => void): () => void;
@@ -42,6 +43,7 @@ export interface VoiceCall
     heard(join: string, codec: Codec, at: number, data: string): void;
     setVolume(who: string, volume: number): void;
     setSink(id: string): void;
+    setQuality(bitrate: number): void;
     close(): void;
 }
 
@@ -128,6 +130,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
     let sink = '';
     let kit: RelayKit | null = null;
     let outbound: Outbound | null = null;
+    let quality = 64_000;
 
     const after = deps.after ?? ((ms: number, run: () => void) =>
     {
@@ -202,8 +205,9 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 return;
             }
 
-            outbound = made.outbound((to, codec, at, data) => deps.relay?.(to, codec, at, data), deps.opus === true);
+            outbound = made.outbound((to, codec, at, data) => deps.relay?.(to, codec, at, data) ?? false, deps.opus === true);
             outbound.setMuted(muted);
+            outbound.setBitrate(quality);
             outbound.setTrack(track);
         }
 
@@ -463,6 +467,36 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         deps.onLink(peer.who, null);
     };
 
+    const tune = (peer: Peer) =>
+    {
+        const sender = peer.sender;
+
+        if (sender === null || typeof sender.getParameters !== 'function')
+        {
+            return;
+        }
+
+        try
+        {
+            const parameters = sender.getParameters();
+            const [first] = parameters.encodings ?? [];
+
+            if (first === undefined || first.maxBitrate === quality)
+            {
+                return;
+            }
+
+            first.maxBitrate = quality;
+            first.priority = 'high';
+            first.networkPriority = 'high';
+            void sender.setParameters(parameters).catch(() => undefined);
+        }
+        catch
+        {
+            return;
+        }
+    };
+
     const carry = (peer: Peer, line: RTCRtpTransceiver) =>
     {
         line.direction = 'sendrecv';
@@ -564,6 +598,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             {
                 settle(peer);
                 peer.linked = true;
+                tune(peer);
                 mark(peer, 'connected');
 
                 if (carries())
@@ -752,7 +787,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     return;
                 }
 
-                const description = JSON.parse(signal.data) as RTCSessionDescriptionInit;
+                const said = JSON.parse(signal.data) as RTCSessionDescriptionInit;
+                const description = said.sdp === undefined ? said : { ...said, sdp: tuneOpus(said.sdp) };
                 const free = !peer.making && (connection.signalingState === 'stable' || peer.settling);
                 const collision = description.type === 'offer' && !free;
 
@@ -795,6 +831,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                         deps.send(peer.who, join, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
                     }
                 }
+
+                tune(peer);
             }
             catch
             {
@@ -839,6 +877,18 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 peer.volume = volume;
                 play(peer);
             }
+        },
+
+        setQuality(bitrate)
+        {
+            quality = bitrate;
+
+            for (const peer of peers.values())
+            {
+                tune(peer);
+            }
+
+            outbound?.setBitrate(bitrate);
         },
 
         setSink(id)

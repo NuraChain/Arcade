@@ -144,7 +144,7 @@ export interface RealtimeApi
 
     signal(table: string, to: string, join: string, kind: SignalFrame['kind'], data: string): void;
 
-    sound(table: string, to: string[], codec: SoundFrame['codec'], at: number, data: string): void;
+    sound(table: string, to: string[], codec: SoundFrame['codec'], at: number, data: string): boolean;
 
     /**
      * Every status change, in order.
@@ -758,10 +758,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         sound(table, to, codec, at, data)
         {
-            if (status() === 'connected')
-            {
-                active.send({ t: 'sound', table, to, codec, at, data }, SOUND_BACKLOG);
-            }
+            return status() === 'connected' && active.send({ t: 'sound', table, to, codec, at, data }, SOUND_BACKLOG);
         },
 
         onTyping(listener)

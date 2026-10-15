@@ -25,6 +25,7 @@ interface FakeCall
     mic: (MediaStream | null)[];
     volumes: Record<string, number>;
     sinks: string[];
+    qualities: number[];
     closed: boolean;
 }
 
@@ -32,7 +33,7 @@ let calls: FakeCall[] = [];
 
 const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
 {
-    const call: FakeCall = { deps, synced: [], received: [], sounds: [], muted: [], mic: [], volumes: {}, sinks: [], closed: false };
+    const call: FakeCall = { deps, synced: [], received: [], sounds: [], muted: [], mic: [], volumes: {}, sinks: [], qualities: [], closed: false };
     calls.push(call);
 
     return {
@@ -63,6 +64,10 @@ const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
         setSink: (id) =>
         {
             call.sinks.push(id);
+        },
+        setQuality: (bitrate) =>
+        {
+            call.qualities.push(bitrate);
         },
         close: () =>
         {
@@ -781,6 +786,23 @@ describe('a call the server carries', () =>
         calls[0].deps.relay!(['j2'], 'opus', 9, 'BwgJ');
 
         expect(soundFrames().map((frame) => (frame.t === 'sound' ? frame.at : -1))).toEqual([7, 9]);
+    });
+
+    it('asks the call for the quality the settings name, and again when it is changed', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        expect(calls[0].qualities.at(-1)).toBe(64_000);
+
+        useSettings().update({ voiceQuality: 'best' });
+        useVoice().tune();
+
+        expect(calls[0].qualities.at(-1)).toBe(96_000);
+
+        useSettings().update({ voiceQuality: 'standard' });
+        useVoice().tune();
+
+        expect(calls[0].qualities.at(-1)).toBe(32_000);
     });
 
     it('gives the call the round trip this browser has measured to the server', async () =>

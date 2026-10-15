@@ -7,7 +7,13 @@ interface Line
 {
     direction: string;
     mid: string | null;
-    sender: { track: MediaStreamTrack | null; replaceTrack(track: MediaStreamTrack | null): Promise<void> };
+    sender: {
+        track: MediaStreamTrack | null;
+        replaceTrack(track: MediaStreamTrack | null): Promise<void>;
+        getParameters(): { encodings: Record<string, unknown>[] };
+        setParameters(parameters: { encodings: Record<string, unknown>[] }): Promise<void>;
+        set: Record<string, unknown>[];
+    };
     receiver: { track: { kind: string } };
 }
 
@@ -30,9 +36,15 @@ function fakeConnection()
     {
         const sender: Line['sender'] = {
             track: null,
+            set: [],
             replaceTrack: async (track) =>
             {
                 sender.track = track;
+            },
+            getParameters: () => ({ encodings: [{ ...(sender.set.at(-1) ?? {}) }] }),
+            setParameters: async (parameters) =>
+            {
+                sender.set.push({ ...parameters.encodings[0] });
             }
         };
         const one: Line = { direction, mid: null, sender, receiver: { track: { kind: 'audio' } } };
@@ -509,6 +521,30 @@ describe('a call between two players', () =>
         expect(waits.sent.map((one) => one.signal.kind)).toEqual(['answer', 'offer', 'answer']);
     });
 
+    it('lets the other end send Opus up to the best quality, and sends at the quality chosen here', async () =>
+    {
+        const asks = asking();
+        const answer = { type: 'answer', sdp: ['v=0', 'a=rtpmap:111 opus/48000/2', 'a=fmtp:111 minptime=10;useinbandfec=1', ''].join('\r\n') };
+
+        asks.sees(MINA);
+        await asks.connection.onnegotiationneeded?.();
+        await asks.call.receive('m1', { kind: 'answer', data: JSON.stringify(answer) });
+
+        const sender = asks.connection.lines[0].sender;
+
+        expect(asks.connection.applied[0].sdp).toContain('a=fmtp:111 minptime=10;useinbandfec=1;maxaveragebitrate=96000;stereo=0;sprop-stereo=0;usedtx=0');
+        expect(sender.set.at(-1)).toEqual({ maxBitrate: 64_000, priority: 'high', networkPriority: 'high' });
+
+        asks.call.setQuality(32_000);
+
+        expect(sender.set.at(-1)).toMatchObject({ maxBitrate: 32_000 });
+        expect(sender.set).toHaveLength(2);
+
+        asks.connection.becomes('connected');
+
+        expect(sender.set, 'a line was told the same quality again').toHaveLength(2);
+    });
+
     it('leaves the restart of a failed connection to the side that called', async () =>
     {
         const asks = asking();
@@ -713,6 +749,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
     const timers: { ms: number; run: () => void; off: boolean }[] = [];
     const sources = new Map<HTMLMediaElement, unknown>();
     const context = fakeContext();
+    const bitrates: number[] = [];
     let closed = 0;
 
     const kit = (): RelayKit => ({
@@ -734,6 +771,11 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
                 {
                     mutes.push(muted);
                 },
+                setBitrate: (bitrate) =>
+                {
+                    bitrates.push(bitrate);
+                },
+                bitrate: () => bitrates.at(-1) ?? 0,
                 close: () =>
                 {
                     closed += 1;
@@ -773,7 +815,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
         onLink: (who, link) => links.push([who, link]),
         onLevel: () => undefined,
         context: () => (options.context === false ? null : context as unknown as AudioContext),
-        ...(options.relay === false ? {} : { relay: (to: string[], codec: Codec, at: number, data: string) => sounds.push({ to, codec, at, data }) }),
+        ...(options.relay === false ? {} : { relay: (to: string[], codec: Codec, at: number, data: string) => sounds.push({ to, codec, at, data }) > 0 }),
         opus: options.opus ?? true,
         kit,
         rtt: () => 120,
@@ -804,6 +846,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
         tracks,
         mutes,
         speaks,
+        bitrates,
         inbound,
         sounds,
         links,
@@ -1077,6 +1120,27 @@ describe('a call the server carries from its first moment', () =>
             one.sees({ ...MINA_OPUS, opus: false });
 
             expect(one.targets.map((targets) => targets.map((target) => target.opus))).toEqual([[true], [false]]);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('asks the server to carry the voice at the quality chosen', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.call.setQuality(96_000);
+            one.sees(MINA_OPUS);
+
+            expect(one.bitrates.at(-1)).toBe(96_000);
+
+            one.call.setQuality(32_000);
+
+            expect(one.bitrates.at(-1)).toBe(32_000);
         }
         finally
         {

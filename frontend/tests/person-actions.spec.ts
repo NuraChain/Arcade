@@ -138,6 +138,7 @@ describe('how loud somebody in the call is, from the sheet about them', () =>
             heard: () => undefined,
             setVolume: () => undefined,
             setSink: () => undefined,
+            setQuality: () => undefined,
             close: () => undefined
         }));
         useVoice().reset();

@@ -27,6 +27,7 @@ export interface Settings
     voiceAuto: boolean;
     voiceThreshold: number;
     voiceRelease: number;
+    voiceQuality: VoiceQuality;
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
@@ -35,6 +36,8 @@ export interface Settings
 }
 
 export type VoiceNoise = 'off' | 'standard' | 'strong';
+
+export type VoiceQuality = 'standard' | 'high' | 'best';
 
 const STORAGE_KEY = 'nura-games.settings';
 
@@ -64,6 +67,7 @@ export function defaultSettings(): Settings
         voiceAuto: true,
         voiceThreshold: -50,
         voiceRelease: 200,
+        voiceQuality: 'high',
         hintMoves: true,
         hintOutcome: true,
         hintRules: true,

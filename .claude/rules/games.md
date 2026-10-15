@@ -1410,8 +1410,9 @@ it. What moves the call is measured, never timed:
 Somebody who comes back as a new joining is tried on a line again.
 
 - **One frame every 60 ms.** An `AudioWorklet` taps the microphone (`services/voice.relay.ts`,
-  loaded from a Blob, which needs a secure page, as the microphone does). A frame is Opus at
-  24 kbps through WebCodecs where both ends can write and read it, and G.711 μ-law at 16 kHz where
+  loaded from a Blob, which needs a secure page, as the microphone does). A frame is Opus at the
+  quality chosen (*Quality is the reader's to choose*), through WebCodecs where both ends can write
+  and read it, and G.711 μ-law at 16 kHz where
   either cannot: the `voice` frame says `opus`, the roster carries it, and a sender picks the
   codec its targets all hear. A frame of pure silence is not sent, and nothing is sent while muted
   or between presses of the talk key. Every frame the microphone gives is COUNTED, sent or not:
@@ -1524,6 +1525,26 @@ gate closed, -70.6 dB at the listener, about 30% less sent). A gate that only he
 opened by a keyboard's clicks, so the noisy recording kept it open; telling a click from a voice
 is what strong suppression is for. `voice-gate.spec.ts`, `voice-input.spec.ts` and
 `voice.spec.ts` (*the microphone, prepared before anybody hears it*) hold it.
+
+**Quality is the reader's to choose, and the line decides how much of it gets through.** Settings
+offer Standard, High and Best (`voiceQuality`, `BITRATES`: 32, 64 and 96 kbps, High by default,
+as Discord's default is). Chrome sent every line at its own default of 32 kbps, and the server
+carried 24.
+
+- **A line**: the other end's description is tuned as it is taken in (`tuneOpus` in
+  `services/voice.sdp.ts`), so Opus may be sent up to 96 kbps, in mono, with forward error
+  correction and without DTX; the sender is held to the preset with `maxBitrate` and asks the
+  network for `priority: 'high'`. It is set after every description, when the line connects and
+  when the preset changes, and never twice to the same number.
+- **The server** carries the preset up to 64 kbps (`RELAY_MOST`), since it pays for every
+  listener, from an encoder at complexity 10 in its voice mode. When the socket falls behind (a
+  frame refused for the backlog) the encoder steps down a rung (48, 32, 24, 16 kbps), at most once
+  a second (`STRAIN_S`), and climbs back a rung once the socket has been calm for ten
+  (`EASE_S`). The audio clock times it, so a spec can drive it.
+
+Measured on the built server: a line's target was 32, 64 and 96 kbps for the three presets and it
+sent 30, 62 and 96; the server carried 29, 60 and 59. `voice-sdp.spec.ts`, `voice-relay.spec.ts`
+(*speaks Opus as well as it is asked*), `voice-rtc.spec.ts` and `voice.spec.ts` hold it.
 
 **One side places the call.** Of two players the one whose JOINING sorts first adds the audio line
 and offers; the other opens a connection with nothing on it, and answers ON the line it was offered,

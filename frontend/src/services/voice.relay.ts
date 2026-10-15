@@ -15,6 +15,8 @@ export interface Outbound
     to(targets: readonly Target[]): void;
     setTrack(track: MediaStreamTrack | null): void;
     setMuted(muted: boolean): void;
+    setBitrate(target: number): void;
+    bitrate(): number;
     close(): void;
 }
 
@@ -25,7 +27,7 @@ export interface Inbound
     close(): void;
 }
 
-export type Send = (to: string[], codec: Codec, at: number, data: string) => void;
+export type Send = (to: string[], codec: Codec, at: number, data: string) => boolean;
 
 export interface RelayKit
 {
@@ -39,7 +41,13 @@ export const OPUS_RATE = 48_000;
 
 export const LAW_RATE = 16_000;
 
-export const OPUS_BITRATE = 24_000;
+export const RELAY_MOST = 64_000;
+
+export const RELAY_STEPS = [16_000, 24_000, 32_000, 48_000, 64_000];
+
+export const STRAIN_S = 1;
+
+export const EASE_S = 10;
 
 export const WAITING_MOST = 50;
 
@@ -108,7 +116,7 @@ registerProcessor('${ PLAY }', Play);
 
 const OPUS = { codec: 'opus', sampleRate: OPUS_RATE, numberOfChannels: 1 };
 
-const ENCODE = { ...OPUS, bitrate: OPUS_BITRATE, opus: { frameDuration: FRAME_MS * 1000 } };
+const ENCODE = (bitrate: number) => ({ ...OPUS, bitrate, opus: { frameDuration: FRAME_MS * 1000, complexity: 10, signal: 'voice', application: 'voip' } });
 
 export function lawOf(samples: Float32Array)
 {
@@ -215,7 +223,7 @@ export async function hearsOpus()
 
     try
     {
-        const [encode, decode] = await Promise.all([AudioEncoder.isConfigSupported(ENCODE), AudioDecoder.isConfigSupported(OPUS)]);
+        const [encode, decode] = await Promise.all([AudioEncoder.isConfigSupported(ENCODE(RELAY_MOST)), AudioDecoder.isConfigSupported(OPUS)]);
 
         return encode.supported === true && decode.supported === true;
     }
@@ -267,17 +275,60 @@ export function createRelayKit(context: AudioContext): RelayKit
             let speaks = opus;
             let toLaw: Resampler | null = null;
             const spoken: number[] = [];
+            let target = RELAY_MOST;
+            let current = RELAY_MOST;
+            let changed = -Infinity;
+            let strained = -Infinity;
             let toOpus: ((samples: Float32Array) => Float32Array<ArrayBuffer>) | null = null;
 
             const codec = (): Codec => (speaks && targets.every((one) => one.opus) ? 'opus' : 'law');
+
+            const rebuild = (next: number) =>
+            {
+                if (next === current)
+                {
+                    return;
+                }
+
+                current = next;
+                changed = context.currentTime;
+                shut(encoder);
+                encoder = null;
+                spoken.length = 0;
+            };
 
             const ship = (how: Codec, index: number, bytes: Uint8Array) =>
             {
                 const to = targets.map((one) => one.join);
 
-                if (to.length > 0)
+                if (to.length === 0)
                 {
-                    send(to, how, index, base64Of(bytes));
+                    return;
+                }
+
+                const sent = send(to, how, index, base64Of(bytes));
+                const now = context.currentTime;
+
+                if (how !== 'opus')
+                {
+                    return;
+                }
+
+                if (!sent)
+                {
+                    strained = now;
+
+                    if (now - changed >= STRAIN_S)
+                    {
+                        rebuild(RELAY_STEPS.filter((one) => one < current).at(-1) ?? RELAY_STEPS[0]);
+                    }
+
+                    return;
+                }
+
+                if (current < target && now - strained >= EASE_S && now - changed >= EASE_S)
+                {
+                    rebuild(RELAY_STEPS.find((one) => one > current && one <= target) ?? target);
                 }
             };
 
@@ -310,7 +361,7 @@ export function createRelayKit(context: AudioContext): RelayKit
                     }
                 });
 
-                made.configure(ENCODE);
+                made.configure(ENCODE(current));
                 encoder = made;
 
                 return made;
@@ -460,6 +511,18 @@ export function createRelayKit(context: AudioContext): RelayKit
                 {
                     muted = next;
                 },
+
+                setBitrate(next)
+                {
+                    target = Math.min(next, RELAY_MOST);
+
+                    if (current > target || context.currentTime - strained >= EASE_S)
+                    {
+                        rebuild(target);
+                    }
+                },
+
+                bitrate: () => current,
 
                 close()
                 {

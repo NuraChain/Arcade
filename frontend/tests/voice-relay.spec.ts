@@ -1,8 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import {
+    EASE_S,
     FRAME_MS,
     LAW_RATE,
+    RELAY_MOST,
+    STRAIN_S,
     WAITING_MOST,
     base64Of,
     bytesOf,
@@ -371,6 +374,7 @@ function speaking(rate = 48_000)
 
     const context = {
         sampleRate: rate,
+        currentTime: 0,
         destination,
         audioWorklet: {
             addModule: async (url: string) =>
@@ -397,10 +401,15 @@ function speaking(rate = 48_000)
     };
 
     const track = { kind: 'audio' } as unknown as MediaStreamTrack;
-    const outbound = (opus = false) => createRelayKit(context as unknown as AudioContext).outbound((to, codec, at, data) => sent.push({ to, codec, at, data }), opus);
+    const line = { open: true };
+    const outbound = (opus = false) => createRelayKit(context as unknown as AudioContext).outbound((to, codec, at, data) =>
+    {
+        sent.push({ to, codec, at, data });
+        return line.open;
+    }, opus);
     const say = (value: number, length = rate * FRAME_MS / 1000) => taps.at(-1)!.port.onmessage!({ data: new Float32Array(length).fill(value) });
 
-    return { taps, sent, sources, modules, destination, track, outbound, say };
+    return { taps, sent, sources, modules, destination, track, outbound, say, context, line };
 }
 
 describe('the microphone, as the server carries it', () =>
@@ -497,6 +506,87 @@ describe('the microphone, as the server carries it', () =>
 
         expect(one.taps).toHaveLength(2);
         expect(one.taps[1].off).toBe(true);
+    });
+
+    it('speaks Opus as well as it is asked, never above what the server carries, and lower while the socket falls behind until it has been calm', async () =>
+    {
+        const configured: number[] = [];
+
+        vi.stubGlobal('AudioData', class
+        {
+            constructor(public init: unknown)
+            {
+            }
+        });
+        vi.stubGlobal('AudioEncoder', class
+        {
+            public state = 'unconfigured';
+            public hooks: { output(chunk: unknown): void };
+
+            constructor(hooks: { output(chunk: unknown): void })
+            {
+                this.hooks = hooks;
+            }
+
+            public configure(config: { bitrate: number })
+            {
+                configured.push(config.bitrate);
+                this.state = 'configured';
+            }
+
+            public encode()
+            {
+                this.hooks.output({ byteLength: 1, copyTo: (into: Uint8Array) => into.set([1]) });
+            }
+
+            public close()
+            {
+                this.state = 'closed';
+            }
+        });
+
+        const one = speaking();
+        const out = one.outbound(true);
+
+        out.setMuted(false);
+        out.setTrack(one.track);
+        out.to([{ join: 'm1', opus: true }]);
+        await flush();
+
+        out.setBitrate(96_000);
+        one.say(0.25);
+
+        expect(out.bitrate()).toBe(RELAY_MOST);
+        expect(configured.at(-1)).toBe(RELAY_MOST);
+
+        one.line.open = false;
+        one.context.currentTime = STRAIN_S;
+        one.say(0.25);
+
+        expect(out.bitrate(), 'a socket that fell behind was sent as much as before').toBe(48_000);
+
+        one.say(0.25);
+
+        expect(out.bitrate(), 'it stepped down again before the last step had a chance').toBe(48_000);
+
+        one.context.currentTime = STRAIN_S * 2.5;
+        one.say(0.25);
+        one.say(0.25);
+
+        expect(out.bitrate()).toBe(32_000);
+        expect(configured.at(-1)).toBe(32_000);
+
+        one.line.open = true;
+        one.context.currentTime += EASE_S / 2;
+        one.say(0.25);
+
+        expect(out.bitrate(), 'it went back up before the socket had been calm for long').toBe(32_000);
+
+        one.context.currentTime += EASE_S;
+        one.say(0.25);
+        one.say(0.25);
+
+        expect(out.bitrate()).toBe(48_000);
     });
 
     it('speaks Opus when everybody it carries for hears it, the telephone code when anybody does not, and the telephone code for good once Opus fails', async () =>

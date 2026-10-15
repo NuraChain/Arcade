@@ -279,6 +279,7 @@ describe('the seat plate every table draws', () =>
                 heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
+                setQuality: () => undefined,
                 close: () => undefined
             };
         });

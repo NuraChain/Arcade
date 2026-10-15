@@ -9,7 +9,7 @@ import { hearsOpus } from '../services/voice.relay.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime, type SignalFrame, type SoundFrame, type VoiceFrame } from './realtime.store.ts';
-import { useSettings, type VoiceNoise } from './settings.store.ts';
+import { useSettings, type VoiceNoise, type VoiceQuality } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
 
@@ -80,6 +80,8 @@ const QUIET = 0.04;
 export const TALK_KEY = 'KeyV';
 
 export const LOUDEST = 2;
+
+export const BITRATES: Record<VoiceQuality, number> = { standard: 32_000, high: 64_000, best: 96_000 };
 
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
 
@@ -624,6 +626,8 @@ export const useVoice = createStore((): VoiceApi =>
                 context: () => context
             });
 
+            call.setQuality(BITRATES[untrack(settings.settings).voiceQuality]);
+
             const speaker = untrack(settings.settings).voiceSpeaker;
 
             if (speaker !== '')
@@ -788,6 +792,7 @@ export const useVoice = createStore((): VoiceApi =>
         tune()
         {
             input?.set(options());
+            call?.setQuality(BITRATES[untrack(settings.settings).voiceQuality]);
             gate();
         },
 

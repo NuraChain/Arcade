@@ -2459,6 +2459,7 @@ describe('PlayPage', () =>
                 heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
+                setQuality: () => undefined,
                 close: () => undefined
             }));
             useVoice().reset();
@@ -2546,6 +2547,7 @@ describe('PlayPage', () =>
                 heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
+                setQuality: () => undefined,
                 close: () => undefined
             }));
             useVoice().reset();
@@ -2765,6 +2767,7 @@ describe('PlayPage', () =>
                     heard: () => undefined,
                     setVolume: () => undefined,
                     setSink: () => undefined,
+                    setQuality: () => undefined,
                     close: () => undefined
                 };
             });
