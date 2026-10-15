@@ -1,3 +1,4 @@
+import { Framer } from './voice.framer.ts';
 import { Playout } from './voice.playout.ts';
 import { createResampler, type Resampler } from './voice.resample.ts';
 
@@ -55,34 +56,24 @@ const PLAY = 'nura-voice-play';
 const WORKLET_SOURCE = `
 const Kept = (${ Playout.toString() });
 
+const Framed = (${ Framer.toString() });
+
 class Tap extends AudioWorkletProcessor
 {
     constructor()
     {
         super();
-        this.size = Math.round(sampleRate * ${ FRAME_MS } / 1000);
-        this.held = new Float32Array(this.size);
-        this.at = 0;
+        this.framer = new Framed(Math.round(sampleRate * ${ FRAME_MS } / 1000));
     }
 
-    process(inputs)
+    process(inputs, outputs)
     {
         const channel = inputs[0] && inputs[0][0];
+        const length = channel !== undefined ? channel.length : (outputs[0] && outputs[0][0] ? outputs[0][0].length : 128);
 
-        if (channel !== undefined)
+        for (const frame of this.framer.push(channel, length))
         {
-            for (let index = 0; index < channel.length; index += 1)
-            {
-                this.held[this.at] = channel[index];
-                this.at += 1;
-
-                if (this.at === this.size)
-                {
-                    this.port.postMessage(this.held, [this.held.buffer]);
-                    this.held = new Float32Array(this.size);
-                    this.at = 0;
-                }
-            }
+            this.port.postMessage(frame, [frame.buffer]);
         }
 
         return true;
@@ -259,8 +250,6 @@ const worklets = (context: AudioContext) =>
     return found;
 };
 
-const indexOf = (timestamp: number) => Math.round(timestamp / (FRAME_MS * 1000));
-
 export function createRelayKit(context: AudioContext): RelayKit
 {
     return {
@@ -277,6 +266,7 @@ export function createRelayKit(context: AudioContext): RelayKit
             let encoder: AudioEncoder | null = null;
             let speaks = opus;
             let toLaw: Resampler | null = null;
+            const spoken: number[] = [];
             let toOpus: ((samples: Float32Array) => Float32Array<ArrayBuffer>) | null = null;
 
             const codec = (): Codec => (speaks && targets.every((one) => one.opus) ? 'opus' : 'law');
@@ -305,15 +295,18 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                         chunk.copyTo(bytes);
 
-                        if (codec() === 'opus')
+                        const index = spoken.shift();
+
+                        if (index !== undefined && codec() === 'opus')
                         {
-                            ship('opus', indexOf(chunk.timestamp), bytes);
+                            ship('opus', index, bytes);
                         }
                     },
                     error: () =>
                     {
                         speaks = false;
                         encoder = null;
+                        spoken.length = 0;
                     }
                 });
 
@@ -363,7 +356,10 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                 try
                 {
-                    coder().encode(new AudioData({
+                    const writing = coder();
+
+                    spoken.push(index);
+                    writing.encode(new AudioData({
                         format: 'f32-planar',
                         sampleRate: OPUS_RATE,
                         numberOfFrames: sound.length,
@@ -376,6 +372,7 @@ export function createRelayKit(context: AudioContext): RelayKit
                 {
                     speaks = false;
                     encoder = null;
+                    spoken.length = 0;
                 }
             };
 
@@ -424,6 +421,7 @@ export function createRelayKit(context: AudioContext): RelayKit
                 unwire();
                 shut(encoder);
                 encoder = null;
+                spoken.length = 0;
             };
 
             return {
@@ -483,6 +481,7 @@ export function createRelayKit(context: AudioContext): RelayKit
             const opusFrame = framed(length);
             let player: AudioWorkletNode | null = null;
             let decoder: AudioDecoder | null = null;
+            const heardAt: number[] = [];
             let closed = false;
 
             const hand = (at: number, samples: Float32Array) =>
@@ -531,12 +530,20 @@ export function createRelayKit(context: AudioContext): RelayKit
                         const samples = new Float32Array(data.numberOfFrames);
 
                         data.copyTo(samples, { planeIndex: 0, format: 'f32-planar' });
-                        hand(indexOf(data.timestamp), context.sampleRate === data.sampleRate ? samples : opusFrame(opusResampler.push(samples)));
+
+                        const at = heardAt.shift();
+
+                        if (at !== undefined)
+                        {
+                            hand(at, context.sampleRate === data.sampleRate ? samples : opusFrame(opusResampler.push(samples)));
+                        }
+
                         data.close();
                     },
                     error: () =>
                     {
                         decoder = null;
+                        heardAt.length = 0;
                     }
                 });
 
@@ -571,11 +578,15 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                     try
                     {
-                        opus().decode(new EncodedAudioChunk({ type: 'key', timestamp: at * FRAME_MS * 1000, data: bytes }));
+                        const reading = opus();
+
+                        heardAt.push(at);
+                        reading.decode(new EncodedAudioChunk({ type: 'key', timestamp: at * FRAME_MS * 1000, data: bytes }));
                     }
                     catch
                     {
                         decoder = null;
+                        heardAt.length = 0;
                     }
                 },
 

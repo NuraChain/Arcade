@@ -281,13 +281,15 @@ describe('sound the server carries from somebody, as it is played', () =>
                 this.state = 'configured';
             }
 
+            public read = 0;
+
             public decode(chunk: { init: { type: string; timestamp: number; data: Uint8Array } })
             {
                 decoded.push(chunk.init);
                 this.hooks.output({
                     numberOfFrames: 2880,
                     sampleRate: 48_000,
-                    timestamp: chunk.init.timestamp,
+                    timestamp: this.read++ * 60_000,
                     copyTo: (into: Float32Array) => into.fill(0.25),
                     close: () => undefined
                 });
@@ -514,6 +516,7 @@ describe('the microphone, as the server carries it', () =>
         vi.stubGlobal('AudioEncoder', class
         {
             public state = 'unconfigured';
+            public written = 0;
             public hooks: { output(chunk: unknown): void; error(): void };
 
             constructor(hooks: { output(chunk: unknown): void; error(): void })
@@ -530,7 +533,7 @@ describe('the microphone, as the server carries it', () =>
             public encode(data: { init: { timestamp: number; numberOfFrames: number; sampleRate: number } })
             {
                 encoded.push(data.init);
-                this.hooks.output({ byteLength: 3, timestamp: data.init.timestamp, copyTo: (into: Uint8Array) => into.set([1, 2, 3]) });
+                this.hooks.output({ byteLength: 3, timestamp: this.written++ * 60_000, copyTo: (into: Uint8Array) => into.set([1, 2, 3]) });
             }
 
             public close()
@@ -554,10 +557,11 @@ describe('the microphone, as the server carries it', () =>
         await flush();
 
         one.say(0.25);
+        one.say(0);
         one.say(0.25);
 
-        expect(one.sent.map((frame) => [frame.codec, frame.at, frame.data])).toEqual([['opus', 0, 'AQID'], ['opus', 1, 'AQID']]);
-        expect(encoded.map((frame) => [frame.timestamp, frame.numberOfFrames, frame.sampleRate])).toEqual([[0, 2880, 48_000], [FRAME_MS * 1000, 2880, 48_000]]);
+        expect(one.sent.map((frame) => [frame.codec, frame.at, frame.data]), 'a pause went missing from the count, as the encoder numbers its output with no gaps').toEqual([['opus', 0, 'AQID'], ['opus', 2, 'AQID']]);
+        expect(encoded.map((frame) => [frame.timestamp, frame.numberOfFrames, frame.sampleRate])).toEqual([[0, 2880, 48_000], [2 * FRAME_MS * 1000, 2880, 48_000]]);
 
         out.to([{ join: 'm1', opus: true }, { join: 's1', opus: false }]);
         one.say(0.25);
@@ -569,6 +573,6 @@ describe('the microphone, as the server carries it', () =>
         one.say(0.25);
 
         expect(one.sent.at(-1)!.codec, 'a browser whose Opus failed went on trying to speak it').toBe('law');
-        expect(one.sent.map((frame) => frame.at)).toEqual([0, 1, 2, 3]);
+        expect(one.sent.map((frame) => frame.at)).toEqual([0, 2, 3, 4]);
     });
 });
