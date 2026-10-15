@@ -1077,8 +1077,25 @@ table with no match, or a finished one, has no `yourTurn` at all rather than a `
 no go to be had there.
 
 The play page's header lists the reader's OTHER tables as links, green where one is waiting on
-them, and the Games item in every navigation counts the tables waiting. The lobby store refetches
-the list on any `game` doorbell, which is how a move at one table lights up the chip on another.
+them, and the Games item in every navigation counts the tables waiting. The lobby store reads the
+list again on a `game` doorbell (all a watcher or a browser with no socket hears), and for a `game`
+frame about a game it has not heard of or one that has ended.
+
+**Whose turn it is at a table the reader sits at is told by the game frame itself.** Every move
+pushes each seat a `game` frame that says whose turn it is, and the store used to answer a turn
+that changed hands by reading `GET /tables/mine` again: every seat at every table, every turn, a
+read that loads the state of every live game the reader plays. The networking audit counted it, one
+read a turn for each browser at the table: sixteen a player in 24 presses (`latency-pass.mjs`'s
+tally), and none since. Now the frame's turn is laid over the list (`turnsSeen` in
+`lobby.store.ts`): `seated()` and `waiting()` read it at once, so the chip of another table goes
+green when the frame arrives rather than a read later. Each entry
+remembers how many reads had been asked for when it was laid, and a read asked for after it takes
+over from it, because a frame the socket missed while it was down is told only by a read. A read
+already on its way when the frame came is older than the frame and does not take it back. The cues
+store's "was it already the reader's turn" asks `listed()`, the list as the server last answered:
+the lobby hears a frame before the cues do, and asked of `seated()` the turn the frame has just
+told would look as though the reader already had it, and "Your turn at Ludo" would never be said.
+`tables.spec.ts` (*whose turn it is at the reader's tables, told by the game itself*) holds it.
 
 **A switch between tables REMOUNTS the play page, so its teardown closes only what it still owns.**
 `<Routes>` keys a segment on its route AND that route's own params, so `/app/play/A` to

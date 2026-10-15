@@ -22,6 +22,8 @@ export interface LobbyApi
     /** Where this account is sitting right now. Survives a reload and a second device. */
     seated: Getter<TableSummary[]>;
 
+    listed: Getter<TableSummary[]>;
+
     waiting: Getter<TableSummary[]>;
 
     open(tableId: string): void;
@@ -115,6 +117,9 @@ export const useLobby = createStore((): LobbyApi =>
         unhold = next;
     };
 
+    const turnsSeen = new Map<string, { yours: boolean; read: number }>();
+    const [turnsTold, setTurnsTold] = createSignal(0);
+
     const seated = createResource(who, async () =>
     {
         const turn = asked += 1;
@@ -125,8 +130,44 @@ export const useLobby = createStore((): LobbyApi =>
             rehold(answer.tables);
         }
 
+        for (const [id, seen] of turnsSeen)
+        {
+            if (seen.read < turn)
+            {
+                turnsSeen.delete(id);
+            }
+        }
+
         return answer;
     }, { name: 'tables.mine' });
+
+    let shown: { from: TableSummary[] | undefined; told: number; tables: TableSummary[] } = { from: undefined, told: -1, tables: [] };
+
+    const tablesNow = () =>
+    {
+        const told = turnsTold();
+        const from = seated.data()?.tables;
+
+        if (shown.from === from && shown.told === told)
+        {
+            return shown.tables;
+        }
+
+        const tables = from === undefined
+            ? []
+            : (turnsSeen.size === 0
+                ? from
+                : from.map((table) =>
+                {
+                    const seen = table.matchId === undefined ? undefined : turnsSeen.get(table.matchId);
+
+                    return seen === undefined || (table.yourTurn === true) === seen.yours ? table : { ...table, yourTurn: seen.yours };
+                }));
+
+        shown = { from, told, tables };
+
+        return tables;
+    };
 
     const left = new Set<string>();
 
@@ -307,9 +348,11 @@ export const useLobby = createStore((): LobbyApi =>
         loading: () => viewing.loading(),
         failed: () => viewing.error(),
 
-        seated: () => seated.data()?.tables ?? [],
+        seated: tablesNow,
 
-        waiting: () => (seated.data()?.tables ?? []).filter((table) => table.yourTurn === true),
+        listed: () => seated.data()?.tables ?? [],
+
+        waiting: () => tablesNow().filter((table) => table.yourTurn === true),
 
         open(tableId)
         {
@@ -463,9 +506,17 @@ export const useLobby = createStore((): LobbyApi =>
                 const known = untrack(seated.data)?.tables.find((table) => table.matchId === frame.match.id);
                 const mine = frame.match.finishedAt === undefined && frame.match.mine !== undefined && frame.match.mine === frame.match.turn;
 
-                if (known === undefined || frame.match.finishedAt !== undefined || (known.yourTurn === true) !== mine)
+                if (known === undefined || frame.match.finishedAt !== undefined)
                 {
                     void seated.refetch();
+
+                    return;
+                }
+
+                if ((turnsSeen.get(frame.match.id)?.yours ?? known.yourTurn === true) !== mine)
+                {
+                    turnsSeen.set(frame.match.id, { yours: mine, read: asked });
+                    setTurnsTold((count) => count + 1);
                 }
             });
 
@@ -481,6 +532,8 @@ export const useLobby = createStore((): LobbyApi =>
         reset()
         {
             left.clear();
+            turnsSeen.clear();
+            setTurnsTold((count) => count + 1);
             asked += 1;
             rehold([]);
             setOpenId('');

@@ -1316,6 +1316,22 @@ describe('the reader\'s turn at a table they are not looking at', () =>
         expect(went).toEqual([`/app/play/${ tableId }`]);
     });
 
+    it('is said when the lobby has heard the frame first, as it does in the app, and its list already shows the turn', async () =>
+    {
+        const stop = useLobby().start();
+
+        useCues().start();
+
+        const tableId = await playingAt();
+
+        await frame(boardOf(tableId, { rev: 5, turn: 0 }));
+
+        expect(useLobby().seated().find((one) => one.id === tableId)?.yourTurn, 'the lobby did not hear the frame before the cues').toBe(true);
+        expect(said(tableId), 'the turn the frame told was taken for a turn the reader already had').toHaveLength(1);
+
+        stop();
+    });
+
     it('is said once for a turn, and again for the next one', async () =>
     {
         useCues().start();

@@ -18,7 +18,7 @@ import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import type { TableSummary } from '../src/api.ts';
+import type { MatchView, TableSummary } from '../src/api.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -1383,6 +1383,151 @@ describe('the lobby store', () =>
 
         socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'game', id: 'some-match', at: 0 });
         clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        expect(server.calls).toContain('tables.mine');
+        stop();
+    });
+});
+
+describe('whose turn it is at the reader\'s tables, told by the game itself', () =>
+{
+    let frames = 40;
+
+    const playing = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, mode: 'live', privacy: 'public' }, []);
+
+        server.tables.find((table) => table.id === id)!.matchId = `match-${ id }`;
+        await lobby.refresh();
+        await settle();
+
+        return id;
+    };
+
+    const tell = async (tableId: string, turn: number, rev: number) =>
+    {
+        frames += 1;
+
+        const match: MatchView = {
+            id: `match-${ tableId }`,
+            tableId,
+            game: 'ludo',
+            rev,
+            seats: 2,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0 },
+                { seat: 1, who: 'sara.k', timeouts: 0 }
+            ] as MatchView['players'],
+            turn,
+            mine: 0,
+            startedAt: new Date(clock.now()).toISOString(),
+            view: { kind: 'ludo', moves: [], controls: turn, seats: [] } as unknown as MatchView['view']
+        };
+
+        socket.deliver({ v: 1, t: 'game', n: frames, at: clock.now(), match, events: [] });
+        await settle();
+    };
+
+    const started = () =>
+    {
+        const lobby = useLobby();
+        const stop = lobby.start();
+
+        useRealtime().start();
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+
+        return { lobby, stop };
+    };
+
+    it('is told by the game frame, without reading every table the reader sits at again', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+
+        server.calls = [];
+        await tell(tableId, 0, 5);
+
+        expect(lobby.waiting().map((table) => table.id), 'the turn that came round was not counted').toEqual([tableId]);
+        expect(lobby.seated().find((table) => table.id === tableId)?.yourTurn, 'the list of tables does not say whose turn it is').toBe(true);
+        expect(server.calls, 'a turn coming round read every table the reader sits at').not.toContain('tables.mine');
+
+        await tell(tableId, 1, 6);
+
+        expect(lobby.waiting()).toEqual([]);
+        expect(server.calls).not.toContain('tables.mine');
+        stop();
+    });
+
+    it('gives way to a read of the tables asked for after it', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+
+        await tell(tableId, 0, 5);
+        expect(lobby.waiting().map((table) => table.id)).toEqual([tableId]);
+
+        server.tables.find((table) => table.id === tableId)!.yourTurn = false;
+        await lobby.refresh();
+        await settle();
+
+        expect(lobby.waiting(), 'what the game told outlived a newer read of the tables').toEqual([]);
+        stop();
+    });
+
+    it('is kept over a read that was already on its way when the game told it', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+        const routes = client.tables as unknown as Record<string, (input?: unknown) => Promise<unknown>>;
+        const real = routes.mine;
+        let release: () => void = () => undefined;
+
+        routes.mine = async (input) =>
+        {
+            const answer = await real(input);
+
+            await new Promise<void>((resolve) =>
+            {
+                release = resolve;
+            });
+
+            return answer;
+        };
+
+        try
+        {
+            const reading = lobby.refresh();
+
+            await settle();
+            await tell(tableId, 0, 5);
+            release();
+            await reading;
+            await settle();
+        }
+        finally
+        {
+            routes.mine = real;
+        }
+
+        expect(lobby.waiting().map((table) => table.id), 'a read that left before the turn came round took the turn back').toEqual([tableId]);
+        stop();
+    });
+
+    it('still reads the tables for a game it has not heard of, and for one that has ended', async () =>
+    {
+        const { stop } = started();
+        const tableId = await playing();
+
+        server.calls = [];
+        await tell('somewhere-else', 0, 3);
+
+        expect(server.calls).toContain('tables.mine');
+
+        server.calls = [];
+        socket.deliver({ v: 1, t: 'game', n: 99, at: clock.now(), match: { ...((): MatchView => ({ id: `match-${ tableId }`, tableId, game: 'ludo', rev: 9, seats: 2, players: [] as unknown as MatchView['players'], turn: 0, mine: 0, startedAt: new Date(clock.now()).toISOString(), finishedAt: new Date(clock.now()).toISOString(), view: { kind: 'ludo', moves: [], controls: 0, seats: [] } as unknown as MatchView['view'] }))() }, events: [] });
         await settle();
 
         expect(server.calls).toContain('tables.mine');

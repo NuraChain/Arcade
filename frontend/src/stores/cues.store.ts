@@ -339,7 +339,7 @@ export const useCues = createStore((): CuesApi =>
 
         const yourTurn = (match: GameFrame['match'], opening: boolean) =>
         {
-            const table = lobby.seated().find((one) => one.id === match.tableId);
+            const table = lobby.listed().find((one) => one.id === match.tableId);
             const mine = match.finishedAt === undefined && match.mine !== undefined && match.turn === match.mine;
             const was = turns.get(match.id) ?? (table?.matchId === match.id && table.yourTurn === true);
 
