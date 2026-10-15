@@ -30,6 +30,7 @@ export interface VoiceCallDeps
     opus?: boolean;
     kit?(context: AudioContext): RelayKit;
     after?(ms: number, run: () => void): () => void;
+    rtt?(): number | null;
 }
 
 export interface VoiceCall
@@ -44,7 +45,12 @@ export interface VoiceCall
     close(): void;
 }
 
-export const RELAY_AFTER_MS = 3000;
+export const WATCH_MS = 200;
+
+export function patienceFor(rtt: number | null)
+{
+    return rtt === null ? 5000 : Math.min(15_000, Math.max(3000, 2000 + rtt * 20));
+}
 
 interface Peer
 {
@@ -66,7 +72,11 @@ interface Peer
     polite: boolean;
     volume: number;
     relaying: boolean;
-    waiting: (() => void) | null;
+    linked: boolean;
+    flowing: boolean;
+    hungUp: boolean;
+    patience: (() => void) | null;
+    watching: (() => void) | null;
 }
 
 interface Boost
@@ -262,7 +272,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const hear = (peer: Peer) =>
     {
-        const stream = peer.inbound?.stream ?? peer.direct;
+        const stream = peer.flowing || peer.inbound === null ? (peer.direct ?? peer.inbound?.stream ?? null) : peer.inbound.stream;
 
         if (stream === null || stream === peer.stream)
         {
@@ -294,36 +304,138 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         peer.meter = context === null ? null : measure(context, stream, (level) => deps.onLevel(peer.who, level));
     };
 
+    const carries = () => deps.relay !== undefined && relays() !== null;
+
     const settle = (peer: Peer) =>
     {
-        peer.waiting?.();
-        peer.waiting = null;
+        peer.patience?.();
+        peer.patience = null;
     };
 
-    const relayTo = (peer: Peer) =>
+    const unwatch = (peer: Peer) =>
+    {
+        peer.watching?.();
+        peer.watching = null;
+    };
+
+    const viaServer = (peer: Peer) =>
+    {
+        if (!peer.relaying && peers.get(peer.join) === peer && carries())
+        {
+            peer.relaying = true;
+            retarget();
+        }
+    };
+
+    const offServer = (peer: Peer) =>
+    {
+        if (peer.relaying)
+        {
+            peer.relaying = false;
+            retarget();
+        }
+    };
+
+    const hangUp = (peer: Peer) =>
     {
         settle(peer);
+        unwatch(peer);
 
-        if (peer.relaying || peers.get(peer.join) !== peer || relays() === null)
+        if (peer.hungUp || peers.get(peer.join) !== peer)
         {
             return;
         }
 
-        peer.relaying = true;
+        peer.hungUp = true;
+        peer.linked = false;
+        peer.flowing = false;
         peer.connection.close();
-        retarget();
+        viaServer(peer);
+        hear(peer);
         mark(peer, 'connected');
     };
 
     const wait = (peer: Peer) =>
     {
-        if (peer.waiting === null && !peer.relaying)
+        if (peer.patience === null && !peer.hungUp && carries())
         {
-            peer.waiting = after(RELAY_AFTER_MS, () =>
+            peer.patience = after(patienceFor(deps.rtt?.() ?? null), () =>
             {
-                peer.waiting = null;
-                relayTo(peer);
+                peer.patience = null;
+
+                if (!peer.linked)
+                {
+                    hangUp(peer);
+                }
             });
+        }
+    };
+
+    const watch = (peer: Peer) =>
+    {
+        unwatch(peer);
+
+        const look = async () =>
+        {
+            let got = 0;
+            let heard = 0;
+
+            try
+            {
+                for (const report of (await peer.connection.getStats()).values() as IterableIterator<{ type: string; kind?: string; packetsReceived?: number }>)
+                {
+                    if (report.type === 'inbound-rtp' && report.kind === 'audio')
+                    {
+                        got += report.packetsReceived ?? 0;
+                    }
+
+                    if (report.type === 'remote-inbound-rtp' && report.kind === 'audio')
+                    {
+                        heard += 1;
+                    }
+                }
+            }
+            catch
+            {
+                got = 0;
+            }
+
+            if (peers.get(peer.join) !== peer || !peer.linked || closed)
+            {
+                return;
+            }
+
+            if (!peer.flowing && got > 0)
+            {
+                peer.flowing = true;
+                hear(peer);
+            }
+
+            if (heard > 0)
+            {
+                offServer(peer);
+            }
+
+            peer.watching = peer.flowing && !peer.relaying ? null : after(WATCH_MS, () => void look());
+        };
+
+        peer.watching = after(0, () => void look());
+    };
+
+    const broke = (peer: Peer) =>
+    {
+        if (peer.hungUp)
+        {
+            return;
+        }
+
+        if (carries())
+        {
+            hangUp(peer);
+        }
+        else
+        {
+            mark(peer, 'failed');
         }
     };
 
@@ -336,6 +448,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
         peers.delete(join);
         settle(peer);
+        unwatch(peer);
         peer.meter?.();
         unboost(peer);
         peer.inbound?.close();
@@ -388,12 +501,25 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             polite: own > join,
             volume: 1,
             relaying: false,
-            waiting: null
+            linked: false,
+            flowing: false,
+            hungUp: false,
+            patience: null,
+            watching: null
         };
 
         peers.set(join, peer);
-        deps.onLink(who, 'connecting');
-        wait(peer);
+
+        if (carries())
+        {
+            viaServer(peer);
+            deps.onLink(who, 'connected');
+            wait(peer);
+        }
+        else
+        {
+            deps.onLink(who, 'connecting');
+        }
 
         if (!peer.polite)
         {
@@ -413,10 +539,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             }
             catch
             {
-                if (!peer.relaying)
-                {
-                    mark(peer, 'failed');
-                }
+                broke(peer);
             }
             finally
             {
@@ -436,16 +559,38 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             const state = connection.connectionState;
 
+            if (peer.hungUp || peers.get(join) !== peer)
+            {
+                return;
+            }
+
             if (state === 'connected')
             {
                 settle(peer);
+                peer.linked = true;
                 mark(peer, 'connected');
+
+                if (carries())
+                {
+                    watch(peer);
+                }
+                else
+                {
+                    peer.flowing = true;
+                    hear(peer);
+                }
             }
             else if (state === 'failed')
             {
-                relayTo(peer);
+                peer.linked = false;
+                peer.flowing = false;
+                unwatch(peer);
 
-                if (!peer.relaying)
+                if (carries())
+                {
+                    hangUp(peer);
+                }
+                else
                 {
                     mark(peer, 'failed');
 
@@ -455,10 +600,28 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     }
                 }
             }
-            else if ((state === 'disconnected' || state === 'connecting' || state === 'new') && !peer.relaying)
+            else if (state === 'disconnected' || state === 'connecting' || state === 'new')
             {
-                mark(peer, 'connecting');
-                wait(peer);
+                const was = peer.linked;
+
+                peer.linked = false;
+                unwatch(peer);
+
+                if (carries())
+                {
+                    peer.flowing = false;
+                    viaServer(peer);
+                    hear(peer);
+
+                    if (was)
+                    {
+                        wait(peer);
+                    }
+                }
+                else
+                {
+                    mark(peer, 'connecting');
+                }
             }
         };
 
@@ -568,7 +731,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             const peer = peers.get(join);
 
-            if (closed || peer === undefined)
+            if (closed || peer === undefined || peer.hungUp)
             {
                 return;
             }
@@ -639,10 +802,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             }
             catch
             {
-                if (!peer.relaying)
-                {
-                    mark(peer, 'failed');
-                }
+                broke(peer);
             }
         },
 
@@ -665,11 +825,19 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 }
 
                 peer.inbound = made.inbound();
-                hear(peer);
             }
 
             peer.inbound.take(codec, at, data);
-            relayTo(peer);
+
+            if (!peer.flowing)
+            {
+                hear(peer);
+            }
+
+            if (!peer.linked)
+            {
+                viaServer(peer);
+            }
         },
 
         setVolume(who, volume)

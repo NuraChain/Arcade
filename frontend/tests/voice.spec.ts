@@ -782,6 +782,13 @@ describe('a call the server carries', () =>
         expect(soundFrames().map((frame) => (frame.t === 'sound' ? frame.at : -1))).toEqual([7, 9]);
     });
 
+    it('gives the call the round trip this browser has measured to the server', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        expect(calls[0].deps.rtt!()).toBe(useRealtime().rtt());
+    });
+
     it('waits for a line on the product clock', async () =>
     {
         const clock = manualClock(900_000);

@@ -1274,8 +1274,9 @@ is only ever seen by somebody with the product open: nothing wakes a closed tab 
 `docs/superpowers/specs/2026-09-23-table-voice-design.md` is the design. A host turns voice on at
 create (`tables.voice`, off by default); seated players join a peer-to-peer call - one
 `RTCPeerConnection` per pair, Opus only, a full mesh of at most seven links per browser - and this
-server introduces them, and carries the sound itself between two who cannot reach each other
-(*A call that cannot connect directly is carried by this server*).
+server introduces them, and carries the sound itself until two of them reach each other, and for
+good between two who cannot (*A call is carried by this server until a line between the two
+connects*).
 
 **A table's voice is a word from a list, not a switch.** `tables.voice` was a boolean, and the owner
 asked for a call that can be for the whole table or for a player's own side. The column and the wire
@@ -1373,23 +1374,40 @@ candidates arrive in bursts.
 fingerprints ride inside SDP this server relays, so a server that wanted to could sit in the middle;
 the chat is end-to-end because every line is signed by a device the reader verifies, and voice
 introductions are not signed yet. A call this server carries is not DTLS-SRTP at all: it rides the
-page's own connection, encrypted to nginx, and this server reads it to pass it on. The copy
-therefore says the sound goes straight between players whenever it can and is encrypted on its
-way - never "end-to-end", and no longer "this server never carries it" - until each fingerprint is
-signed with the device key the sealing already verifies.
+page's own connection, encrypted to nginx, and this server reads it to pass it on, and every call
+begins that way. The copy therefore says a call starts through this server and goes straight
+between two players once their connections reach each other - never "end-to-end", and no longer
+"this server never carries it" - until each fingerprint is signed with the device key the sealing
+already verifies. The landing's "straight between players whenever it can" is still true.
 
 **ICE comes from configuration and a TURN secret never reaches a browser.** `GET /api/voice/ice`
 answers `VOICE_STUN_URLS`, and for `VOICE_TURN_URLS` a TURN REST username that expires in an hour
 with its HMAC. With nothing configured the list is empty: one network connects directly, and two
 NATs are carried by this server.
 
-**A call that cannot connect directly is carried by this server.** The owner asked, of the boot
-warning that voice had no STUN or TURN server: "can we handle it without this?" It can. Each end
-waits `RELAY_AFTER_MS` (three seconds) for its line, or less when the line fails, and then sends
-its microphone to the other through the realtime socket as `sound` frames, and plays what comes
-back. The line is hung up then. A line that has not connected in three seconds will not, and one
-left trying fails again and again, and Firefox logs "ICE failed, add a STUN server" each time it
-gives up. Somebody who comes back as a new joining is tried on a line again.
+**A call is carried by this server until a line between the two connects.** The owner asked, of
+the boot warning that voice had no STUN or TURN server: "can we handle it without this?" It can,
+and later: "fix all of these things that is fixed about latency ... these things should be real".
+Each end used to wait three seconds (`RELAY_AFTER_MS`) for its line before it sent anything
+through the server, so every call between two networks began with three seconds of nobody
+hearing anybody. Now each end sends its microphone through the realtime socket as `sound` frames
+from the moment it sees the other on the roster, plays what comes back, and tries the line beside
+it. What moves the call is measured, never timed:
+
+- **The line takes over when it proves it works.** Once it connects, the page reads its
+  statistics every `WATCH_MS` (200 ms): the voice is played from the line when packets have
+  arrived on it (`inbound-rtp`), and the server stops carrying ours when the other end's report
+  says it receives the line (`remote-inbound-rtp`), so the two overlap rather than leave a gap.
+- **A line that drops gives the call back to the server at once**, and is taken up again if it
+  comes back. One that fails is hung up, and so is one that has not connected within
+  `patienceFor(rtt)`: 2 s and 20 round trips to the server, between 3 and 15 s, 5 s when none has
+  been measured. Nobody waits on it, because the server is already carrying the call; it is hung
+  up because one left trying fails again and again, and Firefox logs "ICE failed, add a STUN
+  server" each time it gives up.
+- **Where nothing can carry the call** (no audio context, or no relay) it waits for its line as it
+  always did, and that line is never given up on.
+
+Somebody who comes back as a new joining is tried on a line again.
 
 - **One frame every 60 ms.** An `AudioWorklet` taps the microphone (`services/voice.relay.ts`,
   loaded from a Blob, which needs a secure page, as the microphone does). A frame is Opus at
@@ -1436,18 +1454,20 @@ gives up. Somebody who comes back as a new joining is tried on a line again.
   0.4% and 0.81% missing over 30 s, the only break of any length in the first two seconds of a
   call while the line is learned; simulated over a minute, no click, no frame lost, a good line
   played about 20 ms behind where it was 120.
-- **Hearing somebody through the server is answered the same way at once**, whatever is left of
-  the wait and whatever the line says: they have hung theirs up. A signal for a line that was hung
-  up is let fall, and an answer that the hanging up cut short does not call the call failed.
-- **A carried call counts as connected.** The Players list never says "Could not connect" for it.
-  That sentence is left for a call nothing can carry (no audio context, or no socket).
+- **Hearing somebody through the server while the line is down is answered the same way**, so a
+  call the other end carries is carried both ways. A signal for a line that was hung up is let
+  fall, and an answer that the hanging up cut short does not call the call failed.
+- **A carried call counts as connected** from its first moment. The Players list never says
+  "Could not connect" for it. That sentence is left for a call nothing can carry (no audio
+  context, or no socket).
 
 `voice-relay.spec.ts` holds the codecs, the tap, the count, the player's frames and the codec
 choice; `voice-playout.spec.ts` the player (a steady line, a jittery one, a late frame, a lost
 one, a pause, a stall and the catching up, the cautious start, nothing clicking);
 `voice-resample.spec.ts` the rates;
-`voice-rtc.spec.ts` (*a call the server carries*) the wait, the failure, the answer, the line
-hung up and the call nothing can carry; `voice.spec.ts` (*a call the server carries*) the store;
+`voice-rtc.spec.ts` (*a call the server carries from its first moment*) the call carried at once,
+the line taking over on its packets and the other end's report, the drop and the line that comes
+back, the failure, the patience and the call nothing can carry; `voice.spec.ts` (*a call the server carries*) the store;
 `realtime-hub.spec.ts` and `voice-frames.spec.ts` the server. Seen in two real browsers on the
 built server with every candidate taken out of both ends, so no line could ever connect: each hears
 the other's tone through the server within four seconds of joining, "Speaking" lights, nobody is

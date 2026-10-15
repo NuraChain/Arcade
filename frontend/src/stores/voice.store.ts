@@ -496,6 +496,7 @@ export const useVoice = createStore((): VoiceApi =>
                 relay: (to, codec, at, data) => realtime.sound(next, to, codec, at, data),
                 opus,
                 after: (ms, run) => runtime().clock.after(ms, run),
+                rtt: () => untrack(realtime.rtt),
                 onLink: (who, link) =>
                 {
                     if (link === 'connected' || link === null)

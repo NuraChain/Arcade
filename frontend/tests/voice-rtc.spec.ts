@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import type { Codec, RelayKit } from '../src/services/voice.relay.ts';
-import { RELAY_AFTER_MS, createVoiceCall, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
+import { WATCH_MS, createVoiceCall, patienceFor, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
 
 interface Line
 {
@@ -42,6 +42,8 @@ function fakeConnection()
         return one;
     };
 
+    const stats: Record<string, unknown>[] = [];
+
     const connection = {
         signalingState: 'stable',
         connectionState: 'new',
@@ -49,6 +51,9 @@ function fakeConnection()
         restarts: 0,
         lines,
         applied,
+        stats,
+
+        getStats: async () => new Map(stats.map((one, index) => [String(index), one])),
         onnegotiationneeded: null as (() => Promise<void>) | null,
         onicecandidate: null as ((event: { candidate: unknown }) => void) | null,
         onconnectionstatechange: null as (() => void) | null,
@@ -766,6 +771,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
         ...(options.relay === false ? {} : { relay: (to: string[], codec: Codec, at: number, data: string) => sounds.push({ to, codec, at, data }) }),
         opus: options.opus ?? true,
         kit,
+        rtt: () => 120,
         after: (ms, run) =>
         {
             const timer = { ms, run, off: false };
@@ -806,7 +812,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
             call.sync('d1', peers);
         },
 
-        lapse()
+        async lapse()
         {
             for (const timer of timers.splice(0))
             {
@@ -814,6 +820,11 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
                 {
                     timer.run();
                 }
+            }
+
+            for (let index = 0; index < 6; index += 1)
+            {
+                await Promise.resolve();
             }
         },
 
@@ -840,9 +851,9 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
 
 const MINA_OPUS = { who: 'mina', join: 'm1', opus: true };
 
-describe('a call the server carries when two players cannot reach each other', () =>
+describe('a call the server carries from its first moment', () =>
 {
-    it('waits for the line, then carries the call through the server and counts it connected', async () =>
+    it('carries the call at once, counts it connected, and tries a line beside it for as long as the measured round trip says', async () =>
     {
         const one = carried();
 
@@ -851,18 +862,20 @@ describe('a call the server carries when two players cannot reach each other', (
             await one.call.setMic(stream);
             one.sees(MINA_OPUS);
 
-            expect(one.timers.map((timer) => timer.ms)).toEqual([RELAY_AFTER_MS]);
-            expect(one.targets, 'the call was carried before the line had its chance').toEqual([]);
-
-            one.lapse();
-
-            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
+            expect(one.targets.at(-1), 'the call waited for a line before it was carried').toEqual([{ join: 'm1', opus: true }]);
             expect(one.speaks).toEqual([true]);
             expect(one.tracks).toEqual([microphone]);
             expect(one.mutes).toEqual([true]);
             expect(one.sounds).toEqual([{ to: ['probe'], codec: 'law', at: 0, data: 'AA==' }]);
+            expect(one.links).toEqual([['mina', 'connected']]);
+            expect(one.connection.closed, 'the line was not tried beside the server').toBe(false);
+            expect(one.timers.map((timer) => timer.ms)).toEqual([patienceFor(120)]);
+
+            await one.lapse();
+
+            expect(one.connection.closed, 'a line that never connected was left trying').toBe(true);
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
             expect(one.links.at(-1)).toEqual(['mina', 'connected']);
-            expect(one.connection.closed, 'the line was left trying after the server took the call').toBe(true);
         }
         finally
         {
@@ -870,29 +883,46 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('never carries a call whose line connects in time, and carries one whose line drops and does not come back', () =>
+    it('gives a line longer on a slower network, and a guess when nothing has been measured', async () =>
+    {
+        expect(patienceFor(null)).toBe(5000);
+        expect(patienceFor(40)).toBe(3000);
+        expect(patienceFor(300)).toBe(8000);
+        expect(patienceFor(2000)).toBe(15_000);
+    });
+
+    it('moves to the line once its packets arrive, and stops carrying once the other end says it hears the line', async () =>
     {
         const one = carried();
+        const LINE = { line: true };
 
         try
         {
             one.sees(MINA_OPUS);
+            one.arrive(LINE);
+            one.call.heard('m1', 'law', 0, 'AQID');
+
+            expect(one.heard(), 'what the server carried was not what was heard').toBe(one.inbound[0].stream);
+
             one.connection.becomes('connected');
-            one.lapse();
+            await one.lapse();
 
-            expect(one.targets).toEqual([]);
+            expect(one.heard(), 'the line was heard before anything came over it').toBe(one.inbound[0].stream);
+            expect(one.timers.map((timer) => timer.ms)).toEqual([WATCH_MS]);
+
+            one.connection.stats.push({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 12 });
+            await one.lapse();
+
+            expect(one.heard(), 'the line was not heard once its packets came').toBe(LINE);
+            expect(one.targets.at(-1), 'the server stopped carrying before the other end heard the line').toEqual([{ join: 'm1', opus: true }]);
+
+            one.connection.stats.push({ type: 'remote-inbound-rtp', kind: 'audio' });
+            await one.lapse();
+
+            expect(one.targets.at(-1)).toEqual([]);
+            expect(one.timers, 'the line was still watched once it carried the call both ways').toEqual([]);
             expect(one.connection.closed).toBe(false);
-            expect(one.links).toEqual([['mina', 'connecting'], ['mina', 'connected']]);
-
-            one.connection.becomes('disconnected');
-
-            expect(one.links.at(-1)).toEqual(['mina', 'connecting']);
-
-            one.lapse();
-
-            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
             expect(one.links.at(-1)).toEqual(['mina', 'connected']);
-            expect(one.connection.closed).toBe(true);
         }
         finally
         {
@@ -900,7 +930,68 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('carries the call at once when the line fails, and hangs the line up rather than try it again', () =>
+    it('goes back to the server at once when the line drops, and hangs the line up when it does not come back in time', async () =>
+    {
+        const one = carried();
+        const LINE = { line: true };
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.arrive(LINE);
+            one.call.heard('m1', 'law', 0, 'AQID');
+            one.connection.becomes('connected');
+            one.connection.stats.push({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 12 }, { type: 'remote-inbound-rtp', kind: 'audio' });
+            await one.lapse();
+
+            expect(one.heard()).toBe(LINE);
+            expect(one.targets.at(-1)).toEqual([]);
+
+            one.connection.becomes('disconnected');
+
+            expect(one.targets.at(-1), 'the server did not carry the call the moment its line dropped').toEqual([{ join: 'm1', opus: true }]);
+            expect(one.heard()).toBe(one.inbound[0].stream);
+            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
+
+            await one.lapse();
+
+            expect(one.connection.closed).toBe(true);
+            expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }]);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('moves back to a line that comes back before it is hung up', async () =>
+    {
+        const one = carried();
+        const LINE = { line: true };
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.arrive(LINE);
+            one.call.heard('m1', 'law', 0, 'AQID');
+            one.connection.becomes('connected');
+            one.connection.stats.push({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 12 }, { type: 'remote-inbound-rtp', kind: 'audio' });
+            await one.lapse();
+            one.connection.becomes('disconnected');
+            one.connection.becomes('connected');
+            await one.lapse();
+
+            expect(one.connection.closed).toBe(false);
+            expect(one.heard()).toBe(LINE);
+            expect(one.targets.at(-1)).toEqual([]);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('hangs up a line that fails and keeps the call carried, without trying the line again', async () =>
     {
         const one = carried();
 
@@ -913,7 +1004,7 @@ describe('a call the server carries when two players cannot reach each other', (
             expect(one.links.at(-1)).toEqual(['mina', 'connected']);
             expect(one.connection.restarts, 'a line the server carries for was tried again').toBe(0);
             expect(one.connection.closed).toBe(true);
-            expect(one.timers.every((timer) => timer.off), 'the wait for the line was left running').toBe(true);
+            expect(one.timers.every((timer) => timer.off), 'the line was still given time after it failed').toBe(true);
 
             one.connection.becomes('connecting');
 
@@ -925,36 +1016,7 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('plays what the server carries from somebody and carries its own back at once, hanging up a line that said it worked', () =>
-    {
-        const one = carried();
-        const LINE = { line: true };
-
-        try
-        {
-            one.sees(MINA_OPUS);
-            one.arrive(LINE);
-            one.connection.becomes('connected');
-
-            expect(one.heard()).toBe(LINE);
-
-            one.call.heard('m1', 'law', 0, 'AQID');
-            one.call.heard('m1', 'law', 1, 'BAUG');
-
-            expect(one.inbound).toHaveLength(1);
-            expect(one.inbound[0].took).toEqual([['law', 0, 'AQID'], ['law', 1, 'BAUG']]);
-            expect(one.heard(), 'what the server carried was not what was heard').toBe(one.inbound[0].stream);
-            expect(one.targets.at(-1), 'somebody heard through the server was not answered the same way').toEqual([{ join: 'm1', opus: true }]);
-            expect(one.connection.closed, 'a line the other end had hung up was kept').toBe(true);
-            expect(one.links.at(-1)).toEqual(['mina', 'connected']);
-        }
-        finally
-        {
-            one.done();
-        }
-    });
-
-    it('lets sound fall from a joining it does not know', () =>
+    it('lets sound fall from a joining it does not know', async () =>
     {
         const one = carried();
 
@@ -964,7 +1026,7 @@ describe('a call the server carries when two players cannot reach each other', (
             one.call.heard('x9', 'law', 0, 'AQID');
 
             expect(one.inbound).toEqual([]);
-            expect(one.targets).toEqual([]);
+            expect(one.targets.flat().map((target) => target.join)).not.toContain('x9');
         }
         finally
         {
@@ -972,7 +1034,7 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('takes no signal for a line it has hung up for the server, and calls nothing failed that the hanging up cut short', async () =>
+    it('takes no signal for a line it has hung up, and calls nothing failed that the hanging up cut short', async () =>
     {
         const one = carried();
 
@@ -983,7 +1045,7 @@ describe('a call the server carries when two players cannot reach each other', (
 
             const answered = one.call.receive('m1', said('answer'));
 
-            one.lapse();
+            await one.lapse();
             one.connection.release();
             await answered;
             await one.connection.onnegotiationneeded?.();
@@ -998,14 +1060,13 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('speaks Opus to somebody only while the roster says they can hear it', () =>
+    it('speaks Opus to somebody only while the roster says they can hear it', async () =>
     {
         const one = carried();
 
         try
         {
             one.sees(MINA_OPUS);
-            one.lapse();
             one.sees({ ...MINA_OPUS, opus: false });
 
             expect(one.targets.map((targets) => targets.map((target) => target.opus))).toEqual([[true], [false]]);
@@ -1023,7 +1084,6 @@ describe('a call the server carries when two players cannot reach each other', (
         try
         {
             one.sees(MINA_OPUS);
-            one.lapse();
             one.call.setMuted(false);
             await one.call.setMic(stream);
 
@@ -1040,14 +1100,13 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('stops carrying and hearing somebody who leaves, and closes what carried the call with the call', () =>
+    it('stops carrying and hearing somebody who leaves, and closes what carried the call with the call', async () =>
     {
         const one = carried();
 
         try
         {
             one.sees(MINA_OPUS, { who: 'sara', join: 's1', opus: false });
-            one.lapse();
             one.call.heard('m1', 'law', 0, 'AQID');
 
             expect(one.targets.at(-1)).toEqual([{ join: 'm1', opus: true }, { join: 's1', opus: false }]);
@@ -1067,7 +1126,7 @@ describe('a call the server carries when two players cannot reach each other', (
         }
     });
 
-    it('waits for the line as it always did where nothing can carry the call', () =>
+    it('waits for the line as it always did where nothing can carry the call', async () =>
     {
         for (const options of [{ relay: false }, { context: false }])
         {
@@ -1076,12 +1135,13 @@ describe('a call the server carries when two players cannot reach each other', (
             try
             {
                 one.sees(MINA_OPUS);
-                one.lapse();
+                await one.lapse();
                 one.call.heard('m1', 'law', 0, 'AQID');
 
                 expect(one.targets).toEqual([]);
                 expect(one.inbound).toEqual([]);
                 expect(one.links.at(-1)).toEqual(['mina', 'connecting']);
+                expect(one.timers, 'a line that is the only way was given a time to give up').toEqual([]);
 
                 one.connection.becomes('failed');
 

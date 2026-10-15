@@ -543,5 +543,5 @@ export const play = {
     'voice.autoJoinHint': 'At a table that has voice on, join the call as soon as you sit down.',
     'voice.volume': 'Voice volume',
     'voice.volumeHint': 'How loud other players are. Muting one person is on the table itself.',
-    'voice.privacy': 'The sound goes straight between players whenever their connections allow, encrypted by the browser. When two players cannot reach each other, this server passes the sound on over their secure connection and keeps none of it.'
+    'voice.privacy': 'A call starts through this server, which passes the sound on over each player’s secure connection and keeps none of it. As soon as two players’ connections reach each other, their sound goes straight between them instead, encrypted by the browser, and back through the server if that link drops.'
 };
