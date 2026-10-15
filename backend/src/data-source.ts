@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import './env-file.ts';
 
+import { randomUUID } from 'node:crypto';
+
 import { DataSource } from 'typeorm';
 
 import { POOL_MAX } from './env.ts';
@@ -22,6 +24,7 @@ export const dataSource = new DataSource({
     url: process.env.DATABASE_URL,
     uuidExtension: 'pgcrypto',
     entities,
+    applicationName: `nura-games ${ randomUUID().slice(0, 8) }`,
 
     synchronize: false,
 

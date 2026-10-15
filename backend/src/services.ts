@@ -116,6 +116,7 @@ export interface Services extends Ports
         sweepTurns(forMs: number): Promise<TurnSweep>;
         sweepTables(): Promise<TableSweep>;
         waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
+        otherServers(): Promise<number>;
         tidy(): Promise<Record<string, number>>;
     };
 
@@ -969,6 +970,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         pushes: `delete from push_subscriptions where failed_at is not null`
     };
 
+    const otherServers = async () =>
+        (await db.query<{ others: number }[]>(
+            `select count(distinct application_name)::int as others
+               from pg_stat_activity
+              where datname = current_database()
+                and application_name like 'nura-games %'
+                and application_name <> current_setting('application_name')`
+        ))[0].others;
+
     const tidy = async () =>
     {
         const gone: Record<string, number> = {};
@@ -1280,7 +1290,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), tidy },
+        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), otherServers, tidy },
 
         async pulse()
         {

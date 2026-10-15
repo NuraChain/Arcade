@@ -1011,6 +1011,22 @@ that moment and counts everybody as here. A sweep still out stands nobody else u
 search answered in those last milliseconds is seated beside the people who were there until the
 server itself let them go.
 
+**One server per database, and a server that finds a second says so.** Discovery and assignment
+are Postgres's and hold across processes: two servers on one database take the same advisory
+locks, read the same chairs and never seat one person twice. What a search and a sweep ask about
+PEOPLE is not. Who is here is the hub's memory, so a server passes over every live table whose
+players hold their sockets on the other one, and its sweep stands those players up. The doorbells,
+the pushed game frames and the calls go only to the sockets the sending server holds, so a player
+on one server is never told that a game the other one started is theirs. The design is one process
+for each database (`README.md` says so where an operator will read it), and a deployment runs one.
+Two did run here by accident: two worktrees' development servers on one development database,
+each standing up the other's waiting players. So every connection of a server carries a name
+(`applicationName` in `data-source.ts`: `nura-games` and eight characters of a uuid), and after
+each table sweep the server counts the other servers' names on its own database (`jobs.otherServers`,
+a read of `pg_stat_activity`, which no repository can say) and, when it first finds one, logs
+"another server is using this database". A server running code from before this carries no name
+and is not seen. `servers.db.spec.ts` and `table-sweep.spec.ts` hold it.
+
 **Here is a socket, or a page that goes on asking.** `hub.present` counted sockets and nothing
 else, so somebody whose socket could not connect - a proxy that does not pass the upgrade, an
 origin the handshake refuses - was away to both sweeps and to every search while they sat at the

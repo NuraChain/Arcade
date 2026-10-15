@@ -7,7 +7,11 @@ Make friends, start groups and chat privately, in English or Persian.
 
 It needs Node 24.11 or newer, PostgreSQL with the `citext` and `pgcrypto` extensions available,
 and nginx (or another proxy) in front for TLS. One process serves the api, the realtime
-connection and the pages.
+connection and the pages. Run one such process for each database: who is online, quick play's
+picture of who is waiting, voice calls and every live update are kept by the process that holds a
+player's connection, so players on two servers cannot find, hear or reach each other, and each
+server would stand up the other's waiting players. A server that finds another one using its
+database says so in its log.
 
 1. As an ordinary account, not root (`sudo adduser nura`, say), clone the repository and run
    `npm ci` at its root. The service runs as whoever owns the clone.

@@ -128,6 +128,15 @@ describe('what runs the sweep of the waiting tables', () =>
         expect(sweep.indexOf('ports.jobs.waiting()')).toBeLessThan(sweep.indexOf(".catch((error: unknown) => log.error('table sweep failed'"));
     });
 
+    it('says once, when it begins, that another server is using the database', () =>
+    {
+        const sweep = main.slice(main.indexOf('const sweepTables ='), main.indexOf('handleShutdownSignals('));
+
+        expect(main).toMatch(/^let crowded = false;$/m);
+        expect(readFileSync(new URL('../src/data-source.ts', import.meta.url), 'utf8')).toMatch(/^    applicationName: `nura-games \$\{ randomUUID\(\)\.slice\(0, 8\) \}`,$/m);
+        expect(sweep).toMatch(/const others = await ports\.jobs\.otherServers\(\);\s*if \(others > 0 && !crowded\)\s*\{\s*log\.warn\('another server is using this database[^']*', \{ others \}\);\s*\}\s*crowded = others > 0;/);
+    });
+
     it('hands the ports a way to say what a search did', () =>
     {
         expect(main).toMatch(/\}, \(event, fields\) => log\.info\(event, fields\)\);/);

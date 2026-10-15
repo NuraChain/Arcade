@@ -300,6 +300,8 @@ const TABLE_SWEEP_MS = 30_000;
 
 let tables: NodeJS.Timeout | null = null;
 
+let crowded = false;
+
 const sweepTables = () =>
 {
     void ports.jobs.sweepTables()
@@ -323,6 +325,15 @@ const sweepTables = () =>
             {
                 log.info('waiting for a game', { games });
             }
+
+            const others = await ports.jobs.otherServers();
+
+            if (others > 0 && !crowded)
+            {
+                log.warn('another server is using this database, and players on two servers cannot find, hear or reach each other: run one server per database', { others });
+            }
+
+            crowded = others > 0;
         })
         .catch((error: unknown) => log.error('table sweep failed', { error }))
         .finally(() =>
