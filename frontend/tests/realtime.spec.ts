@@ -446,12 +446,36 @@ describe('what arrives on the socket', () =>
         socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'chat', id: 'c-1', at: 0 });
         socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'chat', id: 'c-1', at: 0 });
 
-        clock.advance(NUDGE_WINDOW_MS - 1);
-        expect(heard).not.toHaveBeenCalled();
-
-        clock.advance(1);
+        clock.advance(NUDGE_WINDOW_MS);
         expect(heard).toHaveBeenCalledTimes(1);
         expect(heard).toHaveBeenCalledWith('chat', 'c-1');
+    });
+
+    it('hears a doorbell after a quiet window at once, and the ones inside the window after it once more at its end', () =>
+    {
+        const live = useRealtime();
+        const heard = vi.fn();
+
+        live.start();
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS * 4);
+        live.onNudge(heard);
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'table', id: 't-1', at: 0 });
+        clock.advance(0);
+        expect(heard, 'a doorbell after a quiet window waited for the window').toHaveBeenCalledTimes(1);
+
+        clock.advance(10);
+        socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'table', id: 't-1', at: 0 });
+        socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'table', id: 't-1', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS - 11);
+        expect(heard, 'a doorbell inside the window was heard before the window ended').toHaveBeenCalledTimes(1);
+
+        clock.advance(1);
+        expect(heard, 'the doorbells inside the window were not heard at its end, once').toHaveBeenCalledTimes(2);
+
+        clock.advance(NUDGE_WINDOW_MS * 4);
+        expect(heard).toHaveBeenCalledTimes(2);
     });
 
     it('keeps deltas about different things apart inside the same window', () =>

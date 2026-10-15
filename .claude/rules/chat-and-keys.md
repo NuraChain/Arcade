@@ -1373,6 +1373,19 @@ visibility pause, coalesced nudges). **Connecting does not reset the backoff —
 for `STEADY_MS` does**, or a socket that opens and dies 200ms later in a loop is hammered at one
 second forever. 4400, 4401 and 4429 are terminal and never retried.
 
+**A doorbell is heard at once, and a burst is still one read.** The hub batched every change for
+`TICK_MS` (150 ms) and the browser every doorbell for `NUDGE_WINDOW_MS` (250 ms), both counted from
+the first change, so a Ready, a seat taken, a message in a chat list reached the other browser no
+sooner than 400 ms plus two round trips: 444 ms on loopback, measured by `sync-pass.mjs` from the
+request to the chair turning green in the other page. Both windows are now a ceiling on the rate,
+not a delay: a change after a quiet window goes out on the next turn of the event loop, and what
+comes inside the window after a flush waits for the window's end and goes out together
+(`flushedAt` in `hub.ts` and in `realtime.store.ts`). The same Ready now reaches the other page in 18 ms
+(p50; 43 ms when it is pressed straight after another). A wait is never longer than one window, so a
+clock that jumps cannot hold a doorbell back, and the browser forgets its last flush when it tears
+down. `realtime.spec.ts` (*hears a doorbell after a quiet window at once*) and
+`realtime-hub.spec.ts` (*a doorbell in time*) hold both halves.
+
 **The seed is random per browser.** It was the constant 1, so every client on the deployment drew the
 same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.
 

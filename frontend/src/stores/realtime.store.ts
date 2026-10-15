@@ -23,7 +23,7 @@ const SCOPES: readonly NudgeScope[] = ['chat', 'social', 'game', 'table', 'me'];
 
 export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'down';
 
-/** Deltas inside this window become one refetch. */
+/** At most one refetch per window: a doorbell after a quiet window is heard at once, and the ones inside the window after it become one more refetch at its end. */
 export const NUDGE_WINDOW_MS = 250;
 
 /** One rung per consecutive failure, the last one repeating forever. */
@@ -207,6 +207,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     let close: (() => void) | null = null;
     let retry: (() => void) | null = null;
     let coalesce: (() => void) | null = null;
+    let flushedAt = Number.NEGATIVE_INFINITY;
     let attempt = 0;
     let connectedAt = 0;
     let suppressUntil = 0;
@@ -237,6 +238,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const flush = () =>
     {
         coalesce = null;
+        flushedAt = runtime().clock.now();
         const batch = [...pending.values()];
         pending.clear();
         for (const { scope, id } of batch)
@@ -253,7 +255,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         pending.set(`${ scope }:${ id ?? '' }`, { scope, id });
         if (coalesce === null)
         {
-            coalesce = runtime().clock.after(NUDGE_WINDOW_MS, flush);
+            coalesce = runtime().clock.after(Math.min(NUDGE_WINDOW_MS, Math.max(0, flushedAt + NUDGE_WINDOW_MS - runtime().clock.now())), flush);
         }
     };
 
@@ -651,6 +653,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         coalesce?.();
         coalesce = null;
         pending.clear();
+        flushedAt = Number.NEGATIVE_INFINITY;
         close?.();
         close = null;
         watching?.();

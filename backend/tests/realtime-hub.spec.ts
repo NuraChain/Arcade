@@ -1853,3 +1853,44 @@ describe('how busy the games are', () =>
         expect(world.asked).toBe(0);
     });
 });
+
+describe('a doorbell in time', () =>
+{
+    beforeEach(() =>
+    {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() =>
+    {
+        vi.useRealTimers();
+    });
+
+    const after = async (ms: number) =>
+    {
+        world.at += ms;
+        await vi.advanceTimersByTimeAsync(ms);
+    };
+
+    it('goes out at once after a quiet window, and what comes inside the window after it goes out together at its end', async () =>
+    {
+        const host = await connect('alex');
+
+        await after(TICK_MS * 4);
+        world.hub.tableChanged('t-1', ['alex']);
+        await after(0);
+
+        expect(scopesOf(host.wire), 'a change after a quiet window waited for the window').toEqual(['table:t-1']);
+
+        await after(10);
+        world.hub.tableChanged('t-2', ['alex']);
+        world.hub.tableChanged('t-3', ['alex']);
+        await after(TICK_MS - 11);
+
+        expect(scopesOf(host.wire), 'a change inside the window went out before the window ended').toEqual(['table:t-1']);
+
+        await after(1);
+
+        expect(scopesOf(host.wire)).toEqual(['table:t-1', 'table:t-2', 'table:t-3']);
+    });
+});

@@ -595,6 +595,8 @@ export function createHub(deps: HubDeps): Hub
         viewed.delete(userId);
     };
 
+    let flushedAt = Number.NEGATIVE_INFINITY;
+
     const schedule = () =>
     {
         if (timer !== null)
@@ -604,8 +606,9 @@ export function createHub(deps: HubDeps): Hub
         timer = setTimeout(() =>
         {
             timer = null;
+            flushedAt = deps.now();
             void flush();
-        }, TICK_MS);
+        }, Math.min(TICK_MS, Math.max(0, flushedAt + TICK_MS - deps.now())));
         timer.unref?.();
     };
 
