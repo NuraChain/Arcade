@@ -809,3 +809,242 @@ describe('a call the server carries', () =>
         expect(ran, 'a wait that was called off ran anyway').toHaveBeenCalledTimes(1);
     });
 });
+
+describe('the microphone, prepared before anybody hears it', () =>
+{
+    interface Gated
+    {
+        told: Record<string, unknown>[];
+        off: boolean;
+        port: { onmessage: ((event: { data: unknown }) => void) | null };
+    }
+
+    let gates: Gated[] = [];
+    let contexts: { state: string; allowed: boolean; closed: boolean }[] = [];
+    let asked: MediaStreamConstraints[] = [];
+    const processed = { processed: true, getAudioTracks: () => [{ contentHint: '' }], getTracks: () => [] } as unknown as MediaStream;
+
+    const sound = (allowed: boolean) =>
+    {
+        gates = [];
+        contexts = [];
+        asked = [];
+
+        vi.stubGlobal('AudioWorkletNode', class
+        {
+            public told: Record<string, unknown>[] = [];
+            public off = false;
+            public port = {
+                onmessage: null as ((event: { data: unknown }) => void) | null,
+                postMessage: (message: Record<string, unknown>) => this.told.push(message),
+                close: () => undefined
+            };
+
+            constructor()
+            {
+                gates.push(this);
+            }
+
+            public connect(next: unknown)
+            {
+                return next;
+            }
+
+            public disconnect()
+            {
+                this.off = true;
+            }
+        });
+        vi.stubGlobal('AudioContext', class
+        {
+            public state = 'suspended';
+            public allowed = allowed;
+            public closed = false;
+            public currentTime = 0;
+            public onstatechange: (() => void) | null = null;
+            public audioWorklet = { addModule: async () => undefined };
+
+            constructor()
+            {
+                contexts.push(this);
+            }
+
+            public createMediaStreamSource()
+            {
+                return { connect: (next: unknown) => next, disconnect: () => undefined };
+            }
+
+            public createGain()
+            {
+                return { gain: { setTargetAtTime: () => undefined }, connect: (next: unknown) => next, disconnect: () => undefined };
+            }
+
+            public createMediaStreamDestination()
+            {
+                return { stream: processed, channelCount: 2, channelCountMode: 'max', connect: (next: unknown) => next, disconnect: () => undefined };
+            }
+
+            public createAnalyser()
+            {
+                return { connect: (next: unknown) => next, disconnect: () => undefined, getFloatTimeDomainData: () => undefined, fftSize: 0 };
+            }
+
+            public async resume()
+            {
+                if (this.allowed && this.state !== 'running')
+                {
+                    this.state = 'running';
+                    this.onstatechange?.();
+                }
+            }
+
+            public async close()
+            {
+                this.closed = true;
+            }
+        });
+        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:gate');
+        vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+        setVoiceMedia(() => ({
+            getUserMedia: async (constraints: MediaStreamConstraints) =>
+            {
+                asked.push(constraints);
+                return { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream;
+            }
+        }) as unknown as MediaDevices);
+    };
+
+    afterEach(() =>
+    {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('asks the browser for the microphone the way the settings say', async () =>
+    {
+        sound(true);
+        useSettings().update({ voiceEcho: false, voiceAgc: false, voiceNoise: 'off' });
+
+        await useVoice().join(TABLE);
+
+        expect(asked.at(-1)!.audio).toEqual({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 });
+
+        useVoice().leave();
+        useSettings().update({ voiceEcho: true, voiceAgc: true, voiceNoise: 'standard' });
+        await useVoice().join(TABLE);
+
+        expect(asked.at(-1)!.audio).toEqual({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 });
+    });
+
+    it('sends the prepared voice once the call\'s sound can run, and the microphone itself until then', async () =>
+    {
+        sound(false);
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(calls[0].mic.at(-1), 'a voice that cannot run yet was sent, and would have been silence').not.toBe(processed);
+        expect(calls[0].mic.at(-1)).not.toBeNull();
+
+        contexts[0].allowed = true;
+        window.dispatchEvent(new Event('pointerdown'));
+        await settle();
+
+        expect(calls[0].mic.at(-1)).toBe(processed);
+    });
+
+    it('holds the talk key in the gate, so the voice fades in and out instead of the microphone cutting', async () =>
+    {
+        sound(true);
+        useSettings().update({ voicePushToTalk: true, voiceRelease: 250 });
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(calls[0].muted.at(-1), 'the microphone itself was cut while the gate holds the key').toBe(false);
+        expect(gates[0].told.at(-1)).toMatchObject({ push: true, pressed: false, linger: 250 });
+
+        useVoice().press();
+
+        expect(gates[0].told.at(-1)).toMatchObject({ push: true, pressed: true });
+
+        useVoice().release();
+
+        expect(gates[0].told.at(-1)).toMatchObject({ push: true, pressed: false });
+        expect(calls[0].muted.at(-1)).toBe(false);
+    });
+
+    it('still cuts the microphone itself for the talk key where nothing can prepare the voice', async () =>
+    {
+        useSettings().update({ voicePushToTalk: true });
+
+        await useVoice().join(TABLE);
+
+        expect(calls[0].muted.at(-1)).toBe(true);
+
+        useVoice().press();
+
+        expect(calls[0].muted.at(-1)).toBe(false);
+    });
+
+    it('turns the voice up or moves the bar without asking for the microphone again', async () =>
+    {
+        sound(true);
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        useSettings().update({ voiceInput: 1.4, voiceAuto: false, voiceThreshold: -38 });
+        useVoice().tune();
+
+        expect(gates[0].told.at(-1)).toMatchObject({ auto: false, threshold: -38 });
+        expect(asked).toHaveLength(1);
+    });
+
+    it('asks for the microphone again when what the browser does to it changes, and lets go of the old one', async () =>
+    {
+        sound(true);
+        const stopped = vi.fn();
+        const before = track.stop;
+
+        track.stop = stopped;
+
+        try
+        {
+            await useVoice().join(TABLE);
+            await settle();
+
+            useSettings().update({ voiceEcho: false });
+            await useVoice().reprocess();
+            await settle();
+        }
+        finally
+        {
+            track.stop = before;
+        }
+
+        expect(asked).toHaveLength(2);
+        expect(asked.at(-1)!.audio).toMatchObject({ echoCancellation: false });
+        expect(stopped).toHaveBeenCalled();
+        expect(gates[0].off, 'the old voice was left running').toBe(true);
+        expect(gates).toHaveLength(2);
+        expect(calls[0].mic.at(-1)).toBe(processed);
+    });
+
+    it('says how loud the microphone is and where the bar stands, and nothing once the call is over', async () =>
+    {
+        sound(true);
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        gates[0].port.onmessage!({ data: { level: -31, open: true, threshold: -47 } });
+
+        expect(useVoice().reading()).toEqual({ level: -31, open: true, threshold: -47 });
+
+        useVoice().leave();
+
+        expect(useVoice().reading()).toBeNull();
+        expect(gates[0].off).toBe(true);
+    });
+});

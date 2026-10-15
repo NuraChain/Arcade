@@ -1484,6 +1484,34 @@ joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn th
 `services/voice.rtc.ts` is framework-free, and `stores/voice.store.ts` takes it through
 `setVoiceCall` so a spec can observe the store without a real `RTCPeerConnection`.
 
+**The microphone is prepared before anybody hears it** (`services/voice.input.ts`,
+`services/voice.gate.ts`). The owner: "do something about noies it should have options such as
+discord". The browser is asked for the microphone the way Settings say (echo cancellation,
+automatic gain, the browser's own noise suppression for "Standard"), in mono, and the call's own
+`AudioContext` runs it through the input volume (up to twice) and a gate in an `AudioWorklet`
+before either path takes it:
+
+- **Voice activity.** Left automatic, the gate learns the room: its idea of the noise falls at
+  once to anything quieter and rises 3 dB a second, and it opens 12 dB above that, never under
+  -70 dB or over -30. Or it opens at the bar the reader set.
+- **Nothing is cut.** It listens 10 ms ahead of what it lets through, so it is open before a
+  word's first sound; it holds 300 ms through a pause; it fades in over 5 ms and out over 80.
+- **Push to talk is the same gate**: open while the key is held and for the release delay after
+  it (`voiceRelease`), with the same fades. The microphone's own track is cut for it only where
+  nothing can prepare the voice, as it always was.
+- **What it hears is told to the page** about twenty times a second (`voice.reading()`: the
+  level, whether it is open, and the bar), which is what a meter draws.
+- **The microphone itself is sent until the context runs**, because a prepared voice from a
+  context that is not running is silence; the call moves to the prepared voice when it runs.
+- `tune()` hands the gate and the volume a change at once; `reprocess()` asks for the
+  microphone again when what the browser does to it changes, and lets go of the old one.
+
+Measured with clean speech carried by the server: between sentences nothing at all goes out (the
+gate closed, -70.6 dB at the listener, about 30% less sent). A gate that only hears level is
+opened by a keyboard's clicks, so the noisy recording kept it open; telling a click from a voice
+is what strong suppression is for. `voice-gate.spec.ts`, `voice-input.spec.ts` and
+`voice.spec.ts` (*the microphone, prepared before anybody hears it*) hold it.
+
 **One side places the call.** Of two players the one whose JOINING sorts first adds the audio line
 and offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
 turned to `sendrecv` with its own microphone on the sender. One offer, one answer, one line each.

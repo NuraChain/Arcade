@@ -2,6 +2,8 @@ import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
+import type { GateReading } from '../services/voice.gate.ts';
+import { createVoiceInput, type InputOptions, type VoiceInput } from '../services/voice.input.ts';
 import { hearsOpus } from '../services/voice.relay.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
@@ -41,6 +43,7 @@ export interface VoiceApi
     people: Getter<VoicePerson[]>;
     inputs: Getter<MediaChoice[]>;
     outputs: Getter<MediaChoice[]>;
+    reading: Getter<GateReading | null>;
     canPickSpeaker(): boolean;
     speaking(who: string): boolean;
     unreached: Getter<readonly string[]>;
@@ -55,6 +58,8 @@ export interface VoiceApi
     silence(who: string): void;
     setLevel(who: string, volume: number): void;
     applyVolume(): void;
+    tune(): void;
+    reprocess(): Promise<void>;
     survey(): Promise<void>;
     useMic(id: string): Promise<void>;
     useSpeaker(id: string): void;
@@ -135,9 +140,12 @@ export const useVoice = createStore((): VoiceApi =>
     const before = new Map<string, number>();
     const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
     const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
+    const [reading, setReading] = createSignal<GateReading | null>(null);
 
     let call: VoiceCall | null = null;
     let stream: MediaStream | null = null;
+    let input: VoiceInput | null = null;
+    let unread: (() => void) | null = null;
     let context: AudioContext | null = null;
     let unstir: (() => void) | null = null;
     let mutedBeforeDeaf = true;
@@ -156,9 +164,65 @@ export const useVoice = createStore((): VoiceApi =>
 
     const talkKey = () => untrack(settings.settings).voiceTalkKey || TALK_KEY;
 
+    const options = (): InputOptions =>
+    {
+        const current = untrack(settings.settings);
+
+        return {
+            volume: current.voiceInput,
+            push: current.voicePushToTalk,
+            pressed: untrack(talking),
+            linger: current.voiceRelease,
+            auto: current.voiceAuto,
+            threshold: current.voiceThreshold
+        };
+    };
+
     const gate = () =>
     {
-        call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking)));
+        call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking) && !processed()));
+        input?.set(options());
+    };
+
+    const processed = () => input !== null && context?.state === 'running';
+
+    const sending = () => (processed() ? input!.stream : stream);
+
+    const unprocess = () =>
+    {
+        unread?.();
+        unread = null;
+        input?.close();
+        input = null;
+        setReading(null);
+    };
+
+    const process = async (raw: MediaStream | null) =>
+    {
+        unprocess();
+
+        if (raw === null || context === null)
+        {
+            return;
+        }
+
+        try
+        {
+            const made = await createVoiceInput(context, raw, options());
+
+            if (stream !== raw)
+            {
+                made.close();
+                return;
+            }
+
+            input = made;
+            unread = made.onReading((next) => setReading(next));
+        }
+        catch
+        {
+            input = null;
+        }
     };
 
     const fading = new Map<string, () => void>();
@@ -221,6 +285,7 @@ export const useVoice = createStore((): VoiceApi =>
         unstir = null;
         call?.close();
         call = null;
+        unprocess();
         stopStream();
 
         void context?.close().catch(() => undefined);
@@ -317,13 +382,16 @@ export const useVoice = createStore((): VoiceApi =>
 
         const wanted = untrack(settings.settings).voiceMic;
 
+        const current = untrack(settings.settings);
+
         try
         {
             const got = await devices.getUserMedia({
                 audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
+                    echoCancellation: current.voiceEcho,
+                    noiseSuppression: current.voiceNoise === 'standard',
+                    autoGainControl: current.voiceAgc,
+                    channelCount: 1,
                     ...(wanted === '' ? {} : { deviceId: { ideal: wanted } })
                 }
             });
@@ -417,6 +485,7 @@ export const useVoice = createStore((): VoiceApi =>
         people,
         inputs,
         outputs,
+        reading,
 
         canPickSpeaker: () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 
@@ -472,7 +541,21 @@ export const useVoice = createStore((): VoiceApi =>
             opus = hears;
 
             const Context = typeof AudioContext === 'undefined' ? null : AudioContext;
-            context = Context === null ? null : new Context();
+            const made = Context === null ? null : new Context({ latencyHint: 'interactive' });
+
+            context = made;
+
+            if (made !== null)
+            {
+                made.onstatechange = () =>
+                {
+                    if (context === made && made.state === 'running')
+                    {
+                        void call?.setMic(sending());
+                        gate();
+                    }
+                };
+            }
 
             if (typeof window !== 'undefined')
             {
@@ -540,12 +623,18 @@ export const useVoice = createStore((): VoiceApi =>
 
             stream = got;
             stir();
+            await process(got);
+
+            if (round !== joins || untrack(table) !== next)
+            {
+                return;
+            }
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
 
             setMuted(quiet);
             gate();
-            await call.setMic(stream);
+            await call.setMic(sending());
 
             realtime.voice(next, true, quiet, opus);
             setJoining(false);
@@ -649,7 +738,49 @@ export const useVoice = createStore((): VoiceApi =>
 
             stopStream();
             stream = next;
-            await call.setMic(next);
+            await process(next);
+
+            if (round !== joins || call === null)
+            {
+                return;
+            }
+
+            await call.setMic(sending());
+            gate();
+        },
+
+        tune()
+        {
+            input?.set(options());
+            gate();
+        },
+
+        async reprocess()
+        {
+            if (untrack(table) === null || call === null || untrack(mic) !== 'live')
+            {
+                return;
+            }
+
+            const round = joins;
+            const next = await microphone();
+
+            if (next === null || call === null || round !== joins)
+            {
+                stopTracks(next);
+                return;
+            }
+
+            stopStream();
+            stream = next;
+            await process(next);
+
+            if (round !== joins || call === null)
+            {
+                return;
+            }
+
+            await call.setMic(sending());
             gate();
         },
 

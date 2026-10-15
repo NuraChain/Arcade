@@ -20,12 +20,21 @@ export interface Settings
     voiceMic: string;
     voiceSpeaker: string;
     voiceLevels: Record<string, number>;
+    voiceNoise: VoiceNoise;
+    voiceEcho: boolean;
+    voiceAgc: boolean;
+    voiceInput: number;
+    voiceAuto: boolean;
+    voiceThreshold: number;
+    voiceRelease: number;
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
     quickAsks: Record<string, unknown>;
     notify: boolean;
 }
+
+export type VoiceNoise = 'off' | 'standard' | 'strong';
 
 const STORAGE_KEY = 'nura-games.settings';
 
@@ -48,6 +57,13 @@ export function defaultSettings(): Settings
         voiceMic: '',
         voiceSpeaker: '',
         voiceLevels: {},
+        voiceNoise: 'standard',
+        voiceEcho: true,
+        voiceAgc: true,
+        voiceInput: 1,
+        voiceAuto: true,
+        voiceThreshold: -50,
+        voiceRelease: 200,
         hintMoves: true,
         hintOutcome: true,
         hintRules: true,
