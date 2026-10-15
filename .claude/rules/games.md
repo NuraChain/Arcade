@@ -791,6 +791,22 @@ Under the lock, in order:
   somebody still sitting where their last game ended is not waiting for one, and is found a table
   where everybody is here rather than sent back to that one. It is asked before the fifty-table
   limit, or the second of two presses would be refused by the chair the first one took.
+- **One live search at a time.** A search for a live game first lets go of the searcher's other
+  waits: every chair of theirs at a live table quick play opened where they sit ready with no game
+  on (`letGo`), each under that table's lock and asked again under it, through
+  `standUp`, so the table closes behind them if they were alone, and whoever else was there and
+  the table's thread are rung with them named. A searcher used to keep every wait: one who looked
+  for Ludo for four, then for two, then for backgammon held three chairs, and when others came was
+  dealt two live games at once, reproduced on the built server. A turn-based search lets go of
+  nothing, and nothing else is touched: a chair that is not ready (it cannot start a game), a
+  table somebody opened by hand, a turn-based one, one with a game on. One person's searches run
+  one after another, under `pg_advisory_xact_lock(hashtext('quick:who'), hashtext(person))` taken
+  before the game's lock, or two of theirs for two games at once would each find nothing to let go
+  of and both seat them. Two people whose searches cross, each letting go of the table the other is
+  sitting down at, can deadlock on the two tables' locks; Postgres ends one, and the search is
+  tried again as a unique violation is (`40P01`). It comes after the fifty-table limit, so a
+  refused search lets go of nothing. `quick.db.spec.ts` (*one search at a time for a live game*)
+  holds each of those, ten rounds of the two races included.
 - **Candidates.** Open, of that game and pace, public or opened for the host's friends when the
   searcher is one, with no game on, a chair the searcher may take, and no chair of theirs already.
   Never one where the searcher and the host or ANYBODY sitting have blocked each other, either way:

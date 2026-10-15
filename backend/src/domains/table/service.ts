@@ -118,6 +118,8 @@ const QUICK_CANDIDATES = 32;
 
 const UNIQUE_VIOLATION = '23505';
 
+const DEADLOCK = '40P01';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CODE = /^[a-z2-9]{4,12}$/i;
@@ -448,6 +450,45 @@ const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: str
     return true;
 };
 
+const letGo = async (tx: EntityManager, lead: string) =>
+{
+    const waits = await tx.getRepository(TableSeat)
+        .createQueryBuilder('s')
+        .innerJoin(QuickTable, 'q', 'q.table_id = s.table_id')
+        .innerJoin(Table, 't', `t.id = s.table_id and t.mode = 'live'`)
+        .select('s.table_id', 'id')
+        .where('s.user_id = :lead', { lead })
+        .orderBy('s.table_id')
+        .getRawMany<{ id: string }>();
+    const left: { tableId: string; conversationId: string | null; closed: boolean }[] = [];
+
+    for (const { id } of waits)
+    {
+        await lockTable(tx, id);
+
+        const still = await tx.getRepository(TableSeat)
+            .createQueryBuilder('s')
+            .where('s.table_id = :id and s.user_id = :lead and s.ready', { id, lead })
+            .andWhere('not exists (select 1 from matches m where m.table_id = s.table_id and m.finished_at is null)')
+            .getExists();
+
+        if (!still)
+        {
+            continue;
+        }
+
+        const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId: id, kind: 'game' } });
+        const stood = await standUp(tx, id, lead);
+
+        if (stood.left)
+        {
+            left.push({ tableId: id, conversationId: thread?.id ?? null, closed: stood.closed });
+        }
+    }
+
+    return left;
+};
+
 export function createTableService(db: DataSource, social: SocialService)
 {
     const searches = keyedQueue();
@@ -573,6 +614,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             const search = async (tx: EntityManager) =>
             {
+                await tx.query(`select pg_advisory_xact_lock(hashtext('quick:who'), hashtext($1))`, [lead]);
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
 
                 const waiting = await compatible(tx, lead, ask.game, want.filter)
@@ -588,6 +630,9 @@ export function createTableService(db: DataSource, social: SocialService)
                 }
 
                 await mustHaveRoom(lead, tx);
+
+                const left = want.filter.mode === 'live' ? await letGo(tx, lead) : [];
+                const gone = left.length === 0 ? {} : { left };
 
                 const candidates = await compatible(tx, lead, ask.game, want.filter)
                     .select('t.id', 'id')
@@ -619,7 +664,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 {
                     if ((here === null || candidate.occupants.every((occupant) => here.has(occupant))) && await sit(tx, candidate.id, candidate.teams, lead))
                     {
-                        return { id: candidate.id, seated: true };
+                        return { id: candidate.id, seated: true, ...gone };
                     }
                 }
 
@@ -634,7 +679,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 await tx.getRepository(QuickTable).insert({ tableId: opened });
 
-                return { id: opened, seated: true };
+                return { id: opened, seated: true, ...gone };
             };
 
             return await searches.run(ask.game, async () =>
@@ -647,7 +692,9 @@ export function createTableService(db: DataSource, social: SocialService)
                     }
                     catch (error)
                     {
-                        if ((error as { code?: string }).code !== UNIQUE_VIOLATION)
+                        const code = (error as { code?: string }).code;
+
+                        if (code !== UNIQUE_VIOLATION && code !== DEADLOCK)
                         {
                             throw error;
                         }

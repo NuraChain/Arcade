@@ -2031,6 +2031,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     await ringTable(after);
                 }
 
+                for (const gone of found.left ?? [])
+                {
+                    await courtesy('table ring', async () =>
+                    {
+                        if (gone.conversationId !== null)
+                        {
+                            live?.chatChanged(gone.conversationId, me);
+                        }
+                        live?.tableChanged(gone.tableId, [...await table.peopleAt(gone.tableId), me]);
+                    });
+                }
+
                 return asTable(after);
             },
 

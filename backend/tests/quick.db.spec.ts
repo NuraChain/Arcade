@@ -618,7 +618,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await chairsOf(me)).toHaveLength(1);
         });
 
-        it('searches again for somebody whose chair is no longer ready, and for different choices', async () =>
+        it('searches again for somebody whose chair is no longer ready, and for different choices, and lets go of the wait it had', async () =>
         {
             const me = await makeUser();
             const first = (await search(me)).id;
@@ -629,11 +629,16 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             expect(next.seated).toBe(true);
             expect(next.id).not.toBe(first);
+            expect(next.left).toBeUndefined();
 
             const narrower = await search(me, { seats: 3 });
 
             expect(narrower.seated).toBe(true);
             expect([first, next.id]).not.toContain(narrower.id);
+            expect(narrower.left).toEqual([{ tableId: next.id, conversationId: expect.any(String), closed: true }]);
+            expect(await chairOf(me, next.id)).toBeNull();
+            expect(await row(next.id)).toMatchObject({ status: 'closed' });
+            expect(await chairOf(me, first)).toMatchObject({ ready: false });
             expect(await search(me)).toEqual({ id: narrower.id, seated: false });
         });
 
@@ -665,6 +670,133 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await search(me)).toEqual({ id: last.id, seated: false });
             await expect(search(me, { seats: 3 })).rejects.toMatchObject({ status: 409, code: 'seated-max' });
             expect(await chairsOf(me)).toHaveLength(SEATED_MAX);
+        }, 60_000);
+    });
+
+    describe('one search at a time for a live game', () =>
+    {
+        it('lets go of the searcher’s other waits at live tables quick play opened, and keeps every other chair', async () =>
+        {
+            const me = await makeUser();
+            const playing = (await door().table.quick(me, { game: 'backgammon', voice: 'off' })).id;
+
+            await door().table.quick(await makeUser(), { game: 'backgammon', voice: 'off' });
+
+            const waiting = (await search(me, { seats: 4 })).id;
+            const byHand = await opened(me);
+
+            await here.setReady(me, byHand, true);
+
+            const slow = (await search(me, { mode: 'turns' })).id;
+            const now = await search(me, { game: 'hokm' });
+
+            expect(await live(playing)).toBe(1);
+            expect(now.seated).toBe(true);
+            expect(now.left).toEqual([{ tableId: waiting, conversationId: expect.any(String), closed: true }]);
+            expect(await chairOf(me, waiting)).toBeNull();
+            expect(await inThread(me, waiting)).toBe(false);
+            expect(await chairOf(me, byHand)).toMatchObject({ ready: true });
+            expect(await chairOf(me, slow)).toMatchObject({ ready: true });
+            expect(await chairOf(me, playing)).not.toBeNull();
+            expect(await chairOf(me, now.id)).toMatchObject({ ready: true });
+        });
+
+        it('lets go of nothing for a turn-based search, or for a search the searcher was already waiting on', async () =>
+        {
+            const me = await makeUser();
+            const waiting = (await search(me, { seats: 4 })).id;
+
+            expect((await search(me, { mode: 'turns' })).left).toBeUndefined();
+            expect(await search(me, { seats: 4 })).toEqual({ id: waiting, seated: false });
+            expect(await chairOf(me, waiting)).toMatchObject({ ready: true });
+        });
+
+        it('tells whoever else was waiting at that table, and its thread, with the leaver named', async () =>
+        {
+            const tables = vi.spyOn(listener, 'tableChanged');
+            const chats = vi.spyOn(listener, 'chatChanged');
+            const [stays, me] = await crowd(2);
+            const theirs = (await door().table.quick(stays, { game: 'ludo', voice: 'off', seats: 4 })).id;
+
+            try
+            {
+                expect((await door().table.quick(me, { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(theirs);
+
+                tables.mockClear();
+                chats.mockClear();
+                await door().table.quick(me, { game: 'backgammon', voice: 'off' });
+
+                const thread = (await db.getRepository(Conversation).findOneByOrFail({ tableId: theirs, kind: 'game' })).id;
+
+                expect(tables).toHaveBeenCalledWith(theirs, [stays, me]);
+                expect(chats).toHaveBeenCalledWith(thread, me);
+                expect(await row(theirs)).toMatchObject({ status: 'open' });
+                expect(await chairOf(stays, theirs)).toMatchObject({ ready: true });
+            }
+            finally
+            {
+                tables.mockRestore();
+                chats.mockRestore();
+            }
+        });
+
+        it('tells whoever was waiting with the searcher when the new search sits down at a table that was waiting', async () =>
+        {
+            const tables = vi.spyOn(listener, 'tableChanged');
+            const [stays, me, host] = await crowd(3);
+            const theirs = (await door().table.quick(stays, { game: 'ludo', voice: 'off', seats: 4 })).id;
+
+            try
+            {
+                await door().table.quick(me, { game: 'ludo', voice: 'off', seats: 4 });
+
+                const waiting = (await door().table.quick(host, { game: 'backgammon', voice: 'off' })).id;
+
+                tables.mockClear();
+
+                expect(await door().table.quick(me, { game: 'backgammon', voice: 'off' })).toMatchObject({ id: waiting, status: 'playing' });
+                expect(tables).toHaveBeenCalledWith(theirs, [stays, me]);
+                expect(await chairOf(me, theirs)).toBeNull();
+                expect(await chairOf(stays, theirs)).toMatchObject({ ready: true });
+            }
+            finally
+            {
+                tables.mockRestore();
+            }
+        });
+
+        it('leaves one wait when one person’s searches for two games arrive together', async () =>
+        {
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const me = await makeUser();
+
+                await Promise.all([search(me, { game: 'ludo' }, here), search(me, { game: 'backgammon' }, there)]);
+
+                expect((await chairsOf(me)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+            }
+        }, 60_000);
+
+        it('seats both, one wait each, when two people’s searches cross each other’s waits', async () =>
+        {
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const [one, other] = await crowd(2);
+
+                await search(one, { game: 'ludo', seats: 4 });
+                await search(other, { game: 'backgammon' });
+
+                const answers = await Promise.allSettled([
+                    search(one, { game: 'backgammon' }, here),
+                    search(other, { game: 'ludo', seats: 4 }, there)
+                ]);
+
+                expect(answers.map((answer) => answer.status), `round ${ round }`).toEqual(['fulfilled', 'fulfilled']);
+                expect((await chairsOf(one)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+                expect((await chairsOf(other)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+
+                await db.getRepository(Table).createQueryBuilder().delete().execute();
+            }
         }, 60_000);
     });
 
