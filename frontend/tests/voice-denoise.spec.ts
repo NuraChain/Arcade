@@ -148,4 +148,3 @@ describe('strong noise suppression', () =>
         expect(one.made[0]).toEqual({ destroyed: true, off: true, destroy: expect.any(Function), disconnect: expect.any(Function) });
     });
 });
-

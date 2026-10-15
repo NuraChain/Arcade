@@ -578,8 +578,11 @@ describe('the microphone, as the server carries it', () =>
 
         vi.stubGlobal('AudioData', class
         {
-            constructor(public init: unknown)
+            public init: unknown;
+
+            constructor(init: unknown)
             {
+                this.init = init;
             }
         });
         vi.stubGlobal('AudioEncoder', class
