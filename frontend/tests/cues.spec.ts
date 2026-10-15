@@ -1546,7 +1546,7 @@ describe('what the browser is told when nobody is looking at the page', () =>
         await messageFrom();
 
         expect(browser.shown[0].options).toMatchObject({ lang: 'fa', dir: 'rtl' });
-        expect(browser.shown[0].title).toContain('پیامی فرستاد');
+        expect(browser.shown[0].title).toContain('یه پیام فرستاد');
     });
 
     it('has its notices taken down when the reader comes back to the page', async () =>

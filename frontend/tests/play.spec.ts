@@ -1560,7 +1560,7 @@ describe('PlayPage', () =>
 
         it.each([
             ['en', 'You are out of this game.', 'The board you see is at least 30 seconds behind the one they are playing on.'],
-            ['fa', 'از این بازی بیرون رفتی.', 'صفحه‌ای که می‌بینی دست‌کم ۳۰ ثانیه عقب‌تر']
+            ['fa', 'از این بازی اومدی بیرون.', 'صفحه‌ای که می‌بینی دست‌کم ۳۰ ثانیه از بازی اصلی عقب‌تر']
         ] as const)('tells somebody who gave up that they are watching the rest from behind, in %s', async (language, out, behind) =>
         {
             useLocale().setLocale(language);
@@ -1700,7 +1700,7 @@ describe('PlayPage', () =>
 
             it.each([
                 ['en', 'The game goes on without you'],
-                ['fa', 'بازی بدون تو ادامه پیدا می‌کند']
+                ['fa', 'بازی بدون تو ادامه پیدا می‌کنه']
             ] as const)('is told the game goes on without it, and leaves without agreeing to a forfeit it does not owe, in %s', async (language, words) =>
             {
                 useLocale().setLocale(language);
@@ -2144,7 +2144,7 @@ describe('PlayPage', () =>
 
         it.each([
             ['en', 'There is nothing here for you to watch.'],
-            ['fa', 'این‌جا چیزی برای تماشای تو نیست.']
+            ['fa', 'این‌جا چیزی نیست که بتونی تماشا کنی.']
         ] as const)('says there is nothing to watch when the server will not show a game, not that the game is too young, in %s', async (language, words) =>
         {
             useLocale().setLocale(language);

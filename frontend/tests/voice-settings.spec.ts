@@ -290,7 +290,7 @@ describe('the meter of a microphone', () =>
 
         expect(one.fill().className).toContain('origin-right');
         expect(one.bar().getAttribute('aria-valuetext')).toContain('۲۰');
-        expect(one.bar().getAttribute('aria-valuetext')).toContain('در حال فرستادن');
+        expect(one.bar().getAttribute('aria-valuetext')).toContain('داره می‌فرسته');
         expect(one.bar().getAttribute('aria-valuetext')).toContain('دسی‌بل');
 
         useLocale().setLocale('en');

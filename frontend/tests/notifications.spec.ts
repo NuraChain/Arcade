@@ -95,7 +95,7 @@ describe('what a notice says', () =>
 {
     const turn = (ref: Notification['ref']): Notification => ({ id: 'one', kind: 'turn', ref, count: 1, read: false, at: new Date(0).toISOString() });
 
-    it.each([['en', 'Your turn at Hokm', 'Your turn'], ['fa', 'نوبت توست در حکم', 'نوبت توست']] as const)('names the game a turn is in, and says a whole sentence for a row that names none, in %s', (language, named, bare) =>
+    it.each([['en', 'Your turn at Hokm', 'Your turn'], ['fa', 'نوبتته توی حکم', 'نوبتته']] as const)('names the game a turn is in, and says a whole sentence for a row that names none, in %s', (language, named, bare) =>
     {
         useLocale().setLocale(language);
 
@@ -817,7 +817,7 @@ describe('what a notification says', () =>
 
         cleanup();
         useLocale().setLocale('fa');
-        expect(render(item)).toContain('می‌خواهد دوست شود');
+        expect(render(item)).toContain('می‌خواد باهات دوست بشه');
     });
 
     it('says how many when there were many, and says it once when there was one', () =>

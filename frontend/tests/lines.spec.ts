@@ -184,7 +184,7 @@ describe('a line that names somebody', () =>
 
         const persian = namedParams({ winners: ['alex', 'sara.k'] }, (handle) => handle, (items) => useLocale().list(items));
 
-        expect(useLocale().t('chat.line.result', persian)).toBe(`${ useLocale().list(['alex', 'sara.k']) } بردند`);
+        expect(useLocale().t('chat.line.result', persian)).toBe(`${ useLocale().list(['alex', 'sara.k']) } بردن`);
         expect(useLocale().t('chat.line.result', namedParams({ winners: ['alex'] }, (handle) => handle, (items) => useLocale().list(items)))).toBe('alex برد');
     });
 

@@ -174,7 +174,7 @@ describe('the sheet that invites a friend to a table', () =>
 
         await type(container, 'sa');
 
-        expect(container.textContent).toContain('دوستی با این نام نیست.');
+        expect(container.textContent).toContain('دوستی با این اسم پیدا نشد.');
     });
 
     it('keeps a friend\'s row while the search still finds them', async () =>
@@ -404,8 +404,8 @@ describe('somebody the host took out of the table, in the sheet that invites', (
 
         const { container } = await sheetAfter('mina');
 
-        expect(headings(container)).toEqual(['کسانی که از این میز بلند کردی', 'دوستان']);
-        expect(listOf(container, 'کسانی که از این میز بلند کردی')!.contains(rowOf(container, 'mina'))).toBe(true);
+        expect(headings(container)).toEqual(['کسایی که از میز بلندشون کردی', 'دوستان']);
+        expect(listOf(container, 'کسایی که از میز بلندشون کردی')!.contains(rowOf(container, 'mina'))).toBe(true);
     });
 });
 

@@ -309,7 +309,7 @@ try
     const persian = await invite(mina, 'dana.w');
     const farsi = await tagged(page, `table-invite:${ persian }`);
 
-    check('a notice is in Persian, right to left, for a reader whose language that is', farsi?.title === 'Mina Sadeghi یک صندلی برایت نگه داشت' && farsi.lang === 'fa' && farsi.dir === 'rtl', JSON.stringify(farsi));
+    check('a notice is in Persian, right to left, for a reader whose language that is', farsi?.title === 'Mina Sadeghi یه صندلی واست نگه داشته' && farsi.lang === 'fa' && farsi.dir === 'rtl', JSON.stringify(farsi));
     await hide(page, false);
     await dana.context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
 

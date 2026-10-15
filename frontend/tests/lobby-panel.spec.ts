@@ -604,7 +604,7 @@ describe('the button that says ready', () =>
 
     it('goes back and says why when the server refuses, in the reader\'s own language', async () =>
     {
-        for (const [language, ready, why] of [['en', 'I’m ready', 'That table has closed.'], ['fa', 'آماده‌ام', 'آن میز بسته شده.']] as const)
+        for (const [language, ready, why] of [['en', 'I’m ready', 'That table has closed.'], ['fa', 'آماده‌م', 'اون میز بسته شده.']] as const)
         {
             cleanup();
             useLobby().reset();

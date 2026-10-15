@@ -185,7 +185,7 @@ describe('a push', () =>
 
         const [notice] = await worker.push();
 
-        expect(notice.title).toBe('Sara Kamali یک صندلی برایت نگه داشت');
+        expect(notice.title).toBe('Sara Kamali یه صندلی واست نگه داشته');
         expect(notice.options).toMatchObject({ lang: 'fa', dir: 'rtl' });
     });
 

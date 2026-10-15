@@ -334,7 +334,7 @@ describe('the wallet chooser', () =>
         fire(dialog().querySelector('li button')!, 'click');
         await settle();
 
-        expect(dialog().querySelector('[role="alert"]')!.textContent).toContain('تلاش برای ورود از این شبکه زیاد بوده');
+        expect(dialog().querySelector('[role="alert"]')!.textContent).toContain('از این شبکه خیلی زیاد وارد شدن');
         warn.mockRestore();
     });
 

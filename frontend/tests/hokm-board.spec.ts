@@ -2721,7 +2721,7 @@ describe('who dealt the hand, and what takes it', () =>
         const summary = container.querySelector('.hokm-side')!;
 
         expect(summary.textContent).toContain('۷');
-        expect(summary.textContent).toContain('دور را');
+        expect(summary.textContent).toContain('دور رو');
         expect(summary.textContent).not.toContain('tricks');
     });
 

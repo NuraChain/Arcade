@@ -312,7 +312,7 @@ describe('what the thread says about it', () =>
     it('follows a language switch, like every other composed sentence', () =>
     {
         useLocale().setLocale('fa');
-        expect(render(seal('no-device'))).toContain('هنوز کسی نمی‌تواند اینجا بنویسد');
+        expect(render(seal('no-device'))).toContain('هنوز هیچ‌کس نمی‌تونه این‌جا بنویسه');
     });
 
     it('tells a keyless browser which of the two it is, and offers only what would help', () =>

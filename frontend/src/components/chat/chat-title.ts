@@ -92,7 +92,7 @@ export function titleOf(
     {
         return others[0].displayName;
     }
-    return { en: 'Table chat', fa: 'گفت‌وگوی میز' };
+    return { en: 'Table chat', fa: 'چت میز' };
 }
 
 /**

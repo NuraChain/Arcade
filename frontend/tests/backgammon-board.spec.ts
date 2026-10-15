@@ -1195,7 +1195,7 @@ describe('a game that ends on the board', () =>
         await elapse(760);
 
         expect(flag(table.container)!.dir).toBe('rtl');
-        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['omid.k این دست را برد', '۱ امتیاز']);
+        expect([...flag(table.container)!.children].map((line) => line.textContent)).toEqual(['omid.k این دست رو برد', '۱ امتیاز']);
     });
 
     it('lets the reader\'s pips fall with the checker they have put down, and come back with it', async () =>
@@ -1292,7 +1292,7 @@ describe('a roll nobody could play', () =>
         await elapse(1300);
 
         expect(mark(table.container)).toBe('حرکتی نیست');
-        expect(said(table.container)).toBe('تاس‌هایت ۶ و ۶ آمد و حرکتی نداری.');
+        expect(said(table.container)).toBe('تاس‌هات ۶ و ۶ اومد و حرکتی نداری.');
     });
 });
 
@@ -1900,15 +1900,15 @@ describe('a backgammon board played from a keyboard', () =>
 
         expect(container.querySelector('.bg-cursor')?.getAttribute('aria-label')).toBe('تخته');
         expect(named(container)).toEqual([
-            'خانهٔ ۲۴، ۲ مهره. یکی را بردار.',
-            'خانهٔ ۱۳، ۵ مهره. یکی را به خانهٔ ۷ ببر.',
-            'خانهٔ ۸، ۳ مهره. یکی را بردار.',
-            'خانهٔ ۶، ۵ مهره. یکی را به خانهٔ ۵ ببر.'
+            'خونه‌ی ۲۴، ۲ مهره. یکی رو بردار.',
+            'خونه‌ی ۱۳، ۵ مهره. یکی رو ببر خونه‌ی ۷.',
+            'خونه‌ی ۸، ۳ مهره. یکی رو بردار.',
+            'خونه‌ی ۶، ۵ مهره. یکی رو ببر خونه‌ی ۵.'
         ]);
 
         await key(at(container, 'at-24'), 'Enter');
 
-        expect(named(container)).toEqual(['خانهٔ ۲۴. سر جایش برگردان.', 'خانهٔ ۲۳. همین‌جا بگذارش.', 'خانهٔ ۱۸. همین‌جا بگذارش.']);
+        expect(named(container)).toEqual(['خونه‌ی ۲۴. برش گردون سر جاش.', 'خونه‌ی ۲۳. همین‌جا بذارش.', 'خونه‌ی ۱۸. همین‌جا بذارش.']);
     });
 });
 

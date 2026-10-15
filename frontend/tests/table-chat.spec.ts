@@ -521,7 +521,7 @@ describe('a table’s chat that cannot be read', () =>
 
         await settle();
 
-        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['کسی را سر این میز مسدود کرده‌ای.', 'تا وقتی مسدود است، گفتگوی این میز برای هر دوی شما پنهان می‌ماند. بازی ادامه دارد.']);
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['یکی رو سر این میز بلاک کردی.', 'تا وقتی بلاکه، چت این میز برای هر دوتون مخفیه. بازی ادامه داره.']);
         useLocale().setLocale('en');
     });
 });
@@ -588,7 +588,7 @@ describe('the players beside a table’s chat, while a game is on', () =>
 
     it.each([
         ['en', 'missed 2 turns, and one more ends their game'],
-        ['fa', '۲ نوبت را از دست داد و یکی دیگر بازی‌اش را تمام می‌کند']
+        ['fa', '۲ تا نوبت رو از دست داد و یکی دیگه از دست بده، بازیش تموم می‌شه']
     ] as const)('says what the next miss costs once it is the one that ends the game for that seat, in %s', async (language, words) =>
     {
         useLocale().setLocale(language);

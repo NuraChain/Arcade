@@ -198,6 +198,6 @@ describe('the switch for notifications on this device', () =>
         const container = await shown();
 
         expect(container.textContent).toContain('اعلان‌ها روی این دستگاه');
-        expect(button(container, 'روشن کن برای این دستگاه')).toBeDefined();
+        expect(button(container, 'واسه این دستگاه روشنش کن')).toBeDefined();
     });
 });

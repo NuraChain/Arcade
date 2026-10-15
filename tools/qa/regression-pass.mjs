@@ -119,7 +119,7 @@ async function open({ width = 1280, height = 900, locale = 'en' } = {})
 const signInWithWallet = async (page) =>
 {
     await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: /^(Connect|اتصال)/ }).first().click();
+    await page.getByRole('button', { name: /^(Connect|وصل)/ }).first().click();
     await page.waitForURL(/\/app/, { timeout: 30000 });
 };
 
@@ -163,7 +163,7 @@ console.log('\n[2] chat cold load — the thread is loading, not missing');
             await page.goto(`${ BASE }${ href }`);
             await page.waitForTimeout(250);
             const early = await page.locator('body').innerText().catch(() => '');
-            const cried = /No such conversation|گفتگویی با این نشانی نیست/i.test(early);
+            const cried = /No such conversation|همچین چتی نداریم/i.test(early);
             record('no "No such conversation" flash on cold load', !cried, cried ? early.slice(0, 90) : href);
 
             await page.waitForTimeout(3000);
@@ -267,7 +267,7 @@ console.log('\n[5] scroll memory — back lands where you left, not at the top')
             await page.waitForTimeout(900);
             const before = await scroller.evaluate((el) => el.scrollTop);
 
-            await page.getByRole('link', { name: /Chats|گفتگو/ }).first().click().catch(async () =>
+            await page.getByRole('link', { name: /Chats|چت/ }).first().click().catch(async () =>
             {
                 await page.goto(`${ BASE }/app/chats`);
             });
@@ -355,8 +355,8 @@ console.log('\n[7] Persian — the new copy exists in both languages');
         record('the page reads right to left', dir === 'rtl', `dir=${ dir }`);
 
         const settings = await page.locator('body').innerText();
-        record('the account card names the wallet in Persian', settings.includes('ورود با کیف پول'), '');
-        record('and offers no wallet button to a wallet that is already connected', !settings.includes('اتصال کیف پول'), '');
+        record('the account card names the wallet in Persian', /با کیف پول[^\n]* وارد شدی/.test(settings), '');
+        record('and offers no wallet button to a wallet that is already connected', !settings.includes('وصل کردن کیف پول'), '');
 
         await page.goto(`${ BASE }/app/leaderboard`, { waitUntil: 'networkidle' });
         await page.waitForTimeout(1200);
@@ -438,7 +438,7 @@ console.log('\n[9] the landing offers the way BACK to somebody already signed in
      */
     for (const locale of ['en', 'fa'])
     {
-        const connect = locale === 'fa' ? 'اتصال کیف پول' : 'Connect wallet';
+        const connect = locale === 'fa' ? 'وصل کردن کیف پول' : 'Connect wallet';
         const enter = locale === 'fa' ? 'بازی' : 'Play';
 
         const fresh = await open({ locale });

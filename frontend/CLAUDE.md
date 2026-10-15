@@ -1764,6 +1764,29 @@ Both catalogues are split by area under `locales/{en,fa}/` and typed
 key that is *identical* in both languages fails `tests/data.spec.ts`. Interpolation-only strings
 therefore do not belong in the catalogue.
 
+**Persian is written the way people talk.** The owner asked for natural, everyday Iranian Persian
+(فارسی محاوره‌ای) everywhere, restructured rather than translated word for word, and every Persian
+string the product shows was rewritten that way, the server's achievement ladders included
+(`achieve/families.ts`, seeded at boot). New copy follows the same voice:
+
+- The reader is «تو», never «شما»: «می‌خوای»، «می‌تونی»، «بزن»، «واسه»، «رو» for «را». A sentence is
+  said as it would be said, not dressed up; slang is not forced into every line.
+- A control is short: a noun for a button that does something (`ساخت میز`, `ترک میز`, `کپی لینک`), an
+  imperative where that is how people would say it (`برو سر میز`, `دیگه نگرد`). A plate's tag stays a
+  word or two (`وقت تمام`, `ترک کرد`, `نوبتته`): the plates are measured.
+- No suffix is glued to a placeholder (`{name}ه`, `{game}ت`): the sentence is built round it.
+- One word for one thing: «چت» for a conversation, «نام کاربری» for a handle, «بلاک» and «آنبلاک»,
+  «بلاکچین» and «رجیستری», «رمزگذاری» for sealing, «کپی»، «فوروارد»، «اسپویلر»، «مدیر گروه», «اکسپلور»
+  for Discover. A rating is «ریتینگ», experience «تجربه», a backgammon point «امتیاز».
+- The games keep the words players use: حاکم، «حکم کن»، گشنیز، خشت، دل، پیک، سوزوندن، یار، کُت; at
+  hokm a trick is «دست» and a hand «دور»; at Ludo the yard and the home are both «خونه» and a move is
+  counted in «قدم»; at backgammon a point is «خونه», a gammon «مارس» and a backgammon «مارس ترکی»; at
+  poker کال، رِیز، فولد، آل‌این، پات، چک. Six is written «شش».
+
+A spec that checks Persian quotes the catalogue's own words, so a rewrite fails the specs that read
+the old ones; the passes that press a Persian name (`regression-pass`, `seal-pass`, `notify-pass`)
+are kept to the same words.
+
 **A name keeps the page's side and its own reading order.** Every display name carries
 `dir="auto"`, so "Mina Sadeghi" on a Persian page is an element that reads left to right, and
 `text-align: start` is then ITS left. Wherever the element is stretched across its row (`flex-1`,

@@ -385,7 +385,7 @@ describe('the seat plate every table draws', () =>
 
     it.each([
         ['en', 'Missed 1', 'Missed 2', 'Missed 3', 'Void'],
-        ['fa', 'یک غیبت', '۲ غیبت', '۳ غیبت', 'بی‌نتیجه']
+        ['fa', 'یه غیبت', '۲ غیبت', '۳ غیبت', 'بی‌نتیجه']
     ] as const)('says a missed turn as a count a narrow plate has room for, and the last one allowed in the danger tone, in %s', (language, once, twice, thrice, void_) =>
     {
         vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 4);

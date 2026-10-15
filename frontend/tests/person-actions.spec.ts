@@ -318,7 +318,7 @@ describe('what can be done about a person', () =>
     {
         useLocale().setLocale('fa');
 
-        expect(offered(await sheet('mina'))).toContain('افزودن دوست');
+        expect(offered(await sheet('mina'))).toContain('اضافه کردن دوست');
 
         cleanup();
 
@@ -403,13 +403,13 @@ describe('what can be done about a person', () =>
 
         const container = await sheet('sara.k');
 
-        expect(offered(container)).toContain('حذف Sara از دوستان');
+        expect(offered(container)).toContain('حذف Sara از دوستام');
 
-        fire(action(container, 'حذف Sara از دوستان')!, 'click');
+        fire(action(container, 'حذف Sara از دوستام')!, 'click');
 
         const asked = await answered(true);
 
-        expect(asked.props).toMatchObject({ title: 'Sara از دوستانت حذف شود؟', confirm: 'حذف Sara از دوستان' });
-        await vi.waitFor(() => expect(said()).toEqual([['info', 'Sara دیگر در دوستانت نیست.']]));
+        expect(asked.props).toMatchObject({ title: 'Sara رو از دوستات حذف کنی؟', confirm: 'حذف Sara از دوستام' });
+        await vi.waitFor(() => expect(said()).toEqual([['info', 'Sara دیگه توی دوستات نیست.']]));
     });
 });

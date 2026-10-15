@@ -172,7 +172,7 @@ describe('the NFT page', () =>
 
         const persian = (await page()).textContent ?? '';
 
-        expect(persian).toContain('همین حالا به NuraChain دسترسی نبود');
+        expect(persian).toContain('الان به NuraChain دسترسی نداشتیم');
         expect(persian).not.toContain(useLocale().t('state.errorLead'));
     });
 

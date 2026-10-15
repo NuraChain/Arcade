@@ -163,7 +163,7 @@ describe('the home page', () =>
         server.history = [voided];
         const container = await show();
 
-        expect(container.textContent).toContain('یک بازی منچ حساب نشد');
+        expect(container.textContent).toContain('یه بازی منچ حساب نشد');
     });
 
     it('offers every game as a tile that opens its page', async () =>
@@ -182,7 +182,7 @@ describe('the home page', () =>
         useLocale().setLocale('fa');
         const container = await show();
 
-        expect(container.querySelector('h1 .text-accent')?.textContent).toBe('به‌یادماندنی');
+        expect(container.querySelector('h1 .text-accent')?.textContent).toBe('حسابی بکن');
     });
 
     it('asks what to look for when Quick play is pressed, starting from the game it features, and looks for nothing by itself', async () =>
