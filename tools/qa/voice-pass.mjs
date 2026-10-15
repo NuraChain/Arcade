@@ -239,34 +239,67 @@ const measured = (page) => page.evaluate(async () =>
     const out = tap(heard.srcObject);
     const samples = new Float32Array(2048);
 
-    const rms = (analyser) =>
+    const read = (analyser) =>
     {
         analyser.getFloatTimeDomainData(samples);
 
         let sum = 0;
+        let peak = 0;
 
         for (const one of samples)
         {
             sum += one * one;
+            peak = Math.max(peak, Math.abs(one));
         }
 
-        return Math.sqrt(sum / samples.length);
+        return { rms: Math.sqrt(sum / samples.length), peak };
     };
 
     let a = 0;
     let b = 0;
+    let rawPeak = 0;
+    let heardPeak = 0;
 
     for (let step = 0; step < 40; step += 1)
     {
         await new Promise((done) => setTimeout(done, 50));
-        a += rms(raw);
-        b += rms(out);
+
+        const sent = read(raw);
+        const got = read(out);
+
+        a += sent.rms;
+        b += got.rms;
+        rawPeak = Math.max(rawPeak, sent.peak);
+        heardPeak = Math.max(heardPeak, got.peak);
     }
 
     await context.close();
 
-    return { raw: Number((a / 40).toFixed(4)), heard: Number((b / 40).toFixed(4)), ratio: Number((b / Math.max(a, 1e-9)).toFixed(3)) };
+    return { raw: Number((a / 40).toFixed(4)), heard: Number((b / 40).toFixed(4)), ratio: Number((b / Math.max(a, 1e-9)).toFixed(3)), rawPeak: Number(rawPeak.toFixed(3)), heardPeak: Number(heardPeak.toFixed(3)) };
 });
+
+const inputVolume = async (page, keys) =>
+{
+    await page.getByRole('button', { name: 'Voice settings' }).first().click();
+
+    const slider = page.getByRole('dialog').getByRole('slider', { name: 'Input volume' });
+
+    await slider.waitFor({ timeout: 10_000 });
+    await slider.focus();
+
+    for (const key of keys)
+    {
+        await page.keyboard.press(key);
+    }
+
+    const value = Number(await slider.getAttribute('aria-valuenow'));
+
+    await page.keyboard.press('Escape');
+    await until(async () => (await page.getByRole('dialog').count()) === 0, 5_000);
+    return value;
+};
+
+const levelOf = (page, who) => page.evaluate((handle) => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels?.[handle] ?? 1, who);
 
 const linked = (page) => page.evaluate(async () =>
 {
@@ -468,6 +501,10 @@ record('pressing a plate in the call offers how loud that person is, in the shee
 await dana.page.screenshot({ path: 'tools/qa/out/voice-sheet.png' });
 
 await mina.page.getByRole('button', { name: 'Unmute your microphone' }).click();
+
+const halved = await inputVolume(mina.page, Array(10).fill('ArrowDown'));
+
+record('she turns her own input down to half from the voice settings at the table, so she sends with room to spare', halved === 0.5, String(halved));
 await sheetSlider.focus();
 await dana.page.keyboard.press('End');
 
@@ -476,22 +513,37 @@ for (let step = 0; step < 10; step += 1)
     await dana.page.keyboard.press('ArrowDown');
 }
 
-await until(async () => (await boosted(dana.page)) !== null);
+await until(async () => (await boosted(dana.page)) !== null && (await levelOf(dana.page, 'mina')) === 1.5);
 
 const loudened = await measured(dana.page);
 
-record('turned up to one and a half from the sheet, she is heard about one and a half times as loud as she sends', loudened !== null && loudened.raw > 0.001 && loudened.ratio > 1.3 && loudened.ratio < 1.7, JSON.stringify(loudened));
+record('turned up to one and a half from the sheet, she is heard about one and a half times as loud as she sends', loudened !== null && loudened.raw > 0.001 && loudened.rawPeak < 0.75 && loudened.ratio > 1.35 && loudened.ratio < 1.65, JSON.stringify(loudened));
 
 const kept = await dana.page.evaluate(() => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels ?? null);
 
 record('this browser remembers how loud she is', kept !== null && Math.abs((kept.mina ?? 0) - 1.5) < 0.001, JSON.stringify(kept));
 
-for (let step = 0; step < 10; step += 1)
+const doubled = await inputVolume(mina.page, ['End']);
+
+record('she turns her own input up to twice, so what she sends reaches full scale', doubled === 2, String(doubled));
+await sheetSlider.focus();
+await dana.page.keyboard.press('End');
+await until(async () => (await levelOf(dana.page, 'mina')) === 2);
+
+const held = await measured(dana.page);
+
+record('turned up to twice while she sends at full scale, she is held under full scale and never clipped', held !== null && held.rawPeak > 0.9 && held.heardPeak <= 1, JSON.stringify(held));
+
+for (let step = 0; step < 20; step += 1)
 {
     await dana.page.keyboard.press('ArrowDown');
 }
 
 record('back at full from the sheet, she plays from the element alone', await until(async () => (await boosted(dana.page)) === null && (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+const restored = await inputVolume(mina.page, Array(20).fill('ArrowDown'));
+
+record('her own input is back at full', restored === 1, String(restored));
 
 await mina.page.getByRole('button', { name: 'Mute your microphone' }).click();
 await dana.page.keyboard.press('Escape');

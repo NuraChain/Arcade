@@ -1620,11 +1620,29 @@ not:
 `voice.spec.ts` (*what the reader is told about each line*) and `play.spec.ts` (the two ways in)
 hold it, and twenty-eight faults put into it one at a time were each caught. The voice pass opens the sheet in a live call between two real browsers and wants the other player listed with a measured round trip, then a rate once the line has been asked about again; seen as well at 1280 in English from the dock and at 390 in Persian from the table's sheet, a direct line on this machine reading a round trip of 0 to 1 ms and 36 to 65 kbps.
 
-**Everybody can be turned up to twice, and nothing clips.** The reader's own volume stopped at
-full. It goes to `LOUDEST` now, times each person's own, so a voice can be played four times as
-loud as it arrives. Above full it goes through the gain and then a limiter (`LIMIT` in
-`voice.rtc.ts`: -3 dB, a ratio of 20, 2 ms to act), so a loud voice turned up is held under full
-scale instead of clipping.
+**Everybody can be turned up to twice, and a loud voice is held under full scale.** The reader's
+own volume stopped at full. It goes to `LOUDEST` now, times each person's own, so a voice can be
+played four times as loud as it arrives. Above full it goes through the gain, a limiter and a trim
+(`LIMIT` in `voice.rtc.ts`: -1 dB, a ratio of 20, 2 ms to act). The voice pass found two things
+wrong with the first limiter by measuring what was heard, where every spec had read its settings:
+
+- **Its ceiling sat under what a voice reaches at full.** At -3 dB, a voice that peaked at full
+  scale at 100% was held at about three quarters of that once it was turned up: turning somebody
+  up made their loudest moments quieter. It is -1 dB now, so a voice turned up is held just under
+  what it already reached at full.
+- **A `DynamicsCompressorNode` adds a gain of its own after it limits**, to everything, limited or
+  not: the Web Audio specification's makeup gain, one over the curve at full scale, raised to
+  0.6. At -3 dB it was 1.7 dB, so 150% played at 183%. `MAKEUP` is that gain worked out by the
+  same formula, and the trim after the limiter is one over it. `voice-rtc.spec.ts` works it out
+  again from the specification's own words and holds the trim to it, and holds the knee at nought,
+  which the formula takes for granted.
+
+Measured in Chromium with a tone through the same chain: a quiet voice at 150% and at 200% is heard
+at 1.500 and 2.000 times its level (1.827 and 2.435 before); a voice at full scale turned to 150% or
+200% peaks at 0.93 and 0.95; and the first moment of a sound that starts at full scale, at 200%,
+at 0.99. Four times is not held: with everybody and that person both at twice, the first
+milliseconds of such a sound reach 1.07 whatever the attack (0, 1, 2 and 3 ms were tried), and the
+device clips them there. The attack stays at 2 ms, which bends a low voice least.
 
 The units are the reader's too: a level is "dB" in English and «دسی‌بل» in Persian, a delay "ms" and
 «میلی‌ثانیه». A slider takes its unit as `unit` and draws it beside the number, outside `tally`:
@@ -1808,8 +1826,13 @@ call ended. Now:
 
 `voice.spec.ts`, `voice-rtc.spec.ts` (*how loud one person is heard*), `person-actions.spec.ts`
 (*how loud somebody in the call is*), `table-chat.spec.ts` and `app-stores.spec.ts` hold it; the
-voice pass turns Mina past full from the sheet in two real browsers and MEASURES her: at 150% the
-sound the reader hears is about one and a half times the sound she sends (1.46 on the first run).
+voice pass turns Mina past full from the sheet in two real browsers and MEASURES her. The fake
+microphone's beep reaches full scale, and nothing can play that one and a half times as loud
+without clipping, so she first turns her own input to half from the voice settings at the table:
+at 150% the sound the reader hears is then about one and a half times the sound she sends (1.48,
+her peak at 0.59). Then she turns her input to twice, so she sends at full scale, the reader turns
+her to twice, and the loudest moment heard has to stay under full scale (0.992). The check at 150%
+read 0.75 against the first limiter, which is how its ceiling was found.
 
 **The microphone and the speaker are CHOICES, never requirements.** The mic is asked for with
 `deviceId: { ideal }`, so a headset that has been unplugged falls back to the default instead of

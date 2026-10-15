@@ -278,6 +278,13 @@ describe('how loud one person is heard', () =>
 {
     const SOUND = { heard: 'mina' };
 
+    const makeupOf = (limit: typeof LIMIT) =>
+    {
+        const curveAtFull = limit.threshold + (0 - limit.threshold) / limit.ratio;
+
+        return (1 / 10 ** (curveAtFull / 20)) ** 0.6;
+    };
+
     const heard = (context?: ReturnType<typeof fakeContext>) =>
     {
         const asks = side('dana', 'd1', context as unknown as AudioContext | undefined);
@@ -332,7 +339,7 @@ describe('how loud one person is heard', () =>
             one.arrive();
             one.asks.call.setVolume('mina', 1.6);
 
-            const gain = context.nodes.find((node) => node.kind === 'gain')!;
+            const [gain, trim] = context.nodes.filter((node) => node.kind === 'gain');
             const limit = context.nodes.find((node) => node.kind === 'limit')!;
             const out = context.nodes.find((node) => node.kind === 'out')!;
             const [speaker, hold] = one.players();
@@ -340,9 +347,13 @@ describe('how loud one person is heard', () =>
             expect(gain.gain!.value).toBeCloseTo(1.6);
             expect(context.nodes.some((node) => node.kind === 'source' && node.stream === SOUND && node.into.includes(gain)), 'the gain is not fed her sound').toBe(true);
             expect(gain.into, 'a voice turned past full reaches the speaker with nothing to stop it clipping').toEqual([limit]);
-            expect(limit.into).toContain(out);
+            expect(limit.into, 'what the limiter adds of its own reaches the speaker').toEqual([trim]);
+            expect(trim.into).toContain(out);
             expect({ threshold: limit.threshold!.value, knee: limit.knee!.value, ratio: limit.ratio!.value, attack: limit.attack!.value, release: limit.release!.value }).toEqual(LIMIT);
+            expect(trim.gain!.value * makeupOf(LIMIT), 'a voice turned up is heard louder than the level it was given').toBeCloseTo(1, 6);
+            expect(LIMIT.knee, 'the gain taken back out is the one the limiter adds with a hard knee').toBe(0);
             expect(LIMIT.threshold, 'the limiter lets a voice reach full before it holds it').toBeLessThan(0);
+            expect(LIMIT.threshold, 'a voice that reaches full scale at full is held quieter once it is turned up').toBeGreaterThanOrEqual(-1);
             expect(LIMIT.ratio, 'a ratio that low is a compressor, and a loud voice still clips').toBeGreaterThanOrEqual(20);
             expect(one.sources.get(speaker), 'what is heard is not the turned-up sound').toBe(out.stream);
             expect(speaker.volume).toBe(1);
@@ -356,6 +367,7 @@ describe('how loud one person is heard', () =>
             expect(one.players()[0].volume).toBeCloseTo(0.8);
             expect(gain.off).toBe(true);
             expect(limit.off, 'the limiter was left connected to nothing').toBe(true);
+            expect(trim.off, 'the gain after the limiter was left connected to nothing').toBe(true);
         }
         finally
         {

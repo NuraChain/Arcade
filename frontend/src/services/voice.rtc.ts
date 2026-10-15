@@ -137,13 +137,16 @@ const shareOf = (lost: number, packets: number) =>
 
 const millis = (seconds: number | undefined) => (seconds === undefined ? null : Math.round(seconds * 1000));
 
-export const LIMIT = { threshold: -3, knee: 0, ratio: 20, attack: 0.002, release: 0.1 };
+export const LIMIT = { threshold: -1, knee: 0, ratio: 20, attack: 0.002, release: 0.1 };
+
+const MAKEUP = 10 ** (-0.6 * LIMIT.threshold * (1 - 1 / LIMIT.ratio) / 20);
 
 interface Boost
 {
     source: MediaStreamAudioSourceNode;
     gain: GainNode;
     limit: DynamicsCompressorNode;
+    trim: GainNode;
     out: MediaStreamAudioDestinationNode;
     hold: HTMLAudioElement;
 }
@@ -283,6 +286,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         peer.boost.source.disconnect();
         peer.boost.gain.disconnect();
         peer.boost.limit.disconnect();
+        peer.boost.trim.disconnect();
         peer.boost.hold.srcObject = null;
         peer.boost.hold.remove();
         peer.boost = null;
@@ -304,6 +308,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             const source = context.createMediaStreamSource(peer.stream);
             const gain = context.createGain();
             const limit = context.createDynamicsCompressor();
+            const trim = context.createGain();
             const out = context.createMediaStreamDestination();
 
             hold.muted = true;
@@ -317,8 +322,9 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             limit.ratio.value = LIMIT.ratio;
             limit.attack.value = LIMIT.attack;
             limit.release.value = LIMIT.release;
-            source.connect(gain).connect(limit).connect(out);
-            peer.boost = { source, gain, limit, out, hold };
+            trim.gain.value = 1 / MAKEUP;
+            source.connect(gain).connect(limit).connect(trim).connect(out);
+            peer.boost = { source, gain, limit, trim, out, hold };
             peer.audio.srcObject = out.stream;
             void peer.audio.play().catch(() => undefined);
         }
