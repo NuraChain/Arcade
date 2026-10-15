@@ -5,7 +5,7 @@ import { DataSource, IsNull, Not, type EntityManager } from 'typeorm';
 
 import { errorResponse } from '@azerothjs/http';
 
-import { Block, Conversation, ConversationMember, Friendship, Game, Match, MatchPlayer, Notification, Table, TableSeat, User, entities } from '../src/entities/index.ts';
+import { Block, Conversation, ConversationMember, Friendship, Game, Match, MatchPlayer, Notification, QuickTable, Table, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
@@ -1025,6 +1025,76 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             await db.query(`update matches set finished_at = now(), deadline_at = null, outcome = 'abandoned' where id = $1`, [started.matchId]);
 
             expect((await ports.table.quick(mine, { game: 'ludo', voice: 'off', seats: 4 })).id).not.toBe(first.id);
+        });
+    });
+
+    describe('when opening a table fails', () =>
+    {
+        const failOnce = async (code: string) =>
+        {
+            await db.query(`create sequence quick_fault_count`);
+            await db.query(
+                `create function quick_fault() returns trigger language plpgsql as $$
+                 begin
+                     if nextval('quick_fault_count') = 1 then
+                         raise exception 'a fault the test put in' using errcode = '${ code }';
+                     end if;
+                     return new;
+                 end $$`
+            );
+            await db.query(`create trigger quick_fault before insert on quick_tables for each row execute function quick_fault()`);
+        };
+
+        const mended = async () =>
+        {
+            await db.query(`drop trigger if exists quick_fault on quick_tables`);
+            await db.query(`drop function if exists quick_fault()`);
+            await db.query(`drop sequence if exists quick_fault_count`);
+        };
+
+        it('tries again when the table it opens collides with one, and leaves one table', async () =>
+        {
+            await failOnce('23505');
+
+            try
+            {
+                const me = await makeUser();
+                const answer = await search(me, { seats: 4 });
+
+                expect(answer.seated).toBe(true);
+                expect(await chairsOf(me)).toMatchObject([{ tableId: answer.id, ready: true }]);
+                expect(await db.getRepository(Table).count()).toBe(1);
+                expect(await db.getRepository(QuickTable).countBy({ tableId: answer.id })).toBe(1);
+            }
+            finally
+            {
+                await mended();
+            }
+        });
+
+        it('leaves no table, chair or thread behind when it cannot, and the next search opens one that others find', async () =>
+        {
+            await failOnce('P0001');
+
+            try
+            {
+                const me = await makeUser();
+
+                await expect(search(me, { seats: 4 })).rejects.toThrow('a fault the test put in');
+                expect(await chairsOf(me)).toEqual([]);
+                expect(await db.getRepository(Table).count()).toBe(0);
+                expect(await db.getRepository(ConversationMember).countBy({ userId: me })).toBe(0);
+
+                const again = await search(me, { seats: 4 });
+
+                expect(await chairsOf(me)).toMatchObject([{ tableId: again.id, ready: true }]);
+                expect(await inThread(me, again.id)).toBe(true);
+                expect((await search(await makeUser(), { seats: 4 })).id).toBe(again.id);
+            }
+            finally
+            {
+                await mended();
+            }
         });
     });
 

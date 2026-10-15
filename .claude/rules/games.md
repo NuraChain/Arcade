@@ -869,7 +869,11 @@ Under the lock, in order:
   for, the searcher in the first chair and ready.
 
 A unique violation - a table code already in use, or the same person's own claim by hand landing
-first - rolls the transaction back and the search runs again. It refuses three ways and never names
+first - rolls the transaction back and the search runs again. A failure of any other kind rolls back
+everything the search wrote, the table it was opening, the chair and the thread with it, so nothing
+is left for the next search to find and that search opens a table as if the first had never been
+asked. `quick.db.spec.ts` (*when opening a table fails*) holds both with a trigger that fails the
+opening once, and fails with the retry or the transaction taken out. It refuses three ways and never names
 a table: `quick-game` for a game nobody has heard of or one that is not open (422, the same bytes
 for both), `quick-options` for a table the game does not make (422), and `seated-max`. There is no
 refusal for finding nothing, and a block or an absence changes only which table somebody gets.
