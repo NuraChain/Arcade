@@ -1,5 +1,5 @@
 import { Framer } from './voice.framer.ts';
-import { Playout } from './voice.playout.ts';
+import { Playout, type PlayoutStats } from './voice.playout.ts';
 import { createResampler, type Resampler } from './voice.resample.ts';
 
 export type Codec = 'opus' | 'law';
@@ -20,10 +20,17 @@ export interface Outbound
     close(): void;
 }
 
+export interface Heard
+{
+    bytes: number;
+    playout: PlayoutStats | null;
+}
+
 export interface Inbound
 {
     readonly stream: MediaStream;
     take(codec: Codec, at: number, data: string): void;
+    heard(): Heard;
     close(): void;
 }
 
@@ -50,6 +57,8 @@ export const STRAIN_S = 1;
 export const EASE_S = 10;
 
 export const WAITING_MOST = 50;
+
+export const STATS_EVERY = 188;
 
 const BIAS = 0x84;
 
@@ -94,6 +103,7 @@ class Play extends AudioWorkletProcessor
     {
         super();
         this.playout = new Kept(sampleRate, ${ FRAME_MS });
+        this.count = 0;
         this.port.onmessage = (event) => this.playout.take(event.data.at, event.data.samples, currentFrame);
     }
 
@@ -104,6 +114,13 @@ class Play extends AudioWorkletProcessor
         if (channel !== undefined)
         {
             this.playout.fill(channel, currentFrame);
+        }
+
+        this.count += 1;
+
+        if (this.count % ${ STATS_EVERY } === 0)
+        {
+            this.port.postMessage(this.playout.stats());
         }
 
         return true;
@@ -546,6 +563,8 @@ export function createRelayKit(context: AudioContext): RelayKit
             let decoder: AudioDecoder | null = null;
             const heardAt: number[] = [];
             let closed = false;
+            let received = 0;
+            let playout: PlayoutStats | null = null;
 
             const hand = (at: number, samples: Float32Array) =>
             {
@@ -572,6 +591,10 @@ export function createRelayKit(context: AudioContext): RelayKit
                 }
 
                 player = new AudioWorkletNode(context, PLAY, { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+                player.port.onmessage = (event: MessageEvent<PlayoutStats>) =>
+                {
+                    playout = event.data;
+                };
                 player.connect(out);
 
                 for (const one of waiting.splice(0))
@@ -628,6 +651,8 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                     const bytes = bytesOf(data);
 
+                    received += bytes.length;
+
                     if (codec === 'law')
                     {
                         hand(at, lawFrame(lawResampler.push(unlaw(bytes))));
@@ -653,6 +678,8 @@ export function createRelayKit(context: AudioContext): RelayKit
                     }
                 },
 
+                heard: () => ({ bytes: received, playout }),
+
                 close()
                 {
                     closed = true;
@@ -660,6 +687,7 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                     if (player !== null)
                     {
+                        player.port.onmessage = null;
                         player.port.close();
                         player.disconnect();
                         player = null;

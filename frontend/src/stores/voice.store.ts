@@ -6,7 +6,7 @@ import type { GateReading } from '../services/voice.gate.ts';
 import { canDenoise, createDenoiser } from '../services/voice.denoise.ts';
 import { createVoiceInput, type InputOptions, type VoiceInput } from '../services/voice.input.ts';
 import { hearsOpus } from '../services/voice.relay.ts';
-import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
+import { createVoiceCall, type LineFacts, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime, type SignalFrame, type SoundFrame, type VoiceFrame } from './realtime.store.ts';
 import { useSettings, type VoiceNoise, type VoiceQuality } from './settings.store.ts';
@@ -64,6 +64,8 @@ export interface VoiceApi
     applyVolume(): void;
     tune(): void;
     reprocess(): Promise<void>;
+    lines: Getter<Record<string, LineFacts>>;
+    watchLines(): () => void;
     testing: Getter<boolean>;
     testFault: Getter<TestFault | null>;
     startTest(): Promise<void>;
@@ -86,6 +88,8 @@ const QUIET = 0.04;
 export const TALK_KEY = 'KeyV';
 
 export const LOUDEST = 2;
+
+export const LINES_MS = 1000;
 
 export const BITRATES: Record<VoiceQuality, number> = { standard: 32_000, high: 64_000, best: 96_000 };
 
@@ -153,6 +157,9 @@ export const useVoice = createStore((): VoiceApi =>
     const [reading, setReading] = createSignal<GateReading | null>(null);
     const [suppression, setSuppression] = createSignal<VoiceNoise | null>(null);
     const [testing, setTesting] = createSignal(false);
+    const [lines, setLines] = createSignal<Record<string, LineFacts>>({});
+    let watchers = 0;
+    let unlook: (() => void) | null = null;
     const [testFault, setTestFault] = createSignal<TestFault | null>(null);
     let trial: { context: AudioContext; raw: MediaStream; input: VoiceInput; heard: HTMLAudioElement; unread: () => void } | null = null;
     let trials = 0;
@@ -340,6 +347,7 @@ export const useVoice = createStore((): VoiceApi =>
         }
 
         setLoud(new Set<string>());
+        setLines({});
         setMic('off');
         setMuted(true);
         setDeaf(false);
@@ -630,6 +638,31 @@ export const useVoice = createStore((): VoiceApi =>
         setTestFault(null);
     };
 
+    const look = () =>
+    {
+        const asked = call;
+
+        unlook = runtime().clock.after(LINES_MS, look);
+
+        if (asked === null)
+        {
+            if (Object.keys(untrack(lines)).length > 0)
+            {
+                setLines({});
+            }
+
+            return;
+        }
+
+        void asked.facts(runtime().clock.now()).then((found) =>
+        {
+            if (call === asked && watchers > 0)
+            {
+                setLines(found);
+            }
+        }).catch(() => undefined);
+    };
+
     const announce = () =>
     {
         const current = untrack(table);
@@ -905,6 +938,30 @@ export const useVoice = createStore((): VoiceApi =>
         applyVolume,
 
         survey,
+
+        lines,
+
+        watchLines()
+        {
+            watchers += 1;
+
+            if (watchers === 1)
+            {
+                look();
+            }
+
+            return () =>
+            {
+                watchers -= 1;
+
+                if (watchers === 0)
+                {
+                    unlook?.();
+                    unlook = null;
+                    setLines({});
+                }
+            };
+        },
 
         testing,
 

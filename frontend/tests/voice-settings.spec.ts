@@ -146,6 +146,7 @@ const quietCall: VoiceCall = {
     setVolume: () => undefined,
     setSink: () => undefined,
     setQuality: () => undefined,
+    facts: async () => ({}),
     close: () => undefined
 };
 

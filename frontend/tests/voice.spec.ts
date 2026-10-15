@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import type { ClientFrame } from '../../backend/src/realtime/frames.ts';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import type { VoiceCall, VoiceCallDeps, VoiceSignal } from '../src/services/voice.rtc.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
+import type { LineFacts, VoiceCall, VoiceCallDeps, VoiceSignal } from '../src/services/voice.rtc.ts';
 import { keyName } from '../src/lib/talk-key.ts';
 import { IDLE_MS, SOUND_BACKLOG, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { LINES_MS, LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { setDenoiseKit } from '../src/services/voice.denoise.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -26,6 +26,8 @@ interface FakeCall
     volumes: Record<string, number>;
     sinks: string[];
     qualities: number[];
+    lines: Record<string, LineFacts>;
+    asked: number;
     closed: boolean;
 }
 
@@ -33,7 +35,7 @@ let calls: FakeCall[] = [];
 
 const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
 {
-    const call: FakeCall = { deps, synced: [], received: [], sounds: [], muted: [], mic: [], volumes: {}, sinks: [], qualities: [], closed: false };
+    const call: FakeCall = { deps, synced: [], received: [], sounds: [], muted: [], mic: [], volumes: {}, sinks: [], qualities: [], lines: {}, asked: 0, closed: false };
     calls.push(call);
 
     return {
@@ -68,6 +70,12 @@ const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
         setQuality: (bitrate) =>
         {
             call.qualities.push(bitrate);
+        },
+        facts: async () =>
+        {
+            call.asked += 1;
+
+            return { ...call.lines };
         },
         close: () =>
         {
@@ -720,6 +728,115 @@ describe('voice at a table', () =>
         {
             delete (document as { visibilityState?: unknown }).visibilityState;
         }
+    });
+});
+
+describe('what the reader is told about each line', () =>
+{
+    const DIRECT: LineFacts = { path: 'direct', trip: 24, jitter: 3, buffer: 40, lost: 0, kbps: 62 };
+
+    const room = async () =>
+    {
+        socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
+            { who: 'alex', muted: false, talk: true, join: 'j1', opus: false },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2', opus: false }
+        ] });
+        await settle();
+    };
+
+    const later = async (ms: number) =>
+    {
+        (runtime().clock as ManualClock).advance(ms);
+        await settle();
+    };
+
+    it('asks the call about its lines once a second while anybody looks, and stops when nobody does', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+        calls[0].lines = { 'sara.k': DIRECT };
+
+        const first = useVoice().watchLines();
+
+        await settle();
+
+        expect(calls[0].asked).toBe(1);
+        expect(useVoice().lines()['sara.k']).toEqual(DIRECT);
+
+        calls[0].lines = { 'sara.k': { ...DIRECT, trip: 31 } };
+        await later(LINES_MS);
+
+        expect(calls[0].asked).toBe(2);
+        expect(useVoice().lines()['sara.k'].trip).toBe(31);
+
+        const second = useVoice().watchLines();
+
+        await later(LINES_MS);
+
+        expect(calls[0].asked, 'two lookers asked twice as often').toBe(3);
+
+        second();
+        await later(LINES_MS);
+
+        expect(calls[0].asked).toBe(4);
+
+        first();
+
+        expect(useVoice().lines()).toEqual({});
+
+        await later(LINES_MS * 3);
+
+        expect(calls[0].asked, 'the lines were asked about with nobody looking').toBe(4);
+    });
+
+    it('forgets every line when the call ends, and asks nothing of a call that is gone', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+        calls[0].lines = { 'sara.k': DIRECT };
+
+        const stop = useVoice().watchLines();
+
+        await settle();
+        useVoice().leave();
+
+        expect(useVoice().lines()).toEqual({});
+
+        await later(LINES_MS * 2);
+
+        expect(calls[0].asked).toBe(1);
+        expect(useVoice().lines()).toEqual({});
+
+        stop();
+    });
+
+    it('drops an answer that comes back after the call it was about has ended', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+
+        let answer: (found: Record<string, LineFacts>) => void = () => undefined;
+
+        const slow = vi.fn(() => new Promise<Record<string, LineFacts>>((resolve) =>
+        {
+            answer = resolve;
+        }));
+        const made = useVoice();
+
+        setVoiceCall((deps) => ({ ...fakeCall(deps), facts: slow }));
+        made.leave();
+        await made.join(TABLE);
+        await room();
+
+        const stop = made.watchLines();
+
+        made.leave();
+        answer({ 'sara.k': DIRECT });
+        await settle();
+
+        expect(made.lines(), 'a call that had ended was still described').toEqual({});
+
+        stop();
     });
 });
 

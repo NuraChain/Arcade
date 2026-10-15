@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import type { Codec, RelayKit } from '../src/services/voice.relay.ts';
+import type { Codec, Heard, RelayKit } from '../src/services/voice.relay.ts';
 import { LIMIT, WATCH_MS, createVoiceCall, patienceFor, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
 
 interface Line
@@ -746,6 +746,7 @@ interface Carried
     stream: { carried: number };
     took: [Codec, number, string][];
     closed: boolean;
+    heard: Heard;
 }
 
 function carried(options: { relay?: boolean; context?: boolean; opus?: boolean } = {})
@@ -796,7 +797,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
         },
         inbound()
         {
-            const one: Carried = { stream: { carried: inbound.length }, took: [], closed: false };
+            const one: Carried = { stream: { carried: inbound.length }, took: [], closed: false, heard: { bytes: 0, playout: null } };
 
             inbound.push(one);
 
@@ -806,6 +807,7 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
                 {
                     one.took.push([codec, at, data]);
                 },
+                heard: () => one.heard,
                 close: () =>
                 {
                     one.closed = true;
@@ -1236,6 +1238,112 @@ describe('a call the server carries from its first moment', () =>
             {
                 one.done();
             }
+        }
+    });
+});
+
+describe('what is known about each line', () =>
+{
+    const NOTHING = { path: 'none', trip: null, jitter: null, buffer: null, lost: null, kbps: null };
+
+    it('says nothing of a person whose voice has not reached it either way', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+
+            expect((await one.call.facts(1000)).mina).toEqual(NOTHING);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('tells a carried voice by the round trip to the server and what its player measured, and how fast it comes', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.call.heard('m1', 'law', 0, 'AQID');
+            one.inbound[0].heard = { bytes: 3000, playout: { jitter: 18, buffer: 80, taken: 50, late: 1, concealed: 20, skipped: 0 } };
+
+            expect((await one.call.facts(10_000)).mina, 'the round trip is the socket\'s own, measured').toEqual({ path: 'carried', trip: 120, jitter: 18, buffer: 80, lost: 1 / 50, kbps: null });
+
+            one.inbound[0].heard = { bytes: 11_000, playout: { jitter: 20, buffer: 82, taken: 70, late: 1, concealed: 20, skipped: 0 } };
+
+            const second = (await one.call.facts(11_000)).mina;
+
+            expect(second.kbps, 'eight thousand bytes in a second').toBe(64);
+            expect(second.lost, 'nothing came late in the last second').toBe(0);
+            expect(second.jitter).toBe(20);
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('tells a direct line by its own statistics: the pair it chose, its jitter, its buffer, and what was lost since it was last asked', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.arrive({ line: true });
+            one.connection.becomes('connected');
+            await one.lapse();
+            one.connection.stats.push({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 12 });
+            await one.lapse();
+            one.connection.stats.length = 0;
+            one.connection.stats.push(
+                { type: 'transport', selectedCandidatePairId: 'p2' },
+                { type: 'candidate-pair', id: 'p1', state: 'succeeded', nominated: true, currentRoundTripTime: 0.3 },
+                { type: 'candidate-pair', id: 'p2', state: 'succeeded', nominated: true, currentRoundTripTime: 0.024 },
+                { type: 'inbound-rtp', kind: 'audio', packetsReceived: 1000, packetsLost: 10, bytesReceived: 50_000, jitter: 0.003, jitterBufferDelay: 40, jitterBufferEmittedCount: 1000 }
+            );
+
+            expect((await one.call.facts(5000)).mina, 'the pair the transport chose is not the one asked').toEqual({ path: 'direct', trip: 24, jitter: 3, buffer: 40, lost: 10 / 1010, kbps: null });
+
+            one.connection.stats.length = 0;
+            one.connection.stats.push(
+                { type: 'transport', selectedCandidatePairId: 'p2' },
+                { type: 'candidate-pair', id: 'p2', state: 'succeeded', nominated: true, currentRoundTripTime: 0.026 },
+                { type: 'inbound-rtp', kind: 'audio', packetsReceived: 1100, packetsLost: 10, bytesReceived: 58_000, jitter: 0.004, jitterBufferDelay: 42.4, jitterBufferEmittedCount: 1048 }
+            );
+
+            expect((await one.call.facts(6000)).mina, 'the second ask was not about the last second').toEqual({ path: 'direct', trip: 26, jitter: 4, buffer: 50, lost: 0, kbps: 64 });
+        }
+        finally
+        {
+            one.done();
+        }
+    });
+
+    it('takes the round trip from the other end\'s report when no pair says it', async () =>
+    {
+        const one = carried();
+
+        try
+        {
+            one.sees(MINA_OPUS);
+            one.arrive({ line: true });
+            one.connection.becomes('connected');
+            await one.lapse();
+            one.connection.stats.push({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 12 });
+            await one.lapse();
+            one.connection.stats.push({ type: 'remote-inbound-rtp', kind: 'audio', roundTripTime: 0.05 });
+
+            expect((await one.call.facts(1000)).mina.trip).toBe(50);
+        }
+        finally
+        {
+            one.done();
         }
     });
 });

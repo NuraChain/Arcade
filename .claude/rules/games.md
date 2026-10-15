@@ -1586,6 +1586,40 @@ not there, and a browser that cannot prepare the voice each say so under the but
 microphone that arrives after the test was stopped is stopped, and leaving the page stops the
 test.
 
+**At the table the voice has a sheet of its own, and it says what was measured.** The owner asked
+for "a voice manager". From the dock on a wide screen (a gear, "Voice settings") and from the
+table's sheet on a phone, `manageVoice(table)` (`lib/voice-manager.ts`) opens `VoiceManager`, a
+chunk of its own, so the play route carries nothing of it. Out of the call it offers Join, with the
+microphone and what is heard there to be set up first (the same two panels as Settings, the test
+included). In the call it has Mute, Stop hearing everybody and Leave voice, then everybody else in
+the call, a row each (`VoicePeer`, kept through every change of the roster): the speaking ring,
+the name, pressed for the sheet about that person, what is known of the line, a volume up to twice
+and the button that silences them for the reader. Then the two panels, with the call's own meter.
+
+**What is known of a line is measured, never assumed.** `call.facts(now)` in `voice.rtc.ts` is asked
+once a second (`LINES_MS`) by `voice.watchLines()` while the sheet is open, and never when it is
+not:
+
+- **A direct line** answers from its own statistics: the round trip of the candidate pair the
+  transport chose (`selectedCandidatePairId`, else the nominated pair that succeeded, else the
+  other end's `remote-inbound-rtp`), the jitter of `inbound-rtp`, the playout buffer as
+  `jitterBufferDelay` over `jitterBufferEmittedCount`, and what was lost and how fast it came
+  since the last time it was asked, not since the call began.
+- **A carried voice** answers with the socket's own measured round trip, said as "To the server",
+  because the other half of the way is the other player's and cannot be measured from here; and
+  with what its player in the audio thread measured, which it posts about twice a second
+  (`STATS_EVERY` quanta of 128 samples): its jitter, its buffer, and the share of frames that came
+  too late to be played (late over taken: a late frame is among those taken, and was once counted
+  twice). The rate is counted from the bytes carried.
+- A person whose line is still connecting says so, one whose line has not been measured yet says
+  it is being measured, and one who cannot talk with the reader says so and is offered no volume.
+  An answer that comes back after its call has ended is dropped.
+
+`voice-manager.spec.ts`, `voice-rtc.spec.ts` (*what is known about each line*), `voice-relay.spec.ts`
+(the worklet's real source run in the test, reporting on its 188th quantum), `voice-playout.spec.ts`,
+`voice.spec.ts` (*what the reader is told about each line*) and `play.spec.ts` (the two ways in)
+hold it, and twenty-eight faults put into it one at a time were each caught. The voice pass opens the sheet in a live call between two real browsers and wants the other player listed with a measured round trip, then a rate once the line has been asked about again; seen as well at 1280 in English from the dock and at 390 in Persian from the table's sheet, a direct line on this machine reading a round trip of 0 to 1 ms and 36 to 65 kbps.
+
 **Everybody can be turned up to twice, and nothing clips.** The reader's own volume stopped at
 full. It goes to `LOUDEST` now, times each person's own, so a voice can be played four times as
 loud as it arrives. Above full it goes through the gain and then a limiter (`LIMIT` in

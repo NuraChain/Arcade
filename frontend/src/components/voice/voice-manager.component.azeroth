@@ -1,0 +1,108 @@
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
+import VoiceInputSettings from './voice-input-settings.component.azeroth';
+import VoiceOutputSettings from './voice-output-settings.component.azeroth';
+import VoicePeer from './voice-peer.component.azeroth';
+import { haptic } from '../../lib/haptics.ts';
+import { joinVoice } from '../../lib/join-voice.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
+
+export default component VoiceManager(props: OverlayProps & { table: string })
+{
+    const locale = useLocale();
+    const voice = useVoice();
+
+    derived here = voice.table() === props.table;
+
+    derived joining = here && voice.joining();
+
+    derived others = voice.people().filter((one) => !one.me).map((one) => one.who);
+
+    derived company = others.length > 0;
+
+    derived muted = voice.muted();
+
+    derived deaf = voice.deaf();
+
+    derived live = voice.mic() === 'live';
+
+    mount
+    {
+        return voice.watchLines();
+    }
+
+    <div class="flex flex-col gap-5 p-5">
+        <SheetHeader title={ locale.t('voice.manager.open') } onClose={ () => props.close() } />
+        <Show
+            when={ here }
+            fallback={
+                <Panel stack="md">
+                    <p class="text-ui-sm text-muted">{ locale.t('voice.manager.out') }</p>
+                    <Button variant="primary" leading="voice" class="self-start" onClick={ () => void joinVoice(props.table) }>{ locale.t('voice.join') }</Button>
+                </Panel>
+            }
+        >
+            <div class="flex flex-wrap gap-2" role="group" aria-label={ locale.t('voice.title') }>
+                <Button
+                    variant={ muted ? 'outline' : 'secondary' }
+                    leading={ muted ? 'voice-off' : 'voice' }
+                    size="sm"
+                    disabled={ !live || joining }
+                    pressed={ live && !muted }
+                    onClick={ () =>
+                    {
+                        haptic('tick');
+                        voice.toggleMute();
+                    } }
+                >
+                    { locale.t(!live ? 'voice.micUnavailable' : (muted ? 'voice.unmute' : 'voice.mute')) }
+                </Button>
+                <Button
+                    variant={ deaf ? 'destructive' : 'outline' }
+                    leading={ deaf ? 'deafen' : 'listen' }
+                    size="sm"
+                    onClick={ () =>
+                    {
+                        haptic('tick');
+                        voice.toggleDeafen();
+                    } }
+                >
+                    { locale.t(deaf ? 'voice.undeafen' : 'voice.deafen') }
+                </Button>
+                <Button
+                    variant="destructive"
+                    leading="hang-up"
+                    size="sm"
+                    onClick={ () =>
+                    {
+                        haptic('tick');
+                        voice.leave();
+                    } }
+                >
+                    { locale.t('voice.leave') }
+                </Button>
+            </div>
+            <section class="flex flex-col gap-3" aria-labelledby="voice-manager-people">
+                <h3 id="voice-manager-people" class="label text-ui-sm text-text">{ locale.t('voice.manager.people') }</h3>
+                <Show when={ company } fallback={ <p class="text-ui-sm text-muted">{ locale.t('voice.manager.alone') }</p> }>
+                    <ul class="divide-y divide-line rounded-panel border border-line bg-field">
+                        <For each={ others } key={ (who) => who } let={ who }>
+                            <li class="voice-peer" data-who={ who }>
+                                <VoicePeer who={ who } />
+                            </li>
+                        </For>
+                    </ul>
+                </Show>
+            </section>
+        </Show>
+        <Panel stack="md">
+            <VoiceInputSettings />
+        </Panel>
+        <Panel stack="md">
+            <VoiceOutputSettings />
+        </Panel>
+    </div>
+}

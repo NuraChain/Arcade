@@ -128,6 +128,7 @@ describe('a carried voice, played', () =>
 
         expect(stats.jitter).toBeLessThanOrEqual(3);
         expect(stats.buffer).toBe(20);
+        expect(stats.taken, 'every frame that came is counted, so a share of them can be said').toBe(200);
         expect(stats.late).toBe(0);
         expect(steps(out, ms(400)), 'a sample jumped further than the tone it plays').toBeLessThan(sinStep * 1.6);
         expect(level(out, FRAME * 100, FRAME * 150)).toBeCloseTo(0.3 / Math.SQRT2, 2);

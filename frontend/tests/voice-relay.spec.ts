@@ -5,6 +5,7 @@ import {
     FRAME_MS,
     LAW_RATE,
     RELAY_MOST,
+    STATS_EVERY,
     STRAIN_S,
     WAITING_MOST,
     base64Of,
@@ -113,6 +114,7 @@ interface Player
     into: unknown[];
     off: boolean;
     closed: boolean;
+    port: { onmessage?: ((event: { data: unknown }) => void) | null };
 }
 
 function listening(rate = 48_000)
@@ -194,6 +196,68 @@ function listening(rate = 48_000)
 
 describe('sound the server carries from somebody, as it is played', () =>
 {
+    it('counts what it was carried and keeps what the player last said about the line, until it is closed', async () =>
+    {
+        const one = listening();
+
+        await one.ready();
+        one.inbound.take('law', 0, one.frame(0.5));
+        one.inbound.take('law', 1, one.frame(0.5));
+
+        const port = one.players[0].port;
+        const stats = { jitter: 12, buffer: 40, taken: 2, late: 0, concealed: 0, skipped: 0 };
+
+        expect(one.inbound.heard()).toEqual({ bytes: 2 * bytesOf(one.frame(0.5)).length, playout: null });
+
+        port.onmessage!({ data: stats });
+
+        expect(one.inbound.heard().playout).toEqual(stats);
+
+        one.inbound.close();
+
+        expect(port.onmessage, 'a player that was closed still reports').toBeNull();
+    });
+
+    it('says how the line is doing about twice a second, from inside the audio thread', async () =>
+    {
+        const one = listening();
+
+        await one.ready();
+
+        const source = await (vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob).text();
+        const made = new Map<string, new () => { port: { posted: unknown[] }; process(inputs: unknown[], outputs: Float32Array[][]): boolean }>();
+
+        class Processor
+        {
+            public port = {
+                posted: [] as unknown[],
+                onmessage: null,
+                postMessage(message: unknown)
+                {
+                    this.posted.push(message);
+                }
+            };
+        }
+
+        new Function('AudioWorkletProcessor', 'registerProcessor', 'sampleRate', 'currentFrame', source)(Processor, (name: string, kind: new () => never) => made.set(name, kind), 48_000, 0);
+
+        const player = new (made.get('nura-voice-play')!)();
+        const out = [[new Float32Array(128)]];
+
+        for (let index = 0; index < STATS_EVERY - 1; index += 1)
+        {
+            player.process([], out);
+        }
+
+        expect(player.port.posted).toEqual([]);
+
+        player.process([], out);
+
+        expect(player.port.posted).toHaveLength(1);
+        expect(player.port.posted[0]).toEqual({ jitter: 0, buffer: 0, taken: 0, late: 0, concealed: 0, skipped: 0 });
+        expect(STATS_EVERY * 128 / 48_000, 'the player reports far more or far less than twice a second').toBeCloseTo(0.5, 1);
+    });
+
     it('hands each frame to a player in the audio thread with the moment it was spoken, at the call\'s own rate', async () =>
     {
         const one = listening();

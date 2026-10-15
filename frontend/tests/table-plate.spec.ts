@@ -280,6 +280,7 @@ describe('the seat plate every table draws', () =>
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             };
         });

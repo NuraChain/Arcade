@@ -2,6 +2,7 @@ export interface PlayoutStats
 {
     jitter: number;
     buffer: number;
+    taken: number;
     late: number;
     concealed: number;
     skipped: number;
@@ -40,6 +41,7 @@ export class Playout
     written: number;
     cachedIndex: number;
     cachedFrame: Float32Array | undefined;
+    taken: number;
     late: number;
     concealed: number;
     skipped: number;
@@ -77,6 +79,7 @@ export class Playout
         this.written = 0;
         this.cachedIndex = -1;
         this.cachedFrame = undefined;
+        this.taken = 0;
         this.late = 0;
         this.concealed = 0;
         this.skipped = 0;
@@ -84,6 +87,8 @@ export class Playout
 
     take(index: number, samples: Float32Array, now: number)
     {
+        this.taken += 1;
+
         if (index < this.played)
         {
             this.late += 1;
@@ -424,6 +429,7 @@ export class Playout
         return {
             jitter: Math.round(this.span * 1000 / this.rate),
             buffer: Math.round((this.offset - lowest) * 1000 / this.rate),
+            taken: this.taken,
             late: this.late,
             concealed: Math.round(this.concealed * 1000 / this.rate),
             skipped: Math.round(this.skipped * 1000 / this.rate)

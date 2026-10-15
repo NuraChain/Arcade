@@ -25,6 +25,7 @@ export default component TableMenu(props: OverlayProps & {
     onTeam?: () => void;
     deaf?: boolean;
     onDeafen?: () => void;
+    onVoiceManager?: () => void;
     onFullscreen?: () => void;
     onResign?: () => void;
     onLeave?: () => void;
@@ -98,6 +99,16 @@ export default component TableMenu(props: OverlayProps & {
                 icon: props.deaf ? 'deafen' : 'listen',
                 label: locale.t(props.deaf ? 'voice.undeafen' : 'voice.deafen'),
                 run: () => props.onDeafen?.()
+            });
+        }
+
+        if (props.onVoiceManager !== undefined)
+        {
+            list.push({
+                id: 'voice-manager',
+                icon: 'settings',
+                label: locale.t('voice.manager.open'),
+                run: () => props.onVoiceManager?.()
             });
         }
 

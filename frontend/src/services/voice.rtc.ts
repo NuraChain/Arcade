@@ -3,6 +3,18 @@ import { tuneOpus } from './voice.sdp.ts';
 
 export type PeerLink = 'connecting' | 'connected' | 'failed';
 
+export type LinePath = 'direct' | 'carried' | 'none';
+
+export interface LineFacts
+{
+    path: LinePath;
+    trip: number | null;
+    jitter: number | null;
+    buffer: number | null;
+    lost: number | null;
+    kbps: number | null;
+}
+
 export type SignalKind = 'offer' | 'answer' | 'ice';
 
 export interface VoiceSignal
@@ -44,6 +56,7 @@ export interface VoiceCall
     setVolume(who: string, volume: number): void;
     setSink(id: string): void;
     setQuality(bitrate: number): void;
+    facts(now: number): Promise<Record<string, LineFacts>>;
     close(): void;
 }
 
@@ -79,7 +92,50 @@ interface Peer
     hungUp: boolean;
     patience: (() => void) | null;
     watching: (() => void) | null;
+    seen: Seen | null;
 }
+
+interface Seen
+{
+    at: number;
+    path: LinePath;
+    packets: number;
+    lost: number;
+    bytes: number;
+    delayed: number;
+    emitted: number;
+}
+
+interface Stat
+{
+    id?: string;
+    type: string;
+    kind?: string;
+    state?: string;
+    nominated?: boolean;
+    selected?: boolean;
+    selectedCandidatePairId?: string;
+    currentRoundTripTime?: number;
+    roundTripTime?: number;
+    packetsReceived?: number;
+    packetsLost?: number;
+    bytesReceived?: number;
+    jitter?: number;
+    jitterBufferDelay?: number;
+    jitterBufferEmittedCount?: number;
+}
+
+const NOWHERE: LineFacts = { path: 'none', trip: null, jitter: null, buffer: null, lost: null, kbps: null };
+
+const shareOf = (lost: number, packets: number) =>
+{
+    const missing = Math.max(0, lost);
+    const total = missing + Math.max(0, packets);
+
+    return total === 0 ? null : missing / total;
+};
+
+const millis = (seconds: number | undefined) => (seconds === undefined ? null : Math.round(seconds * 1000));
 
 export const LIMIT = { threshold: -3, knee: 0, ratio: 20, attack: 0.002, release: 0.1 };
 
@@ -392,7 +448,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
             try
             {
-                for (const report of (await peer.connection.getStats()).values() as IterableIterator<{ type: string; kind?: string; packetsReceived?: number }>)
+                for (const report of (await peer.connection.getStats()).values() as IterableIterator<Stat>)
                 {
                     if (report.type === 'inbound-rtp' && report.kind === 'audio')
                     {
@@ -430,6 +486,113 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         };
 
         peer.watching = after(0, () => void look());
+    };
+
+    const rateOf = (seen: Seen, before: Seen | null) =>
+        before === null || before.path !== seen.path || seen.at <= before.at ? null : Math.round((seen.bytes - before.bytes) * 8 / (seen.at - before.at));
+
+    const lostOf = (seen: Seen, before: Seen | null) =>
+        before === null || before.path !== seen.path ? shareOf(seen.lost, seen.packets) : shareOf(seen.lost - before.lost, seen.packets - before.packets);
+
+    const directly = async (peer: Peer, now: number): Promise<LineFacts> =>
+    {
+        const pairs = new Map<string, Stat>();
+        let chosen: string | undefined;
+        let inbound: Stat | null = null;
+        let remote: Stat | null = null;
+
+        try
+        {
+            for (const report of (await peer.connection.getStats()).values() as IterableIterator<Stat>)
+            {
+                if (report.type === 'transport' && report.selectedCandidatePairId !== undefined)
+                {
+                    chosen = report.selectedCandidatePairId;
+                }
+
+                if (report.type === 'candidate-pair' && report.id !== undefined)
+                {
+                    pairs.set(report.id, report);
+                }
+
+                if (report.type === 'inbound-rtp' && report.kind === 'audio')
+                {
+                    inbound = report;
+                }
+
+                if (report.type === 'remote-inbound-rtp' && report.kind === 'audio')
+                {
+                    remote = report;
+                }
+            }
+        }
+        catch
+        {
+            return NOWHERE;
+        }
+
+        const pair = (chosen === undefined ? undefined : pairs.get(chosen))
+            ?? [...pairs.values()].find((one) => one.selected === true || (one.nominated === true && one.state === 'succeeded'));
+        const before = peer.seen;
+        const seen: Seen = {
+            at: now,
+            path: 'direct',
+            packets: inbound?.packetsReceived ?? 0,
+            lost: inbound?.packetsLost ?? 0,
+            bytes: inbound?.bytesReceived ?? 0,
+            delayed: inbound?.jitterBufferDelay ?? 0,
+            emitted: inbound?.jitterBufferEmittedCount ?? 0
+        };
+        const fresh = before !== null && before.path === 'direct' && seen.emitted > before.emitted;
+        const delayed = fresh ? seen.delayed - before.delayed : seen.delayed;
+        const emitted = fresh ? seen.emitted - before.emitted : seen.emitted;
+
+        peer.seen = seen;
+
+        return {
+            path: 'direct',
+            trip: millis(pair?.currentRoundTripTime ?? remote?.roundTripTime),
+            jitter: millis(inbound?.jitter),
+            buffer: emitted > 0 ? Math.round(delayed / emitted * 1000) : null,
+            lost: lostOf(seen, before),
+            kbps: rateOf(seen, before)
+        };
+    };
+
+    const carried = (peer: Peer, inbound: Inbound, now: number): LineFacts =>
+    {
+        const heard = inbound.heard();
+        const before = peer.seen;
+        const late = heard.playout?.late ?? 0;
+        const seen: Seen = { at: now, path: 'carried', packets: (heard.playout?.taken ?? 0) - late, lost: late, bytes: heard.bytes, delayed: 0, emitted: 0 };
+
+        peer.seen = seen;
+
+        return {
+            path: 'carried',
+            trip: deps.rtt?.() ?? null,
+            jitter: heard.playout === null ? null : heard.playout.jitter,
+            buffer: heard.playout === null ? null : heard.playout.buffer,
+            lost: heard.playout === null ? null : lostOf(seen, before),
+            kbps: rateOf(seen, before)
+        };
+    };
+
+    const factsOf = async (peer: Peer, now: number) =>
+    {
+        if (peer.flowing)
+        {
+            return directly(peer, now);
+        }
+
+        if (peer.inbound !== null)
+        {
+            return carried(peer, peer.inbound, now);
+        }
+
+        peer.seen = null;
+
+        return NOWHERE;
     };
 
     const broke = (peer: Peer) =>
@@ -545,7 +708,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             flowing: false,
             hungUp: false,
             patience: null,
-            watching: null
+            watching: null,
+            seen: null
         };
 
         peers.set(join, peer);
@@ -887,6 +1051,14 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 peer.volume = volume;
                 play(peer);
             }
+        },
+
+        async facts(now)
+        {
+            const listed = [...peers.values()];
+            const found = await Promise.all(listed.map((peer) => factsOf(peer, now)));
+
+            return Object.fromEntries(listed.map((peer, index) => [peer.who, found[index]]));
         },
 
         setQuality(bitrate)

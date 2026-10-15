@@ -399,6 +399,23 @@ await mina.page.getByRole('button', { name: 'Unmute your microphone' }).click();
 const speaking = await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), 15_000);
 record('unmuted, the fake microphone\'s tone lights "speaking" in the other browser', speaking, (await pillOf(dana.page, 'Mina')).join(', '));
 
+await dana.page.getByRole('button', { name: 'Voice settings' }).first().click();
+
+const lineFacts = () => dana.page.evaluate(() => document.querySelector('li.voice-peer[data-who="mina"] .facts')?.textContent ?? '');
+const lineMeasured = await until(async () => /Round trip \d+ ms|To the server \d+ ms/.test(await lineFacts()), 10_000);
+const lineFirst = await lineFacts();
+const lineTrip = Number((/(?:Round trip|To the server) (\d+) ms/.exec(lineFirst) ?? [])[1] ?? NaN);
+
+record('the voice settings at the table list the other player with the round trip measured on their line', lineMeasured && lineTrip >= 0 && lineTrip < 1000, lineFirst);
+
+const lineRated = await until(async () => /\d+ kbps/.test(await lineFacts()), 5_000);
+
+record('the line is measured again while the settings are open: how fast the voice comes is counted', lineRated, await lineFacts());
+record('the voice settings at the table offer no microphone test during the call', await dana.page.evaluate(() => ![...document.querySelectorAll('[role="dialog"] button')].some((one) => /Test the microphone/.test(one.textContent ?? ''))));
+
+await dana.page.keyboard.press('Escape');
+await until(async () => (await dana.page.locator('li.voice-peer').count()) === 0, 5_000);
+
 await dana.page.screenshot({ path: 'tools/qa/out/voice-dana.png' });
 
 await mina.page.getByRole('button', { name: 'Mute your microphone' }).click();

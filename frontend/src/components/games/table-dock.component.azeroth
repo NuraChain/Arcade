@@ -5,6 +5,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
+import { manageVoice } from '../../lib/voice-manager.ts';
 
 const canFullscreen = () =>
     typeof document !== 'undefined' && document.fullscreenEnabled === true;
@@ -80,6 +81,7 @@ export default component TableDock(props: {
                 ...(props.hostVoice === undefined || props.onHostVoice === undefined ? {} : { voice: props.hostVoice, onVoice: props.onHostVoice }),
                 ...(props.hostScope === undefined || props.onHostScope === undefined ? {} : { team: props.hostScope, onTeam: props.onHostScope }),
                 ...(props.voice !== undefined && voice.table() === props.voice ? { deaf: voice.deaf(), onDeafen: () => voice.toggleDeafen() } : {}),
+                ...(props.voice === undefined ? {} : { onVoiceManager: () => manageVoice(props.voice!) }),
                 ...(canFullscreen() ? { onFullscreen: toggleFull } : {}),
                 ...(props.onResign === undefined ? {} : { onResign: props.onResign }),
                 ...(props.onLeave === undefined ? {} : { onLeave: props.onLeave })
@@ -118,6 +120,17 @@ export default component TableDock(props: {
                         variant="ghost"
                         pressed={ props.hostScope === true }
                         onClick={ () => props.onHostScope?.() }
+                    />
+                }
+            </Show>
+
+            <Show when={ props.voice !== undefined }>
+                { () =>
+                    <IconButton
+                        icon="settings"
+                        label={ locale.t('voice.manager.open') }
+                        variant="ghost"
+                        onClick={ () => manageVoice(props.voice!) }
                     />
                 }
             </Show>

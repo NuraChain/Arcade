@@ -85,6 +85,7 @@ beforeEach(() =>
         setVolume: () => undefined,
         setSink: () => undefined,
         setQuality: () => undefined,
+        facts: async () => ({}),
         close: () => undefined
     }));
     useVoice().reset();
@@ -269,6 +270,7 @@ describe('the players beside a table’s chat, while a call is on', () =>
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             };
         });

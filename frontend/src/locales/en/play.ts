@@ -587,5 +587,17 @@ export const play = {
     'voice.testFault.absent': 'No microphone was found. Plug one in or choose another, then test again.',
     'voice.testFault.failed': 'The test could not start in this browser.',
     'voice.testInCall': 'You are in a call, so the meter shows the microphone the call is using.',
+    'voice.manager.open': 'Voice settings',
+    'voice.manager.out': 'You are not in the call yet. Set up your microphone and what you hear here, then join.',
+    'voice.manager.people': 'In this call',
+    'voice.manager.alone': 'Nobody else is in the call yet.',
+    'voice.line.direct': 'Direct',
+    'voice.line.carried': 'Through the server',
+    'voice.line.trip': 'Round trip {ms} ms',
+    'voice.line.server': 'To the server {ms} ms',
+    'voice.line.jitter': 'Jitter {ms} ms',
+    'voice.line.lost': 'Lost {share}',
+    'voice.line.rate': '{kbps} kbps',
+    'voice.line.measuring': 'Measuring the line…',
     'voice.privacy': 'A call starts through this server, which passes the sound on over each player’s secure connection and keeps none of it. As soon as two players’ connections reach each other, their sound goes straight between them instead, encrypted by the browser, and back through the server if that link drops.'
 };

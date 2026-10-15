@@ -2459,6 +2459,7 @@ describe('PlayPage', () =>
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             }));
             useVoice().reset();
@@ -2575,6 +2576,7 @@ describe('PlayPage', () =>
                 setVolume: () => undefined,
                 setSink: () => undefined,
                 setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             }));
             useVoice().reset();
@@ -2649,6 +2651,51 @@ describe('PlayPage', () =>
             fire(menu(), 'click');
 
             expect(useOverlay().top()!.props.deaf).toBe(true);
+
+            useOverlay().reset();
+        });
+
+        it('opens the voice settings from the table, from the dock on a wide screen and from the table\'s sheet on a phone', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const named = useLocale().t('voice.manager.open');
+            const wide = [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === named);
+
+            expect(wide, 'the dock offers no way to the voice settings').toBeDefined();
+
+            fire(wide!, 'click');
+            await vi.waitFor(() => expect(useOverlay().top()?.id).toBe('voice-manager'), { timeout: 4000 });
+
+            expect(useOverlay().top()!.props.table).toBe(id);
+            expect(useOverlay().top()!.label).toBe(named);
+
+            useOverlay().reset();
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            const onVoiceManager = useOverlay().top()!.props.onVoiceManager as (() => void) | undefined;
+
+            expect(onVoiceManager, 'the table\'s sheet offers no way to the voice settings').toBeDefined();
+
+            useOverlay().reset();
+            onVoiceManager!();
+            await vi.waitFor(() => expect(useOverlay().top()?.id).toBe('voice-manager'), { timeout: 4000 });
+
+            useOverlay().reset();
+        });
+
+        it('offers no voice settings at a table that has no voice', async () =>
+        {
+            const container = renderTest(() => TableDock({}) as Rendered).container;
+
+            expect([...container.querySelectorAll('button')].some((one) => one.getAttribute('aria-label') === useLocale().t('voice.manager.open'))).toBe(false);
+
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            expect(useOverlay().top()!.props.onVoiceManager).toBeUndefined();
 
             useOverlay().reset();
         });
@@ -2823,6 +2870,7 @@ describe('PlayPage', () =>
                     setVolume: () => undefined,
                     setSink: () => undefined,
                     setQuality: () => undefined,
+                    facts: async () => ({}),
                     close: () => undefined
                 };
             });
@@ -3798,6 +3846,21 @@ describe('the table’s chat and its controls', () =>
         fire(entry as HTMLElement, 'click');
 
         expect(deafen).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers the voice settings in the sheet, and opens them', () =>
+    {
+        const close = vi.fn();
+        const manage = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onVoiceManager: manage }) as Rendered).container;
+        const entry = [...container.querySelectorAll('ul button')].find((one) => one.textContent?.trim() === 'Voice settings');
+
+        expect(entry).toBeDefined();
+
+        fire(entry as HTMLElement, 'click');
+
+        expect(manage).toHaveBeenCalledTimes(1);
         expect(close).toHaveBeenCalledTimes(1);
     });
 
