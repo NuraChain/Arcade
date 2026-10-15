@@ -81,10 +81,13 @@ interface Peer
     watching: (() => void) | null;
 }
 
+export const LIMIT = { threshold: -3, knee: 0, ratio: 20, attack: 0.002, release: 0.1 };
+
 interface Boost
 {
     source: MediaStreamAudioSourceNode;
     gain: GainNode;
+    limit: DynamicsCompressorNode;
     out: MediaStreamAudioDestinationNode;
     hold: HTMLAudioElement;
 }
@@ -223,6 +226,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
         peer.boost.source.disconnect();
         peer.boost.gain.disconnect();
+        peer.boost.limit.disconnect();
         peer.boost.hold.srcObject = null;
         peer.boost.hold.remove();
         peer.boost = null;
@@ -243,6 +247,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             const hold = document.createElement('audio');
             const source = context.createMediaStreamSource(peer.stream);
             const gain = context.createGain();
+            const limit = context.createDynamicsCompressor();
             const out = context.createMediaStreamDestination();
 
             hold.muted = true;
@@ -251,8 +256,13 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             hold.srcObject = peer.stream;
             document.body.append(hold);
             void hold.play().catch(() => undefined);
-            source.connect(gain).connect(out);
-            peer.boost = { source, gain, out, hold };
+            limit.threshold.value = LIMIT.threshold;
+            limit.knee.value = LIMIT.knee;
+            limit.ratio.value = LIMIT.ratio;
+            limit.attack.value = LIMIT.attack;
+            limit.release.value = LIMIT.release;
+            source.connect(gain).connect(limit).connect(out);
+            peer.boost = { source, gain, limit, out, hold };
             peer.audio.srcObject = out.stream;
             void peer.audio.play().catch(() => undefined);
         }

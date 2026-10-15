@@ -1546,6 +1546,62 @@ Measured on the built server: a line's target was 32, 64 and 96 kbps for the thr
 sent 30, 62 and 96; the server carried 29, 60 and 59. `voice-sdp.spec.ts`, `voice-relay.spec.ts`
 (*speaks Opus as well as it is asked*), `voice-rtc.spec.ts` and `voice.spec.ts` hold it.
 
+**Settings › Voice is laid out as Discord's, and the microphone can be tried there.** The owner:
+"CReate and complete voice setting and voice manager you know everyone should have feel good best
+quality". The section was two device pickers, a volume and four switches. It is three panels now,
+each a component in `components/voice/` that the table's own sheet can reuse:
+
+- **Input** (`VoiceInputSettings`): the microphone, its volume up to twice, a meter and a test.
+  Then the input mode, voice activity or the talk key, with the sensitivity set automatically or
+  by hand for the first, and the key and its release delay for the second. The bar to set by hand
+  is offered only once the reader turns automatic off; until then the meter draws where the gate
+  opens, and a slider nobody can move is not drawn. Then the processing:
+  noise suppression Off, Standard or Strong, with a sentence for each and one more when strong
+  cannot run here (`voice.suppression()`), then echo cancellation and automatic gain.
+- **Output** (`VoiceOutputSettings`): the speaker where the browser can choose one and has one to
+  choose, how loud everybody is up to twice, and the quality with the rate it sends at.
+- **At the table**: the four switches that were there.
+
+**The meter** (`VoiceMeter`) draws `voice.reading()`: the level from -80 dB to nothing, green
+while the gate is open, and a bar across it where the gate opens. It is a `role="meter"` that
+says the level and "Sending" or "Quiet", fills from the side the page starts, and moves the same
+nodes at twenty readings a second.
+
+**The test** (`voice.startTest`) is the call's own preparation with no call. Its own
+`AudioContext`; the microphone asked for as a call asks for it; strong suppression where it can
+run and the browser's own where it cannot, the microphone asked for again with it as a call does;
+the volume and the gate; and what comes out played back through a hidden audio element on the
+chosen speaker, so the reader hears themselves as the others will. The gate is held open
+whatever the input mode, because the talk key only works at a table. A change of level or of the
+bar reaches it at once (`tune`); a change of what the browser does to the microphone, or of the
+microphone, starts it again; a new speaker plays it there. Joining a call ends it, and during one
+nothing is offered: the meter is then the call's. A microphone the browser refuses, one that is
+not there, and a browser that cannot prepare the voice each say so under the button
+(`voice.testFault()`), in words, until the next test or until the test is put away. A
+microphone that arrives after the test was stopped is stopped, and leaving the page stops the
+test.
+
+**Everybody can be turned up to twice, and nothing clips.** The reader's own volume stopped at
+full. It goes to `LOUDEST` now, times each person's own, so a voice can be played four times as
+loud as it arrives. Above full it goes through the gain and then a limiter (`LIMIT` in
+`voice.rtc.ts`: -3 dB, a ratio of 20, 2 ms to act), so a loud voice turned up is held under full
+scale instead of clipping.
+
+The units are the reader's too: a level is "dB" in English and «دسی‌بل» in Persian, a delay "ms" and
+«میلی‌ثانیه». A slider takes its unit as `unit` and draws it beside the number, outside `tally`:
+inside it, forced left to right, «دسی‌بل» stood before its number for a Persian reader, which is
+the fault the rule about `tally` in `frontend/CLAUDE.md` describes. Seen at 390 in Persian.
+
+`voice-settings.spec.ts`, `voice.spec.ts` (*a test of the microphone, away from any table*),
+`voice-rtc.spec.ts`, `settings.spec.ts` and `primitives.spec.ts` (*Slider*) hold it. Sixty-six
+faults put into the code one at a time were each caught, three only once the spec was mended: Tab
+has to go on moving the keyboard while a talk key is being recorded, the bar set by hand has to
+start from the reader's own value, which the default of -50 had hidden, and the release delay has
+to say its unit. In a real browser with a fake microphone (noise,
+clicks and speech), in both languages: the test plays the voice back (peak 0.7), the meter
+moves, Strong fetches RNNoise and runs with no fallback, a change of suppression starts the test
+again, stopping it or leaving the page lets everything go, and the console is clean.
+
 **One side places the call.** Of two players the one whose JOINING sorts first adds the audio line
 and offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
 turned to `sendrecv` with its own microphone on the sender. One offer, one answer, one line each.

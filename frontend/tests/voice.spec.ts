@@ -417,6 +417,26 @@ describe('voice at a table', () =>
         expect(useVoice().volumeOf('sara.k')).toBe(LOUDEST);
     });
 
+    it('plays everybody up to twice as loud by the reader’s own volume, with each person’s on top of it', async () =>
+    {
+        await useVoice().join(TABLE);
+        await room();
+
+        useSettings().update({ voiceVolume: 1.5 });
+        useVoice().applyVolume();
+
+        expect(calls[0].volumes['sara.k'], 'the reader’s own volume stopped at full').toBeCloseTo(1.5);
+
+        useVoice().setLevel('sara.k', 2);
+
+        expect(calls[0].volumes['sara.k']).toBeCloseTo(3);
+
+        useSettings().update({ voiceVolume: 9 });
+        useVoice().applyVolume();
+
+        expect(calls[0].volumes['sara.k']).toBeCloseTo(LOUDEST * LOUDEST);
+    });
+
     it('stops the microphone a superseded join was granted, rather than leaving it live with nothing holding it', async () =>
     {
         const granted: { stopped: boolean }[] = [];
@@ -1150,5 +1170,271 @@ describe('the microphone, prepared before anybody hears it', () =>
 
         expect(useVoice().reading()).toBeNull();
         expect(gates[0].off).toBe(true);
+    });
+
+    describe('a test of the microphone, away from any table', () =>
+    {
+        const played = () => [...document.body.querySelectorAll('audio')];
+
+        beforeEach(() =>
+        {
+            const sources = new WeakMap<HTMLMediaElement, unknown>();
+
+            vi.spyOn(HTMLMediaElement.prototype, 'srcObject', 'set').mockImplementation(function (this: HTMLMediaElement, value: unknown)
+            {
+                sources.set(this, value);
+            });
+            vi.spyOn(HTMLMediaElement.prototype, 'srcObject', 'get').mockImplementation(function (this: HTMLMediaElement)
+            {
+                return (sources.get(this) ?? null) as MediaStream | null;
+            });
+        });
+
+        afterEach(() =>
+        {
+            useVoice().stopTest();
+
+            for (const one of played())
+            {
+                one.remove();
+            }
+        });
+
+        it('plays the prepared voice back on the speaker the reader chose, and says how loud it is', async () =>
+        {
+            sound(true);
+            useSettings().update({ voiceEcho: false, voiceAgc: true, voiceNoise: 'standard', voiceMic: 'usb-1', voiceSpeaker: 'headset-2' });
+
+            await useVoice().startTest();
+
+            expect(useVoice().testing()).toBe(true);
+            expect(asked).toEqual([{ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1, deviceId: { ideal: 'usb-1' } } }]);
+            expect(played()).toHaveLength(1);
+            expect(played()[0].srcObject, 'what is played back is not the prepared voice').toBe(processed);
+            expect(played()[0].sinkId).toBe('headset-2');
+            expect(played()[0].hidden).toBe(true);
+            expect(contexts[0].state, 'the test made no sound: its sound never ran').toBe('running');
+            expect(useVoice().suppression()).toBe('standard');
+
+            gates[0].port.onmessage!({ data: { level: -24, open: true, threshold: -52 } });
+
+            expect(useVoice().reading()).toEqual({ level: -24, open: true, threshold: -52 });
+        });
+
+        it('lets the voice through in either input mode, and takes a change of level without asking for the microphone again', async () =>
+        {
+            sound(true);
+            useSettings().update({ voicePushToTalk: true, voiceRelease: 300 });
+
+            await useVoice().startTest();
+
+            expect(gates[0].told.at(-1), 'the test waited for a talk key that only works at a table').toMatchObject({ push: false });
+
+            useSettings().update({ voiceInput: 1.7, voiceAuto: false, voiceThreshold: -41 });
+            useVoice().tune();
+
+            expect(gates[0].told.at(-1)).toMatchObject({ push: false, auto: false, threshold: -41 });
+            expect(asked).toHaveLength(1);
+        });
+
+        it('lets go of the microphone, the sound and the meter when it stops', async () =>
+        {
+            sound(true);
+            const stopped = vi.fn();
+            const before = track.stop;
+
+            track.stop = stopped;
+
+            try
+            {
+                await useVoice().startTest();
+                gates[0].port.onmessage!({ data: { level: -30, open: true, threshold: -50 } });
+                useVoice().stopTest();
+            }
+            finally
+            {
+                track.stop = before;
+            }
+
+            expect(useVoice().testing()).toBe(false);
+            expect(stopped, 'the microphone was left open').toHaveBeenCalled();
+            expect(gates[0].off).toBe(true);
+            expect(played()).toHaveLength(0);
+            expect(contexts[0].closed).toBe(true);
+            expect(useVoice().reading()).toBeNull();
+            expect(useVoice().suppression()).toBeNull();
+        });
+
+        it('says the browser would not give it the microphone, or that there is none, until the next test', async () =>
+        {
+            sound(true);
+            setVoiceMedia(() => media('deny'));
+
+            await useVoice().startTest();
+
+            expect(useVoice().testing()).toBe(false);
+            expect(useVoice().testFault()).toBe('denied');
+            expect(contexts[0].closed).toBe(true);
+            expect(played()).toHaveLength(0);
+
+            setVoiceMedia(() => media('none'));
+            await useVoice().startTest();
+
+            expect(useVoice().testFault()).toBe('absent');
+
+            setVoiceMedia(() => media('grant'));
+            await useVoice().startTest();
+
+            expect(useVoice().testFault(), 'a test that worked still said the last one could not start').toBeNull();
+            expect(useVoice().testing()).toBe(true);
+
+            setVoiceMedia(() => media('deny'));
+            await useVoice().startTest();
+            useVoice().stopTest();
+
+            expect(useVoice().testFault(), 'a test the reader put away still said why it failed').toBeNull();
+        });
+
+        it('says the test could not start where the voice cannot be prepared, and lets go of the microphone', async () =>
+        {
+            sound(true);
+            const stopped = vi.fn();
+            const before = track.stop;
+
+            vi.stubGlobal('AudioWorkletNode', class
+            {
+                constructor()
+                {
+                    throw new Error('no worklets here');
+                }
+            });
+            track.stop = stopped;
+
+            try
+            {
+                await useVoice().startTest();
+            }
+            finally
+            {
+                track.stop = before;
+            }
+
+            expect(useVoice().testFault()).toBe('failed');
+            expect(useVoice().testing()).toBe(false);
+            expect(stopped).toHaveBeenCalled();
+            expect(contexts[0].closed).toBe(true);
+        });
+
+        it('runs strong suppression where it can, with the browser’s own off', async () =>
+        {
+            sound(true);
+
+            const made = suppressor();
+
+            useSettings().update({ voiceNoise: 'strong' });
+            await useVoice().startTest();
+
+            expect(asked.at(-1)!.audio).toMatchObject({ noiseSuppression: false });
+            expect(made).toHaveLength(1);
+            expect(useVoice().suppression()).toBe('strong');
+        });
+
+        it('asks for the microphone again with the browser’s suppression when strong suppression will not load', async () =>
+        {
+            sound(true);
+            suppressor(false);
+            useSettings().update({ voiceNoise: 'strong' });
+
+            await useVoice().startTest();
+
+            expect(asked.map((one) => (one.audio as MediaTrackConstraints).noiseSuppression), 'the test ran with no suppression at all').toEqual([false, true]);
+            expect(useVoice().suppression()).toBe('standard');
+            expect(played()).toHaveLength(1);
+        });
+
+        it('stops a microphone that arrives after the test was put away, and plays nothing', async () =>
+        {
+            sound(true);
+
+            const answers: ((value: MediaStream) => void)[] = [];
+            const granted = { stopped: false };
+
+            setVoiceMedia(() => ({
+                getUserMedia: () => new Promise<MediaStream>((resolve) => answers.push(resolve))
+            }) as unknown as MediaDevices);
+
+            const going = useVoice().startTest();
+
+            expect(useVoice().testing()).toBe(true);
+
+            useVoice().stopTest();
+            answers[0]({ getTracks: () => [{ stop: () => (granted.stopped = true) }], getAudioTracks: () => [] } as unknown as MediaStream);
+            await going;
+
+            expect(granted.stopped, 'a microphone granted after the test stopped was left open').toBe(true);
+            expect(played()).toHaveLength(0);
+            expect(useVoice().testing()).toBe(false);
+            expect(contexts[0].closed).toBe(true);
+        });
+
+        it('keeps one test going when it is started twice', async () =>
+        {
+            sound(true);
+
+            await useVoice().startTest();
+            await useVoice().startTest();
+
+            expect(played()).toHaveLength(1);
+            expect(contexts.map((one) => one.closed)).toEqual([true, false]);
+            expect(gates[0].off).toBe(true);
+        });
+
+        it('starts again when what the browser does to the microphone changes', async () =>
+        {
+            sound(true);
+
+            await useVoice().startTest();
+            useSettings().update({ voiceAgc: false });
+            await useVoice().reprocess();
+
+            expect(asked).toHaveLength(2);
+            expect(asked.at(-1)!.audio).toMatchObject({ autoGainControl: false });
+            expect(played()).toHaveLength(1);
+            expect(useVoice().testing()).toBe(true);
+        });
+
+        it('tests the microphone the reader picks while it runs, and plays on the speaker they pick', async () =>
+        {
+            sound(true);
+
+            await useVoice().startTest();
+            await useVoice().useMic('usb-9');
+
+            expect(asked.at(-1)!.audio).toMatchObject({ deviceId: { ideal: 'usb-9' } });
+            expect(played()).toHaveLength(1);
+
+            useVoice().useSpeaker('desk-3');
+            await settle();
+
+            expect(played()[0].sinkId).toBe('desk-3');
+        });
+
+        it('ends when the reader joins a call, and does not start during one', async () =>
+        {
+            sound(true);
+
+            await useVoice().startTest();
+            await useVoice().join(TABLE);
+            await settle();
+
+            expect(useVoice().testing()).toBe(false);
+            expect(contexts[0].closed, 'the test kept its microphone open beside the call').toBe(true);
+            expect(played()).toHaveLength(0);
+
+            await useVoice().startTest();
+
+            expect(useVoice().testing()).toBe(false);
+            expect(asked, 'a test asked for a microphone in the middle of a call').toHaveLength(2);
+        });
     });
 });

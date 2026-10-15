@@ -188,11 +188,13 @@ It was a grid: two sections side by side from 72rem, the switches in two columns
 the lists in three. Sections of different heights left a hole beside the shorter one, a card
 of six switches read as a table, and the owner asked for the column (2026-10-13). The list of
 sections stays beside the column from 56rem: it is the way round the page and not a part of
-it. A control that is not a row keeps a width of its own (`max-w-md` on the two device pickers
-and the volume), and a button in a stacked panel does not stretch (`self-start` on "Turn on
+it. A control that is not a row keeps a width of its own (`max-w-md` on the device pickers, the
+sliders and the choices of the voice panels), and a button in a stacked panel does not stretch (`self-start` on "Turn on
 for this device"); the account's two buttons stand at the end of its row from 42rem.
 `settings.spec.ts` (*the page of settings*) holds the six sections as the children of one
-column and no `grid-cols-` anywhere under it.
+column and no `grid-cols-` anywhere under it. The voice section is three panels, the microphone,
+what is heard and the table's own switches, drawn by `components/voice/` (*Settings › Voice* in
+`.claude/rules/games.md`), and the same spec holds each of them in it.
 
 **Shape is crisp**: `rounded-control` (8px) for buttons, chips, icon buttons and inputs,
 `rounded-tile` (10px) for rows and tiles, `rounded-panel` (14px) for cards, `rounded-hero` (16px)
@@ -1068,7 +1070,9 @@ first Escape in the invite sheet's search clears the name, and the second closes
 icon-only control has a visible name on a mouse and a long-press name on a finger; it portals to
 `.anchor-root` and must never go through the overlay stack, whose `blocking()` drives `inert`.
 `Badge` does counts, free text and dots. `Pagination` does numbered pages and load-more.
-`Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
+`Slider` is pointer-captured and keyboard-driven, and a `unit` it is given stands beside the
+number and outside `tally`, so a Persian «دسی‌بل» follows its number (`primitives.spec.ts`,
+*Slider*). `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
 
 **Motion is for physics and nothing else, and it is never on the first paint.** CSS transitions already open and close every sheet, modal and toast, and they stay. What CSS cannot do is carry a gesture into a spring, or slide a row from where it was to where it went. `lib/motion.ts` loads `motion/mini` behind a dynamic import - a sheet asks for it on the pointer going down, so it has arrived by the release; the chat list asks at mount, so a reorder never waits for a download. A released sheet springs to its detent from where the finger left it, and the chat list FLIPs a thread to the top when a message moves it there. Reduced motion skips both, and neither is in the shell or the landing budget.

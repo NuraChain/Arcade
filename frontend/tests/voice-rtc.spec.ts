@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import type { Codec, RelayKit } from '../src/services/voice.relay.ts';
-import { WATCH_MS, createVoiceCall, patienceFor, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
+import { LIMIT, WATCH_MS, createVoiceCall, patienceFor, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
 
 interface Line
 {
@@ -228,6 +228,11 @@ interface Node
     off: boolean;
     gain?: { value: number };
     stream?: unknown;
+    threshold?: { value: number };
+    knee?: { value: number };
+    ratio?: { value: number };
+    attack?: { value: number };
+    release?: { value: number };
 }
 
 function fakeContext()
@@ -261,6 +266,7 @@ function fakeContext()
         nodes,
         createMediaStreamSource: (stream: unknown) => node('source', { stream }),
         createGain: () => node('gain', { gain: { value: 1 } }),
+        createDynamicsCompressor: () => node('limit', { threshold: { value: -24 }, knee: { value: 30 }, ratio: { value: 12 }, attack: { value: 0.003 }, release: { value: 0.25 } }),
         createMediaStreamDestination: () => node('out', { stream: { boosted: true } }),
         createAnalyser: () => node('analyser')
     };
@@ -327,12 +333,17 @@ describe('how loud one person is heard', () =>
             one.asks.call.setVolume('mina', 1.6);
 
             const gain = context.nodes.find((node) => node.kind === 'gain')!;
+            const limit = context.nodes.find((node) => node.kind === 'limit')!;
             const out = context.nodes.find((node) => node.kind === 'out')!;
             const [speaker, hold] = one.players();
 
             expect(gain.gain!.value).toBeCloseTo(1.6);
             expect(context.nodes.some((node) => node.kind === 'source' && node.stream === SOUND && node.into.includes(gain)), 'the gain is not fed her sound').toBe(true);
-            expect(gain.into).toContain(out);
+            expect(gain.into, 'a voice turned past full reaches the speaker with nothing to stop it clipping').toEqual([limit]);
+            expect(limit.into).toContain(out);
+            expect({ threshold: limit.threshold!.value, knee: limit.knee!.value, ratio: limit.ratio!.value, attack: limit.attack!.value, release: limit.release!.value }).toEqual(LIMIT);
+            expect(LIMIT.threshold, 'the limiter lets a voice reach full before it holds it').toBeLessThan(0);
+            expect(LIMIT.ratio, 'a ratio that low is a compressor, and a loud voice still clips').toBeGreaterThanOrEqual(20);
             expect(one.sources.get(speaker), 'what is heard is not the turned-up sound').toBe(out.stream);
             expect(speaker.volume).toBe(1);
             expect(hold.muted, 'the sound kept flowing for the gain was heard as well').toBe(true);
@@ -344,6 +355,7 @@ describe('how loud one person is heard', () =>
             expect(one.sources.get(one.players()[0])).toBe(SOUND);
             expect(one.players()[0].volume).toBeCloseTo(0.8);
             expect(gain.off).toBe(true);
+            expect(limit.off, 'the limiter was left connected to nothing').toBe(true);
         }
         finally
         {

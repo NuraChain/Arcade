@@ -215,4 +215,34 @@ describe('the page of settings', () =>
             'something inside a section is laid out in columns'
         ).toEqual([]);
     });
+
+    it('lays the voice section out as the microphone, what is heard and the table, each in a panel of its own', async () =>
+    {
+        useSession().establish(establishAccount());
+
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const voice = container.querySelector('#settings-voice')!;
+        const { t } = useLocale();
+        const switches = [...voice.querySelectorAll('[role="switch"]')].map((one) => one.textContent ?? '');
+
+        expect([...voice.querySelectorAll('h3')].map((one) => one.textContent?.trim())).toEqual([
+            t('voice.section.input'),
+            t('voice.section.mode'),
+            t('voice.section.processing'),
+            t('voice.section.output'),
+            t('voice.section.table')
+        ]);
+        expect(voice.querySelector('[role="meter"]'), 'the microphone has no meter').not.toBeNull();
+        expect(voice.querySelector(`[role="slider"][aria-label="${ t('voice.inputVolume') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="slider"][aria-label="${ t('voice.volume') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="group"][aria-label="${ t('voice.noise') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="group"][aria-label="${ t('voice.quality') }"]`)).not.toBeNull();
+
+        for (const key of ['voice.echo', 'voice.agc', 'voice.startMuted', 'voice.autoJoin', 'voice.tables', 'voice.team'] as const)
+        {
+            expect(switches.some((one) => one.includes(t(key))), `no switch for ${ key }`).toBe(true);
+        }
+
+        expect(voice.textContent).toContain(t('voice.privacy'));
+    });
 });

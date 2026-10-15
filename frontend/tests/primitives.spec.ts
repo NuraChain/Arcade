@@ -668,6 +668,36 @@ describe('Slider', () =>
         expect(onChange).toHaveBeenLastCalledWith(1);
     });
 
+    it('stands a unit beside its number, in the reader’s direction, and says the two together', async () =>
+    {
+        const { container } = renderTest(() => Slider({ value: -50, min: -80, max: 0, step: 1, label: 'Bar', unit: 'dB', onChange: noop }) as Rendered);
+        await settle();
+
+        const figure = container.querySelector('.tally')!;
+
+        expect(figure.textContent, 'the unit was forced left to right with its number').toBe('-50');
+        expect(figure.nextElementSibling?.textContent).toBe('dB');
+        expect(figure.nextElementSibling?.classList.contains('tally')).toBe(false);
+        expect(container.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).toBe('-50 dB');
+    });
+
+    it('says what it was told to say, and the number alone when it was told nothing', async () =>
+    {
+        const told = renderTest(() => Slider({ value: 0.5, label: 'Loud', valueText: '50%', onChange: noop }) as Rendered);
+        await settle();
+
+        expect(told.container.querySelector('.tally')?.textContent).toBe('50%');
+        expect(told.container.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).toBe('50%');
+
+        cleanup();
+
+        const bare = renderTest(() => Slider({ value: 0.5, label: 'Loud', onChange: noop }) as Rendered);
+        await settle();
+
+        expect(bare.container.querySelector('.tally')?.textContent).toBe('0.5');
+        expect(bare.container.querySelector('[role="slider"]')!.hasAttribute('aria-valuetext')).toBe(false);
+    });
+
     it('refuses keyboard and pointer input while disabled', async () =>
     {
         const onChange = vi.fn();
