@@ -94,7 +94,8 @@ describe('games: the server and the landing agree', () =>
         expect(named(seed)).toEqual(['2', '3', '4', '4 in pairs']);
         expect(named(TABLE_RULES.ludo)).toEqual(named(seed));
         expect(quickOf(seed, { teams: true })).toMatchObject({ ok: true, make: { seats: 4, teams: true } });
-        expect(quickOf(seed, {})).toMatchObject({ ok: true, make: { seats: 4, teams: false } });
+        expect(quickOf(seed, { seats: 4 })).toMatchObject({ ok: true, make: { seats: 4, teams: false } });
+        expect(quickOf(seed, {})).toMatchObject({ ok: true, make: { seats: 2, teams: false } });
     });
 
     it('offers a cube and blinds exactly where the create form does', () =>

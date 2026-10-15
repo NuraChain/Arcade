@@ -157,7 +157,7 @@ const goHome = async (people) =>
 
 const eightAtOnce = async () =>
 {
-    console.log('[eight press quick play at once]');
+    console.log('[eight ask for ludo at four, at once]');
 
     const eight = [];
 
@@ -168,7 +168,7 @@ const eightAtOnce = async () =>
 
     try
     {
-        const answers = await Promise.all(eight.map((who) => who.post('/tables/quick', { game: 'ludo', voice: 'off' })));
+        const answers = await Promise.all(eight.map((who) => who.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 })));
 
         ok('every press is answered with a table', answers.every((answer) => answer.status === 200 && typeof answer.body?.id === 'string'),
             answers.map((answer) => answer.status).join(' '));
@@ -199,6 +199,35 @@ const eightAtOnce = async () =>
     finally
     {
         await goHome(eight);
+    }
+
+    console.log('');
+};
+
+const twoWhoLeaveItOpen = async () =>
+{
+    console.log('[two strangers leave every choice open, at every game]');
+
+    for (const game of ['ludo', 'hokm', 'poker', 'backgammon'])
+    {
+        const pair = [await arrive(`Open ${ game } a${ tag() }`), await arrive(`Open ${ game } b${ tag() }`)];
+
+        try
+        {
+            const first = await pair[0].post('/tables/quick', { game, voice: 'off' });
+            const second = await pair[1].post('/tables/quick', { game, voice: 'off' });
+            const table = (await pair[0].get(`/tables/${ first.body?.id }`)).body;
+
+            ok(`${ game }: the second sits down at the first one's table`, first.status === 200 && second.body?.id === first.body?.id,
+                `${ first.status } ${ second.status }`);
+            ok(`${ game }: a table of two, full, and its game started with nobody pressing start`,
+                table?.seats === 2 && sittingAt(table).length === 2 && table?.status === 'playing' && table?.matchId !== undefined,
+                `${ table?.seats } seats, ${ sittingAt(table).length } sitting, ${ table?.status }`);
+        }
+        finally
+        {
+            await goHome(pair);
+        }
     }
 
     console.log('');
@@ -346,6 +375,7 @@ const run = async () =>
 {
     console.log(`\nquick pass against ${ BASE }\n`);
 
+    await twoWhoLeaveItOpen();
     await eightAtOnce();
     await eachTheirOwn();
     await goneFromTheChair();

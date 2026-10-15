@@ -476,16 +476,17 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             await here.setReady(minor, theirs, true);
             await befriend(minor, friend);
 
-            const grown = (await search(await makeUser())).id;
+            const four = { seats: 4 };
+            const grown = (await search(await makeUser(), four)).id;
 
             expect(grown).not.toBe(theirs);
-            expect((await search(friend)).id).toBe(theirs);
+            expect((await search(friend, four)).id).toBe(theirs);
 
-            const young = (await search(await child())).id;
+            const young = (await search(await child(), four)).id;
 
             expect([theirs, grown]).not.toContain(young);
-            expect((await search(await child())).id).toBe(young);
-            expect((await search(await makeUser())).id).toBe(grown);
+            expect((await search(await child(), four)).id).toBe(young);
+            expect((await search(await makeUser(), four)).id).toBe(grown);
             expect(await sizes()).toEqual([2, 2, 2]);
         });
 
@@ -497,12 +498,12 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             await joined(stale, 2);
 
-            const fresh = await found({}, without(away));
+            const fresh = await found({ seats: 4 }, without(away));
 
             expect(fresh).not.toBe(stale);
             expect(await sizes()).toEqual([1, 1, 3]);
             expect(await found({ mode: 'turns' }, without(away))).toBe(slow);
-            expect(await found({}, everybody)).toBe(stale);
+            expect(await found({ seats: 4 }, everybody)).toBe(stale);
         });
     });
 
@@ -518,7 +519,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             expect((await search(stranger)).id).toBe(theirs);
             expect(await chairOf(stranger, theirs)).toMatchObject({ seat: 2 });
-            expect((await search(late)).id).not.toBe(theirs);
+            expect((await search(late, { seats: 4 })).id).not.toBe(theirs);
             expect((await search(guest)).id).toBe(theirs);
             expect(await chairOf(guest, theirs)).toMatchObject({ seat: 1, ready: true });
         });
@@ -568,31 +569,31 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             const { me, answer, table } = await made({ game: 'ludo' });
 
             expect(answer.seated).toBe(true);
-            expect(table).toMatchObject({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, hostId: me, roomId: null, status: 'open' });
+            expect(table).toMatchObject({ game: 'ludo', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, hostId: me, roomId: null, status: 'open' });
             expect(await db.getRepository(TableSeat).find({ where: { tableId: table.id }, order: { seat: 'ASC' } })).toMatchObject([
                 { seat: 0, userId: me, ready: true },
-                { seat: 1, userId: null, ready: false },
-                { seat: 2, userId: null, ready: false },
-                { seat: 3, userId: null, ready: false }
+                { seat: 1, userId: null, ready: false }
             ]);
             expect(await inThread(me, table.id)).toBe(true);
         });
 
-        it('opens the table the game makes of what was chosen, and the default where nothing was', async () =>
+        it('opens the table the game makes of what was chosen, and the smallest it plays where nothing was', async () =>
         {
-            expect((await made({ game: 'hokm' })).table).toMatchObject({ seats: 4, target: 7, teams: true });
-            expect((await made({ game: 'poker' })).table).toMatchObject({ seats: 6, blinds: 'low', teams: false });
+            expect((await made({ game: 'hokm' })).table).toMatchObject({ seats: 2, target: 7, teams: false });
+            expect((await made({ game: 'hokm', teams: true })).table).toMatchObject({ seats: 4, target: 7, teams: true });
+            expect((await made({ game: 'poker' })).table).toMatchObject({ seats: 2, blinds: 'low', teams: false });
+            expect((await made({ game: 'ludo', seats: 4 })).table).toMatchObject({ seats: 4, teams: false });
             expect((await made({ game: 'backgammon' })).table).toMatchObject({ seats: 2, target: 1, cube: false });
             expect((await made({ game: 'backgammon', cube: true })).table).toMatchObject({ seats: 2, target: 3, cube: true });
             expect((await made({ game: 'poker', seats: 9, blinds: 'high' })).table).toMatchObject({ seats: 9, blinds: 'high' });
             expect((await made({ game: 'ludo', seats: 2, mode: 'turns' })).table).toMatchObject({ seats: 2, mode: 'turns' });
-            expect((await made({ game: 'hokm', teams: false, target: 13 })).table).toMatchObject({ seats: 3, target: 13, teams: false });
+            expect((await made({ game: 'hokm', teams: false, target: 13 })).table).toMatchObject({ seats: 2, target: 13, teams: false });
         });
 
         it('opens it with the call the searcher asked for', async () =>
         {
             expect((await made({ game: 'ludo', voice: 'table' })).table.voice).toBe('table');
-            expect((await made({ game: 'ludo', seats: 2, voice: 'off' })).table.voice).toBe('off');
+            expect((await made({ game: 'ludo', seats: 3, voice: 'off' })).table.voice).toBe('off');
         });
 
         it('opens one the next search with the same choices sits down at', async () =>
@@ -629,7 +630,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(next.seated).toBe(true);
             expect(next.id).not.toBe(first);
 
-            const narrower = await search(me, { seats: 2 });
+            const narrower = await search(me, { seats: 3 });
 
             expect(narrower.seated).toBe(true);
             expect([first, next.id]).not.toContain(narrower.id);
@@ -669,12 +670,12 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
     describe('when many search at once', () =>
     {
-        it('seats ten searchers at tables of four, four and two, nobody twice and nobody in another’s chair, and starts the two that filled', async () =>
+        it('seats ten searchers who chose four at tables of four, four and two, nobody twice and nobody in another’s chair, and starts the two that filled', async () =>
         {
             const searchers = await crowd(10);
             const doors = searchers.map(() => door());
 
-            const answers = await Promise.all(searchers.map((who, index) => doors[index].table.quick(who, { game: 'ludo', voice: 'off' })));
+            const answers = await Promise.all(searchers.map((who, index) => doors[index].table.quick(who, { game: 'ludo', voice: 'off', seats: 4 })));
 
             const chairs = await db.getRepository(TableSeat).findBy({ userId: Not(IsNull()) });
             const full = chairs.map((chair) => chair.tableId).filter((id, _at, all) => all.filter((one) => one === id).length === 4);
@@ -836,16 +837,32 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             }
         });
 
+        it('deals two strangers who both leave every choice open a game of two, at every game', async () =>
+        {
+            const ports = door();
+
+            for (const game of ['ludo', 'hokm', 'poker', 'backgammon'])
+            {
+                const [first, second] = await crowd(2);
+                const waiting = await ports.table.quick(first, { game, voice: 'off' });
+                const playing = await ports.table.quick(second, { game, voice: 'off' });
+
+                expect(waiting, game).toMatchObject({ seats: 2, taken: 1, status: 'open' });
+                expect(playing, game).toMatchObject({ id: waiting.id, seats: 2, taken: 2, status: 'playing' });
+                expect(await db.getRepository(Match).countBy({ tableId: waiting.id, finishedAt: IsNull() }), game).toBe(1);
+            }
+        });
+
         it('starts one game when two searchers take the last two chairs together', async () =>
         {
             for (let round = 0; round < ROUNDS; round += 1)
             {
                 const [host, early, ...late] = await crowd(4);
-                const theirs = (await door().table.quick(host, { game: 'ludo', voice: 'off' })).id;
+                const theirs = (await door().table.quick(host, { game: 'ludo', voice: 'off', seats: 4 })).id;
 
-                await door().table.quick(early, { game: 'ludo', voice: 'off' });
+                await door().table.quick(early, { game: 'ludo', voice: 'off', seats: 4 });
 
-                const answers = await Promise.all(late.map((who) => door().table.quick(who, { game: 'ludo', voice: 'off' })));
+                const answers = await Promise.all(late.map((who) => door().table.quick(who, { game: 'ludo', voice: 'off', seats: 4 })));
 
                 expect(answers.map((answer) => answer.id), `round ${ round }`).toEqual([theirs, theirs]);
                 expect(await live(theirs), `round ${ round }`).toBe(1);
@@ -943,9 +960,9 @@ describe.skipIf(!active)('quick play, against a real database', () =>
                 }
             };
 
-            expect((await door(absent).table.quick(await makeUser(), { game: 'ludo', voice: 'off' })).id).not.toBe(stale);
+            expect((await door(absent).table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 })).id).not.toBe(stale);
             expect(asked).toEqual([[away, guest].sort()]);
-            expect((await door().table.quick(await makeUser(), { game: 'ludo', voice: 'off' })).id).toBe(stale);
+            expect((await door().table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(stale);
         });
     });
 

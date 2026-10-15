@@ -100,8 +100,9 @@ config object, not claims about the game.
 It caught a live bug the moment it existed: `lobby.quick()`'s fallback config was a literal four
 seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table.
 Quick play sends a seat count only when somebody chose one (*Quick play asks what to look for*):
-left at "Any", the server opens what `seatsByDefault` makes of the game's rules, and
-`catalogue.defaults` asks the same function (*Matchmaking is one request*).
+left at "Any", the server opens the smallest table the game plays when there is nothing to join
+(*Matchmaking is one request*), and the create form starts from `seatsByDefault` through
+`catalogue.defaults`.
 
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
@@ -723,9 +724,19 @@ search that names neither finds both kinds at a game that leaves it open and ope
 What it makes is what `create` would store unchanged - `quick-options.spec.ts` asks the real
 `cubeLive` and `teamsOf` about every table it makes over a grid of asks, because `quick.ts` restates
 both rules to stay free of imports - and it is a table the same search would then find, or the next
-searcher would open a second one beside it. `seatsByDefault` is the smallest seat count of four or
-more, or the largest the game plays (the largest was nine-seat poker, which a quick player would
-wait at all evening); `catalogue.defaults` asks it too, so the rule is written once. The browser's
+searcher would open a second one beside it.
+
+**A search that names no seat count opens the smallest table the game plays.** It opened
+`seatsByDefault`'s table, the smallest of four or more: four at Ludo and Hokm, six at poker. So two
+people who both pressed Quick play and left the choice open were seated together at one table and
+waited there for players who were not coming. Reproduced on the built server with two fresh
+accounts on real sockets: 2 of 4 at Ludo and at Hokm and 2 of 6 at poker, no game, for as long as
+they waited; only backgammon, which plays two, started. Quick play is for starting a game, so the
+table it opens with nothing chosen is the one the next searcher fills: two at every game. It still
+joins the fullest table it can find first, so a table of four that somebody chose fills as before,
+and whoever wants four chooses four. `seatsByDefault` is now only where the create form starts
+(`catalogue.defaults`). `quick-options.spec.ts` and `quick.db.spec.ts` (*deals two strangers who
+both leave every choice open a game of two, at every game*) hold it. The browser's
 copy of a game's rules is a `QuickRules` now: `TableRules` carries `hasCube` and `hasBlinds`,
 `reference-parity.spec.ts` holds both to the seed and asks `quickOf` the same question of both
 copies, and the create form asks them where it asked for a game by name.

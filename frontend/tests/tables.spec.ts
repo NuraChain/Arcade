@@ -835,7 +835,7 @@ describe('the lobby store', () =>
             { game: 'poker', blinds: 'mid', voice: 'off' },
             { game: 'ludo', voice: 'off' }
         ]);
-        expect(server.tables.map((table) => [table.game, table.seats, table.mode])).toEqual([['backgammon', 2, 'live'], ['hokm', 4, 'turns'], ['poker', 6, 'live'], ['ludo', 4, 'live']]);
+        expect(server.tables.map((table) => [table.game, table.seats, table.mode])).toEqual([['backgammon', 2, 'live'], ['hokm', 4, 'turns'], ['poker', 2, 'live'], ['ludo', 2, 'live']]);
         expect(server.tables[0]).toMatchObject({ target: 3, cube: false });
         expect(server.tables[1]).toMatchObject({ teams: true });
         expect(server.tables[2]).toMatchObject({ blinds: 'mid' });
