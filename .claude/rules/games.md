@@ -1516,8 +1516,14 @@ before either path takes it:
   says which is working. The browser's own is off while RNNoise runs: the two together cut the
   weak ends of words (2.6% of the speech missing, against 0.29). The microphone is mixed to one
   channel before it, because it cleans one channel and leaves the other silent, and a stereo
-  microphone came out at half its level. Measured in two browsers: the room 9 dB quieter than
-  Standard and the clicks 12, the voice at the same level, nothing more cut.
+  microphone came out at half its level. Measured in two browsers by the voice quality pass, over
+  a room of pink noise, hum and typing, with the gate held open: the room 6 dB quieter than
+  Standard (-61 against -55 dB, and -40 with neither), the typing as quiet as Standard's or up to
+  3 dB quieter from run to run (Standard already takes it 11 dB under none), the voice at the same
+  level, nothing cut. Strong is for the room, not the keyboard. A note here said the clicks were
+  12 dB quieter; that came from an earlier harness and is not what this pass measures. With the
+  gate working, what is heard in a pause is mostly the gate (typing opens it, and it closes between
+  bursts), which is why the pass compares the two with it held open.
 - **What it hears is told to the page** about twenty times a second (`voice.reading()`: the
   level, whether it is open, and the bar), which is what a meter draws.
 - **The microphone itself is sent until the context runs**, because a prepared voice from a

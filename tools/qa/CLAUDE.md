@@ -589,3 +589,70 @@ inside the app, a device that is switched off asking for the key) the pass faile
 one line for each fault. Its first red run failed 15 and still let the missing name through: the
 fixture account already knew the inviter from old rows, so the pass begins by dismissing every
 notification the account has. The source was put back from a saved copy, never from git.
+
+## The voice quality pass
+
+`tools/qa/voice-quality-pass.mjs` measures how a call SOUNDS, which the voice pass cannot: that
+pass asks whether a line connects, carries packets and lights the speaking ring, and a call can do
+all of that and still break up, cut its words or bring the room with it. Two real Chromium pages
+on the built server, about five minutes and twenty-two checks. Start the server with
+`PUBLIC_ORIGIN=http://localhost:5310 PORT=5300 API_RATE_MAX=20000 npm start` and run
+`QA_BASE=http://localhost:5300 node tools/qa/voice-quality-pass.mjs`; `QA_ONLY=line,carried,noise`
+runs only the cases whose names start with one of those. The browsers reach the server through a
+proxy on 5310, which is why the server takes writes from that origin. Once a connection has asked
+for a WebSocket the proxy holds its bytes in order and delays them like Wi-Fi (4 to 12 ms, and one
+chunk in thirty-three 40 to 150 ms more) or a phone network (20 to 55 ms, and one in seventeen 90
+to 310 ms more); a page loads at once.
+
+**The sound is the pass's own** (`voice-signal.mjs`): syllables on six vowels with a pitch glide,
+fricatives, phrases of three to six syllables and pauses between them, at -20 dBFS; and for the
+noise cases a room under it, pink noise at -36 dB, a hum at 50 and 150 Hz and bursts of typing
+(short bright clicks at a typist's pace). It is the speaker's fake microphone, and the listener's
+page records what it plays.
+
+**How it is scored** (`analyse`, in frames of 10 ms). Its first run failed nine checks with the
+product right, and every one was the instrument; these rules are what came of them.
+
+- The recording is lined up with the clean signal as a whole and again every two seconds, because
+  a carried voice changes its delay as it learns the line.
+- Its first second is not scored: it is the recorder starting, and begins with digital silence.
+- A frame is speech where the clean signal is above -40 dB and missing where what was heard is
+  below -55. Only a frame inside a syllable can be missing: a syllable's first and last frame move
+  with the line-up by a frame (`edges` counts those).
+- A hole of one or two frames of exact digital zero between two frames of speech is the recorder's
+  own context running dry. It is said (`recorder gaps`) and not counted: neither a line nor the
+  carried player ever plays zeros inside a phrase, because both cover a late packet.
+- The room is the level in the middle of a pause, at least 100 ms from speech and clear of the
+  typing, and the typing is the level where a click is. Averaged over every frame of a pause the
+  room was neither: the few frames of speech the line-up put at a pause's edge outweighed its
+  middle, and the clicks outweighed the hum, so standard and strong suppression read the same
+  while the tracks their senders sent were 7 dB apart.
+- The rate is the 90th percentile of half-second windows while somebody speaks, from the sender's
+  `outbound-rtp` on a line and from the frames the listener was carried. The average over the run,
+  printed beside it, is about half: nothing is sent in a pause.
+
+**What it asks, and what it measured** on the build of `4aedb5b6`:
+
+- A direct line: at most 0.5% missing in two breaks, and 50 kbps while speaking. 0%, and 64 kbps.
+- Carried by the server on a quiet, a Wi-Fi-like and a phone-like line: at most 0.5%, 1% and 1.5%
+  missing in 2, 4 and 6 breaks, none over 200 ms, and 45 kbps while speaking. 0%, 0.33% in two
+  breaks of 10 ms in the first seconds, and 0%; 48, 50 and 52 kbps. High asks the encoder for 64
+  and it spends what this sound needs (Opus at a variable rate); the settings say 64 at most.
+- With the room under the voice, as a call starts (standard suppression and the automatic gate):
+  the room 25 dB under the voice. 36 dB.
+- With the gate held open (`voiceAuto: false, voiceThreshold: -80`): standard takes the room 10 dB
+  and the typing 6 dB under what they are with no suppression (15 and 11); strong takes the room
+  4 dB under standard (6), takes the typing at least as far (0 to 3 dB further from run to run)
+  and keeps the voice. The gate is held open because with it working a pause is mostly the gate:
+  typing opens it, and it closes between bursts.
+
+**Proved red** against a production build broken four ways at once: the line's rate held to
+32 kbps, the server's to 24, the carried player's buffer at the median delay where it takes the
+99th percentile, and a strong model that never loads. It failed 10 of 22: the rate on the line and
+on all three carried lines; every line the buffer broke (3.85% missing in eight breaks on the
+Wi-Fi line, 13.88% in seventeen on the phone line); and both checks on strong suppression. Those
+two found a fault of the product's own: a call whose model would not load fell to no suppression
+at all (-41 dB, the level with none) where it should have fallen to the browser's, because the
+microphone was asked for again while the old one was still open (`.claude/rules/games.md`, *The
+microphone is prepared before anybody hears it*). The sources were put back from saved copies,
+never from git.
