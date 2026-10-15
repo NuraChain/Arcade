@@ -41,7 +41,7 @@ const family = (id: string, game: string | undefined, extra: Partial<Achievement
     ...extra
 });
 
-const WON_LUDO = family('won', 'ludo', { have: 12, earned: 11, next: { step: 12, need: 15, tier: 'bronze', blurb: { en: 'Win 15 games of Ludo.', fa: '۱۵ بازی منچ را ببر.' } } });
+const WON_LUDO = family('won', 'ludo', { have: 12, earned: 11, next: { step: 12, need: 15, tier: 'bronze', blurb: { en: 'Win 15 games of Ludo.', fa: '۱۵ بازی منچ رو ببر.' } } });
 
 const show = async (game?: string) =>
 {
@@ -79,7 +79,7 @@ beforeEach(async () =>
             family('won', 'hokm', { have: 0, earned: 0, tier: undefined })
         ],
         recent: [
-            { id: 'ludo-won-11', name: { en: 'Winner 11', fa: 'برنده ۱۱' }, blurb: { en: 'Win 11 games of Ludo.', fa: '۱۱ بازی منچ را ببر.' }, icon: 'trophy', tier: 'bronze', game: 'ludo', earnedAt: '2026-09-02T00:00:00.000Z' }
+            { id: 'ludo-won-11', name: { en: 'Winner 11', fa: 'برنده ۱۱' }, blurb: { en: 'Win 11 games of Ludo.', fa: '۱۱ بازی منچ رو ببر.' }, icon: 'trophy', tier: 'bronze', game: 'ludo', earnedAt: '2026-09-02T00:00:00.000Z' }
         ]
     };
 });
@@ -335,8 +335,8 @@ describe('a ladder', () =>
         server.ladders['ludo-won'] = {
             family: WON_LUDO,
             rungs: [
-                { step: 1, need: 1, tier: 'bronze', name: { en: 'Winner 1', fa: 'برنده ۱' }, blurb: { en: 'Win 1 game of Ludo.', fa: '۱ بازی منچ را ببر.' }, earnedAt: '2026-09-01T00:00:00.000Z' },
-                { step: 2, need: 2, tier: 'bronze', name: { en: 'Winner 2', fa: 'برنده ۲' }, blurb: { en: 'Win 2 games of Ludo.', fa: '۲ بازی منچ را ببر.' } }
+                { step: 1, need: 1, tier: 'bronze', name: { en: 'Winner 1', fa: 'برنده ۱' }, blurb: { en: 'Win 1 game of Ludo.', fa: '۱ بازی منچ رو ببر.' }, earnedAt: '2026-09-01T00:00:00.000Z' },
+                { step: 2, need: 2, tier: 'bronze', name: { en: 'Winner 2', fa: 'برنده ۲' }, blurb: { en: 'Win 2 games of Ludo.', fa: '۲ بازی منچ رو ببر.' } }
             ]
         };
 
