@@ -326,6 +326,7 @@ export const useVoice = createStore((): VoiceApi =>
 
         void context?.close().catch(() => undefined);
         context = null;
+        refused = false;
 
         for (const cancel of waits.values())
         {
@@ -577,10 +578,8 @@ export const useVoice = createStore((): VoiceApi =>
 
             if (strongly && denoiser === null && round === trials)
             {
-                const again = await ask(true);
-
                 stopTracks(raw);
-                raw = again;
+                raw = await ask(true);
             }
 
             if (round !== trials)
@@ -835,6 +834,8 @@ export const useVoice = createStore((): VoiceApi =>
 
             if (refused && got !== null && untrack(settings.settings).voiceNoise === 'strong')
             {
+                stopStream();
+
                 const again = await microphone();
 
                 if (round !== joins || untrack(table) !== next)
@@ -843,12 +844,8 @@ export const useVoice = createStore((): VoiceApi =>
                     return;
                 }
 
-                if (again !== null)
-                {
-                    stopStream();
-                    stream = again;
-                    await process(again);
-                }
+                stream = again;
+                await process(again);
             }
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
@@ -1030,15 +1027,17 @@ export const useVoice = createStore((): VoiceApi =>
             }
 
             const round = joins;
+
+            stopStream();
+
             const next = await microphone();
 
-            if (next === null || call === null || round !== joins)
+            if (call === null || round !== joins)
             {
                 stopTracks(next);
                 return;
             }
 
-            stopStream();
             stream = next;
             await process(next);
 

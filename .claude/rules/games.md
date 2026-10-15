@@ -1528,8 +1528,22 @@ before either path takes it:
   level, whether it is open, and the bar), which is what a meter draws.
 - **The microphone itself is sent until the context runs**, because a prepared voice from a
   context that is not running is silence; the call moves to the prepared voice when it runs.
-- `tune()` hands the gate and the volume a change at once; `reprocess()` asks for the
-  microphone again when what the browser does to it changes, and lets go of the old one.
+- `tune()` hands the gate and the volume a change at once; `reprocess()` lets go of the
+  microphone and then asks for it again when what the browser does to it changes. **In that
+  order, because Chromium keeps one source per device while any track of it is live**, with the
+  processing it was opened with: asked for again while the old one was still open, the browser
+  handed back the old source whatever was asked. So turning echo cancellation, automatic gain or
+  noise suppression on or off in a call changed nothing, and a call whose strong suppression would
+  not load fell back to no suppression at all instead of the browser's (-41 dB of room, where
+  standard leaves -56). The voice quality pass found it, run against a build whose model never
+  loads; a bare page in Chromium shows the rule (a second request while the first is open says
+  `noiseSuppression: false` and measures like it, and the same request after a stop is
+  suppressed). The mic test and the call's fallback let go first too. A microphone the reader
+  CHOOSES is still asked for before the old one goes: it is another device, and a refusal there
+  should leave the old one working. A model that would not load is tried again in the next call
+  (`refused` is cleared when a call ends; `reset()` had left it set, and so had every spec after
+  the first that made the model fail). `voice.spec.ts` (*lets the first microphone go*) holds
+  the order on a fake microphone that hands back a live source as Chromium does.
 
 Measured with clean speech carried by the server: between sentences nothing at all goes out (the
 gate closed, -70.6 dB at the listener, about 30% less sent). A gate that only hears level is

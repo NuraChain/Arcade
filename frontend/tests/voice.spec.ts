@@ -1119,6 +1119,27 @@ describe('the microphone, prepared before anybody hears it', () =>
         return made;
     };
 
+    const sameSource = () =>
+    {
+        const opened: { settings: MediaTrackConstraints; live: boolean }[] = [];
+
+        setVoiceMedia(() => ({
+            getUserMedia: async (constraints: MediaStreamConstraints) =>
+            {
+                asked.push(constraints);
+
+                const open = opened.find((one) => one.live);
+                const one = { settings: open?.settings ?? (constraints.audio as MediaTrackConstraints), live: true };
+                const made = { kind: 'audio', contentHint: '', stop: () => (one.live = false), getSettings: () => one.settings };
+
+                opened.push(one);
+                return { getTracks: () => [made], getAudioTracks: () => [made] } as unknown as MediaStream;
+            }
+        }) as unknown as MediaDevices);
+
+        return () => opened.filter((one) => one.live).map((one) => one.settings);
+    };
+
     it('turns the browser’s own suppression off for strong suppression, which takes its place', async () =>
     {
         sound(true);
@@ -1159,6 +1180,44 @@ describe('the microphone, prepared before anybody hears it', () =>
 
         expect(asked.map((one) => (one.audio as MediaTrackConstraints).noiseSuppression)).toEqual([false, true]);
         expect(useVoice().suppression()).toBe('standard');
+    });
+
+    it('lets the first microphone go before it asks again, so the browser’s suppression is really on when strong suppression will not load', async () =>
+    {
+        sound(true);
+        suppressor(false);
+
+        const live = sameSource();
+
+        useSettings().update({ voiceNoise: 'strong' });
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(live(), 'asked again while the first was open, the browser handed back the first, with no suppression').toEqual([expect.objectContaining({ noiseSuppression: true })]);
+        expect(useVoice().suppression()).toBe('standard');
+    });
+
+    it('tries strong suppression again in the next call when it would not load in the last one', async () =>
+    {
+        sound(true);
+        suppressor(false);
+        useSettings().update({ voiceNoise: 'strong' });
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(useVoice().suppression()).toBe('standard');
+
+        useVoice().leave();
+
+        const made = suppressor();
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(made, 'a model that failed once was never asked for again').toHaveLength(1);
+        expect(useVoice().suppression()).toBe('strong');
+        expect(asked.at(-1)!.audio).toMatchObject({ noiseSuppression: false });
     });
 
     it('says when nothing suppresses the noise because the reader turned it off', async () =>
@@ -1280,6 +1339,23 @@ describe('the microphone, prepared before anybody hears it', () =>
         expect(stopped).toHaveBeenCalled();
         expect(gates[0].off, 'the old voice was left running').toBe(true);
         expect(gates).toHaveLength(2);
+        expect(calls[0].mic.at(-1)).toBe(processed);
+    });
+
+    it('lets the microphone go before it asks again in a call, so what the browser does to it really changes', async () =>
+    {
+        sound(true);
+
+        const live = sameSource();
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        useSettings().update({ voiceEcho: false });
+        await useVoice().reprocess();
+        await settle();
+
+        expect(live(), 'asked again while the old one was open, the change never reached the microphone').toEqual([expect.objectContaining({ echoCancellation: false })]);
         expect(calls[0].mic.at(-1)).toBe(processed);
     });
 
@@ -1477,6 +1553,20 @@ describe('the microphone, prepared before anybody hears it', () =>
 
             expect(asked.map((one) => (one.audio as MediaTrackConstraints).noiseSuppression), 'the test ran with no suppression at all').toEqual([false, true]);
             expect(useVoice().suppression()).toBe('standard');
+            expect(played()).toHaveLength(1);
+        });
+
+        it('lets the first microphone go before it asks again, so a test whose strong suppression will not load has the browser’s', async () =>
+        {
+            sound(true);
+            suppressor(false);
+
+            const live = sameSource();
+
+            useSettings().update({ voiceNoise: 'strong' });
+            await useVoice().startTest();
+
+            expect(live(), 'the test was handed the first microphone back, with no suppression').toEqual([expect.objectContaining({ noiseSuppression: true })]);
             expect(played()).toHaveLength(1);
         });
 
