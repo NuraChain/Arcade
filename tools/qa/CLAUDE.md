@@ -656,3 +656,82 @@ at all (-41 dB, the level with none) where it should have fallen to the browser'
 microphone was asked for again while the old one was still open (`.claude/rules/games.md`, *The
 microphone is prepared before anybody hears it*). The sources were put back from saved copies,
 never from git.
+
+## The networking passes
+
+Two passes hold the real-time path that every game rides on: what a move or a Ready costs to reach
+the other browsers, and whether a browser that is slow, hidden, cut off or behind a bad line comes
+back to the server's board by itself. The networking audit
+(`docs/superpowers/specs/2026-10-15-networking-audit.md`) has the numbers each one measured and
+what they found.
+
+**`tools/qa/sync-pass.mjs` is two independent browsers at one live Ludo game** on the built
+server: `dana.w` and `mina`, each in a context of its own, with an init script in every page that
+stamps each frame its socket hands it and each revision its table shows. Every time is read on one
+clock: the browsers and the pass run on one machine and each stamps with its own
+`performance.timeOrigin + performance.now()`, the same high-resolution epoch everywhere on it, and
+nothing subtracts a time the server wrote. Start the server with the limiter raised
+(`PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 API_RATE_MAX=20000 npm start`) and run
+`QA_BASE=http://localhost:5300 node tools/qa/sync-pass.mjs`; `QA_ONLY=` names parts.
+
+- *ready*: a Ready in one waiting room reaching the other, pressed straight after the last and
+  pressed on its own (the doorbell path: the server rings, the page reads the table again).
+- *ping*: forty round trips on the socket.
+- *steady*, *burst*: an action every 600 ms, and forty as fast as the api answers; every action
+  is timed to its frame's arrival and to the table coming to rest at its revision, in both
+  browsers.
+- *hidden*, *flick*: a hidden tab is pushed every move and plays what it missed when it is shown;
+  a tab flicked twelve times in five seconds keeps its socket and is still pushed every move.
+- *slow*: the second browser's processor six times slower (CDP).
+- *cut*, *churn*: the socket closed from the page; five more tabs of the same account opened and
+  shut and the socket cut three times in a row.
+- *freeze*: the page frozen by CDP (`Page.setWebLifecycleState`) while ten moves are made, which is
+  what a sleeping laptop does to a page's JavaScript.
+- *silent*: a tab opened through the proxy, whose socket then goes quiet both ways with no close,
+  which is what a sleeping laptop or a changed network leaves behind; the page has to find it dead
+  and replace it.
+- *reload*, *twin*: a reload in the middle of a game, and a second tab of the same account.
+- *restart* (only with `QA_RESTART`, a shell command that starts the built server): the server is
+  stopped in the middle of the game and started again.
+- *race*: one move sent at the same moment over the socket and over http under two keys, while the
+  other seat presses too: applied once, the other refused.
+- *stale*: a play sent twice under one key is applied once; one composed against an older board
+  changes nothing.
+- *soak*: a hundred more actions a round (`QA_SOAK`, `QA_SOAK_ROUNDS`), and each page weighed
+  (its heap after a collection, and the elements on its table outside a result) at the start of
+  the run and after every round. Only growth fails it: a table weighed while a lit pawn's landing
+  marks were drawn has fifty more elements than the same table at rest.
+
+Two things the first full run of it got wrong, and the pass now does instead. A page catches up
+over http before its socket has opened, so *silent* waits for the socket of the tab it opened
+before it lets that socket go quiet; it silenced nothing the first time. And a Ready pressed
+straight after the last lands inside the throttle's window, so *ready* measures both: pressed on
+its own, which is what a person does, and straight after.
+
+Every part asks, for both browsers, that the table only ever moved forward and that the board at
+rest is the server's, pawn by pawn. `QA_JITTER=wifi|mobile` puts the second browser behind the
+ordered jitter proxy the voice quality pass uses (`QA_PROXY_PORT`, 5310).
+
+**`tools/qa/load-pass.mjs` is many live games at once with no browser**: two accounts a table,
+each with a real socket, the seat on turn playing over its socket as a browser does, every play
+timed to its `ack` and to the `game` frame the other seat is pushed, a health check alongside,
+and the server's memory before and after each level (`QA_PID`). `QA_TABLES=10,50,100
+QA_SECONDS=20`. Three things in it are what its first versions got wrong:
+
+- **A socket plays no faster than one play in 300 ms.** The gateway closes a socket that sends
+  more than forty in ten seconds (4429), which a person cannot do and the first version did at
+  every table.
+- **A seat learns the board from its `ack` and its pushed `game` frame**, as a browser does, and
+  reads the match over http only when neither has come within five seconds. The second version
+  read the match before every play: thousands of reads a level that no browser makes, which
+  measured the read route as much as the socket and spent the api's per-minute ceiling, so the
+  next level's setup was refused. `QA_READ_EACH=1` brings the reads back for a like-for-like
+  comparison with numbers taken that way.
+- **Every step of a table's setup is checked**, a table that will not start is recorded rather
+  than played, and every api answer that is not a 200 is counted and printed. The second version
+  took a refused start for a game and died on a seat it could not find.
+
+The accounts are made from keys derived from their index, so a second run signs the same people
+in again; each sign-in still adds a device, as a browser's would. One address opens every socket,
+so the handshake ceiling (`HANDSHAKES_A_MINUTE`, 300 a minute) bounds how many new sockets a level
+can open.
