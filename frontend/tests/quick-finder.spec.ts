@@ -4,7 +4,7 @@ import { RouterProvider, Routes, createMemoryHistory, createRouter } from 'azero
 
 import QuickFinder from '../src/components/games/quick-finder.component.azeroth';
 import type { GameId } from '../src/data/games.ts';
-import { TABLE_RULES } from '../src/data/tables.ts';
+import { TABLE_RULES, defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { fitted, recallAsk, rememberAsk } from '../src/lib/quick-asks.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -436,6 +436,45 @@ describe('the sheet that asks what to look for', () =>
         {
             tables.quick = real;
         }
+    });
+
+    it('takes the reader to the live game they are still playing, and says so when it is another game', async () =>
+    {
+        const playing = await useLobby().host('backgammon', { ...defaultTable('backgammon'), seats: 2, mode: 'live', privacy: 'public' }, []);
+
+        server.tables.find((one) => one.id === playing)!.matchId = `match-${ playing }`;
+        await useLobby().refresh();
+        await settle();
+
+        const { container, router } = opened('ludo');
+
+        await settle();
+        fire(finder(container), 'click');
+
+        await vi.waitFor(() => expect(router.location().pathname).toBe(`/app/play/${ playing }`), { timeout: 4000 });
+
+        expect(useToasts().items().map((toast) => [toast.kind, toast.text])).toEqual([['info', useLocale().t('quickMatch.stillPlaying', { game: useLocale().t('games.backgammon.name') })]]);
+        expect(server.tables.filter((one) => one.chairs.some((chair) => chair.who === server.me)).map((one) => one.id)).toEqual([playing]);
+    });
+
+    it('says nothing more when the game still on is the one that was looked for, whatever other tables the reader sits at', async () =>
+    {
+        await useLobby().host('backgammon', { ...defaultTable('backgammon'), seats: 2, mode: 'turns', privacy: 'public' }, []);
+
+        const playing = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 2, mode: 'live', privacy: 'public' }, []);
+
+        server.tables.find((one) => one.id === playing)!.matchId = `match-${ playing }`;
+        await useLobby().refresh();
+        await settle();
+
+        const { container, router } = opened('ludo');
+
+        await settle();
+        fire(finder(container), 'click');
+
+        await vi.waitFor(() => expect(router.location().pathname).toBe(`/app/play/${ playing }`), { timeout: 4000 });
+
+        expect(useToasts().items()).toEqual([]);
     });
 
     it('asks in Persian too', async () =>

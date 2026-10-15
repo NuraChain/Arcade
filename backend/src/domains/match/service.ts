@@ -726,6 +726,31 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
+        playingAt: async (tx: EntityManager, me: string) =>
+        {
+            const seats = await tx.getRepository(MatchPlayer)
+                .createQueryBuilder('p')
+                .innerJoin(Match, 'm', 'm.id = p.match_id and m.finished_at is null')
+                .innerJoin(Table, 't', `t.id = m.table_id and t.mode = 'live'`)
+                .select('p.match_id', 'matchId')
+                .addSelect('p.seat', 'seat')
+                .where('p.user_id = :me', { me })
+                .getRawMany<{ matchId: string; seat: number }>();
+
+            for (const { matchId, seat } of seats)
+            {
+                const match = await tx.getRepository(Match).findOneByOrFail({ id: matchId });
+                const engine = engineFor(match.game);
+
+                if (engine !== null && engine.apply(stateOf(match), engine.forfeit(seat, 'left'), draws).ok)
+                {
+                    return match.tableId;
+                }
+            }
+
+            return null;
+        },
+
         walkOut: async (tx: EntityManager, me: string, tableId: string, mayForfeit: boolean) =>
         {
             const match = await tx.getRepository(Match).findOne({

@@ -2016,13 +2016,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async quick(me, input)
             {
                 const began = performance.now();
-                const found = await table.quick(me, input, here).catch((error: unknown) =>
+                const found = await table.quick(me, input, here, (tx) => match.playingAt(tx, me)).catch((error: unknown) =>
                 {
                     note?.('quick play refused', { game: input.game, who: me, code: (error as { code?: string }).code ?? 'error' });
 
                     throw error;
                 });
                 let after = await mustTable(me, found.id);
+                const outcome = found.seated ? (after.is_host ? 'opened' : 'joined') : after.match_id === null ? 'already waiting' : 'already playing';
 
                 if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
                 {
@@ -2044,7 +2045,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     game: after.game,
                     who: me,
                     asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams },
-                    outcome: !found.seated ? 'already waiting' : after.is_host ? 'opened' : 'joined',
+                    outcome,
                     table: after.id,
                     match: after.match_id,
                     taken: after.taken,

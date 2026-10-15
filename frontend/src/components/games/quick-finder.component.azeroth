@@ -12,6 +12,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 const BLINDS = ['low', 'mid', 'high'] as const;
 
@@ -20,6 +21,7 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
     const catalogue = useCatalogue();
     const lobby = useLobby();
     const locale = useLocale();
+    const toasts = useToasts();
     const { navigate } = useNavigate();
 
     state game = props.game;
@@ -74,10 +76,23 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
             return;
         }
 
+        const asked = game;
+
         pending = true;
-        rememberAsk(game, ask);
+        rememberAsk(asked, ask);
         openTable(
-            lobby.quick(game, ask),
+            lobby.quick(asked, ask).then((id) =>
+            {
+                const elsewhere = lobby.seated().find((table) => table.id === id && table.game !== asked);
+                const named = catalogue.games.find((entry) => entry.id === elsewhere?.game);
+
+                if (named !== undefined)
+                {
+                    toasts.show({ kind: 'info', text: locale.t('quickMatch.stillPlaying', { game: locale.t(named.nameKey) }) });
+                }
+
+                return id;
+            }),
             (to) =>
             {
                 props.close(true);

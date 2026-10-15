@@ -1587,6 +1587,16 @@ export const client =
                 && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
             const mine = (chair: SeatWire) => chair.who === server.me;
             const free = (table: TableWire) => table.chairs.filter((chair) => chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
+            const playing = filter.mode === 'live'
+                ? server.tables.find((table) => table.mode === 'live' && table.matchId !== undefined && table.chairs.some(mine)
+                    && !(server.outOfGame[table.matchId] ?? []).includes(server.me))
+                : undefined;
+
+            if (playing !== undefined)
+            {
+                return structuredClone(restate(playing));
+            }
+
             const waiting = server.tables.find((table) => fits(table) && table.chairs.some((chair) => mine(chair) && chair.ready));
 
             if (waiting !== undefined)

@@ -785,6 +785,23 @@ what holds across processes.
 
 Under the lock, in order:
 
+- **Already playing.** A search for a live game first asks whether the searcher is still playing
+  one, of any game, at a live table, and if so that game's table is the answer and nothing is
+  written. Nobody plays two live games at once, so a search from somebody in one is somebody who
+  lost track of it: another tab, or a press after a request the browser gave up on while the
+  server went on to seat them and start the game. Before this they were seated a second time
+  elsewhere, and a second game could start under them. Still playing is the engine's word, asked
+  the way a walkout asks it (`playingAt` in the match service: the seat's unfinished game at a
+  live table, and a forfeit the engine would take), so a seat that gave up and one a poker game
+  put out of chips search as they always did while the game goes on without them. The table
+  service is handed the question (`playing`), as a leave is handed its walkout, because a
+  table knows no game. It is asked first, under the searcher's own lock (*One live search at a
+  time*) and before the game's, so two searches of one person that cross the start of the game
+  the first one filled meet one answer. A turn-based search asks nothing, and a turn-based game
+  is not one being played here: a game of a move a day is not one somebody sits at. The browser
+  goes to the table it is given and, when that is another game than the one looked for, says
+  "Your Backgammon game is still on" (`quickMatch.stillPlaying`). `quick.db.spec.ts`
+  (*somebody still playing a live game*) and `quick-finder.spec.ts` hold it.
 - **Already waiting.** A table that fits the search where the searcher sits READY is the answer, and
   nothing is written. That is what makes a second press, a reload during the first and a request
   sent twice one chair. Ready is part of it on purpose: a finish clears every chair's readiness, so
@@ -922,19 +939,19 @@ minors, presence, the chairs, the tables it opens, the limit and the refusals.
 tab of a seat that is ready, of one that is not and of one a finish left un-ready.
 `tour-pass.mjs` presses the button on the built server and counts the requests.
 
-Two limits, stated. A search sent again from where the store cannot see it - another tab, or a
-press after a request the browser gave up on while the server went on to seat it - can find the
-first one's game already started, which is no longer waiting, and be seated a second time
-elsewhere. Answering it with the game that seat is in would close that, and would also send a
-poker seat that is out of chips back to the table it is out at for as long as the others play on,
-so it is not done. And sitting down by a link still asks whether the table has closed before its
-own transaction, and can land in one that closed in that instant.
+One limit, stated. Sitting down by a link still asks whether the table has closed before its
+own transaction, and can land in one that closed in that instant. A search sent again from where
+the store cannot see it used to be the second: it found the first one's game already started and
+was seated a second time elsewhere. It is answered with that game now (*Already playing*), and a
+poker seat that is out of chips, which is why it once was not, is asked of the engine and searches
+as before.
 
 **A search says what it did in the server's log, keyed by its table.** Every answer of
 `POST /tables/quick` writes one `quick play` line through `note`, the fifth argument of
 `buildPorts`, which `main.ts` points at its logger. It says the game, the account that searched
-(its id, and nothing about its session), what was asked, whether the searcher was already waiting,
-opened a table or joined one, the table and the game that started at it, how many chairs are taken
+(its id, and nothing about its session), what was asked, whether the searcher was still playing a
+game, already waiting, opened a table or joined one, the table and the game that started at it or
+was already on there, how many chairs are taken
 of how many, how many tables the search passed over because somebody there was away (`away`) or
 because their last chair went, or the table closed, as it sat down (`missed`), how many waits it
 let go of and how long the answer took. The search's answer carries the two counts as `passed`,

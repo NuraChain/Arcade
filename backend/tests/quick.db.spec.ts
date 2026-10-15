@@ -906,6 +906,128 @@ describe.skipIf(!active)('quick play, against a real database', () =>
         }, 60_000);
     });
 
+    describe('somebody still playing a live game', () =>
+    {
+        it('is answered with that game, whatever game a live search asks for, and given no other chair', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const [mine, theirs] = await crowd(2);
+            const first = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+            const started = await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            expect(started.matchId).toEqual(expect.any(String));
+            expect((await ports.table.quick(mine, { game: 'backgammon', voice: 'off' })).id).toBe(first.id);
+            expect((await ports.table.quick(mine, { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(first.id);
+            expect((await ports.table.quick(theirs, { game: 'poker', voice: 'off' })).id).toBe(first.id);
+            expect(await chairsOf(mine)).toHaveLength(1);
+            expect(await chairsOf(theirs)).toHaveLength(1);
+            expect(await sizes()).toEqual([2]);
+            expect(said.slice(2).map(([, fields]) => fields.outcome)).toEqual(['already playing', 'already playing', 'already playing']);
+            expect(said.slice(2).map(([, fields]) => fields.match)).toEqual([started.matchId, started.matchId, started.matchId]);
+        });
+
+        it('is never seated twice by two of their searches that arrive together, one of them taking the last chair', async () =>
+        {
+            const one = door();
+            const two = door();
+
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const [waiting, me] = await crowd(2);
+                const theirs = await one.table.quick(waiting, { game: 'backgammon', voice: 'off' });
+                const answers = await Promise.all([
+                    one.table.quick(me, { game: 'backgammon', voice: 'off' }),
+                    two.table.quick(me, { game: 'backgammon', voice: 'off' })
+                ]);
+
+                expect(answers.map((answer) => answer.id), `round ${ round }`).toEqual([theirs.id, theirs.id]);
+                expect(await chairsOf(me), `round ${ round }`).toHaveLength(1);
+                expect(await live(theirs.id), `round ${ round }`).toBe(1);
+
+                await db.getRepository(Table).createQueryBuilder().delete().execute();
+            }
+        }, 60_000);
+
+        it('still looks for a turn-based game while a live one is on, and for a live one while only a turn-based one is', async () =>
+        {
+            const ports = door();
+            const [mine, theirs, slow, slower] = await crowd(4);
+            const live = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+
+            await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            const later = await ports.table.quick(mine, { game: 'ludo', voice: 'off', mode: 'turns' });
+
+            expect(later.id).not.toBe(live.id);
+            expect(await chairsOf(mine)).toHaveLength(2);
+
+            const turns = await ports.table.quick(slow, { game: 'backgammon', voice: 'off', mode: 'turns' });
+            const both = await ports.table.quick(slower, { game: 'backgammon', voice: 'off', mode: 'turns' });
+
+            expect(both.id).toBe(turns.id);
+            expect(both.matchId).toEqual(expect.any(String));
+
+            const now = await ports.table.quick(slow, { game: 'backgammon', voice: 'off' });
+
+            expect([live.id, turns.id]).not.toContain(now.id);
+            expect(await chairsOf(slow)).toHaveLength(2);
+        });
+
+        it('looks as it always did for a seat the game is over for while it goes on: one that gave up, and one out of chips', async () =>
+        {
+            const ports = door();
+            const three = await crowd(3);
+            let ludo = await ports.table.quick(three[0], { game: 'ludo', voice: 'off', seats: 3 });
+
+            for (const who of three.slice(1))
+            {
+                ludo = await ports.table.quick(who, { game: 'ludo', voice: 'off', seats: 3 });
+            }
+
+            expect(ludo.matchId).toEqual(expect.any(String));
+
+            await ports.match.resign(three[0], ludo.matchId!, { key: 'gave-up' });
+
+            expect((await ports.table.quick(three[0], { game: 'ludo', voice: 'off', seats: 3 })).id).not.toBe(ludo.id);
+            expect((await ports.table.quick(three[1], { game: 'ludo', voice: 'off', seats: 3 })).id).toBe(ludo.id);
+
+            const six = await crowd(6);
+            let poker = await ports.table.quick(six[0], { game: 'poker', voice: 'off', seats: 6 });
+
+            for (const who of six.slice(1))
+            {
+                poker = await ports.table.quick(who, { game: 'poker', voice: 'off', seats: 6 });
+            }
+
+            expect(poker.matchId).toEqual(expect.any(String));
+
+            const { seat } = await db.getRepository(MatchPlayer).findOneByOrFail({ matchId: poker.matchId!, userId: six[1] });
+
+            await db.query(
+                `update matches
+                    set state = jsonb_set(jsonb_set(jsonb_set(state, array['out', $2], 'true'), array['stacks', $2], '0'), array['folded', $2], 'true')
+                  where id = $1`,
+                [poker.matchId, String(seat)]
+            );
+
+            expect((await ports.table.quick(six[1], { game: 'poker', voice: 'off', seats: 6 })).id).not.toBe(poker.id);
+            expect((await ports.table.quick(six[2], { game: 'poker', voice: 'off', seats: 6 })).id).toBe(poker.id);
+        });
+
+        it('never takes a game the server has written down as finished for one being played, whatever its board says', async () =>
+        {
+            const ports = door();
+            const [mine, theirs] = await crowd(2);
+            const first = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+            const started = await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            await db.query(`update matches set finished_at = now(), deadline_at = null, outcome = 'abandoned' where id = $1`, [started.matchId]);
+
+            expect((await ports.table.quick(mine, { game: 'ludo', voice: 'off', seats: 4 })).id).not.toBe(first.id);
+        });
+    });
+
     describe('when many search at once', () =>
     {
         it('seats ten searchers who chose four at tables of four, four and two, nobody twice and nobody in another’s chair, and starts the two that filled', async () =>

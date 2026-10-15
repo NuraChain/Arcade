@@ -150,6 +150,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.quick-options': 'این بازی همچین میزی نداره.',
     'quickMatch.busy': 'داریم برات یه صندلی پیدا می‌کنیم',
     'quickMatch.started': 'بازی {game} شروع شد',
+    'quickMatch.stillPlaying': 'بازی {game} هنوز تموم نشده',
     'quickMatch.go': 'برو سر میز',
     'quickMatch.title': 'دنبال چه بازی‌ای هستی؟',
     'quickMatch.lead': 'سر میزی می‌شینی که دقیقاً همونیه که خواستی، و وقتی پر شد، بازی خودش شروع می‌شه.',

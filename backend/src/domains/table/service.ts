@@ -597,7 +597,8 @@ export function createTableService(db: DataSource, social: SocialService)
         async quick(
             lead: string,
             ask: QuickAsk & { game: string; voice: VoiceScope },
-            present: (userIds: readonly string[]) => ReadonlySet<string>
+            present: (userIds: readonly string[]) => ReadonlySet<string>,
+            playing: (tx: EntityManager) => Promise<string | null> = async () => null
         )
         {
             const rules = await rulesOf(ask.game);
@@ -617,6 +618,14 @@ export function createTableService(db: DataSource, social: SocialService)
             const search = async (tx: EntityManager) =>
             {
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick:who'), hashtext($1))`, [lead]);
+
+                const busy = want.filter.mode === 'live' ? await playing(tx) : null;
+
+                if (busy !== null)
+                {
+                    return { id: busy, seated: false };
+                }
+
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
 
                 const waiting = await compatible(tx, lead, ask.game, want.filter)

@@ -157,6 +157,7 @@ export const play = {
 
     'quickMatch.busy': 'Finding you a seat',
     'quickMatch.started': 'Your {game} game has started',
+    'quickMatch.stillPlaying': 'Your {game} game is still on',
     'quickMatch.go': 'Go to the table',
     'quickMatch.title': 'What are you looking for?',
     'quickMatch.lead': 'You sit down at a table of exactly that, and the game starts by itself when it is full.',
