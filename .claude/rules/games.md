@@ -1528,6 +1528,14 @@ before either path takes it:
   level, whether it is open, and the bar), which is what a meter draws.
 - **The microphone itself is sent until the context runs**, because a prepared voice from a
   context that is not running is silence; the call moves to the prepared voice when it runs.
+- **A microphone the call lets go of is switched back on.** The call mutes by switching off the
+  track it holds. Joined muted while the context was still starting (in Firefox every time; in
+  Chromium when the context runs late), it switched off the raw microphone, then moved to the
+  prepared voice, which is made FROM that microphone, and nothing switched it back on: unmuted,
+  the call sent silence. The voice pass on Firefox found it (nobody heard speaking, the line
+  carrying 1 kbps, a turned-up voice measured at nothing), and a probe read the raw track
+  `enabled: false` after the unmute. `setMic` now switches the track it lets go of back on
+  (`voice-rtc.spec.ts`, *turns a microphone it lets go of back on*).
 - `tune()` hands the gate and the volume a change at once; `reprocess()` lets go of the
   microphone and then asks for it again when what the browser does to it changes. **In that
   order, because Chromium keeps one source per device while any track of it is live**, with the

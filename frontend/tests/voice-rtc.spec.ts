@@ -504,6 +504,28 @@ describe('a call between two players', () =>
         expect(waits.connection.lines[0].sender.track).toBe(microphone);
     });
 
+    it('turns a microphone it lets go of back on, so a voice prepared from it is not left silent', async () =>
+    {
+        const asks = asking();
+        const raw = { enabled: true } as unknown as MediaStreamTrack;
+        const prepared = { enabled: true } as unknown as MediaStreamTrack;
+
+        asks.call.setMuted(true);
+        await asks.call.setMic({ getAudioTracks: () => [raw] } as unknown as MediaStream);
+
+        expect(raw.enabled, 'a muted call sends its microphone switched off').toBe(false);
+
+        await asks.call.setMic({ getAudioTracks: () => [prepared] } as unknown as MediaStream);
+
+        expect(prepared.enabled, 'the voice taken over was sent while muted').toBe(false);
+        expect(raw.enabled, 'the microphone the prepared voice is made from was left switched off').toBe(true);
+
+        asks.call.setMuted(false);
+
+        expect(prepared.enabled).toBe(true);
+        expect(raw.enabled).toBe(true);
+    });
+
     it('takes an offer that arrives while the answer before it is still being applied', async () =>
     {
         const asks = asking();

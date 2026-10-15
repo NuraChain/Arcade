@@ -849,7 +849,14 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             localMeter?.();
             localMeter = null;
 
+            const previous = track;
+
             track = stream?.getAudioTracks()[0] ?? null;
+
+            if (previous !== null && previous !== track)
+            {
+                previous.enabled = true;
+            }
 
             if (track !== null)
             {
