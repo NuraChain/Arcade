@@ -13,6 +13,12 @@ const LOOK_EVERY_MS = 5000;
 
 const RUNG_WITHIN_MS = 2000;
 
+const TOLD_WITHIN_MS = 2000;
+
+const GIVEN_UP_WITHIN_MS = 240_000;
+
+const GAMES = ['ludo', 'hokm', 'poker', 'backgammon'];
+
 let checks = 0;
 let failures = 0;
 
@@ -87,7 +93,8 @@ const session = () =>
         handle: null,
         socket: null,
         rung: [],
-        gone: new Map()
+        gone: new Map(),
+        games: new Map()
     };
 };
 
@@ -110,6 +117,11 @@ const connect = (who) => new Promise((resolve, reject) =>
         if (frame.t === 'nudge' && frame.scope === 'table')
         {
             who.rung.push(frame.id);
+        }
+
+        if (frame.t === 'game' && typeof frame.match?.id === 'string' && !who.games.has(frame.match.id))
+        {
+            who.games.set(frame.match.id, Date.now());
         }
 
         if (frame.t === 'presence')
@@ -371,13 +383,334 @@ const eachTheirOwn = async () =>
     console.log('');
 };
 
+const chairsOf = async (who) => (await who.get('/tables/mine')).body?.tables ?? [];
+
+const isolatedByGame = async () =>
+{
+    console.log('[eight look for four games at once, two for each]');
+
+    const first = [];
+    const second = [];
+
+    for (const game of GAMES)
+    {
+        first.push(await arrive(`Apart ${ game } a${ tag() }`));
+        second.push(await arrive(`Apart ${ game } b${ tag() }`));
+    }
+
+    try
+    {
+        const opened = await Promise.all(first.map((who, index) => who.post('/tables/quick', { game: GAMES[index], voice: 'off' })));
+
+        ok('the first four are at four tables, one for each game', new Set(opened.map((answer) => answer.body?.id)).size === 4 && opened.every((answer) => answer.status === 200),
+            opened.map((answer) => answer.status).join(' '));
+
+        const joined = await Promise.all(second.map((who, index) => who.post('/tables/quick', { game: GAMES[index], voice: 'off' })));
+
+        for (const [index, game] of GAMES.entries())
+        {
+            const table = (await first[index].get(`/tables/${ opened[index].body?.id }`)).body;
+            const sitting = sittingAt(table);
+
+            ok(`${ game }: the second joins the first at a table of ${ game }, and of nothing else`,
+                joined[index].body?.id === opened[index].body?.id && table?.game === game,
+                `${ table?.game }`);
+            ok(`${ game }: the two of them, and nobody who looked for another game, with the game started`,
+                sitting.length === 2 && sitting.includes(first[index].handle) && sitting.includes(second[index].handle) && table?.matchId !== undefined,
+                sitting.join(' '));
+        }
+    }
+    finally
+    {
+        await goHome([...first, ...second]);
+    }
+
+    console.log('');
+};
+
+const pressedAgain = async () =>
+{
+    console.log('[one person presses again and again, then looks for another game]');
+
+    const me = await arrive(`Again ${ tag() }`);
+
+    try
+    {
+        const together = await Promise.all(Array.from({ length: 5 }, () => me.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 })));
+        const ids = new Set(together.map((answer) => answer.body?.id));
+
+        ok('five presses at once are answered with one table', ids.size === 1 && together.every((answer) => answer.status === 200),
+            `${ ids.size } tables, ${ together.map((answer) => answer.status).join(' ') }`);
+
+        const waiting = [...ids][0];
+
+        for (let press = 0; press < 3; press += 1)
+        {
+            await me.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        }
+
+        const mine = await chairsOf(me);
+        const table = (await me.get(`/tables/${ waiting }`)).body;
+
+        ok('and three more after them, with one chair at it', mine.length === 1 && mine[0].id === waiting && sittingAt(table).filter((who) => who === me.handle).length === 1,
+            `${ mine.length } tables, ${ sittingAt(table).join(' ') }`);
+
+        const other = await me.post('/tables/quick', { game: 'hokm', voice: 'off' });
+        const now = await chairsOf(me);
+        const left = (await me.get(`/tables/${ waiting }`)).body;
+
+        ok('a search for another live game lets the first wait go', other.status === 200 && now.length === 1 && now[0].id === other.body?.id,
+            now.map((one) => one.game).join(' '));
+        ok('and the table nobody else was at closes behind them', left === null || left?.status === 'closed' || sittingAt(left).length === 0, `${ left?.status }`);
+    }
+    finally
+    {
+        await goHome([me]);
+    }
+
+    console.log('');
+};
+
+const cancelAndAgain = async () =>
+{
+    console.log('[somebody stops looking, and looks again]');
+
+    const stays = await arrive(`Keeps on ${ tag() }`);
+    const stops = await arrive(`Stops ${ tag() }`);
+
+    try
+    {
+        const first = await stays.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        const joined = await stops.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        const tableId = first.body?.id;
+
+        ok('two wait at one table of four', joined.body?.id === tableId, `${ tableId } ${ joined.body?.id }`);
+
+        stays.rung.length = 0;
+
+        const stopped = await stops.post(`/tables/${ tableId }/leave`, { forfeit: false });
+        const after = (await stays.get(`/tables/${ tableId }`)).body;
+        const rung = await within(RUNG_WITHIN_MS, () => stays.rung.includes(tableId));
+
+        ok('stopping takes that one chair and no other', stopped.status === 200 && sittingAt(after).join(' ') === stays.handle && after?.status === 'open',
+            `${ stopped.status }, ${ sittingAt(after).join(' ') }`);
+        ok('whoever is still waiting is rung about it', rung, `${ stays.rung.length } table rings`);
+        ok('and whoever stopped holds no chair at all', (await chairsOf(stops)).length === 0);
+
+        const again = await stops.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+
+        ok('looking again finds the table still waiting', again.body?.id === tableId && sittingAt((await stays.get(`/tables/${ tableId }`)).body).length === 2,
+            `${ again.body?.id }`);
+
+        await stops.post(`/tables/${ tableId }/leave`, { forfeit: false });
+        await stays.post(`/tables/${ tableId }/leave`, { forfeit: false });
+
+        const closed = (await stays.get(`/tables/${ tableId }`)).body;
+
+        ok('when both stop, the table closes and holds nobody', closed === null || closed?.status === 'closed', `${ closed?.status }`);
+        ok('and neither holds a chair anywhere', (await chairsOf(stays)).length === 0 && (await chairsOf(stops)).length === 0);
+    }
+    finally
+    {
+        await goHome([stays, stops]);
+    }
+
+    console.log('');
+};
+
+const stillPlaying = async () =>
+{
+    console.log('[somebody still playing a live game looks again]');
+
+    const me = await arrive(`Busy ${ tag() }`);
+    const them = await arrive(`Busy too ${ tag() }`);
+
+    try
+    {
+        const first = await me.post('/tables/quick', { game: 'backgammon', voice: 'off' });
+        const started = await them.post('/tables/quick', { game: 'backgammon', voice: 'off' });
+        const tableId = first.body?.id;
+
+        ok('a game of two is dealt', started.body?.id === tableId && started.body?.matchId !== undefined, `${ started.body?.status }`);
+
+        const same = await me.post('/tables/quick', { game: 'backgammon', voice: 'off' });
+        const other = await me.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        const mine = await chairsOf(me);
+
+        ok('looking for the same game is answered with the game being played', same.body?.id === tableId && same.body?.matchId === started.body?.matchId,
+            `${ same.body?.id }`);
+        ok('and so is looking for another live game', other.body?.id === tableId, `${ other.body?.game }`);
+        ok('and they hold that one chair and no other', mine.length === 1 && mine[0].id === tableId, mine.map((one) => one.game).join(' '));
+
+        const slow = await me.post('/tables/quick', { game: 'ludo', voice: 'off', mode: 'turns' });
+
+        ok('a game of a move a day can still be looked for beside it', slow.status === 200 && slow.body?.id !== tableId && slow.body?.mode === 'turns',
+            `${ slow.status } ${ slow.body?.mode }`);
+    }
+    finally
+    {
+        await goHome([me, them]);
+    }
+
+    console.log('');
+};
+
+const cameBack = async () =>
+{
+    console.log('[somebody waiting loses their connection and comes back]');
+
+    const me = await arrive(`Comes back ${ tag() }`);
+
+    try
+    {
+        const first = await me.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        const tableId = first.body?.id;
+
+        me.socket.close();
+        await pause(1500);
+        await connect(me);
+
+        const mine = await chairsOf(me);
+        const again = await me.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 4 });
+        const table = (await me.get(`/tables/${ tableId }`)).body;
+
+        ok('the table they were waiting at is still theirs, and they are still ready', mine.length === 1 && mine[0].id === tableId && table?.chairs?.some((chair) => chair.who === me.handle && chair.ready),
+            `${ mine.length } tables`);
+        ok('and looking again is answered with it', again.body?.id === tableId && (await chairsOf(me)).length === 1, `${ again.body?.id }`);
+    }
+    finally
+    {
+        await goHome([me]);
+    }
+
+    console.log('');
+};
+
+const toldWhenItStarts = async () =>
+{
+    console.log('[who is told that a game has started]');
+
+    const opens = await arrive(`Told a ${ tag() }`);
+    const fills = await arrive(`Told b ${ tag() }`);
+    const aside = await arrive(`Not told ${ tag() }`);
+
+    try
+    {
+        const first = await opens.post('/tables/quick', { game: 'poker', voice: 'off' });
+
+        opens.rung.length = 0;
+
+        const second = await fills.post('/tables/quick', { game: 'poker', voice: 'off' });
+        const table = (await opens.get(`/tables/${ first.body?.id }`)).body;
+        const matchId = table?.matchId;
+
+        if (!ok('a game of two is dealt to the two of them', second.body?.id === first.body?.id && typeof matchId === 'string', `${ table?.status }`))
+        {
+            return;
+        }
+
+        const told = await within(TOLD_WITHIN_MS, () => opens.games.has(matchId) && fills.games.has(matchId));
+
+        ok('each of the two is pushed the game on their own socket', told,
+            `opener ${ opens.games.has(matchId) }, filler ${ fills.games.has(matchId) }`);
+        ok('the one who was waiting is rung about the table as well', await within(RUNG_WITHIN_MS, () => opens.rung.includes(table.id)), `${ opens.rung.length } table rings`);
+        ok('somebody else connected is told nothing about it', !aside.games.has(matchId) && !aside.rung.includes(table.id));
+
+        const theirs = await Promise.all([opens, fills].map(async (who) => (await chairsOf(who)).find((one) => one.id === table.id)?.matchId));
+
+        ok('and both read the same game at the same table', theirs.every((id) => id === matchId), theirs.join(' '));
+    }
+    finally
+    {
+        await goHome([opens, fills, aside]);
+    }
+
+    console.log('');
+};
+
+const oneNeverPlays = async () =>
+{
+    console.log('[one of the two never plays the game quick play started]');
+
+    const stays = await arrive(`Plays ${ tag() }`);
+    const absent = await arrive(`Never plays ${ tag() }`);
+
+    try
+    {
+        const first = await stays.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 2 });
+
+        await absent.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 2 });
+        absent.socket.close();
+
+        const table = (await stays.get(`/tables/${ first.body?.id }`)).body;
+        const matchId = table?.matchId;
+
+        if (!ok('a game of two is dealt', typeof matchId === 'string', `${ table?.status }`))
+        {
+            return;
+        }
+
+        const began = Date.now();
+        let state = (await stays.get(`/matches/${ matchId }`)).body;
+        let turns = 0;
+
+        while (state?.finishedAt === undefined && Date.now() - began < GIVEN_UP_WITHIN_MS)
+        {
+            if (state?.turn === state?.mine && (state.view.die === undefined || state.view.moves.length > 0))
+            {
+                const play = state.view.die === undefined
+                    ? { kind: 'ludo', verb: 'roll' }
+                    : { kind: 'ludo', verb: 'move', piece: state.view.moves[0] };
+                const answer = await stays.post(`/matches/${ matchId }/play`, { key: `p-${ turns }`, rev: state.rev, play });
+
+                turns += 1;
+                state = answer.status === 200 ? answer.body.match : (await stays.get(`/matches/${ matchId }`)).body;
+                continue;
+            }
+
+            await pause(1000);
+            state = (await stays.get(`/matches/${ matchId }`)).body;
+        }
+
+        const gone = state?.players?.find((row) => row.who === absent.handle);
+        const kept = state?.players?.find((row) => row.who === stays.handle);
+
+        ok('the game ends without the one who never played', state?.finishedAt !== undefined, `after ${ Math.round((Date.now() - began) / 1000) } s and ${ turns } plays`);
+        ok('who never played lost it to the clock', gone?.result === 'abandoned' && gone?.exit === 'timeout', `${ gone?.result } ${ gone?.exit }`);
+        ok('and who stayed is charged nothing: a win, or no contest when too little was played to rate', ['won', 'void'].includes(kept?.result),
+            `${ kept?.result }`);
+
+        const after = (await stays.get(`/tables/${ table.id }`)).body;
+
+        ok('the table has no game on it any more', after?.matchId === undefined, `${ after?.status }`);
+
+        const next = await stays.post('/tables/quick', { game: 'ludo', voice: 'off', seats: 2 });
+
+        ok('and who stayed can look for the next game at once, at a table without the one who never played',
+            next.status === 200 && next.body?.id !== table.id && !sittingAt(next.body).includes(absent.handle), `${ next.status }`);
+    }
+    finally
+    {
+        await goHome([stays, absent]);
+    }
+
+    console.log('');
+};
+
 const run = async () =>
 {
     console.log(`\nquick pass against ${ BASE }\n`);
 
     await twoWhoLeaveItOpen();
+    await isolatedByGame();
     await eightAtOnce();
     await eachTheirOwn();
+    await pressedAgain();
+    await cancelAndAgain();
+    await stillPlaying();
+    await cameBack();
+    await toldWhenItStarts();
+    await oneNeverPlays();
     await goneFromTheChair();
 
     console.log('------------------------------------------');

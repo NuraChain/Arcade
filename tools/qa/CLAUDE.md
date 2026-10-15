@@ -735,3 +735,59 @@ The accounts are made from keys derived from their index, so a second run signs 
 in again; each sign-in still adds a device, as a browser's would. One address opens every socket,
 so the handshake ceiling (`HANDSHAKES_A_MINUTE`, 300 a minute) bounds how many new sockets a level
 can open.
+
+## The quick play passes
+
+Three passes hold quick play from the press to the board, each against the BUILT server with the
+limiter raised, every player a wallet made for the run. The audit they were written for, with every
+number they measured, is `docs/superpowers/specs/2026-10-15-quick-play-audit.md`.
+
+**`tools/qa/quick-pass.mjs` is the api half**: `QA_BASE=http://localhost:5300 node
+tools/qa/quick-pass.mjs`, about five minutes, every player with a real socket that records the
+table rings, the departures and the `game` frames it is sent. Two strangers who leave every choice
+open meet at a table of two at every game; eight at four games are four tables of two and nobody
+crosses a game; eight at once for a table of four are two tables, started, nobody twice; five asking
+for their own format each meet their own; five presses at once and three after them are one chair,
+and a search for another live game lets the first wait go; somebody who stops looking takes one
+chair with them, the one still waiting is rung, and the table closes when both stop; somebody still
+playing a live game is answered with it; somebody whose socket drops and comes back is still waiting
+where they were; the two whose game starts are pushed it and rung and nobody else is; one of two who
+never plays is forfeited by the clock while the other is charged nothing and can look again at once;
+and a closed socket's chair is stood up on the second sweep, not the first.
+
+Two of its checks were the pass's own mistakes on their first run, and both are worth knowing. The
+table's ring reaches the waiting player two milliseconds after the `game` frame, so a check made the
+moment the frame arrives finds no ring: it waits for one, as every ring check here does. And a game
+nobody played enough of is "no contest" (`void`) for the one who stayed, not a win: the judge rates
+nobody against a quitter until both have made their share of decisions (`.claude/rules/games.md`,
+*What a game leaves behind*).
+
+**`tools/qa/quick-play-pass.mjs` is the browser half**: `QA_BASE=http://localhost:5300 node
+tools/qa/quick-play-pass.mjs`, about two minutes, 38 checks. Every player is a context of its own
+(`walletSeat`), a desk or a phone, and presses Quick play on a game's page, chooses in the sheet and
+presses Find a game, as a person does; then the server is asked, as each player, what came of it. At
+every game two who leave it at Any are taken to one table and shown the game, the first without a
+reload; four who ask for Hokm two against two are one table of two sides; somebody who stops looking
+from the strip on Home holds no chair and can look again; somebody on another page is told their game
+has started and the toast takes them there; a reload while waiting keeps the table; somebody playing
+a live game who presses Quick play for another is taken back to it and told it is still on; somebody
+waiting for one game who looks for another lets the first wait go. And no page says anything in its
+console.
+
+**`tools/qa/cross-pass.mjs` is two servers on one database**: `QA_BASE=http://localhost:5320
+QA_BASE_B=http://localhost:5321 QA_LOG_A=<log> QA_LOG_B=<log> node tools/qa/cross-pass.mjs`, about
+three minutes. Start both servers from one build, each with its own `PORT` and `PUBLIC_ORIGIN` and
+one `DATABASE_URL` naming a database nobody else uses, built first with `npm run schema:sync` (a
+value given on the command line wins over `.env`). It asks what holds across them and what does
+not. What holds is what Postgres decides: eight searches for a turn-based game sent through both
+servers at once make two full tables with players from both, nobody seated twice. What does not is
+what a server keeps in memory, and those checks say what the code does today, each marked "one
+server per database": a game is pushed to the sockets of the server that started it and to none of
+the other's; a live search on one server passes over a table whose player's socket is on the other;
+and that server's sweep stands the player up. Each server also logs that another is using its
+database. A change that carries presence or pushes across processes fails those checks and rewrites
+them, with the README.
+
+It found a fault on its first run, before it had asked anything: the two servers were started
+together on a new database and the second died at boot, both seeding the catalogue at once
+(`backend/CLAUDE.md`, *Two servers that start against one database*).
