@@ -1860,7 +1860,9 @@ without clipping, so she first turns her own input to half from the voice settin
 at 150% the sound the reader hears is then about one and a half times the sound she sends (1.48,
 her peak at 0.59). Then she turns her input to twice, so she sends at full scale, the reader turns
 her to twice, and the loudest moment heard has to stay under full scale (0.992). The check at 150%
-read 0.75 against the first limiter, which is how its ceiling was found.
+read 0.75 against the first limiter, which is how its ceiling was found. Firefox's fake microphone
+is a tone at -20 dB, which twice brings to 0.2 and never to full scale, so on Firefox the pass asks
+instead that at twice she is heard at twice what she sends (2.0); the ceiling is Chromium's to show.
 
 **The microphone and the speaker are CHOICES, never requirements.** The mic is asked for with
 `deviceId: { ideal }`, so a headset that has been unplugged falls back to the default instead of

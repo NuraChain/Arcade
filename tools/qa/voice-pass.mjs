@@ -525,14 +525,21 @@ record('this browser remembers how loud she is', kept !== null && Math.abs((kept
 
 const doubled = await inputVolume(mina.page, ['End']);
 
-record('she turns her own input up to twice, so what she sends reaches full scale', doubled === 2, String(doubled));
+record(ENGINE === 'firefox' ? 'she turns her own input up to twice' : 'she turns her own input up to twice, so what she sends reaches full scale', doubled === 2, String(doubled));
 await sheetSlider.focus();
 await dana.page.keyboard.press('End');
 await until(async () => (await levelOf(dana.page, 'mina')) === 2);
 
 const held = await measured(dana.page);
 
-record('turned up to twice while she sends at full scale, she is held under full scale and never clipped', held !== null && held.rawPeak > 0.9 && held.heardPeak <= 1, JSON.stringify(held));
+if (ENGINE === 'firefox')
+{
+    record('turned up to twice, she is heard at twice what she sends (this fake microphone is a tone at -20 dB, which twice cannot bring to full scale)', held !== null && held.raw > 0.001 && held.ratio > 1.85 && held.ratio < 2.15 && held.heardPeak <= 1, JSON.stringify(held));
+}
+else
+{
+    record('turned up to twice while she sends at full scale, she is held under full scale and never clipped', held !== null && held.rawPeak > 0.9 && held.heardPeak <= 1, JSON.stringify(held));
+}
 
 for (let step = 0; step < 20; step += 1)
 {
