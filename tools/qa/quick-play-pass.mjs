@@ -13,6 +13,8 @@
  */
 import { BASE, launch, recorder, waitFor, walletSeat } from './seats.mjs';
 
+const TOAST_ACTION_DURATION = 6500;
+
 const { record, finish } = recorder('quick play pass');
 
 const DESK = { width: 1280, height: 900 };
@@ -237,6 +239,10 @@ const startedElsewhere = async (browser) =>
         const told = await waitFor(async () => await toast.count() > 0, 10000);
 
         record('the one on another page is told the game has started', told);
+
+        await away.page.waitForTimeout(TOAST_ACTION_DURATION + 1500);
+
+        record('and it is still there after the time an ordinary toast is given', await toast.count() > 0);
 
         if (told)
         {

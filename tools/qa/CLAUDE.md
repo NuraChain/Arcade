@@ -763,13 +763,14 @@ nobody against a quitter until both have made their share of decisions (`.claude
 *What a game leaves behind*).
 
 **`tools/qa/quick-play-pass.mjs` is the browser half**: `QA_BASE=http://localhost:5300 node
-tools/qa/quick-play-pass.mjs`, about two minutes, 38 checks. Every player is a context of its own
+tools/qa/quick-play-pass.mjs`, about two minutes, 39 checks. Every player is a context of its own
 (`walletSeat`), a desk or a phone, and presses Quick play on a game's page, chooses in the sheet and
 presses Find a game, as a person does; then the server is asked, as each player, what came of it. At
 every game two who leave it at Any are taken to one table and shown the game, the first without a
 reload; four who ask for Hokm two against two are one table of two sides; somebody who stops looking
 from the strip on Home holds no chair and can look again; somebody on another page is told their game
-has started and the toast takes them there; a reload while waiting keeps the table; somebody playing
+has started, the toast is still there after the time an ordinary toast is given, and it takes them
+there; a reload while waiting keeps the table; somebody playing
 a live game who presses Quick play for another is taken back to it and told it is still on; somebody
 waiting for one game who looks for another lets the first wait go. And no page says anything in its
 console.
