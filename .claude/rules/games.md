@@ -1499,6 +1499,19 @@ before either path takes it:
 - **Push to talk is the same gate**: open while the key is held and for the release delay after
   it (`voiceRelease`), with the same fades. The microphone's own track is cut for it only where
   nothing can prepare the voice, as it always was.
+- **Strong suppression is RNNoise** (`services/voice.denoise.ts`, from
+  `@sapphi-red/web-noise-suppressor`), chosen by measurement: run on the same speech over a fan
+  and a keyboard, it took the fan down 28 dB and the clicks 34, kept the voice's level and its full
+  band and added 21 ms, where GTCRN took 15 and 24, works at 16 kHz inside and added 32, and Speex
+  left the clicks alone. It is fetched only when somebody picks it (a worklet and a 157 KB model,
+  111 KB as brotli), runs before the volume and the gate, and needs a call at 48 kHz. Where the
+  call runs at another rate (Firefox keeps the device's) or the model will not load, the browser's
+  own suppression is used, the microphone is asked for again with it, and `voice.suppression()`
+  says which is working. The browser's own is off while RNNoise runs: the two together cut the
+  weak ends of words (2.6% of the speech missing, against 0.29). The microphone is mixed to one
+  channel before it, because it cleans one channel and leaves the other silent, and a stereo
+  microphone came out at half its level. Measured in two browsers: the room 9 dB quieter than
+  Standard and the clicks 12, the voice at the same level, nothing more cut.
 - **What it hears is told to the page** about twenty times a second (`voice.reading()`: the
   level, whether it is open, and the bar), which is what a meter draws.
 - **The microphone itself is sent until the context runs**, because a prepared voice from a

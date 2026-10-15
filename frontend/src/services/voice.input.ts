@@ -1,3 +1,4 @@
+import type { Denoiser } from './voice.denoise.ts';
 import { Gate, type GateReading } from './voice.gate.ts';
 
 export interface InputOptions
@@ -82,7 +83,7 @@ const gated = (context: AudioContext) =>
     return found;
 };
 
-export async function createVoiceInput(context: AudioContext, raw: MediaStream, options: InputOptions): Promise<VoiceInput>
+export async function createVoiceInput(context: AudioContext, raw: MediaStream, options: InputOptions, denoiser: Denoiser | null = null): Promise<VoiceInput>
 {
     await gated(context);
 
@@ -94,7 +95,16 @@ export async function createVoiceInput(context: AudioContext, raw: MediaStream, 
 
     out.channelCount = 1;
     out.channelCountMode = 'explicit';
-    source.connect(gain);
+    if (denoiser === null)
+    {
+        source.connect(gain);
+    }
+    else
+    {
+        source.connect(denoiser.node);
+        denoiser.node.connect(gain);
+    }
+
     gain.connect(gate);
     gate.connect(out);
 
@@ -139,6 +149,7 @@ export async function createVoiceInput(context: AudioContext, raw: MediaStream, 
             gate.port.onmessage = null;
             gate.port.close();
             source.disconnect();
+            denoiser?.close();
             gain.disconnect();
             gate.disconnect();
         }

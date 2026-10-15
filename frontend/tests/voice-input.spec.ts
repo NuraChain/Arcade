@@ -121,6 +121,26 @@ describe('the microphone, as it is prepared to be heard', () =>
         expect(input.stream).toBe(out.stream);
     });
 
+    it('runs the microphone through strong suppression before its volume, and lets the suppressor go with it', async () =>
+    {
+        const one = room();
+        let closed = 0;
+        const suppressor = { kind: 'suppressor', into: [] as unknown[], connect(next: unknown)
+        {
+            suppressor.into.push(next);
+            return next;
+        } };
+        const input = await createVoiceInput(one.context as unknown as AudioContext, raw, OPTIONS, { node: suppressor as unknown as AudioNode, close: () => void (closed += 1) });
+        const [source, gain] = ['source', 'gain'].map((kind) => one.nodes.find((node) => node.kind === kind)!);
+
+        expect(source.into).toEqual([suppressor]);
+        expect(suppressor.into).toEqual([gain]);
+
+        input.close();
+
+        expect(closed).toBe(1);
+    });
+
     it('tells the gate how to listen and turns the volume smoothly, never past twice', async () =>
     {
         const one = room();

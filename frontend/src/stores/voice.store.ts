@@ -3,12 +3,13 @@ import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 import { client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
 import type { GateReading } from '../services/voice.gate.ts';
+import { canDenoise, createDenoiser } from '../services/voice.denoise.ts';
 import { createVoiceInput, type InputOptions, type VoiceInput } from '../services/voice.input.ts';
 import { hearsOpus } from '../services/voice.relay.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime, type SignalFrame, type SoundFrame, type VoiceFrame } from './realtime.store.ts';
-import { useSettings } from './settings.store.ts';
+import { useSettings, type VoiceNoise } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
 
@@ -44,6 +45,7 @@ export interface VoiceApi
     inputs: Getter<MediaChoice[]>;
     outputs: Getter<MediaChoice[]>;
     reading: Getter<GateReading | null>;
+    suppression: Getter<VoiceNoise | null>;
     canPickSpeaker(): boolean;
     speaking(who: string): boolean;
     unreached: Getter<readonly string[]>;
@@ -141,6 +143,8 @@ export const useVoice = createStore((): VoiceApi =>
     const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
     const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
     const [reading, setReading] = createSignal<GateReading | null>(null);
+    const [suppression, setSuppression] = createSignal<VoiceNoise | null>(null);
+    let refused = false;
 
     let call: VoiceCall | null = null;
     let stream: MediaStream | null = null;
@@ -188,6 +192,8 @@ export const useVoice = createStore((): VoiceApi =>
 
     const sending = () => (processed() ? input!.stream : stream);
 
+    const strong = () => untrack(settings.settings).voiceNoise === 'strong' && canDenoise(context) && !refused;
+
     const unprocess = () =>
     {
         unread?.();
@@ -195,6 +201,7 @@ export const useVoice = createStore((): VoiceApi =>
         input?.close();
         input = null;
         setReading(null);
+        setSuppression(null);
     };
 
     const process = async (raw: MediaStream | null) =>
@@ -206,9 +213,18 @@ export const useVoice = createStore((): VoiceApi =>
             return;
         }
 
+        const wanted = untrack(settings.settings).voiceNoise;
+
         try
         {
-            const made = await createVoiceInput(context, raw, options());
+            const denoiser = strong() ? await createDenoiser(context) : null;
+
+            if (strong() && denoiser === null)
+            {
+                refused = true;
+            }
+
+            const made = await createVoiceInput(context, raw, options(), denoiser);
 
             if (stream !== raw)
             {
@@ -218,6 +234,7 @@ export const useVoice = createStore((): VoiceApi =>
 
             input = made;
             unread = made.onReading((next) => setReading(next));
+            setSuppression(denoiser !== null ? 'strong' : (wanted === 'off' ? 'off' : 'standard'));
         }
         catch
         {
@@ -389,7 +406,7 @@ export const useVoice = createStore((): VoiceApi =>
             const got = await devices.getUserMedia({
                 audio: {
                     echoCancellation: current.voiceEcho,
-                    noiseSuppression: current.voiceNoise === 'standard',
+                    noiseSuppression: current.voiceNoise === 'standard' || (current.voiceNoise === 'strong' && !strong()),
                     autoGainControl: current.voiceAgc,
                     channelCount: 1,
                     ...(wanted === '' ? {} : { deviceId: { ideal: wanted } })
@@ -486,6 +503,7 @@ export const useVoice = createStore((): VoiceApi =>
         inputs,
         outputs,
         reading,
+        suppression,
 
         canPickSpeaker: () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 
@@ -628,6 +646,24 @@ export const useVoice = createStore((): VoiceApi =>
             if (round !== joins || untrack(table) !== next)
             {
                 return;
+            }
+
+            if (refused && got !== null && untrack(settings.settings).voiceNoise === 'strong')
+            {
+                const again = await microphone();
+
+                if (round !== joins || untrack(table) !== next)
+                {
+                    stopTracks(again);
+                    return;
+                }
+
+                if (again !== null)
+                {
+                    stopStream();
+                    stream = again;
+                    await process(again);
+                }
             }
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);

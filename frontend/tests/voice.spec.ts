@@ -9,6 +9,7 @@ import { IDLE_MS, SOUND_BACKLOG, useRealtime } from '../src/stores/realtime.stor
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { setDenoiseKit } from '../src/services/voice.denoise.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -824,7 +825,7 @@ describe('the microphone, prepared before anybody hears it', () =>
     let asked: MediaStreamConstraints[] = [];
     const processed = { processed: true, getAudioTracks: () => [{ contentHint: '' }], getTracks: () => [] } as unknown as MediaStream;
 
-    const sound = (allowed: boolean) =>
+    const sound = (allowed: boolean, rate = 48_000) =>
     {
         gates = [];
         contexts = [];
@@ -858,6 +859,7 @@ describe('the microphone, prepared before anybody hears it', () =>
         vi.stubGlobal('AudioContext', class
         {
             public state = 'suspended';
+            public sampleRate = rate;
             public allowed = allowed;
             public closed = false;
             public currentTime = 0;
@@ -918,6 +920,86 @@ describe('the microphone, prepared before anybody hears it', () =>
     {
         vi.unstubAllGlobals();
         vi.restoreAllMocks();
+        setDenoiseKit(null);
+    });
+
+    const suppressor = (works = true) =>
+    {
+        const made: unknown[] = [];
+
+        setDenoiseKit(async () =>
+        {
+            if (!works)
+            {
+                throw new Error('offline');
+            }
+
+            return {
+                worklet: 'blob:suppressor',
+                make: () =>
+                {
+                    const node = { connect: (next: unknown) => next, disconnect: () => undefined, destroy: () => undefined };
+
+                    made.push(node);
+                    return node as unknown as AudioNode & { destroy(): void };
+                }
+            };
+        });
+
+        return made;
+    };
+
+    it('turns the browser’s own suppression off for strong suppression, which takes its place', async () =>
+    {
+        sound(true);
+
+        const made = suppressor();
+
+        useSettings().update({ voiceNoise: 'strong' });
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(asked.at(-1)!.audio).toMatchObject({ noiseSuppression: false });
+        expect(made).toHaveLength(1);
+        expect(useVoice().suppression()).toBe('strong');
+    });
+
+    it('keeps the browser’s suppression where strong suppression cannot run', async () =>
+    {
+        sound(true, 44_100);
+        suppressor();
+        useSettings().update({ voiceNoise: 'strong' });
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(asked).toHaveLength(1);
+        expect(asked.at(-1)!.audio).toMatchObject({ noiseSuppression: true });
+        expect(useVoice().suppression()).toBe('standard');
+    });
+
+    it('asks for the microphone again with the browser’s suppression when strong suppression will not load', async () =>
+    {
+        sound(true);
+        suppressor(false);
+        useSettings().update({ voiceNoise: 'strong' });
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(asked.map((one) => (one.audio as MediaTrackConstraints).noiseSuppression)).toEqual([false, true]);
+        expect(useVoice().suppression()).toBe('standard');
+    });
+
+    it('says when nothing suppresses the noise because the reader turned it off', async () =>
+    {
+        sound(true);
+        useSettings().update({ voiceNoise: 'off' });
+
+        await useVoice().join(TABLE);
+        await settle();
+
+        expect(useVoice().suppression()).toBe('off');
     });
 
     it('asks the browser for the microphone the way the settings say', async () =>

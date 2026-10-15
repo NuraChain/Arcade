@@ -9,7 +9,7 @@ const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '.dist-frontend
 
 const TEXT = new Set(['.js', '.mjs', '.css', '.svg', '.json', '.webmanifest', '.txt', '.xml']);
 
-const BINARY = new Set(['.glb']);
+const BINARY = new Set(['.glb', '.wasm']);
 
 const WORTH = 0.95;
 
