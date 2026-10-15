@@ -88,6 +88,16 @@ async function seat(handle)
     await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
     await context.addInitScript(() =>
     {
+        try
+        {
+            const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+
+            localStorage.setItem('nura-games.settings', JSON.stringify({ voiceAutoJoin: false, voiceStartMuted: true, ...stored }));
+        }
+        catch
+        {
+        }
+
         const Real = window.RTCPeerConnection;
 
         window.__calls = [];

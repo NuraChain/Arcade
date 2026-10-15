@@ -33,6 +33,7 @@ import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/shee
 import { chunk, reloadPage } from '../../lib/chunks.ts';
 import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
+import { joinVoice } from '../../lib/join-voice.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
 import { WATCH_DELAY_MS, turnMs } from '../../../../backend/src/domains/match/turns.ts';
 
@@ -211,7 +212,7 @@ export default component PlayPage()
         if (id !== null && joined === null && id !== entered && untrack(settings.settings).voiceAutoJoin)
         {
             entered = id;
-            void voice.join(id);
+            void joinVoice(id);
         }
     }
 
@@ -272,7 +273,7 @@ export default component PlayPage()
                 kind: 'info',
                 icon: 'voice',
                 text: locale.t(untrack(lobby.table)?.voice === 'team' ? 'voice.offeredTeam' : 'voice.offered'),
-                action: { label: locale.t('voice.join'), run: () => void voice.join(id) },
+                action: { label: locale.t('voice.join'), run: () => void joinVoice(id) },
                 dedupe: `voice-offer-${ id }`
             });
         }

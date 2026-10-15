@@ -1480,8 +1480,13 @@ what Web Audio does, so a carried voice may echo for a reader on speakers, as a 
 full may. And this server carries about 40 kbps for each speaker and each listener in Opus, and
 about 180 in μ-law.
 
-**The microphone is asked for when somebody presses Join, never before**, and refused or missing it
-joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn that off in settings.
+**The microphone is asked for when the call is joined, never before**, and refused or missing it
+joins LISTEN-ONLY rather than failing, and says so in a toast (`joinVoice` in `lib/join-voice.ts`,
+which the Join button, the offer's button and joining automatically all go through). By default a
+call is joined automatically and with the microphone open (the owner, 2026-10-15: "join voice
+automaticly should true and start with the microphone mute should false"): `voiceAutoJoin` is
+on and `voiceStartMuted` off, and Settings › Voice turns either round. A browser that has saved
+its settings keeps what it saved: nothing has shipped, so nothing rewrites a stored choice. `play.spec.ts` (*joining the call without being asked*, *the offer to join the call*) and `voice.spec.ts` hold it, and seven faults were each caught; in two fresh browsers on the built server each joined a table's call by itself, with the microphone open, and heard the other.
 `services/voice.rtc.ts` is framework-free, and `stores/voice.store.ts` takes it through
 `setVoiceCall` so a spec can observe the store without a real `RTCPeerConnection`.
 

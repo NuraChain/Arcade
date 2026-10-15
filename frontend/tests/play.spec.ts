@@ -2449,7 +2449,6 @@ describe('PlayPage', () =>
         beforeEach(() =>
         {
             useSettings().reset();
-            useSettings().update({ voiceAutoJoin: true });
             setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
             setVoiceCall(() => ({
                 setMic: async () => undefined,
@@ -2473,6 +2472,33 @@ describe('PlayPage', () =>
             setVoiceCall(null);
             setVoiceMedia(null);
             useSettings().reset();
+        });
+
+        it('joins by default, with the microphone open', async () =>
+        {
+            await seated();
+
+            expect(socket.sent.filter((frame) => frame.t === 'voice').at(-1), 'a table with voice on was not joined by default').toMatchObject({ on: true, muted: false });
+        });
+
+        it('tells a reader whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            await seated();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().mic()).toBe('denied');
+        });
+
+        it('tells a reader with no microphone at all that they are only listening, in other words', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('none'), { name: 'NotFoundError' })) }) as unknown as MediaDevices);
+
+            await seated();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micAbsent')), { timeout: 4000 });
+
+            expect(useToasts().items().map((toast) => toast.text)).not.toContain(useLocale().t('voice.micDenied'));
         });
 
         it('joins once, and stays out when the reader leaves', async () =>
@@ -2537,6 +2563,7 @@ describe('PlayPage', () =>
         beforeEach(() =>
         {
             useSettings().reset();
+            useSettings().update({ voiceAutoJoin: false });
             useToasts().reset();
             setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
             setVoiceCall(() => ({
@@ -2654,6 +2681,34 @@ describe('PlayPage', () =>
 
             expect(word.className).toContain('sr-only');
             expect(word.className).toContain('@md:not-sr-only');
+        });
+
+        it('tells a reader who took the offer and whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            const { id } = await seated();
+
+            offers()[0].action!.run();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().table()).toBe(id);
+        });
+
+        it('tells a reader who pressed Join and whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+
+            fire([...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Join voice')!, 'click');
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().table()).toBe(id);
         });
     });
 

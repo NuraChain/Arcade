@@ -130,14 +130,24 @@ afterEach(() =>
 
 describe('voice at a table', () =>
 {
-    it('joins muted by default, and says so to the server', async () =>
+    it('joins with the microphone open by default, and says so to the server', async () =>
     {
         await useVoice().join(TABLE);
 
         expect(useVoice().table()).toBe(TABLE);
         expect(useVoice().mic()).toBe('live');
+        expect(useVoice().muted(), 'the owner asked for the microphone to start open').toBe(false);
+        expect(voiceFrames().at(-1)).toMatchObject({ t: 'voice', table: TABLE, on: true, muted: false });
+    });
+
+    it('joins muted when the reader asked to start that way', async () =>
+    {
+        useSettings().update({ voiceStartMuted: true });
+
+        await useVoice().join(TABLE);
+
         expect(useVoice().muted()).toBe(true);
-        expect(voiceFrames().at(-1)).toMatchObject({ t: 'voice', table: TABLE, on: true, muted: true });
+        expect(voiceFrames().at(-1)).toMatchObject({ on: true, muted: true });
     });
 
     it('joins listening only when the microphone is refused', async () =>
@@ -211,6 +221,7 @@ describe('voice at a table', () =>
 
     it('unmutes and tells the room', async () =>
     {
+        useSettings().update({ voiceStartMuted: true });
         await useVoice().join(TABLE);
 
         useVoice().toggleMute();
@@ -277,7 +288,7 @@ describe('voice at a table', () =>
         socket.accept();
         await settle();
 
-        expect(voiceFrames()).toEqual([{ t: 'voice', table: TABLE, on: true, muted: true, opus: false }]);
+        expect(voiceFrames()).toEqual([{ t: 'voice', table: TABLE, on: true, muted: false, opus: false }]);
     });
 
     const room = async () =>
@@ -731,7 +742,7 @@ describe('a call the server carries', () =>
             expect(calls[0].deps.opus).toBe(true);
 
             useVoice().toggleMute();
-            expect(voiceFrames().at(-1)).toMatchObject({ muted: false, opus: true });
+            expect(voiceFrames().at(-1)).toMatchObject({ muted: true, opus: true });
 
             socket.drop();
             useRealtime().start();
