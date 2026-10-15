@@ -148,7 +148,9 @@ async function seat(handle)
     {
         if (event.type() === 'error' && !event.text().includes('favicon'))
         {
-            errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
+            const where = event.location()?.url ?? '';
+
+            errors.push(`${ handle }: ${ event.text().slice(0, 160) }${ where === '' ? '' : ` (${ where.replace(/^https?:\/\/[^/]+/, '') })` }`);
 
             if (process.env.QA_LOUD === '1')
             {
