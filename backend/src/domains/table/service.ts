@@ -374,6 +374,8 @@ const openRow = async (tx: EntityManager, host: string, opening: Opening, guests
 
 const OCCUPANTS = 'select s.user_id from table_seats s where s.table_id = t.id and s.user_id is not null';
 
+const passedOver = (away: number, missed: number) => away + missed === 0 ? {} : { passed: { away, missed } };
+
 const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter) => tx.getRepository(Table)
     .createQueryBuilder('t')
     .where(`t.game = :game and t.status = 'open' and t.mode = :mode`, { game, mode: filter.mode })
@@ -659,12 +661,22 @@ export function createTableService(db: DataSource, social: SocialService)
                     .getRawMany<{ id: string; teams: boolean; occupants: string[] }>();
 
                 const here = want.filter.mode === 'live' ? present(candidates.flatMap((candidate) => candidate.occupants)) : null;
+                let away = 0;
+                let missed = 0;
 
                 for (const candidate of candidates)
                 {
-                    if ((here === null || candidate.occupants.every((occupant) => here.has(occupant))) && await sit(tx, candidate.id, candidate.teams, lead))
+                    if (here !== null && !candidate.occupants.every((occupant) => here.has(occupant)))
                     {
-                        return { id: candidate.id, seated: true, ...gone };
+                        away += 1;
+                    }
+                    else if (await sit(tx, candidate.id, candidate.teams, lead))
+                    {
+                        return { id: candidate.id, seated: true, ...gone, ...passedOver(away, missed) };
+                    }
+                    else
+                    {
+                        missed += 1;
                     }
                 }
 
@@ -679,7 +691,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 await tx.getRepository(QuickTable).insert({ tableId: opened });
 
-                return { id: opened, seated: true, ...gone };
+                return { id: opened, seated: true, ...gone, ...passedOver(away, missed) };
             };
 
             return await searches.run(ask.game, async () =>
@@ -1161,6 +1173,25 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 return { ...await standUp(tx, tableId, me), walked };
             });
+        },
+
+        async waitingByGame()
+        {
+            return await db.getRepository(TableSeat)
+                .createQueryBuilder('s')
+                .innerJoin(Table, 't', `t.id = s.table_id and t.status = 'open' and t.privacy in ('public', 'friends')`)
+                .select('t.game', 'game')
+                .addSelect('t.mode', 'mode')
+                .addSelect('count(*)::int', 'players')
+                .addSelect('count(distinct t.id)::int', 'tables')
+                .addSelect('floor(extract(epoch from now() - min(s.joined_at)))::int', 'oldest')
+                .where('s.ready')
+                .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+                .groupBy('t.game')
+                .addGroupBy('t.mode')
+                .orderBy('t.game')
+                .addOrderBy('t.mode')
+                .getRawMany<{ game: string; mode: string; players: number; tables: number; oldest: number }>();
         },
 
         async waitingSeats(limit: number)

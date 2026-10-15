@@ -108,11 +108,14 @@ export interface TableSweep
     failed: { tableId: string; reason: string }[];
 }
 
+export type Note = (event: string, fields: Record<string, unknown>) => void;
+
 export interface Services extends Ports
 {
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
         sweepTables(): Promise<TableSweep>;
+        waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
         tidy(): Promise<Record<string, number>>;
     };
 
@@ -127,7 +130,7 @@ const WATCHABLE_MAX = 48;
 
 const WAITING_SEATS = 500;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader): Services
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note): Services
 {
     const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
 
@@ -1277,7 +1280,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, sweepTables, tidy },
+        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), tidy },
 
         async pulse()
         {
@@ -2012,7 +2015,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         table: {
             async quick(me, input)
             {
-                const found = await table.quick(me, input, here);
+                const began = performance.now();
+                const found = await table.quick(me, input, here).catch((error: unknown) =>
+                {
+                    note?.('quick play refused', { game: input.game, who: me, code: (error as { code?: string }).code ?? 'error' });
+
+                    throw error;
+                });
                 let after = await mustTable(me, found.id);
 
                 if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
@@ -2030,6 +2039,21 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 {
                     await ringTable(after);
                 }
+
+                note?.('quick play', {
+                    game: after.game,
+                    who: me,
+                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams },
+                    outcome: !found.seated ? 'already waiting' : after.is_host ? 'opened' : 'joined',
+                    table: after.id,
+                    match: after.match_id,
+                    taken: after.taken,
+                    seats: after.seats,
+                    away: found.passed?.away ?? 0,
+                    missed: found.passed?.missed ?? 0,
+                    letGo: found.left?.length ?? 0,
+                    ms: Math.round(performance.now() - began)
+                });
 
                 for (const gone of found.left ?? [])
                 {

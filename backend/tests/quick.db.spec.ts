@@ -12,7 +12,7 @@ import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
 import type { QuickAsk } from '../src/domains/table/quick.ts';
 import { rowsOf } from '../src/lib/rows.ts';
-import { buildPorts, type PresenceReader, type WriteListener } from '../src/services.ts';
+import { buildPorts, type Note, type PresenceReader, type WriteListener } from '../src/services.ts';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -48,14 +48,14 @@ const everybody = (userIds: readonly string[]) => new Set(userIds);
 
 const without = (...away: string[]) => (userIds: readonly string[]) => new Set(userIds.filter((id) => !away.includes(id)));
 
-const door = (presence?: PresenceReader) => buildPorts(db, {
+const door = (presence?: PresenceReader, note?: Note) => buildPorts(db, {
     secret: 'a-test-secret-that-is-long-enough-to-use',
     origin: 'http://localhost:1',
     env: 'test',
     vapidPublicKey: '',
     vapidPrivateKey: '',
     vapidSubject: ''
-} as Parameters<typeof buildPorts>[1], listener, presence);
+} as Parameters<typeof buildPorts>[1], listener, presence, note);
 
 const makeUser = async (overrides: Partial<Pick<User, 'isMinor' | 'allowStrangerMessages'>> = {}) =>
 {
@@ -673,6 +673,112 @@ describe.skipIf(!active)('quick play, against a real database', () =>
         }, 60_000);
     });
 
+    describe('what it tells the server\'s log', () =>
+    {
+        it('says what each search asked and what came of it, keyed by its table, and says a refusal', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const [first, second] = await crowd(2);
+
+            const opened = await ports.table.quick(first, { game: 'backgammon', voice: 'off', target: 3 });
+
+            await ports.table.quick(first, { game: 'backgammon', voice: 'off', target: 3 });
+            await ports.table.quick(second, { game: 'backgammon', voice: 'off' });
+            await expect(ports.table.quick(second, { game: 'backgammon', voice: 'off', seats: 4 })).rejects.toMatchObject({ code: 'quick-options' });
+
+            const game = await db.getRepository(Match).findOneByOrFail({ tableId: opened.id });
+
+            expect(said.map(([event]) => event)).toEqual(['quick play', 'quick play', 'quick play', 'quick play refused']);
+            expect(said[0][1]).toMatchObject({ game: 'backgammon', who: first, asked: { target: 3 }, outcome: 'opened', table: opened.id, match: null, taken: 1, seats: 2, away: 0, missed: 0, letGo: 0 });
+            expect(said[1][1]).toMatchObject({ who: first, outcome: 'already waiting', table: opened.id, match: null, taken: 1 });
+            expect(said[2][1]).toMatchObject({ who: second, outcome: 'joined', table: opened.id, match: game.id, taken: 2 });
+            expect(said[2][1].ms).toEqual(expect.any(Number));
+            expect(said[3][1]).toEqual({ game: 'backgammon', who: second, code: 'quick-options' });
+        });
+
+        it('says how many tables it passed over because somebody there was away', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const away = await makeUser();
+            const stale = await opened(away);
+            const ports = door({ present: without(away) }, (event, fields) => said.push([event, fields]));
+
+            await joined(stale, 1);
+
+            const fresh = await opened(await makeUser());
+            const answer = await ports.table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 });
+
+            expect(answer.id).toBe(fresh);
+            expect(said[0][1]).toMatchObject({ outcome: 'joined', table: fresh, away: 1, missed: 0 });
+        });
+
+        it('says how many tables it passed over because their last chair went, or the table closed, as it sat down', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const host = await makeUser();
+            const theirs = await opened(host);
+            const me = await makeUser();
+
+            const [, searched] = await parkedBehind(
+                (tx) => tx.getRepository(Table).findOne({ where: { id: theirs }, lock: { mode: 'pessimistic_write' } }),
+                [() => here.close(host, theirs), () => ports.table.quick(me, { game: 'ludo', voice: 'off', seats: 4 })]
+            );
+
+            expect(searched).toMatchObject({ status: 'fulfilled' });
+            expect(said[0][1]).toMatchObject({ who: me, outcome: 'opened', away: 0, missed: 1 });
+            expect(said[0][1].table).not.toBe(theirs);
+        });
+
+        it('says how many it let go of', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const me = await makeUser();
+
+            await ports.table.quick(me, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(me, { game: 'hokm', voice: 'off' });
+
+            expect(said.map(([, fields]) => fields.letGo)).toEqual([0, 1]);
+        });
+
+        it('counts who is waiting ready for each game and pace, at how many tables, and the longest wait in seconds', async () =>
+        {
+            const ports = door();
+            const [one, two, three, four, idle, playing, against, closer, inviter, slow] = await crowd(10);
+
+            await ports.table.quick(one, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(two, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(three, { game: 'ludo', voice: 'off', seats: 3 });
+            await ports.table.quick(four, { game: 'backgammon', voice: 'off', mode: 'turns' });
+            await ports.table.quick(slow, { game: 'ludo', voice: 'off', mode: 'turns' });
+            await ports.table.quick(playing, { game: 'poker', voice: 'off' });
+
+            const started = await ports.table.quick(against, { game: 'poker', voice: 'off' });
+            const shut = await ports.table.quick(closer, { game: 'hokm', voice: 'off' });
+            const unready = await opened(idle);
+            const invited = await opened(inviter, { privacy: 'invite' });
+
+            expect(started.matchId).toEqual(expect.any(String));
+
+            await here.close(closer, shut.id);
+            await here.setReady(inviter, invited, true);
+            await joined(unready, 1);
+            await db.query(`update table_seats set joined_at = now() - interval '90 seconds' where user_id = $1`, [one]);
+
+            const waiting = await ports.jobs.waiting();
+
+            expect(waiting).toEqual([
+                { game: 'backgammon', mode: 'turns', players: 1, tables: 1, oldest: expect.any(Number) },
+                { game: 'ludo', mode: 'live', players: 3, tables: 2, oldest: expect.any(Number) },
+                { game: 'ludo', mode: 'turns', players: 1, tables: 1, oldest: expect.any(Number) }
+            ]);
+            expect(waiting[1].oldest).toBeGreaterThanOrEqual(90);
+            expect(waiting[0].oldest).toBeLessThan(90);
+        });
+    });
+
     describe('one search at a time for a live game', () =>
     {
         it('lets go of the searcher’s other waits at live tables quick play opened, and keeps every other chair', async () =>
@@ -914,7 +1020,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await row(theirs)).toMatchObject({ status: 'closed' });
             expect(await sittingAt(theirs)).toEqual([]);
             expect(await inThread(me, theirs)).toBe(false);
-            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true } });
+            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true, passed: { away: 0, missed: 1 } } });
         });
 
         it('sits down somewhere else when the host was already closing the table', async () =>
@@ -932,7 +1038,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await row(theirs)).toMatchObject({ status: 'closed' });
             expect(await sittingAt(theirs)).toEqual([host]);
             expect(await inThread(me, theirs)).toBe(false);
-            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true } });
+            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true, passed: { away: 0, missed: 1 } } });
         });
     });
 

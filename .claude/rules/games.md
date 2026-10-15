@@ -930,6 +930,28 @@ poker seat that is out of chips back to the table it is out at for as long as th
 so it is not done. And sitting down by a link still asks whether the table has closed before its
 own transaction, and can land in one that closed in that instant.
 
+**A search says what it did in the server's log, keyed by its table.** Every answer of
+`POST /tables/quick` writes one `quick play` line through `note`, the fifth argument of
+`buildPorts`, which `main.ts` points at its logger. It says the game, the account that searched
+(its id, and nothing about its session), what was asked, whether the searcher was already waiting,
+opened a table or joined one, the table and the game that started at it, how many chairs are taken
+of how many, how many tables the search passed over because somebody there was away (`away`) or
+because their last chair went, or the table closed, as it sat down (`missed`), how many waits it
+let go of and how long the answer took. The search's answer carries the two counts as `passed`,
+only when either is more than nought, as it carries `left`. A refusal writes `quick play
+refused` with its word. After every table sweep the server writes `waiting for a game` when
+anybody is: for each game and pace, how many people sit ready at a table quick play could fill
+(public, or for the host's friends, open, with no game on), at how many tables, and how long the
+longest of them has waited, in seconds (`jobs.waiting`, `waitingByGame`). So the questions an
+operator asks are answered in the log. How many wait for each game is the last snapshot. Whether
+people who should meet are kept apart is two tables of one game and pace in it, or two `opened`
+lines that passed nothing over. Where a search stopped is its outcome, with `away` or `missed`
+when it walked past tables. Whether a table that filled started is its `match`. A chair stuck
+waiting is an `oldest` that keeps growing, and the sweep's `absent players stood up` line is
+what frees one. The table's id is what joins a search to the game that starts there, to the sweep
+and to every request that reads the table. `quick.db.spec.ts` (*what it tells the server's log*)
+and `table-sweep.spec.ts` hold it.
+
 **A waiting chair belongs to somebody who is there.** An absent player used to keep their chair for
 as long as they liked. The table was passed over by every search, so the people sitting beside a
 closed tab were never found a fourth, and nothing but that player's own Leave gave the chair back.

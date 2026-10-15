@@ -119,6 +119,20 @@ describe('what runs the sweep of the waiting tables', () =>
         expect(sweep).toMatch(/\.finally\(/);
     });
 
+    it('says after each sweep how many are waiting for each game, and how long the longest has waited', () =>
+    {
+        const sweep = main.slice(main.indexOf('const sweepTables ='), main.indexOf('handleShutdownSignals('));
+
+        expect(sweep).toMatch(/await ports\.jobs\.waiting\(\)/);
+        expect(sweep).toMatch(/if \(games\.length > 0\)\s*\{\s*log\.info\('waiting for a game', \{ games \}\);\s*\}/);
+        expect(sweep.indexOf('ports.jobs.waiting()')).toBeLessThan(sweep.indexOf(".catch((error: unknown) => log.error('table sweep failed'"));
+    });
+
+    it('hands the ports a way to say what a search did', () =>
+    {
+        expect(main).toMatch(/\}, \(event, fields\) => log\.info\(event, fields\)\);/);
+    });
+
     it('is stopped on the way down, before the hub lets everybody go and has nobody left to call here', () =>
     {
         expect(shutdown).toMatch(/clearTimeout\(tables\);\s+tables = null;/);
@@ -129,7 +143,7 @@ describe('what runs the sweep of the waiting tables', () =>
     it('is told everybody is here from the moment the server starts going down, never by a hub that has just let everybody go', () =>
     {
         expect(main).toMatch(/let goingDown = false;/);
-        expect(main).toMatch(/buildPorts\(dataSource, config, hub, \{\s*present: \(userIds\) => goingDown \? new Set\(userIds\) : hub\.present\(userIds\)\s*\}\)/);
+        expect(main).toMatch(/buildPorts\(dataSource, config, hub, \{\s*present: \(userIds\) => goingDown \? new Set\(userIds\) : hub\.present\(userIds\)\s*\}, \(event, fields\) => log\.info\(event, fields\)\)/);
         expect(main).not.toMatch(/buildPorts\(dataSource, config, hub, hub\)/);
         expect(main.match(/goingDown = true;/g)).toHaveLength(1);
         expect(shutdown.indexOf('goingDown = true;')).toBeGreaterThan(-1);

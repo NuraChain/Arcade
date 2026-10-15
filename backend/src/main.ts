@@ -137,7 +137,7 @@ let goingDown = false;
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
 const ports = buildPorts(dataSource, config, hub, {
     present: (userIds) => goingDown ? new Set(userIds) : hub.present(userIds)
-});
+}, (event, fields) => log.info(event, fields));
 
 const serving = config.servePages;
 
@@ -313,6 +313,15 @@ const sweepTables = () =>
             for (const one of failed)
             {
                 log.error('chair not freed', one);
+            }
+        })
+        .then(async () =>
+        {
+            const games = await ports.jobs.waiting();
+
+            if (games.length > 0)
+            {
+                log.info('waiting for a game', { games });
             }
         })
         .catch((error: unknown) => log.error('table sweep failed', { error }))
