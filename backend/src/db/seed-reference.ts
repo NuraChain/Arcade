@@ -140,6 +140,8 @@ export async function seedReference(db: DataSource)
 {
     await db.transaction(async (tx) =>
     {
+        await tx.query(`select pg_advisory_xact_lock(hashtext('nura:seed'))`);
+
         for (const [index, game] of GAME_SEEDS.entries())
         {
             await tx.query(

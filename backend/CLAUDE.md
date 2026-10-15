@@ -266,6 +266,15 @@ against an account that had claimed `sara.k` minutes earlier. The personas are g
 guard, but the shape of the mistake is worth keeping: a seed that writes into a table people also
 write to needs to say which rows are ITS rows.
 
+**Two servers that start against one database seed it at once, and the seed waits its turn.**
+`on conflict (id)` cannot arbitrate an insert that meets the other server's same row first on
+another unique column (`games.slug`), so on an empty database the second boot died on a unique
+violation, found by starting two production servers together on a new database. The seed's
+first statement is `pg_advisory_xact_lock(hashtext('nura:seed'))` (raw, because no repository can
+say it), so a second seed waits for the first to commit and then finds every row there.
+`seed-race.db.spec.ts` seeds an empty database from two connections at once, eight rounds, and
+holds the lock itself to see a seed wait for it; before the lock the first failed in round six.
+
 One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
 conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
 That makes the `status` in the seed an INITIAL value only — changing it on a database that already
