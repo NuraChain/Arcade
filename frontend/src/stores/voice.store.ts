@@ -91,6 +91,8 @@ export const LOUDEST = 2;
 
 export const LINES_MS = 1000;
 
+export const ANNOUNCE_MS = 500;
+
 export const BITRATES: Record<VoiceQuality, number> = { standard: 32_000, high: 64_000, best: 96_000 };
 
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
@@ -312,9 +314,15 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
+    let announcedAt = Number.NEGATIVE_INFINITY;
+    let announcing: (() => void) | null = null;
+
     const teardown = () =>
     {
         joins += 1;
+        announcing?.();
+        announcing = null;
+        announcedAt = Number.NEGATIVE_INFINITY;
         unhold?.();
         unhold = null;
         unstir?.();
@@ -662,14 +670,36 @@ export const useVoice = createStore((): VoiceApi =>
         }).catch(() => undefined);
     };
 
-    const announce = () =>
+    const told = () =>
     {
+        announcing = null;
+        announcedAt = runtime().clock.now();
+
         const current = untrack(table);
 
         if (current !== null)
         {
             realtime.voice(current, true, untrack(muted), opus);
         }
+    };
+
+    const announce = () =>
+    {
+        if (announcing !== null)
+        {
+            return;
+        }
+
+        const wait = Math.min(ANNOUNCE_MS, Math.max(0, announcedAt + ANNOUNCE_MS - runtime().clock.now()));
+
+        if (wait === 0)
+        {
+            told();
+
+            return;
+        }
+
+        announcing = runtime().clock.after(wait, told);
     };
 
     return {

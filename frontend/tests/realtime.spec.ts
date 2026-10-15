@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+import { FRAME_FLOORS } from '../../backend/src/realtime/frames.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
     BACKOFF_MS,
+    CHECK_FLOOR_MS,
+    FLOOR_MARGIN_MS,
     IDLE_MS,
     NUDGE_WINDOW_MS,
     PROBE_GRACE_MS,
@@ -427,6 +430,139 @@ describe('the realtime store', () =>
         socket.accept();
         socket.drop();
         expect(live.interrupted()).toBe(true);
+    });
+});
+
+describe('what the socket is asked to say, kept to what the server takes', () =>
+{
+    const presenceSent = () => socket.sent.filter((frame) => frame.t === 'presence');
+
+    it('says where the reader is no more often than the server takes it, and says the last of it', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        for (let step = 0; step < 12; step += 1)
+        {
+            hide();
+            clock.advance(100);
+            show();
+            clock.advance(100);
+        }
+
+        expect(presenceSent().length, 'every flick of the tab was sent, past the floor the gateway closes a socket for').toBeLessThanOrEqual(2);
+
+        clock.advance(FRAME_FLOORS.presence + FLOOR_MARGIN_MS);
+
+        expect(presenceSent().length).toBeLessThanOrEqual(3);
+        expect(presenceSent().at(-1), 'the last thing said is not where the reader is').toEqual({ t: 'presence', state: 'online' });
+
+        clock.advance(FRAME_FLOORS.presence * 10);
+        expect(presenceSent().length).toBeLessThanOrEqual(3);
+    });
+
+    it('says the last of what it was asked while it waited, not the first', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        live.setState('away');
+        clock.advance(100);
+        live.setState('online');
+        clock.advance(100);
+        live.setState('away');
+
+        expect(presenceSent()).toEqual([{ t: 'presence', state: 'away' }]);
+
+        clock.advance(FRAME_FLOORS.presence + FLOOR_MARGIN_MS);
+
+        expect(presenceSent(), 'what was held back was the first thing asked, not the last').toEqual([
+            { t: 'presence', state: 'away' },
+            { t: 'presence', state: 'away' }
+        ]);
+    });
+
+    it('never sends two of a kind closer together than the gateway allows', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        const at: Record<string, number[]> = {};
+        const sent = socket.sent;
+
+        socket.sent = new Proxy(sent, {
+            get(target, key, receiver)
+            {
+                if (key === 'push')
+                {
+                    return (...frames: typeof sent) =>
+                    {
+                        for (const frame of frames)
+                        {
+                            (at[frame.t] ??= []).push(clock.now());
+                        }
+
+                        return target.push(...frames);
+                    };
+                }
+
+                return Reflect.get(target, key, receiver);
+            }
+        });
+
+        for (let step = 0; step < 40; step += 1)
+        {
+            live.sync();
+            live.setState(step % 2 === 0 ? 'away' : 'online');
+            live.startTyping(`c-${ step % 3 }`);
+            clock.advance(250);
+        }
+
+        clock.advance(10_000);
+        socket.sent = sent;
+
+        for (const [kind, times] of Object.entries(at))
+        {
+            const gaps = times.slice(1).map((time, index) => time - times[index]);
+
+            expect(Math.min(...gaps, Number.POSITIVE_INFINITY), `two ${ kind } frames went out closer than the gateway's floor`).toBeGreaterThanOrEqual(FRAME_FLOORS[kind]);
+        }
+    });
+
+    it('checks a socket no more than once in two seconds, however often it is asked', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+
+        const before = socket.pings;
+
+        for (let step = 0; step < 10; step += 1)
+        {
+            live.check();
+            clock.advance(100);
+        }
+
+        expect(socket.pings - before, 'a ping went out for every check, past the budget the gateway closes a socket for').toBe(1);
+
+        clock.advance(CHECK_FLOOR_MS);
+        live.check();
+
+        expect(socket.pings - before).toBe(2);
     });
 });
 

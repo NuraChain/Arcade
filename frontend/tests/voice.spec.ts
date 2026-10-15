@@ -8,7 +8,7 @@ import { keyName } from '../src/lib/talk-key.ts';
 import { IDLE_MS, SOUND_BACKLOG, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { LINES_MS, LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { ANNOUNCE_MS, LINES_MS, LOUDEST, SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { setDenoiseKit } from '../src/services/voice.denoise.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -239,6 +239,32 @@ describe('voice at a table', () =>
         expect(voiceFrames().at(-1)).toMatchObject({ on: true, muted: false });
     });
 
+    it('tells the room about a mute no more than twice a second, and tells it the last of it', async () =>
+    {
+        const clock = manualClock(900_000);
+
+        setRuntime({ clock, seed: 9 });
+        await useVoice().join(TABLE);
+
+        const before = voiceFrames().length;
+
+        for (let step = 0; step < 11; step += 1)
+        {
+            useVoice().toggleMute();
+            clock.advance(40);
+        }
+
+        expect(voiceFrames().length - before, 'every press of mute was sent, past the budget the gateway closes a socket for').toBe(1);
+
+        clock.advance(ANNOUNCE_MS);
+
+        expect(voiceFrames().length - before).toBe(2);
+        expect(voiceFrames().at(-1), 'the room was not told the last of it').toMatchObject({ on: true, muted: useVoice().muted() });
+
+        clock.advance(ANNOUNCE_MS * 4);
+        expect(voiceFrames().length - before).toBe(2);
+    });
+
     it('leaves cleanly, and tears everything down when the server takes it out of the room', async () =>
     {
         await useVoice().join(TABLE);
@@ -372,6 +398,8 @@ describe('voice at a table', () =>
         useVoice().toggleDeafen();
         expect(calls[0].volumes['sara.k']).toBe(1);
         expect(useVoice().muted()).toBe(false);
+
+        (runtime().clock as ManualClock).advance(ANNOUNCE_MS);
         expect(voiceFrames().at(-1)).toMatchObject({ muted: false });
     });
 

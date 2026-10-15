@@ -1330,8 +1330,8 @@ server that is on its way out.
 
 **`isMetered('/ws')` is now nearly dead code.** The rate limiter still scopes to `/api` and
 `/ws`, but a socket costs one request per connection and the gateway meters frames itself
-(`sync` 5s, `presence` 2s, `typing` 3s, ten faults and the socket is closed 4400; the budgets under
-*A game is played over the socket*). Keep the
+(`sync` 5s, `presence` 2s, `typing` 3s, `FRAME_FLOORS` in `realtime/frames.ts`; ten faults and the
+socket is closed 4400; the budgets under *A game is played over the socket*). Keep the
 prefix — a handshake flood is still a flood — but the per-frame budget is where the real metering
 happens.
 
@@ -1385,6 +1385,26 @@ comes inside the window after a flush waits for the window's end and goes out to
 clock that jumps cannot hold a doorbell back, and the browser forgets its last flush when it tears
 down. `realtime.spec.ts` (*hears a doorbell after a quiet window at once*) and
 `realtime-hub.spec.ts` (*a doorbell in time*) hold both halves.
+
+**The browser keeps to the gateway's floors and budgets, and they are written once.** The gateway
+closes a socket that sends a kind of frame more often than it takes it: past its budget in ten
+seconds (`voice` 30, `signal` 120, `sound` 250, `play` 40, `ping` 10) with 4429, and on the
+eleventh frame inside its floor in a minute (`sync` 5 s, `presence` 2 s, `typing` 3 s) with 4400.
+The browser never retries either. And the browser itself broke two of them: every change of the
+tab's visibility sent a `presence` frame and a `ping`, so twelve flicks between tabs in five
+seconds closed the socket for good with 4400, and every move after that reached the page by the
+three-second poll (`sync-pass.mjs`, *flick*, on the build before this); on the build after it the
+same twelve flicks keep the socket and every move after them is pushed. A mute pressed eleven times
+was eleven `voice` frames. The numbers live in `realtime/frames.ts` now (`FRAME_FLOORS`,
+`FRAME_BUDGETS`, `BUDGET_WINDOW_MS`), the gateway reads them from there, and the browser keeps to
+them: a floored frame (`paced` in `realtime.store.ts`) goes at once after a quiet floor and
+otherwise once at the floor's end, with the latest of what was asked, half a second over the floor
+for a line that bunches frames together; a connection check pings no more than once in
+`CHECK_FLOOR_MS`; and the call tells the room about a mute at most twice a second, the last of it
+last (`ANNOUNCE_MS` in `voice.store.ts`). Switching tabs and pressing mute as fast as a hand can no
+longer trips either rule; a script still can, and `load-pass.mjs` paces its sockets for that reason. `realtime.spec.ts` (*what the
+socket is asked to say, kept to what the server takes*) and `voice.spec.ts` (*tells the room about
+a mute no more than twice a second*) hold it.
 
 **The seed is random per browser.** It was the constant 1, so every client on the deployment drew the
 same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.

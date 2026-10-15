@@ -1,5 +1,6 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
+import { FRAME_FLOORS } from '../../../backend/src/realtime/frames.ts';
 import type { PresenceEntry, ServerFrame } from '../api.ts';
 import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -57,6 +58,10 @@ export const IDLE_MS = 60_000;
 export const PROBE_MS = 10_000;
 
 export const PROBE_GRACE_MS = 4000;
+
+export const CHECK_FLOOR_MS = 2000;
+
+export const FLOOR_MARGIN_MS = 500;
 
 const CLOCK_SAMPLES = 8;
 
@@ -201,6 +206,8 @@ export const useRealtime = createStore((): RealtimeApi =>
     const [rtt, setRtt] = createSignal<number | null>(null);
     let offset = 0;
     let pingedAt = 0;
+    let lastPing = Number.NEGATIVE_INFINITY;
+    const floored = new Map<string, { at: number; next: Parameters<RealtimeSource['send']>[0] | null; timer: (() => void) | null }>();
     let probe: (() => void) | null = null;
     const pending = new Map<string, { scope: NudgeScope; id: string | undefined }>();
 
@@ -270,6 +277,58 @@ export const useRealtime = createStore((): RealtimeApi =>
     const sent = (frame: Parameters<RealtimeSource['send']>[0]) =>
         status() === 'connected' && active.send(frame);
 
+    const paced = (frame: Parameters<RealtimeSource['send']>[0]) =>
+    {
+        const floor = (FRAME_FLOORS[frame.t] ?? 0) + FLOOR_MARGIN_MS;
+        const kept = floored.get(frame.t) ?? { at: Number.NEGATIVE_INFINITY, next: null, timer: null };
+        const wait = kept.at + floor - runtime().clock.now();
+
+        floored.set(frame.t, kept);
+
+        if (kept.timer === null && wait <= 0)
+        {
+            const went = active.send(frame);
+
+            if (went)
+            {
+                kept.at = runtime().clock.now();
+            }
+
+            return went;
+        }
+
+        kept.next = frame;
+
+        if (kept.timer === null)
+        {
+            kept.timer = runtime().clock.after(Math.max(0, wait), () =>
+            {
+                kept.timer = null;
+
+                const next = kept.next;
+
+                kept.next = null;
+
+                if (next !== null && active.send(next))
+                {
+                    kept.at = runtime().clock.now();
+                }
+            });
+        }
+
+        return true;
+    };
+
+    const unpace = () =>
+    {
+        for (const kept of floored.values())
+        {
+            kept.timer?.();
+        }
+
+        floored.clear();
+    };
+
     const cancelProbe = () =>
     {
         probe?.();
@@ -279,6 +338,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const ping = () =>
     {
         pingedAt = runtime().clock.now();
+        lastPing = pingedAt;
 
         if (!sent({ t: 'ping' }))
         {
@@ -300,7 +360,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
     const check = () =>
     {
-        if (status() !== 'connected')
+        if (status() !== 'connected' || runtime().clock.now() - lastPing < CHECK_FLOOR_MS)
         {
             return;
         }
@@ -615,7 +675,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             if (document.visibilityState === 'hidden')
             {
-                active.send({ t: 'presence', state: 'away' });
+                paced({ t: 'presence', state: 'away' });
                 cancelSleep = runtime().clock.after(IDLE_MS, () =>
                 {
                     cancelSleep = null;
@@ -624,7 +684,7 @@ export const useRealtime = createStore((): RealtimeApi =>
                 return;
             }
 
-            active.send({ t: 'presence', state: 'online' });
+            paced({ t: 'presence', state: 'online' });
             resume();
         };
 
@@ -654,6 +714,8 @@ export const useRealtime = createStore((): RealtimeApi =>
         coalesce = null;
         pending.clear();
         flushedAt = Number.NEGATIVE_INFINITY;
+        lastPing = Number.NEGATIVE_INFINITY;
+        unpace();
         close?.();
         close = null;
         watching?.();
@@ -776,9 +838,9 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => watchers.delete(listener);
         },
 
-        sync: () => active.send({ t: 'sync' }),
-        setState: (state) => active.send({ t: 'presence', state }),
-        startTyping: (conversationId) => active.send({ t: 'typing', id: conversationId }),
+        sync: () => paced({ t: 'sync' }),
+        setState: (state) => paced({ t: 'presence', state }),
+        startTyping: (conversationId) => paced({ t: 'typing', id: conversationId }),
 
         simulateDrop(ms)
         {

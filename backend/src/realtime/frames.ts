@@ -30,6 +30,12 @@ export const SOUND_DATA_MAX = 2048;
 
 export const SOUND_TO_MOST = 8;
 
+export const FRAME_FLOORS: Readonly<Record<string, number>> = { sync: 5000, presence: 2000, typing: 3000 };
+
+export const BUDGET_WINDOW_MS = 10_000;
+
+export const FRAME_BUDGETS: Readonly<Record<string, number>> = { voice: 30, signal: 120, sound: 250, play: 40, ping: 10 };
+
 const FRAME_MAX = 4096;
 
 const SIGNAL_FRAME_MAX = SIGNAL_DATA_MAX + 512;

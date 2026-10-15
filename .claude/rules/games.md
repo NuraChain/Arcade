@@ -2535,8 +2535,9 @@ engine did over self-played games.
 The gateway checks a play twice: the frame shape strictly, then `matchPlayInput` with a comparison that
 refuses any key the schema would have stripped, so a `die` inside a play is refused rather than quietly
 dropped. One socket's plays run one after another, so a socket never holds two match transactions. Every
-frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `play`
-40, `ping` 10), and past it the socket is closed 4429.
+frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `sound`
+250, `play` 40, `ping` 10: `FRAME_BUDGETS` in `realtime/frames.ts`, which the browser keeps to as
+well), and past it the socket is closed 4429.
 
 **There is no catch-up verb on the socket.** The realtime store rings every scope once whenever a
 connection opens, and the match store answers that `game` ring by reading `since` from the revision
