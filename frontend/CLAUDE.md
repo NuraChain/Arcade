@@ -888,6 +888,15 @@ an arrival by construction, so there is nothing to arm: a table the list does no
 answered for, which is a silence on a cold load and never a false start. It lives in the cues chunk,
 which the shell imports after it mounts, and costs the shell nothing.
 
+**And it stays until the game is in front of the reader.** It was a toast with a button, six and a
+half seconds, and in the walk of quick play on the built server it had gone before it was pressed:
+a reader who looked away for that long had the Games badge and the tab's title left to say that a
+game with a thirty-second clock was theirs. It has no countdown now (`duration: Infinity`), and is
+taken back (`standing`, `trackStarted`) when the reader opens that table, when they no longer sit
+at it, and when a frame says the game ended without them; the reader can still close it, and the
+moves that follow do not raise it again. `cues.spec.ts` (*stays until the reader goes to the
+table*) holds each.
+
 **A turn that comes round while the reader is elsewhere says so too.** The same frame says whose
 turn it is. When it becomes the reader's, at a table that is not on the screen, the store says
 "Your turn at Ludo" with the way there: once for a turn, never for a turn the reader already held

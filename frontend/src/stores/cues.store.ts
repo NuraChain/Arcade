@@ -73,6 +73,8 @@ export const useCues = createStore((): CuesApi =>
 
     const begun = new Set<string>();
 
+    const standing = new Map<string, string>();
+
     const turns = new Map<string, boolean>();
 
     const run = (): (() => void) =>
@@ -337,6 +339,17 @@ export const useCues = createStore((): CuesApi =>
             };
         };
 
+        const letGo = (tableId: string) =>
+        {
+            const id = standing.get(tableId);
+
+            if (id !== undefined)
+            {
+                standing.delete(tableId);
+                toasts.dismiss(id);
+            }
+        };
+
         const yourTurn = (match: GameFrame['match'], opening: boolean) =>
         {
             const table = lobby.listed().find((one) => one.id === match.tableId);
@@ -346,6 +359,7 @@ export const useCues = createStore((): CuesApi =>
             if (match.finishedAt !== undefined)
             {
                 turns.delete(match.id);
+                letGo(match.tableId);
 
                 return;
             }
@@ -400,13 +414,14 @@ export const useCues = createStore((): CuesApi =>
                 return true;
             }
 
-            toasts.show({
+            standing.set(table.id, toasts.show({
                 kind: 'live',
                 icon: 'play',
                 text,
                 action: { label: locale.t('quickMatch.go'), run: () => go.current?.(target) },
-                dedupe: `cue.started.${ table.id }`
-            });
+                dedupe: `cue.started.${ table.id }`,
+                duration: Infinity
+            }));
             chime();
 
             return true;
@@ -435,6 +450,20 @@ export const useCues = createStore((): CuesApi =>
             back();
         }
 
+        const trackStarted = () => createEffect(() =>
+        {
+            const open = lobby.openId();
+            const seated = lobby.seated();
+
+            for (const tableId of [...standing.keys()])
+            {
+                if (tableId === open || !seated.some((one) => one.id === tableId))
+                {
+                    letGo(tableId);
+                }
+            }
+        }, { name: 'cues.started' });
+
         const trackWords = () => createEffect(() =>
         {
             if (settings.settings().notify)
@@ -450,6 +479,7 @@ export const useCues = createStore((): CuesApi =>
             trackNotices();
             trackTitle();
             trackWords();
+            trackStarted();
 
             return dispose;
         });
@@ -505,6 +535,7 @@ export const useCues = createStore((): CuesApi =>
             noticeSeeded = false;
             noticeSeenBusy = false;
             begun.clear();
+            standing.clear();
             turns.clear();
         },
 

@@ -998,6 +998,69 @@ describe('the cues store', () =>
             expect(went).toEqual([`/app/play/${ tableId }`]);
         });
 
+        it('stays until the reader goes to the table, however long that takes', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            await push(dealt(tableId));
+            clock.advance(120_000);
+            await settle();
+
+            expect(said(tableId)).toHaveLength(1);
+
+            useLobby().open(tableId);
+            await settle();
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
+        it('goes when the game ends before the reader came, and when the reader no longer sits at the table', async () =>
+        {
+            useCues().start();
+
+            const ended = await seatedAt();
+
+            await push(dealt(ended));
+            await push(dealt(ended, { rev: 9, finishedAt: new Date(clock.now()).toISOString() }), 10);
+
+            expect(said(ended)).toHaveLength(0);
+
+            const left = await seatedAt();
+
+            await push(dealt(left), 11);
+
+            expect(said(left)).toHaveLength(1);
+
+            for (const chair of server.tables.find((one) => one.id === left)!.chairs)
+            {
+                if (chair.who === server.me)
+                {
+                    chair.who = undefined;
+                    chair.ready = false;
+                }
+            }
+
+            await useLobby().refresh();
+            await settle();
+
+            expect(said(left)).toHaveLength(0);
+        });
+
+        it('can still be closed by the reader, and is not raised again by the moves that follow', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            await push(dealt(tableId));
+            useToasts().dismiss(said(tableId)[0].id);
+            await push(dealt(tableId, { rev: 2 }), 10);
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
         it('says it for a game played a move a day as well', async () =>
         {
             useCues().start();
