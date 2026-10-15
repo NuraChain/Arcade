@@ -1396,7 +1396,12 @@ gives up. Somebody who comes back as a new joining is tried on a line again.
   24 kbps through WebCodecs where both ends can write and read it, and G.711 μ-law at 16 kHz where
   either cannot: the `voice` frame says `opus`, the roster carries it, and a sender picks the
   codec its targets all hear. A frame of pure silence is not sent, and nothing is sent while muted
-  or between presses of the talk key.
+  or between presses of the talk key. Every frame the microphone gives is COUNTED, sent or not:
+  `at` is the sender's capture clock in frames, so a pause is a gap in the count and never a
+  shift in time, and the receiver can measure how late each frame is. The telephone code is
+  brought to 16 kHz and back through a windowed-sinc filter (`services/voice.resample.ts`), which
+  also brings Opus to a call that does not run at 48 kHz; it used to average three samples
+  together, which folded the top of the voice back into it as a hiss.
 - **The hub forwards it and nothing more.** `hub.sound` sends a frame only to joinings it names in
   the sender's own call who may talk with the sender, never back to the sender and never from one
   who has said they are muted. It is metered by the `sound` budget, 250 frames in ten seconds,
@@ -1405,18 +1410,42 @@ gives up. Somebody who comes back as a new joining is tried on a line again.
   move never waits behind sound, and a socket that cannot keep up loses sound and is never closed
   for it. The browser does the same on its side: a frame is dropped rather than sent behind 8 KB the
   socket has not sent yet (`SOUND_BACKLOG`).
-- **The receiver plays it 120 ms behind** (`JITTER_MS`), each frame straight after the one before,
-  starts again that far behind when the frames fell behind the clock, and lets a frame fall rather
-  than play it more than 400 ms late (`LAG_MOST_MS`). What it plays is a `MediaStream` from the
-  call's own `AudioContext`, handed to the same audio element a line's stream is, so the volume,
-  turning somebody past full, the speaker, deafening and the speaking ring all work unchanged.
+- **The receiver measures the line and plays as far behind as it needs, no further.** The owner:
+  "Quality of voice is too bad", and later "fix all of these things that is fixed about latency
+  ... these things should be real". It played every voice a fixed 120 ms behind, started again
+  that far behind whenever a frame was late, and dropped any frame more than 400 ms late: on a
+  real line every hiccup was a hole and a jump. Measured in two browsers through a proxy that
+  holds bytes in order with Wi-Fi-like and mobile-like delays, 1.65% and 2.82% of the speech was
+  missing, and nothing had been lost in transit. `Playout` (`services/voice.playout.ts`) runs
+  in the audio thread, inside the same Blob module as the tap:
+  - each frame's delay is measured against the sender's clock, and the buffer is the 99th
+    percentile of the last 400 (about 24 s of speech) plus 12 ms. A frame that arrives in a burst
+    behind another is not counted again, so one stall is one late moment and not ten: counted
+    every time, a single hiccup raised the buffer for the next half a minute;
+  - a call starts as far behind as the old fixed buffer and comes down to what the line shows as
+    it learns it, over about six seconds of speech;
+  - a phrase starts exactly that far behind its first frame; inside one, the player steers by
+    playing up to 3% faster or 2% slower, and catches up by skipping only quiet sound;
+  - a frame that is late is waited for under a fading mirror of the last sound (no hole, no
+    click, at most 60 ms), and played whole when it comes; one or two frames missing inside a
+    phrase are covered and the phrase goes on in time; a pause in what was sent is silence.
+  What it plays is a `MediaStream` from the call's own `AudioContext`, handed to the same audio
+  element a line's stream is, so the volume, turning somebody past full, the speaker, deafening
+  and the speaking ring all work unchanged. The class is written with no reference outside itself
+  because the worklet is built from its `toString()`. Measured again through the same proxy:
+  0.4% and 0.81% missing over 30 s, the only break of any length in the first two seconds of a
+  call while the line is learned; simulated over a minute, no click, no frame lost, a good line
+  played about 20 ms behind where it was 120.
 - **Hearing somebody through the server is answered the same way at once**, whatever is left of
   the wait and whatever the line says: they have hung theirs up. A signal for a line that was hung
   up is let fall, and an answer that the hanging up cut short does not call the call failed.
 - **A carried call counts as connected.** The Players list never says "Could not connect" for it.
   That sentence is left for a call nothing can carry (no audio context, or no socket).
 
-`voice-relay.spec.ts` holds the codecs, the jitter, the tap and the codec choice;
+`voice-relay.spec.ts` holds the codecs, the tap, the count, the player's frames and the codec
+choice; `voice-playout.spec.ts` the player (a steady line, a jittery one, a late frame, a lost
+one, a pause, a stall and the catching up, the cautious start, nothing clicking);
+`voice-resample.spec.ts` the rates;
 `voice-rtc.spec.ts` (*a call the server carries*) the wait, the failure, the answer, the line
 hung up and the call nothing can carry; `voice.spec.ts` (*a call the server carries*) the store;
 `realtime-hub.spec.ts` and `voice-frames.spec.ts` the server. Seen in two real browsers on the

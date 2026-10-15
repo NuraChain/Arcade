@@ -1,3 +1,6 @@
+import { Playout } from './voice.playout.ts';
+import { createResampler, type Resampler } from './voice.resample.ts';
+
 export type Codec = 'opus' | 'law';
 
 export interface Target
@@ -37,9 +40,7 @@ export const LAW_RATE = 16_000;
 
 export const OPUS_BITRATE = 24_000;
 
-export const JITTER_MS = 120;
-
-export const LAG_MOST_MS = 400;
+export const WAITING_MOST = 50;
 
 const BIAS = 0x84;
 
@@ -49,7 +50,11 @@ const SILENT = 1 / 32_768;
 
 const TAP = 'nura-voice-tap';
 
-const TAP_SOURCE = `
+const PLAY = 'nura-voice-play';
+
+const WORKLET_SOURCE = `
+const Kept = (${ Playout.toString() });
+
 class Tap extends AudioWorkletProcessor
 {
     constructor()
@@ -84,7 +89,30 @@ class Tap extends AudioWorkletProcessor
     }
 }
 
+class Play extends AudioWorkletProcessor
+{
+    constructor()
+    {
+        super();
+        this.playout = new Kept(sampleRate, ${ FRAME_MS });
+        this.port.onmessage = (event) => this.playout.take(event.data.at, event.data.samples, currentFrame);
+    }
+
+    process(inputs, outputs)
+    {
+        const channel = outputs[0] && outputs[0][0];
+
+        if (channel !== undefined)
+        {
+            this.playout.fill(channel, currentFrame);
+        }
+
+        return true;
+    }
+}
+
 registerProcessor('${ TAP }', Tap);
+registerProcessor('${ PLAY }', Play);
 `;
 
 const OPUS = { codec: 'opus', sampleRate: OPUS_RATE, numberOfChannels: 1 };
@@ -131,41 +159,6 @@ export function unlaw(bytes: Uint8Array)
     return out;
 }
 
-export function resample(samples: Float32Array, from: number, to: number)
-{
-    const length = Math.max(1, Math.round((samples.length * to) / from));
-    const out = new Float32Array(length);
-    const step = from / to;
-
-    for (let index = 0; index < length; index += 1)
-    {
-        if (step > 1)
-        {
-            const start = Math.min(samples.length - 1, Math.floor(index * step));
-            const end = Math.min(samples.length, Math.max(start + 1, Math.floor((index + 1) * step)));
-            let sum = 0;
-
-            for (let at = start; at < end; at += 1)
-            {
-                sum += samples[at];
-            }
-
-            out[index] = sum / (end - start);
-        }
-        else
-        {
-            const at = index * step;
-            const left = Math.min(Math.floor(at), samples.length - 1);
-            const right = Math.min(left + 1, samples.length - 1);
-            const weight = at - Math.floor(at);
-
-            out[index] = samples[left] * (1 - weight) + samples[right] * weight;
-        }
-    }
-
-    return out;
-}
-
 export function silent(samples: Float32Array)
 {
     return samples.every((sample) => Math.abs(sample) < SILENT);
@@ -194,6 +187,32 @@ export function bytesOf(text: string)
     }
 
     return out;
+}
+
+export function framed(length: number)
+{
+    let carried = new Float32Array(0);
+
+    return (samples: Float32Array) =>
+    {
+        const joined = new Float32Array(carried.length + samples.length);
+
+        joined.set(carried);
+        joined.set(samples, carried.length);
+
+        const out = new Float32Array(length);
+
+        out.set(joined.subarray(0, length));
+
+        if (joined.length < length)
+        {
+            out.fill(joined.length === 0 ? 0 : joined[joined.length - 1], joined.length);
+        }
+
+        carried = joined.slice(Math.min(joined.length, length));
+
+        return out;
+    };
 }
 
 export async function hearsOpus()
@@ -225,13 +244,13 @@ const shut = (coder: AudioEncoder | AudioDecoder | null) =>
 
 const loaded = new WeakMap<BaseAudioContext, Promise<void>>();
 
-const tapped = (context: AudioContext) =>
+const worklets = (context: AudioContext) =>
 {
     let found = loaded.get(context);
 
     if (found === undefined)
     {
-        const url = URL.createObjectURL(new Blob([TAP_SOURCE], { type: 'text/javascript' }));
+        const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
 
         found = context.audioWorklet.addModule(url).finally(() => URL.revokeObjectURL(url));
         loaded.set(context, found);
@@ -239,6 +258,8 @@ const tapped = (context: AudioContext) =>
 
     return found;
 };
+
+const indexOf = (timestamp: number) => Math.round(timestamp / (FRAME_MS * 1000));
 
 export function createRelayKit(context: AudioContext): RelayKit
 {
@@ -250,23 +271,23 @@ export function createRelayKit(context: AudioContext): RelayKit
             let muted = true;
             let closed = false;
             let wiring = 0;
-            let at = 0;
-            let fed = 0;
+            let clock = 0;
             let source: MediaStreamAudioSourceNode | null = null;
             let tap: AudioWorkletNode | null = null;
             let encoder: AudioEncoder | null = null;
             let speaks = opus;
+            let toLaw: Resampler | null = null;
+            let toOpus: ((samples: Float32Array) => Float32Array<ArrayBuffer>) | null = null;
 
             const codec = (): Codec => (speaks && targets.every((one) => one.opus) ? 'opus' : 'law');
 
-            const ship = (how: Codec, bytes: Uint8Array) =>
+            const ship = (how: Codec, index: number, bytes: Uint8Array) =>
             {
                 const to = targets.map((one) => one.join);
 
                 if (to.length > 0)
                 {
-                    send(to, how, at, base64Of(bytes));
-                    at += 1;
+                    send(to, how, index, base64Of(bytes));
                 }
             };
 
@@ -286,7 +307,7 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                         if (codec() === 'opus')
                         {
-                            ship('opus', bytes);
+                            ship('opus', indexOf(chunk.timestamp), bytes);
                         }
                     },
                     error: () =>
@@ -302,8 +323,30 @@ export function createRelayKit(context: AudioContext): RelayKit
                 return made;
             };
 
+            const opusOf = (samples: Float32Array<ArrayBuffer>) =>
+            {
+                if (context.sampleRate === OPUS_RATE)
+                {
+                    return samples;
+                }
+
+                if (toOpus === null)
+                {
+                    const resampler = createResampler(context.sampleRate, OPUS_RATE);
+                    const frame = framed(OPUS_RATE * FRAME_MS / 1000);
+
+                    toOpus = (input) => frame(resampler.push(input));
+                }
+
+                return toOpus(samples);
+            };
+
             const heard = (samples: Float32Array<ArrayBuffer>) =>
             {
+                const index = clock;
+
+                clock += 1;
+
                 if (muted || targets.length === 0 || silent(samples))
                 {
                     return;
@@ -311,11 +354,12 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                 if (codec() === 'law')
                 {
-                    ship('law', lawOf(resample(samples, context.sampleRate, LAW_RATE)));
+                    toLaw ??= createResampler(context.sampleRate, LAW_RATE);
+                    ship('law', index, lawOf(toLaw.push(samples)));
                     return;
                 }
 
-                const sound = context.sampleRate === OPUS_RATE ? samples : resample(samples, context.sampleRate, OPUS_RATE);
+                const sound = opusOf(samples);
 
                 try
                 {
@@ -324,10 +368,9 @@ export function createRelayKit(context: AudioContext): RelayKit
                         sampleRate: OPUS_RATE,
                         numberOfFrames: sound.length,
                         numberOfChannels: 1,
-                        timestamp: fed * FRAME_MS * 1000,
+                        timestamp: index * FRAME_MS * 1000,
                         data: sound
                     }));
-                    fed += 1;
                 }
                 catch
                 {
@@ -361,7 +404,7 @@ export function createRelayKit(context: AudioContext): RelayKit
                     return;
                 }
 
-                await tapped(context);
+                await worklets(context);
 
                 if (round !== wiring || closed || track === null)
                 {
@@ -432,45 +475,48 @@ export function createRelayKit(context: AudioContext): RelayKit
         inbound()
         {
             const out = context.createMediaStreamDestination();
-            const playing = new Set<AudioBufferSourceNode>();
+            const waiting: { at: number; samples: Float32Array }[] = [];
+            const length = Math.round(context.sampleRate * FRAME_MS / 1000);
+            const lawResampler = createResampler(LAW_RATE, context.sampleRate);
+            const opusResampler = createResampler(OPUS_RATE, context.sampleRate);
+            const lawFrame = framed(length);
+            const opusFrame = framed(length);
+            let player: AudioWorkletNode | null = null;
             let decoder: AudioDecoder | null = null;
-            let next = 0;
             let closed = false;
 
-            const play = (samples: Float32Array<ArrayBuffer>, rate: number) =>
+            const hand = (at: number, samples: Float32Array) =>
             {
                 if (closed || samples.length === 0)
                 {
                     return;
                 }
 
-                const now = context.currentTime;
-
-                if (next < now)
+                if (player === null)
                 {
-                    next = now + JITTER_MS / 1000;
+                    waiting.push({ at, samples });
+                    waiting.splice(0, Math.max(0, waiting.length - WAITING_MOST));
+                    return;
                 }
 
-                if (next - now > LAG_MOST_MS / 1000)
+                player.port.postMessage({ at, samples }, [samples.buffer]);
+            };
+
+            void worklets(context).then(() =>
+            {
+                if (closed)
                 {
                     return;
                 }
 
-                const buffer = context.createBuffer(1, samples.length, rate);
-                const node = context.createBufferSource();
+                player = new AudioWorkletNode(context, PLAY, { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+                player.connect(out);
 
-                buffer.copyToChannel(samples, 0);
-                node.buffer = buffer;
-                node.connect(out);
-                node.onended = () =>
+                for (const one of waiting.splice(0))
                 {
-                    playing.delete(node);
-                    node.disconnect();
-                };
-                playing.add(node);
-                node.start(next);
-                next += buffer.duration;
-            };
+                    hand(one.at, one.samples);
+                }
+            }).catch(() => undefined);
 
             const opus = () =>
             {
@@ -485,7 +531,7 @@ export function createRelayKit(context: AudioContext): RelayKit
                         const samples = new Float32Array(data.numberOfFrames);
 
                         data.copyTo(samples, { planeIndex: 0, format: 'f32-planar' });
-                        play(samples, data.sampleRate);
+                        hand(indexOf(data.timestamp), context.sampleRate === data.sampleRate ? samples : opusFrame(opusResampler.push(samples)));
                         data.close();
                     },
                     error: () =>
@@ -514,7 +560,7 @@ export function createRelayKit(context: AudioContext): RelayKit
 
                     if (codec === 'law')
                     {
-                        play(unlaw(bytes), LAW_RATE);
+                        hand(at, lawFrame(lawResampler.push(unlaw(bytes))));
                         return;
                     }
 
@@ -536,15 +582,15 @@ export function createRelayKit(context: AudioContext): RelayKit
                 close()
                 {
                     closed = true;
+                    waiting.length = 0;
 
-                    for (const node of playing)
+                    if (player !== null)
                     {
-                        node.onended = null;
-                        node.stop();
-                        node.disconnect();
+                        player.port.close();
+                        player.disconnect();
+                        player = null;
                     }
 
-                    playing.clear();
                     shut(decoder);
                     decoder = null;
                     out.disconnect();
