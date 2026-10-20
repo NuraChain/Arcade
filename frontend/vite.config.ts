@@ -1,41 +1,11 @@
 import { azeroth } from '@azerothjs/compiler';
 import tailwindcss from '@tailwindcss/vite';
-import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 process.env.VITE_USER_NODE_ENV ??= '';
-
-const REQUIRED_ENV = [
-    'VITE_NURA_CHAIN_ID',
-    'VITE_NURA_CHAIN_NAME',
-    'VITE_NURA_CURRENCY_NAME',
-    'VITE_NURA_CURRENCY_SYMBOL',
-    'VITE_NURA_RPC_URL',
-    'VITE_NURA_EXPLORER_URL',
-    'VITE_NURA_SITE',
-    'VITE_PUBLIC_ORIGIN'
-];
-
-const requireEnv = (mode: string) =>
-{
-    const root = fileURLToPath(new URL('..', import.meta.url));
-
-    if (!existsSync(new URL('../.env', import.meta.url)))
-    {
-        throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.');
-    }
-
-    const env = loadEnv(mode, root, 'VITE_');
-    const absent = REQUIRED_ENV.filter((name) => env[name] === undefined);
-
-    if (absent.length > 0)
-    {
-        throw new Error(`The root .env does not set ${ absent.join(', ') }. Every variable in .env.example has to be written in .env.`);
-    }
-};
 
 const shareOrigin = (): Plugin =>
 {
@@ -45,7 +15,7 @@ const shareOrigin = (): Plugin =>
         name: 'nura-share-origin',
         configResolved: (config) =>
         {
-            origin = String(config.env.VITE_PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
+            origin = String(loadEnv(config.mode, fileURLToPath(new URL('..', import.meta.url)), '').PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
         },
         transformIndexHtml: (html) =>
             origin === '' ? html : html.replaceAll('content="/share.jpg"', `content="${ origin }/share.jpg"`)
@@ -77,10 +47,8 @@ const chunkModules = (): Plugin =>
     };
 };
 
-export default defineConfig(({ isSsrBuild, mode }) =>
+export default defineConfig(({ isSsrBuild }) =>
 {
-    requireEnv(mode);
-
     return {
         plugins: [azeroth(), tailwindcss(), shareOrigin(), ...(isSsrBuild === true ? [] : [chunkModules()])],
 
@@ -165,7 +133,6 @@ export default defineConfig(({ isSsrBuild, mode }) =>
             {
                 '/api': { target: 'http://127.0.0.1:3200', changeOrigin: false },
                 '/ws': { target: 'ws://127.0.0.1:3200', ws: true },
-                '/_image': { target: 'http://127.0.0.1:3200', changeOrigin: false },
                 '/avatars': { target: 'http://127.0.0.1:3200', changeOrigin: false }
             },
             fs:

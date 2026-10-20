@@ -1,57 +1,50 @@
-/**
- * A die, drawn in the DOM.
- *
- * The canvas already tumbles one over the middle of the board, and that one is a flourish: it
- * appears when a roll lands and fades. This is the die a player READS - it sits in whoever's turn
- * it is and stays there until the move is made, so it has to be legible at 28px, selectable by a
- * screen reader, and present on a browser with no WebGL at all.
- *
- * Pips rather than a numeral, because a die face is read at a glance and a digit is read as a
- * digit - and `tally` numerals would put a Persian six on a die that has never had one printed on
- * it anywhere. The number goes in the label instead, which is what a screen reader says.
- */
+import { createDie, type Die } from '../../game/stage/die.ts';
 
-/**
- * Which of the nine cells each face fills, top-left to bottom-right.
- *
- * A 3x3 grid rather than absolute offsets: the pips then sit on the same lattice at every size, and
- * the face scales by changing one font-relative measurement instead of six coordinates.
- */
-const PIPS: Record<number, readonly number[]> = {
-    1: [4],
-    2: [0, 8],
-    3: [0, 4, 8],
-    4: [0, 2, 6, 8],
-    5: [0, 2, 4, 6, 8],
-    6: [0, 2, 3, 5, 6, 8]
-};
+const TILT = 19;
 
-const CELLS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const faced = (value: number) => Number.isInteger(value) && value >= 1 && value <= 6;
 
 export default component DieFace(props: { value: number; size?: 'sm' | 'md' | 'fill'; label: string })
 {
-    derived lit = PIPS[props.value] ?? PIPS[1];
+    let host: HTMLSpanElement | null = null;
+    let die: Die | null = null;
 
     derived box = props.size === 'sm'
-        ? 'h-7 w-7 gap-0.5 p-1'
-        : (props.size === 'fill' ? 'h-full w-full gap-[7%] p-[15%]' : 'h-10 w-10 gap-0.5 p-1.5');
+        ? 'h-7 w-7'
+        : (props.size === 'fill' ? 'h-full w-full' : 'h-10 w-10');
+
+    effect
+    {
+        const face = props.value;
+
+        if (faced(face))
+        {
+            die?.show(face, TILT);
+        }
+    }
+
+    mount
+    {
+        const made = createDie({ flat: true });
+
+        made.node.style.setProperty('--die', '72cqmin');
+        made.node.style.left = '50%';
+        made.node.style.top = '50%';
+        made.show(faced(props.value) ? props.value : 1, TILT);
+        host?.append(made.node);
+        die = made;
+
+        return () =>
+        {
+            made.dispose();
+            die = null;
+        };
+    }
 
     <span
-        class={ () => [
-            'inline-grid shrink-0 grid-cols-3 grid-rows-3 rounded-[18%] bg-[#f6f1e6] shadow-[inset_0_-3px_0_rgb(0_0_0/0.12),0_1px_3px_rgb(0_0_0/0.35)] ring-1 ring-black/20',
-            box
-        ].join(' ') }
+        class={ () => ['relative inline-block shrink-0 [container-type:size]', box].join(' ') }
         role="img"
         aria-label={ props.label }
-    >
-        <For each={ CELLS } key={ (cell) => cell } let={ cell }>
-            <span
-                class={ () => [
-                    'block rounded-full',
-                    lit.includes(cell) ? 'bg-[#2b1d12] shadow-[inset_0_1px_1.5px_rgb(0_0_0/0.45)]' : 'bg-transparent'
-                ].join(' ') }
-                aria-hidden="true"
-            ></span>
-        </For>
-    </span>
+        ref={ (element) => host = element }
+    ></span>
 }

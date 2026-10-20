@@ -7,7 +7,7 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 
 import '../src/entities/index.ts';
-import { VOICE_SCOPES } from '../src/domains/table/voices.ts';
+import { VOICE_SCOPES, callOf, scopeFor } from '../src/domains/table/voices.ts';
 import { tableCreateInput, voiceSwitch } from '../src/schemas.ts';
 import { defaultTable } from '../../frontend/src/data/tables.ts';
 
@@ -24,7 +24,7 @@ describe('who a table\'s call is for', () =>
     {
         expect(wordsIn('tables_voice_known').sort()).toEqual([...VOICE_SCOPES].sort());
 
-        for (const word of [...VOICE_SCOPES, 'team', 'on', 'true', ''])
+        for (const word of [...VOICE_SCOPES, 'side', 'on', 'true', ''])
         {
             const known = (VOICE_SCOPES as readonly string[]).includes(word);
 
@@ -42,9 +42,27 @@ describe('who a table\'s call is for', () =>
         expect(voiceSwitch.safeParse({ voice: true }).ok).toBe(false);
     });
 
-    it('is off or the whole table, and nothing narrower until a call can keep two sides apart', () =>
+    it('is off, the whole table, or a side of a table of two sides', () =>
     {
-        expect([...VOICE_SCOPES]).toEqual(['off', 'table']);
+        expect([...VOICE_SCOPES]).toEqual(['off', 'table', 'team']);
+        expect(wordsIn('tables_voice_team')).toEqual(['team']);
+    });
+
+    it('is the whole table where somebody asked for a side and the table has none', () =>
+    {
+        expect(scopeFor('team', false)).toBe('table');
+        expect(scopeFor('team', true)).toBe('team');
+        expect(scopeFor('table', true)).toBe('table');
+        expect(scopeFor('off', true)).toBe('off');
+    });
+
+    it('names no call where there is none, the table\'s call for the table, and a call a side for a side', () =>
+    {
+        expect(callOf('off', 't-1', 0)).toBeNull();
+        expect(callOf('table', 't-1', 1)).toBe('t-1');
+        expect(callOf('team', 't-1', 0)).toBe('t-1#0');
+        expect(callOf('team', 't-1', 1)).toBe('t-1#1');
+        expect(callOf('team', 't-1', 0)).not.toBe(callOf('team', 't-1', 1));
     });
 
     it('is listed by a module that imports nothing, so the browser reads the same list', () =>

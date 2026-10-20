@@ -74,9 +74,11 @@ export interface ToastsApi
     queued: Getter<number>;
     show(input: ToastInput): string;
     update(id: string, patch: ToastPatch): void;
-    promise<T>(work: Promise<T>, copy: { pending: string; done: (value: T) => string; failed?: string }): Promise<T>;
+    promise<T>(work: Promise<T>, copy: { pending: string; done: (value: T) => string; failed?: string | ((error: unknown) => string) }): Promise<T>;
     dismiss(id: string): void;
     dismissAll(): void;
+    lifted: Getter<boolean>;
+    lift(): () => void;
     pause(id: string): void;
     resume(id: string): void;
     progress(id: string, now: number): number;
@@ -120,6 +122,8 @@ export const useToasts = createStore(() =>
 {
     const [items, setItems] = createSignal<Toast[]>([]);
     const [queue, setQueue] = createSignal<Toast[]>([]);
+    const [lifts, setLifts] = createSignal(0);
+    let era = 0;
 
     const timers = new Map<string, () => void>();
     let counter = 0;
@@ -130,11 +134,21 @@ export const useToasts = createStore(() =>
         timers.delete(id);
     };
 
+    const away = new Set<string>();
+
+    const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
     const arm = (toast: Toast) =>
     {
         stop(toast.id);
         if (!Number.isFinite(toast.remaining))
         {
+            return;
+        }
+        if (hidden())
+        {
+            away.add(toast.id);
+            patchItem(toast.id, { paused: true });
             return;
         }
         timers.set(toast.id, runtime().clock.after(toast.remaining, () => dismiss(toast.id)));
@@ -264,7 +278,9 @@ export const useToasts = createStore(() =>
             }
             catch (error)
             {
-                this.update(id, { kind: 'error', text: copy.failed ?? String(error) });
+                const failed = copy.failed ?? useLocale().t('common.actionFailed');
+
+                this.update(id, { kind: 'error', text: typeof failed === 'string' ? failed : failed(error) });
                 throw error;
             }
         },
@@ -279,6 +295,26 @@ export const useToasts = createStore(() =>
             }
             setItems([]);
             setQueue([]);
+        },
+
+        lifted: () => lifts() > 0,
+
+        lift()
+        {
+            const born = era;
+            let held = true;
+
+            setLifts((count) => count + 1);
+
+            return () =>
+            {
+                if (held && born === era)
+                {
+                    setLifts((count) => count - 1);
+                }
+
+                held = false;
+            };
         },
 
         /**
@@ -361,9 +397,40 @@ export const useToasts = createStore(() =>
                 });
             };
 
-            window.addEventListener('unhandledrejection', caught);
+            const look = () =>
+            {
+                if (hidden())
+                {
+                    for (const toast of untrack(items))
+                    {
+                        if (!toast.paused && Number.isFinite(toast.remaining))
+                        {
+                            api.pause(toast.id);
+                            away.add(toast.id);
+                        }
+                    }
 
-            return () => window.removeEventListener('unhandledrejection', caught);
+                    return;
+                }
+
+                const back = [...away];
+
+                away.clear();
+
+                for (const id of back)
+                {
+                    api.resume(id);
+                }
+            };
+
+            window.addEventListener('unhandledrejection', caught);
+            document.addEventListener('visibilitychange', look);
+
+            return () =>
+            {
+                window.removeEventListener('unhandledrejection', caught);
+                document.removeEventListener('visibilitychange', look);
+            };
         },
 
         reset()
@@ -373,9 +440,12 @@ export const useToasts = createStore(() =>
                 cancel();
             }
             timers.clear();
+            away.clear();
             counter = 0;
+            era += 1;
             setItems([]);
             setQueue([]);
+            setLifts(0);
         }
     };
 

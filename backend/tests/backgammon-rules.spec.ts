@@ -70,7 +70,7 @@ const scripted = (faces: number[]): ((sides: number) => number) =>
 function stateWith(overrides: Partial<BackgammonState>): BackgammonState
 {
     return {
-        ...create(3, true, scripted([6, 1])).state,
+        ...create(3, true).state,
         ...overrides
     };
 }
@@ -624,7 +624,7 @@ describe('the doubling cube', () =>
 {
     it('is dead in a one-point match', () =>
     {
-        const state = create(1, true, scripted([6, 1])).state;
+        const state = create(1, true).state;
 
         expect(state.cubed).toBe(false);
         expect(mayDouble({ ...state, phase: 'roll' }, state.turn)).toBe(false);
@@ -632,7 +632,7 @@ describe('the doubling cube', () =>
 
     it('is off when the table was opened without one', () =>
     {
-        expect(create(5, false, scripted([6, 1])).state.cubed).toBe(false);
+        expect(create(5, false).state.cubed).toBe(false);
     });
 
     it('may be turned by either player while it is centred, and only by its owner after a take', () =>
@@ -772,13 +772,14 @@ describe('the dead cube', () =>
         expect(mayDouble(single, 1)).toBe(false);
     });
 
-    it('rolls for a player whose cube is dead inside the move that ended the last turn', () =>
+    it('leaves a player whose cube is dead to roll like anybody else, with the roll the only thing to do', () =>
     {
         const moving = waiting({ target: 3, score: [2, 0], turn: 1, phase: 'move', dice: [6, 5], checkers: [[...START], [...START]] });
         const played = apply(moving, { kind: 'move', seat: 1, hops: [{ from: 24, to: 18 }, { from: 18, to: 13 }] }, scripted([3, 1]));
 
         expect(played.ok && played.state.turn).toBe(0);
-        expect(played.ok && played.state.phase).toBe('move');
-        expect(played.ok && played.events).toContainEqual({ e: 'roll', seat: 0, dice: [3, 1] });
+        expect(played.ok && played.state.phase).toBe('roll');
+        expect(played.ok && played.events.some((event) => event.e === 'roll')).toBe(false);
+        expect(played.ok && legalMoves(played.state, 0)).toEqual([{ kind: 'roll', seat: 0 }]);
     });
 });

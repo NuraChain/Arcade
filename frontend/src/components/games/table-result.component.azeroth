@@ -1,30 +1,95 @@
+import { onCleanup, untrack } from 'azerothjs';
+
 import MatchResult from './match-result.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
 
-export default component TableResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch })
+export const RESULT_OUT = 240;
+
+export const RESULT_WAIT = 12_000;
+
+export default component TableResult(props: { match: MatchView; shown: boolean; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch; onStand?: (stands: boolean) => void })
 {
     const locale = useLocale();
 
     state folded = false;
 
-    <Show
-        when={ !folded }
-        fallback={
-            <div class="table-result-tab">
-                <Button variant="secondary" size="md" leading="trophy" onClick={ () => folded = false }>{ locale.t('match.result.show') }</Button>
-            </div>
-        }
-    >
+    state last = untrack(() => ({ match: props.match, mine: props.mine, rematch: props.rematch, busy: props.busy === true }));
+
+    state standing = false;
+
+    state leaving = false;
+
+    let stop: () => void = () => undefined;
+
+    const gone = () =>
+    {
+        standing = false;
+        folded = false;
+    };
+
+    effect
+    {
+        const now = { match: props.match, mine: props.mine, rematch: props.rematch, busy: props.busy === true };
+        const shown = props.shown && now.match.finishedAt !== undefined;
+
+        untrack(() =>
+        {
+            if (shown)
+            {
+                stop();
+                last = now;
+                standing = true;
+                leaving = false;
+            }
+            else if (standing && !leaving)
+            {
+                if (now.match.id === last.match.id)
+                {
+                    gone();
+                }
+                else
+                {
+                    leaving = true;
+                    stop = runtime().clock.after(RESULT_OUT, gone);
+                }
+            }
+        });
+    }
+
+    effect
+    {
+        const stands = standing;
+
+        untrack(() => props.onStand?.(stands));
+    }
+
+    onCleanup(() => stop());
+
+    <Show when={ standing }>
         { () =>
-            <div class="table-result">
-                <div class="flex flex-col gap-2">
-                    <MatchResult match={ props.match } mine={ props.mine } busy={ props.busy === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-                    <Button variant="ghost" size="sm" class="self-center" onClick={ () => folded = true }>{ locale.t('match.result.board') }</Button>
-                </div>
-            </div>
+            <Show
+                when={ !folded }
+                fallback={
+                    <div class="table-result-tab" data-leaving={ leaving ? 'true' : undefined } inert={ leaving }>
+                        <Button variant="secondary" size="md" leading="trophy" onClick={ () => folded = false }>{ locale.t('match.result.show') }</Button>
+                    </div>
+                }
+            >
+                { () =>
+                    <div class="table-result" data-leaving={ leaving ? 'true' : undefined } inert={ leaving }>
+                        <div class="flex flex-col gap-2">
+                            <div class="table-result-card">
+                                <MatchResult match={ last.match } mine={ last.mine } busy={ last.busy } onAgain={ props.onAgain } rematch={ last.rematch } />
+                            </div>
+                            <Button variant="secondary" size="sm" class="self-center" onClick={ () => folded = true }>{ locale.t('match.result.board') }</Button>
+                        </div>
+                    </div>
+                }
+            </Show>
         }
     </Show>
 }

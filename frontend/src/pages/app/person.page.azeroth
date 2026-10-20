@@ -14,16 +14,14 @@ import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { openTable } from '../../lib/open-table.ts';
+import { playWith } from '../../lib/play-with.ts';
 import { attempt } from '../../lib/attempt.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 
@@ -32,9 +30,7 @@ export default component PersonPage()
     const locale = useLocale();
     const social = useSocial();
     const presence = usePresence();
-    const catalogue = useCatalogue();
     const chat = useChat();
-    const lobby = useLobby();
     const overlay = useOverlay();
     const shell = useShell();
     const params = useParams();
@@ -134,8 +130,7 @@ export default component PersonPage()
     {
         if (person !== null)
         {
-            const game = catalogue.featured();
-            openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
+            playWith(person.id, view.data()?.refusal === undefined);
         }
     };
 
@@ -203,17 +198,16 @@ export default component PersonPage()
                                             variant="outline"
                                             leading="friend-add"
                                             block
-                                            loading={ social.working(them.id) }
                                             onClick={ () => void attempt(social.add(them.id), locale.t('person.added')) }
                                         >
                                             { locale.t('person.add') }
                                         </Button>
                                     </Show>
                                     <Show when={ relation === 'outgoing' }>
-                                        <Button variant="outline" leading="clock" block loading={ social.working(them.id) } onClick={ () => void attempt(social.withdraw(them.id)) }>{ locale.t('person.withdraw') }</Button>
+                                        <Button variant="outline" leading="clock" block onClick={ () => void attempt(social.withdraw(them.id)) }>{ locale.t('person.withdraw') }</Button>
                                     </Show>
                                     <Show when={ relation === 'incoming' }>
-                                        <Button variant="outline" leading="friend-check" block loading={ social.working(asked) } onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
+                                        <Button variant="outline" leading="friend-check" block onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
                                     </Show>
                                     <Show when={ relation === 'friend' }>
                                         <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
@@ -238,7 +232,6 @@ export default component PersonPage()
                                 variant="outline"
                                 size="sm"
                                 class="mt-3"
-                                loading={ social.working(them.id) }
                                 onClick={ () => void attempt(social.unblock(them.id), locale.t('actions.unblocked', { name: name.split(' ')[0] })) }
                             >
                                 { locale.t('actions.unblock', { name: name.split(' ')[0] }) }

@@ -1,12 +1,19 @@
 import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
-import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
+import { runtime } from '../lib/runtime.ts';
+import type { GateReading } from '../services/voice.gate.ts';
+import { canDenoise, createDenoiser } from '../services/voice.denoise.ts';
+import { createVoiceInput, type InputOptions, type VoiceInput } from '../services/voice.input.ts';
+import { hearsOpus } from '../services/voice.relay.ts';
+import { createVoiceCall, type LineFacts, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
-import { useRealtime, type SignalFrame, type VoiceFrame } from './realtime.store.ts';
-import { useSettings } from './settings.store.ts';
+import { useRealtime, type SignalFrame, type SoundFrame, type VoiceFrame } from './realtime.store.ts';
+import { useSettings, type VoiceNoise, type VoiceQuality } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
+
+export type TestFault = 'denied' | 'absent' | 'failed';
 
 export type VoiceMark = 'speaking' | 'live' | 'muted';
 
@@ -39,8 +46,11 @@ export interface VoiceApi
     people: Getter<VoicePerson[]>;
     inputs: Getter<MediaChoice[]>;
     outputs: Getter<MediaChoice[]>;
+    reading: Getter<GateReading | null>;
+    suppression: Getter<VoiceNoise | null>;
     canPickSpeaker(): boolean;
     speaking(who: string): boolean;
+    unreached: Getter<readonly string[]>;
     mark(who: string): VoiceMark | null;
     volumeOf(who: string): number;
     join(table: string): Promise<void>;
@@ -52,6 +62,14 @@ export interface VoiceApi
     silence(who: string): void;
     setLevel(who: string, volume: number): void;
     applyVolume(): void;
+    tune(): void;
+    reprocess(): Promise<void>;
+    lines: Getter<Record<string, LineFacts>>;
+    watchLines(): () => void;
+    testing: Getter<boolean>;
+    testFault: Getter<TestFault | null>;
+    startTest(): Promise<void>;
+    stopTest(): void;
     survey(): Promise<void>;
     useMic(id: string): Promise<void>;
     useSpeaker(id: string): void;
@@ -61,9 +79,21 @@ export interface VoiceApi
 
 const SPEAKING = 0.08;
 
+export const SPEAKING_HOLD_MS = 400;
+
+export const UNREACHED_MS = 10_000;
+
 const QUIET = 0.04;
 
 export const TALK_KEY = 'KeyV';
+
+export const LOUDEST = 2;
+
+export const LINES_MS = 1000;
+
+export const ANNOUNCE_MS = 500;
+
+export const BITRATES: Record<VoiceQuality, number> = { standard: 32_000, high: 64_000, best: 96_000 };
 
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
 
@@ -102,21 +132,56 @@ export const useVoice = createStore((): VoiceApi =>
     const [mine, setMine] = createSignal('');
     const [links, setLinks] = createSignal<Record<string, PeerLink>>({});
     const [loud, setLoud] = createSignal<ReadonlySet<string>>(new Set());
-    const [volumes, setVolumes] = createSignal<Readonly<Record<string, number>>>({});
+    const [unreached, setUnreached] = createSignal<readonly string[]>([]);
+    const waits = new Map<string, () => void>();
+
+    const reached = (who: string) =>
+    {
+        waits.get(who)?.();
+        waits.delete(who);
+        setUnreached((held) => held.includes(who) ? held.filter((one) => one !== who) : held);
+    };
+
+    const awaited = (who: string) =>
+    {
+        if (!waits.has(who) && !untrack(unreached).includes(who))
+        {
+            waits.set(who, runtime().clock.after(UNREACHED_MS, () =>
+            {
+                waits.delete(who);
+                setUnreached((held) => held.includes(who) ? held : [...held, who]);
+            }));
+        }
+    };
+    const before = new Map<string, number>();
     const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
     const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
+    const [reading, setReading] = createSignal<GateReading | null>(null);
+    const [suppression, setSuppression] = createSignal<VoiceNoise | null>(null);
+    const [testing, setTesting] = createSignal(false);
+    const [lines, setLines] = createSignal<Record<string, LineFacts>>({});
+    let watchers = 0;
+    let unlook: (() => void) | null = null;
+    const [testFault, setTestFault] = createSignal<TestFault | null>(null);
+    let trial: { context: AudioContext; raw: MediaStream; input: VoiceInput; heard: HTMLAudioElement; unread: () => void } | null = null;
+    let trials = 0;
+    let refused = false;
 
     let call: VoiceCall | null = null;
     let stream: MediaStream | null = null;
+    let input: VoiceInput | null = null;
+    let unread: (() => void) | null = null;
     let context: AudioContext | null = null;
+    let unstir: (() => void) | null = null;
     let mutedBeforeDeaf = true;
     let unhold: (() => void) | null = null;
+    let opus = false;
 
     const me = () => untrack(account.user)?.id ?? '';
 
-    const master = () => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
+    const master = () => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), LOUDEST);
 
-    const own = (who: string) => untrack(volumes)[who] ?? 1;
+    const own = (who: string) => untrack(settings.settings).voiceLevels[who] ?? 1;
 
     const heard = (who: string) => (untrack(deaf) ? 0 : master() * own(who));
 
@@ -124,29 +189,105 @@ export const useVoice = createStore((): VoiceApi =>
 
     const talkKey = () => untrack(settings.settings).voiceTalkKey || TALK_KEY;
 
+    const options = (): InputOptions =>
+    {
+        const current = untrack(settings.settings);
+
+        return {
+            volume: current.voiceInput,
+            push: current.voicePushToTalk,
+            pressed: untrack(talking),
+            linger: current.voiceRelease,
+            auto: current.voiceAuto,
+            threshold: current.voiceThreshold
+        };
+    };
+
     const gate = () =>
     {
-        call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking)));
+        call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking) && !processed()));
+        input?.set(options());
+    };
+
+    const processed = () => input !== null && context?.state === 'running';
+
+    const sending = () => (processed() ? input!.stream : stream);
+
+    const strong = () => untrack(settings.settings).voiceNoise === 'strong' && canDenoise(context) && !refused;
+
+    const unprocess = () =>
+    {
+        unread?.();
+        unread = null;
+        input?.close();
+        input = null;
+        setReading(null);
+        setSuppression(null);
+    };
+
+    const process = async (raw: MediaStream | null) =>
+    {
+        unprocess();
+
+        if (raw === null || context === null)
+        {
+            return;
+        }
+
+        const wanted = untrack(settings.settings).voiceNoise;
+
+        try
+        {
+            const denoiser = strong() ? await createDenoiser(context) : null;
+
+            if (strong() && denoiser === null)
+            {
+                refused = true;
+            }
+
+            const made = await createVoiceInput(context, raw, options(), denoiser);
+
+            if (stream !== raw)
+            {
+                made.close();
+                return;
+            }
+
+            input = made;
+            unread = made.onReading((next) => setReading(next));
+            setSuppression(denoiser !== null ? 'strong' : (wanted === 'off' ? 'off' : 'standard'));
+        }
+        catch
+        {
+            input = null;
+        }
+    };
+
+    const fading = new Map<string, () => void>();
+
+    const hush = (who: string) =>
+    {
+        fading.get(who)?.();
+        fading.delete(who);
     };
 
     const level = (who: string, value: number) =>
     {
-        setLoud((current) =>
+        if (value >= SPEAKING)
         {
-            const on = current.has(who);
+            hush(who);
+            setLoud((current) => current.has(who) ? current : new Set([...current, who]));
+            return;
+        }
 
-            if (!on && value >= SPEAKING)
+        if (value < QUIET && untrack(loud).has(who) && !fading.has(who))
+        {
+            fading.set(who, runtime().clock.after(SPEAKING_HOLD_MS, () =>
             {
-                return new Set([...current, who]);
-            }
-
-            if (on && value < QUIET)
-            {
-                return new Set([...current].filter((one) => one !== who));
-            }
-
-            return current;
-        });
+                fading.delete(who);
+                setLoud((current) => new Set([...current].filter((one) => one !== who)));
+            }));
+        }
     };
 
     const stopTracks = (held: MediaStream | null) =>
@@ -165,24 +306,57 @@ export const useVoice = createStore((): VoiceApi =>
 
     let joins = 0;
 
+    const stir = () =>
+    {
+        if (context !== null && context.state === 'suspended')
+        {
+            void context.resume().catch(() => undefined);
+        }
+    };
+
+    let announcedAt = Number.NEGATIVE_INFINITY;
+    let announcing: (() => void) | null = null;
+
     const teardown = () =>
     {
         joins += 1;
+        announcing?.();
+        announcing = null;
+        announcedAt = Number.NEGATIVE_INFINITY;
         unhold?.();
         unhold = null;
+        unstir?.();
+        unstir = null;
         call?.close();
         call = null;
+        unprocess();
         stopStream();
 
         void context?.close().catch(() => undefined);
         context = null;
+        refused = false;
+
+        for (const cancel of waits.values())
+        {
+            cancel();
+        }
+
+        waits.clear();
+        setUnreached([]);
 
         setTable(null);
         setJoining(false);
         setRoster([]);
         setMine('');
         setLinks({});
+
+        for (const who of [...fading.keys()])
+        {
+            hush(who);
+        }
+
         setLoud(new Set<string>());
+        setLines({});
         setMic('off');
         setMuted(true);
         setDeaf(false);
@@ -205,7 +379,15 @@ export const useVoice = createStore((): VoiceApi =>
         setRoster(frame.peers);
         setMine(frame.mine);
 
-        call?.sync(frame.mine, frame.peers.filter((peer) => peer.talk && peer.join !== frame.mine).map((peer) => ({ who: peer.who, join: peer.join })));
+        call?.sync(frame.mine, frame.peers.filter((peer) => peer.talk && peer.join !== frame.mine).map((peer) => ({ who: peer.who, join: peer.join, opus: peer.opus })));
+    };
+
+    const sounded = (frame: SoundFrame) =>
+    {
+        if (frame.table === untrack(table))
+        {
+            call?.heard(frame.join, frame.codec, frame.at, frame.data);
+        }
     };
 
     const signalled = (frame: SignalFrame) =>
@@ -246,13 +428,16 @@ export const useVoice = createStore((): VoiceApi =>
 
         const wanted = untrack(settings.settings).voiceMic;
 
+        const current = untrack(settings.settings);
+
         try
         {
             const got = await devices.getUserMedia({
                 audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
+                    echoCancellation: current.voiceEcho,
+                    noiseSuppression: current.voiceNoise === 'standard' || (current.voiceNoise === 'strong' && !strong()),
+                    autoGainControl: current.voiceAgc,
+                    channelCount: 1,
                     ...(wanted === '' ? {} : { deviceId: { ideal: wanted } })
                 }
             });
@@ -272,14 +457,15 @@ export const useVoice = createStore((): VoiceApi =>
         const self = mine();
         const state = links();
         const speaking = loud();
-        const own = volumes();
+        const own = settings.settings().voiceLevels;
+        const lost = unreached();
 
         return roster().map((peer) => ({
             who: peer.who,
             me: peer.join === self,
             muted: peer.muted,
             talk: peer.talk,
-            link: peer.join === self ? 'connected' : (state[peer.who] ?? null),
+            link: peer.join === self ? 'connected' : (lost.includes(peer.who) ? 'failed' : (state[peer.who] ?? null)),
             speaking: speaking.has(peer.who) && !peer.muted,
             silenced: (own[peer.who] ?? 1) === 0,
             volume: own[peer.who] ?? 1
@@ -296,7 +482,10 @@ export const useVoice = createStore((): VoiceApi =>
 
     const setLevel = (who: string, value: number) =>
     {
-        setVolumes((current) => ({ ...current, [who]: Math.min(Math.max(value, 0), 1) }));
+        const level = Math.min(Math.max(value, 0), LOUDEST);
+        const others = Object.entries(untrack(settings.settings).voiceLevels).filter(([one]) => one !== who);
+
+        settings.update({ voiceLevels: Object.fromEntries(level === 1 ? others : [...others, [who, level]]) });
         call?.setVolume(who, heard(who));
     };
 
@@ -322,14 +511,195 @@ export const useVoice = createStore((): VoiceApi =>
         gate();
     };
 
-    const announce = () =>
+    const endTrial = () =>
     {
+        if (trial === null)
+        {
+            return;
+        }
+
+        trial.unread();
+        trial.input.close();
+        stopTracks(trial.raw);
+        trial.heard.srcObject = null;
+        trial.heard.remove();
+        void trial.context.close().catch(() => undefined);
+        trial = null;
+    };
+
+    const startTest = async () =>
+    {
+        const round = ++trials;
+
+        endTrial();
+        setTestFault(null);
+
+        const devices = media();
+        const Context = typeof AudioContext === 'undefined' ? null : AudioContext;
+
+        if (untrack(table) !== null || devices === null || Context === null || typeof devices.getUserMedia !== 'function')
+        {
+            return;
+        }
+
+        setTesting(true);
+
+        const current = untrack(settings.settings);
+        const made = new Context({ latencyHint: 'interactive' });
+        const strongly = current.voiceNoise === 'strong' && canDenoise(made);
+        const ask = (browser: boolean) => devices.getUserMedia({
+            audio: {
+                echoCancellation: current.voiceEcho,
+                noiseSuppression: browser,
+                autoGainControl: current.voiceAgc,
+                channelCount: 1,
+                ...(current.voiceMic === '' ? {} : { deviceId: { ideal: current.voiceMic } })
+            }
+        });
+        const quit = (fault: TestFault | null, held: MediaStream | null) =>
+        {
+            stopTracks(held);
+            void made.close().catch(() => undefined);
+
+            if (round === trials)
+            {
+                setTesting(false);
+                setTestFault(fault);
+            }
+        };
+
+        let raw: MediaStream;
+
+        try
+        {
+            raw = await ask(current.voiceNoise !== 'off' && !strongly);
+        }
+        catch (error)
+        {
+            quit((error as { name?: string }).name === 'NotAllowedError' ? 'denied' : 'absent', null);
+            return;
+        }
+
+        try
+        {
+            const denoiser = strongly ? await createDenoiser(made) : null;
+
+            if (strongly && denoiser === null && round === trials)
+            {
+                stopTracks(raw);
+                raw = await ask(true);
+            }
+
+            if (round !== trials)
+            {
+                denoiser?.close();
+                quit(null, raw);
+                return;
+            }
+
+            const prepared = await createVoiceInput(made, raw, { ...options(), push: false }, denoiser);
+
+            if (round !== trials)
+            {
+                prepared.close();
+                quit(null, raw);
+                return;
+            }
+
+            const heard = document.createElement('audio');
+
+            heard.hidden = true;
+            heard.autoplay = true;
+            heard.srcObject = prepared.stream;
+            document.body.append(heard);
+
+            if (current.voiceSpeaker !== '' && 'setSinkId' in heard)
+            {
+                void heard.setSinkId(current.voiceSpeaker).catch(() => undefined);
+            }
+
+            void made.resume().catch(() => undefined);
+            void heard.play().catch(() => undefined);
+            trial = { context: made, raw, input: prepared, heard, unread: prepared.onReading((next) => setReading(next)) };
+            setSuppression(denoiser !== null ? 'strong' : (current.voiceNoise === 'off' ? 'off' : 'standard'));
+            void survey();
+        }
+        catch
+        {
+            quit('failed', raw);
+        }
+    };
+
+    const stopTest = () =>
+    {
+        trials += 1;
+        endTrial();
+
+        if (untrack(table) === null)
+        {
+            setReading(null);
+            setSuppression(null);
+        }
+
+        setTesting(false);
+        setTestFault(null);
+    };
+
+    const look = () =>
+    {
+        const asked = call;
+
+        unlook = runtime().clock.after(LINES_MS, look);
+
+        if (asked === null)
+        {
+            if (Object.keys(untrack(lines)).length > 0)
+            {
+                setLines({});
+            }
+
+            return;
+        }
+
+        void asked.facts(runtime().clock.now()).then((found) =>
+        {
+            if (call === asked && watchers > 0)
+            {
+                setLines(found);
+            }
+        }).catch(() => undefined);
+    };
+
+    const told = () =>
+    {
+        announcing = null;
+        announcedAt = runtime().clock.now();
+
         const current = untrack(table);
 
         if (current !== null)
         {
-            realtime.voice(current, true, untrack(muted));
+            realtime.voice(current, true, untrack(muted), opus);
         }
+    };
+
+    const announce = () =>
+    {
+        if (announcing !== null)
+        {
+            return;
+        }
+
+        const wait = Math.min(ANNOUNCE_MS, Math.max(0, announcedAt + ANNOUNCE_MS - runtime().clock.now()));
+
+        if (wait === 0)
+        {
+            told();
+
+            return;
+        }
+
+        announcing = runtime().clock.after(wait, told);
     };
 
     return {
@@ -342,10 +712,14 @@ export const useVoice = createStore((): VoiceApi =>
         people,
         inputs,
         outputs,
+        reading,
+        suppression,
 
         canPickSpeaker: () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 
         speaking: (who) => loud().has(who) && roster().some((peer) => peer.who === who && !peer.muted),
+
+        unreached,
 
         mark(who)
         {
@@ -364,7 +738,7 @@ export const useVoice = createStore((): VoiceApi =>
             return person.muted ? 'muted' : 'live';
         },
 
-        volumeOf: (who) => volumes()[who] ?? 1,
+        volumeOf: (who) => settings.settings().voiceLevels[who] ?? 1,
 
         async join(next)
         {
@@ -373,9 +747,11 @@ export const useVoice = createStore((): VoiceApi =>
                 return;
             }
 
+            stopTest();
+
             if (untrack(table) !== null)
             {
-                realtime.voice(untrack(table)!, false, true);
+                realtime.voice(untrack(table)!, false, true, opus);
                 teardown();
             }
 
@@ -385,15 +761,42 @@ export const useVoice = createStore((): VoiceApi =>
             unhold = realtime.hold();
 
             const round = ++joins;
-            const ice = await client.voice.ice().catch(() => ({ servers: [] }));
+            const [ice, hears] = await Promise.all([client.voice.ice().catch(() => ({ servers: [] })), hearsOpus()]);
 
             if (round !== joins || untrack(table) !== next)
             {
                 return;
             }
 
+            opus = hears;
+
             const Context = typeof AudioContext === 'undefined' ? null : AudioContext;
-            context = Context === null ? null : new Context();
+            const made = Context === null ? null : new Context({ latencyHint: 'interactive' });
+
+            context = made;
+
+            if (made !== null)
+            {
+                made.onstatechange = () =>
+                {
+                    if (context === made && made.state === 'running')
+                    {
+                        void call?.setMic(sending());
+                        gate();
+                    }
+                };
+            }
+
+            if (typeof window !== 'undefined')
+            {
+                window.addEventListener('pointerdown', stir);
+                window.addEventListener('keydown', stir);
+                unstir = () =>
+                {
+                    window.removeEventListener('pointerdown', stir);
+                    window.removeEventListener('keydown', stir);
+                };
+            }
 
             call = makeCall({
                 me,
@@ -403,8 +806,21 @@ export const useVoice = createStore((): VoiceApi =>
                     ...(server.credential === undefined ? {} : { credential: server.credential })
                 })),
                 send: (to, join, signal) => realtime.signal(next, to, join, signal.kind, signal.data),
+                relay: (to, codec, at, data) => realtime.sound(next, to, codec, at, data),
+                opus,
+                after: (ms, run) => runtime().clock.after(ms, run),
+                rtt: () => untrack(realtime.rtt),
                 onLink: (who, link) =>
                 {
+                    if (link === 'connected' || link === null)
+                    {
+                        reached(who);
+                    }
+                    else
+                    {
+                        awaited(who);
+                    }
+
                     setLinks((current) =>
                     {
                         const rest = Object.fromEntries(Object.entries(current).filter(([key]) => key !== who));
@@ -419,6 +835,8 @@ export const useVoice = createStore((): VoiceApi =>
                 onLevel: level,
                 context: () => context
             });
+
+            call.setQuality(BITRATES[untrack(settings.settings).voiceQuality]);
 
             const speaker = untrack(settings.settings).voiceSpeaker;
 
@@ -436,14 +854,37 @@ export const useVoice = createStore((): VoiceApi =>
             }
 
             stream = got;
+            stir();
+            await process(got);
+
+            if (round !== joins || untrack(table) !== next)
+            {
+                return;
+            }
+
+            if (refused && got !== null && untrack(settings.settings).voiceNoise === 'strong')
+            {
+                stopStream();
+
+                const again = await microphone();
+
+                if (round !== joins || untrack(table) !== next)
+                {
+                    stopTracks(again);
+                    return;
+                }
+
+                stream = again;
+                await process(again);
+            }
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
 
             setMuted(quiet);
             gate();
-            await call.setMic(stream);
+            await call.setMic(sending());
 
-            realtime.voice(next, true, quiet);
+            realtime.voice(next, true, quiet, opus);
             setJoining(false);
         },
 
@@ -453,7 +894,7 @@ export const useVoice = createStore((): VoiceApi =>
 
             if (current !== null)
             {
-                realtime.voice(current, false, true);
+                realtime.voice(current, false, true, opus);
             }
 
             teardown();
@@ -508,7 +949,15 @@ export const useVoice = createStore((): VoiceApi =>
 
         silence(who)
         {
-            setLevel(who, own(who) === 0 ? 1 : 0);
+            if (own(who) === 0)
+            {
+                setLevel(who, before.get(who) ?? 1);
+                before.delete(who);
+                return;
+            }
+
+            before.set(who, own(who));
+            setLevel(who, 0);
         },
 
         setLevel,
@@ -517,9 +966,47 @@ export const useVoice = createStore((): VoiceApi =>
 
         survey,
 
+        lines,
+
+        watchLines()
+        {
+            watchers += 1;
+
+            if (watchers === 1)
+            {
+                look();
+            }
+
+            return () =>
+            {
+                watchers -= 1;
+
+                if (watchers === 0)
+                {
+                    unlook?.();
+                    unlook = null;
+                    setLines({});
+                }
+            };
+        },
+
+        testing,
+
+        testFault,
+
+        startTest,
+
+        stopTest,
+
         async useMic(id)
         {
             settings.update({ voiceMic: id });
+
+            if (trial !== null)
+            {
+                await startTest();
+                return;
+            }
 
             if (untrack(table) === null || call === null || untrack(mic) !== 'live')
             {
@@ -537,7 +1024,59 @@ export const useVoice = createStore((): VoiceApi =>
 
             stopStream();
             stream = next;
-            await call.setMic(next);
+            await process(next);
+
+            if (round !== joins || call === null)
+            {
+                return;
+            }
+
+            await call.setMic(sending());
+            gate();
+        },
+
+        tune()
+        {
+            input?.set(options());
+            trial?.input.set({ ...options(), push: false });
+            call?.setQuality(BITRATES[untrack(settings.settings).voiceQuality]);
+            gate();
+        },
+
+        async reprocess()
+        {
+            if (trial !== null)
+            {
+                await startTest();
+                return;
+            }
+
+            if (untrack(table) === null || call === null || untrack(mic) !== 'live')
+            {
+                return;
+            }
+
+            const round = joins;
+
+            stopStream();
+
+            const next = await microphone();
+
+            if (call === null || round !== joins)
+            {
+                stopTracks(next);
+                return;
+            }
+
+            stream = next;
+            await process(next);
+
+            if (round !== joins || call === null)
+            {
+                return;
+            }
+
+            await call.setMic(sending());
             gate();
         },
 
@@ -545,6 +1084,11 @@ export const useVoice = createStore((): VoiceApi =>
         {
             settings.update({ voiceSpeaker: id });
             call?.setSink(id);
+
+            if (trial !== null && 'setSinkId' in trial.heard)
+            {
+                void trial.heard.setSinkId(id).catch(() => undefined);
+            }
         },
 
         start()
@@ -583,6 +1127,7 @@ export const useVoice = createStore((): VoiceApi =>
             const stops = [
                 realtime.onVoice(onVoice),
                 realtime.onSignal(signalled),
+                realtime.onSound(sounded),
                 realtime.onStatus((status) =>
                 {
                     const current = untrack(table);
@@ -590,7 +1135,7 @@ export const useVoice = createStore((): VoiceApi =>
                     if (status === 'connected' && current !== null && !untrack(joining))
                     {
                         call?.sync('', []);
-                        realtime.voice(current, true, untrack(muted));
+                        realtime.voice(current, true, untrack(muted), opus);
                     }
                 })
             ];
@@ -615,8 +1160,9 @@ export const useVoice = createStore((): VoiceApi =>
 
         reset()
         {
+            stopTest();
             teardown();
-            setVolumes({});
+            before.clear();
             setInputs([]);
             setOutputs([]);
         }

@@ -101,7 +101,7 @@ These curves were computed from the under-damped spring equations, then sampled 
 |---|---|---|---|---|---|
 | `--ease-snap` | Apple, 0.40 s, bounce 0.15 | 500 ms | 203 ms | 0.6% | `linear(0, 0.005 1.3%, 0.022 2.8%, 0.054 4.5%, 0.096 6.3%, 0.19 9.5%, 0.41 16.3%, 0.511 19.5%, 0.609 23%, 0.688 26.3%, 0.756 29.5%, 0.814 32.8%, 0.864 36.3%, 0.903 39.8%, 0.937 43.8%, 0.965 48.3%, 0.984 53.3%, 0.997 58.8%, 1.006 72.3%, 1)` |
 | `--ease-pop` | M3 Expressive fast, 0.6 / 800 | 360 ms | 84 ms | 9.5% (peak at ~139 ms) | `linear(0, 0.007 1.3%, 0.033 2.8%, 0.073 4.3%, 0.126 5.8%, 0.244 8.5%, 0.534 14.5%, 0.648 17%, 0.762 19.8%, 0.85 22.3%, 0.924 24.8%, 0.983 27.3%, 1.028 29.8%, 1.062 32.5%, 1.078 34.5%, 1.089 36.5%, 1.094 41%, 1.081 46.3%, 1.02 60.5%, 0.999 68.8%, 0.991 80.3%, 1)` |
-| fly | M3 emphasized decelerate | 300–360 ms | — | 0 | `cubic-bezier(0.05, 0.7, 0.1, 1)` |
+| fly | a short push and a long settle (first M3 emphasized decelerate, which crossed half the way in its first frame) | 260–360 ms | — | 0 | `cubic-bezier(0.3, 0.3, 0.1, 1)` |
 | gather | M3 emphasized accelerate | 380–420 ms | — | 0 | `cubic-bezier(0.3, 0, 0.8, 0.15)` |
 
 - **Fallbacks** for browsers without `linear()`: snap → `cubic-bezier(0.2,0,0,1)`, pop → `cubic-bezier(0.34,1.56,0.64,1)`.

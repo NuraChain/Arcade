@@ -193,7 +193,7 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
 
         <div class="flex flex-col gap-2 sm:flex-row-reverse">
             <Button variant="primary" block submit loading={ pending }>
-                { editing ? locale.t('groups.save') : locale.t('groups.create') }
+                { editing ? locale.t('groups.save') : locale.t('groups.createSubmit') }
             </Button>
             <Button variant="ghost" block onClick={ () => props.close() }>{ locale.t('common.cancel') }</Button>
         </div>

@@ -6,6 +6,10 @@ import { stepAlong } from '../../lib/snap.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
+const CHOSEN = '[aria-pressed="true"], [aria-current="true"], [aria-current="page"]';
+
+const FADE = 56;
+
 export default component Rail(props: { children?: Child; label?: string; bleed?: boolean; class?: string; inner?: string })
 {
     const device = useDevice();
@@ -41,18 +45,45 @@ export default component Rail(props: { children?: Child; label?: string; bleed?:
         scroller.scrollTo({ left: target * (locale.dir() === 'rtl' ? -1 : 1), behavior: device.reducedMotion() ? 'auto' : 'smooth' });
     };
 
+    const reveal = (behavior: ScrollBehavior) =>
+    {
+        const chosen = scroller?.querySelector<HTMLElement>(CHOSEN) ?? null;
+
+        if (scroller === null || chosen === null)
+        {
+            return;
+        }
+
+        const room = scroller.getBoundingClientRect();
+        const item = chosen.getBoundingClientRect();
+        const short = room.left + FADE - item.left;
+        const by = short > 0 ? -short : Math.max(0, item.right - (room.right - FADE));
+
+        if (by !== 0)
+        {
+            scroller.scrollTo({ left: scroller.scrollLeft + by, behavior });
+        }
+    };
+
     mount
     {
         measure();
+        reveal('instant');
         const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
         if (observer !== null && scroller !== null)
         {
             observer.observe(scroller);
         }
+        const chosen = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => reveal(device.reducedMotion() ? 'auto' : 'smooth'));
+        if (chosen !== null && scroller !== null)
+        {
+            chosen.observe(scroller, { subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-current'] });
+        }
         const undrag = scroller === null ? null : dragScroll(scroller);
         return () =>
         {
             observer?.disconnect();
+            chosen?.disconnect();
             undrag?.();
         };
     }

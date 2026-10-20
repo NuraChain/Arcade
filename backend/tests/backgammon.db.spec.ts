@@ -42,8 +42,8 @@ const makeUser = async () =>
     seq += 1;
 
     return rowsOf<{ id: string }>(await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, 'guest')
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3)
          returning id`,
         [`b${ seq }x${ Math.floor(Math.random() * 100000) }`, `Board ${ seq }`, seq % 360]
     ))[0].id;
@@ -111,9 +111,15 @@ const play = async (matchId: string, userAt: ReadonlyMap<number, string>, next: 
 
         const action = backgammonEngine.autoplay(state, seat!, { die: () => 1 });
 
+        if (action?.kind === 'roll')
+        {
+            await matches.act(userAt.get(seat!)!, matchId, { play: { kind: 'backgammon', verb: 'roll' }, key: `roll-${ step }` });
+            continue;
+        }
+
         if (action?.kind !== 'move')
         {
-            throw new Error(`expected a move at step ${ step }, got ${ action?.kind }`);
+            throw new Error(`expected a roll or a move at step ${ step }, got ${ action?.kind }`);
         }
 
         await matches.act(userAt.get(seat!)!, matchId, { play: { kind: 'backgammon', verb: 'move', hops: action.hops }, key: `move-${ step }` });

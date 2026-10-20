@@ -3,7 +3,7 @@ import type { Engine } from './engine.ts';
 import type { MatchSeatRow } from './service.ts';
 import type { Format } from './sides.ts';
 
-type SeatRow = Pick<MatchSeatRow, 'seat' | 'who' | 'timeouts' | 'result' | 'rating_before' | 'rating_after'>;
+type SeatRow = Pick<MatchSeatRow, 'seat' | 'who' | 'timeouts' | 'result' | 'exit' | 'rating_before' | 'rating_after'>;
 
 export function envelopeOf(engine: Pick<Engine, 'standings' | 'sideOf'> | null, state: unknown, rows: readonly SeatRow[], finished: boolean, format: Format): MatchView['players']
 {
@@ -14,6 +14,7 @@ export function envelopeOf(engine: Pick<Engine, 'standings' | 'sideOf'> | null, 
         who: row.who,
         ...(row.timeouts === null ? {} : { timeouts: row.timeouts }),
         ...(row.result == null ? {} : { result: row.result }),
+        ...(row.result == null || row.exit == null ? {} : { exit: row.exit }),
         ...(row.rating_before == null || row.rating_after == null
             ? {}
             : { ratingBefore: row.rating_before, ratingAfter: row.rating_after }),

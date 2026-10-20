@@ -11,19 +11,6 @@ export function remember(key: string, value: string)
     }
 }
 
-export function recall(key: string, allowed: readonly string[]): string | null
-{
-    try
-    {
-        const value = localStorage.getItem(key);
-        return value !== null && allowed.includes(value) ? value : null;
-    }
-    catch
-    {
-        return null;
-    }
-}
-
 export function forget(key: string)
 {
     try

@@ -1,7 +1,7 @@
 /**
  * Two enrolled browsers in one thread, watching what a message ARRIVING does to the page.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production PORT=5300 \
+ *   npm run build && API_RATE_MAX=20000 PORT=5300 \
  *     PUBLIC_ORIGIN=http://localhost:5300 npm start
  *   QA_BASE=http://localhost:5300 node tools/qa/chat-pass.mjs
  *
@@ -36,6 +36,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { sql as run } from './db.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -168,7 +169,7 @@ async function seat(handle)
 
     page.on('console', (event) =>
     {
-        if (event.type() === 'error' && !event.text().includes('favicon')) { errors.push(`${ handle }: ${ event.text().slice(0, 160) }`); }
+        if (event.type() === 'error' && !event.text().includes('favicon') && !chainUnreached(event, handle)) { errors.push(`${ handle }: ${ event.text().slice(0, 160) }`); }
     });
     page.on('pageerror', (error) => errors.push(`${ handle }: ${ String(error).slice(0, 160) }`));
 
@@ -337,12 +338,10 @@ const pressable = async (page, name) =>
 async function enrol(who)
 {
     /*
-     * Two doors say the same thing and either may be the one on screen: the shell's keys banner
-     * offers "Give it keys" on every route, and the seal notice above a composer this browser
-     * cannot use offers "Give this browser keys". Whichever is there, pressing it is the real
-     * enrolment - the same button a person presses, signing with the injected wallet.
+     * The seal notice above a composer this browser cannot use offers "Connect wallet". Pressing
+     * it is the real enrolment - the same button a person presses, signing with the injected wallet.
      */
-    const button = await pressable(who.page, /Give it keys|Give this browser keys/i);
+    const button = await pressable(who.page, /^Connect wallet$/i);
 
     if (button === null)
     {
@@ -489,10 +488,64 @@ try
 
     record('and a swipe across it still starts a reply', swiped && replying);
 
-    // ---------------------------------------------------------------- 4. the console
-    console.log('\n[4] the console, in both browsers');
+    // ---------------------------------------------------------------- 4. a handle in a message
+    console.log('\n[4] a handle typed in a message is a way to that person');
+
+    await watcher.page.keyboard.press('Escape');
+    await watcher.page.waitForTimeout(500);
+
+    if (await composer.isVisible().catch(() => false))
+    {
+        await composer.fill('ask @Dana.W or @nobody.here.9, not dana@example.com');
+        await composer.press('Enter');
+    }
+
+    await watcher.page.waitForTimeout(SETTLE_MS * 2);
+
+    const thread = new URL(watcher.page.url()).pathname;
+    const named = watcher.page.locator('main a[href="/app/people/dana.w"]').last();
+    const nobody = watcher.page.locator('main a[href="/app/people/nobody.here.9"]').last();
+    let loads = 0;
+    const counted = () =>
+    {
+        loads += 1;
+    };
+
+    record('the handle in the line is a link to that person, saying what was typed', await named.count() > 0 && (await named.innerText()).trim() === '@Dana.W',
+        await named.count() > 0 ? (await named.innerText()).trim() : 'no link');
+    record('an address of mail in the same line is not a link, to a person or to anywhere',
+        await watcher.page.locator('main a[href*="example"]').count() === 0 && await watcher.page.locator('main a[href^="/app/people/"]').filter({ hasText: 'example' }).count() === 0);
+
+    watcher.page.on('load', counted);
+    await named.click();
+    await watcher.page.waitForURL('**/app/people/dana.w', { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('pressing it opens their profile without loading the page', new URL(watcher.page.url()).pathname === '/app/people/dana.w' && loads === 0,
+        `${ new URL(watcher.page.url()).pathname }, ${ loads } loads`);
+    record('and the profile is theirs', (await watcher.page.locator('main').innerText()).includes('dana.w'));
+
+    await watcher.page.goBack();
+    await watcher.page.waitForURL(`**${ thread }`, { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('going back is the thread, with the line still in it', new URL(watcher.page.url()).pathname === thread && await nobody.count() > 0);
+
+    // ---------------------------------------------------------------- 5. the console
+    console.log('\n[5] the console, in both browsers');
     record('nothing was logged', sender.errors.length === 0 && watcher.errors.length === 0,
         [...sender.errors, ...watcher.errors].slice(0, 2).join(' | '));
+
+    // ---------------------------------------------------------------- 6. a handle nobody has
+    console.log('\n[6] a handle nobody has');
+
+    await nobody.click();
+    await watcher.page.waitForURL('**/app/people/nobody.here.9', { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    record('opens the page that says there is no such person, without loading the page', /No such person/.test(await watcher.page.locator('main').innerText()) && loads === 0);
+
+    watcher.page.off('load', counted);
 }
 finally
 {

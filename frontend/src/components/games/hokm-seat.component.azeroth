@@ -1,0 +1,74 @@
+import HokmMark, { type SeatMark } from './hokm-mark.component.azeroth';
+import type { PlateTone } from './plate-tag.ts';
+import TablePlate, { type PlateTeam } from './table-plate.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export const SIDE_TONE = ['text-accent', 'text-gold', 'text-live'];
+
+export default component HokmSeat(props: {
+    side: string;
+    who: string;
+    name: string;
+    turn: boolean;
+    yours: boolean;
+    remainingMs?: number;
+    turnMs?: number;
+    out: boolean;
+    team?: PlateTeam;
+    tag?: string;
+    tone?: PlateTone;
+    bubble?: string;
+    mark: SeatMark;
+    colour: number;
+    tricks: number;
+    held: number;
+    backs: number;
+})
+{
+    const locale = useLocale();
+
+    derived timed = props.turn;
+
+    derived pile = Array.from({ length: props.backs }, (_, index) => index);
+
+    <>
+        <TablePlate
+            who={ props.who }
+            name={ props.name }
+            turn={ props.turn }
+            remainingMs={ props.remainingMs }
+            turnMs={ props.turnMs }
+            dim={ props.out }
+            team={ props.team }
+            tag={ props.tag }
+            tone={ props.tone }
+            bubble={ props.bubble }
+            below={ props.side !== 'bottom' }
+            anchor={ props.side.endsWith('right') ? 'end' : (props.side.endsWith('left') ? 'start' : 'centre') }
+            marker={ <HokmMark mark={ props.mark } dealer={ locale.t('hokm.dealer') } /> }
+            facts={
+                <span class="contents">
+                    <span class="flex items-center gap-0.5" aria-hidden="true">
+                        <Icon name="trophy" size={ 11 } class={ SIDE_TONE[props.colour % SIDE_TONE.length] } />
+                        <span class="tally">{ locale.n(props.tricks) }</span>
+                    </span>
+                    <span class="flex items-center gap-0.5" aria-hidden="true">
+                        <Icon name="cards" size={ 11 } />
+                        <span class="tally">{ locale.n(props.held) }</span>
+                    </span>
+                    <span class="sr-only">{ locale.plural('hokm.tricks', props.tricks) }, { locale.plural('hokm.held', props.held) }{ props.mark === 'dealer' ? `, ${ locale.t('hokm.dealer') }` : '' }</span>
+                </span>
+            }
+        />
+        <Show when={ timed }>
+            { () => <TurnClock remainingMs={ props.remainingMs } over={ false } yours={ props.yours } brief class="hokm-clock" /> }
+        </Show>
+        <span class="hokm-pile" style={ `--n: ${ props.backs }` } data-empty={ props.backs === 0 ? 'true' : undefined } aria-hidden="true">
+            <For each={ pile } key={ (back) => back } let={ back }>
+                <span class="card-back" style={ `--i: ${ back }` }></span>
+            </For>
+        </span>
+    </>
+}

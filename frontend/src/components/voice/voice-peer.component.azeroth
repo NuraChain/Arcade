@@ -1,0 +1,119 @@
+import Avatar from '../ui/avatar.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Slider from '../ui/slider.component.azeroth';
+import { aboutPerson } from '../../lib/person-menu.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { LOUDEST, useVoice } from '../../stores/voice.store.ts';
+
+export default component VoicePeer(props: { who: string })
+{
+    const locale = useLocale();
+    const people = usePeople();
+    const voice = useVoice();
+
+    derived person = voice.people().find((one) => one.who === props.who) ?? null;
+
+    derived known = people.byHandle(props.who);
+
+    derived name = known === null ? props.who : locale.text(known.displayName);
+
+    derived speaking = person !== null && person.speaking;
+
+    derived silenced = person !== null && person.silenced;
+
+    derived talks = person !== null && person.talk;
+
+    derived volume = person === null ? 1 : person.volume;
+
+    derived line = voice.lines()[props.who] ?? null;
+
+    derived state = person === null || !person.talk
+        ? 'apart'
+        : (person.link === 'failed' ? 'failed' : (person.link !== 'connected' ? 'connecting' : (line === null || line.path === 'none' ? 'measuring' : 'measured')));
+
+    derived measured = state === 'measured';
+
+    derived alarm = state === 'apart' || state === 'failed';
+
+    derived status = locale.t(state === 'apart' ? 'voice.apart' : (state === 'failed' ? 'voice.failed' : (state === 'connecting' ? 'voice.connecting' : 'voice.line.measuring')));
+
+    derived path = line !== null && line.path === 'direct' ? locale.t('voice.line.direct') : locale.t('voice.line.carried');
+
+    derived hasTrip = line !== null && line.trip !== null;
+
+    derived trip = line === null || line.trip === null ? '' : locale.t(line.path === 'direct' ? 'voice.line.trip' : 'voice.line.server', { ms: locale.n(line.trip) });
+
+    derived hasJitter = line !== null && line.jitter !== null;
+
+    derived jitter = line === null || line.jitter === null ? '' : locale.t('voice.line.jitter', { ms: locale.n(line.jitter) });
+
+    derived hasLost = line !== null && line.lost !== null;
+
+    derived lost = line === null || line.lost === null ? '' : locale.t('voice.line.lost', { share: locale.n(line.lost, { style: 'percent', maximumFractionDigits: 1 }) });
+
+    derived hasRate = line !== null && line.kbps !== null;
+
+    derived rate = line === null || line.kbps === null ? '' : locale.t('voice.line.rate', { kbps: locale.n(line.kbps) });
+
+    <div class="flex flex-col gap-2.5 px-3 py-3" data-path={ line === null ? undefined : line.path }>
+        <div class="flex min-w-0 items-center gap-3">
+            <span class={ () => [ 'relative flex shrink-0 rounded-full transition-shadow duration-150', speaking ? 'ring-2 ring-live ring-offset-2 ring-offset-field' : '' ].join(' ') }>
+                <Avatar person={ known } size="md" />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <button
+                    type="button"
+                    class="min-w-0 cursor-pointer truncate text-start text-ui-sm font-semibold text-text hover:underline"
+                    dir="auto"
+                    aria-haspopup="dialog"
+                    aria-label={ locale.t('actions.about', { name }) }
+                    onClick={ () => aboutPerson(props.who) }
+                >
+                    { name }
+                </button>
+                <Show
+                    when={ measured }
+                    fallback={ <span class={ () => [ 'text-ui-2xs', alarm ? 'font-semibold text-danger' : 'text-muted' ].join(' ') }>{ status }</span> }
+                >
+                    <span class="facts text-ui-2xs text-muted">
+                        <span class="font-semibold text-text">{ path }</span>
+                        <Show when={ hasTrip }>
+                            <span>{ trip }</span>
+                        </Show>
+                        <Show when={ hasJitter }>
+                            <span>{ jitter }</span>
+                        </Show>
+                        <Show when={ hasLost }>
+                            <span>{ lost }</span>
+                        </Show>
+                        <Show when={ hasRate }>
+                            <span>{ rate }</span>
+                        </Show>
+                    </span>
+                </Show>
+            </span>
+            <IconButton
+                icon={ silenced ? 'sound-off' : 'sound' }
+                label={ locale.t(silenced ? 'voice.unsilence' : 'voice.silence', { name }) }
+                variant="ghost"
+                size="sm"
+                pressed={ silenced }
+                disabled={ !talks }
+                onClick={ () => voice.silence(props.who) }
+            />
+        </div>
+        <Show when={ talks }>
+            <Slider
+                value={ volume }
+                min={ 0 }
+                max={ LOUDEST }
+                ticks={ [1] }
+                step={ 0.05 }
+                label={ locale.t('voice.volumeOf', { name }) }
+                valueText={ locale.n(volume, { style: 'percent' }) }
+                onChange={ (value) => voice.setLevel(props.who, value) }
+            />
+        </Show>
+    </div>
+}

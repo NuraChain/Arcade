@@ -2,29 +2,49 @@ import { untrack } from 'azerothjs';
 
 import BoardCanvas from './board-canvas.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_WAIT } from './table-result.component.azeroth';
 import DieFace from './die-face.component.azeroth';
-import TurnClock from './turn-clock.component.azeroth';
 import YardBadge from './yard-badge.component.azeroth';
-import Button from '../ui/button.component.azeroth';
-import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
-import type { BoardView, LudoBeat } from '../../game/bridge.ts';
-import { chairsOf, ludoOf } from '../../data/match.ts';
+import { missesOf, withMisses } from './plate-tag.ts';
+import type { BoardGoal, BoardHandle, BoardOptions, Facts } from '../../game/bridge.ts';
+import { chairsOf, ludoOf, type LudoSeat, type MatchPlayer } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
-import { CELL, MARGIN } from '../../game/layout.ts';
-import { coachOf, movedTo, outcomeOf, pieceFor } from '../../game/helpers/ludo.ts';
+import { turnChime } from './table-cues.ts';
+import { FINISHED, YARD } from '../../game/board/path.ts';
+import { CELL, FRAME_ROUND, MARGIN } from '../../game/layout.ts';
+import { HISTORY, feltOf, keyOf, type Felt, type Told } from '../../game/ludo-felt.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { createPresenter, type Sight, type Table } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
+import { coachOf, goalsOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts';
+import type { Tip } from '../../game/helpers/tip.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { TOKENS_PER_PLAYER } from '../../../../backend/src/domains/match/ludo/board.ts';
+import { partnerOf, variantOf } from '../../../../backend/src/domains/match/sides.ts';
 
-const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
+const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi; border-radius: ${ (FRAME_ROUND * 100).toFixed(3) }%`;
 
+const PRESS_MS = 400;
 
-export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+const HURRY_MS = 8000;
+
+const NOTHING: ReadonlySet<string> = new Set();
+
+const NO_GOALS: readonly BoardGoal[] = [];
+
+const UPRIGHT: Tip = { key: 'match.upright' };
+
+const SPENT = { 'no-move': 'match.stuck', 'three-sixes': 'match.sixes', wasted: 'match.wasted' } as const;
+
+export default component MatchBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -36,7 +56,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived help = settings.settings();
 
-    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], seats: [] };
+    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], controls: 0, seats: [] };
 
     derived chairs = chairsOf(game);
 
@@ -46,7 +66,11 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived turnOf = game.players.find((player) => player.seat === game.turn);
 
-    derived turnSeat = ludo.seats.find((seat) => seat.seat === game.turn);
+    derived sided = new Set(ludo.seats.map((seat) => seat.side)).size < ludo.seats.length;
+
+    derived partner = mine === undefined ? null : partnerOf(mine, { seats: game.seats, variant: variantOf(sided) });
+
+    derived helping = !over && game.turn !== undefined && ludo.controls !== game.turn;
 
     const nameFor = (seat: number | undefined) =>
     {
@@ -62,23 +86,117 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived nameOf = nameFor(turnOf?.seat);
 
+    derived owner = nameFor(ludo.controls);
+
     derived says = (() =>
     {
         if (mine !== undefined && mine === game.turn)
         {
-            return ludo.die === undefined
-                ? locale.t('match.turn.yours')
-                : locale.t('match.turn.rolled', { die: locale.n(ludo.die) });
+            if (ludo.die !== undefined)
+            {
+                return locale.t('match.turn.rolled', { die: locale.n(ludo.die) });
+            }
+
+            return helping ? locale.t('match.turn.helping', { name: owner }) : locale.t('match.turn.yours');
         }
 
-        return locale.t('match.turn.theirs', { name: nameOf });
+        if (!helping)
+        {
+            return locale.t('match.turn.theirs', { name: nameOf });
+        }
+
+        return mine === ludo.controls
+            ? locale.t('match.turn.helpingYours', { name: nameOf })
+            : locale.t('match.turn.helpingTheirs', { name: nameOf, partner: owner });
     })();
 
-    state ahead: { rev: number; board: NonNullable<ReturnType<typeof movedTo>> } | null = null;
+    state ahead: { id: string; rev: number; board: NonNullable<ReturnType<typeof movedTo>> } | null = null;
 
-    derived drawn = ahead !== null && ahead.rev === game.rev ? ahead.board : ludo;
+    state facts: Facts | null = null;
+
+    state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
+
+    state rigged = false;
+
+    state said = '';
+
+    state passed = '';
+
+    state shownRev = 0;
+
+    state handed = false;
+
+    derived drawn = ahead !== null && ahead.id === game.id && ahead.rev === game.rev ? ahead.board : ludo;
 
     derived tokens = seatsFor(drawn, mine);
+
+    derived movable = new Set(tokens.filter((token) => token.playable).map((token) => token.key));
+
+    const tokenSays = (goal: ReturnType<typeof goalsOf>[number]) =>
+    {
+        if (goal.from === YARD)
+        {
+            return locale.t(goal.takes > 0 ? 'match.token.out.takes' : 'match.token.out');
+        }
+
+        const vars = { n: locale.n(goal.piece + 1) };
+        const squares = goal.to - goal.from;
+
+        if (goal.to === FINISHED)
+        {
+            return locale.plural('match.token.move.home', squares, vars);
+        }
+
+        return locale.plural(goal.takes > 0 ? 'match.token.move.takes' : 'match.token.move', squares, vars);
+    };
+
+    derived goals = movable.size === 0 ? NO_GOALS : goalsOf(drawn).map((goal) => ({ key: keyOf(drawn.controls, goal.piece), to: goal.to, takes: goal.takes, says: tokenSays(goal) }));
+
+    derived result = over && !presenting;
+
+    derived yours = !over && mine !== undefined && mine === game.turn;
+
+    derived hurried = game.remainingMs !== undefined && game.remainingMs < HURRY_MS;
+
+    derived landed = hurried || shownRev >= game.rev;
+
+    derived homeAt = (seat: number, told: number) => facts?.home[seat] ?? told;
+
+    derived gone = (seat: LudoSeat) => (facts === null ? seat.out : facts.out.includes(seat.seat));
+
+    derived seatAt = (seat: LudoSeat): LudoSeat => (seat.out === gone(seat) ? seat : { ...seat, out: gone(seat) });
+
+    derived playerAt = (seated: MatchPlayer, seat: LudoSeat): MatchPlayer =>
+    {
+        const player = withMisses(seated, missed);
+
+        if (player.result === undefined || result || gone(seat))
+        {
+            return player;
+        }
+
+        const { result: _unshown, exit: _how, ...playing } = player;
+
+        return playing;
+    };
+
+    derived shownTurn = facts === null ? game.turn : (facts.turn ?? undefined);
+
+    derived shownControls = facts === null || shownTurn === undefined
+        ? ludo.controls
+        : ((facts.home[shownTurn] ?? 0) === TOKENS_PER_PLAYER ? (partnerOf(shownTurn, { seats: game.seats, variant: variantOf(sided) }) ?? shownTurn) : shownTurn);
+
+    derived dieAt = (seat: number) =>
+    {
+        if (facts === null)
+        {
+            return seat === game.turn ? ludo.die : undefined;
+        }
+
+        return facts.die !== null && facts.plate && facts.die.roller === seat ? facts.die.face : undefined;
+    };
 
     const CORNER: Record<string, string> = {
         red: 'top-left',
@@ -90,56 +208,221 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     derived seatCards = chairs.map((chair) => ({
         player: chair.player,
         seat: chair.seat,
-        corner: CORNER[chair.seat.colour] ?? 'top-left'
+        corner: CORNER[chair.seat.colour] ?? 'top-left',
+        colours: ludo.seats.filter((one) => one.side === chair.seat.side).map((one) => one.colour)
     }));
 
     derived sideways = device.landscape() && device.height() <= SHORT_MAX;
 
-    derived hint = ((): string =>
+    derived tip = over || !landed ? null : coachOf(ludo, mine, game.turn, props.events.events.flatMap((event) => event.log.kind === 'ludo' ? event.log.moves : []));
+
+    derived advice = tip ?? (sideways && !over ? UPRIGHT : null);
+
+    derived winners = ludo.seats
+        .filter((seat) => game.players.some((player) => player.seat === seat.seat && player.result === 'won'))
+        .map((seat) => seat.colour);
+
+    let table: BoardHandle | null = null;
+    let sound: SoundHandle | null = null;
+    let keyed = false;
+    let rollButton: HTMLButtonElement | null = null;
+    let root: HTMLElement | null = null;
+
+    let boardNode: HTMLElement | null = null;
+
+    const inReach = () =>
     {
-        if (over || mine === undefined || mine !== game.turn)
+        const on = document.activeElement;
+
+        return on === null || on === document.body || boardNode?.contains(on) === true;
+    };
+
+    const report = (error: unknown) => console.error(error);
+
+    const stage = createStage({ clock: runtime().clock, quiet: () => device.reducedMotion(), report });
+
+    const sightNow = (): Sight<Felt> => ({ id: game.id, rev: game.rev, seat: mine ?? null, view: feltOf(drawn, game.turn, winners) });
+
+    const proxy: Table<Felt, Told> = {
+        kind: 'ludo',
+        history: HISTORY,
+        reset: (sight) => table?.reset(sight),
+        same: (sight) => table?.same(sight) ?? true,
+        settle: (sight, ctx) => table?.settle(sight, ctx),
+        play: (acts, sight, ctx) => table?.play(acts, sight, ctx),
+        estimate: (acts) => table?.estimate(acts) ?? 0
+    };
+
+    const presenter = createPresenter<Felt, Told>({ stage, clock: runtime().clock, table: proxy, sight: () => untrack(sightNow), report, due: () => (over ? RESULT_WAIT : null) });
+
+    const level = () =>
+    {
+        if (!presenter.presenting())
         {
-            return '';
+            shownRev = untrack(() => game.rev);
+            missed = missesOf(untrack(() => game.players));
+        }
+    };
+
+    const unwatch = presenter.watch((busy) =>
+    {
+        presenting = busy;
+        props.onPresenting?.(busy);
+
+        if (!busy)
+        {
+            passed = '';
+            level();
+        }
+    });
+
+    const chime = turnChime(() => sound);
+
+    const offering = () => (handed ? mine ?? null : null);
+
+    const attach = (made: BoardHandle | null) =>
+    {
+        table = made;
+
+        rigged = made !== null;
+
+        if (made === null)
+        {
+            facts = null;
+
+            return;
         }
 
-        if (board.canRoll())
-        {
-            return locale.t('match.hint.roll');
-        }
+        made.reset(untrack(sightNow));
+        made.offer(untrack(offering));
+        made.lit(untrack(() => (landed ? movable : NOTHING)), untrack(() => help.hintMoves), untrack(() => goals));
+    };
 
-        return ludo.die !== undefined && board.moves().length > 0 ? locale.t(help.hintMoves ? 'match.hint.move' : 'helpers.ludo.hint.move') : '';
-    })();
-
-    derived tip = over ? null : coachOf(ludo, mine, game.turn, board.events().events.flatMap((event) => event.log.kind === 'ludo' ? event.log.moves : []));
-
-    derived beats = ((): LudoBeat[] =>
+    effect
     {
-        const colourOf = (seat: number | undefined) =>
-            ludo.seats.find((one) => one.seat === seat)?.colour ?? null;
+        const batch = props.events;
 
-        return board.events().events.flatMap((event) => event.log.kind === 'ludo'
-            ? event.log.moves.map((move) => ({ rev: event.rev, e: move.e, colour: colourOf(move.seat), die: move.die, why: move.why }))
-            : []);
-    })();
+        void game.id;
+        void game.rev;
 
-    derived view = ((): BoardView => ({
-        tokens,
-        die: drawn.die ?? null,
-        turn: turnSeat?.colour ?? null,
-        yours: !over && mine !== undefined && mine === game.turn,
-        winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null,
-        lit: help.hintMoves,
-        beats
-    }))();
+        untrack(() =>
+        {
+            presenter.see(batch);
+            level();
+        });
+    }
+
+    effect
+    {
+        const keys = landed ? movable : NOTHING;
+        const marks = goals;
+        const hints = help.hintMoves;
+
+        untrack(() =>
+        {
+            table?.lit(keys, hints, marks);
+
+            if (keyed && keys.size > 0 && inReach())
+            {
+                table?.focus();
+            }
+        });
+    }
+
+    effect
+    {
+        const pressable = board.canRoll() && !board.busy();
+
+        untrack(() =>
+        {
+            if (pressable && keyed && inReach())
+            {
+                queueMicrotask(() => rollButton?.focus({ preventScroll: true }));
+            }
+        });
+    }
+
+    effect
+    {
+        const can = board.canRoll();
+        const told = landed;
+
+        untrack(() =>
+        {
+            if (!can)
+            {
+                handed = false;
+            }
+            else if (told)
+            {
+                handed = true;
+            }
+        });
+    }
+
+    effect
+    {
+        const seat = offering();
+
+        untrack(() => table?.offer(seat));
+    }
+
+    effect
+    {
+        const next = says;
+        const told = landed;
+
+        if (told)
+        {
+            said = next;
+        }
+    }
+
+    effect
+    {
+        const mineNow = yours;
+
+        untrack(() => chime(mineNow));
+    }
+
+    effect
+    {
+        const on = help.sound;
+
+        untrack(() => sound?.setEnabled(on));
+    }
+
+    mount
+    {
+        sound = createSound(untrack(() => help.sound));
+        presenter.frame(root);
+
+        return () =>
+        {
+            unwatch();
+            props.onPresenting?.(false);
+            presenter.dispose();
+            sound?.dispose();
+            sound = null;
+        };
+    }
 
     const pick = async (key: string) =>
     {
         const [seat, piece] = key.split('-').map(Number);
-        const legal = seat === mine ? pieceFor(untrack(() => ludo), seat, piece) : null;
+        const held = untrack(() => ludo);
+        const reader = untrack(() => mine);
+        const moving = reader !== undefined && reader === untrack(() => game.turn) && seat === held.controls;
+        const legal = moving ? pieceFor(held, piece) : null;
 
         if (legal === null || !board.moves().includes(legal))
         {
             return;
+        }
+
+        if (legal !== piece)
+        {
+            table?.swap(key, keyOf(seat, legal));
         }
 
         await moveNow(legal);
@@ -149,12 +432,24 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     {
         const seat = untrack(() => mine);
         const current = untrack(() => ludo);
+        const id = untrack(() => game.id);
         const rev = untrack(() => game.rev);
-        const next = seat === undefined || untrack(board.busy) ? null : movedTo(current, seat, piece);
+        const next = seat === undefined || untrack(board.busy) ? null : movedTo(current, piece);
 
         if (next !== null)
         {
-            ahead = { rev, board: next };
+            const to = next.seats.find((one) => one.seat === current.controls)?.tokens.find((token) => token.piece === piece)?.at;
+            const key = keyOf(current.controls, piece);
+
+            ahead = { id, rev, board: next };
+
+            if (to !== undefined)
+            {
+                presenter.act(async () =>
+                {
+                    await table?.advance(key, to);
+                }, PRESS_MS);
+            }
         }
 
         const outcome = await board.move(piece);
@@ -162,52 +457,77 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         if (outcome === 'stale' || outcome === 'failed')
         {
             ahead = null;
+            presenter.act((ctx) => table?.settle(untrack(sightNow), ctx));
         }
     };
 
-    const moveSays = (piece: number) =>
+    const rollBy = (event: MouseEvent) =>
     {
-        const token = locale.n(piece + 1);
-        const outcome = mine === undefined ? null : outcomeOf(ludo, mine, piece);
-
-        if (outcome?.kind === 'enter')
-        {
-            return help.hintOutcome && outcome.count !== undefined
-                ? locale.plural('helpers.ludo.move.enterCapture', outcome.count, { token })
-                : locale.t('match.move.enter', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'home')
-        {
-            return locale.t('match.move.home', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'safe')
-        {
-            return locale.t('helpers.ludo.move.safe', { token });
-        }
-
-        if (help.hintOutcome && outcome?.kind === 'capture')
-        {
-            return locale.plural('helpers.ludo.move.capture', outcome.count, { token, name: nameFor(outcome.victim) });
-        }
-
-        return locale.t('match.move.step', { token, die: locale.n(ludo.die ?? 0) });
+        keyed = event.detail === 0;
+        void roll();
     };
 
-    <div data-rev={ props.match.rev } class="table-stage p-2.5 rounded-hero [background:radial-gradient(ellipse_70%_60%_at_50%_42%,rgb(255_184_110/0.16),transparent_70%),radial-gradient(ellipse_85%_80%_at_50%_50%,transparent_52%,rgb(6_3_1/0.62)_100%),#3A2110_url('/board/ludo-table.webp')_center/cover_no-repeat] [box-shadow:inset_0_1px_0_rgb(255_255_255/0.07),inset_0_0_0_1px_rgb(0_0_0/0.45),0_24px_48px_-28px_rgb(0_0_0/0.9)] slim:mx-[calc(0.375rem_-_var(--page-pad,1rem))]">
+    const roll = async () =>
+    {
+        table?.rattle(true);
+
+        if (presenter.presenting())
+        {
+            presenter.act(() => undefined);
+        }
+
+        const outcome = await board.roll();
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            table?.rattle(false);
+        }
+    };
+
+    const gear: Omit<BoardOptions, 'host' | 'plate'> = {
+        stage,
+        sound: () => sound,
+        feel: (kind) =>
+        {
+            if (untrack(() => mine) !== undefined)
+            {
+                haptic(kind);
+            }
+        },
+        onPick: (key, byKey) =>
+        {
+            keyed = byKey;
+            void pick(key);
+        },
+        onFacts: (next) =>
+        {
+            facts = next;
+        },
+        onPass: (roller, face, fate) =>
+        {
+            const whose = untrack(() => mine) === roller ? 'you' : 'them';
+
+            passed = locale.t(`${ SPENT[fate] }.${ whose }`, { name: untrack(() => nameFor(roller)), die: locale.n(face) });
+        }
+    };
+
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage p-2.5 rounded-hero [background:radial-gradient(ellipse_70%_60%_at_50%_42%,rgb(255_184_110/0.16),transparent_70%),radial-gradient(ellipse_85%_80%_at_50%_50%,transparent_52%,rgb(6_3_1/0.62)_100%),#3A2110_url('/board/ludo-table.webp')_center/cover_no-repeat] [box-shadow:inset_0_1px_0_rgb(255_255_255/0.07),inset_0_0_0_1px_rgb(0_0_0/0.45),0_24px_48px_-28px_rgb(0_0_0/0.9)] slim:mx-[calc(0.375rem_-_var(--page-pad,1rem))]" ref={ (element) => root = element }>
         <div class="table-grid ludo-grid">
             <div class="table-fit">
-                <div class="ludo-frame [--plate-row:3rem] [--plate-col:9.5rem] [direction:ltr] grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [grid-template-areas:'tl_tr'_'board_board'_'bl_br'] items-center gap-2 inline-[min(100cqw,100cqh_-_2_*_var(--plate-row)_-_1rem)] fit-wide:grid-cols-[var(--plate-col)_auto_var(--plate-col)] fit-wide:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] fit-wide:[grid-template-areas:'tl_board_tr'_'bl_board_br'] fit-wide:inline-auto fit-wide:gap-x-3 fit-wide:[--plate-col:6.5rem] fit-short:[--plate-col:5.75rem] fit-short:[--plate-row:2.75rem]">
+                <div class="ludo-frame relative [--plate-row:3rem] [--plate-col:9.5rem] [--foot:0rem] [--tabs:0.75rem] [direction:ltr] [margin-block-end:var(--foot)] grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [grid-template-areas:'tl_tr'_'board_board'_'bl_br'] items-center gap-2 inline-[min(100cqw,100cqh_-_2_*_var(--plate-row)_-_1rem_-_var(--foot)_-_var(--tabs))] fit-wide:grid-cols-[var(--plate-col)_auto_var(--plate-col)] fit-wide:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] fit-wide:[grid-template-areas:'tl_board_tr'_'bl_board_br'] fit-wide:inline-auto fit-wide:gap-x-3 fit-wide:[--plate-col:6.5rem] fit-short:[--plate-col:5.75rem] fit-short:[--plate-row:2.75rem]">
                     <For each={ seatCards } key={ (entry) => entry.player.seat } let={ entry }>
                         <div class="contents">
                             <YardBadge
-                                player={ entry.player }
-                                seat={ entry.seat }
+                                player={ playerAt(entry.player, entry.seat) }
+                                seat={ seatAt(entry.seat) }
+                                home={ homeAt(entry.player.seat, entry.seat.home) }
                                 corner={ entry.corner }
                                 mine={ mine }
-                                active={ entry.player.seat === game.turn }
-                                die={ entry.player.seat === game.turn ? ludo.die : undefined }
+                                active={ entry.player.seat === shownTurn }
+                                controls={ shownControls }
+                                colours={ entry.colours }
+                                partner={ entry.player.seat === partner }
+                                die={ dieAt(entry.player.seat) }
                                 finished={ over }
                                 bubble={ props.speech?.[entry.player.who] }
                                 remainingMs={ game.remainingMs }
@@ -216,8 +536,8 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                         </div>
                     </For>
 
-                    <div class="board-stage table-surface isolate @container rounded-panel [box-shadow:0_26px_40px_-20px_rgb(0_0_0/0.85),0_3px_8px_rgb(0_0_0/0.45)] [grid-area:board]" style={ STAGE }>
-                        <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
+                    <div class="board-stage table-surface isolate @container [box-shadow:0_26px_40px_-20px_rgb(0_0_0/0.85),0_3px_8px_rgb(0_0_0/0.45)] [grid-area:board]" style={ STAGE } ref={ (element) => boardNode = element }>
+                        <BoardCanvas game={ game.game } tokens={ tokens } rig={ gear } onTable={ attach } />
 
                         <Show when={ board.canRoll() }>
                             { () =>
@@ -226,68 +546,36 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                     class="board-roll group/roll absolute z-[6] left-[50%] top-[50%] grid place-items-center inline-[max(3.5rem,calc(var(--cell-cq)*3.2))] block-[max(3.5rem,calc(var(--cell-cq)*3.2))] [translate:-50%_-50%] rounded-[calc(var(--cell-cq)*0.8)] cursor-pointer [-webkit-tap-highlight-color:transparent] disabled:cursor-progress focus-visible:[outline:3px_solid_var(--accent)] focus-visible:outline-offset-2"
                                     aria-label={ locale.t('match.roll') }
                                     disabled={ board.busy() }
-                                    onClick={ () => void board.roll() }
+                                    onClick={ rollBy }
+                                    ref={ (element) => rollButton = element }
                                 >
-                                    <span class="inline-[70%] block-[70%] [filter:drop-shadow(0_8px_10px_rgb(0_0_0/0.55))] motion-safe:animate-[roll-bob_1.4s_ease-in-out_infinite] group-active/roll:[scale:0.92] motion-safe:group-disabled/roll:animate-[roll-shake_0.45s_linear_infinite]" aria-hidden="true">
-                                        <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
-                                    </span>
+                                    <Show when={ !rigged }>
+                                        { () =>
+                                            <span class="inline-[70%] block-[70%] [filter:drop-shadow(0_8px_10px_rgb(0_0_0/0.55))] motion-safe:animate-[roll-bob_1.4s_ease-in-out_infinite] group-active/roll:[scale:0.92] motion-safe:group-disabled/roll:animate-[roll-shake_0.45s_linear_infinite]" aria-hidden="true">
+                                                <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
+                                            </span>
+                                        }
+                                    </Show>
                                 </button>
                             }
                         </Show>
+                    </div>
+
+                    <div class="ludo-lamp" dir={ locale.dir() }>
+                        <CoachLine tip={ advice } lamp />
                     </div>
                 </div>
             </div>
 
             <Show when={ !over }>
                 { () =>
-                    <section class="table-bar p-3 border border-[rgb(255_255_255/0.08)] rounded-panel bg-[rgb(8_13_25/0.8)] [backdrop-filter:blur(8px)] [box-shadow:0_16px_30px_-18px_rgb(0_0_0/0.9)]">
-                        <div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                            <div class="flex min-w-0 flex-[1_1_9rem] flex-col gap-0.5">
-                                <p class="text-ui-base font-semibold text-white" aria-live="polite">{ says }</p>
-                                <Show when={ hint !== '' }>
-                                    { () => <p class="text-ui-xs text-muted">{ hint }</p> }
-                                </Show>
-                                <Show when={ sideways }>
-                                    { () =>
-                                        <p class="flex items-center gap-1.5 text-ui-xs text-gold">
-                                            <Icon name="phone" size={ 14 } class="shrink-0" />
-                                            <span>{ locale.t('match.upright') }</span>
-                                        </p>
-                                    }
-                                </Show>
-                            </div>
-                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ !over && mine !== undefined && mine === game.turn } />
-                        </div>
-
-                        <CoachLine tip={ tip } />
-
-                        <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>
-                            { () =>
-                                <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
-                                    <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
-                                        <li class="min-w-0">
-                                            <Button
-                                                variant="secondary"
-                                                class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
-                                                disabled={ board.busy() }
-                                                onClick={ () => void moveNow(piece) }
-                                            >
-                                                <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
-                                            </Button>
-                                        </li>
-                                    </For>
-                                </ul>
-                            }
-                        </Show>
+                    <section class="table-bar ludo-bar">
+                        <p class="sr-only" aria-live="polite">{ passed === '' ? said : passed }</p>
                     </section>
                 }
             </Show>
         </div>
 
-        <Show when={ over }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
     </div>
 }

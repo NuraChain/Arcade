@@ -10,7 +10,8 @@ import { TableSeat } from '../src/entities/table-seat.entity.ts';
 import { FOLD_MAX, createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
-import { WATCH_DELAY_MS, createWatchService } from '../src/domains/match/watch.ts';
+import { WATCH_DELAY_MS, WATCH_TAIL } from '../src/domains/match/turns.ts';
+import { createWatchService } from '../src/domains/match/watch.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { matchWatch, type MatchView } from '../src/schemas.ts';
@@ -49,14 +50,14 @@ const makeUser = async () =>
     seq += 1;
 
     return rowsOf<{ id: string }>(await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, 'guest')
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3)
          returning id`,
         [`m${ seq }x${ Math.floor(Math.random() * 100000) }`, `Match ${ seq }`, seq % 360]
     ))[0].id;
 };
 
-const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: string; players: string[] }> =>
+const seatedTable = async (seats: number, game = 'ludo', teams = false): Promise<{ tableId: string; players: string[] }> =>
 {
     const players: string[] = [];
 
@@ -75,7 +76,7 @@ const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: str
         blinds: 'low',
         chat: true,
         voice: 'off',
-        teams: false,
+        teams,
         invitees: []
     });
 
@@ -274,9 +275,9 @@ describe.skipIf(!active)('a match, against a real database', () =>
             });
             const dealer = createMatchService(db, createAchieveService(db), [noting(ludoEngine), noting(hokmEngine)]);
 
-            const startedAs = async (game: string, seats: number) =>
+            const startedAs = async (game: string, seats: number, asked = false) =>
             {
-                const { tableId, players } = await seatedTable(seats, game);
+                const { tableId, players } = await seatedTable(seats, game, asked);
                 const load = await dealer.start(players[0], tableId);
                 const stored = rowsOf<{ variant: string }>(await db.query(`select variant from matches where id = $1`, [load.match.id]))[0].variant;
 
@@ -289,7 +290,27 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await startedAs('hokm', 3)).toBe('standard');
             expect(await startedAs('hokm', 2)).toBe('standard');
             expect(await startedAs('ludo', 4)).toBe('standard');
-            expect(handed.map((table) => table.variant)).toEqual(['teams', 'standard', 'standard', 'standard']);
+            expect(await startedAs('ludo', 4, true)).toBe('teams');
+            expect(await startedAs('ludo', 3, true)).toBe('standard');
+            expect(handed.map((table) => table.variant)).toEqual(['teams', 'standard', 'standard', 'standard', 'teams', 'standard']);
+        });
+
+        it('deals a ludo table opened two against two as partners opposite, on the board every reader is sent and on the envelope', async () =>
+        {
+            const { tableId, players } = await seatedTable(4, 'ludo', true);
+            const { match, state } = await matches.start(players[0], tableId);
+            const sent = await matches.envelope((await matches.peek(match.id))!);
+
+            expect(match.variant).toBe('teams');
+            expect(sent.map((player) => player.side)).toEqual([0, 1, 0, 1]);
+
+            for (const reader of [0, 1, 2, 3, null])
+            {
+                const board = matches.board('ludo', state, reader);
+
+                expect(board.kind === 'ludo' ? board.seats.map((row) => row.side) : null, `as ${ reader }`).toEqual([0, 1, 0, 1]);
+                expect(board.kind === 'ludo' ? board.controls : null, `as ${ reader }`).toBe(turnSeatOf(state));
+            }
         });
 
         it('will not start a table as a format its game does not play, whoever wrote the row, and deals nothing', async () =>
@@ -1068,6 +1089,28 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await liveAt(players[0], tableId)).toBe(load.match.id);
         });
 
+        it('lets go of a seat the game has already put out, whatever it agreed to, and writes nothing', async () =>
+        {
+            for (const agreed of [false, true])
+            {
+                const { tableId, players } = await seatedTable(6, 'poker');
+                const load = await matches.start(players[0], tableId);
+                const busted = load.players.find((one) => one.seat === 1)!.user_id;
+
+                await db.query(
+                    `update matches
+                        set state = jsonb_set(jsonb_set(jsonb_set(state, '{out,1}', 'true'), '{stacks,1}', '0'), '{folded,1}', 'true')
+                      where id = $1`,
+                    [load.match.id]
+                );
+
+                expect(await leave(busted, tableId, agreed), `agreed to forfeit: ${ agreed }`).toEqual({ left: true, closed: false, walked: null });
+                expect(await heldBy(busted, tableId)).toEqual({ chair: false, thread: false });
+                expect(await forfeitsOf(load.match.id)).toEqual([]);
+                expect(await liveAt(players[0], tableId)).toBe(load.match.id);
+            }
+        });
+
         it('gives the chair back with no game on, before one and after one, whatever was agreed', async () =>
         {
             const waiting = await seatedTable(2);
@@ -1342,12 +1385,38 @@ describe.skipIf(!active)('a match, against a real database', () =>
             vapidSubject: ''
         } as Parameters<typeof buildPorts>[1]);
 
-        const sent = async (matchId: string) => matchWatch.parse(await portsOf().match.watch(await makeUser(), matchId));
+        const sent = async (matchId: string, rev: number | null = null) => matchWatch.parse(await portsOf().match.watch(await makeUser(), matchId, rev));
 
         const aged = async (matchId: string, seconds: number) =>
         {
             await db.query(`update match_actions set created_at = now() - make_interval(secs => $2::int) where match_id = $1`, [matchId, seconds]);
         };
+
+        const agedUpTo = async (matchId: string, rev: number) =>
+        {
+            await db.query(
+                `update match_actions set created_at = case when rev <= $2 then now() - interval '1 minute' else now() end where match_id = $1`,
+                [matchId, rev]
+            );
+        };
+
+        const advance = async (matchId: string, steps: number) =>
+        {
+            for (let step = 0; step < steps; step += 1)
+            {
+                const load = (await matches.peek(matchId))!;
+                const state = load.state as LudoState;
+                const actor = load.players.find((one) => one.seat === turnSeatOf(state))!.user_id;
+
+                await matches.act(actor, matchId, state.die === null
+                    ? { play: ROLL, key: `w${ load.match.rev }` }
+                    : { play: moveOf(legalMoves(state)[0]), key: `w${ load.match.rev }` });
+            }
+        };
+
+        const revsOf = (seen: { events: { rev: number }[] }) => seen.events.map((event) => event.rev);
+
+        const upTo = (rev: number, from = 0) => Array.from({ length: rev - from }, (_, index) => from + index + 1);
 
         const outOf = (view: MatchView) => (view.view.kind === 'ludo' ? view.view.seats.map((seat) => seat.out) : []);
 
@@ -1490,6 +1559,105 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await endingsOf()).toEqual(['finishedAt', 'outcome']);
         });
 
+        it('hands a watcher no event the board beside it does not have', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await advance(load.match.id, 3);
+            await agedUpTo(load.match.id, load.match.rev + 2);
+
+            const seen = await sent(load.match.id, 0);
+
+            expect(seen.match.rev).toBe(load.match.rev + 2);
+            expect(revsOf(seen), 'an event younger than the delay reached a watcher').toEqual(upTo(seen.match.rev));
+
+            await agedUpTo(load.match.id, load.match.rev + 3);
+
+            const later = await sent(load.match.id, seen.match.rev);
+
+            expect(later.match.rev).toBe(load.match.rev + 3);
+            expect(revsOf(later)).toEqual([later.match.rev]);
+        });
+
+        it('answers a game nobody has moved in with the one row that began it', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const seen = await sent(load.match.id, 0);
+
+            expect(seen.events.map((event) => [event.rev, event.seat])).toEqual([[load.match.rev, -1]]);
+        });
+
+        it('answers the revisions after the one asked from, once and in order, and none when nothing is new', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await advance(load.match.id, 5);
+            await aged(load.match.id, DELAY + 1);
+
+            const shown = load.match.rev + 5;
+
+            expect(revsOf(await sent(load.match.id, 0))).toEqual(upTo(shown));
+            expect(revsOf(await sent(load.match.id, shown - 2))).toEqual([shown - 1, shown]);
+            expect(revsOf(await sent(load.match.id, shown)), 'an idle read was answered events').toEqual([]);
+            expect(revsOf(await sent(load.match.id, 2_000_000_000_000)), 'a revision the game has not reached').toEqual([]);
+            expect(revsOf(await sent(load.match.id, -4)), 'a revision before the beginning is the beginning').toEqual(upTo(shown));
+            expect((await sent(load.match.id, shown - 2)).match.rev).toBe(shown);
+        });
+
+        it('answers the board and no events to somebody who asked from no revision', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await advance(load.match.id, 2);
+            await aged(load.match.id, DELAY + 1);
+
+            const seen = await sent(load.match.id);
+
+            expect(seen.match.rev).toBe(load.match.rev + 2);
+            expect(seen.events).toEqual([]);
+        });
+
+        it('answers the board alone to somebody further behind than a board will play', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await advance(load.match.id, WATCH_TAIL + 1);
+            await aged(load.match.id, DELAY + 1);
+
+            const shown = load.match.rev + WATCH_TAIL + 1;
+            const far = await sent(load.match.id, 0);
+
+            expect(far.match.rev).toBe(shown);
+            expect(far.events, 'a whole game was handed over in one answer').toEqual([]);
+            expect(revsOf(await sent(load.match.id, shown - WATCH_TAIL))).toEqual(upTo(shown, shown - WATCH_TAIL));
+            expect(revsOf(await sent(load.match.id, shown - WATCH_TAIL - 1))).toEqual([]);
+        });
+
+        it('answers a finished game with what was left of it', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await advance(load.match.id, 2);
+
+            const held = (await sent(load.match.id, 0)).match.rev;
+
+            expect(held, 'two moves younger than the delay').toBe(load.match.rev);
+
+            await matches.act(players[1], load.match.id, { play: null, key: 'ends-it' });
+
+            const over = await sent(load.match.id, held);
+
+            expect(over.live).toBe(false);
+            expect(over.match.rev).toBe(load.match.rev + 3);
+            expect(revsOf(over)).toEqual(upTo(over.match.rev, held));
+        });
+
         it('has nothing to watch at an id nobody holds, or at one that is no id at all', async () =>
         {
             const reader = await makeUser();
@@ -1497,7 +1665,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             for (const nowhere of ['00000000-0000-4000-8000-000000000000', 'not-a-uuid', '00000000-0000-4000-8000-00000000000'])
             {
-                expect(await ports.match.watch(reader, nowhere), nowhere).toBeNull();
+                expect(await ports.match.watch(reader, nowhere, 0), nowhere).toBeNull();
             }
         });
 
@@ -1508,16 +1676,23 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const stranger = await makeUser();
             const ports = portsOf();
 
-            expect(await ports.match.watch(stranger, load.match.id), 'anybody may watch a game at a public table').not.toBeNull();
+            expect(await ports.match.watch(stranger, load.match.id, 0), 'anybody may watch a game at a public table').not.toBeNull();
 
             await db.getRepository(Table).update({ id: tableId }, { privacy: 'friends' });
 
-            expect(await ports.match.watch(stranger, load.match.id), 'a stranger was shown a game at a friends table').toBeNull();
+            for (const rev of [null, 0, 1])
+            {
+                expect(await ports.match.watch(stranger, load.match.id, rev), 'a stranger was shown a game at a friends table').toBeNull();
+            }
 
             await matches.act(players[1], load.match.id, { play: null, key: 'ends-it' });
 
-            expect(await ports.match.watch(stranger, load.match.id), 'a game being over made the table it was played at public').toBeNull();
-            expect((await ports.match.watch(players[0], load.match.id))?.live, 'somebody in a chair there is still shown it').toBe(false);
+            for (const rev of [null, 0, 1])
+            {
+                expect(await ports.match.watch(stranger, load.match.id, rev), 'a game being over made the table it was played at public').toBeNull();
+            }
+
+            expect((await ports.match.watch(players[0], load.match.id, null))?.live, 'somebody in a chair there is still shown it').toBe(false);
         });
     });
 
@@ -1602,6 +1777,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 expect(seen!.load.match.rev, `revision ${ row.rev }`).toBe(row.rev);
                 expect(board.kind === 'hokm' && (board.hand.length > 0 || board.offer !== undefined || board.glimpse !== undefined || board.trick.length > 0))
                     .toBe(false);
+
+                const told = await matches.told(seen!.load, Math.max(0, row.rev - WATCH_TAIL));
+                const moves = told.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : []));
+
+                expect(told.at(-1)?.rev, `revision ${ row.rev }`).toBe(row.rev);
+                expect(moves.filter((move) => move.card !== undefined), `a card in what a watcher is told at revision ${ row.rev }`).toEqual([]);
             }
         }, 60_000);
     });

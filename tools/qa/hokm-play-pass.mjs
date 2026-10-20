@@ -1,7 +1,7 @@
 /**
  * Two real browsers playing hokm through the interface, run by hand against the BUILT server.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production PORT=5300 \
+ *   npm run build && API_RATE_MAX=20000 PORT=5300 \
  *     PUBLIC_ORIGIN=http://localhost:5300 npm start
  *   QA_BASE=http://localhost:5300 node tools/qa/hokm-play-pass.mjs
  *
@@ -27,7 +27,10 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { leavingFindings, leavingOf, watchLeaving } from './motion.mjs';
+import { platesPressed } from './plate.mjs';
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 function cachedChromium()
 {
@@ -115,6 +118,11 @@ async function seat(handle)
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, handle))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
@@ -135,7 +143,7 @@ const pressable = async (page, name) =>
 /**
  * How wide the image behind an element really is, once the browser has fetched it.
  *
- * `hokm-table-*.webp`, `hokm-ornaments-*.svg` and `deck.svg` are files that can 404 leaving a table with no
+ * `hokm-table-*.webp`, `hokm-frame.svg`, `hokm-medallion.svg` and `deck.svg` are files that can 404 leaving a table with no
  * cloth and a hand of blank rectangles, each with a perfect accessible name - which every other gate
  * in this repository passes. A missing background image is not an error in the DOM, so the only way
  * to know is to fetch it again and read what came back.
@@ -149,7 +157,13 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 
     if (node === null) { return -1; }
 
-    const urls = [...getComputedStyle(node).backgroundImage.matchAll(/url\("?([^")]+)"?\)/g)].map((match) => match[1]);
+    const drawn = [null, '::before', '::after'].flatMap((part) =>
+    {
+        const style = getComputedStyle(node, part);
+
+        return [style.backgroundImage, style.borderImageSource];
+    });
+    const urls = drawn.flatMap((value) => [...value.matchAll(/url\("?([^")]+)"?\)/g)].map((match) => match[1]));
 
     if (urls.length === 0) { return 0; }
 
@@ -168,7 +182,7 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 /** The cards this browser is showing in the hand, and whether each one can be pressed. */
 const hand = (page) => page.evaluate(() =>
     [...document.querySelectorAll('main ul[aria-label] button')]
-        .map((one) => ({ says: one.getAttribute('aria-label') ?? '', can: !one.disabled })));
+        .map((one) => ({ says: one.getAttribute('aria-label') ?? '', can: one.getAttribute('aria-disabled') !== 'true' })));
 
 /** What is lying on the felt, in the order the wire sent it. */
 const table = (page) => page.evaluate(() =>
@@ -244,6 +258,14 @@ try
             await loaded(mina.page, '.hokm-table') > 0);
     }
 
+    console.log('\n[2b] a plate is pressed, and it is not a move');
+    {
+        for (const player of [dana, mina])
+        {
+            await platesPressed(record, player.page, player.handle);
+        }
+    }
+
     // ---------------------------------------------------------------- 3. trump, by the one seat
     console.log('\n[3] the trump call, offered to the Hâkem and to nobody else');
     {
@@ -293,7 +315,7 @@ try
     }
 
     // ---------------------------------------------------------------- 3b. the cards put face down
-    console.log('\n[3b] the cards put face down, chosen by pressing them');
+    console.log('\n[3b] the cards put face down, lifted by pressing them and taken by pressing the stock');
     {
         const board = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
         const caller = board.view.hakem === board.mine ? dana : mina;
@@ -303,10 +325,13 @@ try
         {
             await who.page.waitForTimeout(SETTLE_MS);
 
-            const confirm = who.page.getByRole('button', { name: `Put these ${ count } face down` }).first();
+            const stock = who.page.getByRole('button', { name: `Put these ${ count } face down` }).first();
+            const owed = await who.page.evaluate(() => document.querySelector('main .hokm-stock-due')?.textContent?.trim() ?? '');
 
-            record(`the seat putting ${ count } down is asked to choose, and cannot confirm yet`, await confirm.isDisabled().catch(() => false));
-            record('and the other seat is given nothing to press', await pressable(waiting.page, /face down/) === null);
+            record(`the seat putting ${ count } down is shown how many on the stock, which cannot take them yet`,
+                owed === `0/${ count }` && await stock.count() === 0, owed);
+            record('and the other seat is given nothing to press', await pressable(waiting.page, /face down/) === null
+                && await waiting.page.evaluate(() => document.querySelector('main .hokm-stock-due') === null));
 
             const held = await hand(who.page);
 
@@ -315,9 +340,9 @@ try
                 await who.page.getByRole('button', { name: one.says, exact: true }).first().click();
             }
 
-            record(`choosing exactly ${ count } lets it confirm`, await confirm.isEnabled().catch(() => false));
+            record(`lifting exactly ${ count } lets the stock take them`, await stock.isEnabled().catch(() => false));
 
-            await confirm.click();
+            await stock.click();
             await who.page.waitForTimeout(SETTLE_MS);
 
             const left = await hand(who.page);
@@ -345,10 +370,13 @@ try
             const keep = await pressable(drawer.page, /^Keep the /);
             const next = await pressable(drawer.page, /^Take the next card$/);
 
-            record(`draw ${ pressed + 1 }: the drawer is shown the card and both choices`, keep !== null && next !== null);
+            record(`draw ${ pressed + 1 }: the drawn card lies on the felt, and the card and the stock are the two choices`, keep !== null && next !== null
+                && await drawer.page.evaluate(() => document.querySelector('main button.hokm-offer .card-face') !== null
+                    && document.querySelector('main .hokm-stock[data-live] button.hokm-stock-press') !== null));
             record(`draw ${ pressed + 1 }: the other browser is shown neither`,
                 await pressable(waiting.page, /^Take the next card$/) === null
-                    && await waiting.page.evaluate(() => document.querySelector('main .hokm-draw') === null));
+                    && await waiting.page.evaluate(() => document.querySelector('main .hokm-offer') === null
+                        && document.querySelector('main .hokm-stock[data-live]') === null));
 
             const before = (await hand(drawer.page)).length;
 
@@ -360,7 +388,7 @@ try
             pressed += 1;
         }
 
-        record('draws were made by pressing Keep and Take the next card', pressed === 4, `${ pressed } draws`);
+        record('draws were made by pressing the drawn card and the stock', pressed === 4, `${ pressed } draws`);
 
         const players = {};
 
@@ -394,6 +422,8 @@ try
     {
         let clicked = 0;
         let followed = 0;
+        let narrowed = 0;
+        let agreed = 0;
         let gathered = 0;
 
         for (let attempt = 0; attempt < CLICKED_CARDS * 4 && clicked < CLICKED_CARDS; attempt += 1)
@@ -418,12 +448,21 @@ try
             }
 
             /**
-             * The follow-suit rule, seen from the interface rather than from the engine.
+             * The follow-suit rule, as the interface shows it and as the engine holds it.
              *
-             * A hand that can play anything is somebody leading; a hand where some cards have gone
-             * quiet is somebody following, and BOTH have to be true at some point in three tricks
-             * or the interface is not enforcing anything it says it is.
+             * A hand that can play anything is somebody leading, or following a suit they do not
+             * hold; a hand where some cards have gone quiet is somebody following one they do. The
+             * page has to let through exactly the cards the rules do, on every turn.
+             *
+             * Counting the quiet hands alone was the whole check once, and it failed on a table
+             * that was right: this pass puts each seat's lowest cards face down and calls clubs,
+             * the lowest suit, so a seat can come to the tricks holding no trump at all and follow
+             * three leads of it with anything.
              */
+            const allowed = (await (await mover.request.get(`${ BASE }/api/matches/${ match }`)).json()).view;
+
+            if (playable.length === allowed.plays.length) { agreed += 1; }
+            if (allowed.plays.length < allowed.hand.length) { narrowed += 1; }
             if (playable.length < held.length) { followed += 1; }
 
             const before = await watcher.page.evaluate(() => document.querySelectorAll('main .hokm-trick').length);
@@ -448,8 +487,18 @@ try
         }
 
         record('cards were played by clicking', clicked === CLICKED_CARDS, `${ clicked } played`);
+
+        const beside = await dana.page.evaluate(() => [...document.querySelectorAll('main .table-stage button:not(.table-plate-press)')]
+            .filter((one) => one.closest('.card-hold, .hokm-rail, .table-result') === null)
+            .map((one) => one.getAttribute('aria-label') ?? one.textContent?.trim() ?? ''));
+        const drawn = await dana.page.evaluate(() => document.querySelector('main .table-grid > .table-bar') !== null
+            || [...document.querySelectorAll('main .hokm-rail > p')].some((one) => !one.classList.contains('sr-only')));
+
+        record('no button on the page plays a card but the card', beside.length === 0, beside.join(' | '));
+        record('no bar of sentences is drawn under the table', !drawn);
         record('the other browser saw the table change', gathered > 0, `${ gathered } of ${ clicked }`);
-        record('an illegal card was quiet while a legal one was not', followed > 0, `${ followed } of ${ clicked } turns`);
+        record('every hand let through exactly the cards the rules allowed', agreed === clicked, `${ agreed } of ${ clicked } turns`);
+        record('an illegal card was quiet wherever the rules narrowed a hand', followed === narrowed, `${ followed } of the ${ narrowed } turns narrowed`);
 
         /**
          * The trick that was gathered, which is the one thing on this table that exists for a moment
@@ -521,11 +570,23 @@ try
 
         record('the match reaches a real finish', done.finishedAt !== undefined && done.finishedAt !== null, done.outcome);
 
-        await dana.page.waitForTimeout(SETTLE_MS);
-        await mina.page.waitForTimeout(SETTLE_MS);
-
         for (const who of [dana, mina])
         {
+            /**
+             * The result waits for the table. The last trick is played out, gathered and called
+             * before the panel arrives, and after a match played over the api the table is still
+             * showing its last few seconds when the server finished long ago. So this waits for the
+             * table to say it has caught up: a sleep of any length would be a guess at that.
+             */
+            const caught = await who.page.waitForFunction((least) =>
+            {
+                const table = document.querySelector('main .table-stage');
+
+                return table !== null && Number(table.dataset.rev) >= least && !table.hasAttribute('data-presenting');
+            }, done.rev, { timeout: 45_000 }).then(() => true, () => false);
+
+            record(`${ who.handle }'s table catches up with the finish`, caught);
+
             const said = await who.page.evaluate(() =>
                 document.querySelector('main [aria-live]')?.textContent?.trim() ?? '');
 
@@ -540,8 +601,55 @@ try
         }
     }
 
-    // ---------------------------------------------------------------- 6. the console, throughout
-    console.log('\n[6] the console, over the whole match');
+    // ---------------------------------------------------------------- 6. another game at the table
+    console.log('\n[6] another game at the same table');
+    {
+        /**
+         * A rematch is the one moment a result and an opening deal meet. The board once kept the
+         * result of the game before over the next one until its first cards had been dealt, with
+         * no row on the page to deal them into, and no pass asked for another game.
+         */
+        for (const who of [dana, mina])
+        {
+            await watchLeaving(who.page, 'main .board-flight > *');
+        }
+
+        for (const who of [dana, mina])
+        {
+            await (await pressable(who.page, /Play again/i))?.click();
+        }
+
+        let next = match;
+
+        for (let tries = 0; tries < 50 && (next === match || next === undefined || next === null); tries += 1)
+        {
+            await dana.page.waitForTimeout(200);
+            next = (await (await dana.request.get(`${ BASE }/api/tables/${ tableId }`)).json()).matchId;
+        }
+
+        record('a new game begins at the same table', typeof next === 'string' && next !== match);
+
+        for (const who of [dana, mina])
+        {
+            const dealt = await who.page.waitForFunction(() =>
+            {
+                const table = document.querySelector('main .table-stage');
+
+                return table !== null && document.querySelector('.table-result, .table-result-tab') === null && !table.hasAttribute('data-presenting')
+                    && document.querySelectorAll('.hokm-hand > li').length > 0 && document.querySelector('.hokm-hand > li[data-dealt="false"]') === null;
+            }, null, { timeout: 20_000 }).then(() => true, () => false);
+
+            record(`${ who.handle } is dealt the next game, into a hand that is on the page`, dealt);
+
+            for (const [name, ok, detail] of leavingFindings(await leavingOf(who.page)))
+            {
+                record(`${ who.handle }: ${ name }`, ok, detail);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 7. the console, throughout
+    console.log('\n[7] the console, over the whole match');
     {
         record('nothing was logged in either browser', dana.errors.length === 0 && mina.errors.length === 0,
             [...dana.errors, ...mina.errors].slice(0, 2).join(' | '));

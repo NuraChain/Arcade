@@ -1,6 +1,7 @@
 import { bootClient } from '@azerothjs/kit/client';
 
 import App from './App.azeroth';
+import { watchChunks } from './lib/chunks.ts';
 import { setRuntime } from './lib/runtime.ts';
 import { loadCatalogue } from './stores/locale.store.ts';
 
@@ -22,6 +23,8 @@ if (import.meta.env.DEV)
         console.warn('[dev] devtools unavailable; continuing without the panel.', error);
     }
 }
+
+watchChunks();
 
 if (document.documentElement.lang === 'fa')
 {

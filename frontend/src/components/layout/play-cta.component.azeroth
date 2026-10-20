@@ -2,7 +2,7 @@ import Button from '../ui/button.component.azeroth';
 import { useConnect } from '../../stores/connect.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
-export default component PlayCta(props: { returning: boolean; guest?: boolean })
+export default component PlayCta(props: { returning: boolean })
 {
     const locale = useLocale();
     const connect = useConnect();
@@ -14,9 +14,6 @@ export default component PlayCta(props: { returning: boolean; guest?: boolean })
                 <span class="glow-cta grid rounded-control">
                     <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('landing.cta.start') }</Button>
                 </span>
-                <Show when={ props.guest === true }>
-                    <Button variant="outline" size="lg" to="/sign-in">{ locale.t('landing.cta.guest') }</Button>
-                </Show>
             </span>
         }
     >

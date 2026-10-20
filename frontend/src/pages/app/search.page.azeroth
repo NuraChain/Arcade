@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { useHead, useNavigate, useQuery } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -9,6 +9,7 @@ import GroupCard from '../../components/social/group-card.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
@@ -23,6 +24,7 @@ import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.
 import { useSocial } from '../../stores/social.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { useAddress, usePageParams } from '../../lib/page-param.ts';
 import { useDevice } from '../../stores/device.store.ts';
 
 const PEOPLE_PAGE = 8;
@@ -60,36 +62,27 @@ export default component SearchPage()
     derived paging = pagingFor(device.posture() === 'phone');
     const { navigate } = useNavigate();
 
-    const asked = useQuery();
+    const address = useAddress();
 
     mount
     {
         social.want('people');
-
-        const term = asked().q;
-
-        if (typeof term === 'string' && term.trim() !== '')
-        {
-            search.setQuery(term);
-        }
+        search.setScope(SEARCH_SCOPES.find((one) => one === address.text('scope')) ?? 'all');
+        search.setQuery(address.text('q'));
     }
 
     useHead({ title: () => locale.t('app.nav.search') });
 
-    state peoplePage = 1;
-    state messagePage = 1;
+    const pages = usePageParams(['people', 'messages']);
+
+    derived peoplePage = pages.page('people');
+
+    derived messagePage = pages.page('messages');
+
 
     derived results = search.results();
 
     derived query = search.query();
-
-    effect
-    {
-        search.query();
-        search.scope();
-        peoplePage = 1;
-        messagePage = 1;
-    }
 
     derived recents = search.recents();
 
@@ -109,10 +102,29 @@ export default component SearchPage()
 
     derived hidden = results.locked > 0;
 
+    derived everybody = search.everybody();
+
+    derived looking = search.searching();
+
+    derived unanswered = search.failed();
+
+    derived peopled = search.scope() === 'all' || search.scope() === 'people';
+
+    derived further = asking && peopled && !everybody;
+
+    derived settled = !looking && !unanswered;
+
+    const widen = () =>
+    {
+        search.setScope('people');
+        pages.reset({ scope: 'people' });
+    };
+
     const run = (term: string) =>
     {
         search.setQuery(term);
         search.remember(term);
+        pages.reset({ q: term.trim() });
     };
 
     <Page label={ locale.t('app.nav.search') }>
@@ -120,7 +132,11 @@ export default component SearchPage()
             <h1 class="sr-only">{ locale.t('app.nav.search') }</h1>
             <SearchInput
                 value={ query }
-                onInput={ (value) => search.setQuery(value) }
+                onInput={ (value) =>
+                {
+                    search.setQuery(value);
+                    pages.reset({ q: value.trim() });
+                } }
                 placeholder={ locale.t('search.placeholder') }
                 label={ locale.t('app.nav.search') }
                 autofocus
@@ -132,7 +148,11 @@ export default component SearchPage()
             label={ locale.t('search.scope.all') }
             class="mb-5"
             value={ search.scope() }
-            onChange={ (id) => search.setScope(id as SearchScope) }
+            onChange={ (id) =>
+            {
+                search.setScope(id as SearchScope);
+                pages.reset({ scope: id === 'all' ? '' : id });
+            } }
             items={ SEARCH_SCOPES.map((scope) => ({ id: scope, label: locale.t(`search.scope.${ scope }`) })) }
         />
 
@@ -170,9 +190,30 @@ export default component SearchPage()
             }
         >
             { () =>
+                <div class="flex flex-col gap-5">
+                <Show when={ everybody }>
+                    <p class="flex items-start gap-2 px-1 text-ui-xs text-faint">
+                        <Icon name="people" size={ 13 } class="mt-0.5 shrink-0" />
+                        <span>{ locale.t('search.peopleElsewhere') }</span>
+                    </p>
+                </Show>
+                <Show when={ looking }>
+                    <p class="px-1 text-ui-sm text-muted" role="status">{ locale.t('search.searching') }</p>
+                </Show>
+                <Show when={ unanswered }>
+                    <div class="flex flex-wrap items-center gap-3 rounded-tile border border-line bg-field px-3 py-2 text-ui-sm text-muted" role="status">
+                        <Icon name="alert" size={ 15 } class="shrink-0 text-gold" />
+                        <span class="min-w-0 flex-1">{ locale.t('search.peopleFailed') }</span>
+                        <Button variant="outline" size="sm" onClick={ () => search.retry() }>{ locale.t('common.retry') }</Button>
+                    </div>
+                </Show>
                 <Show
                     when={ found }
-                    fallback={ <EmptyState icon="search" title={ locale.t('search.empty', { query }) } lead={ locale.t('search.emptyLead') } class="py-10" /> }
+                    fallback={
+                        <Show when={ settled }>
+                            <EmptyState icon="search" title={ locale.t('search.empty', { query }) } lead={ locale.t('search.emptyLead') } class="py-10" />
+                        </Show>
+                    }
                 >
                     { () =>
                         <div class="flex flex-col gap-7">
@@ -194,7 +235,7 @@ export default component SearchPage()
                                         page={ peoplePage }
                                         mode={ paging }
                                         label={ locale.t('search.scope.people') }
-                                        onPage={ (page) => peoplePage = page }
+                                        onPage={ (page) => pages.turn('people', page) }
                                     />
                                 </section>
                             </Show>
@@ -270,13 +311,17 @@ export default component SearchPage()
                                         page={ messagePage }
                                         mode={ paging }
                                         label={ locale.t('search.scope.chats') }
-                                        onPage={ (page) => messagePage = page }
+                                        onPage={ (page) => pages.turn('messages', page) }
                                     />
                                 </section>
                             </Show>
                         </div>
                     }
                 </Show>
+                <Show when={ further }>
+                    <Button variant="outline" size="md" leading="people" class="self-start" onClick={ widen }>{ locale.t('search.everybody', { query }) }</Button>
+                </Show>
+                </div>
             }
         </Show>
     </Page>

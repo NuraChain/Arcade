@@ -30,6 +30,8 @@ export default component NotificationRow(props: {
 
     derived answerable = asked !== '';
 
+    derived unread = !props.item.read;
+
     <div class={ () => [
         'flex flex-col gap-2 px-3 py-2.5',
         props.item.read ? '' : 'bg-accent/5'
@@ -44,7 +46,7 @@ export default component NotificationRow(props: {
                     <span class="tally text-ui-xs text-faint">{ locale.relative(Date.parse(props.item.at)) }</span>
                 </span>
             </button>
-            <Show when={ !props.item.read }>
+            <Show when={ unread }>
                 { () => <span class="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></span> }
             </Show>
             <IconButton
@@ -62,7 +64,6 @@ export default component NotificationRow(props: {
                     <Button
                         variant="primary"
                         size="sm"
-                        loading={ asked !== '' && social.working(asked) }
                         onClick={ () =>
                         {
                             if (asked !== '')
@@ -76,7 +77,6 @@ export default component NotificationRow(props: {
                     <Button
                         variant="ghost"
                         size="sm"
-                        disabled={ asked !== '' && social.working(asked) }
                         onClick={ () =>
                         {
                             if (asked !== '')

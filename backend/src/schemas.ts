@@ -1,7 +1,12 @@
-import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
+import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
+import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
+
+const NUL_FREE = new RegExp(`^[^${ String.fromCharCode(0) }]*$`);
+
+const string = (options: StringOptions = {}) => text({ pattern: NUL_FREE, ...options });
 
 /**
  * The wire shape, declared once.
@@ -247,16 +252,18 @@ export const liveCounts = object({ games: array(gameLive) });
 
 export type LiveCounts = Infer<typeof liveCounts>;
 
-/* -------------------------------------------------------------------------- identity */
+export interface Pulse
+{
+    games: LiveCounts['games'];
+    watching: string;
+}
 
-export const accountKind = enumOf(['wallet', 'guest']);
+/* -------------------------------------------------------------------------- identity */
 
 /**
  * The signed-in account, as the browser sees it.
  *
- * `kind` is here because the UI must be able to tell the truth about how much an identity
- * proves: a wallet account signed a challenge, a guest typed a name. Anything that renders a
- * verification badge reads this.
+ * Every account signed a challenge with a wallet key, which is the only way an identity exists.
  */
 export const account = object({
     id: string(),
@@ -265,14 +272,12 @@ export const account = object({
     bio: string(),
     avatar: string().optional(),
     hue: number(),
-    kind: accountKind,
     isMinor: boolean(),
     joinedAt: string().optional(),
 
     /**
-     * The wallet this account signs in with, when it has one. Absent for a guest, and absent
-     * for a wallet account only while the link is being written - the UI renders it as
-     * "no wallet linked" rather than assuming.
+     * The wallet this account signs in with. Absent only while the link is being written - the
+     * UI renders it as "no wallet linked" rather than assuming.
      */
     address: string().optional(),
     admin: boolean().optional()
@@ -313,8 +318,6 @@ export const walletSignIn = object({
         label: string({ trim: true, max: 64 })
     }).optional()
 });
-
-export const guestSignIn = object({ name: string({ trim: true, nonempty: true, max: 64 }) });
 
 /** Claiming a different @handle. The unique index arbitrates, exactly as it does at creation. */
 export const handleInput = object({ handle: string({ trim: true, min: 2, max: 32 }) });
@@ -427,12 +430,11 @@ export const langQuery = object({ lang: string({ trim: true, max: 32 }).optional
 /**
  * Who vouched for a device, as a closed set.
  *
- * `server` means NOBODY did: a guest account has no wallet to sign with, so the row says the
- * device is theirs on the strength of the session and nothing else. It is a required field on the
- * wire and a required prop on the badge for the same reason - a device that cannot be proven must
- * not be able to render as a proven one by leaving the question out.
+ * It is a required field on the wire and a required prop on the badge: every device carries a
+ * wallet proof, and a device that cannot be proven must not be able to render as one by leaving
+ * the question out.
  */
-export const attestation = enumOf(['wallet', 'contract', 'server']);
+export const attestation = enumOf(['wallet', 'contract']);
 
 export type Attestation = Infer<typeof attestation>;
 
@@ -475,17 +477,16 @@ export const deviceRef = object({ id: string() });
 /**
  * What enrolment sends.
  *
- * `nonce` and `signature` travel together or not at all: a wallet account must prove the device
- * with the wallet on it, and a guest account has nothing to prove it with. The server decides
- * which case applies from the account, never from what the caller chose to send.
+ * `nonce` and `signature` are required: every account proves a device with the wallet on it, and
+ * the server refuses an enrolment that arrives without one rather than attesting it itself.
  */
 export const enrolInput = object({
     id: string({ max: 22 }),
     exchangeKey: string({ max: 512 }),
     signingKey: string({ max: 512 }),
     label: string({ trim: true, max: 64 }),
-    nonce: string().optional(),
-    signature: string().optional()
+    nonce: string(),
+    signature: string()
 });
 
 export const deviceLabelInput = object({ label: string({ trim: true, max: 64 }) });
@@ -596,8 +597,7 @@ export type PeerDevice = Infer<typeof peerDevice>;
  *
  * `devices` is empty rather than absent when somebody has none, because the client has to tell
  * "nobody on the other side can read this" from "I have not loaded the other side yet", and a
- * missing key cannot say that. `kind` is here so the reason can be specific: a guest has no
- * wallet, so a guest has no sealable device, and the UI says which of those it is looking at.
+ * missing key cannot say that.
  */
 export const conversationMember = object({
     /**
@@ -611,10 +611,9 @@ export const conversationMember = object({
     accountId: string(),
 
     handle: string(),
-    kind: accountKind,
 
     /**
-     * The wallet this account signs in with. Absent for a guest, who has none.
+     * The wallet this account signs in with.
      *
      * It is what anchors a device attestation to a PERSON, and it is shown so it can be compared out
      * of band the way a safety number is. Without it the attestation chain terminates in an address
@@ -853,6 +852,8 @@ export const suggestionList = object({ suggestions: array(suggestion) });
 export const personList = object({ people: array(personSummary) });
 
 export const namesQuery = object({ handles: string({ max: 2400 }) });
+
+export const peopleQuery = object({ q: string({ max: 64 }) });
 
 /**
  * A profile as seen by somebody in particular: the person, our relationship, and whether the
@@ -1105,6 +1106,8 @@ export const tableSummary = object({
     /** The game being played here, absent until somebody starts one. */
     matchId: string().optional(),
 
+    lastMatchId: string().optional(),
+
     yourTurn: boolean().optional(),
 
     /**
@@ -1115,6 +1118,12 @@ export const tableSummary = object({
      * than leaving a person to wonder why a table they can see is not in the public list.
      */
     roomId: string().optional(),
+
+    removed: boolean().optional(),
+
+    quick: boolean().optional(),
+
+    keptOut: array(string()).optional(),
 
     createdAt: string()
 });
@@ -1172,6 +1181,49 @@ export const seatResult = object({
     seat: number().optional()
 });
 
+export const partyStage = enumOf(PARTY_STAGES);
+
+export const partyEnd = enumOf(PARTY_ENDS);
+
+export const partyView = object({
+    id: string(),
+    game: string(),
+    leader: string(),
+    member: string(),
+    stage: partyStage,
+    remainingMs: number({ int: true, min: 0 })
+});
+
+export type PartyView = Infer<typeof partyView>;
+
+export const partyInvite = object({
+    id: string(),
+    game: string(),
+    from: string(),
+    remainingMs: number({ int: true, min: 0 })
+});
+
+export type PartyInvite = Infer<typeof partyInvite>;
+
+export const partyEnded = object({
+    id: string(),
+    reason: partyEnd,
+    by: string().optional()
+});
+
+export const partyState = object({
+    party: partyView.optional(),
+    invites: array(partyInvite),
+    ended: partyEnded.optional()
+});
+
+export type PartyState = Infer<typeof partyState>;
+
+export const partyInput = object({
+    id: string({ max: 32 }),
+    game: string({ max: 32 })
+});
+
 /* ----------------------------------------------------------------- matches */
 
 /**
@@ -1212,6 +1264,8 @@ export const matchPlayer = object({
 
     result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
 
+    exit: enumOf(['resign', 'left', 'timeout']).optional(),
+
     /**
      * What the game did to this seat's rating. Both or neither, and absent for a match that did not
      * move one - a room that emptied is recorded and scores nothing, so a client that renders a
@@ -1249,12 +1303,15 @@ export const ludoBoard = object({
     /** THIS viewer's legal moves, empty unless it is their turn and they have rolled. */
     moves: array(number()),
 
+    controls: number({ int: true, min: 0, max: 3 }),
+
     seats: array(object({
         seat: number(),
         colour: string(),
         tokens: array(matchToken),
         home: number(),
-        out: boolean()
+        out: boolean(),
+        side: number({ int: true, min: 0, max: 3 })
     }))
 });
 
@@ -1328,7 +1385,7 @@ export const hokmBoard = object({
 
 export const backgammonBoard = object({
     kind: literal('backgammon'),
-    phase: enumOf(['roll', 'move', 'double']),
+    phase: enumOf(['opening', 'roll', 'move', 'double']),
     turn: number({ int: true, min: 0, max: 1 }),
     dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }),
     seats: array(object({
@@ -1343,7 +1400,11 @@ export const backgammonBoard = object({
     doubling: boolean(),
     crawford: boolean(),
     target: number({ int: true, min: 1, max: 99 }),
-    round: number({ int: true, min: 1, max: 999 })
+    round: number({ int: true, min: 1, max: 999 }),
+    opening: array(object({
+        seat: number({ int: true, min: 0, max: 1 }),
+        die: number({ int: true, min: 1, max: 6 })
+    }), { max: 2 }).optional()
 });
 
 const pokerSeat = number({ int: true, min: 0, max: 8 });
@@ -1503,7 +1564,7 @@ export const hokmLog = object({
 });
 
 export const backgammonMove = object({
-    e: enumOf(['opening', 'roll', 'move', 'pass', 'double', 'take', 'drop', 'game', 'forfeit', 'finish']),
+    e: enumOf(['throw', 'tie', 'opening', 'roll', 'move', 'pass', 'double', 'take', 'drop', 'game', 'forfeit', 'finish']),
     seat: number({ int: true, min: 0, max: 1 }).optional(),
     dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }).optional(),
     from: number({ int: true, min: 0, max: 25 }).optional(),
@@ -1681,7 +1742,9 @@ export const matchWatch = object({
     delay: number(),
 
     /** Whether the game is still being played. */
-    live: boolean()
+    live: boolean(),
+
+    events: array(matchEvent)
 });
 
 export type MatchWatch = Infer<typeof matchWatch>;
@@ -1711,6 +1774,7 @@ export const notificationKind = enumOf([
     'friend-accepted',
     'group-added',
     'table-invite',
+    'table-removed',
     'message',
 
     /**
@@ -1737,7 +1801,8 @@ export const notificationRef = object({
     tableId: string().optional(),
     groupId: string().optional(),
     requestId: string().optional(),
-    personId: string().optional()
+    personId: string().optional(),
+    game: string().optional()
 });
 
 /**

@@ -28,10 +28,10 @@ export interface ChatScope
  * Why a send could not be sealed, carried as data rather than flattened into a sentence.
  *
  * `post` used to throw a string with the failure interpolated into it, and the only toast a page
- * could show was the one generic line - which told somebody whose room holds a guest that the
- * problem was somebody else's unconfirmed browser. The failure and the member it names are both
- * things the screen can speak precisely, so the error carries them and the page decides what to
- * say.
+ * could show was the one generic line - which told somebody whose room holds a member with no
+ * confirmed browser that the problem was somebody else's. The failure and the member it names are
+ * both things the screen can speak precisely, so the error carries them and the page decides what
+ * to say.
  */
 export class SealFailure extends Error
 {
@@ -99,6 +99,22 @@ export interface ChatSource
 
 const byAt = (a: Message, b: Message) => a.at - b.at;
 
+const sealedAs = (wire: ChatMessage) => [
+    wire.conversationId,
+    wire.epoch,
+    wire.seq,
+    wire.id,
+    wire.senderAccountId,
+    wire.senderDeviceId,
+    wire.kind,
+    wire.clientAt,
+    wire.commitment,
+    wire.expiresAt,
+    wire.iv,
+    wire.body,
+    wire.signature
+].join('|');
+
 /**
  * Every live source, so the plaintext they hold can be thrown away from outside them.
  *
@@ -162,8 +178,15 @@ export function createApiSource()
     /** Whose messages are in this Map. Set the first time anything is read for somebody. */
     let openedFor = '';
 
-    const remember = (message: Message) =>
+    let age = 0;
+
+    const remember = (born: number, message: Message) =>
     {
+        if (born !== age)
+        {
+            return message;
+        }
+
         // A message that has run out leaves the archive rather than being replaced in it. The
         // archive is what `search.store.ts` reads, so a disappearing message that stayed here would
         // go on being findable by its words long after it stopped being readable in the thread -
@@ -206,6 +229,7 @@ export function createApiSource()
      * no author to resolve, which is the whole point of the kind split.
      */
     const asMessage = (
+        born: number,
         wire: ChatMessage,
         text: string,
         locked: MessageFailure | null,
@@ -217,7 +241,7 @@ export function createApiSource()
             Object.entries(said).filter((entry): entry is [string, string | string[]] => entry[1] !== undefined)
         );
 
-        return remember({
+        return remember(born, {
             id: wire.id,
             conversationId: wire.conversationId,
             from: signed?.from ?? wire.from ?? '',
@@ -250,11 +274,12 @@ export function createApiSource()
     const opens = new Map<string, OpenedMessage>();
 
     const openCached = async (
+        born: number,
         wire: ChatMessage,
         keyFor: (epoch: number) => Promise<Uint8Array | null>
     ) =>
     {
-        const key = `${ wire.id }|${ wire.signature ?? '' }`;
+        const key = sealedAs(wire);
         const held = opens.get(key);
 
         if (held !== undefined)
@@ -264,7 +289,7 @@ export function createApiSource()
 
         const fresh = await openMessage(wire.conversationId, wire, keyFor);
 
-        if ('text' in fresh)
+        if ('text' in fresh && born === age)
         {
             opens.set(key, fresh);
 
@@ -289,13 +314,18 @@ export function createApiSource()
         }
     };
 
-    const openHeld = async (id: string, wire: ChatMessage) =>
+    const openHeld = async (born: number, id: string, wire: ChatMessage) =>
     {
+        if (wire.conversationId !== id)
+        {
+            return asMessage(born, wire, '', 'tampered');
+        }
+
         const given: Promise<Uint8Array | null>[] = [];
 
         try
         {
-            return await openOne(wire, (epoch) =>
+            return await openOne(born, wire, (epoch) =>
             {
                 const fetching = heldKey(id, epoch);
                 given.push(fetching);
@@ -309,13 +339,14 @@ export function createApiSource()
     };
 
     const openOne = async (
+        born: number,
         wire: ChatMessage,
         keyFor: (epoch: number) => Promise<Uint8Array | null>
     ): Promise<Message> =>
     {
         if (wire.kind !== 'text')
         {
-            return asMessage(wire, '', null);
+            return asMessage(born, wire, '', null);
         }
 
         // Gone is gone, whatever the row says. The expiry is signed into the envelope, so a server
@@ -323,34 +354,35 @@ export function createApiSource()
         // reason the promise means anything.
         if (wire.expiresAt !== undefined && Date.parse(wire.expiresAt) <= runtime().clock.now())
         {
-            return asMessage(wire, '', 'expired');
+            return asMessage(born, wire, '', 'expired');
         }
 
-        const read = await openCached(wire, keyFor);
+        const read = await openCached(born, wire, keyFor);
 
         if (!('text' in read))
         {
-            return asMessage(wire, '', read.failure);
+            return asMessage(born, wire, '', read.failure);
         }
 
         const body = decodeText(read.text);
 
         if (body === null)
         {
-            return asMessage(wire, '', 'tampered');
+            return asMessage(born, wire, '', 'tampered');
         }
 
-        return asMessage(wire, body.text, null, {
+        return asMessage(born, wire, body.text, null, {
             from: read.from,
             frankingKey: read.frankingKey,
             plain: read.text,
             ...(body.reply === undefined ? {} : { reply: body.reply }),
             ...(body.fwd === true ? { fwd: true as const } : {}),
-            reactions: await openReactions(wire, keyFor)
+            reactions: await openReactions(born, wire, keyFor)
         });
     };
 
     const openReactions = async (
+        born: number,
         wire: ChatMessage,
         keyFor: (epoch: number) => Promise<Uint8Array | null>
     ): Promise<Reaction[]> =>
@@ -360,7 +392,7 @@ export function createApiSource()
 
         const opened = await Promise.all(live.map(async (one): Promise<Reaction | null> =>
         {
-            const found = await openCached(one, keyFor);
+            const found = await openCached(born, one, keyFor);
 
             if (!('text' in found))
             {
@@ -452,6 +484,7 @@ export function createApiSource()
         {
             openedFor = scope.me;
 
+            const born = age;
             const wires: Awaited<ReturnType<typeof client.chat.list>>['conversations'] = [];
             let cursor: string | undefined;
             let read = 0;
@@ -471,7 +504,7 @@ export function createApiSource()
                     conversation: asConversation(row),
                     last: row.last === undefined
                         ? null
-                        : await openHeld(row.id, row.last),
+                        : await openHeld(born, row.id, row.last),
                     unread: row.unread
                 }))),
                 more: cursor !== undefined
@@ -481,6 +514,8 @@ export function createApiSource()
         async thread(id, scope, _signal, wanted = THREAD_PAGE)
         {
             openedFor = scope.me;
+
+            const born = age;
 
             const walk = async (): Promise<{ wires: ChatMessage[]; earlier: boolean }> =>
             {
@@ -526,7 +561,7 @@ export function createApiSource()
 
             try
             {
-                return { messages: await Promise.all(page.wires.map((wire) => openOne(wire, keyFor))), earlier: page.earlier };
+                return { messages: await Promise.all(page.wires.map((wire) => openOne(born, wire, keyFor))), earlier: page.earlier };
             }
             finally
             {
@@ -604,6 +639,7 @@ export function createApiSource()
 
         reset()
         {
+            age += 1;
             archive.clear();
             opens.clear();
             openedFor = '';

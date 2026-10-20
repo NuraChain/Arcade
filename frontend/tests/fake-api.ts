@@ -1,8 +1,13 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
+import { WATCH_TAIL } from '../../backend/src/domains/match/turns.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
-import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
+import { PEOPLE_FOUND_MAX, SEARCH_FROM, searchNeedle } from '../../backend/src/domains/social/names.ts';
+import { handleFromAddress } from '../../backend/src/domains/identity/handle.ts';
+import { createParties, type Parties, type PartyWhy } from '../../backend/src/domains/party/parties.ts';
+import { createRegistry } from '../../backend/src/domains/party/registry.ts';
+import { PARTY_REFUSALS } from '../../backend/src/domains/party/rules.ts';
 import { chairFor, quickOf, type QuickAsk } from '../../backend/src/domains/table/quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
 import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
@@ -18,7 +23,8 @@ import type {
     MuteSubject,
     NftItem,
     PersonSummary,
-    Privacy
+    Privacy,
+    Standing
 } from '../../backend/src/schemas.ts';
 import {
     FRIENDSHIP_FIXTURES,
@@ -29,13 +35,9 @@ import {
 } from './fixtures.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
+import { runtime } from '../src/lib/runtime.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
-
-function hueOf(text: string)
-{
-    return [...text].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
-}
+export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'chain-unreachable';
 
 interface GroupWire
 {
@@ -58,7 +60,7 @@ interface GroupWire
 interface NotificationWire
 {
     id: string;
-    kind: 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message';
+    kind: 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'table-removed' | 'message' | 'turn';
     actor?: string;
     ref: Record<string, string>;
     count: number;
@@ -100,6 +102,9 @@ interface TableWire
     conversationId?: string;
     matchId?: string;
     yourTurn?: boolean;
+    removed?: boolean;
+    keptOut?: string[];
+    quick?: boolean;
     createdAt: string;
 }
 
@@ -128,22 +133,87 @@ function restate(table: TableWire)
         table.mine = mine.seat;
         table.conversationId = `conv-${ table.id }`;
     }
+    if (keptOut(table, server.me))
+    {
+        table.removed = true;
+    }
+    else
+    {
+        delete table.removed;
+    }
+
+    const named = table.host === server.me && mine !== undefined
+        ? (server.keptOut[table.id] ?? []).filter((who) => !server.blocks.includes(who)).reverse()
+        : [];
+
+    if (named.length > 0)
+    {
+        table.keptOut = named;
+    }
+    else
+    {
+        delete table.keptOut;
+    }
     return table;
 }
+
+const noTable = () => new ApiError(404, 'not-found', 'No table there.', undefined);
+
+const keptOut = (table: TableWire, who: string) => (server.keptOut[table.id] ?? []).includes(who);
 
 function mustTable(id: string)
 {
     const table = server.tables.find((one) => one.id === id);
     if (table === undefined)
     {
-        throw new ApiError(404, 'not-found', 'No table there.', undefined);
+        throw noTable();
     }
+    return table;
+}
+
+function mustSee(id: string)
+{
+    const table = mustTable(id);
+
+    if (table.privacy === 'invite' && keptOut(table, server.me))
+    {
+        throw noTable();
+    }
+
     return table;
 }
 
 const tableRefusal = (word: TableRefusal, message: string) => new ApiError(TABLE_REFUSALS[word], word, message, undefined);
 
 const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
+
+const formParties = (): Parties => createParties({
+    registry: createRegistry({
+        now: () => runtime().clock.now(),
+        after: (ms, run) => runtime().clock.after(ms, run),
+        ring: (userIds) => server.partyRung.push(...userIds),
+        id: () => crypto.randomUUID()
+    }),
+    person: async (handle) => (PEOPLE_FIXTURES.some((one) => one.handle === handle) ? handle : null),
+    handles: async (userIds) => new Map(userIds.map((id) => [id, id])),
+    reaches: async (a, b) => [a, b].every((who) => who === server.me || (!server.blocks.includes(who) && server.refusals[who] === undefined)),
+    muted: async (userId, by, game) => userId === server.me && server.mutes.some((entry) =>
+        (entry.kind === 'person' && entry.id === by) || (entry.kind === 'notice' && entry.id === 'invites') || (entry.kind === 'game' && entry.id === game)),
+    teamGame: async (game) =>
+    {
+        const rules = TABLE_RULES[game as keyof typeof TABLE_RULES];
+
+        return rules !== undefined && rules.seats.includes(4) && teamsOf(rules.partners, 4, true);
+    }
+});
+
+function teamed(answer: { ok: true } | { ok: false; why: PartyWhy })
+{
+    if (!answer.ok)
+    {
+        throw answer.why === 'no-invitee' ? noInvitee() : new ApiError(PARTY_REFUSALS[answer.why], answer.why, 'That team-up was refused.', undefined);
+    }
+}
 
 interface OpeningWire
 {
@@ -248,7 +318,8 @@ export const server =
     ladders: {} as Record<string, unknown>,
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
-    standings: [] as { handle: string; rating: number; played: number; won: number }[],
+    standings: [] as Standing[],
+    boardsAsked: [] as string[],
     history: [] as MatchHistoryEntry[],
 
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
@@ -353,7 +424,7 @@ export const server =
             label: input.label ?? '',
             exchangeKey: input.exchangeKey,
             signingKey: input.signingKey,
-            attested: input.attested ?? 'server',
+            attested: input.attested ?? 'wallet',
             revoked: input.revoked ?? false,
             createdAt: new Date(1_700_000_000_000 + server.devices.length * 1000).toISOString()
         };
@@ -364,6 +435,11 @@ export const server =
     /** The VAPID key this fake server publishes. Null means push is not configured. */
     pushKey: null as string | null,
     pushSubscriptions: [] as { endpoint: string; p256dh: string; auth: string }[],
+
+    restartParties()
+    {
+        server.parties = formParties();
+    },
 
     /**
      * Something happened to me, with the server's dedupe rule applied.
@@ -402,12 +478,23 @@ export const server =
     tables: [] as TableWire[],
 
     outOfGame: {} as Record<string, string[]>,
+    keptOut: {} as Record<string, string[]>,
+
+    parties: formParties(),
+    partyRung: [] as string[],
+    refusals: {} as Record<string, 'blocked' | 'strangers-off' | 'minor-safety'>,
+
     asked: [] as { game: string; seats: number; teams: boolean }[],
     sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
+
+    searched: [] as string[],
+    directoryMax: Infinity,
 
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
     watches: {} as Record<string, unknown>,
+    ledgers: {} as Record<string, { rev: number }[]>,
+    watchedFrom: [] as string[],
 
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
@@ -420,10 +507,14 @@ export const server =
     {
         server.watching = [];
         server.watches = {};
+        server.ledgers = {};
+        server.watchedFrom = [];
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
+        server.standings = [];
+        server.boardsAsked = [];
         server.history = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
@@ -444,8 +535,14 @@ export const server =
         server.refuseGroup = null;
         server.tables = [];
         server.outOfGame = {};
+        server.keptOut = {};
+        server.parties = formParties();
+        server.partyRung = [];
+        server.refusals = {};
         server.asked = [];
         server.sought = [];
+        server.searched = [];
+        server.directoryMax = Infinity;
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
@@ -485,13 +582,13 @@ export const server =
 /**
  * Three fixture people a spec can be signed in as.
  *
- * Ordinary guest accounts: the demo kind is gone, and these exist only so a test has somebody with
- * a name, a hue and an age gate to be. The minor is here because the privacy rules turn on it.
+ * They exist only so a test has somebody with a name, a hue and an age gate to be. The minor is
+ * here because the privacy rules turn on it.
  */
 const FIXTURE_ACCOUNTS: Record<string, Account> = {
-    alex: { id: accountIdOf('alex'), handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'wallet', isMinor: false },
-    'sara.k': { id: accountIdOf('sara.k'), handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'wallet', isMinor: false },
-    kian16: { id: accountIdOf('kian16'), handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'wallet', isMinor: true }
+    alex: { id: accountIdOf('alex'), handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, isMinor: false },
+    'sara.k': { id: accountIdOf('sara.k'), handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false },
+    kian16: { id: accountIdOf('kian16'), handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, isMinor: true }
 };
 
 interface FakeEpoch
@@ -640,24 +737,17 @@ export function fixtureAccount(handle: string): Account | undefined
 }
 
 /**
- * A guest account, with the handle CLAIMED rather than assumed.
+ * A fixture account on the server, for a spec that just needs somebody signed in.
  *
- * The real server inserts and lets the unique index arbitrate, walking `candidatesFor` until one
- * sticks. A fake that handed back the first candidate would let a spec sign in as a name somebody
- * already answers to and never notice - which is exactly what it did, and the test that was meant
- * to catch it passed for a different reason entirely.
+ * `auth.wallet` is the only door into an account and it needs a provider, so this sets the account
+ * the server would have minted - which is what the chain and NFT reads are keyed on - and hands it
+ * back for `useSession().establish`.
  */
-export function guestAccount(name: string): Account
+export function establishAccount(handle = 'alex', overrides: Partial<Account> = {})
 {
-    const taken = new Set(PEOPLE_FIXTURES.map((one) => one.handle));
-
-    let handle = handleFromName(name);
-    for (let attempt = 0; taken.has(handle) && attempt < 8; attempt += 1)
-    {
-        handle = candidatesFor(handleFromName(name), attempt + 1, () => 0.5);
-    }
-
-    return { id: `u-${ handle }`, handle, displayName: name.trim(), bio: '', hue: hueOf(name), kind: 'guest', isMinor: false };
+    const account: Account = { ...(FIXTURE_ACCOUNTS[handle] ?? FIXTURE_ACCOUNTS.alex), ...overrides };
+    server.account = account;
+    return account;
 }
 
 export function walletAccount(address: string): Account
@@ -669,7 +759,6 @@ export function walletAccount(address: string): Account
         displayName: `${ lower.slice(0, 6) }…${ lower.slice(-4) }`,
         bio: '',
         hue: Number.parseInt(lower.slice(2, 8), 16) % 360,
-        kind: 'wallet',
         isMinor: false,
         address: lower
     };
@@ -715,6 +804,10 @@ export const client =
         async nfts(input: { query: { offset?: string; limit?: string } })
         {
             server.calls.push('chain.nfts');
+            if (server.refuse === 'chain-unreachable')
+            {
+                throw new ApiError(503, 'chain-unreachable', 'We could not reach the network. Try again in a moment.', undefined);
+            }
             const offset = Number(input.query.offset ?? '0');
             const limit = Number(input.query.limit ?? '24');
             const held = server.account?.address === undefined ? [] : server.nfts.items;
@@ -756,9 +849,10 @@ export const client =
             server.calls.push('catalogue.live');
             return { games: server.live.map((row) => ({ ...row })) };
         },
-        async leaderboard(input: { params: { game: string } })
+        async leaderboard(input: { params: { game: string }; query?: { window?: string } })
         {
             server.calls.push('catalogue.leaderboard');
+            server.boardsAsked.push(`${ input.params.game } ${ input.query?.window ?? '' }`);
             return { game: input.params.game, standings: server.standings.map((row) => ({ ...row })) };
         }
     },
@@ -1424,7 +1518,7 @@ export const client =
         async view({ params }: { params: { id: string } })
         {
             server.calls.push('tables.view');
-            return structuredClone(restate(mustTable(params.id)));
+            return structuredClone(restate(mustSee(params.id)));
         },
 
         async byCode({ params }: { params: { code: string } })
@@ -1486,12 +1580,23 @@ export const client =
             const fits = (table: TableWire) =>
                 table.status !== 'closed'
                 && table.matchId === undefined
-                && table.privacy === 'public'
+                && !keptOut(table, server.me)
+                && (table.privacy === 'public' || (table.privacy === 'friends' && table.host !== undefined && server.friends.includes(table.host)))
                 && table.game === input.game
                 && table.mode === filter.mode
                 && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
             const mine = (chair: SeatWire) => chair.who === server.me;
             const free = (table: TableWire) => table.chairs.filter((chair) => chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
+            const playing = filter.mode === 'live'
+                ? server.tables.find((table) => table.mode === 'live' && table.matchId !== undefined && table.chairs.some(mine)
+                    && !(server.outOfGame[table.matchId] ?? []).includes(server.me))
+                : undefined;
+
+            if (playing !== undefined)
+            {
+                return structuredClone(restate(playing));
+            }
+
             const waiting = server.tables.find((table) => fits(table) && table.chairs.some((chair) => mine(chair) && chair.ready));
 
             if (waiting !== undefined)
@@ -1503,7 +1608,7 @@ export const client =
                 .filter((table) => fits(table) && !table.chairs.some(mine) && free(table).length > 0)
                 .sort((a, b) => free(a).length - free(b).length)[0];
 
-            const table = joined ?? newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] });
+            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] }), { quick: true });
             const seat = joined === undefined
                 ? 0
                 : chairFor(free(table).map((chair) => chair.seat), table.chairs.filter((chair) => chair.who !== undefined).map((chair) => chair.seat), table.teams);
@@ -1523,7 +1628,7 @@ export const client =
         async claim({ params }: { params: { id: string } })
         {
             server.calls.push('tables.claim');
-            const table = mustTable(params.id);
+            const table = mustSee(params.id);
             if (table.status === 'closed')
             {
                 throw tableRefusal('table-closed', 'That table has closed.');
@@ -1538,6 +1643,11 @@ export const client =
             if (table.matchId !== undefined)
             {
                 throw tableRefusal('playing', 'A game is being played at that table.');
+            }
+
+            if (keptOut(table, server.me))
+            {
+                throw tableRefusal('kept-out', 'The host took you out of that table.');
             }
 
             const free = table.chairs.find((chair) =>
@@ -1603,12 +1713,68 @@ export const client =
                 throw noInvitee();
             }
 
+            if (keptOut(table, input.id))
+            {
+                if (table.host !== server.me)
+                {
+                    throw noInvitee();
+                }
+
+                server.keptOut[table.id] = server.keptOut[table.id].filter((one) => one !== input.id);
+            }
+
             const free = table.chairs.find((chair) => chair.who === undefined && chair.invited === undefined);
             if (free !== undefined)
             {
                 free.invited = input.id;
             }
             return restate(table);
+        },
+
+        async remove({ params, input }: { params: { id: string }; input: { id: string } })
+        {
+            server.calls.push('tables.remove');
+
+            const table = mustTable(params.id);
+            const sitting = (who: string) => table.chairs.some((chair) => chair.who === who);
+
+            if (table.host !== server.me || !sitting(server.me) || table.quick === true)
+            {
+                throw noTable();
+            }
+
+            if (table.status === 'closed')
+            {
+                throw tableRefusal('table-closed', 'That table has closed.');
+            }
+
+            if (table.matchId !== undefined)
+            {
+                throw tableRefusal('playing', 'A game is being played at that table.');
+            }
+
+            if (input.id === server.me || !sitting(input.id))
+            {
+                throw noTable();
+            }
+
+            for (const chair of table.chairs)
+            {
+                if (chair.who === input.id)
+                {
+                    delete chair.who;
+                    chair.ready = false;
+                }
+
+                if (chair.invited === input.id)
+                {
+                    delete chair.invited;
+                }
+            }
+
+            server.keptOut[table.id] = [...(server.keptOut[table.id] ?? []), input.id];
+
+            return structuredClone(restate(table));
         },
 
         async start({ params }: { params: { id: string } })
@@ -1650,8 +1816,73 @@ export const client =
                 throw tableRefusal('table-closed', 'That table has closed.');
             }
 
+            if (input.voice === 'team' && !table.teams)
+            {
+                throw new ApiError(422, 'validation-failed', 'That is not a table this game makes.', { voice: 'A call for one side needs a table of two sides.' });
+            }
+
+            if (table.voice === input.voice)
+            {
+                return table;
+            }
+
+            if (table.teams && table.matchId !== undefined)
+            {
+                throw tableRefusal('playing', 'The call a game began under stays until it ends.');
+            }
+
+            if (table.voice === 'team' || input.voice === 'team')
+            {
+                for (const chair of table.chairs)
+                {
+                    chair.ready = false;
+                }
+            }
+
             table.voice = input.voice;
             return table;
+        }
+    },
+
+    parties:
+    {
+        async state()
+        {
+            server.calls.push('parties.state');
+
+            return await server.parties.state(server.me);
+        },
+
+        async invite({ input }: { input: { id: string; game: string } })
+        {
+            server.calls.push('parties.invite');
+            teamed(await server.parties.invite(server.me, input.id, input.game));
+
+            return await server.parties.state(server.me);
+        },
+
+        async accept({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.accept');
+            teamed(await server.parties.accept(server.me, params.id));
+
+            return await server.parties.state(server.me);
+        },
+
+        async decline({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.decline');
+            teamed(server.parties.decline(server.me, params.id));
+
+            return { ok: true };
+        },
+
+        async leave({ params }: { params: { id: string } })
+        {
+            server.calls.push('parties.leave');
+            teamed(server.parties.leave(server.me, params.id));
+
+            return { ok: true };
         }
     },
 
@@ -1670,18 +1901,26 @@ export const client =
             return { matches: server.history.map((row) => ({ ...row })) };
         },
 
-        async watch({ params }: { params: { id: string } })
+        async watch({ params, query }: { params: { id: string }; query?: { rev?: string } })
         {
             server.calls.push('matches.watch');
+            server.watchedFrom.push(query?.rev ?? '');
 
-            const held = server.watches[params.id];
+            const held = server.watches[params.id] as { match: { rev: number } } | undefined;
 
             if (held === undefined)
             {
                 throw new ApiError(404, 'not-found', 'Nothing to watch there.', undefined);
             }
 
-            return structuredClone(held);
+            const asked = query?.rev ?? '';
+            const shown = held.match.rev;
+            const from = /^\d{1,15}$/.test(asked) ? Math.min(Number(asked), shown) : shown;
+            const events = shown - from > WATCH_TAIL
+                ? []
+                : (server.ledgers[params.id] ?? []).filter((event) => event.rev > from && event.rev <= shown);
+
+            return structuredClone({ ...held, events });
         }
     },
 
@@ -1698,8 +1937,10 @@ export const client =
                 // browser renders the row out of `people.store`, so a request whose sender it has
                 // never been told about renders as nothing at all.
                 incoming: server.incoming.filter((request) => reachable(request.from))
+                    .sort((a, b) => b.at.localeCompare(a.at))
                     .map((request) => ({ ...request, person: personWire(request.from) })),
                 outgoing: server.outgoing.filter((request) => reachable(request.to))
+                    .sort((a, b) => b.at.localeCompare(a.at))
                     .map((request) => ({ ...request, person: personWire(request.to) })),
                 blocked: server.blocks.map(personWire),
                 mutes: [...server.mutes]
@@ -1743,7 +1984,9 @@ export const client =
             }
             const relation = server.blocks.includes(params.handle) ? 'blocked' as const
                 : server.friends.includes(params.handle) ? 'friend' as const : 'none' as const;
-            return { person: personWire(params.handle), relation, mutual: 0 };
+            const refusal = server.refusals[params.handle];
+
+            return { person: personWire(params.handle), relation, mutual: 0, ...(refusal === undefined ? {} : { refusal }) };
         },
 
         async names({ query }: { query: { handles: string } })
@@ -1756,7 +1999,27 @@ export const client =
         async people()
         {
             server.calls.push('social.people');
-            return { people: PEOPLE_FIXTURES.map((one) => one.handle).filter(reachable).map(personWire) };
+            return { people: PEOPLE_FIXTURES.map((one) => one.handle).filter(reachable).slice(0, server.directoryMax).map(personWire) };
+        },
+
+        async search({ query }: { query: { q: string } })
+        {
+            server.calls.push('social.search');
+            server.searched.push(query.q);
+
+            const needle = searchNeedle(query.q);
+
+            if ([...needle].length < SEARCH_FROM)
+            {
+                return { people: [] };
+            }
+
+            return {
+                people: PEOPLE_FIXTURES
+                    .filter((one) => reachable(one.handle) && (searchNeedle(one.handle).includes(needle) || searchNeedle(one.displayName).includes(needle)))
+                    .slice(0, PEOPLE_FOUND_MAX)
+                    .map((one) => personWire(one.handle))
+            };
         },
 
         async suggestions()
@@ -1774,6 +2037,17 @@ export const client =
         async request({ input }: { input: { id: string } })
         {
             server.calls.push('social.request');
+
+            const theirs = server.incoming.find((one) => one.from === input.id);
+
+            if (theirs !== undefined)
+            {
+                server.incoming = server.incoming.filter((one) => one !== theirs);
+                server.friends.push(input.id);
+
+                return { outcome: 'accepted' as const };
+            }
+
             counter += 1;
             server.outgoing.push({
                 id: `req-out-${ counter }`,
@@ -1906,12 +2180,17 @@ export const client =
             {
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
+            if (server.refuse === 'challenge-busy')
+            {
+                throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
+            }
             const nonce = `nonce-${ server.calls.length }`;
+            const live = server.devices.some((one) => one.id === input.device && !one.revoked);
             server.issued = {
                 address: input.address,
                 nonce,
                 ...(input.device === undefined ? {} : { device: input.device }),
-                message: input.device === undefined
+                message: input.device === undefined || live
                     ? `Sign in to Nura Games (nura.games).\n\nNonce: ${ nonce }`
                     : `Sign in to Nura Games (nura.games) and let this browser read and send your messages.\n\nBrowser key: ${ input.device }\nNonce: ${ nonce }`
             };
@@ -1930,25 +2209,11 @@ export const client =
             {
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
+            if (server.refuse === 'wallet-busy')
+            {
+                throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
+            }
             server.account = walletAccount(input.address);
-            return { account: server.account };
-        },
-
-        async guest({ input }: { input: { name: string } })
-        {
-            server.calls.push('auth.guest');
-            // What this server really refuses. A name that is merely TAKEN is never refused -
-            // `insertUser` claims by INSERT and suffixes on 23505 - so a fake that modelled a
-            // "taken" conflict was rehearsing a state the product cannot reach.
-            if (server.refuse === 'guest-reserved')
-            {
-                throw new ApiError(409, 'conflict', 'That name is reserved. Try another.', undefined);
-            }
-            if (server.refuse === 'guest-unreachable')
-            {
-                throw new ApiError(429, 'too-many-requests', 'Slow down.', undefined);
-            }
-            server.account = guestAccount(input.name);
             return { account: server.account };
         },
 
@@ -2016,5 +2281,25 @@ export const client =
         }
     }
 };
+
+const refusals = new Set<() => void>();
+
+export function onUnauthorized(listener: () => void)
+{
+    refusals.add(listener);
+
+    return () =>
+    {
+        refusals.delete(listener);
+    };
+}
+
+export function answeredUnauthorized()
+{
+    for (const listener of [...refusals])
+    {
+        listener();
+    }
+}
 
 export { ApiError, applyFieldErrors };

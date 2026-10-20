@@ -7,13 +7,14 @@ import { defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
-import { useAccount } from '../src/stores/account.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
 import type { MatchHistoryEntry } from '../src/api.ts';
-import { client, server } from './fake-api.ts';
+import { client, establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -55,7 +56,7 @@ beforeEach(async () =>
     server.reset();
     useCatalogue().reset();
     useRecord().reset();
-    await useAccount().signIn('Alex');
+    useSession().establish(establishAccount());
 });
 
 afterEach(() =>
@@ -120,6 +121,27 @@ describe('the home page', () =>
         expect(row.textContent, 'a chair that filled is not on the row that was kept').toContain('2/4');
     });
 
+    it('puts the tables the reader sits at straight after the opening, and lists the games once', async () =>
+    {
+        await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 4 }, []);
+
+        const container = await show();
+        const order = () => [...container.querySelectorAll('section[aria-labelledby]')].map((one) => one.getAttribute('aria-labelledby'));
+
+        await vi.waitFor(() => expect(order()).toContain('home-continue'), { timeout: 4000 });
+
+        expect(order().filter((one) => one !== 'home-friends'), 'the reader\'s tables come after a list of games, or the games are listed twice').toEqual(['home-hero', 'home-continue', 'home-games', 'home-recent']);
+    });
+
+    it('lets a game\'s name in its tile break onto a second line rather than be cut short', async () =>
+    {
+        const container = await show();
+        const names = [...container.querySelectorAll('section[aria-labelledby="home-games"] li a > span:first-of-type')];
+
+        expect(names.length).toBe(4);
+        expect(names.every((one) => one.classList.contains('hyphens-auto') && one.classList.contains('wrap-break-word') && !one.classList.contains('truncate')), '"Backgammon" is cut to "Backgam…" on a phone').toBe(true);
+    });
+
     it('says where finished games will appear instead of drawing an empty box', async () =>
     {
         const container = await show();
@@ -141,7 +163,7 @@ describe('the home page', () =>
         server.history = [voided];
         const container = await show();
 
-        expect(container.textContent).toContain('یک بازی منچ حساب نشد');
+        expect(container.textContent).toContain('یه بازی منچ حساب نشد');
     });
 
     it('offers every game as a tile that opens its page', async () =>
@@ -160,10 +182,38 @@ describe('the home page', () =>
         useLocale().setLocale('fa');
         const container = await show();
 
-        expect(container.querySelector('h1 .text-accent')?.textContent).toBe('به‌یادماندنی');
+        expect(container.querySelector('h1 .text-accent')?.textContent).toBe('حسابی بکن');
     });
 
-    it('spins on its quick play button while a seat is being found, says so, and sends one request for two presses', async () =>
+    it('asks what to look for when Quick play is pressed, starting from the game it features, and looks for nothing by itself', async () =>
+    {
+        useLobby().reset();
+        useOverlay().reset();
+
+        const container = await show();
+        const hero = container.querySelector<HTMLElement>('section[aria-labelledby="home-hero"]')!;
+        const button = [...hero.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === 'Quick play')!;
+
+        server.calls = [];
+        fire(button, 'click');
+        fire(button, 'click');
+
+        try
+        {
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            expect(useOverlay().items(), 'two presses opened two sheets').toHaveLength(1);
+            expect(useOverlay().top()!.props.game).toBe(useCatalogue().featured());
+            expect(useOverlay().top()!.label).toBe(useLocale().t('quickMatch.title'));
+            expect(server.calls, 'a table was looked for before anybody said what to look for').not.toContain('tables.quick');
+        }
+        finally
+        {
+            useOverlay().reset();
+        }
+    });
+
+    it('spins on its quick play button while a seat at the game it features is being found, and says so', async () =>
     {
         useLobby().reset();
 
@@ -188,8 +238,7 @@ describe('the home page', () =>
         {
             expect(button.getAttribute('aria-busy')).not.toBe('true');
 
-            fire(button, 'click');
-            fire(button, 'click');
+            void useLobby().quick(useCatalogue().featured());
             await settle();
 
             expect(button.getAttribute('aria-busy')).toBe('true');

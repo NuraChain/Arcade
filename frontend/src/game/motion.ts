@@ -8,6 +8,7 @@ export interface Rect
 
 export interface Clock
 {
+    now(): number;
     after(ms: number, run: () => void): () => void;
 }
 
@@ -15,11 +16,12 @@ export const SNAP_LINEAR = 'linear(0, 0.005 1.3%, 0.022 2.8%, 0.054 4.5%, 0.096 
 
 export const POP_LINEAR = 'linear(0, 0.007 1.3%, 0.033 2.8%, 0.073 4.3%, 0.126 5.8%, 0.244 8.5%, 0.534 14.5%, 0.648 17%, 0.762 19.8%, 0.85 22.3%, 0.924 24.8%, 0.983 27.3%, 1.028 29.8%, 1.062 32.5%, 1.078 34.5%, 1.089 36.5%, 1.094 41%, 1.081 46.3%, 1.02 60.5%, 0.999 68.8%, 0.991 80.3%, 1)';
 
-export function easings(springs: boolean): { fly: string; gather: string; snap: string; pop: string }
+export function easings(springs: boolean): { fly: string; gather: string; flip: string; snap: string; pop: string }
 {
     return {
-        fly: 'cubic-bezier(0.05, 0.7, 0.1, 1)',
+        fly: 'cubic-bezier(0.3, 0.3, 0.1, 1)',
         gather: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
+        flip: 'ease-out',
         snap: springs ? SNAP_LINEAR : 'cubic-bezier(0.2, 0, 0, 1)',
         pop: springs ? POP_LINEAR : 'cubic-bezier(0.34, 1.56, 0.64, 1)'
     };
@@ -44,6 +46,23 @@ export const TIMING = {
 } as const;
 
 export const centreOf = (rect: Rect): { x: number; y: number } => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+
+export function outside(box: Rect, toward: { x: number; y: number }, gap: number)
+{
+    const from = centreOf(box);
+    const far = Math.hypot(toward.x - from.x, toward.y - from.y);
+
+    if (far === 0)
+    {
+        return { x: from.x, y: from.y, dx: 0, dy: 0 };
+    }
+
+    const dx = (toward.x - from.x) / far;
+    const dy = (toward.y - from.y) / far;
+    const reach = Math.min(dx === 0 ? Infinity : box.width / 2 / Math.abs(dx), dy === 0 ? Infinity : box.height / 2 / Math.abs(dy)) + gap;
+
+    return { x: from.x + dx * reach, y: from.y + dy * reach, dx, dy };
+}
 
 export interface FlightShape
 {
@@ -91,11 +110,6 @@ export function flightFrames(from: Rect, to: Rect, shape: FlightShape = {}): Key
     ];
 }
 
-export function fadeFrames(): Keyframe[]
-{
-    return [{ opacity: 0 }, { opacity: 1 }];
-}
-
 export function rectIn(layer: Element, element: Element): Rect
 {
     const outer = layer.getBoundingClientRect();
@@ -110,51 +124,4 @@ export function rectIn(layer: Element, element: Element): Rect
         width,
         height
     };
-}
-
-export interface Flight extends FlightShape
-{
-    duration: number;
-    easing: string;
-    delay?: number;
-    reduced?: boolean;
-}
-
-export function fly(layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, flight: Flight): Animation | null
-{
-    clone.classList.add('flight');
-    clone.setAttribute('aria-hidden', 'true');
-    clone.style.left = `${ to.x }px`;
-    clone.style.top = `${ to.y }px`;
-    clone.style.width = `${ to.width }px`;
-    clone.style.height = `${ to.height }px`;
-    layer.append(clone);
-
-    if (typeof clone.animate !== 'function')
-    {
-        clone.remove();
-        return null;
-    }
-
-    const run = clone.animate(flight.reduced === true ? fadeFrames() : flightFrames(from, to, flight), {
-        duration: flight.reduced === true ? TIMING.FADE : flight.duration,
-        easing: flight.reduced === true ? 'linear' : flight.easing,
-        delay: flight.delay ?? 0,
-        fill: 'both'
-    });
-
-    run.onfinish = () => clone.remove();
-    run.oncancel = () => clone.remove();
-
-    return run;
-}
-
-export function land(layer: HTMLElement)
-{
-    for (const running of layer.getAnimations?.({ subtree: true }) ?? [])
-    {
-        running.cancel();
-    }
-
-    layer.replaceChildren();
 }

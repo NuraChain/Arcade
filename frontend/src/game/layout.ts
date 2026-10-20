@@ -5,6 +5,8 @@ export const RIM = 0.016 / 0.380;
 
 export const FIELD = 1 - RIM * 2;
 
+export const FRAME_ROUND = 63 / 1024;
+
 /**
  * The playing grid does NOT fill the paper, and assuming it did put every token near an edge about
  * a quarter of a cell too far out - exact in the middle, worst in the corners, which is the hardest
@@ -106,10 +108,27 @@ export interface Pickable
 
 export const PICK_REACH = 1.25;
 
-export function pickNear(tokens: readonly Pickable[], x: number, y: number, size: number)
+export const PAWN_REACH = 0.6;
+
+export const GOAL_REACH = 0.6;
+
+interface Reached
+{
+    key: string;
+    distance: number;
+}
+
+export interface Markable
+{
+    key: string;
+    col: number;
+    row: number;
+}
+
+function nearestPick(tokens: readonly Pickable[], x: number, y: number, size: number)
 {
     const cell = CELL * size;
-    let best: string | null = null;
+    let best: Reached | null = null;
     let closest = cell * PICK_REACH;
 
     for (const token of tokens)
@@ -124,10 +143,42 @@ export function pickNear(tokens: readonly Pickable[], x: number, y: number, size
 
         if (distance <= closest)
         {
-            best = token.key;
+            best = { key: token.key, distance };
             closest = distance;
         }
     }
 
     return best;
+}
+
+function goalNear(goals: readonly Markable[], x: number, y: number, size: number)
+{
+    const reach = CELL * size * GOAL_REACH;
+    let best: Reached | null = null;
+
+    for (const goal of goals)
+    {
+        const spot = centreOf(goal.col, goal.row, size);
+        const distance = Math.hypot(spot.x - x, spot.y - y);
+
+        if (distance <= reach && (best === null || distance < best.distance))
+        {
+            best = { key: goal.key, distance };
+        }
+    }
+
+    return best;
+}
+
+export function aimNear(tokens: readonly Pickable[], goals: readonly Markable[], x: number, y: number, size: number)
+{
+    const pawn = nearestPick(tokens, x, y, size);
+    const goal = goalNear(goals, x, y, size);
+
+    if (goal === null || (pawn !== null && pawn.distance <= CELL * size * PAWN_REACH))
+    {
+        return pawn?.key ?? null;
+    }
+
+    return goal.key;
 }

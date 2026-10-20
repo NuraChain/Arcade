@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { chainUnreached } from './unreached.mjs';
+import { signInWallet } from './wallets.mjs';
 
 export const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -107,6 +109,11 @@ export async function seat(browser, handle, viewport = { width: 1280, height: 90
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, handle))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
@@ -139,6 +146,11 @@ async function open(browser, viewport, signIn)
 
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, signedIn))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             errors.push(`${ signedIn }: ${ event.text().slice(0, 160) }`);
@@ -158,18 +170,18 @@ async function open(browser, viewport, signIn)
     return { handle: signedIn, context, page, errors, api };
 }
 
-export async function guestSeat(browser, name, viewport = { width: 1280, height: 900 })
+export async function walletSeat(browser, name, viewport = { width: 1280, height: 900 })
 {
     return await open(browser, viewport, async (context) =>
     {
-        const answer = await context.request.post(`${ BASE }/api/auth/guest`, { data: { name } });
-
-        if (!answer.ok())
+        const post = async (path, data) =>
         {
-            throw new Error(`could not sign in a guest called ${ name } (${ answer.status() })`);
-        }
+            const answer = await context.request.post(`${ BASE }/api${ path }`, { data });
 
-        return (await answer.json()).account.handle;
+            return { status: answer.status(), body: await answer.json().catch(() => null) };
+        };
+
+        return (await signInWallet(post, name)).handle;
     });
 }
 
@@ -196,6 +208,27 @@ export async function pressable(page, name)
     }
 
     return await button.isDisabled() ? null : button;
+}
+
+export async function solid(page, selector)
+{
+    return await page.evaluate((chosen) =>
+    {
+        const element = document.querySelector(chosen);
+
+        if (element === null)
+        {
+            return false;
+        }
+
+        const ink = document.createElement('canvas').getContext('2d');
+
+        ink.fillStyle = 'transparent';
+        ink.fillStyle = getComputedStyle(element).backgroundColor;
+        ink.fillRect(0, 0, 1, 1);
+
+        return ink.getImageData(0, 0, 1, 1).data[3] === 255;
+    }, selector);
 }
 
 export async function waitFor(check, timeout = 6000)

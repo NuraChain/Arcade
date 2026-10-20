@@ -21,6 +21,8 @@ SERVICE_NAME="nura-games"
 # there is only ever one unit.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_PATH="$ROOT/backend"
+SERVICE_USER="$(stat -c '%U' "$ROOT")"
+SERVICE_GROUP="$(stat -c '%G' "$ROOT")"
 
 # This backend COMPILES, which is the one thing that differs from the Explorer service and the one
 # thing that will strand a deploy silently. `typeorm` sitting in `dependencies` is what decides it:
@@ -33,43 +35,36 @@ SERVICE_PATH_APP="../.dist-backend/main.js"
 SERVICE_DIR="${SERVICE_DIR:-/etc/systemd/system}"
 SERVICE_FILE="$SERVICE_DIR/${SERVICE_NAME}.service"
 
-# Three things a missing build turns into a restart loop at 3am. Say so here instead.
-if [ ! -f "$SERVICE_PATH/$SERVICE_PATH_APP" ]; then
-  echo "warning: .dist-backend/main.js is missing - run 'npm run build' before starting" >&2
-fi
+# A service installed without these restarts in a loop at 3am, or runs open. Refuse here instead.
+REFUSED=0
 
-if [ ! -f "$ROOT/.dist-frontend/index.html" ]; then
-  echo "warning: .dist-frontend is missing - the server would answer the api and 404 every page" >&2
-fi
+refuse()
+{
+  echo "error: $1" >&2
+  REFUSED=1
+}
 
-if [ ! -f "$ROOT/.dist-server/entry.server.js" ]; then
-  echo "warning: .dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
-fi
+[ "$SERVICE_USER" != "root" ] || refuse "the checkout belongs to root, and the service runs as whoever owns the checkout - clone it as an ordinary account (one made with 'sudo adduser nura', say) and install from that clone"
+[ -f "$SERVICE_PATH/$SERVICE_PATH_APP" ] || refuse ".dist-backend/main.js is missing - run 'npm run build' first"
+[ -f "$ROOT/.dist-frontend/index.html" ] || refuse ".dist-frontend is missing - run 'npm run build' first"
+[ -f "$ROOT/.dist-server/entry.server.js" ] || refuse ".dist-server/entry.server.js is missing - run 'npm run build' first"
 
 if [ ! -f "$ROOT/.env" ]; then
-  echo "warning: .env is missing at the repository root - the service would boot against the defaults" >&2
+  refuse ".env is missing at the repository root - copy .env.example to .env and fill it in"
 else
-  # Three values decide whether this process is a SERVER or half of a development pair, and every
-  # one of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
-  # `PUBLIC_ORIGIN` pointing anywhere but the real origin makes the realtime gate refuse every
-  # socket and makes every wallet signature a claim about somewhere else; `NODE_ENV` short of
-  # production runs `syncSchema` on every boot; and a `SESSION_SECRET` that is empty is the only
-  # thing standing between a cookie and a forged session.
-  # Only an EXPLICIT false is worth saying anything about: absent means "serve them", because under
-  # NODE_ENV=production this process is the server. Warning on absent would fire for the correct
-  # configuration, which is the same noise the schema note above was fixed for.
-  ! grep -q '^SERVE_PAGES=false' "$ROOT/.env" ||
-    echo "warning: SERVE_PAGES=false - this process answers the api and 404s every page unless something else serves the client" >&2
-
+  # PUBLIC_ORIGIN is the site in every sign-in message, the realtime origin check and the cookie's
+  # site at once; an empty SESSION_SECRET is the only thing between a cookie and a forged session.
   grep -q '^PUBLIC_ORIGIN=https\?://' "$ROOT/.env" ||
-    echo "warning: PUBLIC_ORIGIN is unset - the realtime origin gate refuses every socket without it" >&2
+    refuse "PUBLIC_ORIGIN is not set to the address people use, such as https://play.example.com"
 
   grep -qE '^SESSION_SECRET=.+' "$ROOT/.env" ||
-    echo "warning: SESSION_SECRET is empty - sessions cannot be signed" >&2
+    refuse "SESSION_SECRET is empty - set it to a long random string, such as the output of 'openssl rand -hex 32'"
 fi
 
+[ "$REFUSED" -eq 0 ] || exit 1
+
 # The schema is built from the entities, and production does it as a DELIBERATE act rather than as a
-# side effect of starting - `main.ts` runs the sync only under NODE_ENV=development. A first deploy
+# side effect of starting - `main.ts` runs the sync only in development. A first deploy
 # that skips it boots against a database with no tables, and an entity change deployed without it
 # runs against the old shape.
 #
@@ -80,6 +75,7 @@ echo "note: run 'npm run schema:sync --workspace backend' before the first start
 
 # systemd does not create the directory it is told to log into.
 mkdir -p "$ROOT/.logs"
+chown "$SERVICE_USER:$SERVICE_GROUP" "$ROOT/.logs"
 
 echo "> Installing systemd service (${SERVICE_FILE})..."
 
@@ -89,10 +85,14 @@ Description=Nura Games
 After=network.target postgresql.service
 
 [Service]
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
 RestartSec=5
 Restart=always
-# Without this the server runs its DEVELOPMENT path, which includes building the schema from the
-# entities on every boot - a thing production does on purpose or not at all.
+# Production is also what the server takes an unset NODE_ENV to mean, and .env cannot change it.
 Environment=NODE_ENV=production
 WorkingDirectory=$SERVICE_PATH
 # Quoted: systemd splits ExecStart on whitespace, and an interpreter installed under a path with

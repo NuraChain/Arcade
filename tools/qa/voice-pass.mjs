@@ -20,10 +20,16 @@
  * the server at once, so the other end hangs up for a different reason: the roster that leaves the
  * player out. The one roster in which a joining changes IN PLACE is another tab of the same player
  * taking the call, and the pass does that too.
+ *
+ * It ends with four players at one table, because two players are one connection and four are six:
+ * every page connected to the other three with packets both ways, through one of them leaving and
+ * coming back, one's socket being cut, and one reloading.
+ *
+ *   QA_BROWSER=firefox runs it all on Firefox.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
@@ -49,11 +55,22 @@ function cachedChromium()
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
+const ENGINE = process.env.QA_BROWSER === 'firefox' ? 'firefox' : 'chromium';
+
 const executablePath = cachedChromium();
-const browser = await chromium.launch({
-    ...(executablePath === undefined ? {} : { executablePath }),
-    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']
-});
+const browser = ENGINE === 'firefox'
+    ? await firefox.launch({
+        firefoxUserPrefs: {
+            'media.navigator.streams.fake': true,
+            'media.navigator.permission.disabled': true,
+            'media.autoplay.default': 0,
+            'media.autoplay.blocking_policy': 0
+        }
+    })
+    : await chromium.launch({
+        ...(executablePath === undefined ? {} : { executablePath }),
+        args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
+    });
 
 const results = [];
 const record = (name, ok, detail) =>
@@ -66,11 +83,21 @@ async function seat(handle)
 {
     const fixture = WALLET_FIXTURES.find((one) => one.handle === handle);
     const wallet = privateKeyToAccount(fixture.privateKey);
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', permissions: ['microphone'] });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', ...(ENGINE === 'firefox' ? {} : { permissions: ['microphone'] }) });
 
     await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
     await context.addInitScript(() =>
     {
+        try
+        {
+            const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+
+            localStorage.setItem('nura-games.settings', JSON.stringify({ voiceAutoJoin: false, voiceStartMuted: true, ...stored }));
+        }
+        catch
+        {
+        }
+
         const Real = window.RTCPeerConnection;
 
         window.__calls = [];
@@ -121,7 +148,14 @@ async function seat(handle)
     {
         if (event.type() === 'error' && !event.text().includes('favicon'))
         {
-            errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
+            const where = event.location()?.url ?? '';
+
+            errors.push(`${ handle }: ${ event.text().slice(0, 160) }${ where === '' ? '' : ` (${ where.replace(/^https?:\/\/[^/]+/, '') })` }`);
+
+            if (process.env.QA_LOUD === '1')
+            {
+                console.log(`        (${ handle } logged: ${ event.text().slice(0, 120) })`);
+            }
         }
     });
 
@@ -169,6 +203,105 @@ const loudness = (page) => page.evaluate(() =>
     const audio = [...document.querySelectorAll('audio')].find((one) => one.srcObject !== null);
     return audio === undefined ? -1 : audio.volume;
 });
+
+const boosted = (page) => page.evaluate(() =>
+{
+    const playing = [...document.querySelectorAll('audio')].filter((one) => one.srcObject !== null);
+    const hold = playing.find((one) => one.muted);
+    const heard = playing.find((one) => !one.muted);
+
+    return hold === undefined || heard === undefined || heard.srcObject === hold.srcObject ? null : { volume: heard.volume };
+});
+
+const measured = (page) => page.evaluate(async () =>
+{
+    const playing = [...document.querySelectorAll('audio')].filter((one) => one.srcObject !== null);
+    const hold = playing.find((one) => one.muted);
+    const heard = playing.find((one) => !one.muted);
+
+    if (hold === undefined || heard === undefined)
+    {
+        return null;
+    }
+
+    const context = new AudioContext();
+
+    await context.resume();
+
+    const tap = (stream) =>
+    {
+        const analyser = context.createAnalyser();
+
+        analyser.fftSize = 2048;
+        context.createMediaStreamSource(stream).connect(analyser);
+        return analyser;
+    };
+
+    const raw = tap(hold.srcObject);
+    const out = tap(heard.srcObject);
+    const samples = new Float32Array(2048);
+
+    const read = (analyser) =>
+    {
+        analyser.getFloatTimeDomainData(samples);
+
+        let sum = 0;
+        let peak = 0;
+
+        for (const one of samples)
+        {
+            sum += one * one;
+            peak = Math.max(peak, Math.abs(one));
+        }
+
+        return { rms: Math.sqrt(sum / samples.length), peak };
+    };
+
+    let a = 0;
+    let b = 0;
+    let rawPeak = 0;
+    let heardPeak = 0;
+
+    for (let step = 0; step < 40; step += 1)
+    {
+        await new Promise((done) => setTimeout(done, 50));
+
+        const sent = read(raw);
+        const got = read(out);
+
+        a += sent.rms;
+        b += got.rms;
+        rawPeak = Math.max(rawPeak, sent.peak);
+        heardPeak = Math.max(heardPeak, got.peak);
+    }
+
+    await context.close();
+
+    return { raw: Number((a / 40).toFixed(4)), heard: Number((b / 40).toFixed(4)), ratio: Number((b / Math.max(a, 1e-9)).toFixed(3)), rawPeak: Number(rawPeak.toFixed(3)), heardPeak: Number(heardPeak.toFixed(3)) };
+});
+
+const inputVolume = async (page, keys) =>
+{
+    await page.getByRole('button', { name: 'Voice settings' }).first().click();
+
+    const slider = page.getByRole('dialog').getByRole('slider', { name: 'Input volume' });
+
+    await slider.waitFor({ timeout: 10_000 });
+    await slider.focus();
+
+    for (const key of keys)
+    {
+        await page.keyboard.press(key);
+    }
+
+    const value = Number(await slider.getAttribute('aria-valuenow'));
+
+    await page.keyboard.press('Escape');
+    await until(async () => (await page.getByRole('dialog').count()) === 0, 5_000);
+    return value;
+};
+
+const levelOf = (page, who) => page.evaluate((handle) => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels?.[handle] ?? 1, who);
 
 const linked = (page) => page.evaluate(async () =>
 {
@@ -301,6 +434,23 @@ await mina.page.getByRole('button', { name: 'Unmute your microphone' }).click();
 const speaking = await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), 15_000);
 record('unmuted, the fake microphone\'s tone lights "speaking" in the other browser', speaking, (await pillOf(dana.page, 'Mina')).join(', '));
 
+await dana.page.getByRole('button', { name: 'Voice settings' }).first().click();
+
+const lineFacts = () => dana.page.evaluate(() => document.querySelector('li.voice-peer[data-who="mina"] .facts')?.textContent ?? '');
+const lineMeasured = await until(async () => /Round trip \d+ ms|To the server \d+ ms/.test(await lineFacts()), 10_000);
+const lineFirst = await lineFacts();
+const lineTrip = Number((/(?:Round trip|To the server) (\d+) ms/.exec(lineFirst) ?? [])[1] ?? NaN);
+
+record('the voice settings at the table list the other player with the round trip measured on their line', lineMeasured && lineTrip >= 0 && lineTrip < 1000, lineFirst);
+
+const lineRated = await until(async () => /\d+ kbps/.test(await lineFacts()), 5_000);
+
+record('the line is measured again while the settings are open: how fast the voice comes is counted', lineRated, await lineFacts());
+record('the voice settings at the table offer no microphone test during the call', await dana.page.evaluate(() => ![...document.querySelectorAll('[role="dialog"] button')].some((one) => /Test the microphone/.test(one.textContent ?? ''))));
+
+await dana.page.keyboard.press('Escape');
+await until(async () => (await dana.page.locator('li.voice-peer').count()) === 0, 5_000);
+
 await dana.page.screenshot({ path: 'tools/qa/out/voice-dana.png' });
 
 await mina.page.getByRole('button', { name: 'Mute your microphone' }).click();
@@ -335,7 +485,78 @@ await slider.first().focus();
 await dana.page.keyboard.press('Home');
 record('turning one person down reaches their audio and nobody else\'s', await until(async () => (await loudness(dana.page)) === 0), String(await loudness(dana.page)));
 await dana.page.keyboard.press('End');
-record('turning them back up restores it', await until(async () => (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+record('turning them up past full plays them through a gain, and the element itself at full', await until(async () => (await boosted(dana.page))?.volume === 1), JSON.stringify(await boosted(dana.page)));
+
+for (let step = 0; step < 20; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+record('turning them back to full plays them from the element alone again', await until(async () => (await boosted(dana.page)) === null && (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+await dana.page.keyboard.press('Escape');
+await dana.page.locator('.table-plate', { hasText: 'Mina' }).locator('.table-plate-press').first().click();
+
+const sheetSlider = dana.page.getByRole('dialog').getByRole('slider', { name: /How loud Mina/ });
+
+record('pressing a plate in the call offers how loud that person is, in the sheet about them', await until(async () => (await sheetSlider.count()) > 0));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-sheet.png' });
+
+await mina.page.getByRole('button', { name: 'Unmute your microphone' }).click();
+
+const halved = await inputVolume(mina.page, Array(10).fill('ArrowDown'));
+
+record('she turns her own input down to half from the voice settings at the table, so she sends with room to spare', halved === 0.5, String(halved));
+await sheetSlider.focus();
+await dana.page.keyboard.press('End');
+
+for (let step = 0; step < 10; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+await until(async () => (await boosted(dana.page)) !== null && (await levelOf(dana.page, 'mina')) === 1.5);
+
+const loudened = await measured(dana.page);
+
+record('turned up to one and a half from the sheet, she is heard about one and a half times as loud as she sends', loudened !== null && loudened.raw > 0.001 && loudened.rawPeak < 0.75 && loudened.ratio > 1.35 && loudened.ratio < 1.65, JSON.stringify(loudened));
+
+const kept = await dana.page.evaluate(() => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels ?? null);
+
+record('this browser remembers how loud she is', kept !== null && Math.abs((kept.mina ?? 0) - 1.5) < 0.001, JSON.stringify(kept));
+
+const doubled = await inputVolume(mina.page, ['End']);
+
+record(ENGINE === 'firefox' ? 'she turns her own input up to twice' : 'she turns her own input up to twice, so what she sends reaches full scale', doubled === 2, String(doubled));
+await sheetSlider.focus();
+await dana.page.keyboard.press('End');
+await until(async () => (await levelOf(dana.page, 'mina')) === 2);
+
+const held = await measured(dana.page);
+
+if (ENGINE === 'firefox')
+{
+    record('turned up to twice, she is heard at twice what she sends (this fake microphone is a tone at -20 dB, which twice cannot bring to full scale)', held !== null && held.raw > 0.001 && held.ratio > 1.85 && held.ratio < 2.15 && held.heardPeak <= 1, JSON.stringify(held));
+}
+else
+{
+    record('turned up to twice while she sends at full scale, she is held under full scale and never clipped', held !== null && held.rawPeak > 0.9 && held.heardPeak <= 1, JSON.stringify(held));
+}
+
+for (let step = 0; step < 20; step += 1)
+{
+    await dana.page.keyboard.press('ArrowDown');
+}
+
+record('back at full from the sheet, she plays from the element alone', await until(async () => (await boosted(dana.page)) === null && (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+const restored = await inputVolume(mina.page, Array(20).fill('ArrowDown'));
+
+record('her own input is back at full', restored === 1, String(restored));
+
+await mina.page.getByRole('button', { name: 'Mute your microphone' }).click();
+await dana.page.keyboard.press('Escape');
+await until(async () => (await dana.page.getByRole('dialog').count()) === 0);
 
 await dana.page.getByRole('button', { name: 'Stop hearing everybody' }).click();
 record('deafening silences everybody for the one who deafened', await until(async () => (await loudness(dana.page)) === 0));
@@ -382,7 +603,226 @@ record('turning it back on offers the call to the other player without a reload'
     (await mina.page.getByRole('button', { name: 'Join voice' }).count()) > 0
     && (await mina.page.getByText('This table has voice. Join to talk while you play.').count()) > 0));
 
-const errors = [...dana.errors, ...mina.errors];
+await dana.page.getByRole('button', { name: 'Join voice' }).first().click();
+await until(async () => (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) > 0);
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: true }));
+});
+await mina.page.reload();
+await mina.page.waitForLoadState('networkidle');
+record('a page set to join by itself is in the call after a reload, with nothing pressed', await until(async () =>
+    (await mina.page.getByRole('button', { name: 'Leave voice' }).count()) > 0, 15_000));
+
+if (await dana.page.getByRole('button', { name: 'Unmute your microphone' }).count() > 0)
+{
+    await dana.page.getByRole('button', { name: 'Unmute your microphone' }).click();
+}
+
+const ringed = (page) => page.locator('.table-plate-avatar[data-speaking], span.ring-live').count();
+
+record('and that page shows who is speaking, though nobody has pressed it', await until(async () => (await ringed(mina.page)) > 0, 12_000), `${ await ringed(mina.page) } ringed`);
+record('the speaker wears the ring on their own page too', await until(async () => (await ringed(dana.page)) > 0, 6000), `${ await ringed(dana.page) } ringed`);
+await mina.page.screenshot({ path: 'tools/qa/out/voice-speaking.png' });
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: false }));
+});
+
+for (const one of [dana, mina])
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ table.id }/leave`, { data: { forfeit: true } }).catch(() => undefined);
+}
+
+const omid = await seat('omid.k');
+const sara = await seat('sara.k');
+const four = [dana, mina, omid, sara];
+
+const mesh = (page) => page.evaluate(async () =>
+{
+    const out = [];
+
+    for (const one of (window.__calls ?? []).filter((call) => call.connectionState !== 'closed'))
+    {
+        let sent = 0;
+        let got = 0;
+
+        for (const report of (await one.getStats()).values())
+        {
+            sent += report.type === 'outbound-rtp' ? report.packetsSent ?? 0 : 0;
+            got += report.type === 'inbound-rtp' ? report.packetsReceived ?? 0 : 0;
+        }
+
+        out.push({ state: one.connectionState, lines: one.getTransceivers().length, sent, got });
+    }
+
+    return out;
+});
+
+const meshed = (seen, peers) => seen.length === peers && seen.every((one) => one.state === 'connected' && one.lines === 1 && one.sent > 0 && one.got > 0);
+
+const together = (people, ms = 30_000) => until(async () =>
+    (await Promise.all(people.map((one) => mesh(one.page)))).every((seen) => meshed(seen, people.length - 1)), ms);
+
+const toldOf = async (people) => (await Promise.all(people.map(async (one) =>
+    `${ one.handle }: ${ (await mesh(one.page)).map((call) => `${ call.state } ${ call.got }/${ call.sent }`).join(', ') || 'no call' }`))).join(' | ');
+
+const crowded = await dana.context.request.post(`${ BASE }/api/tables`, {
+    data: tableBody({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', voice: 'table' })
+});
+const round = await crowded.json();
+
+for (const one of four.slice(1))
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ round.id }/seat`);
+}
+
+for (const one of four)
+{
+    await one.page.goto(`${ BASE }/app/play/${ round.id }`);
+    await one.page.waitForLoadState('networkidle');
+}
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+record('four players in one call each connect to the other three, with packets both ways on every line', crowded.ok() && await together(four), await toldOf(four));
+
+await players(dana.page);
+
+const lines = {};
+
+for (const name of ['Mina', 'Omid', 'Sara'])
+{
+    lines[name] = await pillOf(dana.page, name);
+}
+
+record('the players list says each of the other three is in the call, and none is left connecting',
+    Object.values(lines).every((texts) => texts.some((text) => text === 'Speaking' || text === 'In voice' || text === 'Muted')
+        && !texts.some((text) => text === 'Connecting' || text === 'Could not connect' || text === 'Can\'t talk with you')),
+    JSON.stringify(lines));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-four.png' });
+
+await sara.page.getByRole('button', { name: 'Leave voice' }).first().click();
+record('one of the four leaving leaves the other three connected to each other and to nobody else',
+    await together([dana, mina, omid]) && (await mesh(sara.page)).length === 0, await toldOf(four));
+
+await sara.page.getByRole('button', { name: 'Join voice' }).first().click();
+record('and coming back connects them to all three again', await together(four), await toldOf(four));
+
+const omidBuilt = await built(omid.page);
+
+await cut(omid.page);
+record('a fourth whose socket drops is called again by all three', await until(async () => (await built(omid.page)) >= omidBuilt + 3, 30_000) && await together(four), await toldOf(four));
+
+await mina.page.reload();
+await mina.page.waitForLoadState('networkidle');
+record('somebody who reloads is out of the call, and the others are three', await together([dana, omid, sara]), await toldOf(four));
+
+await mina.page.getByRole('button', { name: 'Join voice' }).first().click();
+record('and is back in it with all three once they join again', await together(four), await toldOf(four));
+
+const named = (page) => page.evaluate(() =>
+{
+    const title = document.querySelector('main header h1');
+
+    return title === null
+        ? { width: 0, cut: true }
+        : { width: Math.round(title.getBoundingClientRect().width), cut: title.scrollWidth > title.clientWidth + 1 };
+});
+
+const NAME_FLOOR = 48;
+const phones = {};
+
+for (const width of [390, 360])
+{
+    await dana.page.setViewportSize({ width, height: 780 });
+    await wait(500);
+    phones[`${ width } in the call`] = await named(dana.page);
+}
+
+await dana.page.getByRole('button', { name: 'Leave voice' }).first().click();
+await until(async () => (await dana.page.getByRole('button', { name: 'Join voice' }).count()) > 0);
+
+for (const width of [390, 360])
+{
+    await dana.page.setViewportSize({ width, height: 780 });
+    await wait(500);
+    phones[`${ width } offered the call`] = await named(dana.page);
+}
+
+record('on a phone the table keeps its name in the header beside the call, whole',
+    Object.values(phones).every((seen) => seen.width >= NAME_FLOOR && !seen.cut), JSON.stringify(phones));
+await dana.page.setViewportSize({ width: 1280, height: 900 });
+
+for (const one of four)
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ round.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);
+}
+
+const sideTable = await dana.context.request.post(`${ BASE }/api/tables`, {
+    data: tableBody({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', voice: 'team', teams: true })
+});
+const sided = await sideTable.json();
+
+record('a host can open a table of two sides whose call is for each side', sideTable.ok() && sided.voice === 'team', sideTable.ok() ? '' : String(sideTable.status()));
+
+for (const one of four.slice(1))
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ sided.id }/seat`);
+}
+
+for (const one of four)
+{
+    await one.page.goto(`${ BASE }/app/play/${ sided.id }`);
+    await one.page.waitForLoadState('networkidle');
+}
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+const partnered = () => until(async () => (await Promise.all(four.map((one) => mesh(one.page)))).every((seen) => meshed(seen, 1)), 30_000);
+
+record('at a table whose call is for each side, everybody is connected to their partner and to nobody else', await partnered(), await toldOf(four));
+
+await players(dana.page);
+
+const across = await pillOf(dana.page, 'Mina');
+const beside = await pillOf(dana.page, 'Omid');
+
+record('the players list shows the partner in the call and an opponent in no call at all',
+    beside.some((one) => one === 'Speaking' || one === 'In voice' || one === 'Muted') && !across.some((one) => one === 'Speaking' || one === 'In voice' || one === 'Muted' || one === 'Connecting'),
+    JSON.stringify({ omid: beside, mina: across }));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-sides.png' });
+
+await dana.page.getByRole('button', { name: 'Let the whole table hear each other' }).first().click();
+
+record('the host making it the whole table\'s call between games takes everybody out, and carries nobody into it',
+    await until(async () => (await Promise.all(four.map((one) => mesh(one.page)))).every((seen) => seen.length === 0)
+        && (await Promise.all(four.map((one) => one.page.getByRole('button', { name: 'Join voice' }).count()))).every((count) => count > 0), 20_000),
+    await toldOf(four));
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+record('and once they join again, all four are in one call, each connected to the other three', await together(four), await toldOf(four));
+
+await dana.context.request.post(`${ BASE }/api/tables/${ sided.id }/voice`, { data: { voice: 'off' } }).catch(() => undefined);
+
+for (const one of four)
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ sided.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);
+}
+
+const errors = [...dana.errors, ...mina.errors, ...omid.errors, ...sara.errors];
 record('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));
 
 await dana.context.request.post(`${ BASE }/api/tables/${ table.id }/close`).catch(() => undefined);

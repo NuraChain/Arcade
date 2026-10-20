@@ -35,16 +35,6 @@ export const ICON_BUTTON_SIZE: Record<ButtonSize, string> = {
 
 export const COPY_CHIP = 'relative inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.75 coarse:before:inset-x-0';
 
-export const TONE_TEXT: Record<Tone, string> = {
-    neutral: 'text-muted',
-    accent: 'text-accent',
-    live: 'text-live',
-    gold: 'text-gold',
-    win: 'text-win',
-    danger: 'text-danger',
-    madder: 'text-madder'
-};
-
 export const TONE_FILL: Record<Tone, string> = {
     neutral: 'bg-raised text-text',
     accent: 'bg-accent-fill text-accent-ink',
@@ -73,16 +63,6 @@ export const TONE_OUTLINE: Record<Tone, string> = {
     win: 'border border-win/50 text-win',
     danger: 'border border-danger/50 text-danger',
     madder: 'border border-madder/50 text-madder'
-};
-
-export const TONE_BAR: Record<Tone, string> = {
-    neutral: 'bg-muted',
-    accent: 'bg-accent',
-    live: 'bg-live',
-    gold: 'bg-gold',
-    win: 'bg-win',
-    danger: 'bg-danger',
-    madder: 'bg-madder'
 };
 
 export const TONE_DOT: Record<Tone, string> = {

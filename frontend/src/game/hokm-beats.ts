@@ -1,245 +1,128 @@
-import { dealerOf } from '../../../backend/src/domains/match/hokm/scoring.ts';
+import { OPENING, type Laid, type Told } from './hokm-felt.ts';
 import { TIMING } from './motion.ts';
+import { seeded } from './stage/curves.ts';
 
-export interface HokmMove
+export interface Packet
 {
-    e: 'trump' | 'card' | 'trick' | 'hand' | 'deal' | 'discard' | 'draw' | 'forfeit' | 'finish';
-    seat?: number;
-    suit?: string;
-    card?: number;
-    side?: number;
-    points?: number;
-    kot?: boolean;
-    hakem?: number;
-}
-
-export interface Laid
-{
-    card: number;
     seat: number;
+    count: number;
 }
 
-export interface Felt
-{
-    cards: readonly Laid[];
-    took: number | null;
-}
+export const SHUFFLE = 450;
 
-export interface Reader
-{
-    seat: number | null;
-    seats: number;
-    sideOf: (seat: number) => number;
-}
+export const ROUND = 4;
 
-export type Beat =
-    | { at: number; kind: 'card'; card: number; seat: number; duration: number }
-    | { at: number; kind: 'land'; card: number; seat: number }
-    | { at: number; kind: 'took'; seat: number; ours: boolean }
-    | { at: number; kind: 'gather'; seat: number; cards: readonly Laid[] }
-    | { at: number; kind: 'clear' }
-    | { at: number; kind: 'trump'; suit: string; ours: boolean }
-    | { at: number; kind: 'deal'; from: number; to: readonly number[]; gap: number; duration: number; shuffle: boolean }
-    | { at: number; kind: 'discard'; seat: number }
-    | { at: number; kind: 'draw'; seat: number; duration: number }
-    | { at: number; kind: 'hand'; side: number; points: number; kot: boolean; ours: boolean }
-    | { at: number; kind: 'finish'; won: boolean };
+export const TURN = 220;
 
-export interface Timeline
-{
-    beats: Beat[];
-    felt: Felt;
-    ends: number;
-    held: number | null;
-}
+export const TURN_GAP = 35;
 
-export const EMPTY: Felt = { cards: [], took: null };
+export const COLLECT_GAP = 60;
 
-export const CATCH_UP_ACTIONS = 12;
+export const CARRY = 420;
+
+export const NAMING = 340;
+
+export const LIFT = 360;
+
+export const DRAW_GAP = 120;
+
+export const BANNER_IN = 360;
+
+export const BANNER_OUT = 200;
+
+export const PLUS = 900;
 
 export const gatherOrder = (cards: readonly Laid[], took: number): Laid[] =>
     [...cards.filter((one) => one.seat !== took), ...cards.filter((one) => one.seat === took)];
 
 export const gatherLength = (count: number) => TIMING.GATHER + TIMING.GATHER_GAP * Math.max(0, count - 1);
 
-export const overflows = (actions: number, moves: readonly HokmMove[]) =>
-    actions > CATCH_UP_ACTIONS || moves.filter((move) => move.e === 'hand').length > 1;
+export const dealGap = (packets: number) =>
+    (packets <= 1 ? 0 : Math.min(TIMING.DEAL_GAP_MAX, (TIMING.DEAL_TOTAL_MAX - TIMING.DEAL_FLY) / (packets - 1)));
 
-function dealing(from: number, to: readonly number[], at: number, shuffle: boolean): { beat: Beat; ends: number }
+export const dealLength = (packets: number, shuffled: boolean) =>
+    (shuffled ? SHUFFLE : 0) + dealGap(packets) * Math.max(0, packets - 1) + TIMING.DEAL_FLY;
+
+export const openLength = (cards: number) => (cards <= 0 ? 0 : TURN + TURN_GAP * (cards - 1));
+
+export const collectLength = (seats: number, folds: boolean) => TIMING.DEAL_FLY + Math.max(folds ? TURN : 0, COLLECT_GAP * Math.max(0, seats - 1));
+
+export const openingPackets = (seats: number, hakem: number): Packet[] =>
+    (seats === 2 ? [hakem, (hakem + 1) % seats] : [hakem]).map((seat) => ({ seat, count: OPENING }));
+
+export function restPackets(seats: number, full: number, hakem: number): Packet[]
 {
-    const lead = shuffle ? 450 : 0;
-    const gap = to.length <= 1 ? 0 : Math.min(TIMING.DEAL_GAP_MAX, (TIMING.DEAL_TOTAL_MAX - TIMING.DEAL_FLY) / (to.length - 1));
+    const round = Array.from({ length: seats }, (_, nth) => (hakem + nth) % seats);
+    const rounds = Math.ceil((full - OPENING) / ROUND);
 
-    return {
-        beat: { at, kind: 'deal', from, to, gap, duration: TIMING.DEAL_FLY, shuffle },
-        ends: at + lead + gap * Math.max(0, to.length - 1) + TIMING.DEAL_FLY
-    };
+    return seats === 2 ? [] : [
+        ...round.slice(1).map((seat) => ({ seat, count: OPENING })),
+        ...Array.from({ length: rounds }, (_, nth) => round.map((seat) => ({ seat, count: Math.min(ROUND, full - OPENING - nth * ROUND) }))).flat()
+    ];
 }
 
-export function beatsOf(moves: readonly HokmMove[], felt: Felt, reader: Reader, heldFor = 0): Timeline
+export function dealtIn(cards: readonly number[], sizes: readonly number[], seed: number): number[][]
 {
-    const beats: Beat[] = [];
-    const ours = (seat: number) => reader.seat !== null && reader.sideOf(seat) === reader.sideOf(reader.seat);
-    let cards: Laid[] = [...felt.cards];
-    let took = felt.took;
+    const next = seeded(seed);
+    const order = cards.map((card) => ({ card, at: next() })).sort((one, other) => one.at - other.at).map((one) => one.card);
+    const starts = sizes.map((_, nth) => sizes.slice(0, nth).reduce((sum, size) => sum + size, 0));
+
+    return sizes.map((size, nth) => order.slice(starts[nth], starts[nth] + size));
+}
+
+export const holdBefore = (next: Told) => (next.e === 'hand' || next.e === 'finish' ? TIMING.HOLD : TIMING.HOLD_MIN);
+
+export function spanOf(moves: readonly Told[], seats: number, mine: number | null)
+{
     let at = 0;
-    let settled = 0;
-    let tookAt = took === null ? null : -heldFor;
+    let down = 0;
+    let ended = false;
 
-    const gather = (hold: number) =>
+    moves.forEach((move, index) =>
     {
-        if (took === null)
+        const next = moves[index + 1];
+
+        if (move.e === 'card')
         {
+            down = Math.max(down, at + (move.seat === mine ? TIMING.FLY : TIMING.FLY_THEIRS));
+            at += next?.e === 'card' ? TIMING.SEQ_GAP : 0;
+
             return;
         }
 
-        const start = Math.max(at, (tookAt ?? at) + hold);
-        const order = gatherOrder(cards, took);
+        at = Math.max(at, down);
 
-        beats.push({ at: start, kind: 'gather', seat: took, cards: order });
-
-        const done = start + gatherLength(order.length);
-
-        beats.push({ at: done, kind: 'clear' });
-        cards = [];
-        took = null;
-        tookAt = null;
-        at = done;
-        settled = done;
-    };
-
-    moves.forEach((move) =>
-    {
-        if (move.e === 'card' && move.card !== undefined && move.seat !== undefined)
+        if (move.e === 'trick')
         {
-            gather(TIMING.HOLD_MIN);
-
-            const duration = move.seat === reader.seat ? TIMING.FLY : TIMING.FLY_THEIRS;
-
-            beats.push({ at, kind: 'card', card: move.card, seat: move.seat, duration });
-            beats.push({ at: at + duration, kind: 'land', card: move.card, seat: move.seat });
-            cards = [...cards, { card: move.card, seat: move.seat }];
-            settled = Math.max(settled, at + duration);
-            at += TIMING.SEQ_GAP;
-            return;
+            at += TIMING.SETTLE + (next === undefined ? 0 : holdBefore(next) + gatherLength(seats));
         }
-
-        if (move.e === 'trick' && move.seat !== undefined)
+        else if (move.e === 'hand')
         {
-            const when = Math.max(at, settled) + TIMING.SETTLE;
-
-            beats.push({ at: when, kind: 'took', seat: move.seat, ours: ours(move.seat) });
-            took = move.seat;
-            tookAt = when;
-            at = when;
-            settled = when;
-            return;
-        }
-
-        if (move.e === 'hand' && move.side !== undefined)
-        {
-            gather(TIMING.HOLD);
-            at = Math.max(at, settled);
-
-            const mineSide = reader.seat !== null && reader.sideOf(reader.seat) === move.side;
-
-            beats.push({ at, kind: 'hand', side: move.side, points: move.points ?? 0, kot: move.kot === true, ours: mineSide });
             at += TIMING.BANNER;
-            settled = at;
-            return;
+            ended = true;
         }
-
-        if (move.e === 'deal' && move.hakem !== undefined)
+        else if (move.e === 'deal')
         {
-            gather(TIMING.HOLD_MIN);
-            at = Math.max(at, settled);
-
-            const dealer = dealerOf(move.hakem, reader.seats);
-            const dealt = dealing(dealer, reader.seats === 2 ? [move.hakem, dealer] : [move.hakem], at, true);
-
-            beats.push(dealt.beat);
-            at = dealt.ends;
-            settled = at;
-            return;
+            at += (ended ? collectLength(seats, mine !== null) + CARRY : 0)
+                + dealLength(seats === 2 ? 2 : 1, true)
+                + (mine !== null && (seats === 2 || move.hakem === mine) ? openLength(OPENING) : 0);
+            ended = false;
         }
-
-        if (move.e === 'trump' && move.suit !== undefined)
+        else if (move.e === 'trump')
         {
-            at = Math.max(at, settled);
-
-            const hakem = move.seat ?? 0;
-
-            beats.push({ at, kind: 'trump', suit: move.suit, ours: move.seat !== undefined && move.seat === reader.seat });
-
-            if (reader.seats === 2)
-            {
-                at += TIMING.FADE;
-                settled = at;
-                return;
-            }
-
-            const order = Array.from({ length: reader.seats }, (_, step) => (dealerOf(hakem, reader.seats) + 1 + step) % reader.seats);
-            const dealt = dealing(dealerOf(hakem, reader.seats), order, at + TIMING.FADE, false);
-
-            beats.push(dealt.beat);
-            at = dealt.ends;
-            settled = at;
-            return;
+            at += NAMING + TIMING.FADE + (seats === 2 ? 0 : dealLength(restPackets(seats, Math.floor(52 / seats), 0).length, false) + (mine === null ? 0 : openLength(ROUND)));
         }
-
-        if (move.e === 'discard' && move.seat !== undefined)
+        else if (move.e === 'draw')
         {
-            at = Math.max(at, settled);
-            beats.push({ at, kind: 'discard', seat: move.seat });
-            return;
+            at += (move.seat === mine ? TURN + LIFT : DRAW_GAP + TIMING.DEAL_FLY) + (mine !== null && move.seat !== mine ? LIFT : 0);
+        }
+        else if (move.e === 'discard')
+        {
+            at += (move.seat === mine ? TURN : 0) + TIMING.DEAL_FLY + (mine !== null && move.seat !== mine ? LIFT : 0);
         }
 
-        if (move.e === 'draw' && move.seat !== undefined)
-        {
-            at = Math.max(at, settled);
-            beats.push({ at, kind: 'draw', seat: move.seat, duration: TIMING.DEAL_FLY });
-            at += TIMING.DEAL_FLY;
-            settled = at;
-            return;
-        }
-
-        if (move.e === 'finish')
-        {
-            gather(TIMING.HOLD);
-            at = Math.max(at, settled);
-            beats.push({ at, kind: 'finish', won: move.side !== undefined && reader.seat !== null && reader.sideOf(reader.seat) === move.side });
-        }
+        down = at;
     });
 
-    return { beats, felt: { cards, took }, ends: Math.max(at, settled), held: took === null ? null : tookAt };
-}
-
-export function feltOf(trick: readonly number[], lead: number, seats: number): Felt
-{
-    return { cards: trick.map((card, offset) => ({ card, seat: (lead + offset) % seats })), took: null };
-}
-
-export function scaled(timeline: Timeline, factor: number): Timeline
-{
-    const quick = (beat: Beat): Beat =>
-    {
-        if (beat.kind === 'card' || beat.kind === 'draw')
-        {
-            return { ...beat, at: beat.at * factor, duration: beat.duration * factor };
-        }
-
-        if (beat.kind === 'deal')
-        {
-            return { ...beat, at: beat.at * factor, gap: beat.gap * factor, duration: beat.duration * factor };
-        }
-
-        return { ...beat, at: beat.at * factor };
-    };
-
-    return {
-        beats: timeline.beats.map(quick),
-        felt: timeline.felt,
-        ends: timeline.ends * factor,
-        held: timeline.held === null ? null : timeline.held * factor
-    };
+    return Math.max(at, down);
 }

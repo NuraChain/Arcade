@@ -36,9 +36,7 @@ export default component NavRail()
                     <Tooltip label={ locale.t(item.labelKey) } side="end">
                         <Link to={ item.to } prefetch="hover" aria-current={ lit(item, tab) ? 'page' : undefined } class={ () => [ 'nav-row', ACTIVE_ROW, 'relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text', lit(item, tab) ? 'is-active' : '' ].join(' ') } aria-label={ locale.t(item.labelKey) }>
                             <Icon name={ item.icon } size={ 20 } />
-                            <Show when={ countOf(item) > 0 }>
-                                { () => <Badge count={ countOf(item) } size="sm" tone={ toneOf(item) } anchor label={ labelOf(item) } /> }
-                            </Show>
+                            <Badge count={ countOf(item) } size="sm" tone={ toneOf(item) } anchor label={ labelOf(item) } />
                         </Link>
                     </Tooltip>
                 </li>

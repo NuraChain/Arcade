@@ -64,7 +64,7 @@ export default component ToastHost()
     const people = usePeople();
     const overlay = useOverlay();
 
-    derived placement = sheeted(overlay.items(), device.posture() === 'phone') ? 'top' : 'bottom';
+    derived placement = toasts.lifted() || sheeted(overlay.items(), device.posture() === 'phone') ? 'top' : 'bottom';
 
     /**
      * One drag recogniser per toast on screen - and only per toast on screen.
@@ -88,9 +88,50 @@ export default component ToastHost()
         return made;
     };
 
+    let region: HTMLElement | null = null;
+
+    let before: HTMLElement | null = null;
+
+    const back = () =>
+    {
+        const target = before;
+
+        before = null;
+
+        if (target !== null && target.isConnected)
+        {
+            target.focus();
+        }
+    };
+
     mount
     {
-        return () => drags.clear();
+        const reach = (event: KeyboardEvent) =>
+        {
+            if (!event.altKey || event.ctrlKey || event.metaKey || event.code !== 'KeyT' || region === null)
+            {
+                return;
+            }
+
+            const newest = [...region.querySelectorAll<HTMLElement>('[data-toast]')].at(-1);
+
+            if (newest === undefined)
+            {
+                return;
+            }
+
+            event.preventDefault();
+            before = document.activeElement instanceof HTMLElement && !newest.contains(document.activeElement) ? document.activeElement : before;
+            (newest.querySelector<HTMLElement>('button') ?? newest).focus();
+        };
+
+        document.addEventListener('keydown', reach);
+
+        return () =>
+        {
+            document.removeEventListener('keydown', reach);
+            drags.clear();
+        };
     }
 
     derived items = toasts.items();
@@ -118,12 +159,16 @@ export default component ToastHost()
             data-posture={ device.posture() }
             role="region"
             aria-label={ locale.t('toast.region') }
+            aria-keyshortcuts="Alt+T"
             aria-live="polite"
+            ref={ (element) => region = element }
         >
             <For each={ items } key={ (toast) => toast.id } let={ toast }>
                 <div
                     class="pointer-events-auto relative flex inline-full max-inline-[26rem] items-center gap-2.5 overflow-hidden rounded-panel border border-line bg-lifted py-2 pr-2 pl-3 [box-shadow:var(--shadow-3)] touch-pan-x [translate:0_var(--swipe,0px)] animate-toast-in before:absolute before:inset-y-0 before:start-0 before:inline-[3px] before:bg-(--toast-tone,var(--accent)) data-[kind=success]:[--toast-tone:var(--live)] data-[kind=live]:[--toast-tone:var(--live)] data-[kind=error]:[--toast-tone:var(--danger)] data-[kind=warning]:[--toast-tone:var(--gold)]"
                     data-kind={ toast.kind }
+                    data-toast
+                    tabindex="-1"
                     role={ toast.kind === 'error' ? 'alert' : 'status' }
                     aria-live={ toast.kind === 'error' ? 'assertive' : 'polite' }
                     ref={ (element) => element.style.setProperty('--swipe', '0px') }
@@ -132,6 +177,18 @@ export default component ToastHost()
 
                     onFocusIn={ () => toasts.pause(toast.id) }
                     onFocusOut={ () => toasts.resume(toast.id) }
+                    onKeyDown={ (event) =>
+                    {
+                        if (event.key !== 'Escape' || !toast.dismissible)
+                        {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toasts.dismiss(toast.id);
+                        back();
+                    } }
                     onPointerDown={ (event) =>
                     {
                         if (!device.coarse() || !toast.dismissible)
@@ -178,54 +235,56 @@ export default component ToastHost()
                 >
                     <span class={ () => [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
                         <Show
-                            when={ toast.avatar !== null }
+                            when={ toast.avatar }
+                            let={ face }
                             fallback={
                                 <Show when={ toast.kind === 'pending' } fallback={ <Icon name={ toast.icon ?? ICON[toast.kind] } size={ 18 } /> }>
                                     { () => <Spinner size={ 18 } /> }
                                 </Show>
                             }
                         >
-                            { () => <Avatar person={ people.byHandle(toast.avatar!) ?? null } size="sm" /> }
+                            <Avatar person={ people.byHandle(face) ?? null } size="sm" />
                         </Show>
                     </span>
 
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="text-ui-base text-text">{ toast.text }</span>
-                        <Show when={ toast.detail !== null }>
-                            { () => <span class="truncate text-ui-xs text-muted">{ toast.detail }</span> }
+                        <Show when={ toast.detail } let={ detail }>
+                            <span class="truncate text-ui-xs text-muted">{ detail }</span>
                         </Show>
                     </span>
 
-                    <Show when={ toast.action !== null }>
-                        { () =>
-                            <button
-                                type="button"
-                                class="shrink-0 cursor-pointer rounded-control px-2 py-1 text-ui-sm font-bold text-accent hover:bg-accent/10"
-                                onClick={ () =>
+                    <Show when={ toast.action } let={ action }>
+                        <button
+                            type="button"
+                            class="flex shrink-0 cursor-pointer items-center rounded-control px-2 py-1 text-ui-sm font-bold text-accent hover:bg-accent/10 coarse:min-h-11 coarse:px-3"
+                            onClick={ () =>
+                            {
+                                action.run();
+                                if (action.keepOpen !== true)
                                 {
-                                    toast.action?.run();
-                                    if (toast.action?.keepOpen !== true)
-                                    {
-                                        toasts.dismiss(toast.id);
-                                    }
-                                } }
-                            >
-                                { toast.action?.label }
-                            </button>
-                        }
+                                    toasts.dismiss(toast.id);
+                                    back();
+                                }
+                            } }
+                        >
+                            { action.label }
+                        </button>
                     </Show>
 
-                    <Show when={ toast.dismissible }>
-                        { () =>
-                            <button
-                                type="button"
-                                class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-control text-faint hover:bg-field hover:text-text coarse:h-11 coarse:w-11"
-                                aria-label={ locale.t('toast.dismiss') }
-                                onClick={ () => toasts.dismiss(toast.id) }
-                            >
-                                <Icon name="close" size={ 15 } />
-                            </button>
-                        }
+                    <Show when={ toast.dismissible ? toast.id : null } let={ closing }>
+                        <button
+                            type="button"
+                            class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-control text-faint hover:bg-field hover:text-text coarse:h-11 coarse:w-11"
+                            aria-label={ locale.t('toast.dismiss') }
+                            onClick={ () =>
+                            {
+                                toasts.dismiss(closing);
+                                back();
+                            } }
+                        >
+                            <Icon name="close" size={ 15 } />
+                        </button>
                     </Show>
 
                     <Show when={ !held(toast) }>

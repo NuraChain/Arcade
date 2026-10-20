@@ -11,9 +11,9 @@
  * old one kept running.
  */
 
-const WORKER = '/push-worker.js';
+import { client } from '../api.ts';
 
-export type PushState = 'unsupported' | 'unconfigured' | 'denied' | 'off' | 'on';
+export const WORKER = '/push-worker.js';
 
 export interface PushSubscriptionKeys
 {
@@ -88,8 +88,8 @@ export async function currentSubscription(): Promise<PushSubscription | null>
  * Registers the worker and subscribes, asking for permission on the way.
  *
  * `userVisibleOnly` is not optional in any browser that ships this, and it is the right promise
- * anyway: every push this product sends results in a visible notice, because a silent push is a
- * wake-up nobody asked for.
+ * anyway: a push this product sends results in a visible notice unless the app is on the screen,
+ * where the page says it instead. A silent push is a wake-up nobody asked for.
  *
  * Returns null when the person says no. That is an answer, and the caller stores nothing.
  */
@@ -126,4 +126,79 @@ export async function unsubscribe(): Promise<string | null>
     const endpoint = subscription.endpoint;
     await subscription.unsubscribe();
     return endpoint;
+}
+
+const madeWith = (held: PushSubscription, key: string) =>
+    encodeKey(held.options.applicationServerKey) === key.replace(/=+$/, '');
+
+export async function leaveReach()
+{
+    const endpoint = await unsubscribe().catch(() => null);
+
+    if (endpoint !== null)
+    {
+        await client.notifications.unsubscribe({ input: { endpoint } }).catch(() => undefined);
+    }
+}
+
+export async function keepReach(on: boolean)
+{
+    const held = await currentSubscription();
+
+    if (!on)
+    {
+        if (held !== null)
+        {
+            await leaveReach();
+        }
+
+        return false;
+    }
+
+    const published = pushSupported() ? await client.notifications.pushKey().catch(() => null) : null;
+
+    if (published === null)
+    {
+        return held !== null;
+    }
+
+    const key = published.key ?? '';
+    const wanted = key !== '' && Notification.permission === 'granted';
+
+    if (held !== null && wanted && madeWith(held, key))
+    {
+        await client.notifications.subscribe({ input: keysOf(held) }).catch(() => undefined);
+
+        return true;
+    }
+
+    if (held !== null)
+    {
+        await leaveReach();
+    }
+
+    if (!wanted)
+    {
+        return false;
+    }
+
+    try
+    {
+        const keys = await subscribe(key);
+
+        if (keys === null)
+        {
+            return false;
+        }
+
+        await client.notifications.subscribe({ input: keys });
+
+        return true;
+    }
+    catch
+    {
+        await unsubscribe().catch(() => null);
+
+        return false;
+    }
 }

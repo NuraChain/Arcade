@@ -1,8 +1,8 @@
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { User } from './user.entity.ts';
 
-/** Which authority vouched for a device. `server` means nobody did. */
-export type Attestation = 'wallet' | 'contract' | 'server';
+/** Which authority vouched for a device: a wallet that signed for it, or the contract wallet it belongs to. */
+export type Attestation = 'wallet' | 'contract';
 
 /**
  * A browser or app that holds keys for one account.
@@ -15,10 +15,10 @@ export type Attestation = 'wallet' | 'contract' | 'server';
  * Only public halves are stored. There is no column here a private key could land in by accident,
  * which is the point: the server is not a party to the sealing, and the schema says so.
  */
-@Check('devices_attestation_matches_kind', `(attested = 'server' and attested_address is null) or (attested in ('wallet', 'contract') and attested_address is not null)`)
+@Check('devices_attestation_matches_kind', `attested_address is not null`)
 @Check('devices_attestation_whole', `(attested_address is null and attested_message is null and attested_signature is null) or (attested_address is not null and attested_message is not null and attested_signature is not null)`)
-@Check('devices_attested_address_shape', `attested_address is null or attested_address ~ '^0x[0-9a-f]{40}$'`)
-@Check('devices_attested_known', `attested in ('wallet', 'contract', 'server')`)
+@Check('devices_attested_address_shape', `attested_address ~ '^0x[0-9a-f]{40}$'`)
+@Check('devices_attested_known', `attested in ('wallet', 'contract')`)
 @Check('devices_id_shape', `id ~ '^[A-Za-z0-9_-]{22}$'`)
 @Index('devices_user_live', ['userId', 'createdAt'], { where: `revoked_at is null` })
 @Index('devices_user', ['userId'])
@@ -60,7 +60,7 @@ export class Device
      * All three together or none: the address that signed the enrolment, the exact bytes it
      * signed, and the signature. A peer recovers the address itself and checks that the message
      * names this device, which is what stops a device this server fabricated from being wrapped
-     * into a conversation. Null for `attested: 'server'`, where there is nothing to show.
+     * into a conversation.
      */
     @Column({ name: 'attested_address', type: 'citext', nullable: true })
     attestedAddress!: string | null;

@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+import { FRAME_FLOORS } from '../../backend/src/realtime/frames.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
     BACKOFF_MS,
+    CHECK_FLOOR_MS,
+    FLOOR_MARGIN_MS,
     IDLE_MS,
     NUDGE_WINDOW_MS,
+    PROBE_GRACE_MS,
     STEADY_MS,
     useRealtime
 } from '../src/stores/realtime.store.ts';
@@ -237,6 +241,27 @@ describe('the realtime store', () =>
         expect(socket.closed.length).toBe(1);
     });
 
+    it('does not let a release from before a reset undo a hold taken since', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        const stale = live.hold();
+
+        live.reset();
+        socket.reset();
+        live.start();
+        socket.accept();
+
+        live.hold();
+        stale();
+        hide();
+        clock.advance(IDLE_MS * 3);
+
+        expect(socket.closed.length, 'a hold was let go by a release that belonged to the connection before it').toBe(0);
+    });
+
     it('reconnects a held socket that drops while the tab is hidden, rather than waiting to be looked at', () =>
     {
         const live = useRealtime();
@@ -284,6 +309,60 @@ describe('the realtime store', () =>
         clock.advance(NUDGE_WINDOW_MS);
 
         expect(heard.sort()).toEqual(['chat:', 'game:', 'me:', 'social:', 'table:']);
+    });
+
+    it('asks its socket for an answer the moment the tab is shown again, and opens a new one when none comes', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        hide();
+        clock.advance(5000);
+        socket.deaf = true;
+        show();
+
+        expect(socket.pings, 'a socket that may have died while the tab was away was trusted').toBe(1);
+
+        clock.advance(PROBE_GRACE_MS - 1);
+        expect(socket.opens).toBe(1);
+
+        clock.advance(2);
+        expect(socket.closed).toEqual([1000]);
+        expect(socket.opens).toBe(2);
+    });
+
+    it('keeps a socket that answers when the tab is shown again', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        hide();
+        clock.advance(5000);
+        show();
+        clock.advance(PROBE_GRACE_MS * 3);
+
+        expect(socket.pings).toBe(1);
+        expect(socket.closed).toEqual([]);
+        expect(socket.opens).toBe(1);
+    });
+
+    it('asks its socket for an answer when the network comes back, and opens a new one when none comes', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+        socket.deaf = true;
+
+        window.dispatchEvent(new Event('online'));
+
+        expect(socket.pings).toBe(1);
+
+        clock.advance(PROBE_GRACE_MS + 1);
+
+        expect(socket.closed).toEqual([1000]);
+        expect(socket.opens).toBe(2);
     });
 
     it('treats two online events as one reconnection', () =>
@@ -354,6 +433,139 @@ describe('the realtime store', () =>
     });
 });
 
+describe('what the socket is asked to say, kept to what the server takes', () =>
+{
+    const presenceSent = () => socket.sent.filter((frame) => frame.t === 'presence');
+
+    it('says where the reader is no more often than the server takes it, and says the last of it', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        for (let step = 0; step < 12; step += 1)
+        {
+            hide();
+            clock.advance(100);
+            show();
+            clock.advance(100);
+        }
+
+        expect(presenceSent().length, 'every flick of the tab was sent, past the floor the gateway closes a socket for').toBeLessThanOrEqual(2);
+
+        clock.advance(FRAME_FLOORS.presence + FLOOR_MARGIN_MS);
+
+        expect(presenceSent().length).toBeLessThanOrEqual(3);
+        expect(presenceSent().at(-1), 'the last thing said is not where the reader is').toEqual({ t: 'presence', state: 'online' });
+
+        clock.advance(FRAME_FLOORS.presence * 10);
+        expect(presenceSent().length).toBeLessThanOrEqual(3);
+    });
+
+    it('says the last of what it was asked while it waited, not the first', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        live.setState('away');
+        clock.advance(100);
+        live.setState('online');
+        clock.advance(100);
+        live.setState('away');
+
+        expect(presenceSent()).toEqual([{ t: 'presence', state: 'away' }]);
+
+        clock.advance(FRAME_FLOORS.presence + FLOOR_MARGIN_MS);
+
+        expect(presenceSent(), 'what was held back was the first thing asked, not the last').toEqual([
+            { t: 'presence', state: 'away' },
+            { t: 'presence', state: 'away' }
+        ]);
+    });
+
+    it('never sends two of a kind closer together than the gateway allows', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+        socket.sent.length = 0;
+
+        const at: Record<string, number[]> = {};
+        const sent = socket.sent;
+
+        socket.sent = new Proxy(sent, {
+            get(target, key, receiver)
+            {
+                if (key === 'push')
+                {
+                    return (...frames: typeof sent) =>
+                    {
+                        for (const frame of frames)
+                        {
+                            (at[frame.t] ??= []).push(clock.now());
+                        }
+
+                        return target.push(...frames);
+                    };
+                }
+
+                return Reflect.get(target, key, receiver);
+            }
+        });
+
+        for (let step = 0; step < 40; step += 1)
+        {
+            live.sync();
+            live.setState(step % 2 === 0 ? 'away' : 'online');
+            live.startTyping(`c-${ step % 3 }`);
+            clock.advance(250);
+        }
+
+        clock.advance(10_000);
+        socket.sent = sent;
+
+        for (const [kind, times] of Object.entries(at))
+        {
+            const gaps = times.slice(1).map((time, index) => time - times[index]);
+
+            expect(Math.min(...gaps, Number.POSITIVE_INFINITY), `two ${ kind } frames went out closer than the gateway's floor`).toBeGreaterThanOrEqual(FRAME_FLOORS[kind]);
+        }
+    });
+
+    it('checks a socket no more than once in two seconds, however often it is asked', () =>
+    {
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        clock.advance(10_000);
+
+        const before = socket.pings;
+
+        for (let step = 0; step < 10; step += 1)
+        {
+            live.check();
+            clock.advance(100);
+        }
+
+        expect(socket.pings - before, 'a ping went out for every check, past the budget the gateway closes a socket for').toBe(1);
+
+        clock.advance(CHECK_FLOOR_MS);
+        live.check();
+
+        expect(socket.pings - before).toBe(2);
+    });
+});
+
 describe('what arrives on the socket', () =>
 {
     it('collapses a burst of deltas about one thing into a single refetch', () =>
@@ -370,12 +582,36 @@ describe('what arrives on the socket', () =>
         socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'chat', id: 'c-1', at: 0 });
         socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'chat', id: 'c-1', at: 0 });
 
-        clock.advance(NUDGE_WINDOW_MS - 1);
-        expect(heard).not.toHaveBeenCalled();
-
-        clock.advance(1);
+        clock.advance(NUDGE_WINDOW_MS);
         expect(heard).toHaveBeenCalledTimes(1);
         expect(heard).toHaveBeenCalledWith('chat', 'c-1');
+    });
+
+    it('hears a doorbell after a quiet window at once, and the ones inside the window after it once more at its end', () =>
+    {
+        const live = useRealtime();
+        const heard = vi.fn();
+
+        live.start();
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS * 4);
+        live.onNudge(heard);
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'table', id: 't-1', at: 0 });
+        clock.advance(0);
+        expect(heard, 'a doorbell after a quiet window waited for the window').toHaveBeenCalledTimes(1);
+
+        clock.advance(10);
+        socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'table', id: 't-1', at: 0 });
+        socket.deliver({ v: 1, t: 'nudge', n: 3, scope: 'table', id: 't-1', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS - 11);
+        expect(heard, 'a doorbell inside the window was heard before the window ended').toHaveBeenCalledTimes(1);
+
+        clock.advance(1);
+        expect(heard, 'the doorbells inside the window were not heard at its end, once').toHaveBeenCalledTimes(2);
+
+        clock.advance(NUDGE_WINDOW_MS * 4);
+        expect(heard).toHaveBeenCalledTimes(2);
     });
 
     it('keeps deltas about different things apart inside the same window', () =>

@@ -6,6 +6,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { playersOf, scoreOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
+import { resultWord } from './plate-tag.ts';
 
 export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch })
 {
@@ -140,7 +141,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                             <Show when={ chair.player.result !== undefined }>
                                 { () =>
                                     <span class="shrink-0 text-ui-2xs text-muted">
-                                        { locale.t(`history.result.${ chair.player.result! }`) }
+                                        { resultWord(locale, chair.player.result!, chair.player.exit) }
                                     </span>
                                 }
                             </Show>

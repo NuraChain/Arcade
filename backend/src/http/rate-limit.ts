@@ -15,14 +15,30 @@ export function forPaths(matches: (pathname: string) => boolean, wrapper: Handle
     {
         const wrapped = wrapper(next);
         return {
-            handle: (request) => (matches(new URL(request.url).pathname)
+            handle: (request) => (matches(routedPath(new URL(request.url).pathname))
                 ? wrapped.handle(request)
                 : next.handle(request))
         };
     };
 }
 
-/** Whether a path is metered: the api and the realtime upgrade, never pages or assets. */
+export function routedPath(pathname: string)
+{
+    const segments = pathname.split('/').filter((segment) => segment !== '').map((segment) =>
+    {
+        try
+        {
+            return decodeURIComponent(segment);
+        }
+        catch
+        {
+            return segment;
+        }
+    });
+
+    return `/${ segments.join('/') }`;
+}
+
 /**
  * Whether a path is metered.
  *
@@ -54,5 +70,28 @@ export function apiRateLimit(options: { limit?: number; windowMs?: number; trust
         limit: options.limit ?? 600,
         windowMs: options.windowMs ?? 60_000,
         trustProxy: options.trustProxy ?? false
+    }));
+}
+
+export const SIGN_IN_SHARE = 20;
+
+export const SIGN_IN_LEAST = 10;
+
+export function isSignIn(pathname: string)
+{
+    return pathname === '/api/auth/challenge' || pathname === '/api/auth/wallet';
+}
+
+export function signInLimit(apiLimit: number)
+{
+    return Math.max(SIGN_IN_LEAST, Math.floor(apiLimit / SIGN_IN_SHARE));
+}
+
+export function signInRateLimit(options: { apiLimit: number; trustProxy: boolean })
+{
+    return forPaths(isSignIn, rateLimit({
+        limit: signInLimit(options.apiLimit),
+        windowMs: 60_000,
+        trustProxy: options.trustProxy
     }));
 }

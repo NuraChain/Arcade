@@ -16,7 +16,7 @@ const seeded = (id: string): QuickRules => GAME_SEEDS.find((seed) => seed.id ===
 
 const RULES = { hokm: seeded('hokm'), poker: seeded('poker'), backgammon: seeded('backgammon'), ludo: seeded('ludo') };
 
-const EITHER: QuickRules = { ...RULES.ludo, partners: 'optional' };
+const CLOSED: QuickRules = { ...RULES.ludo, partners: 'none' };
 
 const ANY: QuickFilter = { seats: null, mode: 'live', target: null, blinds: null, cube: null, teams: null };
 
@@ -52,7 +52,7 @@ const GRID: QuickAsk[] = [undefined, 2, 3, 4, 5, 6, 9].flatMap((seats) =>
                         ...(teams === undefined ? {} : { teams })
                     })))))));
 
-describe('the table a game opens when nobody says how many chairs', () =>
+describe('the table the create form offers when nobody has said how many chairs', () =>
 {
     it('is the smallest of four or more, or the largest the game plays', () =>
     {
@@ -75,12 +75,20 @@ describe('a quick search with nothing chosen', () =>
         }
     });
 
-    it('opens the table each game makes by default when there is nothing to join', () =>
+    it('opens the smallest table the game plays when there is nothing to join, so two people who leave it open are a game at once', () =>
     {
-        expect(sought(RULES.hokm, {}).make).toEqual({ seats: 4, mode: 'live', target: 7, blinds: 'low', cube: false, teams: true });
-        expect(sought(RULES.poker, {}).make).toEqual({ seats: 6, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
+        expect(sought(RULES.hokm, {}).make).toEqual({ seats: 2, mode: 'live', target: 7, blinds: 'low', cube: false, teams: false });
+        expect(sought(RULES.poker, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
         expect(sought(RULES.backgammon, {}).make).toEqual({ seats: 2, mode: 'live', target: 1, blinds: 'low', cube: false, teams: false });
-        expect(sought(RULES.ludo, {}).make).toEqual({ seats: 4, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
+        expect(sought(RULES.ludo, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
+    });
+
+    it('opens the smallest of what was asked when only part was chosen', () =>
+    {
+        expect(sought(RULES.hokm, { teams: true }).make).toMatchObject({ seats: 4, teams: true });
+        expect(sought(RULES.ludo, { teams: true }).make).toMatchObject({ seats: 4, teams: true });
+        expect(sought(RULES.poker, { blinds: 'high' }).make).toMatchObject({ seats: 2, blinds: 'high' });
+        expect(sought({ ...RULES.poker, seats: [6, 9] }, {}).make).toMatchObject({ seats: 6 });
     });
 });
 
@@ -158,33 +166,35 @@ describe('two against two in a quick search', () =>
 
     it('can be turned down for such a game, which then seeks and opens a table that is not four', () =>
     {
-        expect(sought(RULES.hokm, { teams: false })).toMatchObject({ filter: { seats: null, teams: false }, make: { seats: 3, teams: false } });
+        expect(sought(RULES.hokm, { teams: false })).toMatchObject({ filter: { seats: null, teams: false }, make: { seats: 2, teams: false } });
         expect(refused(RULES.hokm, { teams: false, seats: 4 })).toBe(true);
         expect(refused({ ...RULES.hokm, seats: [4] }, { teams: false })).toBe(true);
     });
 
     it('is refused for a game with no partners, and at any table that is not four', () =>
     {
-        expect(refused(RULES.ludo, { teams: true })).toBe(true);
+        expect(refused(CLOSED, { teams: true })).toBe(true);
+        expect(refused(CLOSED, { teams: true, seats: 4 })).toBe(true);
         expect(refused(RULES.poker, { teams: true })).toBe(true);
         expect(refused(RULES.hokm, { teams: true, seats: 3 })).toBe(true);
-        expect(refused(EITHER, { teams: true, seats: 2 })).toBe(true);
-        expect(refused({ ...EITHER, seats: [2, 3] }, { teams: true })).toBe(true);
-        expect(sought(RULES.ludo, { teams: false })).toMatchObject({ filter: { teams: false }, make: { seats: 4, teams: false } });
+        expect(refused(RULES.ludo, { teams: true, seats: 2 })).toBe(true);
+        expect(refused({ ...RULES.ludo, seats: [2, 3] }, { teams: true })).toBe(true);
+        expect(sought(CLOSED, { teams: false })).toMatchObject({ filter: { teams: false }, make: { seats: 2, teams: false } });
     });
 
-    it('is the opener’s to choose where the game leaves it open, and a search that says nothing finds both and opens the plain game', () =>
+    it('is the opener’s to choose at ludo, which leaves it open, and a search that says nothing finds both and opens the plain game', () =>
     {
-        expect(sought(EITHER, {})).toMatchObject({ filter: ANY, make: { seats: 4, teams: false } });
-        expect(sought(EITHER, { seats: 4 })).toMatchObject({ filter: { seats: 4, teams: null }, make: { seats: 4, teams: false } });
-        expect(sought(EITHER, { teams: true })).toMatchObject({ filter: { teams: true }, make: { seats: 4, teams: true } });
-        expect(sought(EITHER, { teams: false, seats: 4 })).toMatchObject({ filter: { seats: 4, teams: false }, make: { seats: 4, teams: false } });
+        expect(sought(RULES.ludo, {})).toMatchObject({ filter: ANY, make: { seats: 2, teams: false } });
+        expect(sought(RULES.ludo, { seats: 4 })).toMatchObject({ filter: { seats: 4, teams: null }, make: { seats: 4, teams: false } });
+        expect(sought(RULES.ludo, { teams: true })).toMatchObject({ filter: { teams: true }, make: { seats: 4, teams: true } });
+        expect(sought(RULES.ludo, { teams: false })).toMatchObject({ filter: { teams: false }, make: { seats: 2, teams: false } });
+        expect(sought(RULES.ludo, { teams: false, seats: 4 })).toMatchObject({ filter: { seats: 4, teams: false }, make: { seats: 4, teams: false } });
     });
 });
 
 describe('whatever is asked', () =>
 {
-    const games: [string, QuickRules][] = [...Object.entries(RULES), ['a game that leaves teams open', EITHER]];
+    const games: [string, QuickRules][] = [...Object.entries(RULES), ['a game of four with no partners', CLOSED]];
 
     it('opens only a table the game makes, which opening it by hand would store unchanged', () =>
     {

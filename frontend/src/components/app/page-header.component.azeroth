@@ -2,18 +2,30 @@ import type { Child } from 'azerothjs';
 
 export default component PageHeader(props: { title: string; lead?: string; eyebrow?: string; actions?: Child; flush?: boolean })
 {
-    <header class={ [ 'flex flex-col gap-3 @2xl:flex-row @2xl:items-end @2xl:justify-between', props.flush === true ? '' : 'pb-6' ].filter(Boolean).join(' ') }>
-        <div class="flex min-w-0 flex-col gap-2">
-            <Show when={ props.eyebrow !== undefined }>
-                { () => <p class="label -mb-1 text-ui-xs text-faint">{ props.eyebrow }</p> }
+    derived eyebrow = props.eyebrow;
+
+    derived lead = props.lead;
+
+    derived actions = props.actions;
+
+    derived marked = eyebrow !== undefined;
+
+    derived led = lead !== undefined;
+
+    derived acting = actions !== undefined;
+
+    <header class={ [ 'flex flex-wrap items-end justify-between gap-3', props.flush === true ? '' : 'pb-6' ].filter(Boolean).join(' ') }>
+        <div class="flex min-w-0 flex-[1_1_24rem] flex-col gap-2">
+            <Show when={ marked }>
+                { () => <p class="label -mb-1 text-ui-xs text-faint">{ eyebrow }</p> }
             </Show>
             <h1 class="title text-ui-3xl">{ props.title }</h1>
-            <Show when={ props.lead !== undefined }>
-                { () => <p class="max-w-[40rem] text-ui-md text-muted">{ props.lead }</p> }
+            <Show when={ led }>
+                { () => <p class="max-w-[40rem] text-ui-md text-muted">{ lead }</p> }
             </Show>
         </div>
-        <Show when={ props.actions !== undefined }>
-            { () => <div class="flex shrink-0 flex-wrap items-center gap-3">{ props.actions }</div> }
+        <Show when={ acting }>
+            { () => <div class="flex flex-wrap items-center gap-3">{ actions }</div> }
         </Show>
     </header>
 }

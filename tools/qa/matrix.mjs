@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, 'out', 'matrix');
@@ -57,6 +58,7 @@ const ROUTES = [
     { id: 'play-backgammon', path: '/app/play/:backgammon' },
     { id: 'play-poker', path: '/app/play/:poker' },
     { id: 'play-hokm', path: '/app/play/:hokm' },
+    { id: 'play-lobby', path: '/app/play/:lobby' },
     { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -280,6 +282,17 @@ async function audit(page)
             problems.push({ kind: 'landmark', detail: 'no main landmark' });
         }
 
+        for (const lead of document.querySelectorAll('.page header p'))
+        {
+            const box = lead.getBoundingClientRect();
+            const words = (lead.textContent ?? '').trim().split(/\s+/).length;
+
+            if (box.width > 1 && words >= 8 && box.width < 240)
+            {
+                problems.push({ kind: 'squeezed', detail: `a header line of ${ words } words is ${ Math.round(box.width) }px wide` });
+            }
+        }
+
         if (document.querySelector('.table-stage') !== null)
         {
             const page = document.querySelector('.page');
@@ -302,6 +315,37 @@ async function audit(page)
 
         return problems;
     });
+}
+
+/**
+ * A table of two against two that is still waiting for its players.
+ *
+ * Its row on the home page is the widest a row gets: the game, the code, the "2 v 2" mark and the
+ * state. The matrix had no such table, so its home cells were green over a row that ran off a 320px
+ * phone, and it was found only because another pass died and left a team table behind. Reused when
+ * a run before left one, as the playable tables are.
+ */
+async function teamTable(browser, storageState)
+{
+    const mine = await browser.newContext({ storageState });
+    const seated = await mine.request.get(`${ BASE }/api/tables/mine`);
+    const already = seated.ok() ? (await seated.json()).tables.find((one) => one.teams === true && one.matchId === undefined) : undefined;
+    const made = already === undefined
+        ? await mine.request.post(`${ BASE }/api/tables/`, { data: tableBody({ game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', teams: true }) })
+        : null;
+
+    if (made !== null && !made.ok())
+    {
+        await mine.close();
+
+        throw new Error(`qa: could not open a team table (${ made.status() })`);
+    }
+
+    const id = already?.id ?? (await made.json()).id;
+
+    await mine.close();
+
+    return id;
 }
 
 async function main()
@@ -332,6 +376,8 @@ async function main()
         hokm: await playableTable(browser, storageState, 'hokm')
     };
 
+    tables.lobby = await teamTable(browser, storageState);
+
     const partner = await browser.newContext({ storageState: await signedIn(browser, PARTNER_HANDLE) });
 
     const keepDealing = async (page) =>
@@ -340,9 +386,21 @@ async function main()
 
         if (seen.ok() && (await seen.json()).matchId === undefined)
         {
+            await partner.request.post(`${ BASE }/api/tables/${ tables.poker }/seat`);
             await partner.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/start`);
+        }
+    };
+
+    const stopDealing = async (page) =>
+    {
+        const seen = await page.request.get(`${ BASE }/api/tables/${ tables.poker }`);
+        const matchId = seen.ok() ? (await seen.json()).matchId : undefined;
+
+        if (matchId !== undefined)
+        {
+            await page.request.post(`${ BASE }/api/matches/${ matchId }/resign`, { data: { key: `matrix-${ matchId }` } });
         }
     };
     const failures = [];
@@ -371,6 +429,11 @@ async function main()
                 const noise = [];
                 page.on('console', (message) =>
                 {
+                    if (chainUnreached(message, locale))
+                    {
+                        return;
+                    }
+
                     if (message.type() === 'error' || message.type() === 'warning')
                     {
                         noise.push(`${ message.type() }: ${ message.text().slice(0, 140) }`);
@@ -407,7 +470,8 @@ async function main()
                         .replace(':ludo', tables.ludo)
                         .replace(':backgammon', tables.backgammon)
                         .replace(':poker', tables.poker)
-                        .replace(':hokm', tables.hokm);
+                        .replace(':hokm', tables.hokm)
+                        .replace(':lobby', tables.lobby);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 
@@ -426,6 +490,11 @@ async function main()
                     if (SHOTS && problems.length > 0)
                     {
                         await page.screenshot({ path: join(OUT, `${ label }.png`), fullPage: false }).catch(() => undefined);
+                    }
+
+                    if (route.id === 'play-poker')
+                    {
+                        await stopDealing(page);
                     }
 
                     rows.push({ label, problems: problems.length });

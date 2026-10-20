@@ -8,7 +8,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import type { Account, NftItem } from '../../backend/src/schemas.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -33,7 +33,7 @@ const token = (n: number): NftItem => ({
     image: n === 2 ? '' : `/api/nfts/image/${ COLLECTION }/${ n }`
 });
 
-const signIn = (kind: 'wallet' | 'guest') =>
+const signIn = () =>
 {
     const account: Account = {
         id: 'u-dana',
@@ -41,9 +41,8 @@ const signIn = (kind: 'wallet' | 'guest') =>
         displayName: 'Dana',
         bio: '',
         hue: 12,
-        kind,
         isMinor: false,
-        ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+        address: '0x1111111111111111111111111111111111111111'
     };
     server.account = account;
     useSession().establish(account);
@@ -93,7 +92,7 @@ describe('the NFT page', () =>
 {
     it('shows every token the wallet holds with its name, collection and picture', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: [token(1), token(2), token(4)] };
 
         const container = await page();
@@ -110,7 +109,7 @@ describe('the NFT page', () =>
 
     it('pages through a large wallet without repeating a token', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: Array.from({ length: 30 }, (_, i) => token(i + 10)) };
 
         const container = await page();
@@ -127,7 +126,7 @@ describe('the NFT page', () =>
 
     it('keeps the tokens already shown when more are read, pictures and all', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: Array.from({ length: 30 }, (_, i) => token(i + 10)) };
 
         const container = await page();
@@ -150,28 +149,54 @@ describe('the NFT page', () =>
 
     it('says an empty wallet is empty', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.nfts = { configured: true, items: [] };
 
         expect((await page()).textContent).toContain('No NFTs in this wallet');
     });
 
+    it('says the chain could not be reached when the server says so, in either language, and not to check a connection that works', async () =>
+    {
+        signIn();
+        server.nfts = { configured: true, items: [] };
+        server.refuse = 'chain-unreachable';
+
+        const text = (await page()).textContent ?? '';
+
+        expect(text).toContain('Could not read your NFTs');
+        expect(text).toContain('NuraChain could not be reached just now');
+        expect(text).not.toContain(useLocale().t('state.errorLead'));
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = (await page()).textContent ?? '';
+
+        expect(persian).toContain('الان به NuraChain دسترسی نداشتیم');
+        expect(persian).not.toContain(useLocale().t('state.errorLead'));
+    });
+
+    it('keeps the plain sentence for a failure that is not the chain', async () =>
+    {
+        signIn();
+        server.nfts = { configured: true, items: [] };
+
+        const asked = vi.spyOn(client.chain, 'nfts').mockRejectedValue(new ApiError(500, 'internal', 'Something broke.', undefined));
+        const text = (await page()).textContent ?? '';
+
+        asked.mockRestore();
+
+        expect(text).toContain('Could not read your NFTs');
+        expect(text).toContain(useLocale().t('state.errorLead'));
+        expect(text).not.toContain('could not be reached just now');
+    });
+
     it('says so when the server reads no chain, rather than calling the wallet empty', async () =>
     {
-        signIn('wallet');
+        signIn();
 
         const text = (await page()).textContent ?? '';
         expect(text).toContain('does not read NFTs');
         expect(text).not.toContain('No NFTs in this wallet');
-    });
-
-    it('asks nothing for a guest, who has no wallet', async () =>
-    {
-        signIn('guest');
-        server.nfts = { configured: true, items: [token(4)] };
-
-        const text = (await page()).textContent ?? '';
-        expect(text).toContain('has no wallet');
-        expect(server.calls).not.toContain('chain.nfts');
     });
 });

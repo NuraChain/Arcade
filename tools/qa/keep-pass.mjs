@@ -1,7 +1,7 @@
 /**
  * Every signed-in route, read again from under the reader, and nothing on it drawn twice.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production PORT=5300 \
+ *   npm run build && API_RATE_MAX=20000 PORT=5300 \
  *     PUBLIC_ORIGIN=http://localhost:5300 npm start
  *   QA_BASE=http://localhost:5300 node tools/qa/keep-pass.mjs
  *

@@ -18,6 +18,7 @@ const NOTICES: Record<Exclude<ConnectionState, 'online'>, Notice> =
 {
     offline: { tone: 'bg-danger/15 text-danger', icon: 'wifi-off', text: 'connection.offline', urgent: true },
     reconnecting: { tone: 'bg-accent/15 text-accent', icon: null, text: 'connection.reconnecting', urgent: false },
+    unreached: { tone: 'bg-accent/15 text-accent', icon: null, text: 'connection.unreached', urgent: false },
     restored: { tone: 'bg-live/15 text-live', icon: 'selected', text: 'connection.restored', urgent: false }
 };
 

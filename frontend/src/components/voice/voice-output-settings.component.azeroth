@@ -1,0 +1,70 @@
+import Segmented from '../ui/segmented.component.azeroth';
+import Select from '../ui/select.component.azeroth';
+import Slider from '../ui/slider.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings, type VoiceQuality } from '../../stores/settings.store.ts';
+import { BITRATES, useVoice } from '../../stores/voice.store.ts';
+
+export default component VoiceOutputSettings()
+{
+    const locale = useLocale();
+    const settings = useSettings();
+    const voice = useVoice();
+
+    derived current = settings.settings();
+
+    derived speakers = voice.outputs().map((one, index) => ({ value: one.id, label: one.label === '' ? locale.t('voice.deviceUnnamed', { n: locale.n(index + 1) }) : one.label }));
+
+    derived pickSpeaker = voice.canPickSpeaker() && speakers.length > 0;
+
+    derived rate = locale.n(BITRATES[current.voiceQuality] / 1000);
+
+    <div class="flex flex-col gap-4">
+        <h3 class="label text-ui-sm text-text">{ locale.t('voice.section.output') }</h3>
+        <Show when={ pickSpeaker }>
+            <Select
+                label={ locale.t('voice.speaker') }
+                value={ current.voiceSpeaker }
+                options={ [{ value: '', label: locale.t('voice.deviceDefault') }, ...speakers] }
+                class="max-w-md"
+                onChange={ (value) => voice.useSpeaker(value) }
+            />
+        </Show>
+        <Slider
+            value={ current.voiceVolume }
+            min={ 0 }
+            max={ 2 }
+            step={ 0.05 }
+            ticks={ [0, 1, 2] }
+            label={ locale.t('voice.volume') }
+            hint={ locale.t('voice.volumeHint') }
+            valueText={ locale.n(current.voiceVolume, { style: 'percent' }) }
+            class="max-w-md"
+            onChange={ (value) =>
+            {
+                settings.update({ voiceVolume: value });
+                voice.applyVolume();
+            } }
+        />
+        <div class="flex flex-col gap-2">
+            <span class="text-ui-md font-semibold text-text">{ locale.t('voice.quality') }</span>
+            <Segmented
+                items={ [
+                    { id: 'standard', label: locale.t('voice.quality.standard') },
+                    { id: 'high', label: locale.t('voice.quality.high') },
+                    { id: 'best', label: locale.t('voice.quality.best') }
+                ] }
+                value={ current.voiceQuality }
+                label={ locale.t('voice.quality') }
+                block={ true }
+                class="max-w-md"
+                onChange={ (id) =>
+                {
+                    settings.update({ voiceQuality: id as VoiceQuality });
+                    voice.tune();
+                } }
+            />
+            <p class="text-ui-xs text-muted">{ locale.t('voice.qualityHint', { rate }) }</p>
+        </div>
+    </div>
+}

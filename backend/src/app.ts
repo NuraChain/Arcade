@@ -1,4 +1,4 @@
-import { App, json, type ErrorObserver, type RequestObserver } from '@azerothjs/http';
+import { App, HttpError, json, type ErrorObserver, type RequestLogger, type RequestObserver } from '@azerothjs/http';
 import { manifestOf, register } from '@azerothjs/http/api';
 import { mountPages, type KitOptions } from '@azerothjs/kit';
 import type { Logger } from '@azerothjs/logger';
@@ -6,6 +6,8 @@ import type { DataSource } from 'typeorm';
 
 import { buildApi } from './api.ts';
 import { avatarFile } from './domains/identity/avatar.ts';
+import { sameSiteWrites } from './http/origin.ts';
+import { wellFormed } from './http/well-formed.ts';
 import type { Ports } from './ports.ts';
 import type { ServerConfig } from './env.ts';
 import { buildPorts } from './services.ts';
@@ -76,13 +78,27 @@ function watchErrors(log: Logger): ErrorObserver
             return;
         }
 
+        if (error instanceof HttpError)
+        {
+            log.warn('request could not be served', seen);
+            return;
+        }
+
         log.error('request threw', seen);
+    };
+}
+
+export function requestLog(log: Logger): RequestLogger
+{
+    return {
+        info: (said, fields) => log.info(said, fields),
+        error: (said, fields) => (fields?.status === 503 ? log.warn(said, fields) : log.error(said, fields))
     };
 }
 
 export function buildApp(deps: AppDeps)
 {
-    const app = new App({ observe: deps.observe, onError: watchErrors(deps.log) });
+    const app = new App({ observe: deps.observe, onError: watchErrors(deps.log) }).use(wellFormed).use(sameSiteWrites(deps.config.origin));
 
     // Declared by hand rather than through `api`, because a health check that needs the typed
     // client to boot is not a health check. It answers before anything else is mounted.

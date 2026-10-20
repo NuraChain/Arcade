@@ -1,14 +1,15 @@
 import 'reflect-metadata';
+import './env-file.ts';
 
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
-import { logRequests, pipeline, requestId, securityHeaders } from '@azerothjs/http';
+import { logRequests, pipeline, requestId } from '@azerothjs/http';
 import { handleShutdownSignals, serve } from '@azerothjs/http/node';
 import { manifestOf } from '@azerothjs/http/api';
 import type { PageRenderer, PageRoute } from '@azerothjs/kit';
 
 import { buildApi } from './api.ts';
-import { buildApp } from './app.ts';
+import { buildApp, requestLog } from './app.ts';
 import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
@@ -16,25 +17,22 @@ import { seedReference } from './db/seed-reference.ts';
 import { syncSchema } from './db/schema.ts';
 import { loadServerConfig } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
-import { apiRateLimit } from './http/rate-limit.ts';
+import { headersFor } from './http/headers.ts';
+import { apiRateLimit, signInRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
 import { createFranking } from './domains/chat/franking.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { createSocialService } from './domains/social/service.ts';
 import { attachRealtime } from './realtime/gateway.ts';
-import { voiceAllowed } from './domains/table/voice.ts';
+import { voiceCall } from './domains/table/voice.ts';
 import { createHub } from './realtime/hub.ts';
+import { HANDSHAKES_A_MINUTE, SOCKETS_MOST, SOCKETS_PER_ACCOUNT } from './realtime/limits.ts';
 import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
-try
-{
-    process.loadEnvFile(new URL('../.env', import.meta.url));
-}
-catch (error)
-{
-    throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.', { cause: error });
-}
+const CLIENT_DIR = fileURLToPath(new URL('../.dist-frontend', import.meta.url));
+
+const SSR_ENTRY = new URL('../.dist-server/entry.server.js', import.meta.url);
 
 const config = loadServerConfig();
 const log = createServerLogger(config);
@@ -100,7 +98,7 @@ const identity = createIdentityService(dataSource, {
 
 const hub = createHub({
     now: () => Date.now(),
-    accountMax: config.wsAccountMax,
+    accountMax: SOCKETS_PER_ACCOUNT,
 
     async edgesFor(userId)
     {
@@ -122,32 +120,37 @@ const hub = createHub({
 
     report: (error, where) => log.error('realtime failure', { where, error }),
 
-    voiceAllowed: (userId, tableId) => voiceAllowed(dataSource, userId, tableId),
+    voiceCall: (userId, tableId) => voiceCall(dataSource, userId, tableId),
 
     async mayTalk(a, b)
     {
         const [there, back] = await Promise.all([social.mayMessage(a, b), social.mayMessage(b, a)]);
         return there === null && back === null;
-    }
+    },
+
+    pulse: () => ports.pulse()
 });
+
+let goingDown = false;
 
 // ONE instance, shared by the API and by the gateway. It used to be built twice here, once for
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
-const ports = buildPorts(dataSource, config, hub, hub);
+const ports = buildPorts(dataSource, config, hub, {
+    present: (userIds) => goingDown ? new Set(userIds) : hub.present(userIds)
+}, (event, fields) => log.info(event, fields));
 
 const serving = config.servePages;
 
-if (!serving)
+if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
 {
-    log.warn('not serving pages - this process answers the api only', {
-        reason: 'SERVE_PAGES=false',
-        env: config.env,
-        fix: 'set SERVE_PAGES=true in the root .env, or run vite for the browser half'
+    log.info('voice has no STUN or TURN server - a call between two networks is carried by this server', {
+        reason: 'VOICE_STUN_URLS and VOICE_TURN_URLS are empty',
+        direct: 'set VOICE_STUN_URLS to let more players talk to each other directly'
     });
 }
 
 const ssr = serving
-    ? await import(pathToFileURL(config.ssrEntry).href)
+    ? await import(SSR_ENTRY.href)
         .catch((error: unknown) =>
         {
             /*
@@ -156,7 +159,7 @@ const ssr = serving
              * rather than leaving an ERR_MODULE_NOT_FOUND pointing into `.dist-server`.
              */
             log.error('the SSR bundle is missing - run `npm run build` before starting', {
-                path: config.ssrEntry,
+                path: fileURLToPath(SSR_ENTRY),
                 error
             });
 
@@ -169,12 +172,12 @@ const app = buildApp({
     config,
     log,
     ports,
-    observe: logRequests(log),
+    observe: logRequests(requestLog(log)),
     pages: ssr === undefined
         ? undefined
         : {
             routes: ssr.routes,
-            clientDir: config.clientDir,
+            clientDir: CLIENT_DIR,
             renderer: ssr.renderPage,
 
             // Embedded into every served page, so the typed client boots synchronously instead
@@ -191,13 +194,14 @@ const app = buildApp({
 const handler = pipeline(
     app,
     requestId(),
-    securityHeaders({ crossOriginResourcePolicy: false, crossOriginOpenerPolicy: false }),
+    headersFor(config.env === 'production'),
     gzipOnTheWay,
-    ...(ssr === undefined ? [] : [precompressed(config.clientDir, ['/assets/', '/world/'])]),
+    ...(ssr === undefined ? [] : [precompressed(CLIENT_DIR, ['/assets/', '/world/'])]),
 
     // Scoped to /api and /ws. Wrapping the whole handler would meter the forty static assets a
     // cold page load pulls, and a visitor would start taking 429s on their own JavaScript.
-    apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' })
+    apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' }),
+    signInRateLimit({ apiLimit: config.apiRateMax, trustProxy: config.env === 'production' })
 );
 
 const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' });
@@ -205,7 +209,13 @@ const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' }
 // IMMEDIATELY after `serve`, with nothing awaited in between: until the upgrade listener is
 // registered, an Upgrade-flagged request falls through to `mountPages`' catch-all, and every
 // awaited statement here widens that window from a tick into however long the await takes.
-const detachRealtime = attachRealtime(served.server, { ports, hub, config, log });
+const detachRealtime = attachRealtime(served.server, {
+    ports,
+    hub,
+    config,
+    log,
+    limits: { handshakes: HANDSHAKES_A_MINUTE, sockets: SOCKETS_MOST }
+});
 
 /**
  * Deletes what has run out.
@@ -286,6 +296,59 @@ const sweepTurns = () =>
 turns = setTimeout(sweepTurns, TURN_SWEEP_MS);
 turns.unref();
 
+const TABLE_SWEEP_MS = 30_000;
+
+let tables: NodeJS.Timeout | null = null;
+
+let crowded = false;
+
+const sweepTables = () =>
+{
+    void ports.jobs.sweepTables()
+        .then(({ stoodUp, closed, failed }) =>
+        {
+            if (stoodUp > 0)
+            {
+                log.info('absent players stood up', { stoodUp, closed });
+            }
+
+            for (const one of failed)
+            {
+                log.error('chair not freed', one);
+            }
+        })
+        .then(async () =>
+        {
+            const games = await ports.jobs.waiting();
+
+            if (games.length > 0)
+            {
+                log.info('waiting for a game', { games });
+            }
+
+            const others = await ports.jobs.otherServers();
+
+            if (others > 0 && !crowded)
+            {
+                log.warn('another server is using this database, and players on two servers cannot find, hear or reach each other: run one server per database', { others });
+            }
+
+            crowded = others > 0;
+        })
+        .catch((error: unknown) => log.error('table sweep failed', { error }))
+        .finally(() =>
+        {
+            if (tables !== null)
+            {
+                tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
+                tables.unref();
+            }
+        });
+};
+
+tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
+tables.unref();
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -307,6 +370,13 @@ handleShutdownSignals(served, {
             clearTimeout(turns);
             turns = null;
         }
+        if (tables !== null)
+        {
+            clearTimeout(tables);
+            tables = null;
+        }
+
+        goingDown = true;
 
         const saidGoodbye = hub.closeAll(1001, 'Server restarting');
 

@@ -94,7 +94,7 @@ that game's close-up, pushed a further 7% from the copy by the lens. A finger do
 tap on the button.
 
 **Every claim on the page is one the product backs.** No counts, no waits, no seasons, no fairness,
-no chess. Voice is "encrypted by the browser" and never end-to-end; poker is live only; a level unlocks
+no chess. Voice goes "straight between players whenever it can" and is "encrypted on its way", never end-to-end; poker is live only; a level unlocks
 nothing. `reference-parity.spec.ts` pins every game seed `available` because `/` prints "Live" on all
 four without asking the server. The components on `/` are built only from pieces with no path to
 `api.ts` - `GameCard` and `GameTile` reach `catalogue.store` and are not allowed there.
@@ -119,6 +119,13 @@ Everything lives in `styles/tokens.css` (`@theme`, the one `:root` palette, `@th
 shell, overlay, tooltip and toast CSS that Tailwind cannot see as utilities). The reference is
 `design.jpg` (the shell and home) and `me.jpg` (a profile); the spec that turned them into tokens
 is `docs/superpowers/specs/2026-09-22-arena-blue-redesign-design.md`.
+
+**A line of facts is `facts`, and a wrapped line never starts with a dot.** A group's "4 members ·
+1 online · Backgammon" put each dot in front of its fact, so when the line wrapped at 390 the second
+line began with a dot. `facts` (`base.css`) draws the dot before every fact and moves the line back
+over the first one with a negative inline start and a `clip-path` on the side the line starts from,
+so whichever fact begins a line shows no dot, in either direction. `facts-line.spec.ts` (server
+suite) holds the rule and its one caller.
 
 **There is one theme and nothing that could hold a second.** No `data-theme`, no theme store, no
 switch, no `prefers-color-scheme` branch, no light block. The pre-paint script in `index.html`
@@ -155,6 +162,17 @@ Only a hero or a profile card stands in for it. Section headings are `SectionHea
 at `text-ui-lg`, with the blue "See all" beside them and a 44px row whether or not they have one, so
 two headings side by side line up.
 
+**A header's lead keeps room to be read, and its actions go under it when they would take that
+room.** The header was a column that became a row at one width of its container (`@2xl`), with
+actions that never shrank, so wherever the row was just wide enough to exist the lead had what
+was left: on the games page, whose actions are two counts and two buttons (533px), the lead was
+165px wide in four lines at 1024 and 277px in two at 1440, beside a title with half the page
+empty under it. It is one wrapping row now. The title and lead ask for 24rem
+(`flex-[1_1_24rem]`) and the actions wrap onto a line of their own when both do not fit, which no
+breakpoint has to guess: the same header is a row beside a single button and a stack beside the
+games page's counts. The matrix calls a header line of eight words or more that is under 240px
+wide `squeezed`.
+
 **One gutter, on every side.** `--page-pad` is 16px on a phone, 24 from 640 and 32 from 1024, and
 `Page` pads its top by the same amount as its sides - it was 16px at the top under 32px sides on a
 desktop, so every page began closer to the top bar than to the sidebar. The social panel starts at
@@ -163,6 +181,21 @@ uses `bleed bleed-pad`, which read the gutter; the settings nav hard-coded `-mx-
 short of the edge on a desktop. `tools/qa` measures none of this, so it was measured by hand: every
 route at 390 and 1280, the first content's inset and the title's box.
 
+**The settings page is one column of sections.** Account, Appearance, Privacy & safety,
+Notifications, Voice and Game helpers stand one under another, each as wide as the column, and
+so do the rows inside them: one switch to a row, and the three safety lists one under another.
+It was a grid: two sections side by side from 72rem, the switches in two columns from 48rem,
+the lists in three. Sections of different heights left a hole beside the shorter one, a card
+of six switches read as a table, and the owner asked for the column (2026-10-13). The list of
+sections stays beside the column from 56rem: it is the way round the page and not a part of
+it. A control that is not a row keeps a width of its own (`max-w-md` on the device pickers, the
+sliders and the choices of the voice panels), and a button in a stacked panel does not stretch (`self-start` on "Turn on
+for this device"); the account's two buttons stand at the end of its row from 42rem.
+`settings.spec.ts` (*the page of settings*) holds the six sections as the children of one
+column and no `grid-cols-` anywhere under it. The voice section is three panels, the microphone,
+what is heard and the table's own switches, drawn by `components/voice/` (*Settings › Voice* in
+`.claude/rules/games.md`), and the same spec holds each of them in it.
+
 **Shape is crisp**: `rounded-control` (8px) for buttons, chips, icon buttons and inputs,
 `rounded-tile` (10px) for rows and tiles, `rounded-panel` (14px) for cards, `rounded-hero` (16px)
 for hero cards (`hero-surface`), `rounded-sheet` (18px). `rounded-full` is for avatars, presence
@@ -170,7 +203,8 @@ dots, badges, status pills and the search pill.
 
 **The kit, and the one of each that pages reuse.** Lists of rows sit on ONE card divided by
 hairlines (`divide-y divide-line rounded-panel border border-line bg-field`), never as a stack of
-separate tiles; a row with nothing to act on ends in a chevron. A status is `Badge dot text tone`
+separate tiles; a row that leads somewhere ends in a chevron, and a person's row with nothing
+beside it ends in the "more" mark, because it opens the sheet about them. A status is `Badge dot text tone`
 (the pill: the dot carries the colour, the word stays neutral). Presence dots: online `live`, away
 `gold`, offline `faint`, unknown nothing. A person's header is `ProfileHeader`, used by both the
 reader's own page and anybody else's. It is a cover band tinted by the person's hue with the picture
@@ -216,7 +250,10 @@ footprint including the safe area - which is also what anything placed above it 
 `--nav-h`, which is only the pill. On a phone the top bar is gone from the five top-level pages;
 a sub-page keeps a slim back-and-title bar, and Home carries the brand, search and the bell.
 Scrollbars are hidden below 768px and on any coarse pointer; the areas still scroll, and `base.css`
-keeps the thin custom bar for a mouse on a wide screen.
+keeps the thin custom bar for a mouse on a wide screen. The same file hides the cross a browser
+draws in a search field of its own accord (`::-webkit-search-cancel-button`): `Input` draws the
+clear control when it is `clearable`, Chromium and Safari drew theirs beside it, and Firefox draws
+none.
 
 **Game art is illustration, not a render.** `frontend/public/art/games/<game>.svg` (a 3:2 scene)
 and `<game>-icon.svg` (the tile) are hand-built vector: sharp at any width and a few kilobytes each.
@@ -231,8 +268,8 @@ gradient inside a copy of the logo that is `display: none` (the sidebar on a pho
 in every other copy on the page. `public/favicon.svg` is the same drawing, and `tools/art/raster.mjs`
 renders it to the PNG sizes, draws `share.jpg` (the 1200x630 link preview) from the logo and the
 four game scenes, and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
-the matrix does. `og:image` is written absolute by the build when `VITE_PUBLIC_ORIGIN` is set in
-the root `.env`, because a link preview needs one; left empty it stays relative, which is right for
+the matrix does. `og:image` is written absolute by the build against `PUBLIC_ORIGIN` from the root
+`.env`, because a link preview needs one; with none it stays relative, which is right for
 localhost and wrong for a share.
 
 **Achievements are medals and empty states are illustrations, both in CSS.** `.medal[data-tier]`
@@ -442,35 +479,32 @@ a laptop opened on a phone showed the padlock, enabled the box, and threw
 pure function - tampered first because it is the only state that means something is wrong, then this
 browser because it is the one the reader can fix, then everybody else - and a spec pins the order.
 
-**Enrolment is offered where somebody is stuck, not only where it lives.** The seal notice carries a
-button when this browser is what is in the way, and `enrol` NEVER rejects - it reports through
-`failure()` - so every outcome is read back and spoken. A browser is live the moment it enrols, so
-there is no second step to point anybody at.
+**A browser's keys come with the wallet, and nothing asks for them on every page.** The owner:
+"we have get device key i think we can remove it and when user connect wallet it should
+automaticly add it". Connecting the wallet already added the browser in the same signature
+(*Signing in and authorising the browser are ONE signature* in `chat-and-keys.md`), and it now does
+so whatever keys the browser held: when the server's message names the keys this browser already
+had, they are not this account's (revoked, somebody else's, never added), so `connect()` makes
+fresh ones and asks for the message again before the wallet signs. `wallet.spec.ts` (*connecting
+a wallet adds this browser*) holds the three cases and the browser that cannot hold keys.
 
-**And it is offered before anybody is stuck, because both other doors need you to already be
-there.** `keys-banner.component.azeroth` sits in the shell where `ConnectionBanner` does, on every
-route, and says this browser cannot read your messages yet. The seal notice is above a composer
-somebody with no keys cannot reach the point of using, and the devices page is a page nobody opens
-unprompted - so the product's answer to "why can nobody hear me" was a screen you had to already
-know about. It carries the button, because enrolling is one step and it happens there. It once read
-`TEXT[gap!]` inside a branch guarded by `asking()`, and the text binding re-ran with `gap` already
-null in the tick before the branch went, so `locale.t(undefined)` fell through every lookup into the
-plural path and the error boundary took the whole page the moment enrolment finished.
-`keys-banner.spec.ts` walks absent and gone.
+So the strip that sat on every route ("This browser can't read your messages yet. Give it keys")
+is gone, with its dismissal and the three words it said. It was reached only by a session whose
+browser holds no keys of its own: a cookie this browser kept while its stored keys went (a
+cleared site, Safari's week, another port of localhost in development). Such a session is asked
+where it is stuck, above a composer it cannot send from, and on the devices page, both in the
+wallet's words: "Connect wallet". `enrolment.store.ts` keeps the one routine both would otherwise
+copy, a sequence of DECISIONS (a locked wallet says something different from a refused
+signature), and `give` NEVER rejects: `enrol` reports through `failure()`, so every outcome is
+read back and spoken. A browser is live the moment it is added, so there is no second step to
+point anybody at.
 
-**The routine behind that button lives in `enrolment.store.ts`, and it lives there because there are
-now two of them.** It is a sequence of DECISIONS - a locked wallet says something different from a
-refused signature - and it was written out inside `chat.page`. The moment a second surface offered the same button, a second copy of those
-decisions would have been a second chance to say the wrong one, which is the argument `policy.ts`
-makes about the social rules and the same shape.
-
-`gap()` is deliberately silent for two states. A GUEST gets nothing, because a guest has no wallet
-to attest with, so a key here would unblock this browser and leave them blocked on the other half -
-a button that lies about what it fixes. `unsupported` gets nothing either: there is nothing behind
-the button on a browser with no secure storage, and a strip that cannot be acted on is furniture
-that never goes away. Dismissal is held for the session and never written down - a key gap is not a
-preference, and a flag in `localStorage` would silence it for good on the one machine where the
-answer matters.
+**The status strips are a chunk of their own.** `strips.component` draws the connection strip
+and the strip that says a search for players is on (`looking-strip`, *A waiting table IS the
+search* in `games.md`), and starts the connection store; the shell fetches it one promise after
+itself through `strips-loader.ts`, the cues loader's shape. The shell stood at 12,225 of its
+12,288 bytes, neither strip is drawn unless something is wrong, and a direct `import()` in the
+shell would have put the chunk table back into it, which is what a loader module is for.
 
 **A `<Show>`'s `fallback` is built exactly when the guard is FALSE**, which is precisely the moment
 the thing the guard protects may be gone. Closing a table did it: `table` went null, `seated` flipped
@@ -535,10 +569,16 @@ table, and were drawn again with every re-read of it. Each reads a `derived` boo
 create form's choice of seats does, and `lobby-panel.spec.ts` and `table-row.spec.ts` hand each
 the table again and ask for the same node.
 
-Two things ride on the rebuild without saying so, and both have to be put right in the same change:
+Three things ride on the rebuild without saying so, and each has to be put right in the same change:
 a `fallback` that opens with a ternary (chosen once, so it was only ever refreshed by being
-rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), and a child
-that copies a prop into a local. A screenshot cannot see any of this: the rebuild finishes inside a
+rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), a child
+that copies a prop into a local, and a hole of TEXT that reads a prop. `{ props.bet }` inside a
+branch is compiled to `bindContent(el, props.bet)`, one read made while the branch is built, where
+the same hole outside a branch is live and an ATTRIBUTE in the same branch is live. It is in the
+framework's register with a reproduction (entry 40). A poker seat's bet kept "40" after a raise to
+200 the day its pill stopped being drawn again. Inside a branch a prop is read through a `derived`
+(`derived bet = props.bet`, then `{ bet }`); `poker-seat` and the shared `table-plate` do.
+A screenshot cannot see any of this: the rebuild finishes inside a
 frame. Mark the nodes and ask `document.contains` afterwards, which is what `play.spec.ts` does
 (*a table that is read again*) and what the browser pass did across a whole game.
 
@@ -562,6 +602,12 @@ again. An array is as fresh as a row: a condition that counts one is a derived b
 the rows are the keyed list's to keep. `friends-page.spec.ts` holds the field, the reader in it and
 the rows through a re-read and through typing.
 
+It had it a third time, on the Requests tab, and a test written for something else found it. The
+two lists there sat under `when={ incoming.length > 0 }` and `when={ outgoing.length > 0 }`
+with their markup straight inside, so answering one request drew every other one again, the row
+somebody was about to press included. They read `received` and `pending` now, and the spec
+answers one request and sends another and wants the rows that stay to be the nodes they were.
+
 The notifications page shows what a rebuild costs when the reader is not at the top. Its list and
 its filter were branches over the notifications array, so opening, dismissing or receiving one built
 every row again: dismissing the last of a long list left the reader a third of a screen above where
@@ -572,6 +618,17 @@ be told what changed instead: `<For>` hands a kept row its new item, and a row r
 where it draws. `notifications-page.spec.ts` holds the rows through a read, a dismissal and an
 arrival - and could only once the specs' server stopped handing back the same row objects, which is
 the group page's lesson again: a row set to the object it already holds is told nothing.
+
+The table page had it once more, where it costs the most: the board somebody is WATCHING. Its
+branch asked `watchReady && watch.view() !== null` around a thunk, the watch is a new object after
+every doorbell and every thirty-second poll, and so the whole watched board - its stage, whatever
+was in flight on it, its sound handle - was taken down and built again on every answer, a poll that
+brought nothing included. A board built a moment ago has no previous position to move anything
+from, which is half of why a watcher's board jumped. It takes the watch through `let=` now, and
+`WatchBoard`'s own two branches read derived booleans where they read `props.watch.live` straight
+off a prop that is new each time. `play.spec.ts` (*a table that is read again*) marks every node of
+the watched board, reads the watch twice and wants them all still in the page, with the second
+answer shown.
 
 The first run of the node-marking pass (`tools/qa/keep-pass.mjs`, below) found the same fault one
 level in, on nine routes, in five shapes worth knowing by sight:
@@ -588,7 +645,37 @@ level in, on nine routes, in five shapes worth knowing by sight:
 - **A component that tests a prop in a `when`** (`props.person.isMinor`, `props.state !==
   'locked'`, `props.current`) re-runs it whenever the PARENT's expression for that prop does, and
   inside a keyed list that is every time the row is handed its item. The child takes a derived
-  boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`.
+  boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`,
+  `NotificationLead` (the picture of whoever a notification is about, drawn again in every row of
+  the side panel and the notifications page whenever the list was read), `NotificationRow`'s
+  unread mark, `LobbyPanel`'s close (its handler is a new function at every read of the table)
+  and the board a waiting Ludo or backgammon table is drawn with, and the count on a tab, which
+  is `TabCount` now because a row of `Tabs` is handed a new item at every read and a component
+  is a file of its own.
+- **Markup handed in as a prop is built again at every read of the prop.** A prop is a getter, and
+  `facts={ <span>...</span> }` is a getter that makes a new span. `TablePlate` asked
+  `props.facts !== undefined` in a `when` and drew `props.facts` in the branch, so every plate at
+  every table built its mark, its line and its trailing piece twice and threw one away, with
+  whatever was alive in it still running. It showed the day a `TurnClock` went into Ludo's line:
+  the clock ticked twice a second, once from a copy that was never in the document. A component
+  that tests a slot and then draws it reads it ONCE, into a `derived` (`derived facts =
+  props.facts`), and tests and draws that. `table-plate.spec.ts` counts the builds, and
+  `turn-clock.spec.ts` the ticks of a clock that sits on a plate. `PageHeader` had the same
+  shape for its eyebrow, its lead and its actions, and the notifications page built "Mark all
+  read" from the unread count, so the button was drawn again at every read of the list. The
+  header reads each slot once, and the page hands it a button chosen by a `derived` boolean.
+- **A count that hides itself at nothing is not put in a branch.** `Badge` draws nothing for a
+  count of none, and the sidebar, the rail and the island still wrapped each nav count in
+  `<Show when={ countOf(item) > 0 }>`. That condition reads `lobby.waiting()`, an array that is
+  new at every read, so every count was drawn again whenever the lists behind it were read. No
+  spec saw it, and the keep pass only did once the account it signs in as had tables waiting on
+  it. `shell.spec.ts` (*the sidebar's counts*) reads the lists again and wants the same counts.
+- **A keyed list over OBJECTS hands every kept row a new item at every read**, and whatever the
+  row reads off its item runs again: a `when`, and equally a prop that is markup
+  (`marker={ item.crowned ? <Crown /> : undefined }`), which is built again. A list over the keys
+  themselves hands a kept row nothing. The hokm table's seats are seat numbers for that reason,
+  and a row asks for what it shows by number (`.claude/rules/games.md`, *The table is drawn once
+  and stays*).
 - **Two things rode on those rebuilds and had to be put right with them.** A `Link`'s `to` is read
   ONCE unless it is a function (`to={ () => ... }`): a click follows the prop, the `href` does not,
   so a link that is kept now and whose address can change (the other person's handle, at the head
@@ -633,6 +720,75 @@ The top bar's primary action is "Play now", to the
 games list, because starting a game is what the product is for; the sidebar and the rail already
 carry the chat count, so the top bar does not repeat it.
 
+**Nothing called "Play now" takes a chair.** A game's card says the same two words and leads to
+that game's page, as its picture and its name do and as the landing's card always has. Until the
+owner pressed one on Home, the card's button ran quick play: one press and the reader was seated at
+a table of a game, a size and a pace they had not chosen. The words for that are "Quick play", and
+they are on the game's page and in Home's hero, where the choice can be made. `GameCard` and
+`GameGrid` take no handler at all now, so a card cannot be given one by accident;
+`play.spec.ts` presses the card and wants a navigation and no request.
+
+**Home lists the games once, and the reader's own tables come first.** On a wide screen Home drew
+the four games twice in a row - as tiles, then as four large "Featured games" cards - and the
+tables the reader sits at ("Continue playing", one of them waiting for them) began about 1,470px
+down, under both. The featured cards went (the Games page has them, and "See all" goes there), and
+"Continue playing" follows the hero at every width, before the games. `home.spec.ts` (*straight
+after the opening*) holds the order.
+
+**A phone sees every game at once.** The Games page laid its cards one to a row on a phone, each a
+picture, a name, a description, two counts and a button: 2.6 screens to choose among four games,
+and Discover's "Where people are playing" the same. `GameGrid` lays two to a row under its wide
+breakpoints, and a card keeps the game's description only while it is wide enough to read it
+(`@[13rem]`: each of the grid's rows is a container, so it is the card's own width that is asked).
+The page's lead says the ones still being built are marked only while one is. `games-page.spec.ts`
+holds the lead and the shape.
+
+**"See all" opens the whole of what the section showed the first few of.** The owner pressed it
+beside Discover's "People you may know" and was shown their own friends: the link named the Friends
+page and the page opened on its first tab. Read across the app, four were off the same way and one
+was missing. Discover's people go to `/app/friends?tab=suggestions`, where every suggestion is
+listed and paged; its groups, which showed twelve and had no way to the rest, go to
+`?tab=groups`; "Friends online" on Home and in the right panel goes to `?tab=online`, where it
+opened everybody; and Home's "Recent games" goes to `/app/me?tab=games`, where it opened the
+reader's medals. That last one needed the profile's tab in the address, as the Friends page's has
+been since a toast first had to name one: `me.page` reads `?tab=`, falls back to Achievements for
+a name it does not have, and writes a pressed tab with `replace`, so Back leaves the page rather
+than walking its tabs. **The rule for the next list: a tab that a link has to reach lives in the
+address, and a "See all" names it.** `see-all.spec.ts` presses each one and wants the tab chosen
+and the list on it.
+
+**A friend is added by their handle, from the Friends page.** The owner asked for "a button or
+something that users can add their friends easily by handle". There was no such place: a handle
+had to be typed into Search with an `@`, the person opened, and Add friend pressed on their
+profile. "Add friend", beside "Find people", opens a sheet with one field. Two letters of a handle
+or of a name are enough; it asks `GET /social/search` a moment after the typing stops
+(`SEARCH_PAUSE_MS`, the search page's own pause, which moved to `search.service.ts` so the two
+share one number) and lists who the server found, an exact handle first, each with what the reader
+can do: Add friend, Accept for somebody who had already asked, and the plain words Friends or
+Request sent. **Enter adds whoever has EXACTLY the handle typed and nobody otherwise**, so a slip
+does not ask a stranger. It says "Looking for people…" and never "nobody" while the server is still
+being asked, says the look failed with a Try again where it would have said nobody, and drops an
+answer for words the reader has since changed. Nothing on the server changed: a person's id on the
+wire IS their handle, so the request is the one Suggestions sends. The sheet is a chunk of its own
+behind `lib/add-friend.ts`; `add-friend.spec.ts` holds it.
+
+**A handle typed in a message is a way to that person.** The owner: "such as telegram when you type
+@someoneusername you can click on it and see his profile". `lib/markdown.ts` reads a `mention`
+where it reads a link: an `@` that no letter, digit or underscore stands before - which is what
+keeps `dana@example.com` an address - followed by a handle in the SERVER's own shape
+(`identity/handle.ts`: two to thirty-two letters or digits of any script, with dots, underscores
+and hyphens inside, ending in a letter or a digit). So "thanks @dana.w." leaves the full stop out,
+`@سارا` is a mention, thirty-three letters are not the first thirty-two, and nothing is read
+inside code, inside a link or behind a backslash. The node keeps what was typed (`v`) and the
+handle as the server folds it (`normalizeName`), so "@Dana.W" says that and leads to `dana.w`.
+`markdown-dom.ts` draws it as a real `<a href="/app/people/…">`, left to right as every handle
+is, and `RichText` hands the painter the router's `navigate`: an ordinary press is followed
+without loading the page, and one with Ctrl, Cmd, Shift, Alt or the middle button is left to the
+browser, which is what a real link is for. **Nothing is looked up to draw it.** A handle nobody has
+opens the profile page's own "No such person", so a message cannot be used to ask who exists.
+Previews (`plainOf`) keep the words. `markdown.spec.ts` holds the reading, `mentions.spec.ts` the
+link and the navigation, and `chat-pass` sends one between two real wallets.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table
@@ -671,9 +827,12 @@ the one console line the hand-run passes failed on against the development serve
 **An arrival is said once.** A friend request and a message each reach the browser twice, as
 themselves and as the notification the server files for them, and each has a tracker of its own in
 `cues.store`. So the notification tracker keeps quiet about those two kinds (`SAID_ELSEWHERE`) and
-speaks for what only a notification carries: an invitation, an acceptance, a group, a turn. Before
-that every request and every message raised two toasts, and the second one spoke even about the
-room the reader had open. Being the only voice a message has, the chat tracker also has to say the
+speaks for what only a notification carries: an invitation, an acceptance, a group, a turn, and a
+host taking the reader out of a table. That last one has no button (`LEADS_NOWHERE`): there is no
+chair for them at the table it is about, and it is a toast of its own, so it never inherits the
+button of an invitation still on screen. Before that every request and every message raised two
+toasts, and the second one spoke even about the room the reader had open. Being the only voice a
+message has, the chat tracker also has to say the
 one thing the notification used to cover for it: the first message of a conversation that was not
 in the list when it armed. It tells that from an old conversation a later page read in by the
 SERVER'S clock - the message is later than anything the tracker had seen (`newest`) - never by the
@@ -681,6 +840,41 @@ browser's. It speaks for a person's own words only (`kind === 'text'`): a line t
 into a room - a result, an invitation, a group made or joined - is not somebody sending a message,
 and the ones that matter have a notification that says what they are. And nobody is told about a
 message they wrote themselves in another tab.
+
+**A friend request is announced for the request that came, not for a count that went up.** The
+tracker remembered how many requests were waiting and, when there were more, named the sender of
+the LAST one in the list. The server lists requests newest first, so with one request already
+waiting the toast for the next named whoever had been waiting longest. No spec could see it: the
+specs' server listed requests in the order a test handed them over, the new one last, which is the
+one order the server never sends. The tracker keeps the ids it has been shown (`asked`) and speaks
+for the first one it has not, the specs' server orders requests as the server does, and a test adds
+a request with `knock`, which makes it the newest and says nothing about where it goes in the list.
+Ids shown while the socket is down are kept like any others, so a request read in during a
+reconnect is still recovery and not news. It is also what lets the social store take a guess back:
+a request the reader pressed away, and the server refused, returns to the list under an id the
+tracker has already been shown. Counted, it was an arrival, with a toast and a chime, naming
+somebody else - found in the real browser with a decline held and then refused, not by a spec.
+
+**And a notification is announced for the row that came.** That tracker spoke when the unread count
+rose, for the first unread row of the PAGE'S list. So it said nothing when the count did not rise
+(something else was read on another device in the same moment), nothing while the page was
+filtered to another kind (`items()` is the filtered list, and an invitation was looked for among
+the friend requests), and nothing for an invitation that came together with a message: the newest
+unread row was the message, which keeps quiet here. It reads `latest()`, the unfiltered head, keeps
+the time of the newest row it has been shown (`noticedAt`, the server's clock and never the
+browser's), and speaks for the newest unread row later than that which is not said elsewhere. A row
+that comes back with more to say has a new time and is news again; an older unread row that moves
+up the list when the rows above it are dismissed is not, and neither is one that was read somewhere
+else before this page showed it.
+
+**A turn is not announced at the table it is at.** A table played a move a day files a `turn`
+notice whenever the turn comes to somebody, so that they hear of it wherever they are. Somebody
+already looking at that table has heard it from the board, which chimes the turn and shows it,
+and was then told again by a toast whose button led to the page they were on, with a second chime,
+once for every move the other side made. The tracker passes over a `turn` whose table is the one
+the lobby has open (`lobby.openId()`, read untracked, so opening a table announces nothing by
+itself). The row is still unread in the bell, and a turn at any other table is still said.
+`cues.spec.ts` holds both.
 
 **A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
 server starts the game when the last chair fills, which can be minutes later and on another page, and
@@ -694,6 +888,70 @@ an arrival by construction, so there is nothing to arm: a table the list does no
 answered for, which is a silence on a cold load and never a false start. It lives in the cues chunk,
 which the shell imports after it mounts, and costs the shell nothing.
 
+**And it stays until the game is in front of the reader.** It was a toast with a button, six and a
+half seconds, and in the walk of quick play on the built server it had gone before it was pressed:
+a reader who looked away for that long had the Games badge and the tab's title left to say that a
+game with a thirty-second clock was theirs. It has no countdown now (`duration: Infinity`), and is
+taken back (`standing`, `trackStarted`) when the reader opens that table, when they no longer sit
+at it, and when a frame says the game ended without them; the reader can still close it, and the
+moves that follow do not raise it again. `cues.spec.ts` (*stays until the reader goes to the
+table*) holds each.
+
+**A turn that comes round while the reader is elsewhere says so too.** The same frame says whose
+turn it is. When it becomes the reader's, at a table that is not on the screen, the store says
+"Your turn at Ludo" with the way there: once for a turn, never for a turn the reader already held
+when the page first heard of the game (the lobby's own `yourTurn` is the baseline until a frame
+has been seen), never in the same breath as the game starting, and not as a toast at a table
+played a move a day, where the server writes a `turn` notification that has a toast of its own.
+Both are under the account's "Games" switch (the `turns` mute), which silences the start as well.
+
+**What a cue says is also told to the system, when nobody is looking at the page.** Every place
+the cues store raises a toast it also calls `system(text, tag, target)`, and `tellSystem` in
+`lib/system-notice.ts` shows a notification through the worker's registration only when the
+device switch is on (`settings.notify`), the browser has said yes and `document.visibilityState`
+is `hidden`. So a visible page has its toast and a hidden one has a notice, never both. The tag
+names the subject (`chat:<thread>`, `turn:<table>`, `table:<table>`, `request`,
+`<kind>:<subject>` for a notification), so a burst in one thread is one notice that is refreshed,
+and the two voices a turn can have at a table played a move a day land on one notice. Two cues
+have a notice and no toast, because the table they are about is the page that is open and
+hidden: the reader's turn there, and the game starting for somebody waiting on that table's own
+page, which is the case the whole thing exists for. When the document is seen again every notice
+of ours is taken down (`clearSystem`): the page has the truth now. The same is done when the
+app opens on a page that is being looked at, since a notice a push raised is stale the moment
+the reader is in the app, whichever way they came in. `system-notice.spec.ts` holds
+the outlet, `cues.spec.ts` (*what the browser is told when nobody is looking at the page*) what
+is said through it, and `device-notices.spec.ts` the switch. The tags and the sentence for each
+kind are `lib/notice-words.ts`'s (`rowTag`, `chatTag`, `REQUEST_TAG`, `CUE_KEYS`), because the
+worker repeats them for a push and the two must be one notice; `system`'s last argument says
+whether the server pushes that subject, and a hidden page on a device a push reaches leaves
+those to the worker (`.claude/rules/chat-and-keys.md`, *One speaker for one thing*). Pressing a
+notice is the worker's too (the same file, *A pressed notice goes to the thing itself*): this
+store only listens for where it led (`onWent`) and hands the path to the shell's `navigate`.
+
+**A cue waits for the name of whoever it is about.** A toast and a notice are said once and are
+not redrawn, so every cue with a person in it goes through `named`, which asks the people store
+(`people.want`) and speaks when that settles: at once for somebody known, after one request for a
+stranger, and by handle when nobody will describe them. The first notice the real build ever
+showed read "mina saved you a seat": an invitation can come from somebody this page has never
+loaded. A store that stopped while the name was out says nothing. `cues.spec.ts` (*somebody the
+page has not been told about*) holds the three.
+
+**A cue is silent wherever the reader said so.** The server writes no notification for a kind
+that is switched off, from somebody the reader muted or in a thread they muted (`tell`, in one
+`exists`). A message and a friend request are heard by the page from its own lists, not from
+that row, so the cues store asks the same three mutes itself (`hushed(notice, from, thread)`),
+and the toast, its chime and the notice to the system go quiet together. Until this the
+"Messages" and "Friend requests" switches, a muted thread and a muted person emptied the bell's
+list and nothing else: the page still rang for every one, and with the device switch on so did
+the system. The turn and the start ask it too, by kind alone. `cues.spec.ts` (*what the reader
+switched off*) holds each mute, a thread that is not muted beside one that is, and the voice
+coming back when the switch does.
+
+**A notice's pictures are files the server has.** `/apple-touch-icon.png` and `/favicon-32.png`,
+in `lib/system-notice.ts` and in the worker: the one first written for both (`/icon-192.png`) was
+never in `public/`, a 404 in the console for every notice and a blank picture on the lock screen.
+`system-notice.spec.ts` reads the paths out of both files and asks `public/` for each.
+
 **Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
 belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
 `parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it
@@ -705,11 +963,53 @@ than to a hard-coded games list. The chat thread shows its own back whenever the
 it, which includes a phone held sideways: that is rail posture with no rail and no top bar, and the
 thread was a page with no way out.
 
+**The shell tells one history entry from the next by its key AND its address.** `leave` goes back
+only when this visit has a page to go back to, so the count has to be right, and the router's
+`location.key` is not enough to keep it: keys restart at `az1` in every document while a page that
+was reloaded keeps the stamp it had, so the first page opened after a reload carries the key of the
+page it was opened from (the framework register, entry 41). The shell compared keys, took that page
+for the one it was already on and counted nothing. From a table that had been reloaded, the back
+arrow on a profile opened from a plate went to Friends instead of back to the table. A page
+arrived at by a link has no stamp to collide with, which is why nothing had shown it.
+`shell.arrive(location)` is the one place a location is taken in: an entry is
+`${ key } ${ fullPath }`, the page a visit began on is never counted, a push and a pop are and a
+replace is not, and it answers whether this was another entry than the last, which is also when
+the shell closes what was open over the page. `app-stores.spec.ts` builds the collision with the
+real router.
+
+**A pop is counted by the distance the router measured.** Every pop used to be one step back. The
+browser's Forward is a pop too, so going back and forward again left the count one short, and a
+jump of three pages back from the browser's long-press list left two pages that were not there:
+the back arrow then went back in history from the page the visit began on, which leaves the site.
+`location.delta` is the pop's own distance (negative back, positive forward, from the stamps the
+router writes on every entry); a pop it could not measure (`0`, an entry from before the router)
+is still one step back. `app-stores.spec.ts` holds both, Back and Forward through the real router.
+
+**A row with little room says how long ago in the short form.** `locale.relative` takes
+`{ now, style }`; a table's row says "15 min. ago" where "15 minutes ago" was clipped at 390 on a
+team table's row, behind its seats and its voice mark. Lists with room keep the long form.
+`format.spec.ts` holds both styles in both languages. The watch list's row put "started 15 minutes
+ago" beside the game's name and let the NAME give way, so a phone read "Backg… started 15 minutes
+ago"; the name keeps its width now and the time says it short and gives way instead
+(`watch-page.spec.ts`, *keeps a game's name whole*).
+
 **A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
 `pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
 Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans
 for one name (friends, group members, the group-add picker) grows a search box once it holds more than
-`SEARCH_FROM`, folding letterforms with the same `narrowed`/`ranked` global search uses. Notifications
+`SEARCH_FROM`, folding letterforms with the same `narrowed`/`ranked` global search uses. **What was typed is
+folded where it is compared, not by whoever asks.** `rank` folded every name it looked through
+and compared it with the needle as it was handed over, and the four lists handed over the reader's
+own keystrokes: "Sara" found nobody where "sara" found her - and a phone's keyboard capitalises the
+first letter of anything - and neither did a name typed with the Arabic letterforms of the Persian
+ones it was stored in, or with Persian digits, which is the whole of what `fold` is for. Global
+search folded its words before it asked, so it worked and nothing looked wrong. `ranked` and
+`rank` fold the needle themselves now (folding is the same twice), and `narrowed` takes words
+that are nothing but spaces and marks nobody sees for nothing typed. A person is looked for by
+`namesOf`: the name, the handle, and the handle as every row shows it, with its @, which found
+nobody either. It was found by a live check whose script typed a helper's name with its capital
+into "Search friends"; every spec had typed lowercase. `social.spec.ts` (*search folding*) and
+`friends-page.spec.ts` hold it. Notifications
 filter by the account-mute categories on the SERVER (`?notice=`), because filtering a keyset-paged list
 in the browser only filters the pages already fetched; the right panel reads `latest()`, the unfiltered
 head, so choosing Messages on the page does not empty the panel beside it.
@@ -722,11 +1022,66 @@ left to right, the Persian "۱ تا ۱۰ از ۴۰" read backwards. `LoadMore` i
 notifications, match history, the leaderboard - which used to be three differently sized buttons
 written three times.
 
+**A list's page is in the address, and so is the watch list's game.** The owner asked for
+"the completly pagination that mmake user work easy" on every size of screen. The pager had most
+of it; what it did not have was a page that a reload or Back kept: every list held its page in
+local state, so a reader on page three of their friends who opened a profile and came back was
+on page one. `usePageParams(keys)` in `lib/page-param.ts` reads each list's page from the query
+and writes it with `replace`, so Back leaves the page rather than walking its pages, as a tab
+does. The friends page and a group's members use `page`, the search page `people` and
+`messages`, Settings `blocked`, `muted` and `reports`, the watch list `page` beside its
+`game`, which is the address's too now. The first page is never written. A page that sets its
+query from the address on mount resets its pages where a PERSON changes the search (typing, a
+scope, a recent search), never in an effect: an effect also runs when the mount sets the query, and
+threw away the page a reload asked for. `page-param.spec.ts` holds the reading and the writing,
+`watch-page.spec.ts` and `people-search.spec.ts` a page opened on its page through the real router.
+A phone's growing list says how far it has come ("Showing 16 of 40"), and its "Show more" asks a
+derived boolean: it sat in a branch over the count, so every press drew the button again and a
+keyboard was dropped on the page. Not added, on purpose: a choice of page size (these are lists of
+people and tables, not a ledger) and a field to type a page into (the numbered pager always shows
+the first and the last).
+
+**Every filter is in the address too, and so are a search's words.** The owner asked for the
+search box and the filters to be as complete as the pager. The games page's kind (`category`),
+the notifications' kind (`kind`), the search page's words and scope (`q`, `scope`), the
+leaderboard's game and stretch of time (`game`, `window`, on a game's page as well) and the scope
+of a profile's achievements (`scope`) were each held in a component or a store, so a reload, or
+Back from wherever a result led, forgot them. `useAddress()` in `lib/page-param.ts` reads a word
+(`text`: the first of a word given twice, nothing for none) and writes several at once with
+`replace`, each in its place, an empty one left out, and nothing at all when the address already
+says it; `usePageParams` is built on it, and `reset(words)` writes new words and the first page in
+one step. A filter's default is never written (All, a month, everywhere), and a word the page does
+not have is its default. Where a filter lives in a store (the search's words and scope, the
+notifications' kind), the page reads the address into the store in `mount` and writes both where
+a person changes it, so the address is the truth on arrival: the search page opened from the nav
+is empty whatever was searched for last, and Back brings the search back with its page. The chat
+list's tab is the exception and stays in module memory: a thread is another route, and the tab
+has to outlive it (*On a desktop the list stays beside the thread*). `page-param.spec.ts`,
+`games-page.spec.ts`, `notifications-page.spec.ts`, `people-search.spec.ts`, `leaderboard.spec.ts`
+and `record.spec.ts` hold each.
+
+**A row of chips shows the one that is chosen.** With the filter in the address a page can open on
+any chip, and a phone shows three or four of a row: the leaderboard opened on Ludo at 390 showed
+Hokm, Poker and half of Backgammon, with nothing on screen saying whose board it was. The clean
+production run found it. `Rail` brings its pressed or current child into view when it mounts and
+whenever another is chosen (a `MutationObserver` on `aria-pressed` and `aria-current`), clear of
+its fade and sideways only, so the page never moves; a chip already in view stays where it is, as
+a tab does in `Tabs`. Every `FilterBar`, the leaderboard's games and the settings sections get it.
+`primitives.spec.ts` (*Rail*) holds it.
+
+**Escape clears a search field that has words, and only then closes what it sits in.** A field
+with `clearable` answers Escape by clearing itself and marking the event answered
+(`preventDefault`), and the overlay host leaves an Escape that something already answered. The
+first Escape in the invite sheet's search clears the name, and the second closes the sheet.
+`primitives.spec.ts` (*SearchInput*) and `shell.spec.ts` (*OverlayHost*) hold both halves.
+
 **Primitives** live in `components/ui/`. `Tooltip` wraps every `IconButton` automatically, so an
 icon-only control has a visible name on a mouse and a long-press name on a finger; it portals to
 `.anchor-root` and must never go through the overlay stack, whose `blocking()` drives `inert`.
 `Badge` does counts, free text and dots. `Pagination` does numbered pages and load-more.
-`Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
+`Slider` is pointer-captured and keyboard-driven, and a `unit` it is given stands beside the
+number and outside `tally`, so a Persian «دسی‌بل» follows its number (`primitives.spec.ts`,
+*Slider*). `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
 
 **Motion is for physics and nothing else, and it is never on the first paint.** CSS transitions already open and close every sheet, modal and toast, and they stay. What CSS cannot do is carry a gesture into a spring, or slide a row from where it was to where it went. `lib/motion.ts` loads `motion/mini` behind a dynamic import - a sheet asks for it on the pointer going down, so it has arrived by the release; the chat list asks at mount, so a reorder never waits for a download. A released sheet springs to its detent from where the finger left it, and the chat list FLIPs a thread to the top when a message moves it there. Reduced motion skips both, and neither is in the shell or the landing budget.
@@ -764,6 +1119,147 @@ words back in the toast to be copied by hand - except a `secret`, the recovery p
 into a toast a screen reader would announce. The wallet dialog is the one copy that stays inline, because
 the public pages have no toast host.
 
+**What a press does is on screen in the same turn, and only a refusal is ever seen.** The owner:
+"when it click on ready button it should immidetly on client set it to active such as instagram
+like so that user never feel that app has delay". Ready sent its request, waited for the answer,
+read the table again and only then turned green, which on a phone on a train is a second of
+nothing. A store that holds something the reader can change keeps `createGuesses()`
+(`lib/guess.ts`) beside its resource and hands out `guesses.over(read)`: what the server last
+said with every press still in flight laid over it, and the read itself, the SAME object, while
+nothing is in flight, so nothing is drawn again for having the layer there. A verb is
+`guesses.during(guess, send, read)`:
+
+- the guess is made in the turn of the press, before anything is awaited;
+- it stands through the request AND through the read that follows the answer, so the screen never
+  shows the old answer in between;
+- a refusal takes it back at once and is the caller's to say, through `attempt` and the sentence
+  that refusal has (`whyRefused`). The thing goes back and a toast says why; there is no spinner
+  and no disabled button on the way;
+- when the request went through and the truth could not be read again, the guess is KEPT until a
+  read lands (`landed()`): the server said yes, and going back to "Not ready" because a second
+  request failed would be the screen contradicting it. A read that failed is not a read
+  (`viewing.error()`; a resource's `refetch` resolves either way, which is why the store asks).
+
+A guess is a function over the whole thing held, and each one says which table and which chair it
+is about (`atMine`), so a doorbell that reads the table again under a press changes nothing it
+should not, and a press at one table is never drawn at another. A store's requests leave one after
+another (`inTurn`): two quick presses are two requests in the order they were made, the second
+waiting for the first's ANSWER and not for its success, and the screen says what the last press
+said throughout.
+
+**Not everything is guessed.** A move in a game is predicted by its own board, with what the press
+decides and nothing chance decides (*Every board answers the press before the server does*, in
+`games.md`). Nothing the browser cannot know is guessed: which table quick play finds, a deal, a
+start. Nothing that takes the reader off the page is: leaving a table, closing one, giving up. And a
+message is already drawn as it is sent.
+
+The first two were the lobby's Ready and the result panel's Play again. `guess.spec.ts` holds the layer;
+`tables.spec.ts` (*what the reader did at a table, shown before the server has said so*) the store,
+with the request held, refused, sent twice and answered by a table that then cannot be read;
+`lobby-panel.spec.ts` (*the button that says ready*) the button, which is the same node
+throughout, and the sentence in both languages; `play.spec.ts` Play again on the page.
+
+**The sheet about a person leads with their profile, and offers the one friend action that is
+true for them.** It began with Message and offered a friend nothing but to be removed, so a
+stranger could not be added from it and a request could not be taken back or accepted. The order
+is the profile, a game together for a friend ("Play with {name}", which opens the sheet that
+chooses one, team-ups offered, as a friend's row does), a message, then add, cancel the request
+or accept theirs (by `relation`, as the person's page does), the handle, mute, report, and the two
+that are asked about first: remove from friends and block. Somebody blocked is offered no message and no friend action, as on their page:
+a message to them has nowhere to go. Somebody who opens it about themselves - from their own row
+among a group's members, or any list that holds the reader - is offered their profile and their
+handle and nothing more: it used to offer them a message to themselves, and to mute, report and
+block themselves. `person-actions.spec.ts` holds the order, each relation and both languages.
+
+**Somebody drawn in a list is pressed for that sheet.** The owner asked for it: pressing a person
+should offer what can be done with them, their profile first. A leaderboard row - on the page and
+on a game's - did nothing at a press. A friend online on Home and in the side panel, a person
+Discover suggests and the picture beside a message in a group each went straight to that person's
+page. Each is one button now, `aria-haspopup="dialog"`, that opens the sheet through `aboutPerson`
+(`lib/person-menu.ts`, which loads the sheet at the press), as a plate and a chair at a table do;
+the chevron that said a row went somewhere is a quiet "more" mark. `person-press.spec.ts` and
+`leaderboard.spec.ts` hold them. The leaderboard also marks the reader's own row, a light ground
+and "You" beside the name, because a reader looks for themselves first.
+
+**A person's row is the press, and nothing beside it says More.** `FriendRow` - a friend, a
+request, a group's member, a search result, somebody blocked or muted in Settings - linked the
+person to their page, and the friends list and a group's members added a More button beside it
+for the sheet, the friends list a long press as well. The person in the row is now the button that
+opens the sheet, so that More and the hold went, and what stays beside a person is what the row is
+for: play, message, accept, withdraw, unblock, hand over, remove. A friend's Play says "Play" on
+a phone too, where it was a lightning bolt beside the More. A row with nothing beside it ends in
+the "more" mark. The head of a thread with one other person keeps its More, named "More
+about {name}" (`actions.about`), and its picture opens the same sheet. `friends-page.spec.ts`,
+`groups.spec.ts` and `chat-page.spec.ts` hold it.
+
+**Everything the reader does about another person is shown the same way**: a friend request
+sent, taken back, accepted or declined; a friendship ended; a block and an unblock. The social
+store lays its guesses over ONE shape made from the graph (`Known`: who is a friend, who is
+blocked, the requests each way), so `relation(id)` and the four lists cannot disagree for the
+length of a request. Each guess is written to change nothing once the truth holds what it guessed:
+a request already out is not added a second time, and somebody already a friend is not listed
+twice, which is what keeps the moment between the answer and the layer going from showing
+anything twice.
+
+- **Asking somebody who has already asked is drawn as what the server makes of it**, a friendship
+  and not a second request. The specs' server sent a request whatever was waiting; it accepts now,
+  as the real one always has.
+- **One thing pressed twice is one request, and two different things are two.** The store kept
+  what was in flight by PERSON, which was harmless while "Cancel request" could only be pressed
+  once the request had been answered. Shown at the press, it can be pressed while the request is
+  still on its way, and would have been handed the request's own promise and never sent. It is
+  kept by verb and person now, and the two leave in the order they were pressed.
+- **Nothing is busy.** `social.working` and every `loading` and `disabled` that read it are
+  gone: a row that changes the moment it is pressed has nothing to spin for, and a button that
+  spun was the wait this is about.
+- **A privacy switch turns under the finger** and ends on what the server STORED, which for a
+  minor is not always what was asked; refused, it turns back and Settings says so.
+
+`social.spec.ts` (*what the reader did about somebody, shown before the server has said so*)
+holds the store with each request held, refused and sent out of turn, and `friends-page.spec.ts`
+the Requests tab.
+
+**A notification read, all of them read, or one taken away is shown the same way**, over the three
+things that store hands out: the page's list, the list beside the page (`latest`) and the count.
+
+- **The count goes down by one only for a row that was unread where the reader pressed it**,
+  wherever that row is drawn - the page's list, the panel's, a page read earlier - and never below
+  nothing: an earlier page can still call unread what was read on another device.
+- **The read that follows is the store's own `keep`**, which changes the earlier pages as the reader
+  changed them and reads the head again. A guess is let go only when BOTH lists were read: under a
+  filter the list beside the page is a second request, and one that failed keeps the guess over it.
+- **Mark all read and the cross on a row say when the server refuses** (`attempt`). They were
+  called with `void` and nothing behind them, so a refusal was an unhandled rejection and a row
+  that stayed where it was with no word.
+- **Opening a notification marks it read, and says nothing if that is refused.** The reader asked
+  for the thing it leads to; the mark is a courtesy to that, and a toast about it on the page they
+  have just opened would be about nothing they did. The row goes back to unread by itself.
+- **A press the server refuses is not news.** Refused, a row is unread again or back in the list,
+  and the tracker that announces arrivals goes by the time of the newest row it has been shown,
+  not by the count going up. The other way round, a row that comes while everything is being marked
+  read is drawn as read for that moment; so once the tracker is armed only an UNREAD row moves its
+  mark, and that row is announced when the server's word arrives that it is unread.
+
+`notifications.spec.ts` (*what the reader did to a notification, shown before the server has said
+so*), `notifications-page.spec.ts` (*when something on it is pressed*), the right panel's test in
+`shell.spec.ts` and the last tests of *a notification that arrives* in `cues.spec.ts` hold it.
+
+**Play again says which game it follows, because the table on screen may still be the one from
+before the finish.** The result arrives with the last move, pushed; the table is read again a
+doorbell later, which is half a second on a good line and far longer on a bad one. In between the
+page holds a table with a game on and every chair ready from the last START, and `rematchOf`
+rightly trusts none of that readiness, so the first live check of this pressed Play again there and
+saw nothing change until the table had been read again. `lobby.again(tableId, over)` is handed the
+game the result panel is showing, and where the table still names that game the guess is the table
+as the finish leaves it - no game on, nobody ready, full or with a chair free - with the reader's
+own chair ready. "Waiting for Sara to play again." is then on screen at the press in that moment
+too. A table that names another game is taken as it stands.
+
+**A spec that waits for what a press shows is answered before the request has left.** With a guess
+`vi.waitFor(the words)` returns in the turn of the press. A test that then "answers" or "refuses"
+the request it believes is out resolves nothing, and hangs: the first version of the Play again
+test did exactly that. Wait for the request to have been asked, then answer it.
+
 **A toast's countdown stops for a pointer AND for focus, and starts again however the touch ended.**
 Pausing takes the time spent so far out of `remaining` and deliberately leaves `startedAt` where it
 is, because that is what the subtraction was measured from — so `progress` has to read a `paused`
@@ -773,6 +1269,29 @@ pointer arriving and focus landing are two different callers, and hovering a toa
 its button took two bites out of one countdown. Resuming is idempotent too, which is what lets
 `pointercancel` say it unconditionally — a cancelled touch never reaches `pointerup`, and the toast
 used to sit there for good waiting for a resume that was never coming.
+
+**A toast keeps its time for somebody who can see it, and the keyboard can reach it.** The owner
+asked for toasts "with full Facilities"; most were there (six kinds, an action, close, a pause
+under a pointer or focus, swipe away, a capped stack, the right announcement, de-duplication).
+Four things were not:
+
+- **A hidden tab holds every countdown.** A toast counting down when the tab hides, or raised
+  while it is hidden, waits (`away` in the store) and counts on from where it stopped when the
+  tab is seen. A toast held by a pointer stays held.
+- **Alt+T takes the keyboard to the newest toast**, onto its own button when it has one, and
+  Escape in a toast closes it. Either way, and after its button or its close is pressed, the
+  keyboard goes back to where it was (`back` in the host). The region says `aria-keyshortcuts`.
+- **A toast's buttons are kept through a pause.** Focus on a button paused the toast, the pause is
+  a new toast object, and the branches round the action, the close, the detail and the picture
+  asked the object in a `when`, so the button under the keyboard was drawn again and the
+  keyboard fell to the page. They are value branches (`let=`), which swap only when the answer
+  does. Only the Alt+T spec could see it.
+- **The promise form says a refusal in words it is given.** It showed `String(error)`, which is
+  a sentence in English from wherever the error came; `failed` may be a function of the error,
+  and without one the reader is told `common.actionFailed`. Its first caller is adding this
+  browser with the wallet ("Your wallet is adding this browser…", then what happened).
+
+`shell.spec.ts` (*ToastHost*) and `primitives.spec.ts` hold all four.
 
 **A toast gets out of a sheet's way.** Toasts sit above everything, at the foot of a phone, which is
 where a sheet is: the offer to join a table's voice lay over "Turn voice off for this table" in the
@@ -784,6 +1303,18 @@ said at the foot as the sheet leaves. A dialog on a wider screen is centred and 
 their corner. The store used to carry a `placement` and a `setPlacement` that nothing ever called,
 with the CSS for a top placement written and never drawn: both are gone, the host reads what it needs.
 `shell.spec.ts` (*beside a sheet*) holds the three cases.
+
+**At a table a toast keeps off the hand and the chat.** The foot of a phone is the reader's own cards
+and dice and, once it is open, the chat's field; the bottom corner of a wide screen is where the chat
+card's composer sits. A page that needs the toasts elsewhere holds them at the top with
+`toasts.lift()`, which answers the release: the holds are counted, so two holders do not let go of
+each other's, and one taken before a `reset()` cannot undo one taken after. The table's page holds
+it for as long as it is mounted, at every width. It used to let go on a wide screen while the chat
+card was closed, from when a board stood in the middle of the page with room round it. A table
+takes all the room it is given now, so that corner is the table's: measured at 1280 on a Hokm
+table, a toast there lay over the hand's Sort button in Persian and over the coach's lamp in
+English, with the reader's cards beside it, for as long as it stood. The invitation card already
+went to the head of the page at a table for the same reason.
 
 **An offer in a toast is taken back when it stops being true.** A table with voice offers the call
 in a toast with a Join button, and a toast outlives whatever raised it. The host switched voice off
@@ -820,6 +1351,16 @@ parse a title to find its own number in it. Stopping it puts the page's title ba
 the observer. `cues.spec.ts` writes a page title under a running count, changes it, reads
 everything, and stops the store.
 
+**The count takes up the page's title before it writes, not only when its observer hears of it.**
+A `MutationObserver` answers in a microtask, and the count's own effect answers at once. Opening a
+thread does both in one turn: the page writes the thread's name, and reading the thread changes the
+count, so the count wrote "7 · Loading… · Nura Games" over the name before the observer had heard
+of it, and the observer then found the title equal to what the count last wrote and left it. Every
+thread's tab said "Loading…" (in Persian too), and one opened from the list said "Chats". `write`
+now compares the title with the string it last wrote and takes up anything else as the page's own,
+so it does not matter which of the two is told first. `cues.spec.ts` (*in the same turn as the
+count changed*) holds it.
+
 **`tools/qa/keep-pass.mjs` is the pass for a page drawn twice.** A branch that is built again
 though nothing changed looks exactly as it did, so no screenshot, no matrix cell and no spec that
 was not written for that one branch can see it; every one of them here was found by hand, by
@@ -838,6 +1379,30 @@ and after any change to a page's outer branches.
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can
 perform is not a defence. It carries a tooltip with the whole value and a copy button now.
 
+**An overlay hands the keyboard back when the page under it can take it, and to something that is
+still there.** A layer used to refocus whatever had the keyboard when it opened, in its own
+cleanup. The shell is `inert` while anything is open, a browser ignores `focus()` on something
+inert, and whether the shell had stopped being inert by then was the order in which two effects
+heard about one write. It differed by page: on Friends the More button got the keyboard back, and
+at a table nothing did, so closing any sheet there left a keyboard at the top of the page.
+`overlay-layer` hands it back in a microtask, once everything that listens to the write has heard
+it (measured at a table on the built server: inert at the cleanup, not inert one microtask later).
+A sheet opened from another as that one closes - Report and Block, from the sheet about a person -
+remembered a button that was gone by the time it closed. Each layer leaves `origin` for its dialog
+in a `WeakMap`, and a layer opened from inside a dialog falls back to it when its own opener has
+left the page; a second sheet over a first that stays still goes back to the first.
+`shell.spec.ts` holds all three, with the page told first and with the host told first.
+
+**A question about something that cannot be undone gives the keyboard to Cancel.** A sheet gives
+the keyboard to the first thing in its body that can take it, and `ConfirmSheet` draws its answer
+first, so resigning, leaving or closing a table, deleting a message, removing a member, blocking
+somebody or ending a friendship was one Enter away from the press that asked about it. A
+`destructive` question marks Cancel `autofocus`, which `firstTabbable` prefers; the answer is
+still drawn first and is still the larger. A question that loses nothing leaves the keyboard on
+its answer. Handing a group over is not one of those: the reader cannot take it back, so it is
+asked as `destructive` too (`groups.spec.ts`, *handing the group over*). `confirm-sheet.spec.ts`
+holds both.
+
 **A tooltip belongs to a KEYBOARD focus, not to every focus.** `onFocusIn` fires for a programmatic
 `.focus()` too, and every sheet moves focus to its close button as it opens - so each one opened with
 the word "Close" floating over its own first paragraph, which on the table sheet covered the sentence
@@ -854,6 +1419,57 @@ else does not.
 **Touch is not an afterthought.** Anything a finger hits clears 44px — use the `coarse:` variant
 rather than growing the control for everyone. `npm run qa` fails the build if it does not.
 
+## A part of the app that would not load
+
+**Chromium keeps a failed `import()` for as long as the document lives.** Ask again for the same
+module and it rejects at once, with no request sent. Measured on the production build in Chrome 154,
+a chunk's request aborted once and then let through: the second `import()` of the same address
+failed in the same tick and the network stayed quiet. Firefox and Safari ask again. So every "Try
+again" drawn over a chunk that had not come - a board's, a watcher's board's - did nothing in the
+browser most people use; the full-screen error page's button drew the same error again; and a tab
+left open across a deploy, whose chunks are gone from the server, lost every page and sheet it had
+not already fetched, one press at a time. No spec saw it: a module mock that throws is run again on
+every import.
+
+**The one way back is loading the page, and `lib/chunks.ts` is the one place that decides to.**
+
+- *By itself, once.* The build's preload helper raises `vite:preloadError` on `window` for every
+  dynamic import that fails, and `watchChunks()` in `main.azeroth` hears it - started before the
+  first lazy load there is, the Persian catalogue. The page is loaded again when the SERVER ANSWERS
+  (`GET /api/auth/me`, any status under 500, five seconds to say so) and the page has not loaded
+  itself again in the last minute (`RELOAD_GAP_MS`, noted in `sessionStorage`). A dead origin
+  answered with a reload is the browser's own error page in place of an app that would have
+  recovered, which is why the server is asked; and where the note cannot be read or written nothing
+  is automatic, because a reload that cannot remember itself is a loop. Several parts lost in the
+  same moment ask the server once.
+- *When it is asked to.* `reloadPage()` is every Try again over a lost chunk, the "Reload" of a
+  game this copy cannot draw (which called a function that returned at once), and the error page's
+  button, which falls back to the boundary's `reset` when the server is not answering. It ignores
+  the minute and still asks the server first; a press that reloads nothing leaves the complaint
+  where it was.
+- *Without a flash.* `chunk(load)` wraps a dynamic import whose failure would otherwise be DRAWN
+  for the moment a reload takes: it waits for the decision and, when the page is going, never
+  settles, so a route stays pending on the page it was leaving and a board stays its placeholder.
+  Every `lazy:` in `routes.ts` goes through it (`chunks.spec.ts` reads the file), and so do the
+  board loaders in `boards.ts` and the chunks the table page fetches for itself.
+
+A sheet opened by a press (the finder, the invite sheet, a message's actions) is not wrapped: it
+toasts "That did not go through" for the moment the reload takes, or for good while the server is
+silent. `runtime().reload` is the seam the specs count, and the typed `api` client is not what asks
+the server, because `lib/chunks.ts` is in the landing's initial chunk and the client must not be.
+
+**Nothing asks for a lost chunk twice.** The watcher's board on the table page used to be asked for
+again by every re-read of the table; in Chromium each of those failed without a request and drew
+the complaint again. And a watcher whose GAME's board would not come was shown a placeholder for
+ever; it says so now, with the same Try again.
+
+**Measured on the production build**, a chunk's request aborted in Chromium: a lost lobby, a lost
+board, a lost page and a lost sheet each load the page again once; the error page is never drawn on
+the way to a page whose chunk was lost (polled every 40 ms); a second loss inside the minute stays
+and says so; Try again loads the page whatever the minute says, and the part is there once its
+request goes through; and with `/api/auth/me` aborted as well nothing reloads, no note is written,
+and the page goes on saying so.
+
 ## Performance
 
 **`npm run build` fails on these now.** `tools/budgets.mjs` runs after the build steps, gzips the
@@ -867,6 +1483,18 @@ that ships. Each of those is one keystroke from being undone and every one of th
 fails silently - the page still works, it just pays for the whole typed api client, and its
 top-level await on `/api/_manifest`, on a route prerendered to a file precisely so it needs no
 server.
+
+**Each table's chunk and the stage under them have a ceiling too.** A table is the component a
+game is played in (`components/games/boards.ts`), and the stage is the chunk that holds
+`game/stage/stage.ts`, which every table waits on. The four tables were 8.4, 17.0, 17.5 and
+21.2 KB gzip and the stage 8.9 KB when the ceilings were set: 24 KB a table, 11 KB the stage.
+Which chunk holds a module is read from the build's own list (`.vite/chunks.json`), because the
+bundler cuts the stage kit into several chunks (`stage`, `curves`, `die`, `flight`, `route`) and
+folds a module with one user into that user: `chips` into poker's table, `celebrate` into Ludo's
+renderer, `feed` into the match store. The tables come from their registry as the scenes do, so
+a fifth game is measured by the same rule. The build is refused as well for a registry with no
+table, for a table or a stage that is in no chunk or in the landing page's first set, and for a
+stage folded into one table. Each of the five was lowered or broken once and seen to refuse.
 
 **It asks which modules, never which chunk names, because the `boot` group renames everything it
 swallows.** The rules used to match `^api-`, `^landing-`, `^session\.store-` against the initial
@@ -970,6 +1598,13 @@ The client half of the same audits, each a thing that outlived what it belonged 
   whoever signed in next - the archive defect in *Reading chat* was one case of it, and a list of stores
   to reset would be one entry short the day somebody adds a store. The session is forgotten first, the
   server and the keyring are told, and then the tab starts again from nothing.
+- **Nobody signed in reads no chat.** The chat store keyed its list and its open thread on the
+  reader, with `'you'` standing in for nobody, so forgetting the session at sign-out was a new key:
+  both were read again, the list while the session still stood and the thread's signers just after
+  the server had ended it, a 401 in the console of every sign-out with a thread open. The notify
+  pass found it. Both keys are null while nobody is signed in (`signedIn`, a memo of a boolean:
+  the account is a new object at every read, and a key that read it was a new key each time).
+  `realtime-stores.spec.ts` (*a chat store whose reader has signed out*) holds it.
 - **A voice join that has been overtaken stops its own microphone.** `join` is counted, and every await
   asks whether it is still the latest; a superseded one stops the tracks it was granted instead of
   writing them over the live ones, which is how a second join to the same table used to leave a
@@ -980,8 +1615,9 @@ The client half of the same audits, each a thing that outlived what it belonged 
   which otherwise held a detached anchor and a closure over a page that no longer existed.
 - **An error that would never leave gives its slot up.** Error toasts do not expire, so three of them
   used to fill every slot and queue everything after them for good; a new toast now retires the oldest.
-- **A timer that fires takes its own stop-handle with it** in the hokm board and the table cues, which
-  otherwise kept one per beat for the whole match.
+- **A timer that fires takes its own stop-handle with it** in the stage and the table cues, which
+  otherwise kept one per beat for the whole match. The hokm board has no timers of its own now: its
+  scenes wait on the stage's.
 - **The plaintext archive is capped** at five thousand messages, oldest first, and **epoch key bytes
   are zeroed** once a page of history or a list preview has been opened with them - the thread shares
   one copy per epoch across a page, so it is zeroed after the page, not after each message.
@@ -991,10 +1627,15 @@ The client half of the same audits, each a thing that outlived what it belonged 
 
 ## What the browser stopped paying for
 
-- **A message is opened once.** `chat.source` keeps what it opened by `(id, signature)` - the same
-  bytes cannot open to different words - so a refetch of the list or a thread, which every doorbell
-  causes, costs no signature check, no key fetch and no decryption for anything already on screen. Only
-  a successful open is kept; a failure is asked again. It is capped with the archive and dropped with it.
+- **A message is opened once.** `chat.source` keeps what it opened by everything its signature covers
+  (`sealedAs`: the room, the epoch and the count, the id, the account and the device, the kind, the
+  time, the commitment, the last moment, the nonce, the words and the signature itself), so a refetch
+  of the list or a thread, which every doorbell causes, costs no signature check, no key fetch and no
+  decryption for anything already on screen. It was kept by `(id, signature)`, on the reasoning that
+  the same bytes cannot open to different words. The words are not all a row says: its time, its last
+  moment and its room are read from the row, so a server that served an opened message again with
+  any of them changed was believed without being asked. Only a successful open is kept; a failure is
+  asked again. It is capped with the archive and dropped with it.
 - **Unknown people are asked about in one request.** `GET /social/names?handles=` answers up to fifty
   (`NAMES_MAX`, a zero-import module both halves read) with a name, a bio and a hue - no presence and no
   relation - where `people.want` used to send one request per handle.
@@ -1002,17 +1643,34 @@ The client half of the same audits, each a thing that outlived what it belonged 
   compositor cannot run, so a twenty-four hour one repainted the plate every frame for a day while the
   ring moved one pixel every quarter hour. Over ten minutes the ring is drawn still and moved once a
   minute; a live turn keeps its smooth animation.
+- **With less motion asked for, a live turn's ring is drawn still too, and stepped once a second.**
+  `base.css` gives every animation no time there, and `plate-clock` holds its last frame, so the ring
+  was drawn EMPTY from the first instant of every turn: a seat with twenty-five seconds left looked
+  as if its time had run out. The plate draws the still ring (`data-still`) for a reader who asked
+  for less motion and steps it on the product clock, once a second while its seat is on turn, which
+  is the beat `TurnClock` counts its seconds on. A ring that drops a notch a second is a clock hand,
+  not travel. One ticker serves both cases and changes its pace with the turn (a minute for a turn
+  of a day, for a seat that is not on turn, and for a reader whose ring animates by itself), and it
+  is released with the scope (`onCleanup`). A new count sets the beat to the moment it was heard,
+  or the first step after it would be measured from the old beat. `table-plate.spec.ts` holds it.
 - **The toast bar is CSS**: a `transform` animation paused with `animation-play-state`, where a 120ms
   timer rewrote a width - a layout - for every toast on screen.
 - **The landing preloads its poster** with the same media queries the stage's CSS chooses by, so the
   largest paint starts with the HTML rather than after the stylesheet, and each screen still fetches
   exactly one of the three. `tools/prerender-locales.mjs` writes the two links into the prerendered
   files only, because the other pages share `index.html`.
-- **Hidden and offline tabs stop polling** the live counts and the watch list.
+- **Nothing polls the live counts or the watch list.** Both follow the realtime `pulse` frame, and a
+  page with no socket reads them on the lifeline's ring (`.claude/rules/games.md`, *The counts and
+  the Watch list keep themselves up to date*).
 - **Hokm's gather reads every card's box before it moves any**, instead of a read and a write per card.
 - **A scroll waits on no script unless it could become a gesture.** The pull-to-refresh and back-swipe
   listener has to be non-passive to cancel the scroll, so it is attached only for a touch that starts
   at the leading edge or on a list already at its top, and removed when that touch ends.
+- **A touch that starts on something that takes drags of its own is not the page's.** An element
+  marked `data-drags` (a board with a piece to carry) is left alone by `attachGestures`, whichever
+  edge it sits at. `touch-action: none` does not do this: the page's gestures are touch events of
+  their own. A backgammon checker carried from the board's edge point swiped the page away and left
+  the table (`.claude/rules/games.md`, *While there is a checker to carry*).
 - **The message hover toolbar is not built on a touch screen**, where it can never show - several
   tooltip-wrapped buttons per message, hidden.
 - **The table no longer animates its padding when the chat sheet opens.** The stage is a size container,
@@ -1097,6 +1755,12 @@ Three sizing traps: a grid item needs `min-w-0` to shrink around `truncate`; an 
 needs `min-w-0` too; and a `<button>` shrink-wraps even at `display: flex`, so a class list shared with
 a `<div>` must state `w-full`.
 
+**A name that IS the thing is not truncated.** Home's four game tiles cut "Backgammon" to
+"Backgam…" from 320 to 390: it needs 72px and a tile gives 52 to 70. The tile's name breaks onto a
+second line instead (`hyphens-auto wrap-break-word`); a browser with a hyphenation dictionary breaks
+it with a hyphen and one without breaks it at the edge, and either way the whole name is read.
+`home.spec.ts` (*break onto a second line*) holds it.
+
 ## RTL
 
 English and Persian. **Logical properties only** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,
@@ -1109,6 +1773,50 @@ Both catalogues are split by area under `locales/{en,fa}/` and typed
 key that is *identical* in both languages fails `tests/data.spec.ts`. Interpolation-only strings
 therefore do not belong in the catalogue.
 
+**Persian is written the way people talk.** The owner asked for natural, everyday Iranian Persian
+(فارسی محاوره‌ای) everywhere, restructured rather than translated word for word, and every Persian
+string the product shows was rewritten that way, the server's achievement ladders included
+(`achieve/families.ts`, seeded at boot). New copy follows the same voice:
+
+- The reader is «تو», never «شما»: «می‌خوای»، «می‌تونی»، «بزن»، «واسه»، «رو» for «را». A sentence is
+  said as it would be said, not dressed up; slang is not forced into every line.
+- A control is short: a noun for a button that does something (`ساخت میز`, `ترک میز`, `کپی لینک`), an
+  imperative where that is how people would say it (`برو سر میز`, `دیگه نگرد`). A plate's tag stays a
+  word or two (`وقت تمام`, `ترک کرد`, `نوبتته`): the plates are measured.
+- No suffix is glued to a placeholder (`{name}ه`, `{game}ت`): the sentence is built round it.
+- One word for one thing: «چت» for a conversation, «نام کاربری» for a handle, «بلاک» and «آنبلاک»,
+  «بلاکچین» and «رجیستری», «رمزگذاری» for sealing, «کپی»، «فوروارد»، «اسپویلر»، «مدیر گروه», «اکسپلور»
+  for Discover. A rating is «ریتینگ», experience «تجربه», a backgammon point «امتیاز».
+- The games keep the words players use: حاکم، «حکم کن»، گشنیز، خشت، دل، پیک، سوزوندن، یار، کُت; at
+  hokm a trick is «دست» and a hand «دور»; at Ludo the yard and the home are both «خونه» and a move is
+  counted in «قدم»; at backgammon a point is «خونه», a gammon «مارس» and a backgammon «مارس ترکی»; at
+  poker کال، رِیز، فولد، آل‌این، پات، چک. Six is written «شش».
+
+A spec that checks Persian quotes the catalogue's own words, so a rewrite fails the specs that read
+the old ones; the passes that press a Persian name (`regression-pass`, `seal-pass`, `notify-pass`)
+are kept to the same words.
+
+**A name keeps the page's side and its own reading order.** Every display name carries
+`dir="auto"`, so "Mina Sadeghi" on a Persian page is an element that reads left to right, and
+`text-align: start` is then ITS left. Wherever the element is stretched across its row (`flex-1`,
+`w-full`, or a child of a column), the name stood at the far end from its own avatar: on the
+leaderboard and in a game's result, while a Persian name beside it stood where it should. The
+owner saw it. `base.css` gives every one-line label (`.truncate[dir='auto']`, a label fixed left
+to right with `.truncate[dir='ltr']`, and the plate's name) `text-align: match-parent`, which
+answers with the PARENT's start, so the letters still
+read their own way and the label stands where the row begins. Chromium and Safari know the word
+only as `-webkit-match-parent` and Firefox only plain, so both are written, the plain one last.
+The rule is inside `:where()`: a label centred or ended on purpose keeps its place. Text of more
+than one line (a message, a bio, a clamped preview) is not a label and keeps its own side.
+A handle is written left to right on every page (`dir="ltr"`), so under a name on a Persian page
+it stood at the far side of the row from the name and picture it belongs to: in the sheet about a
+person, the invite sheet, the add-friend and group-add lists and the create-game form. It is in
+the rule's reach now. Measured in the sheet at 390 in Persian, the handle ends where the name
+ends, beside the picture.
+`backend/tests/label-direction.spec.ts` holds the two words, the three places the rule has to
+reach, the five handles, and that no stretched `dir="auto"` element is out of its reach; the
+regression pass measures a Latin name on the Persian leaderboard.
+
 **A MEASURED coordinate is physical, and so is the property that applies it.** The tooltip placed
 itself with `inset-inline-start: var(--x)` while `place()` hands back a `left` read off
 `getBoundingClientRect` - which worked only by accident. The bubble carries `dir="auto"` so a Latin
@@ -1118,6 +1826,25 @@ the ⋯ button's name floating at the far side of the header. The logical-proper
 layout that should flip; a number that came from the layout engine already has a side, and applying
 it logically flips it a second time. `.tooltip` and its arrow use `left`/`top` for exactly that
 reason.
+
+**A shape made by turning a box is not a direction to flip.** At first the sign over
+poker's cards about to fold was a chevron: two borders of a small box turned 45 degrees, so that
+it pointed up at the table. Written as `border-block-start` and `border-inline-start` the same
+turn pointed it sideways in Persian, where inline-start is the right border. Hokm's chevron over a
+lifted card was written that way and was right only because its hand is `direction: ltr`. Both
+are gone, and a lifted card's ring breathes instead, which has no direction to get wrong; but the
+trap is anybody's, and the borders of a turned shape are `border-top` and `border-left`. It was
+seen at a Persian table, with every gate and the fit pass green.
+
+**A table does not mirror, so what stands at a place on it is placed physically.** Poker's table
+is `direction: ltr` and its seats are placed by `left` and `top`: the seat after the reader is
+on the reader's left in both languages, and a seat's cards and bet lie on the side its plate
+faces (`--ux`, `--uy`), which is a side of the table and not of the sentence. The row by the pot
+(`.poker-tally`) reads left to right for the same reason, and only what is written in it takes
+the page's direction. When poker kept a clock and a lamp in a corner of its table, that corner
+was the felt's right in both languages, and `align-items: flex-end` put them on its LEFT in
+Persian: a column's end is a side of the sentence. The reader's own row under the table is
+theirs and not the table's, so it does follow the page.
 
 The language is not carried in the url, because AzerothJS prefix routing is recorded as broken in the
 framework's own `framework-bugs.md`. It is a `locale` COOKIE, written by the framework's own

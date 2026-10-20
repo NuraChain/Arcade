@@ -1,7 +1,7 @@
 /**
  * Two people, two browsers, one server: friends, chat and groups end to end.
  *
- *   npm run build && API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start
+ *   npm run build && API_RATE_MAX=20000 npm start
  *   node tools/qa/social-pass.mjs
  *
  * Everything else that drives a browser here tests ONE session. The interesting half of a social
@@ -24,6 +24,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { sql } from './db.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:3200';
 
@@ -223,6 +224,11 @@ async function asPerson(person)
     const errors = [];
     page.on('console', (e) =>
     {
+        if (chainUnreached(e, 'the browser'))
+        {
+            return;
+        }
+
         if (e.type() === 'error' && !e.text().includes('favicon'))
         {
             errors.push(e.text().slice(0, 180));
@@ -238,19 +244,13 @@ async function asPerson(person)
 }
 
 /** Gives this browser its keys. */
-async function enrol(who)
+async function keyed(who)
 {
     await who.page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
     await who.page.waitForTimeout(1200);
-    const button = who.page.getByRole('button', { name: /Give this browser keys/i }).first();
-    if (await button.count() === 0)
-    {
-        return false;
-    }
-    await button.click();
-    await who.page.waitForTimeout(3500);
+    const offered = await who.page.getByRole('button', { name: 'Connect wallet', exact: true }).count();
     const text = await who.page.locator('body').innerText();
-    return /This browser is set up|This one/i.test(text);
+    return offered === 0 && /This browser is set up|This one/i.test(text);
 }
 
 const body = (page) => page.locator('body').innerText();
@@ -268,8 +268,8 @@ try
     record('Mina signs in with her wallet', bob.page.url().includes('/app'), bob.address);
     record('they are different accounts', alice.address !== bob.address, '');
 
-    record('Dana gives her browser keys', await enrol(alice), '');
-    record('Mina gives her browser keys', await enrol(bob), '');
+    record('signing in gave Dana’s browser its keys, with no step of its own', await keyed(alice), '');
+    record('signing in gave Mina’s browser its keys, with no step of its own', await keyed(bob), '');
 
     const deviceCount = sql(`select count(*) from devices d join users u on u.id = d.user_id
         where u.handle in ('${ ALICE.handle }', '${ BOB.handle }') and d.revoked_at is null`);
@@ -279,7 +279,11 @@ try
     section('add friend');
     await alice.page.goto(`${ BASE }/app/people/${ BOB.handle }`, { waitUntil: 'networkidle' });
     await alice.page.waitForTimeout(1500);
-    record('Dana can open Mina’s profile', (await body(alice.page)).includes(BOB.name), '');
+    const profileText = await body(alice.page);
+
+    const opened = profileText.includes(BOB.handle) && !profileText.includes('No such person');
+
+    record('Dana can open Mina’s profile', opened, opened ? '' : profileText.replace(/\s+/g, ' ').slice(0, 240));
 
     const add = alice.page.getByRole('button', { name: /^Add friend$/ }).first();
     record('a stranger is offered "Add friend"', await add.count() > 0, '');

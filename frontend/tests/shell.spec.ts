@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { RouterProvider, Routes, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
+import { RouterProvider, Routes, createEffect, createMemoryHistory, createRoot, createRouter, createSignal, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
 import { NAV, RAIL, lit } from '../src/components/app/nav-items.ts';
@@ -8,7 +8,9 @@ import { routeMeta } from '../src/lib/route-meta.ts';
 import Sidebar from '../src/components/app/sidebar.component.azeroth';
 import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
+import { CARRIED_FROM } from '../src/components/app/overlay-layer.component.azeroth';
 import Page from '../src/components/app/page.component.azeroth';
+import PageHeader from '../src/components/app/page-header.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
 import TopBar from '../src/components/app/top-bar.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
@@ -19,16 +21,18 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
-import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, establishAccount, server } from './fake-api.ts';
+import { lostDuring } from './rejections.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -144,6 +148,40 @@ describe('Button', () =>
         form.remove();
     });
 
+    it('keeps its icon when whoever owns it is read again, and changes it where it stands', async () =>
+    {
+        const [seat, setSeat] = createSignal({ ready: false });
+        const { container } = renderTest(() => Button({
+            children: 'I am ready',
+            get leading()
+            {
+                return seat().ready ? 'close' as const : 'play' as const;
+            }
+        }) as Rendered);
+        const drawn = () => [...container.querySelectorAll('svg g')].map((shape) => shape.innerHTML).join('|');
+        const icon = container.querySelector('svg');
+        const parts = [...container.querySelectorAll('svg *')];
+
+        expect(icon).not.toBeNull();
+
+        const before = drawn();
+
+        expect(before, 'the icon has shapes').not.toBe('');
+
+        setSeat({ ready: false });
+        await settle();
+
+        expect(container.querySelector('svg'), 'the icon was drawn again for the answer it already had').toBe(icon);
+        expect([...container.querySelectorAll('svg *')]).toEqual(parts);
+
+        setSeat({ ready: true });
+        await settle();
+
+        expect(container.querySelector('svg'), 'the icon was drawn again to change').toBe(icon);
+        expect(drawn(), 'the icon is still the one it was').not.toBe(before);
+        expect(drawn()).not.toBe('');
+    });
+
     it('is really disabled when that is what it was told', () =>
     {
         const onClick = vi.fn();
@@ -179,6 +217,37 @@ describe('Tabs', () =>
         fire(tabs[1] as HTMLElement, 'click');
         expect(onChange).toHaveBeenCalledWith('online');
         expect(tabs[1].querySelector('.tally')?.textContent).toBe('3');
+    });
+
+    it('keeps a tab’s count when its tabs are handed over again, and changes the number where it stands', () =>
+    {
+        const [counted, setCounted] = createSignal(3);
+        const { container } = renderTest(() => Tabs({
+            get items()
+            {
+                return [{ id: 'all', label: 'All' }, { id: 'online', label: 'Online', count: counted() }];
+            },
+            value: 'all',
+            label: 'Friends',
+            onChange: () => undefined
+        }) as Rendered);
+        const count = () => container.querySelectorAll('[role="tab"]')[1].querySelector('.tally');
+        const drawn = count();
+
+        expect(drawn?.textContent).toBe('3');
+
+        setCounted(3);
+
+        expect(count(), 'the count was drawn again for tabs that say the same').toBe(drawn);
+
+        setCounted(4);
+
+        expect(count(), 'a count that changed was drawn again rather than changed').toBe(drawn);
+        expect(drawn?.textContent).toBe('4');
+
+        setCounted(0);
+
+        expect(count(), 'a count of nothing is still drawn').toBeNull();
     });
 
     it('moves its highlight with the selection, not only its aria', async () =>
@@ -218,6 +287,35 @@ describe('OverlayHost', () =>
         return panel;
     };
 
+    it('closes a sheet when its handle is pressed, and not when the press was a drag let go short of closing', async () =>
+    {
+        const overlay = useOverlay();
+        const { unmount } = renderTest(() => OverlayHost({}) as Rendered);
+        const handle = overlay.open(Probe, {}, { label: 'Probe', kind: 'sheet' });
+        await settle();
+
+        const grip = document.body.querySelector<HTMLButtonElement>(`[data-overlay-layer='${ handle.id }'] button[aria-label]`)!;
+        const at = (type: string, y: number) => grip.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, pointerType: 'mouse', clientX: 10, clientY: y }));
+
+        grip.setPointerCapture = () => undefined;
+
+        at('pointerdown', 100);
+        at('pointermove', 100 + CARRIED_FROM + 20);
+        at('pointerup', 100 + CARRIED_FROM + 20);
+        grip.click();
+
+        expect(overlay.items()[0]?.phase, 'a drag let go short of closing closed the sheet').toBe('open');
+
+        at('pointerdown', 100);
+        at('pointerup', 100);
+        grip.click();
+
+        expect(overlay.items()[0]?.phase).toBe('closing');
+        clock.advance(OVERLAY_SETTLE);
+        await settle();
+        unmount();
+    });
+
     it('renders a dialog into the body, moves focus in, and lets Escape close it', async () =>
     {
         const overlay = useOverlay();
@@ -242,6 +340,129 @@ describe('OverlayHost', () =>
         unmount();
     });
 
+    const beneath = (first: 'page' | 'host') =>
+    {
+        const overlay = useOverlay();
+        const under = document.createElement('div');
+        const opener = document.createElement('button');
+        const held: boolean[] = [];
+        const focus = opener.focus.bind(opener);
+        const inert = () => createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                under.toggleAttribute('inert', overlay.blocking());
+            });
+
+            return dispose;
+        });
+        const host = () => renderTest(() => OverlayHost({}) as Rendered).unmount;
+
+        opener.type = 'button';
+        opener.textContent = 'opens it';
+        under.appendChild(opener);
+        document.body.appendChild(under);
+        vi.spyOn(opener, 'focus').mockImplementation((options) =>
+        {
+            held.push(under.hasAttribute('inert'));
+
+            if (!under.hasAttribute('inert'))
+            {
+                focus(options);
+            }
+        });
+
+        const made = first === 'page' ? { stop: inert(), unmount: host() } : { unmount: host(), stop: inert() };
+
+        opener.focus();
+        held.length = 0;
+
+        return {
+            opener,
+            held,
+            leave: () =>
+            {
+                made.unmount();
+                made.stop();
+                under.remove();
+            }
+        };
+    };
+
+    const gone = async () =>
+    {
+        clock.advance(OVERLAY_SETTLE);
+        await settle();
+    };
+
+    it.each(['page', 'host'] as const)('gives the keyboard back to what opened it, at a moment the page under it can take it, whichever of the two hears first that it closed (the %s)', async (first) =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath(first);
+        const handle = overlay.open(Probe, {}, { label: 'Probe' });
+
+        await settle();
+
+        expect(document.activeElement?.textContent).toBe('ok');
+
+        handle.close();
+        await gone();
+
+        expect(held, 'it was handed back while the page was still inert, or more than once').toEqual([false]);
+        expect(document.activeElement).toBe(opener);
+        leave();
+    });
+
+    it('gives it back to what opened the first of two, when the second was opened from the first as the first closed', async () =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath('host');
+        const first = overlay.open(Probe, {}, { label: 'First' });
+
+        await settle();
+        first.close();
+
+        const second = overlay.open(Probe, {}, { label: 'Second' });
+
+        await settle();
+        await gone();
+
+        expect(overlay.items().map((entry) => entry.label)).toEqual(['Second']);
+        expect(document.activeElement).not.toBe(opener);
+
+        second.close();
+        await gone();
+
+        expect(held[held.length - 1], 'it was handed back while the page was still inert').toBe(false);
+        expect(document.activeElement).toBe(opener);
+        leave();
+    });
+
+    it('gives it back to the first of two, and not to the page, when the second closes over the first', async () =>
+    {
+        const overlay = useOverlay();
+        const { opener, held, leave } = beneath('host');
+
+        overlay.open(Probe, {}, { label: 'First' });
+        await settle();
+
+        const inside = document.activeElement;
+        const second = overlay.open(Probe, {}, { label: 'Second' });
+
+        await settle();
+
+        expect(document.activeElement).not.toBe(inside);
+
+        second.close();
+        await gone();
+
+        expect(overlay.items().map((entry) => entry.label)).toEqual(['First']);
+        expect(document.activeElement).toBe(inside);
+        expect(held, 'the page under both was asked to take it').toEqual([]);
+        expect(opener.isConnected).toBe(true);
+        leave();
+    });
+
     it('keeps a non-dismissible layer open through Escape and the scrim', async () =>
     {
         const overlay = useOverlay();
@@ -251,6 +472,26 @@ describe('OverlayHost', () =>
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         fire(document.body.querySelector('.overlay-scrim') as HTMLElement, 'click');
         expect(overlay.top()?.phase).toBe('open');
+    });
+
+    it('leaves an Escape that something inside it already answered, such as a search field clearing its words', async () =>
+    {
+        const overlay = useOverlay();
+        renderTest(() => OverlayHost({}) as Rendered);
+        overlay.open(Probe, {}, { label: 'Invite' });
+        await settle();
+
+        const answered = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+        answered.preventDefault();
+        document.dispatchEvent(answered);
+
+        expect(overlay.top()?.phase, 'a sheet closed on an Escape a field inside it had used').toBe('open');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await settle();
+
+        expect(overlay.top()?.phase ?? 'closed').not.toBe('open');
     });
 });
 
@@ -267,6 +508,113 @@ describe('ToastHost', () =>
         clock.advance(TOAST_DURATION);
         await settle();
         expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+    });
+
+    it('holds a toast\'s time while the tab is hidden, and counts on from where it stopped when it is seen', async () =>
+    {
+        const stop = useToasts().start();
+        const seen = vi.spyOn(document, 'visibilityState', 'get');
+
+        try
+        {
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'Invite sent' });
+            await settle();
+            clock.advance(1000);
+
+            seen.mockReturnValue('hidden');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION * 5);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length, 'a toast ran out while nobody could see it').toBe(1);
+
+            seen.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION - 1000 - 50);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length, 'a toast lost the time it had left').toBe(1);
+
+            clock.advance(100);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+        }
+        finally
+        {
+            seen.mockRestore();
+            stop();
+        }
+    });
+
+    it('holds a toast raised while the tab is hidden until somebody can see it', async () =>
+    {
+        const stop = useToasts().start();
+        const seen = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+        try
+        {
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'Your turn at Ludo' });
+            await settle();
+            clock.advance(TOAST_DURATION * 5);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(1);
+
+            seen.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(TOAST_DURATION);
+            await settle();
+
+            expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+        }
+        finally
+        {
+            seen.mockRestore();
+            stop();
+        }
+    });
+
+    it('takes the keyboard to the newest toast on Alt+T, and back where it was on Escape', async () =>
+    {
+        const outside = document.createElement('button');
+
+        document.body.append(outside);
+        renderTest(() => ToastHost({}) as Rendered);
+        useToasts().show({ text: 'Invite sent' });
+        useToasts().show({ kind: 'live', text: 'Mina Sadeghi saved you a seat', action: { label: 'Go to the table', run: () => undefined } });
+        await settle();
+
+        outside.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', code: 'KeyT', altKey: true, bubbles: true }));
+
+        expect(document.activeElement?.textContent?.trim(), 'the keyboard did not reach the newest toast\'s own button').toBe('Go to the table');
+
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await settle();
+
+        expect(document.body.textContent).not.toContain('Mina Sadeghi saved you a seat');
+        expect(document.activeElement, 'the keyboard was left on nothing').toBe(outside);
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', code: 'KeyT', bubbles: true }));
+
+        expect(document.activeElement, 'T alone moved the keyboard').toBe(outside);
+        outside.remove();
+    });
+
+    it('gives a toast\'s own button the same room for a finger as the one that dismisses it', async () =>
+    {
+        renderTest(() => ToastHost({}) as Rendered);
+        useToasts().show({ kind: 'live', text: 'Mina Sadeghi saved you a seat', action: { label: 'Go to the table', run: () => undefined } });
+        await settle();
+
+        const [action, dismiss] = [...document.body.querySelectorAll<HTMLElement>('[role="status"] button')];
+
+        expect(action.textContent?.trim()).toBe('Go to the table');
+        expect(action.classList.contains('coarse:min-h-11'), 'the button a notice is answered with is under a thumb\'s width on a phone').toBe(true);
+        expect(dismiss.classList.contains('coarse:h-11')).toBe(true);
     });
 
     /**
@@ -389,6 +737,56 @@ describe('ToastHost', () =>
 
             expect(region().dataset.placement).toBe('top');
             expect(region().querySelector('[role="status"]')?.textContent).toContain('Invited Sara');
+        });
+
+        it('goes to the top for as long as a page holds it there, on a wide screen too, and comes back when the last hold is let go', async () =>
+        {
+            useDevice().override('sidebar');
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'This table has voice' });
+            await settle();
+
+            const toast = region().querySelector('[role="status"]');
+
+            expect(region().dataset.placement).toBe('bottom');
+
+            const first = useToasts().lift();
+            const second = useToasts().lift();
+
+            await settle();
+
+            expect(region().dataset.placement).toBe('top');
+            expect(region().querySelector('[role="status"]'), 'the toast was drawn again to be moved').toBe(toast);
+
+            first();
+            first();
+            await settle();
+
+            expect(region().dataset.placement, 'one hold let go twice took the other with it').toBe('top');
+
+            second();
+            await settle();
+
+            expect(region().dataset.placement).toBe('bottom');
+
+            const before = useToasts().lift();
+
+            useToasts().reset();
+            await settle();
+
+            expect(region().dataset.placement, 'a hold outlived the reset').toBe('bottom');
+
+            const since = useToasts().lift();
+
+            before();
+            await settle();
+
+            expect(region().dataset.placement, 'a hold from before the reset let go of one taken after it').toBe('top');
+
+            since();
+            await settle();
+
+            expect(region().dataset.placement).toBe('bottom');
         });
 
         it('stays in its corner beside a dialog on a wide screen', async () =>
@@ -624,9 +1022,10 @@ describe('the top bar', () =>
         useShell().reset();
         useDevice().override('sidebar');
         const { container, router } = await subPage('/app');
+        useShell().arrive(router.location());
         router.navigate('/app/games/hokm');
-        useShell().notePush();
         await settle();
+        useShell().arrive(router.location());
 
         fire(backOf(container)!, 'click');
         await settle();
@@ -672,7 +1071,7 @@ describe('the right panel', () =>
     it('says what lands there, and who is not online, rather than drawing two empty boxes', async () =>
     {
         server.friends = [];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await mount();
 
         expect(container.textContent).toContain('Friend requests, invitations and messages land here.');
@@ -681,7 +1080,7 @@ describe('the right panel', () =>
 
     it('lists the notifications the server holds, as sentences, each one a way in', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const container = await mount();
@@ -691,10 +1090,53 @@ describe('the right panel', () =>
         expect(rows[0].textContent).toContain('ago');
     });
 
+    it('reads a notification in the turn its row is pressed, and loses no refusal', async () =>
+    {
+        const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+        const real = routes.read;
+
+        useSession().establish(establishAccount());
+        server.notify({ kind: 'turn', dedupeKey: 'turn:nowhere' });
+        useNotifications().reset();
+
+        const container = await mount();
+        const row = container.querySelector<HTMLElement>('section[aria-labelledby="panel-activity"] li button')!;
+        let refuse: () => void = () => undefined;
+
+        routes.read = () => new Promise((_resolve, reject) =>
+        {
+            refuse = () => reject(new ApiError(500, 'internal', 'Something went wrong.', undefined));
+        });
+
+        const lost = await lostDuring(async () =>
+        {
+            try
+            {
+                expect(useNotifications().latest()[0].read).toBe(false);
+
+                fire(row, 'click');
+
+                expect(useNotifications().latest()[0].read).toBe(true);
+                expect(useNotifications().unread()).toBe(0);
+
+                refuse();
+                await settle();
+            }
+            finally
+            {
+                routes.read = real;
+            }
+        });
+
+        expect(useNotifications().latest()[0].read).toBe(false);
+        expect(useNotifications().unread()).toBe(1);
+        expect(lost).toEqual([]);
+    });
+
     it('keeps both of its empty lines when the lists behind them are read again', async () =>
     {
         server.friends = [];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await mount();
         const lines = () => [...container.querySelectorAll('section > p')];
         const drawn = lines();
@@ -709,9 +1151,27 @@ describe('the right panel', () =>
         expect(lines()[1], 'the line about who is online was drawn again').toBe(drawn[1]);
     });
 
+    it('keeps the picture of the person a notification is about when the list is read again', async () =>
+    {
+        useSession().establish(establishAccount());
+        usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+        server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
+        useNotifications().reset();
+        const container = await mount();
+        const picture = () => container.querySelector('section[aria-labelledby="panel-activity"] li [role="img"]');
+        const drawn = picture();
+
+        expect(drawn, 'the row drew no picture of Sara').not.toBeNull();
+
+        await useNotifications().refresh();
+        await settle();
+
+        expect(picture(), 'the picture was drawn again for an answer that changed nothing').toBe(drawn);
+    });
+
     it('keeps a notification it has listed when another one arrives', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const container = await mount();
@@ -733,7 +1193,7 @@ describe('the sidebar’s counts', () =>
 {
     it('badges Friends with the requests waiting and Notifications with the unread, like the phone nav', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
         useNotifications().reset();
         const Stub = (): HTMLElement => document.createElement('div');
@@ -745,13 +1205,53 @@ describe('the sidebar’s counts', () =>
         expect(container.querySelector('a[href="/app/friends"]')!.innerHTML).toContain('2 friend requests');
         expect(container.querySelector('a[href="/app/notifications"]')!.textContent).toContain('1');
     });
+
+    it('keeps a count it has drawn when the list behind it is read again and says the same', async () =>
+    {
+        useSession().establish(establishAccount());
+        server.tables.push({
+            id: 'table-waits',
+            code: 'wait01',
+            game: 'ludo',
+            seats: 2,
+            mode: 'turns',
+            privacy: 'public',
+            target: 1,
+            cube: false,
+            blinds: 'low',
+            chat: true,
+            voice: 'off',
+            teams: false,
+            status: 'ready',
+            chairs: [{ seat: 0, who: server.me, ready: true, host: true }, { seat: 1, who: 'sara.k', ready: true, host: false }],
+            taken: 2,
+            matchId: 'match-waits',
+            yourTurn: true,
+            createdAt: new Date(0).toISOString()
+        });
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
+        await useLobby().refresh();
+        await settle();
+
+        const waiting = () => container.querySelector('a[href="/app/games"] .tally');
+        const drawn = waiting();
+
+        expect(drawn?.textContent, 'Games counted no table waiting on the reader').toBe('1');
+
+        await useLobby().refresh();
+        await settle();
+
+        expect(waiting(), 'the count was drawn again for an answer that changed nothing').toBe(drawn);
+    });
 });
 
 describe('the sidebar’s account card', () =>
 {
     it('keeps a long name inside the card and lets it run in its own direction', async () =>
     {
-        await useAccount().signIn('Aleksandra Konstantinopolskaya-Wright');
+        useSession().establish(establishAccount('alex', { displayName: 'Aleksandra Konstantinopolskaya-Wright' }));
         const Stub = (): HTMLElement => document.createElement('div');
         const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
         const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
@@ -762,6 +1262,38 @@ describe('the sidebar’s account card', () =>
         expect(name.className).toContain('truncate');
         expect(name.parentElement!.className).toContain('min-w-0');
         expect(card.textContent).not.toContain('Sign out');
+    });
+});
+
+describe('PageHeader', () =>
+{
+    it('reads what it is handed once, and keeps the box round its actions while what they come from is read again', () =>
+    {
+        const [heard, setHeard] = createSignal(0);
+        let built = 0;
+        const { container } = renderTest(() => PageHeader({
+            title: 'A page',
+            get actions()
+            {
+                heard();
+                built += 1;
+
+                const button = document.createElement('button');
+
+                button.textContent = 'Act';
+
+                return button;
+            }
+        }) as Rendered);
+        const box = container.querySelector('header > div:last-child');
+
+        expect(built, 'the actions were built and thrown away').toBe(1);
+        expect(box?.querySelector('button')).not.toBeNull();
+
+        setHeard(1);
+
+        expect(container.querySelector('header > div:last-child'), 'the box round the actions was drawn again').toBe(box);
+        expect(built, 'the actions were built twice for one read').toBe(2);
     });
 });
 
@@ -879,7 +1411,7 @@ describe('routes', () =>
 
     it('keeps a signed-in person in the app and bounces them off sign-in', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const router = createRouter({ routes, history: createMemoryHistory('/sign-in?next=/app/chats'), scroll: false });
         await settle();
         expect(router.location().pathname).toBe('/app/chats');

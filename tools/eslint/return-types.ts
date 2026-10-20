@@ -98,7 +98,7 @@ const prefersInferredReturnType: Rule.RuleModule = {
 
         const typeOf = (node: Tree): ts.Type => checker!.getTypeAtLocation(tsOf(node)!);
 
-        const functionOf = (variable: Scope.Variable): Tree | undefined =>
+        const madeBy = (variable: Scope.Variable): Tree | undefined =>
         {
             const [def] = variable.defs;
             if (def?.type !== 'FunctionName' && def?.type !== 'Variable')
@@ -106,18 +106,47 @@ const prefersInferredReturnType: Rule.RuleModule = {
                 return undefined;
             }
             const node = def.node as unknown as Tree;
-            const made = node.type === 'VariableDeclarator' ? node.init as Tree | null : node;
-            return made !== null && FUNCTIONS.has(made.type) ? made : undefined;
+            if (node.type !== 'VariableDeclarator')
+            {
+                return FUNCTIONS.has(node.type) ? node : undefined;
+            }
+            const made = node.init as Tree | null;
+            const stated = (node.id as Tree).typeAnnotation !== undefined;
+
+            return made !== null && (FUNCTIONS.has(made.type) || !stated) ? made : undefined;
         };
 
-        const called = (scope: Scope.Scope): Tree[] => [
-            ...scope.references.flatMap((one) => one.resolved === null ? [] : functionOf(one.resolved) ?? []),
-            ...scope.childScopes.flatMap(called)
-        ];
+        const readWithin = (scope: Scope.Scope, [start, end]: AST.Range): Scope.Reference[] =>
+        {
+            const [first, last] = scope.block.range!;
+            if (last <= start || first >= end)
+            {
+                return [];
+            }
+            return [
+                ...scope.references.filter((one) => one.identifier.range![0] >= start && one.identifier.range![1] <= end),
+                ...scope.childScopes.flatMap((child) => readWithin(child, [start, end]))
+            ];
+        };
+
+        const leads = new Map<Tree, Tree[]>();
+
+        const leadsTo = (from: Tree): Tree[] =>
+        {
+            const known = leads.get(from);
+            if (known !== undefined)
+            {
+                return known;
+            }
+            const found = readWithin(source.getScope(from as unknown as Rule.Node), from.range as AST.Range)
+                .flatMap((one) => one.resolved === null ? [] : madeBy(one.resolved) ?? []);
+
+            leads.set(from, found);
+            return found;
+        };
 
         const reaches = (from: Tree, target: Tree, seen: Set<Tree>): boolean =>
-            called(source.getScope(from as unknown as Rule.Node)).some((next) =>
-                next === target || (!seen.has(next) && reaches(next, target, seen.add(next))));
+            leadsTo(from).some((next) => next === target || (!seen.has(next) && reaches(next, target, seen.add(next))));
 
         const namesItself = (fn: Callable): boolean =>
         {

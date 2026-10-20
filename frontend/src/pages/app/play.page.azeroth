@@ -2,14 +2,13 @@ import { Dynamic, type MountNode, onCleanup, untrack, useHead, useNavigate, useP
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
-import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import PlayHeader from '../../components/games/play-header.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
-import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
+import { inPlay } from '../../data/match.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
@@ -19,23 +18,24 @@ import { usePeople } from '../../stores/people.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
-import { useRealtime } from '../../stores/realtime.store.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
-import { useWatch } from '../../stores/watch.store.ts';
+import { useWatch, type Watched as WatchedGame } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
+import { TOAST_ACTION_DURATION, useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
-import type { MatchView, MatchWatch } from '../../api.ts';
+import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
+import { chunk, reloadPage } from '../../lib/chunks.ts';
 import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
+import { joinVoice } from '../../lib/join-voice.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
-import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
+import { WATCH_DELAY_MS, turnMs } from '../../../../backend/src/domains/match/turns.ts';
 
 export default component PlayPage()
 {
@@ -73,13 +73,21 @@ export default component PlayPage()
 
     state chatReady = false;
 
-    let Watched: ((props: { watch: MatchWatch }) => MountNode) | null = null;
+    let Watched: ((props: { watch: WatchedGame; events: EventBatch; onDone?: () => void }) => MountNode) | null = null;
 
     let watchAsked = false;
 
     state watchReady = false;
 
     state watchLost = false;
+
+    let Lobby: typeof import('../../components/games/lobby-panel.component.azeroth').default | null = null;
+
+    let lobbyAsked = false;
+
+    state lobbyReady = false;
+
+    state lobbyLost = false;
 
     let talk: Record<string, string> = {};
 
@@ -102,6 +110,8 @@ export default component PlayPage()
     let hush: (() => void)[] = [];
 
     let offer = '';
+
+    const stranded = new Map<string, string>();
 
     const withdraw = () =>
     {
@@ -141,6 +151,13 @@ export default component PlayPage()
         {
             release();
             withdraw();
+
+            for (const toast of stranded.values())
+            {
+                toasts.dismiss(toast);
+            }
+
+            stranded.clear();
 
             if (untrack(voice.table) === mine)
             {
@@ -195,11 +212,41 @@ export default component PlayPage()
         if (id !== null && joined === null && id !== entered && untrack(settings.settings).voiceAutoJoin)
         {
             entered = id;
-            void voice.join(id);
+            void joinVoice(id);
         }
     }
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
+
+    effect
+    {
+        const apart = voice.unreached();
+
+        for (const who of apart)
+        {
+            if (!stranded.has(who))
+            {
+                const person = people.byHandle(who);
+
+                stranded.set(who, toasts.show({
+                    kind: 'warning',
+                    icon: 'voice-off',
+                    text: locale.t('voice.unreached', { name: person === null ? who : locale.text(person.displayName) }),
+                    duration: TOAST_ACTION_DURATION,
+                    dedupe: `voice-unreached-${ who }`
+                }));
+            }
+        }
+
+        for (const [who, toast] of [...stranded])
+        {
+            if (!apart.includes(who))
+            {
+                toasts.dismiss(toast);
+                stranded.delete(who);
+            }
+        }
+    }
 
     let offered = '';
 
@@ -225,8 +272,8 @@ export default component PlayPage()
             offer = toasts.show({
                 kind: 'info',
                 icon: 'voice',
-                text: locale.t('voice.offered'),
-                action: { label: locale.t('voice.join'), run: () => void voice.join(id) },
+                text: locale.t(untrack(lobby.table)?.voice === 'team' ? 'voice.offeredTeam' : 'voice.offered'),
+                action: { label: locale.t('voice.join'), run: () => void joinVoice(id) },
                 dedupe: `voice-offer-${ id }`
             });
         }
@@ -245,31 +292,38 @@ export default component PlayPage()
 
         void lobby.setVoice(current.id, on ? 'table' : 'off')
             .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
-            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed')), dedupe: 'table-voice' }));
+            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed', 'voice.refused.playing')), dedupe: 'table-voice' }));
     };
 
-    derived showing = board.match() !== null && board.match()!.tableId === table?.id;
+    const switchScope = () =>
+    {
+        const current = untrack(lobby.table);
+
+        if (current === null || current.voice === 'off')
+        {
+            return;
+        }
+
+        const next = current.voice === 'team' ? 'table' : 'team';
+
+        void lobby.setVoice(current.id, next)
+            .then(() => toasts.show({ kind: 'success', text: locale.t(next === 'team' ? 'voice.nowTeam' : 'voice.nowTable'), dedupe: 'table-voice' }))
+            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed', 'voice.refused.playing')), dedupe: 'table-voice' }));
+    };
+
+    derived behind = seated && table?.matchId !== undefined && board.match()?.id !== table?.matchId;
+
+    derived unfetched = behind && board.lost();
+
+    derived showing = !unfetched && board.match() !== null && board.match()!.tableId === table?.id;
 
     derived awake = showing && board.match()!.finishedAt === undefined;
-
-    derived wired = awake || (seated
-        && table?.mode === 'live'
-        && table.status !== 'closed'
-        && table.chairs.find((chair) => chair.seat === table?.mine)?.ready === true);
 
     effect
     {
         if (awake)
         {
             onCleanup(holdScreen());
-        }
-    }
-
-    effect
-    {
-        if (wired)
-        {
-            onCleanup(useRealtime().hold());
         }
     }
 
@@ -297,21 +351,41 @@ export default component PlayPage()
 
     derived closed = table?.status === 'closed';
 
-    derived lobbyOpen = !showing && seated;
+    derived dealing = behind && !showing && !unfetched;
 
-    derived standing = !seated && !showing && table !== null && table.matchId === undefined;
+    derived lobbyOpen = seated && !showing && !behind;
 
-    derived watching = !seated && table?.matchId !== undefined;
+    derived removed = table?.removed === true;
+
+    derived seatOffered = !removed;
+
+    derived spectated = watch.view();
+
+    derived watching = !seated && table !== null && (table.matchId !== undefined || spectated?.match.tableId === table.id);
+
+    derived standing = !seated && !showing && table !== null && table.matchId === undefined && !watching;
+
+    derived roomOpen = lobbyOpen || standing;
+
+    derived startable = !showing && ready && seated;
+
+    derived watched = watchReady ? spectated : null;
 
     derived callAt = talkable ? table?.id : undefined;
 
-    derived hostVoice = amHost && table !== null && table.status !== 'closed' ? table.voice !== 'off' : undefined;
+    derived settledCall = table !== null && table.status !== 'closed' && !(table.teams && table.matchId !== undefined);
+
+    derived hostVoice = amHost && settledCall ? table!.voice !== 'off' : undefined;
+
+    derived hostScope = amHost && settledCall && table!.teams && table!.voice !== 'off' ? table!.voice === 'team' : undefined;
 
     derived railOpen = settings.settings().railOpen;
 
     derived cardOpen = floating && hasChat && railOpen;
 
     derived sheetVisible = !floating && hasChat && chatOpen;
+
+    onCleanup(toasts.lift());
 
     derived halfSheet = sheetVisible && !sideways && !chatWide;
 
@@ -464,7 +538,20 @@ export default component PlayPage()
         }
     }
 
-    derived resigning = seated && showing && board.match()?.finishedAt === undefined;
+    derived gone = (() =>
+    {
+        const current = board.match();
+
+        return showing && current !== null && current.finishedAt === undefined
+            && current.players.some((player) => player.seat === current.mine && player.result !== undefined);
+    })();
+
+    derived resigning = (() =>
+    {
+        const current = board.match();
+
+        return seated && showing && current !== null && inPlay(current);
+    })();
 
     const resign = async () =>
     {
@@ -486,6 +573,8 @@ export default component PlayPage()
     };
 
     derived playing = showing ? (board.match()?.game ?? '') : '';
+
+    derived played = playing !== '' && drawn === playing ? board.match() : null;
 
     state boardFailed = false;
 
@@ -518,9 +607,17 @@ export default component PlayPage()
         });
     };
 
-    const redraw = () =>
+    const reload = () => void reloadPage();
+
+    const retry = () =>
     {
-        draw(playing);
+        if (unfetched)
+        {
+            void board.refresh().catch(() => undefined);
+            return;
+        }
+
+        reload();
     };
 
     effect
@@ -537,8 +634,9 @@ export default component PlayPage()
 
     derived rematch = table !== null && seated ? rematchOf(table) : undefined;
 
-    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
-        match: board.match()!,
+    const boardProps = (match: MatchView): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
+        match,
+        events: board.events(),
         starting,
         onAgain: seated ? () => void again() : undefined,
         rematch,
@@ -562,7 +660,7 @@ export default component PlayPage()
 
         const held = board.match();
 
-        if (held === null || held.tableId !== table?.id)
+        if (held === null || held.tableId !== table?.id || id !== undefined)
         {
             board.close();
         }
@@ -571,24 +669,24 @@ export default component PlayPage()
     const drawWatch = () =>
     {
         watchAsked = true;
-        watchLost = false;
 
-        void import('../../components/games/watch-board.component.azeroth').then((module) =>
+        void chunk(() => import('../../components/games/watch-board.component.azeroth'))().then((module) =>
         {
             Watched = module.default;
             watchReady = true;
         }).catch(() =>
         {
-            watchAsked = false;
             watchLost = true;
         });
     };
+
+    const leaveWatch = () => watch.close();
 
     const rewatch = () =>
     {
         if (Watched === null)
         {
-            drawWatch();
+            reload();
         }
         else
         {
@@ -599,8 +697,13 @@ export default component PlayPage()
     effect
     {
         const id = table?.matchId;
+        const here = table?.id;
 
-        if (id !== undefined && !seated)
+        if (seated || here === undefined)
+        {
+            watch.close();
+        }
+        else if (id !== undefined)
         {
             watch.open(id);
 
@@ -609,9 +712,35 @@ export default component PlayPage()
                 drawWatch();
             }
         }
+        else if (untrack(() => watch.view())?.match.tableId === here)
+        {
+            watch.settle();
+        }
         else
         {
             watch.close();
+        }
+    }
+
+    const drawLobby = () =>
+    {
+        lobbyAsked = true;
+
+        void chunk(() => import('../../components/games/lobby-panel.component.azeroth'))().then((module) =>
+        {
+            Lobby = module.default;
+            lobbyReady = true;
+        }).catch(() =>
+        {
+            lobbyLost = true;
+        });
+    };
+
+    effect
+    {
+        if (!lobbyAsked && (roomOpen || lobby.seated().some((one) => one.id === mine && one.matchId === undefined)))
+        {
+            drawLobby();
         }
     }
 
@@ -647,7 +776,7 @@ export default component PlayPage()
 
     const begin = starter((tableId) => lobby.begin(tableId));
 
-    const again = starter((tableId) => lobby.again(tableId));
+    const again = starter((tableId) => lobby.again(tableId, board.match()?.id));
 
     const copyLink = async () =>
     {
@@ -675,6 +804,7 @@ export default component PlayPage()
         catch (error)
         {
             toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.table.playing')), dedupe: 'sit-down' });
+            void lobby.refresh();
         }
     };
 
@@ -793,6 +923,7 @@ export default component PlayPage()
                 <div
                     ref={ (element) => arena = element }
                     data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
+                    data-beside={ besideSheet ? (chatWide ? 'wide' : 'narrow') : undefined }
                     class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                 >
                     <PlayHeader
@@ -813,6 +944,8 @@ export default component PlayPage()
                                     voice={ callAt }
                                     hostVoice={ hostVoice }
                                     onHostVoice={ switchVoice }
+                                    hostScope={ hostScope }
+                                    onHostScope={ switchScope }
                                 />
                                 <Show when={ floating && hasChat && !cardOpen }>
                                     { () =>
@@ -841,12 +974,20 @@ export default component PlayPage()
                         }
                     />
 
-                    <Show when={ playing !== '' && drawn === playing }>
-                        { () => <Dynamic component={ Board! } props={ boardProps } /> }
+                    <Show when={ gone }>
+                        <p data-gone role="status" class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">
+                            <Icon name="activity" size={ 14 } class="shrink-0 text-accent" />
+                            <span class="font-semibold text-text">{ locale.t('watch.gone') }</span>
+                            <span>{ locale.plural('watch.behind.seconds', WATCH_DELAY_MS / 1000) }</span>
+                        </p>
                     </Show>
 
-                    <Show when={ playing !== '' && drawn !== playing && boardFailed }>
-                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
+                    <Show when={ played } let={ match }>
+                        <Dynamic component={ Board! } props={ () => boardProps(match) } />
+                    </Show>
+
+                    <Show when={ unfetched || (playing !== '' && drawn !== playing && boardFailed) }>
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ retry } class="py-12" /> }
                     </Show>
 
                     <Show when={ playing !== '' && !drawable(playing) }>
@@ -856,13 +997,13 @@ export default component PlayPage()
                                 title={ locale.t('match.cannotDraw') }
                                 lead={ locale.t('match.cannotDrawLead') }
                                 action={ locale.t('match.cannotDrawAction') }
-                                onAction={ () => draw(playing) }
+                                onAction={ reload }
                                 class="py-12"
                             />
                         }
                     </Show>
 
-                    <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
+                    <Show when={ dealing || (playing !== '' && drawable(playing) && drawn !== playing && !boardFailed) }>
                         { () =>
                             <div class="flex flex-col gap-3" aria-busy="true">
                                 <Skeleton class="aspect-[16/10] w-full rounded-hero" />
@@ -871,27 +1012,17 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ !showing && ready && seated }>
-                        { () =>
-                            <Panel pad="md" stack="sm" class="items-center text-center">
-                                <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
-                                <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
-                                    { locale.t('match.start') }
-                                </Button>
-                            </Panel>
-                        }
-                    </Show>
 
                     <Show when={ watching }>
                         { () =>
                             <div class="flex min-h-0 flex-1 flex-col gap-3">
-                                <Show when={ watchReady && watch.view() !== null }>
-                                    { () => <Dynamic component={ Watched! } props={ () => ({ watch: watch.view()! }) } /> }
+                                <Show when={ watched } let={ seen }>
+                                    <Dynamic component={ Watched! } props={ () => ({ watch: seen, events: watch.events(), onDone: leaveWatch }) } />
                                 </Show>
-                                <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
+                                <Show when={ watch.refused() }>
                                     { () =>
                                         <Panel pad="lg" class="items-center text-center">
-                                            <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
+                                            <p data-unwatchable class="max-w-[44ch] text-ui-base text-muted">{ locale.t('watch.refused') }</p>
                                         </Panel>
                                     }
                                 </Show>
@@ -902,45 +1033,27 @@ export default component PlayPage()
                         }
                     </Show>
 
-                    <Show when={ lobbyOpen }>
+                    <Show when={ roomOpen && lobbyReady }>
                         { () =>
-                            <LobbyPanel
-                                table={ shown }
-                                onInvite={ () => invite(shown.id) }
-                                onCopyLink={ () => void copyLink() }
-                                onLeave={ () => void leave(null) }
+                            <Dynamic
+                                component={ Lobby! }
+                                props={ () => ({
+                                    table: shown,
+                                    starting,
+                                    removed,
+                                    onStart: startable ? () => void begin() : undefined,
+                                    onSit: standing && seatOffered ? () => void sitDown() : undefined,
+                                    onInvite: () => invite(shown.id),
+                                    onCopyLink: () => void copyLink(),
+                                    onLeave: () => void leave(null),
+                                    onClose: amHost && lobbyOpen ? () => void end() : undefined
+                                }) }
                             />
                         }
                     </Show>
 
-                    <Show when={ standing }>
-                        { () =>
-                            <Panel pad="lg" stack="md" class="items-center text-center">
-                                <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
-                                <p class="max-w-[44ch] text-ui-base text-muted">
-                                    { locale.plural('play.lobby.emptySeats', shown.seats - shown.taken) }
-                                </p>
-                                <Button
-                                    variant="primary"
-                                    size="lg"
-                                    leading="seat"
-                                    disabled={ shown.taken >= shown.seats }
-                                    onClick={ () => void sitDown() }
-                                >
-                                    { locale.t('play.table.sitDown') }
-                                </Button>
-                            </Panel>
-                        }
-                    </Show>
-
-                    <Show when={ amHost && !showing }>
-                        { () =>
-                            <div class="flex">
-                                <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
-                                    { locale.t('play.close.confirm') }
-                                </Button>
-                            </div>
-                        }
+                    <Show when={ roomOpen && lobbyLost }>
+                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ reload } class="py-12" /> }
                     </Show>
 
                 </div>

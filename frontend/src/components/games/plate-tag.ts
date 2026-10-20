@@ -10,6 +10,17 @@ export interface PlateTag
     tone: PlateTone;
 }
 
+const GONE = { resign: 'card.gaveUp', left: 'card.out', timeout: 'card.timedOut' } as const;
+
+export const goneKey = (exit: MatchPlayer['exit']) => GONE[exit ?? 'left'];
+
+export const resultWord = (locale: ReturnType<typeof useLocale>, result: NonNullable<MatchPlayer['result']>, exit: MatchPlayer['exit']) =>
+    locale.t(result === 'abandoned' ? goneKey(exit) : `history.result.${ result }`);
+
+export const missesOf = (players: readonly MatchPlayer[]) => new Map(players.map((one) => [one.seat, one.timeouts ?? 0]));
+
+export const withMisses = (player: MatchPlayer, missed: ReadonlyMap<number, number>) => ({ ...player, timeouts: missed.get(player.seat) ?? 0 });
+
 export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlayer | undefined, finished: boolean): PlateTag | null
 {
     if (player === undefined)
@@ -24,7 +35,7 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
 
     if (player.result === 'abandoned')
     {
-        return { text: locale.t('card.out'), tone: 'neutral' };
+        return { text: locale.t(goneKey(player.exit)), tone: 'neutral' };
     }
 
     if (player.result === 'lost')
@@ -41,9 +52,7 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
 
     if (missed > 0 && !finished)
     {
-        return nextMissForfeits(missed)
-            ? { text: locale.t('card.lastChance'), tone: 'danger' }
-            : { text: locale.plural('match.missed', missed), tone: 'gold' };
+        return { text: locale.plural('card.missed', missed), tone: nextMissForfeits(missed) ? 'danger' : 'gold' };
     }
 
     return null;

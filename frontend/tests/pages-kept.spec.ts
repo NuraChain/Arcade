@@ -36,7 +36,7 @@ const settle = async () =>
 
 const opened = (at: string, path: string, page: () => unknown) =>
 {
-    const table: Route[] = [{ path, component: (): HTMLElement => page() as HTMLElement }];
+    const table: Route[] = [{ path, component: () => page() as HTMLElement }];
     const router = createRouter({ routes: table, history: createMemoryHistory(at), scroll: false });
 
     return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered).container;
@@ -56,7 +56,7 @@ beforeEach(() =>
     server.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useRealtime().reset();
     socket.reset();
     useRealtime().start();
@@ -141,7 +141,7 @@ describe('a page whose lists are read again and answer as they did', () =>
     it('keeps a row somebody still matches while the search is typed on, on Search', async () =>
     {
         const container = opened('/app/search?q=sar', '/app/search', SearchPage);
-        const row = () => container.querySelector('a[href="/app/people/sara.k"]')?.closest('li') ?? null;
+        const row = () => [...container.querySelectorAll('li button[aria-haspopup="dialog"]')].find((one) => one.textContent?.includes('Sara Kamali'))?.closest('li') ?? null;
 
         await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
         await settle();

@@ -60,7 +60,7 @@ export const TABLE_RULES: Record<GameId, TableRules> = {
     hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: 'required', hasCube: false, hasBlinds: false },
     poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none', hasCube: false, hasBlinds: true },
     backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: 'none', hasCube: true, hasBlinds: false },
-    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'none', hasCube: false, hasBlinds: false }
+    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
 };
 
 export function defaultTable(game: GameId): TableConfig
@@ -94,6 +94,14 @@ export function formatsOf(rules: Pick<TableRules, 'seats' | 'partners'>)
 }
 
 export type TableFormat = ReturnType<typeof formatsOf>[number];
+
+export const formatsWithin = (rules: Pick<TableRules, 'seats' | 'partners'>, heads: number) =>
+    formatsOf(rules).filter((format) => format.seats <= heads);
+
+export const TEAMS_HINT: Partial<Record<GameId, 'create.teamsHint.hokm' | 'create.teamsHint.ludo'>> = {
+    hokm: 'create.teamsHint.hokm',
+    ludo: 'create.teamsHint.ludo'
+};
 
 export function isValidTable(config: TableConfig, rules: TableRules)
 {

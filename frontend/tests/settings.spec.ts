@@ -3,15 +3,15 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import SettingsPage from '../src/pages/app/settings.page.azeroth';
-import MePage from '../src/pages/app/me.page.azeroth';
 import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { server } from './fake-api.ts';
+import { establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -51,46 +51,6 @@ afterEach(() =>
 {
     cleanup();
     resetRuntime();
-});
-
-/**
- * The guest half of these two pages, which no gate had ever rendered.
- *
- * `tools/qa` tours the 640-cell matrix signed in as `dana.w`, a WALLET fixture, and the seal pass
- * signs in with a wallet too - so every control behind `!account.isWallet()` shipped without once
- * being drawn. That is the same structural blind spot recorded for the sealing's `ready` branch,
- * and it is why the wallet fixtures exist at all; this is the same story from the other end.
- *
- * What it hid: a PRIMARY button reading "Connect a wallet", sitting above a "Sign out" button and
- * carrying the identical handler. There is no wallet-link route on this server - `/auth/wallet`
- * mints a NEW user from the address and never reads the session - and a guest handle is claimed by
- * INSERT, so signing out of a guest account is the end of it. The button destroyed the account
- * while promising, in the card that steered people to it, that everything would follow them.
- */
-describe('a guest seat', () =>
-{
-    it('is never offered a wallet button that signs it out instead', async () =>
-    {
-        await useAccount().signIn('Alex');
-        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
-
-        expect(container.textContent).toContain('Guest seat');
-        expect(container.textContent).not.toContain('Connect a wallet');
-
-        const signOut = [...container.querySelectorAll('button')]
-            .filter((button) => button.textContent?.trim() === 'Sign out');
-        expect(signOut.length).toBe(1);
-    });
-
-    it('is told the seat ends at sign-out rather than that it moves', async () =>
-    {
-        await useAccount().signIn('Alex');
-        const container = await show(MePage as unknown as () => HTMLElement, '/app/me');
-
-        expect(container.textContent).toContain('This seat is this browser');
-        expect(container.textContent).toContain('no way back into a guest account');
-        expect(container.textContent).not.toContain('follow you to any device');
-    });
 });
 
 /**
@@ -136,7 +96,7 @@ describe('the profile sheet', () =>
 
     it('writes the name and the bio, and adopts what the server answers with', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
 
         const container = await sheet();
 
@@ -157,7 +117,7 @@ describe('the profile sheet', () =>
 
     it('says a handle is taken, and writes nothing else when it is', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         server.takenHandles = ['taken'];
 
         const container = await sheet();
@@ -188,12 +148,12 @@ describe('the notification switches', () =>
     it('read the account\'s own mutes and write through the server, so every device agrees', async () =>
     {
         server.mutes = [{ kind: 'notice', id: 'turns' }];
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
         const switchFor = (label: string) =>
             [...container.querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.querySelector('span span')?.textContent === label)!;
 
-        expect(switchFor('Your turn in a turn-based game').getAttribute('aria-checked')).toBe('false');
+        expect(switchFor('Games: your turn, and a game starting').getAttribute('aria-checked')).toBe('false');
         expect(switchFor('Messages').getAttribute('aria-checked')).toBe('true');
 
         switchFor('Messages').click();
@@ -210,7 +170,7 @@ describe('the safety lists', () =>
 {
     it('keep the lines that say nobody is blocked, muted or reported when they are read again', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(establishAccount());
 
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
         const lineOf = (text: string) => [...container.querySelectorAll('p')].find((one) => one.textContent?.trim() === text) ?? null;
@@ -232,5 +192,57 @@ describe('the safety lists', () =>
         expect(lines()[0], 'the line about blocks was drawn again').toBe(drawn[0]);
         expect(lines()[1], 'the line about mutes was drawn again').toBe(drawn[1]);
         expect(lines()[2], 'the line about reports was drawn again').toBe(drawn[2]);
+    });
+});
+
+describe('the page of settings', () =>
+{
+    it('is one column of sections, each as wide as the column, with no grid of columns in any of them', async () =>
+    {
+        useSession().establish(establishAccount());
+
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const sections = [...container.querySelectorAll('section[id^="settings-"]')];
+        const column = sections[0]?.parentElement ?? null;
+        const classes = (column?.getAttribute('class') ?? '').split(' ');
+
+        expect(sections.map((one) => one.id)).toEqual(['settings-account', 'settings-appearance', 'settings-safety', 'settings-notifications', 'settings-voice', 'settings-helpers']);
+        expect(sections.every((one) => one.parentElement === column), 'a section stands beside another inside a wrapper of its own').toBe(true);
+        expect(classes).toEqual(expect.arrayContaining(['flex', 'flex-col']));
+        expect(classes.filter((one) => /grid/.test(one)), 'the sections are laid out as a grid').toEqual([]);
+        expect(
+            [...(column?.querySelectorAll('[class*="grid-cols-"]') ?? [])].map((one) => one.getAttribute('class')),
+            'something inside a section is laid out in columns'
+        ).toEqual([]);
+    });
+
+    it('lays the voice section out as the microphone, what is heard and the table, each in a panel of its own', async () =>
+    {
+        useSession().establish(establishAccount());
+
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const voice = container.querySelector('#settings-voice')!;
+        const { t } = useLocale();
+        const switches = [...voice.querySelectorAll('[role="switch"]')].map((one) => one.textContent ?? '');
+
+        expect([...voice.querySelectorAll('h3')].map((one) => one.textContent?.trim())).toEqual([
+            t('voice.section.input'),
+            t('voice.section.mode'),
+            t('voice.section.processing'),
+            t('voice.section.output'),
+            t('voice.section.table')
+        ]);
+        expect(voice.querySelector('[role="meter"]'), 'the microphone has no meter').not.toBeNull();
+        expect(voice.querySelector(`[role="slider"][aria-label="${ t('voice.inputVolume') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="slider"][aria-label="${ t('voice.volume') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="group"][aria-label="${ t('voice.noise') }"]`)).not.toBeNull();
+        expect(voice.querySelector(`[role="group"][aria-label="${ t('voice.quality') }"]`)).not.toBeNull();
+
+        for (const key of ['voice.echo', 'voice.agc', 'voice.startMuted', 'voice.autoJoin', 'voice.tables', 'voice.team'] as const)
+        {
+            expect(switches.some((one) => one.includes(t(key))), `no switch for ${ key }`).toBe(true);
+        }
+
+        expect(voice.textContent).toContain(t('voice.privacy'));
     });
 });

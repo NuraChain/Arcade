@@ -5,14 +5,14 @@ import { DataSource, IsNull, Not, type EntityManager } from 'typeorm';
 
 import { errorResponse } from '@azerothjs/http';
 
-import { Block, Conversation, ConversationMember, Friendship, Game, Match, MatchPlayer, Notification, Table, TableSeat, User, entities } from '../src/entities/index.ts';
+import { Block, Conversation, ConversationMember, Friendship, Game, Match, MatchPlayer, Notification, QuickTable, Table, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
 import type { QuickAsk } from '../src/domains/table/quick.ts';
 import { rowsOf } from '../src/lib/rows.ts';
-import { buildPorts, type PresenceReader, type WriteListener } from '../src/services.ts';
+import { buildPorts, type Note, type PresenceReader, type WriteListener } from '../src/services.ts';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -40,21 +40,22 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
-    sessionsRevoked: () => undefined
+    sessionsRevoked: () => undefined,
+    seen: () => undefined
 };
 
 const everybody = (userIds: readonly string[]) => new Set(userIds);
 
 const without = (...away: string[]) => (userIds: readonly string[]) => new Set(userIds.filter((id) => !away.includes(id)));
 
-const door = (presence?: PresenceReader) => buildPorts(db, {
+const door = (presence?: PresenceReader, note?: Note) => buildPorts(db, {
     secret: 'a-test-secret-that-is-long-enough-to-use',
     origin: 'http://localhost:1',
     env: 'test',
     vapidPublicKey: '',
     vapidPrivateKey: '',
     vapidSubject: ''
-} as Parameters<typeof buildPorts>[1], listener, presence);
+} as Parameters<typeof buildPorts>[1], listener, presence, note);
 
 const makeUser = async (overrides: Partial<Pick<User, 'isMinor' | 'allowStrangerMessages'>> = {}) =>
 {
@@ -64,7 +65,6 @@ const makeUser = async (overrides: Partial<Pick<User, 'isMinor' | 'allowStranger
         handle: `q${ seq }x${ Math.floor(Math.random() * 100000) }`,
         displayName: `Quick ${ seq }`,
         hue: seq % 360,
-        kind: 'guest',
         ...overrides
     });
 
@@ -476,16 +476,17 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             await here.setReady(minor, theirs, true);
             await befriend(minor, friend);
 
-            const grown = (await search(await makeUser())).id;
+            const four = { seats: 4 };
+            const grown = (await search(await makeUser(), four)).id;
 
             expect(grown).not.toBe(theirs);
-            expect((await search(friend)).id).toBe(theirs);
+            expect((await search(friend, four)).id).toBe(theirs);
 
-            const young = (await search(await child())).id;
+            const young = (await search(await child(), four)).id;
 
             expect([theirs, grown]).not.toContain(young);
-            expect((await search(await child())).id).toBe(young);
-            expect((await search(await makeUser())).id).toBe(grown);
+            expect((await search(await child(), four)).id).toBe(young);
+            expect((await search(await makeUser(), four)).id).toBe(grown);
             expect(await sizes()).toEqual([2, 2, 2]);
         });
 
@@ -497,12 +498,12 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             await joined(stale, 2);
 
-            const fresh = await found({}, without(away));
+            const fresh = await found({ seats: 4 }, without(away));
 
             expect(fresh).not.toBe(stale);
             expect(await sizes()).toEqual([1, 1, 3]);
             expect(await found({ mode: 'turns' }, without(away))).toBe(slow);
-            expect(await found({}, everybody)).toBe(stale);
+            expect(await found({ seats: 4 }, everybody)).toBe(stale);
         });
     });
 
@@ -518,7 +519,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             expect((await search(stranger)).id).toBe(theirs);
             expect(await chairOf(stranger, theirs)).toMatchObject({ seat: 2 });
-            expect((await search(late)).id).not.toBe(theirs);
+            expect((await search(late, { seats: 4 })).id).not.toBe(theirs);
             expect((await search(guest)).id).toBe(theirs);
             expect(await chairOf(guest, theirs)).toMatchObject({ seat: 1, ready: true });
         });
@@ -568,31 +569,31 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             const { me, answer, table } = await made({ game: 'ludo' });
 
             expect(answer.seated).toBe(true);
-            expect(table).toMatchObject({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, hostId: me, roomId: null, status: 'open' });
+            expect(table).toMatchObject({ game: 'ludo', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, hostId: me, roomId: null, status: 'open' });
             expect(await db.getRepository(TableSeat).find({ where: { tableId: table.id }, order: { seat: 'ASC' } })).toMatchObject([
                 { seat: 0, userId: me, ready: true },
-                { seat: 1, userId: null, ready: false },
-                { seat: 2, userId: null, ready: false },
-                { seat: 3, userId: null, ready: false }
+                { seat: 1, userId: null, ready: false }
             ]);
             expect(await inThread(me, table.id)).toBe(true);
         });
 
-        it('opens the table the game makes of what was chosen, and the default where nothing was', async () =>
+        it('opens the table the game makes of what was chosen, and the smallest it plays where nothing was', async () =>
         {
-            expect((await made({ game: 'hokm' })).table).toMatchObject({ seats: 4, target: 7, teams: true });
-            expect((await made({ game: 'poker' })).table).toMatchObject({ seats: 6, blinds: 'low', teams: false });
+            expect((await made({ game: 'hokm' })).table).toMatchObject({ seats: 2, target: 7, teams: false });
+            expect((await made({ game: 'hokm', teams: true })).table).toMatchObject({ seats: 4, target: 7, teams: true });
+            expect((await made({ game: 'poker' })).table).toMatchObject({ seats: 2, blinds: 'low', teams: false });
+            expect((await made({ game: 'ludo', seats: 4 })).table).toMatchObject({ seats: 4, teams: false });
             expect((await made({ game: 'backgammon' })).table).toMatchObject({ seats: 2, target: 1, cube: false });
             expect((await made({ game: 'backgammon', cube: true })).table).toMatchObject({ seats: 2, target: 3, cube: true });
             expect((await made({ game: 'poker', seats: 9, blinds: 'high' })).table).toMatchObject({ seats: 9, blinds: 'high' });
             expect((await made({ game: 'ludo', seats: 2, mode: 'turns' })).table).toMatchObject({ seats: 2, mode: 'turns' });
-            expect((await made({ game: 'hokm', teams: false, target: 13 })).table).toMatchObject({ seats: 3, target: 13, teams: false });
+            expect((await made({ game: 'hokm', teams: false, target: 13 })).table).toMatchObject({ seats: 2, target: 13, teams: false });
         });
 
         it('opens it with the call the searcher asked for', async () =>
         {
             expect((await made({ game: 'ludo', voice: 'table' })).table.voice).toBe('table');
-            expect((await made({ game: 'ludo', seats: 2, voice: 'off' })).table.voice).toBe('off');
+            expect((await made({ game: 'ludo', seats: 3, voice: 'off' })).table.voice).toBe('off');
         });
 
         it('opens one the next search with the same choices sits down at', async () =>
@@ -617,7 +618,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await chairsOf(me)).toHaveLength(1);
         });
 
-        it('searches again for somebody whose chair is no longer ready, and for different choices', async () =>
+        it('searches again for somebody whose chair is no longer ready, and for different choices, and lets go of the wait it had', async () =>
         {
             const me = await makeUser();
             const first = (await search(me)).id;
@@ -628,11 +629,16 @@ describe.skipIf(!active)('quick play, against a real database', () =>
 
             expect(next.seated).toBe(true);
             expect(next.id).not.toBe(first);
+            expect(next.left).toBeUndefined();
 
-            const narrower = await search(me, { seats: 2 });
+            const narrower = await search(me, { seats: 3 });
 
             expect(narrower.seated).toBe(true);
             expect([first, next.id]).not.toContain(narrower.id);
+            expect(narrower.left).toEqual([{ tableId: next.id, conversationId: expect.any(String), closed: true }]);
+            expect(await chairOf(me, next.id)).toBeNull();
+            expect(await row(next.id)).toMatchObject({ status: 'closed' });
+            expect(await chairOf(me, first)).toMatchObject({ ready: false });
             expect(await search(me)).toEqual({ id: narrower.id, seated: false });
         });
 
@@ -667,14 +673,439 @@ describe.skipIf(!active)('quick play, against a real database', () =>
         }, 60_000);
     });
 
+    describe('what it tells the server\'s log', () =>
+    {
+        it('says what each search asked and what came of it, keyed by its table, and says a refusal', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const [first, second] = await crowd(2);
+
+            const opened = await ports.table.quick(first, { game: 'backgammon', voice: 'off', target: 3 });
+
+            await ports.table.quick(first, { game: 'backgammon', voice: 'off', target: 3 });
+            await ports.table.quick(second, { game: 'backgammon', voice: 'off' });
+            await expect(ports.table.quick(second, { game: 'backgammon', voice: 'off', seats: 4 })).rejects.toMatchObject({ code: 'quick-options' });
+
+            const game = await db.getRepository(Match).findOneByOrFail({ tableId: opened.id });
+
+            expect(said.map(([event]) => event)).toEqual(['quick play', 'quick play', 'quick play', 'quick play refused']);
+            expect(said[0][1]).toMatchObject({ game: 'backgammon', who: first, asked: { target: 3 }, outcome: 'opened', table: opened.id, match: null, taken: 1, seats: 2, away: 0, missed: 0, letGo: 0 });
+            expect(said[1][1]).toMatchObject({ who: first, outcome: 'already waiting', table: opened.id, match: null, taken: 1 });
+            expect(said[2][1]).toMatchObject({ who: second, outcome: 'joined', table: opened.id, match: game.id, taken: 2 });
+            expect(said[2][1].ms).toEqual(expect.any(Number));
+            expect(said[3][1]).toEqual({ game: 'backgammon', who: second, code: 'quick-options' });
+        });
+
+        it('says how many tables it passed over because somebody there was away', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const away = await makeUser();
+            const stale = await opened(away);
+            const ports = door({ present: without(away) }, (event, fields) => said.push([event, fields]));
+
+            await joined(stale, 1);
+
+            const fresh = await opened(await makeUser());
+            const answer = await ports.table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 });
+
+            expect(answer.id).toBe(fresh);
+            expect(said[0][1]).toMatchObject({ outcome: 'joined', table: fresh, away: 1, missed: 0 });
+        });
+
+        it('says how many tables it passed over because their last chair went, or the table closed, as it sat down', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const host = await makeUser();
+            const theirs = await opened(host);
+            const me = await makeUser();
+
+            const [, searched] = await parkedBehind(
+                (tx) => tx.getRepository(Table).findOne({ where: { id: theirs }, lock: { mode: 'pessimistic_write' } }),
+                [() => here.close(host, theirs), () => ports.table.quick(me, { game: 'ludo', voice: 'off', seats: 4 })]
+            );
+
+            expect(searched).toMatchObject({ status: 'fulfilled' });
+            expect(said[0][1]).toMatchObject({ who: me, outcome: 'opened', away: 0, missed: 1 });
+            expect(said[0][1].table).not.toBe(theirs);
+        });
+
+        it('says how many it let go of', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const me = await makeUser();
+
+            await ports.table.quick(me, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(me, { game: 'hokm', voice: 'off' });
+
+            expect(said.map(([, fields]) => fields.letGo)).toEqual([0, 1]);
+        });
+
+        it('counts who is waiting ready for each game and pace, at how many tables, and the longest wait in seconds', async () =>
+        {
+            const ports = door();
+            const [one, two, three, four, idle, playing, against, closer, inviter, slow] = await crowd(10);
+
+            await ports.table.quick(one, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(two, { game: 'ludo', voice: 'off', seats: 4 });
+            await ports.table.quick(three, { game: 'ludo', voice: 'off', seats: 3 });
+            await ports.table.quick(four, { game: 'backgammon', voice: 'off', mode: 'turns' });
+            await ports.table.quick(slow, { game: 'ludo', voice: 'off', mode: 'turns' });
+            await ports.table.quick(playing, { game: 'poker', voice: 'off' });
+
+            const started = await ports.table.quick(against, { game: 'poker', voice: 'off' });
+            const shut = await ports.table.quick(closer, { game: 'hokm', voice: 'off' });
+            const unready = await opened(idle);
+            const invited = await opened(inviter, { privacy: 'invite' });
+
+            expect(started.matchId).toEqual(expect.any(String));
+
+            await here.close(closer, shut.id);
+            await here.setReady(inviter, invited, true);
+            await joined(unready, 1);
+            await db.query(`update table_seats set joined_at = now() - interval '90 seconds' where user_id = $1`, [one]);
+
+            const waiting = await ports.jobs.waiting();
+
+            expect(waiting).toEqual([
+                { game: 'backgammon', mode: 'turns', players: 1, tables: 1, oldest: expect.any(Number) },
+                { game: 'ludo', mode: 'live', players: 3, tables: 2, oldest: expect.any(Number) },
+                { game: 'ludo', mode: 'turns', players: 1, tables: 1, oldest: expect.any(Number) }
+            ]);
+            expect(waiting[1].oldest).toBeGreaterThanOrEqual(90);
+            expect(waiting[0].oldest).toBeLessThan(90);
+        });
+    });
+
+    describe('one search at a time for a live game', () =>
+    {
+        it('lets go of the searcher’s other waits at live tables quick play opened, and keeps every other chair', async () =>
+        {
+            const me = await makeUser();
+            const playing = (await door().table.quick(me, { game: 'backgammon', voice: 'off' })).id;
+
+            await door().table.quick(await makeUser(), { game: 'backgammon', voice: 'off' });
+
+            const waiting = (await search(me, { seats: 4 })).id;
+            const byHand = await opened(me);
+
+            await here.setReady(me, byHand, true);
+
+            const slow = (await search(me, { mode: 'turns' })).id;
+            const now = await search(me, { game: 'hokm' });
+
+            expect(await live(playing)).toBe(1);
+            expect(now.seated).toBe(true);
+            expect(now.left).toEqual([{ tableId: waiting, conversationId: expect.any(String), closed: true }]);
+            expect(await chairOf(me, waiting)).toBeNull();
+            expect(await inThread(me, waiting)).toBe(false);
+            expect(await chairOf(me, byHand)).toMatchObject({ ready: true });
+            expect(await chairOf(me, slow)).toMatchObject({ ready: true });
+            expect(await chairOf(me, playing)).not.toBeNull();
+            expect(await chairOf(me, now.id)).toMatchObject({ ready: true });
+        });
+
+        it('lets go of nothing for a turn-based search, or for a search the searcher was already waiting on', async () =>
+        {
+            const me = await makeUser();
+            const waiting = (await search(me, { seats: 4 })).id;
+
+            expect((await search(me, { mode: 'turns' })).left).toBeUndefined();
+            expect(await search(me, { seats: 4 })).toEqual({ id: waiting, seated: false });
+            expect(await chairOf(me, waiting)).toMatchObject({ ready: true });
+        });
+
+        it('tells whoever else was waiting at that table, and its thread, with the leaver named', async () =>
+        {
+            const tables = vi.spyOn(listener, 'tableChanged');
+            const chats = vi.spyOn(listener, 'chatChanged');
+            const [stays, me] = await crowd(2);
+            const theirs = (await door().table.quick(stays, { game: 'ludo', voice: 'off', seats: 4 })).id;
+
+            try
+            {
+                expect((await door().table.quick(me, { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(theirs);
+
+                tables.mockClear();
+                chats.mockClear();
+                await door().table.quick(me, { game: 'backgammon', voice: 'off' });
+
+                const thread = (await db.getRepository(Conversation).findOneByOrFail({ tableId: theirs, kind: 'game' })).id;
+
+                expect(tables).toHaveBeenCalledWith(theirs, [stays, me]);
+                expect(chats).toHaveBeenCalledWith(thread, me);
+                expect(await row(theirs)).toMatchObject({ status: 'open' });
+                expect(await chairOf(stays, theirs)).toMatchObject({ ready: true });
+            }
+            finally
+            {
+                tables.mockRestore();
+                chats.mockRestore();
+            }
+        });
+
+        it('tells whoever was waiting with the searcher when the new search sits down at a table that was waiting', async () =>
+        {
+            const tables = vi.spyOn(listener, 'tableChanged');
+            const [stays, me, host] = await crowd(3);
+            const theirs = (await door().table.quick(stays, { game: 'ludo', voice: 'off', seats: 4 })).id;
+
+            try
+            {
+                await door().table.quick(me, { game: 'ludo', voice: 'off', seats: 4 });
+
+                const waiting = (await door().table.quick(host, { game: 'backgammon', voice: 'off' })).id;
+
+                tables.mockClear();
+
+                expect(await door().table.quick(me, { game: 'backgammon', voice: 'off' })).toMatchObject({ id: waiting, status: 'playing' });
+                expect(tables).toHaveBeenCalledWith(theirs, [stays, me]);
+                expect(await chairOf(me, theirs)).toBeNull();
+                expect(await chairOf(stays, theirs)).toMatchObject({ ready: true });
+            }
+            finally
+            {
+                tables.mockRestore();
+            }
+        });
+
+        it('leaves one wait when one person’s searches for two games arrive together', async () =>
+        {
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const me = await makeUser();
+
+                await Promise.all([search(me, { game: 'ludo' }, here), search(me, { game: 'backgammon' }, there)]);
+
+                expect((await chairsOf(me)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+            }
+        }, 60_000);
+
+        it('seats both, one wait each, when two people’s searches cross each other’s waits', async () =>
+        {
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const [one, other] = await crowd(2);
+
+                await search(one, { game: 'ludo', seats: 4 });
+                await search(other, { game: 'backgammon' });
+
+                const answers = await Promise.allSettled([
+                    search(one, { game: 'backgammon' }, here),
+                    search(other, { game: 'ludo', seats: 4 }, there)
+                ]);
+
+                expect(answers.map((answer) => answer.status), `round ${ round }`).toEqual(['fulfilled', 'fulfilled']);
+                expect((await chairsOf(one)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+                expect((await chairsOf(other)).filter((chair) => chair.ready), `round ${ round }`).toHaveLength(1);
+
+                await db.getRepository(Table).createQueryBuilder().delete().execute();
+            }
+        }, 60_000);
+    });
+
+    describe('somebody still playing a live game', () =>
+    {
+        it('is answered with that game, whatever game a live search asks for, and given no other chair', async () =>
+        {
+            const said: [string, Record<string, unknown>][] = [];
+            const ports = door(undefined, (event, fields) => said.push([event, fields]));
+            const [mine, theirs] = await crowd(2);
+            const first = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+            const started = await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            expect(started.matchId).toEqual(expect.any(String));
+            expect((await ports.table.quick(mine, { game: 'backgammon', voice: 'off' })).id).toBe(first.id);
+            expect((await ports.table.quick(mine, { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(first.id);
+            expect((await ports.table.quick(theirs, { game: 'poker', voice: 'off' })).id).toBe(first.id);
+            expect(await chairsOf(mine)).toHaveLength(1);
+            expect(await chairsOf(theirs)).toHaveLength(1);
+            expect(await sizes()).toEqual([2]);
+            expect(said.slice(2).map(([, fields]) => fields.outcome)).toEqual(['already playing', 'already playing', 'already playing']);
+            expect(said.slice(2).map(([, fields]) => fields.match)).toEqual([started.matchId, started.matchId, started.matchId]);
+        });
+
+        it('is never seated twice by two of their searches that arrive together, one of them taking the last chair', async () =>
+        {
+            const one = door();
+            const two = door();
+
+            for (let round = 0; round < ROUNDS; round += 1)
+            {
+                const [waiting, me] = await crowd(2);
+                const theirs = await one.table.quick(waiting, { game: 'backgammon', voice: 'off' });
+                const answers = await Promise.all([
+                    one.table.quick(me, { game: 'backgammon', voice: 'off' }),
+                    two.table.quick(me, { game: 'backgammon', voice: 'off' })
+                ]);
+
+                expect(answers.map((answer) => answer.id), `round ${ round }`).toEqual([theirs.id, theirs.id]);
+                expect(await chairsOf(me), `round ${ round }`).toHaveLength(1);
+                expect(await live(theirs.id), `round ${ round }`).toBe(1);
+
+                await db.getRepository(Table).createQueryBuilder().delete().execute();
+            }
+        }, 60_000);
+
+        it('still looks for a turn-based game while a live one is on, and for a live one while only a turn-based one is', async () =>
+        {
+            const ports = door();
+            const [mine, theirs, slow, slower] = await crowd(4);
+            const live = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+
+            await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            const later = await ports.table.quick(mine, { game: 'ludo', voice: 'off', mode: 'turns' });
+
+            expect(later.id).not.toBe(live.id);
+            expect(await chairsOf(mine)).toHaveLength(2);
+
+            const turns = await ports.table.quick(slow, { game: 'backgammon', voice: 'off', mode: 'turns' });
+            const both = await ports.table.quick(slower, { game: 'backgammon', voice: 'off', mode: 'turns' });
+
+            expect(both.id).toBe(turns.id);
+            expect(both.matchId).toEqual(expect.any(String));
+
+            const now = await ports.table.quick(slow, { game: 'backgammon', voice: 'off' });
+
+            expect([live.id, turns.id]).not.toContain(now.id);
+            expect(await chairsOf(slow)).toHaveLength(2);
+        });
+
+        it('looks as it always did for a seat the game is over for while it goes on: one that gave up, and one out of chips', async () =>
+        {
+            const ports = door();
+            const three = await crowd(3);
+            let ludo = await ports.table.quick(three[0], { game: 'ludo', voice: 'off', seats: 3 });
+
+            for (const who of three.slice(1))
+            {
+                ludo = await ports.table.quick(who, { game: 'ludo', voice: 'off', seats: 3 });
+            }
+
+            expect(ludo.matchId).toEqual(expect.any(String));
+
+            await ports.match.resign(three[0], ludo.matchId!, { key: 'gave-up' });
+
+            expect((await ports.table.quick(three[0], { game: 'ludo', voice: 'off', seats: 3 })).id).not.toBe(ludo.id);
+            expect((await ports.table.quick(three[1], { game: 'ludo', voice: 'off', seats: 3 })).id).toBe(ludo.id);
+
+            const six = await crowd(6);
+            let poker = await ports.table.quick(six[0], { game: 'poker', voice: 'off', seats: 6 });
+
+            for (const who of six.slice(1))
+            {
+                poker = await ports.table.quick(who, { game: 'poker', voice: 'off', seats: 6 });
+            }
+
+            expect(poker.matchId).toEqual(expect.any(String));
+
+            const { seat } = await db.getRepository(MatchPlayer).findOneByOrFail({ matchId: poker.matchId!, userId: six[1] });
+
+            await db.query(
+                `update matches
+                    set state = jsonb_set(jsonb_set(jsonb_set(state, array['out', $2], 'true'), array['stacks', $2], '0'), array['folded', $2], 'true')
+                  where id = $1`,
+                [poker.matchId, String(seat)]
+            );
+
+            expect((await ports.table.quick(six[1], { game: 'poker', voice: 'off', seats: 6 })).id).not.toBe(poker.id);
+            expect((await ports.table.quick(six[2], { game: 'poker', voice: 'off', seats: 6 })).id).toBe(poker.id);
+        });
+
+        it('never takes a game the server has written down as finished for one being played, whatever its board says', async () =>
+        {
+            const ports = door();
+            const [mine, theirs] = await crowd(2);
+            const first = await ports.table.quick(mine, { game: 'backgammon', voice: 'off' });
+            const started = await ports.table.quick(theirs, { game: 'backgammon', voice: 'off' });
+
+            await db.query(`update matches set finished_at = now(), deadline_at = null, outcome = 'abandoned' where id = $1`, [started.matchId]);
+
+            expect((await ports.table.quick(mine, { game: 'ludo', voice: 'off', seats: 4 })).id).not.toBe(first.id);
+        });
+    });
+
+    describe('when opening a table fails', () =>
+    {
+        const failOnce = async (code: string) =>
+        {
+            await db.query(`create sequence quick_fault_count`);
+            await db.query(
+                `create function quick_fault() returns trigger language plpgsql as $$
+                 begin
+                     if nextval('quick_fault_count') = 1 then
+                         raise exception 'a fault the test put in' using errcode = '${ code }';
+                     end if;
+                     return new;
+                 end $$`
+            );
+            await db.query(`create trigger quick_fault before insert on quick_tables for each row execute function quick_fault()`);
+        };
+
+        const mended = async () =>
+        {
+            await db.query(`drop trigger if exists quick_fault on quick_tables`);
+            await db.query(`drop function if exists quick_fault()`);
+            await db.query(`drop sequence if exists quick_fault_count`);
+        };
+
+        it('tries again when the table it opens collides with one, and leaves one table', async () =>
+        {
+            await failOnce('23505');
+
+            try
+            {
+                const me = await makeUser();
+                const answer = await search(me, { seats: 4 });
+
+                expect(answer.seated).toBe(true);
+                expect(await chairsOf(me)).toMatchObject([{ tableId: answer.id, ready: true }]);
+                expect(await db.getRepository(Table).count()).toBe(1);
+                expect(await db.getRepository(QuickTable).countBy({ tableId: answer.id })).toBe(1);
+            }
+            finally
+            {
+                await mended();
+            }
+        });
+
+        it('leaves no table, chair or thread behind when it cannot, and the next search opens one that others find', async () =>
+        {
+            await failOnce('P0001');
+
+            try
+            {
+                const me = await makeUser();
+
+                await expect(search(me, { seats: 4 })).rejects.toThrow('a fault the test put in');
+                expect(await chairsOf(me)).toEqual([]);
+                expect(await db.getRepository(Table).count()).toBe(0);
+                expect(await db.getRepository(ConversationMember).countBy({ userId: me })).toBe(0);
+
+                const again = await search(me, { seats: 4 });
+
+                expect(await chairsOf(me)).toMatchObject([{ tableId: again.id, ready: true }]);
+                expect(await inThread(me, again.id)).toBe(true);
+                expect((await search(await makeUser(), { seats: 4 })).id).toBe(again.id);
+            }
+            finally
+            {
+                await mended();
+            }
+        });
+    });
+
     describe('when many search at once', () =>
     {
-        it('seats ten searchers at tables of four, four and two, nobody twice and nobody in another’s chair, and starts the two that filled', async () =>
+        it('seats ten searchers who chose four at tables of four, four and two, nobody twice and nobody in another’s chair, and starts the two that filled', async () =>
         {
             const searchers = await crowd(10);
             const doors = searchers.map(() => door());
 
-            const answers = await Promise.all(searchers.map((who, index) => doors[index].table.quick(who, { game: 'ludo', voice: 'off' })));
+            const answers = await Promise.all(searchers.map((who, index) => doors[index].table.quick(who, { game: 'ludo', voice: 'off', seats: 4 })));
 
             const chairs = await db.getRepository(TableSeat).findBy({ userId: Not(IsNull()) });
             const full = chairs.map((chair) => chair.tableId).filter((id, _at, all) => all.filter((one) => one === id).length === 4);
@@ -781,7 +1212,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await row(theirs)).toMatchObject({ status: 'closed' });
             expect(await sittingAt(theirs)).toEqual([]);
             expect(await inThread(me, theirs)).toBe(false);
-            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true } });
+            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true, passed: { away: 0, missed: 1 } } });
         });
 
         it('sits down somewhere else when the host was already closing the table', async () =>
@@ -799,7 +1230,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             expect(await row(theirs)).toMatchObject({ status: 'closed' });
             expect(await sittingAt(theirs)).toEqual([host]);
             expect(await inThread(me, theirs)).toBe(false);
-            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true } });
+            expect(searched).toEqual({ status: 'fulfilled', value: { id: await elsewhere(me, theirs), seated: true, passed: { away: 0, missed: 1 } } });
         });
     });
 
@@ -836,16 +1267,32 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             }
         });
 
+        it('deals two strangers who both leave every choice open a game of two, at every game', async () =>
+        {
+            const ports = door();
+
+            for (const game of ['ludo', 'hokm', 'poker', 'backgammon'])
+            {
+                const [first, second] = await crowd(2);
+                const waiting = await ports.table.quick(first, { game, voice: 'off' });
+                const playing = await ports.table.quick(second, { game, voice: 'off' });
+
+                expect(waiting, game).toMatchObject({ seats: 2, taken: 1, status: 'open' });
+                expect(playing, game).toMatchObject({ id: waiting.id, seats: 2, taken: 2, status: 'playing' });
+                expect(await db.getRepository(Match).countBy({ tableId: waiting.id, finishedAt: IsNull() }), game).toBe(1);
+            }
+        });
+
         it('starts one game when two searchers take the last two chairs together', async () =>
         {
             for (let round = 0; round < ROUNDS; round += 1)
             {
                 const [host, early, ...late] = await crowd(4);
-                const theirs = (await door().table.quick(host, { game: 'ludo', voice: 'off' })).id;
+                const theirs = (await door().table.quick(host, { game: 'ludo', voice: 'off', seats: 4 })).id;
 
-                await door().table.quick(early, { game: 'ludo', voice: 'off' });
+                await door().table.quick(early, { game: 'ludo', voice: 'off', seats: 4 });
 
-                const answers = await Promise.all(late.map((who) => door().table.quick(who, { game: 'ludo', voice: 'off' })));
+                const answers = await Promise.all(late.map((who) => door().table.quick(who, { game: 'ludo', voice: 'off', seats: 4 })));
 
                 expect(answers.map((answer) => answer.id), `round ${ round }`).toEqual([theirs, theirs]);
                 expect(await live(theirs), `round ${ round }`).toBe(1);
@@ -943,9 +1390,9 @@ describe.skipIf(!active)('quick play, against a real database', () =>
                 }
             };
 
-            expect((await door(absent).table.quick(await makeUser(), { game: 'ludo', voice: 'off' })).id).not.toBe(stale);
+            expect((await door(absent).table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 })).id).not.toBe(stale);
             expect(asked).toEqual([[away, guest].sort()]);
-            expect((await door().table.quick(await makeUser(), { game: 'ludo', voice: 'off' })).id).toBe(stale);
+            expect((await door().table.quick(await makeUser(), { game: 'ludo', voice: 'off', seats: 4 })).id).toBe(stale);
         });
     });
 

@@ -19,6 +19,12 @@ paths:
   - "frontend/src/stores/record.store.ts"
   - "frontend/src/stores/cues.store.ts"
   - "frontend/src/services/voice.rtc.ts"
+  - "backend/src/domains/party/**"
+  - "frontend/src/stores/party.store.ts"
+  - "frontend/src/stores/party-loader.ts"
+  - "frontend/src/components/social/party*"
+  - "frontend/src/components/social/play-with-sheet.component.azeroth"
+  - "frontend/src/lib/play-with.ts"
   - "tools/art/**"
   - "tools/qa/*pass*.mjs"
 ---
@@ -93,8 +99,10 @@ config object, not claims about the game.
 
 It caught a live bug the moment it existed: `lobby.quick()`'s fallback config was a literal four
 seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table.
-Quick play sends no seat count at all now: the server opens what `seatsByDefault` makes of the
-game's rules, and `catalogue.defaults` asks the same function (*Matchmaking is one request*).
+Quick play sends a seat count only when somebody chose one (*Quick play asks what to look for*):
+left at "Any", the server opens the smallest table the game plays when there is nothing to join
+(*Matchmaking is one request*), and the create form starts from `seatsByDefault` through
+`catalogue.defaults`.
 
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
@@ -102,18 +110,20 @@ structural half: a team table has four chairs. The other half - does this game h
 `game_rules`, which a CHECK cannot reach, so `create` asks it. `game_rules.partners` was a boolean
 that could only say "hokm"; it is `none`, `optional` or `required` now (`game_rules_partners_known`),
 because "forced at four seats" would otherwise be a game's name in `table/service.ts`, a domain that
-knows no game. Hokm is `required`, the rest are `none`, and ludo flips to `optional` in the commit
-that puts its team game at a table, the way `games.status` opened hokm: the engine plays two against
-two before that, and the catalogue says so only once a board can show it.
+knows no game. Hokm is `required`, ludo is `optional`, and the rest are `none`. Ludo was `none` until
+the commit that put its team game at a table (*Ludo two against two reached a table*, under *Playing
+a game*), the way `games.status` opened hokm: the engine played two against two before that, and the
+catalogue said so only once a board could show it.
 
 The answer is one pure function, `teamsOf(partners, seats, asked)` in `table/teams.ts`: four seats,
 and either the game forces it or the game allows it and the opener asked. It imports nothing, so the
 browser asks the same one, and it is NORMALIZED rather than refused for the reason the cube is:
-`teams` is a field on a config its callers start from `catalogue.defaults(game)`. Two of them, the
-sheet that opens a table in a chat and the group page, then change `seats`, so a hokm default turned
-into a table for two would carry a stale `true` and be refused by its own default. `asInput` in the
-lobby store resolves it from the seats the table finally has, the summary echoes what was STORED,
-and `table-teams.db.spec.ts` asks the row. The create form builds its own config, and built it with
+`teams` is a field on a config its callers start from `catalogue.defaults(game)`. A caller that then
+changes `seats` and nothing else, as the sheet that opens a table in a chat and the group page both
+did, turns a hokm default into a table for two carrying a stale `true`, and a refusal would have
+turned that table away for its own default. `asInput` in the lobby store resolves it from the seats
+the table finally has, the summary echoes what was STORED, and `table-teams.db.spec.ts` asks the
+row. The create form builds its own config, and built it with
 no `teams` at all behind an `as TableConfig`: harmless while every game is `none` or `required`,
 and an `undefined` the wire refuses the day one is `optional`. It names the field and is held by
 `satisfies` now, so the next required field fails the typecheck there, and `tables.spec.ts` submits
@@ -159,11 +169,42 @@ played with whom until the score moved.
   ones, so the two could disagree about one table. Under the chips the form says what two against
   two means at this game; above the friends list it says that the first friend picked is the
   partner, because `guestChairs` deals that chair first.
+- **So does a table opened in a conversation, and a group has no second way to open one.** The
+  sheet that opens a table in a chat offered bare seat counts and sent `teams` as the game's default
+  had it, so once a game left the choice open four friends could open it two against two from the
+  games page and never from their own chat. It offers `formatsWithin(rules, heads)` now, the same
+  formats held to the room's head count: "2", "3", "4" and "2 v 2" at ludo in a room of four or
+  more, with the sentence the form says under them. Nothing chosen is the largest count the room
+  fills, in the plain game where the game leaves it open, which is what `catalogue.defaults` opens.
+  A group's "Play together" composed a config of its own, the largest seat count and the default's
+  `teams`, a second copy of what fits in a room that had already been wrong once (*The second
+  audit*). It opens that sheet on the group's room, with the game the group plays chosen and the
+  group's own head count (`heads`, because the chat list is a page and may not hold the room).
+  `open-here.spec.ts` holds both doors, and reads the catalogue again under the open sheet to hold
+  the seat control to the node it was: its branch asks a `derived` boolean, where it asked the
+  length of an array that is new on every read.
 - **The lobby seats each side together.** `sideOf` in `match/sides.ts`, the function a start deals
   by, sorts the chairs into two groups: "Your team" for the reader's own, "Team 1" and "Team 2"
   for the other and for somebody not sitting. One under the other on a phone, side by side from a
   36rem container. The groups are a keyed list of keyed lists, so a chair that fills is the same
   card with somebody in it, and `lobby-panel.spec.ts` reads the table again to hold that.
+- **A row gives up its least part first, and names no width to do it.** A row holds the game's
+  name, the table's code, the "2 v 2" mark, who is seated, the table's age and its state, and
+  only the name and the age could shrink. On a 320px phone a team table's row ran off the page
+  (the row is 262px inside; the icon, the state and the arrow leave about 90px for a line whose
+  code and mark alone take 96), a backgammon table read "Back…" beside a code that was whole, and
+  every age read "2…". Each of the row's two lines is now `flex-wrap` inside `h-[1lh]` and
+  `overflow-hidden`: a part that does not fit goes WHOLE to a second line that is never drawn.
+  What leaves first is what stands last, so the order in the markup is the order of worth: name,
+  mark, code on the first line; seated, the voice mark, the age on the second. The age is the one
+  part that still shortens (`min-w-16 flex-1` round its dot and its `truncate`): with 4rem it reads
+  "27 minu…", with less it would be a stub and goes. A first breakpoint-shaped fix (`@container`
+  on the link, the code `hidden` under `@xs`) was thrown away before it was committed: it hid a
+  code that fitted at 360 and did nothing for the name or the age. `1lh` is no older than what
+  Tailwind 4 already asks of a browser, and one that lacks it draws the second line, which is the
+  row as it was. The code is still in the page for a screen reader. Nothing had seen the overflow:
+  the matrix had no team table. It keeps one waiting now (`teamTable` in `tools/qa/matrix.mjs`),
+  and the fault was found because another pass died and left one behind.
 - **A row in a list and the play header say "2 v 2"** where they said a head count.
 - **A plate wears its side.** `TablePlate` takes `team`: a pip on the avatar in the side's colour
   and, for a screen reader, "Partner", "Opponent", or "Team 2" for somebody watching. The reader's
@@ -172,12 +213,19 @@ played with whom until the score moved.
 - **The result is read by side**, the winners first: "Your team" and "Opponents", or the two
   numbers for somebody watching. A game where every seat stands alone is one list, as it was.
 - **The hero says "Partners at four" only where the game requires them.** It said it for anything
-  but `none`, which the day a game merely allows partners would claim it is played in them.
+  but `none`, which the day a game merely allows partners would claim it is played in them. Where
+  the game leaves it to whoever opens the table the hero says "2 v 2 at four", from the published
+  rules, and the game's page has a fourth card that says how such a game is won. Both sentences
+  were in the catalogue with nothing reading them on the day ludo's seed opened the door: the page
+  built its cards from a literal `[1, 2, 3]` and a cast, which no key can fail. It lists each
+  game's cards by key now (`RULE_CARDS`), so a card with no sentence fails `check`, and
+  `tables.spec.ts` holds the chip to the published rules in both languages and counts the cards.
 
 `fit-pass.mjs` wants every plate at a table of two sides to show its mark on the felt, clear of
-every other plate. `tables.spec.ts`, `lobby-panel.spec.ts`, `table-row.spec.ts`,
-`table-plate.spec.ts`, `hokm-board.spec.ts`, `match-result.spec.ts` and `play.spec.ts` hold the
-rest.
+every other plate, and at a ludo table, whose plates sit beside the board, to show it inside the
+screen (`ludo-4-teams`). `tables.spec.ts`, `lobby-panel.spec.ts`, `table-row.spec.ts`,
+`table-plate.spec.ts`, `hokm-board.spec.ts`, `match-result.spec.ts`, `play.spec.ts` and
+`open-here.spec.ts` hold the rest.
 
 **A wire field that reaches a bounded column says so in `schemas.ts`.** `crest` is `varchar(24)`,
 `hue` is `smallint`, `blinds` is one of three levels - and none of that was stated, so an over-long
@@ -197,8 +245,8 @@ eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The
 any more* in `frontend/CLAUDE.md`.
 
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
-each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty` and `not-ready` at 409,
-`no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
+each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready` and
+`kept-out` at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
 `table/service.ts` is the only way the
 table service, the start, the walkout and the invite port throw one: the word is checked where it is
 thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals
@@ -253,9 +301,11 @@ it. A close had the same window from the other side and left a game running on a
 `lockTable(tx, tableId)` in `table/service.ts` is `pg_advisory_xact_lock(hashtext($1::uuid::text))` -
 raw, because no repository can say it - and it is the first statement of the transaction in `start`,
 in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
-tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*). It is
-the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person never
-meets it. Under it the start reads the table and the chairs again and asks every question of THAT
+tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*), and so
+does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*),
+and so do a host's removal and an invitation (*The host can take somebody out of a chair*).
+It is the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person
+never meets it. Under it the start reads the table and the chairs again and asks every question of THAT
 read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -
 and deals the players from it. The key is the id as Postgres spells it: hashing the text a caller
 sent would give `/tables/<ID IN CAPITALS>/start` a lock of its own, and the route hands the start
@@ -264,8 +314,9 @@ the id as it arrived.
 Being seated is still asked BEFORE the transaction, so somebody with no chair is answered 404 without
 holding the table or waiting for it; and it is asked again under the lock, so somebody whose own leave
 got there first is answered that 404 rather than `chairs-empty`, a word meant for people in chairs. A
-claim and an invitation only FILL an empty chair, which cannot hurt a start that has read every chair
-taken, so they take no table lock. Nor does `setReady`, which is why the insert keeps its WHERE clause:
+claim only FILLS an empty chair, which cannot hurt a start that has read every chair taken, so it
+takes no table lock. An invitation only holds one, and took none either until a removal could run
+beside it. Nor does `setReady`, which is why the insert keeps its WHERE clause:
 somebody can still stop being ready between the read and the deal, and that is the race the paragraph
 above loses. The count and `matches_one_live` stay as belts. Two starts no longer both reach the
 insert - the second finds the first one's game in its own read - and a 23505 there is still read as
@@ -309,6 +360,21 @@ word reaches only somebody playing in that game, and anybody else is answered as
 `standUp(tx, tableId, userId)` in `table/service.ts` is the one place a chair goes back: it frees the
 chair, takes the person out of the table's thread and closes the table behind the last one out.
 
+**Whether a seat has anything to forfeit is the engine's to say, and it is asked before the
+leaver is.** A poker seat that runs out of chips is out of the game, and no result is written for
+it until the game ends. `walkOut` asked whether the leaver had agreed to forfeit before it asked
+the engine whether that seat had anything left to give up, so a busted seat's honest "no" was
+answered `playing`, and the page said "Your game has just started" to somebody out of chips. It
+asks the engine first: a forfeit the engine refuses is nothing to forfeit, and that seat leaves
+whatever it said, as a seat with a result always did. The page asks one question of its own,
+`inPlay(match)` in `data/match.ts` - the game is on, the reader's seat has no result, and the
+board does not say that seat is out - and both the Give up control and `leaveLead` read it. A
+busted seat was offered Give up, which the engine refuses, and its sheet said "leaving forfeits
+it as a loss"; it is offered Leave alone now, told "The game goes on without you", and sends
+`false`. So is somebody in a chair the game never dealt in, who was offered Give up as well.
+`match.db.spec.ts` (*leaving a live match*) puts a seat out by hand and lets it go both ways with
+nothing written; `play.spec.ts` holds the control and the sheet in both languages.
+
 The play page says "Your game has just started" (`play.leave.started`, through `whyRefused`), stays
 where it is and reads the table again at once: the table's own ring is still on its way through two
 coalescing windows when the refusal lands, and without the read the page says it over a lobby. A leave
@@ -342,6 +408,198 @@ invite sheet and the create form say `tables.refused.no-invitee`; the sheet stil
 what the profile already says: `GET /social/people/:handle` answers 404 for a missing handle and
 carries `refusal` for one that exists, on purpose, so a closed compose box can say why. This route
 discloses nothing more than that, and claims nothing more.
+
+**The host can take somebody out of a chair.** `POST /tables/:id/remove { id: handle }`, and
+`table.remove` is its one transaction. Only at a table with no game on: during a game the way out is
+the forfeit a player takes themselves, and a host who could remove an opponent mid-hand could remove
+a loss, so a live match answers `playing`. Only the host, and only one who is sitting there. Anybody
+else who asks - a stranger, a seated player, a host who has left the chair - and any name that is
+not another player in a chair at that table, the host's own and one nobody holds included, is
+answered in the bytes of a table that is not there: 404, "No table there.", never 403.
+`table-closed` and `playing` are said to the sitting host alone, who can see both. Whoever may not
+ask is answered before the table's lock is asked for, as a start answers somebody with no chair, and
+is asked again under it.
+
+The name is looked for among the people in chairs at that table, under the lock and after those two
+answers, and nowhere else. The port used to resolve it through the social read every other route
+names people by, which leaves out a suspended account: the chair was still drawn with its cross,
+every press answered "No table there.", and at a table no sweep empties - by invitation, in a room,
+turn-based - the chair was held for good by exactly the account a host most needs out. The notice to
+whoever was taken out cannot be written for such an account, and it is a courtesy, so the removal
+stands.
+
+It takes `lockTable` first and asks every one of those questions of what it reads under it, then
+goes through `standUp`, so the chair is freed, the thread is left and the rule about a chair going
+back still exists once. A start racing it sees the full table or the empty chair, never half of
+each. Two things `standUp` does not do are done beside it: a row in `table_removals` (the table, the
+person, when), and the chair that was HELD for them is let go. `invited_id` is the one thing a leave
+keeps, so that somebody can come back; kept here it would be a chair nobody else can take and, at a
+table by invitation, the very thing that still lets them see it.
+
+**Nobody is taken out of a table quick play opened.** The owner: "when i create table if someone
+that i dont want to be my table i should kick him not on quick play only on create table". The
+host of a table is whoever opened it, and quick play opens one for the first searcher who finds
+nothing, so that searcher was a host like any other and could take out the strangers quick play
+seated beside them, at a table nobody chose. `quick_tables` names the tables quick play opened, one
+row written in the transaction that opens it, and `remove` answers the host of one in the bytes of
+a table that is not there, before anything is locked; the summary says `quick: true` to everybody,
+and the lobby hands the chairs no cross there (`removing`). A table opened from the create form, a
+chat or a group is the host's, and quick play SEATING somebody at one does not change that: its
+host may take out a searcher as anybody else. It is a table of its own and not a column on
+`tables` because another worktree runs on the same development database, and a required column
+there would be a rebuild that stops its server; a row that only exists for quick play's tables
+needs no rebuild and nothing to fill. `table-removal.db.spec.ts` (*who may ask*) holds both
+halves against Postgres, and `lobby-panel.spec.ts` the control.
+
+**Whoever was taken out cannot sit at that table again while it lives**, or at a public table a
+removal would last as long as it takes to press "Take a seat". `claimSeat` refuses them `kept-out`,
+asked inside its transaction after the per-person lock, where a second request of theirs that was
+already waiting cannot slip past; `compatible()` passes the table over for them, so quick play seats
+them somewhere else; and **an invitation from the host is the one way back**: `invite` deletes the
+row in the transaction that holds the chair. From anybody else at the table the same invitation is
+`no-invitee`, the sentence every name that cannot be invited gets, because a chair held for somebody
+the claim would refuse is a chair nothing frees. `invite` takes the table's lock for the same
+reason: unlocked, it could hold a chair for somebody in the moment they were being taken out, and
+the table would be left with a removal row and a chair nobody else may take
+(`table-removal.db.spec.ts`, *against an invitation that reaches the table with it*, ends every
+round that way with the lock line deleted). Two invitations queue behind that lock now; the
+`skip locked` in its statement is still what looks past a chair somebody is taking by hand, because
+a claim takes no table lock.
+
+**The host is told who they took out, because the way back needs a name to press.** The sheet that
+invites offered the host's friends and nobody else, and at a public table whoever was taken out is
+usually a stranger quick play seated: the confirm sheet said "unless you invite them" about somebody
+no control could name. The table's wire carries `keptOut` for the SITTING host alone - the handles
+with a removal row there, the latest first - and the sheet lists them ahead of the friends under
+"People you took out", through the same `lobby.invite`; a friend who was taken out is listed once,
+there. The list leaves out anybody on either side of a block with the host and a suspended account,
+as every list of people does, and tells nobody anything new: the host put each of them there. It is
+absent for everybody else, for a host who has left the chair, and when it would be empty.
+
+**That invitation is still an invitation.** `mustInvite` is asked before the removal row is looked
+at, so a block, strangers turned off and a minor refuse the host as they refuse anybody, with
+`no-invitee` and the row left where it was; the sheet says the sentence. Taking somebody out makes
+the host no less a stranger to them, and an exception here would be the messaging policy's fifth
+copy, the generous one. For somebody who takes no strangers the way back is being friends first; a
+block has none while it stands.
+
+**They are told in words, and nobody else is told anything but the empty chair.** No line is written
+in the table's thread. The table's wire carries `removed: true` for a reader with a removal row who
+may still see the table - public, the host's friends', a room's - and its page says "The host took
+you out of this table." where it said they were only looking, with no seat offered. A table by
+invitation they can no longer see at all, so its page says what it says of any table that is not
+there; that is deliberate, since a removal is not a ticket to go on watching a private table. What
+tells them why is the notification: `table-removed`, the host as its actor, filed with the
+invitations somebody can switch off (`NOTICE_OF`), raised by the cues store as a toast with no
+button, and leading from the bell to the games list. Its `ref` names the game beside the table - the
+sentence says "a Ludo table", and they may not be let read the table to find out - so `game` joined
+the closed set a `ref` may carry. Its dedupe key is `removed:<tableId>`, not the invitation's
+`table:<id>`: under one key the notice would overwrite an unread invitation, the unread count would
+not move, and the cue that speaks when the count rises would say nothing. The rings are a leave's
+with one more name on them (`tableChanged` for everybody there and whoever was taken out,
+`chatChanged` naming them so their chat list drops the thread), each through `courtesy()`. The voice
+hub needed nothing: every table ring re-asks `voiceAllowed`, and somebody with no chair is not
+allowed.
+
+**A table opened again says how its last game ended.** A finished game is shown where it ended,
+with the result over it, and a table that was left and opened again showed the waiting room and
+no word of what had happened there (A3 of the graphics audit). A table's `matchId` is the game
+BEING PLAYED there (`m.finished_at is null`), so nothing named the one before. The summary
+carries `lastMatchId` now: the newest game that has ended at the table, and only to somebody who
+played in it, so nobody is handed an id that `GET /matches/:id` would refuse them. A stranger at
+a public table is told nothing. The lobby reads that game once (`createResource` over a
+`derived`, so a chair changing does not ask again) and draws the same `MatchResult` the board
+shows, under everything a waiting room is for and with no Play again: the room's own Ready is how
+the next game starts. **It tells of no game but the one its table names**: what was read is
+checked against `lastMatchId`, because the room is one instance for whichever table the page is
+shown, and a resource keeps what it read last while it reads again. Without the check a table
+opened from another told of the other's game until its own arrived. It is a courtesy, so when
+the game cannot be read the room is as it was. `table-last-game.db.spec.ts` holds the field
+against Postgres (who is told, which game, another table's games) and `lobby-panel.spec.ts` the
+room.
+
+**A waiting room is the table about to be played.** The lobby was a form: a heading that said the
+game's name a second time under the play header, a grid of cards, a row of buttons, and most of a
+desktop page empty under it (A2 of the graphics audit). It is the table now, drawn in the game's
+own art: `.lobby-top` is a `container-type: size` box, so `.poker-table` and `.hokm-table` draw
+their rail, felt, cloth and medal from it exactly as they do at a game (their `> *` rules only set
+variables), Ludo is the wooden table with `/board/ludo-board.svg` on it, and backgammon is a small
+svg from `backgammon-layout.ts`, whose `SPIKES` the board now takes from there too. The box is
+`direction: ltr`, as every table is.
+
+- **Each chair stands where its seat will be** (`lobby-seats.ts`): a Ludo seat at the corner of
+  the colour it will play, whoever reads; every other table from the reader's chair at its foot,
+  the next to play on the reader's right at Hokm and on their LEFT at poker (`aroundStadium` walks
+  the other way), a watcher's table from seat 0. `lobby-seats.spec.ts` reads the boards' own
+  `CORNER`, `FOUR` and `aroundStadium` through `import.meta.glob(..., { query: '?raw' })`, so the
+  lobby cannot drift from a board.
+- **A chair** (`SeatCard`) is a face, a first name, a tag and three marks: the host's crown, a tick
+  for ready that turns where it is (`data-on`, the node kept), and on a table two sides play at
+  the ring in the side's colour, as a plate marks its side. The full name is where the person is
+  acted on: the press that opens what can be done about them (a focusable button: a lobby is not a
+  board played by a cursor, so the plate's `tabindex="-1"` does not apply), the host's cross. An
+  empty chair is the host's Invite, as large as the chair. Over six seats the tag is said, not
+  drawn (`data-crowd`).
+- **A person arrives and leaves by opacity and movement** (6.3 of the motion spec): a chair that
+  fills draws its person with `chair-in`; one that empties keeps the person drawn, `inert`, for
+  `CHAIR_OUT` (180 ms) with `chair-out`, then the empty chair arrives. Less motion asked for: at
+  once, both ways. The chairs and the list are the nodes they were across every read.
+- **Under the table**: one status line (what is being waited for, or for somebody standing, that
+  they are only looking, and how many seats are free), then the ONE action that matters (Take a
+  seat, I'm ready, Start the game with the ready toggle still under it), then Copy link, Leave and,
+  for the host, Close. The play page's own start panel, standing panel and close button moved in
+  as props (`onStart`, `onSit`, `removed`, `onClose`), and the room is shown to `lobbyOpen ||
+  standing`: somebody standing sees the table as it stands. Every word is the one it was, so every
+  pass that presses one by name still finds it.
+
+`lobby-panel.spec.ts`, `lobby-seats.spec.ts` and `backend/tests/lobby-table-art.spec.ts` hold it;
+the matrix has a `play-lobby` page on its waiting team table.
+
+**The control is a cross in the corner of the chair, and it is the lobby's one control without
+words.** A chair is half a phone wide, so `SeatCard` draws an `IconButton` there (44px under a
+finger, clear of the name) labelled "Take Sara out of the table", under a `derived` boolean of its
+own: only for a sitting host, never on their own chair, an empty one or one only held for somebody.
+The lobby asks first (`ConfirmSheet`: "Their chair goes back to the table. They cannot sit here
+again unless you invite them."), says a refusal through `whyRefused` - `playing` is "A game has just
+started at this table." - and reads the table again when it was refused, as a leave does. A chair
+that is refused reads the table again too, so a page that still offered a seat stops.
+
+**The lobby store goes on reading a table the reader may still see after the chair is lost.**
+`revalidate` stopped asking about ANY table but a public one once the reader's chair was gone, so as
+not to ask for a table that answers 404; somebody taken out of a friend's table read "No such table"
+on a page the server would have told the truth on. It stops asking only where the chair was what
+let them see it (`goesWithTheChair`: a table by invitation, or one for their friends that the reader
+hosts). And `lobby.open` reads a table again when it had stopped asking about it: an invitation
+leads to the address the reader is already on, and nothing else would have asked.
+
+`table-removal.db.spec.ts` holds the server against Postgres: every asker and every name that is
+answered as a missing table, compared byte for byte with one, and answered at once while the table
+is held; a live game and a closed table; an account suspended in its chair; the chair, the thread
+and the held chair; `kept-out`; quick play seating them elsewhere at a table it still fills for
+anybody else; the host's invitation, somebody else's, and the host's of somebody who takes no
+strangers; the view, and who is named to the sitting host and to nobody else; the rings and the one
+notice, and a bell that fails; and twenty rounds against a start, parked where the sweep's race is
+parked, each ending as a game with everybody in it or an empty chair with no game. With `lockTable`
+deleted from `remove` a game is dealt to an empty chair in the first round.
+
+Twenty more are against somebody else's invitation of the player being taken out (*against an
+invitation that reaches the table with it*), at the same gate. The removal first: it is parked on
+the player's row in the thread, having written its row and let go of the held chairs, and the
+invitation behind it is answered `no-invitee`. The invitation first: it is parked at its own
+statement by a share lock on `table_seats`, and the removal behind it lets go of the chair it held.
+Either way no chair is left held for somebody who is kept out. With `lockTable` deleted from
+`invite` all twenty end with a removal row and a chair held for the same person, which no claim can
+take and nothing frees.
+`table-refusals.spec.ts` and `app.spec.ts` hold the word and the route with no Postgres, and that
+the route sends `keptOut`: a field the wire does not declare is dropped there, and the ports a
+database spec asks never pass through it. `lobby-panel.spec.ts` holds the control (who is offered
+it, the question, the request, a refusal's words, the same node when the table is read again);
+`invite-list.spec.ts` the people taken out in the sheet (ahead of the friends, under their heading,
+a stranger among them, the one request, the refusal's sentence, the row kept when the table is read
+again); `play.spec.ts` the page; `tables.spec.ts` the store; `notifications.spec.ts` and
+`cues.spec.ts` the notice and its toast; and the specs' server takes somebody out, and names them
+to the host, by the same rules. `realtime-pass.mjs` does it in two browsers, and invites back by
+pressing the name under that heading.
 
 **Every control on the table page is a `Button` with words on it.** Three of them were not, and each
 failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,
@@ -466,12 +724,51 @@ search that names neither finds both kinds at a game that leaves it open and ope
 What it makes is what `create` would store unchanged - `quick-options.spec.ts` asks the real
 `cubeLive` and `teamsOf` about every table it makes over a grid of asks, because `quick.ts` restates
 both rules to stay free of imports - and it is a table the same search would then find, or the next
-searcher would open a second one beside it. `seatsByDefault` is the smallest seat count of four or
-more, or the largest the game plays (the largest was nine-seat poker, which a quick player would
-wait at all evening); `catalogue.defaults` asks it too, so the rule is written once. The browser's
+searcher would open a second one beside it.
+
+**A search that names no seat count opens the smallest table the game plays.** It opened
+`seatsByDefault`'s table, the smallest of four or more: four at Ludo and Hokm, six at poker. So two
+people who both pressed Quick play and left the choice open were seated together at one table and
+waited there for players who were not coming. Reproduced on the built server with two fresh
+accounts on real sockets: 2 of 4 at Ludo and at Hokm and 2 of 6 at poker, no game, for as long as
+they waited; only backgammon, which plays two, started. Quick play is for starting a game, so the
+table it opens with nothing chosen is the one the next searcher fills: two at every game. It still
+joins the fullest table it can find first, so a table of four that somebody chose fills as before,
+and whoever wants four chooses four. `seatsByDefault` is now only where the create form starts
+(`catalogue.defaults`). `quick-options.spec.ts` and `quick.db.spec.ts` (*deals two strangers who
+both leave every choice open a game of two, at every game*) hold it. The browser's
 copy of a game's rules is a `QuickRules` now: `TableRules` carries `hasCube` and `hasBlinds`,
 `reference-parity.spec.ts` holds both to the seed and asks `quickOf` the same question of both
 copies, and the create form asks them where it asked for a game by name.
+
+**Quick play asks what to look for, and then looks for exactly that.** Every Quick play button used
+to send the game and nothing else, so "any" was all anybody could ask for: nobody could look for
+Ludo for two, or a backgammon match to five, though the server had taken both since the day the
+search moved to it. The button opens a sheet now - `quick-finder`, a chunk of its own, opened by
+`lib/find-game.ts` under one overlay id, so two presses are one sheet. It offers the game, then the
+tables `formatsOf` says that game makes, then only the options its rules have: the pace where there
+are two, a length where there is more than one, the cube where the length leaves one to turn
+(`cubeAsked`: a game to one point has none, and the server refuses the pair), blinds at poker. Each
+is "Any" until chosen - the pace alone opens on Live, because the search has no "either" for it -
+and what is sent is exactly what was chosen: `lobby.quick(game, ask)`. While a search for that game
+is out the sheet's choices are inert and its button is busy, so what it shows is what was sent. The
+last choice is kept for each game with the device's settings and read back through `fitted`, which
+drops whatever the game's rules no longer allow, so a rule that changes never sends an ask the
+server would refuse. **One search is out for a game at a time in the browser**, whatever a second
+press asks for: the guard is the game, not the format, until the table's page has opened it. After
+that a new search is a new request and the server decides - the same table when it fits what is
+asked, another chair when it does not.
+
+**A waiting table IS the search, and it says so wherever the reader is.** `lib/looking.ts` is the
+one definition, and it is the server's own (`compatible()`): a table quick play fills - public, or
+a friend's opened for friends - with no game on, a chair nobody is being kept a seat at, and the
+reader sitting READY at it. Its lobby says "Looking for players: 2 of 4 here" where it counted empty
+chairs, and a strip in the lazy strips chunk says the same on every page that draws the strips (a
+table's own page and an open thread do not), with the way to the table and a way to stop - which is
+leaving the chair, sent as a leave that forfeits nothing, and answered with "Your game has just
+started" when it came too late. The strip waits until the table's page has opened the search, like
+the toast that says a game started, or it would flash on the page the reader is leaving. Nobody is in a queue the product cannot show: a search that is
+not a chair somebody can see does not exist here.
 
 **Every search for one game takes one lock, because the row it would lock does not exist yet.** Two
 searchers who both find nothing both insert a table; that is a phantom, and no row lock stops it.
@@ -488,12 +785,45 @@ what holds across processes.
 
 Under the lock, in order:
 
+- **Already playing.** A search for a live game first asks whether the searcher is still playing
+  one, of any game, at a live table, and if so that game's table is the answer and nothing is
+  written. Nobody plays two live games at once, so a search from somebody in one is somebody who
+  lost track of it: another tab, or a press after a request the browser gave up on while the
+  server went on to seat them and start the game. Before this they were seated a second time
+  elsewhere, and a second game could start under them. Still playing is the engine's word, asked
+  the way a walkout asks it (`playingAt` in the match service: the seat's unfinished game at a
+  live table, and a forfeit the engine would take), so a seat that gave up and one a poker game
+  put out of chips search as they always did while the game goes on without them. The table
+  service is handed the question (`playing`), as a leave is handed its walkout, because a
+  table knows no game. It is asked first, under the searcher's own lock (*One live search at a
+  time*) and before the game's, so two searches of one person that cross the start of the game
+  the first one filled meet one answer. A turn-based search asks nothing, and a turn-based game
+  is not one being played here: a game of a move a day is not one somebody sits at. The browser
+  goes to the table it is given and, when that is another game than the one looked for, says
+  "Your Backgammon game is still on" (`quickMatch.stillPlaying`). `quick.db.spec.ts`
+  (*somebody still playing a live game*) and `quick-finder.spec.ts` hold it.
 - **Already waiting.** A table that fits the search where the searcher sits READY is the answer, and
   nothing is written. That is what makes a second press, a reload during the first and a request
   sent twice one chair. Ready is part of it on purpose: a finish clears every chair's readiness, so
   somebody still sitting where their last game ended is not waiting for one, and is found a table
   where everybody is here rather than sent back to that one. It is asked before the fifty-table
   limit, or the second of two presses would be refused by the chair the first one took.
+- **One live search at a time.** A search for a live game first lets go of the searcher's other
+  waits: every chair of theirs at a live table quick play opened where they sit ready with no game
+  on (`letGo`), each under that table's lock and asked again under it, through
+  `standUp`, so the table closes behind them if they were alone, and whoever else was there and
+  the table's thread are rung with them named. A searcher used to keep every wait: one who looked
+  for Ludo for four, then for two, then for backgammon held three chairs, and when others came was
+  dealt two live games at once, reproduced on the built server. A turn-based search lets go of
+  nothing, and nothing else is touched: a chair that is not ready (it cannot start a game), a
+  table somebody opened by hand, a turn-based one, one with a game on. One person's searches run
+  one after another, under `pg_advisory_xact_lock(hashtext('quick:who'), hashtext(person))` taken
+  before the game's lock, or two of theirs for two games at once would each find nothing to let go
+  of and both seat them. Two people whose searches cross, each letting go of the table the other is
+  sitting down at, can deadlock on the two tables' locks; Postgres ends one, and the search is
+  tried again as a unique violation is (`40P01`). It comes after the fifty-table limit, so a
+  refused search lets go of nothing. `quick.db.spec.ts` (*one search at a time for a live game*)
+  holds each of those, ten rounds of the two races included.
 - **Candidates.** Open, of that game and pace, public or opened for the host's friends when the
   searcher is one, with no game on, a chair the searcher may take, and no chair of theirs already.
   Never one where the searcher and the host or ANYBODY sitting have blocked each other, either way:
@@ -512,10 +842,12 @@ Under the lock, in order:
   over the thirty-two because presence is memory in one process, the limit the hub already states.
   The SEARCHER is never asked about: the request is proof enough that their browser is alive, and a
   socket that binds a moment after a cold page load would otherwise open a table of its own beside
-  the one it should have filled. So an account with no socket at all - a browser behind a proxy
-  that refuses WebSockets, a script that only posts - is seated like anybody else, and from then on
-  that table is passed over by every later search, for the people already waiting there as much as
-  for the newcomer, until it leaves.
+  the one it should have filled. So an account with no socket at all is seated like anybody else.
+  A browser behind a proxy that refuses WebSockets goes on counting as here, because its page goes
+  on asking (*Here is a socket, or a page that goes on asking*, below); a script that posts once
+  and falls silent does not, and from twenty seconds later that table is passed over by every
+  search, for the people already waiting there as much as for the newcomer, until it leaves or the
+  sweep stands it up (*A waiting chair belongs to somebody who is there*).
 - **A chair.** The search takes the table's lock first - `lockTable`, the one a start, a leave and
   a close take - and the UPDATE that takes the chair asks that the table is still open. A join only
   fills a chair, which cannot hurt a start; what it could hurt is a table being emptied. The last
@@ -537,7 +869,11 @@ Under the lock, in order:
   for, the searcher in the first chair and ready.
 
 A unique violation - a table code already in use, or the same person's own claim by hand landing
-first - rolls the transaction back and the search runs again. It refuses three ways and never names
+first - rolls the transaction back and the search runs again. A failure of any other kind rolls back
+everything the search wrote, the table it was opening, the chair and the thread with it, so nothing
+is left for the next search to find and that search opens a table as if the first had never been
+asked. `quick.db.spec.ts` (*when opening a table fails*) holds both with a trigger that fails the
+opening once, and fails with the retry or the transaction taken out. It refuses three ways and never names
 a table: `quick-game` for a game nobody has heard of or one that is not open (422, the same bytes
 for both), `quick-options` for a table the game does not make (422), and `seated-max`. There is no
 refusal for finding nothing, and a block or an absence changes only which table somebody gets.
@@ -551,8 +887,8 @@ nobody. At a `turns` table the start is followed by the `turn` notice for whoeve
 that is the searcher: nobody else there has to be here, so nothing else would tell them. The Start
 button still writes none.
 
-**The browser sends one request and shows that it is out.** `lobby.quick(game)` posts the game and
-the device's voice preference and answers with the table's id. A second press while the first is
+**The browser sends one request and shows that it is out.** `lobby.quick(game, ask)` posts the game,
+whatever was chosen in the sheet and the device's voice preference, and answers with the table's id. A second press while the first is
 out is handed the SAME promise, so a double tap is one request, and `lobby.finding()` names the
 games being searched for: the card, the game's hero, the bar a phone keeps at the foot of the game
 page and the home hero spin on it, and a `role="status"` line says "Finding you a seat" to a screen
@@ -571,12 +907,17 @@ ever does. A press in between is handed the table it was already given and asks 
 
 **Somebody waiting at a live table keeps their socket.** A hidden tab lets its socket go after a
 minute, and a seat whose socket is gone is not here: the table is passed over by every search until
-they come back. The play page holds the socket for as long as the reader sits READY at a live table
-that has not closed, not only while a game is on the board. Ready is the whole of the difference. A
+they come back. The lobby store holds the socket for as long as the reader sits READY at a live table
+that has not closed, or has a live game on at one, WHATEVER PAGE THEY ARE ON: every read of the
+reader's own tables decides it again, and only the newest read is believed. The play page held it
+first, and only while it was open - so a search made from a game's page and left for Home lost its
+socket to a hidden tab, was passed over by every search and was stood up without a word, where the
+table's own page would have kept the chair. Ready is the whole of the difference. A
 chair quick play took is ready, and so is one that pressed Play again; a chair a finished game left
 un-ready is waiting for nothing, and held, its hidden tab would be here for as long as it lived. The
 first chair freed there would then make it the fullest table with everybody here, and the next
-searcher would be seated ready beside people who are not looking.
+searcher would be seated ready beside people who are not looking. A seat that is not here does not
+keep its chair for long either way: *A waiting chair belongs to somebody who is there*.
 
 **Somebody who has left the page is told when the game starts.** The server starts a quick table the
 moment its last chair fills, and nobody sitting there has to be looking at it. Anybody seated who is
@@ -602,14 +943,181 @@ minors, presence, the chairs, the tables it opens, the limit and the refusals.
 tab of a seat that is ready, of one that is not and of one a finish left un-ready.
 `tour-pass.mjs` presses the button on the built server and counts the requests.
 
-Three limits, stated. A search sent again from where the store cannot see it - another tab, or a
-press after a request the browser gave up on while the server went on to seat it - can find the
-first one's game already started, which is no longer waiting, and be seated a second time
-elsewhere. Answering it with the game that seat is in would close that, and would also send a
-poker seat that is out of chips back to the table it is out at for as long as the others play on,
-so it is not done. Sitting down by a link still asks whether the table has closed before its own
-transaction, and can land in one that closed in that instant. And an absent player keeps their
-chair: the table is invisible to quick play, and nothing stands them up yet.
+One limit, stated. Sitting down by a link still asks whether the table has closed before its
+own transaction, and can land in one that closed in that instant. A search sent again from where
+the store cannot see it used to be the second: it found the first one's game already started and
+was seated a second time elsewhere. It is answered with that game now (*Already playing*), and a
+poker seat that is out of chips, which is why it once was not, is asked of the engine and searches
+as before.
+
+**A search says what it did in the server's log, keyed by its table.** Every answer of
+`POST /tables/quick` writes one `quick play` line through `note`, the fifth argument of
+`buildPorts`, which `main.ts` points at its logger. It says the game, the account that searched
+(its id, and nothing about its session), what was asked, whether the searcher was still playing a
+game, already waiting, opened a table or joined one, the table and the game that started at it or
+was already on there, how many chairs are taken
+of how many, how many tables the search passed over because somebody there was away (`away`) or
+because their last chair went, or the table closed, as it sat down (`missed`), how many waits it
+let go of and how long the answer took. The search's answer carries the two counts as `passed`,
+only when either is more than nought, as it carries `left`. A refusal writes `quick play
+refused` with its word. After every table sweep the server writes `waiting for a game` when
+anybody is: for each game and pace, how many people sit ready at a table quick play could fill
+(public, or for the host's friends, open, with no game on), at how many tables, and how long the
+longest of them has waited, in seconds (`jobs.waiting`, `waitingByGame`). So the questions an
+operator asks are answered in the log. How many wait for each game is the last snapshot. Whether
+people who should meet are kept apart is two tables of one game and pace in it, or two `opened`
+lines that passed nothing over. Where a search stopped is its outcome, with `away` or `missed`
+when it walked past tables. Whether a table that filled started is its `match`. A chair stuck
+waiting is an `oldest` that keeps growing, and the sweep's `absent players stood up` line is
+what frees one. The table's id is what joins a search to the game that starts there, to the sweep
+and to every request that reads the table. `quick.db.spec.ts` (*what it tells the server's log*)
+and `table-sweep.spec.ts` hold it.
+
+**A waiting chair belongs to somebody who is there.** An absent player used to keep their chair for
+as long as they liked. The table was passed over by every search, so the people sitting beside a
+closed tab were never found a fourth, and nothing but that player's own Leave gave the chair back.
+A chair at a waiting table whose occupant is not here on two sweeps in a row is stood up now.
+Waiting is the row saying `open` with no game on, so a full table nobody started and one a finished
+game left behind are both waiting; and it is only a `live` table that is `public` or `friends`, the
+ones a quick search can put somebody at. A `turns` table is correspondence, and nobody at one has to
+be here. An invite table and a table opened in a conversation are reached by a chair held for
+somebody or by a card in a chat, and emptying one would leave that card pointing at nothing.
+
+**Two sweeps, because one absence is ordinary.** Here is `hub.present`, which already forgives
+fifteen seconds: the hub forgets somebody fifteen to forty-five seconds after their last socket
+goes, its own sweep being every thirty. One strike on top of that would stand up a phone that
+locked for half a minute, and everybody whose socket had not come back when the first sweep ran
+after a restart, since a hub that has just started knows nobody. `main.ts` runs the sweep every
+thirty seconds (`TABLE_SWEEP_MS`) on a `setTimeout` that is set again only when a sweep has
+finished, the turn sweep's shape, so two never overlap; a chair goes back between forty-five and
+about a hundred and five seconds after its socket did. The arithmetic is `strikes(previous,
+absentNow)` in `table/sweep.ts`, which imports nothing: away now and struck before is stood up, away
+now for the first time is the next set, and everything else is forgotten - somebody who came back, a
+chair that emptied by itself, a table that started or closed. A strike is spent when it is used, so
+a chair that would not come free is suspected afresh and tried again two sweeps later. The key is
+the table and the person: a strike earned at one table says nothing about the same person at
+another.
+
+**The strikes are memory, because what they are about is.** The set is a variable inside
+`buildPorts`, for the reason presence is applied in Node: who is here is one process's memory, and
+a strike written to the database would outlive the hub it was a statement about - after a restart
+it would stand people up on the word of a process that no longer exists. A restart forgets every
+strike instead, and the first sweep is thirty seconds after boot. With no hub everybody counts as
+here, so nothing is ever struck. A server on its way down has no hub either: `hub.closeAll` empties
+it, and asked after that it would say nobody is here, to a sweep that was already out when the
+signal landed as much as to a new one. So `beforeShutdown` clears the timer and sets `goingDown`,
+both BEFORE `hub.closeAll`, and the reader `main.ts` hands `buildPorts` stops asking the hub from
+that moment and counts everybody as here. A sweep still out stands nobody else up, and a quick
+search answered in those last milliseconds is seated beside the people who were there until the
+server itself let them go.
+
+**One server per database, and a server that finds a second says so.** Discovery and assignment
+are Postgres's and hold across processes: two servers on one database take the same advisory
+locks, read the same chairs and never seat one person twice. What a search and a sweep ask about
+PEOPLE is not. Who is here is the hub's memory, so a server passes over every live table whose
+players hold their sockets on the other one, and its sweep stands those players up. The doorbells,
+the pushed game frames and the calls go only to the sockets the sending server holds, so a player
+on one server is never told that a game the other one started is theirs. The design is one process
+for each database (`README.md` says so where an operator will read it), and a deployment runs one.
+Two did run here by accident: two worktrees' development servers on one development database,
+each standing up the other's waiting players. So every connection of a server carries a name
+(`applicationName` in `data-source.ts`: `nura-games` and eight characters of a uuid), and after
+each table sweep the server counts the other servers' names on its own database (`jobs.otherServers`,
+a read of `pg_stat_activity`, which no repository can say) and, when it first finds one, logs
+"another server is using this database". A server running code from before this carries no name
+and is not seen. `servers.db.spec.ts` and `table-sweep.spec.ts` hold it.
+
+**Here is a socket, or a page that goes on asking.** `hub.present` counted sockets and nothing
+else, so somebody whose socket could not connect - a proxy that does not pass the upgrade, an
+origin the handshake refuses - was away to both sweeps and to every search while they sat at the
+table pressing buttons, and was stood up inside two minutes. Their page is not silent: with no
+socket the lifeline rings every scope every eight seconds and every store reads itself again
+(`chat-and-keys.md`, *Realtime*). Every one of those requests is answered as somebody, so
+`identity.principal` tells the hub who it was (`WriteListener.seen`), and anybody seen in the
+last `SEEN_MS` - twenty seconds, two beats and room for a slow one - is here. It lights no dot:
+`presenceOf` and the frames are still the socket's, and being seen is said to nobody. The hub's
+own sweep forgets whoever has stopped asking. A hidden tab with no socket stops ringing and is
+away like any other closed tab, which is the same answer a hidden tab with a socket gets unless
+it is holding a seat; that one difference is left, because a browser throttles a hidden page's
+timers to a beat a minute and nothing here can keep a promise on that. `realtime-hub.spec.ts`
+(*who is here*) holds the window, the sweep and the dot that is not drawn;
+`table-sweep.db.spec.ts` puts a real hub behind the services, has a session ask before each of
+four sweeps and keeps the chair, then stops asking and gives it up at the second.
+
+**`vacate` takes the table's lock first and reads again under it.** `jobs.sweepTables()` reads
+`table.waitingSeats(500)` - a QueryBuilder over the chairs in scope, longest sat first, so that two
+sweeps in a row look at the same ones - asks `present`, applies the strikes, and calls
+`table.vacate(tableId, userId, present)` for each chair that is owed one. That read is as stale as
+any read, so vacate is one transaction that takes `lockTable` FIRST, in the order every other writer
+keeps: the table's lock, then the match row, then chair rows, and nothing that holds a table's lock
+waits for the lock a game's searches take. Under it the same predicate is asked of that one chair -
+still waiting, still that person's - and anything else answers null and writes nothing. Who is here
+is asked again there too, of the reader the sweep hands it, as a quick search is handed one. The
+sweep asked once, before a loop that can be five hundred chairs long and can wait at any of them for
+a table's lock until the statement times out, and somebody whose phone woke up in the meantime is
+here: they keep the chair and the thread, nothing is rung, and the strike that brought the sweep to
+them is spent. Otherwise it goes through `standUp`, so the rule about a chair going back still
+exists once: the chair is freed, the person leaves the table's thread, and the table closes behind
+the last one out.
+
+**It is not a forfeit and it never touches a match.** A table with a game on is out of scope by
+construction, and the read under the lock is what makes that true when a start races the sweep: the
+start first, and vacate finds its game and leaves the chair alone; vacate first, and the start reads
+an empty chair and answers `chairs-empty`. Vacate locks no row of a match either: under the table's
+lock no game can begin, and one that is ending is still a game on, so its chairs wait for a later
+sweep.
+
+It then rings what a leave rings, through `courtesy()`: the table for everybody still sitting or
+invited there, whoever is looking at it and whoever was stood up, and the table's thread with
+whoever was stood up named, so that their chat list drops it. Nobody is notified. Whoever was stood
+up is away by definition, and when they come back `/tables/mine` no longer lists the table. A table
+that will not let go of its chair - its lock held until the statement times out - comes back in the
+sweep's `failed`, is logged as `chair not freed`, and the sweep goes on to the next one; a sweep
+that fails altogether is logged and the timer is set again.
+
+`table-sweep.spec.ts` holds the arithmetic with no Postgres, and reads `main.ts` for the caller - a
+sweep is the first of the *Five things that were written and never called* - and for the reader
+that stops asking the hub before the hub is emptied. `table-sweep.db.spec.ts` holds the rest against
+Postgres, with a presence the test owns: the first sweep and the second, somebody back in between,
+the table closed behind the last one out, no hub, the turn-based, invite, room and closed tables
+that keep their absent, a game on and the same table once it is over, the order and the bound of
+the read, a chair that has moved on, somebody who came back while the sweep waited for their
+table's lock (asked before the lock, they are stood up and that test fails), the rings and nobody
+notified, a ring that fails, and a table whose lock is held, through a second DataSource with a
+lock timeout. Two more race a start, ten rounds each, at a gate that holds `matches` in share mode
+and the absent player's row in the thread: the start parks at its insert, vacate at the first
+statement after it freed the chair, and which of them reached the table first is known. With
+`lockTable` deleted from `vacate` both fail in every round, the same way: a game dealt to a chair
+with nobody in it.
+
+`quick-pass.mjs` is the pass, over the api of the built server, every guest with a real socket:
+eight press quick play for ludo together and are two started tables of four; a guest who closes its
+socket at a public live table is stood up on the second sweep and not the first, the one whose
+socket stayed open keeps the chair and is rung, and a turn-based table keeps its absent player.
+
+The second sweep is told from the first by the hub's own word, because a time counted from the
+close tells them apart badly. On a server started for the pass the table sweep runs just behind the
+hub's, and the hub forgets somebody fifteen to forty-five seconds after their socket goes: the first
+sweep to find them away comes fifteen to forty-five seconds after the close and the second
+forty-five to seventy-five, and a pass that reads the table every five seconds cannot put a line
+between the two. So the guest who stays keeps the moment it is sent the `presence` frame that says
+the other has gone. Standing up on the first absence would free the chair with that frame, the
+second sweep is thirty seconds behind it, and the pass wants twenty-five between the frame and the
+first read that shows the chair free. On a server up long enough for the two sweeps to drift twenty
+seconds apart the pass can no longer tell, and the db spec is what holds the two strikes. The ring
+is waited for, up to two seconds: it leaves the hub a tick after the chair is free, and a read of
+the table can land in between.
+
+Four things it costs, stated. The socket hold is for a chair that is READY, so somebody who opens a
+public table, does not say ready and hides the tab is away a minute later and stood up within two
+more, and the table closes behind them if they were alone. An account with no socket at all cannot
+wait at a live table: quick play still seats it, and the second sweep stands it up unless the game
+has started by then. That goes for a browser behind a proxy, for one turned away because
+the sockets this process holds (`SOCKETS_MOST`) are spent, and for a script: an API pass must not park its accounts at a waiting
+live table, and the matrix sits its partner down again before it restarts poker (*Poker*). A host
+stood up from a table for their friends can no longer see it, because nobody is their own friend,
+which was already true of a host who left. And five hundred chairs is all one sweep looks at: with
+more than that waiting at once, the newest wait for an older one to go.
 
 **The table's chat is the chat domain.** A table owns a `kind: 'game'` conversation, one per
 table by partial unique index, and membership moves with the seats inside the same transaction —
@@ -655,8 +1163,25 @@ table with no match, or a finished one, has no `yourTurn` at all rather than a `
 no go to be had there.
 
 The play page's header lists the reader's OTHER tables as links, green where one is waiting on
-them, and the Games item in every navigation counts the tables waiting. The lobby store refetches
-the list on any `game` doorbell, which is how a move at one table lights up the chip on another.
+them, and the Games item in every navigation counts the tables waiting. The lobby store reads the
+list again on a `game` doorbell (all a watcher or a browser with no socket hears), and for a `game`
+frame about a game it has not heard of or one that has ended.
+
+**Whose turn it is at a table the reader sits at is told by the game frame itself.** Every move
+pushes each seat a `game` frame that says whose turn it is, and the store used to answer a turn
+that changed hands by reading `GET /tables/mine` again: every seat at every table, every turn, a
+read that loads the state of every live game the reader plays. The networking audit counted it, one
+read a turn for each browser at the table: sixteen a player in 24 presses (`latency-pass.mjs`'s
+tally), and none since. Now the frame's turn is laid over the list (`turnsSeen` in
+`lobby.store.ts`): `seated()` and `waiting()` read it at once, so the chip of another table goes
+green when the frame arrives rather than a read later. Each entry
+remembers how many reads had been asked for when it was laid, and a read asked for after it takes
+over from it, because a frame the socket missed while it was down is told only by a read. A read
+already on its way when the frame came is older than the frame and does not take it back. The cues
+store's "was it already the reader's turn" asks `listed()`, the list as the server last answered:
+the lobby hears a frame before the cues do, and asked of `seated()` the turn the frame has just
+told would look as though the reader already had it, and "Your turn at Ludo" would never be said.
+`tables.spec.ts` (*whose turn it is at the reader's tables, told by the game itself*) holds it.
 
 **A switch between tables REMOUNTS the play page, so its teardown closes only what it still owns.**
 `<Routes>` keys a segment on its route AND that route's own params, so `/app/play/A` to
@@ -670,12 +1195,191 @@ the thread it last opened; `play.spec.ts` drives play-to-play and chat-to-chat w
 playing. The table still opens from an effect over the pathname rather than in `mount`, and the
 leaving page's copy of that effect opening the NEW id is harmless.
 
+## Parties
+
+Two friends who want to play on one side form a **party** first. This is the forming and nothing
+more: one asks, the other says yes or not now, and both are told. Taking two partner chairs in one
+search is built on it and is not here yet, so a party that is ready has nothing to press but Leave.
+
+**A party is memory in one process, as presence and the sweep's strikes are.** The registry lives
+inside `buildPorts`: every party, every invitation somebody holds, every clock and every cooldown is
+a map, no row is written, and a restart forgets all of it. Everything in it is minutes old at most -
+an invitation lasts ninety seconds (`INVITE_MS`), a team that is ready and does nothing five minutes
+(`IDLE_MS`), the reason one ended thirty seconds (`ENDED_MS`) - so a table of rows would be a sweep
+to write and nothing a restart is sorry to lose. The browser says "This team-up ended" once when a
+team it held is gone and no reason came with it, which is what a restart looks like from outside.
+With a second process the two would not know each other's parties; that is the limit presence
+already states.
+
+**The domain is four files, split the way the social graph's is.** `party/rules.ts` imports nothing:
+the clocks, the stages (`inviting`, `ready`), the endings (`declined`, `expired`, `left`, `ended`)
+and the refusals with their statuses. `registry.ts` is the state machine and imports only that. It is
+HANDED its clock, its ids and its doorbell (`now`, `after`, `id`, `ring`), so
+`party-registry.spec.ts` walks every transition on a clock it owns, and reads both files as text for
+a `Date`, a timer or `crypto`. `parties.ts` is the policy - who may ask whom, which games, what a
+reader is shown - and answers with values, `{ ok: false, why }`, never a throw; it has type imports
+only, so the specs' server in the browser runs this same file over its own people. `refusal.ts`
+turns a word into what the route sends, and `services.ts` hands the policy the real graph, the
+catalogue and the hub, on timers that are `unref`'d.
+
+**One person is in one party, and holds up to five invitations.** Asking while in a party, and
+saying yes while in one, are `in-party` (409). Asking the same person for the same game again before
+they answer is the SAME party, so a second press is one invitation. A sixth invitation to one person
+runs the oldest out (`INVITES_HELD`). Whoever asked may leave at any time, which takes an unanswered
+invitation back; the other one only after saying yes.
+
+**Asking somebody who has already asked is saying yes.** Two friends who each asked the other for
+one game made two parties: each led one and held the other's card, and Team up on either card
+answered `in-party` until one of them worked out to leave first. `registry.invite` looks for the
+other one's unanswered invitation for that game before it makes anything, and takes it up: one team,
+led by whoever asked first, as a friend request to somebody who has already asked is an acceptance.
+It is looked for after `in-party`, because the one-party rule is about whoever is acting, and before
+the wait a refusal starts, because a yes is not asking again. Another game is an invitation of the
+asker's own, and the two stand side by side until one is taken back. So Team up in the sheet of
+somebody whose card is on screen is the card's own yes, with no second request to make.
+
+**Only a game played two against two can be teamed up for.** `teamGame` asks the catalogue - open,
+four seats, and `teamsOf(partners, 4, true)` - and anything else is `not-team-game` (422). It is
+asked AFTER who may be reached, so that answer says nothing about an account.
+
+**Somebody who cannot be asked is answered in the table invitation's own bytes.** A name nobody
+holds, the asker's own, a block either way, strangers turned off, a minor's safety rule and a
+suspended account are all 404 `no-invitee`, "No one by that name can be invited.": it is
+`noInvitee()` from the table service, so the two cannot drift, and the question is `mayMessage`
+asked both ways. A party named by something that is no uuid, by an id nobody holds, by somebody
+else's and by one that is over are all `party-missing` (404), in the same bytes.
+`party-policy.spec.ts` compares the bodies. What the 404 cannot hide is what a profile already says
+(`refusal` on a person's page), which is why the sheet offers no team-up to somebody whose page
+carries one.
+
+**A mute is an invitation nobody sees.** If the invitee muted the asker, the game or invitations as
+a kind - `social.hasMuted`, one `exists` over the three subjects - the party is made and the asker
+is rung, and the invitee is neither rung nor shown it, and cannot accept it by its id. Whoever asked
+cannot tell a mute from somebody who looked away, and that is held to everything they can read, not
+only to the ninety seconds it runs out after:
+
+- **It takes one of the five places.** It is pushed out by a sixth like any other, and pushes the
+  oldest out when it is the sixth itself. It was left out of the count at first, and asking as five
+  more accounts then told the two apart in seconds: an invitation that had been seen ran out at
+  once, and one that had not stood for its ninety seconds. What it costs is the invitee's to pay: an
+  invitation they can see may run out with fewer than five on their screen.
+- **Asking back takes it up.** The invitee asking for that same team is a yes to an invitation they
+  were never shown, and from then on both are told of everything. Passed over, it would have left a
+  second party beside the first, which is a thing that could only happen to somebody muted.
+
+`party-policy.spec.ts` asks as somebody who was seen and again as somebody muted, a mute of each
+kind, through five later invitations and through being asked back, and compares what the route
+would send byte for byte.
+
+**A reason is kept for thirty seconds, and it names only who acted.** A party that ends leaves a
+tombstone on the next reads of its people, `ended: { id, reason, by? }`: `declined` and `left` name
+who did it, `expired` nobody, and `ended` is what two people who can no longer reach each other get,
+with no word about why. Whoever asked always gets one; the other one only if they had said yes,
+because an invitation they never answered is not their news.
+
+**A no and a silence are waited out; a change of mind is not.** An invitation that was refused, ran
+out or was pushed out starts thirty seconds in which that asker cannot ask that person again
+(`party-cooldown`, 429), or Not now would be answered by asking again. One the asker took back
+starts none, and neither does one the graph ended: leaving and asking again is how the game is
+changed, and for a while it answered "Try again in a moment.", as did asking again after a Leave
+pressed by mistake. It leaves one thing open, stated: nothing but the limiter every route sits
+behind stops somebody asking, taking it back and asking again, and each time is a card on the other
+one's screen. Whoever is tired of that mutes them, and is shown nothing from then on.
+
+**A party follows the graph.** After a block, an unblock, an unfriend, a change of privacy and an
+answered friend request, `party.revalidate` runs through `courtesy()` and ends, as `ended`, every
+party of the caller whose two people no longer pass `mayMessage` both ways. Saying yes asks the same
+question again, and a no there ends the invitation and answers `party-missing`.
+
+**The doorbell is `me` with `party`, and nothing else is written**: no notification, no push, no
+frame from a browser (*Who hears what* in `chat-and-keys.md`).
+
+`party-registry.spec.ts` and `party-policy.spec.ts` hold the two pure halves with no Postgres;
+`party.db.spec.ts` asks the real ports - the graph's hooks, a mute of each kind, a suspended asker,
+a bell that fails, and that neither another process nor the database holds a party; `app.spec.ts`
+(*teaming up*) holds the five routes, their words and statuses; `well-formed.spec.ts` the body.
+`tools/qa/garbage-pass.mjs` sends the invitation's route garbage and names the three that take no
+body.
+
+**In the browser all of it is a chunk the shell does not carry.** `stores/party-loader.ts` is the
+shell's whole share, the cues loader's shape with one difference: its stop is handed over at once,
+so a chunk that arrives after the shell has gone starts nothing. `components/social/party.ts`
+starts the store and draws the invitations into an element of its own on `document.body` - outside
+`#app-shell`, which an open sheet makes inert. `party-invite.spec.ts` reads the source for a static
+import of any of it from outside itself.
+
+**The store keeps what it last read, and counts on the product's clock.** `party.store.ts` reads
+`GET /parties` for the account, on `me`/`party` and when everything is rung. A read that fails
+keeps the team on screen and says the read failed; it is never taken for no team. Every clock is
+counted from the moment its answer ARRIVED (`remaining`), never from the device's own time. When the
+nearest one runs out the store reads again by itself, a quarter of a second late on purpose
+(`EXPIRY_SLACK_MS`), so an invitation leaves the screen with no doorbell. It holds the socket while
+a party or an invitation stands. An ending is said once, as a `warning` toast, and never to whoever
+caused it. Every verb goes through `attempt` with `whyParty`: one request a party however often it
+is pressed, and a refusal in its own sentence.
+
+**A yes is said to whoever asked, unless the team is already on screen.** Somebody who asks and
+then closes the sheet would otherwise never learn that the other one is in. When the store sees its
+own invitation become a team it says "{name} is in. Ready when you are." with their picture and a
+View that opens the sheet - once, and not while that sheet is open (`playingWith`), because the
+panel there has just said it. It is a toast of its own (`party-in`): under the endings' key an
+ending would inherit its button, the fault a removal's toast avoids the same way. And it is taken
+back the moment the team is gone, so nothing offers the way to a team that is over.
+
+**An invitation is a card nobody has to answer, and it takes the focus from nobody.** `PartyInvite`
+is a labelled region, `aria-live="polite"`, and never in the overlay stack. Each invitation is a
+`role="status"` card: who, which game, Team up and Not now at 44px under a finger, and a bar for
+what is left of the ninety seconds, built once with the card so a re-read never starts it again.
+It is drawn where the toasts are: the foot of the page above the island (`--nav-room`), the corner
+from rail width. At a table, and wherever the toasts have been sent to the top - a page holding
+them there, a sheet open on a phone - it is one row at the head of the page, because the foot is
+the hand, the dice and the chat. One row however many are waiting: the oldest, with a count of the
+others beside the name ("+2", and a sentence for a screen reader after the one that says what is
+asked), and the next takes its place when that one is answered or runs out. Every invitation was a
+row there at first, so a second reached below the play header and five would have covered the top
+of the board and taken its taps. The cards that are not drawn are not hidden ones: `shown` is the
+list the keyed `<For>` is given, so the one that stays is the node it was and the rest are built
+when they are owed. An invitation for a game this browser cannot draw is not drawn.
+
+**The card keeps its place and the toasts move.** Both want the same edge, and a card that stepped
+aside for every toast would take Team up from under a finger. So the card watches its own height
+and, while the two share an edge, writes a `translate` on the toasts' region that clears it; it
+takes that away when they part, when the last invitation goes and when it is unmounted. This is the
+one place the chunk reaches into the shell's markup, and it restates the rule for where toasts are
+(`sheeted`). `party-invite.spec.ts` mounts the real `ToastHost` beside the card to hold both: the
+region is where the card looks for it, and the two agree about the edge in every case. The bar on a
+card and the one in the panel are one line of arithmetic, `lib/countdown.ts`.
+
+**"Play" on a profile and on a friend's row asks which game.** Both opened a private table of the
+day's featured game without a word. `lib/play-with.ts` opens `PlayWithSheet`, a chunk of its own
+under one overlay id: every playable game with Private table, which is what the button did, for the
+game the reader picked; and Team up beside it at a game played in pairs, unless the person's page
+carries a `refusal`. Saying yes on a card opens the same sheet on the new partner.
+
+**The team is shown in that sheet, whoever's it is.** While the reader is in a party the sheet
+draws the `PartyPanel`: "Your team", the two of them, the game, "Waiting for {name}…" with the
+invitation's bar, then "{name} is in. Ready when you are." to whoever asked and "{name} will start
+the search." to whoever said yes, and Leave team. It is drawn in the sheet of anybody, so the way
+out of a team is wherever the reader looks; beside a team with somebody else the games stay on
+offer, and asking for a second team says "You are already in a team. Leave it first."
+
+`party-store.spec.ts`, `party-invite.spec.ts` and `play-with-sheet.spec.ts` hold the browser's
+half; `data.spec.ts` holds every refusal and ending to a sentence and every sentence to something
+that says it; `profile-page.spec.ts` and `friends-page.spec.ts` press Play.
+
+Three things it costs, stated. At a table the row lies over the page's own header until it is
+answered or runs out: a place inside that header is the header's to give. While a sheet is open a
+keyboard cannot reach the card, because the sheet holds the focus; a pointer can. And an invitation
+is only ever seen by somebody with the product open: nothing wakes a closed tab for one.
+
 ## Voice at the table
 
 `docs/superpowers/specs/2026-09-23-table-voice-design.md` is the design. A host turns voice on at
 create (`tables.voice`, off by default); seated players join a peer-to-peer call - one
 `RTCPeerConnection` per pair, Opus only, a full mesh of at most seven links per browser - and this
-server does nothing but introduce them.
+server introduces them, and carries the sound itself until two of them reach each other, and for
+good between two who cannot (*A call is carried by this server until a line between the two
+connects*).
 
 **A table's voice is a word from a list, not a switch.** `tables.voice` was a boolean, and the owner
 asked for a call that can be for the whole table or for a player's own side. The column and the wire
@@ -683,10 +1387,55 @@ take that shape first, with today's two answers and no change in what anybody he
 play and parties are never written against the boolean: `VOICE_SCOPES` in `table/voices.ts` is `off`
 and `table`, the module imports nothing so the browser reads the same list, `tables_voice_known`
 holds the column to it, the wire's `voiceScope` is `enumOf` that list, and the host's switch posts
-`{ voice }` where it posted `{ on }`. `team` joins the list only in the commit that teaches the hub
-to keep two sides apart: a word nothing can enforce is a promise the product would be making.
+`{ voice }` where it posted `{ on }`. `team` joined the list in the commit that taught the hub to
+keep two sides apart (below): a word nothing can enforce is a promise the product would be making.
 `table-voices.spec.ts` holds the CHECK, the wire and the list to one set, and refuses a yes or a no
 at the door.
+
+**At a table of two sides the call can be for each side.** The owner asked for it on 2026-10-07
+("voice should have more setting") and again on 2026-10-14 ("make complete voice chat"). `team` is
+the third word, and only a table of two sides may hold it: `tables_voice_team` (`voice <> 'team' or
+teams`) makes anything else unrepresentable, `create` refuses it at a table without sides as a 422
+on `voice` against the NORMALISED sides, and the browser never sends it there, because `asInput`
+resolves every table's preference with `scopeFor` once its sides are final (a quick search's
+preference is resolved the same way where quick play opens a table). `callOf(scope, table, side)`
+names the call: none, the table, or the table and the side.
+
+- **The hub keeps CALLS, not rooms.** `voiceCall(userId, tableId)` replaced `voiceAllowed`: one
+  query for the reader's chair, the table's scope, its sides and its status, answering the call
+  the reader may be in or nothing, with the side from the one `sideOf`. A member keeps the spelling
+  of the table its browser sent, and every frame says that, never the call: the browser drops a
+  frame for a table it did not join. A join first takes the person out of every other call of that
+  table; joins to one table still run one at a time; a signal travels only inside a call; and a
+  ring rechecks every call of the table and drops whoever's call changed. A change of scope is never
+  a move: nobody is carried from one audience into another, and nobody is joined again without
+  pressing Join.
+- **The scope a game begins under is the scope it ends under.** At a table of two sides nothing
+  about voice changes while a game is on (`playing`, "The call stays as it is until this game
+  ends."): not the side call on, not off, not widened to everyone, because each would hand one
+  side's microphones to the other, or a private line to one side, in the middle of a hand. A table
+  without sides still switches off and on at any time. Between games a change to or from `team`
+  un-readies every chair: readiness is consent to the next game, and who hears whom is part of what
+  was agreed to. `setVoice` asks for the host's chair, takes the table's lock, reads the table under
+  it, and writes nothing for the scope the table already has.
+- **What the reader sees.** The create form adds "Only teammates hear each other" under "Voice
+  chat" while the table being made has two sides and voice is on. The host gets one more control in
+  the dock and the table menu ("Let only teammates hear each other", "Let the whole table hear each
+  other"), shown only between games; the on/off switch hides during a game at such a table too. The
+  header's and a row's mark say "Team voice", the offer says "Your team has a call of its own", and
+  Settings has "At a table of two sides, only my teammate" under "Open my tables with voice on",
+  which makes that the preference a table opens with.
+
+`table-voices.spec.ts` (`scopeFor`, `callOf`), `realtime-hub.spec.ts` (*at a table whose call is for
+each side*: two calls, no roster or signal across, not even between two who share a call at another
+table and so may talk, a change of scope that drops everybody and carries nobody, a change of side,
+a table named in capitals joined, muted and left in either spelling), `table-voice.db.spec.ts` (the call a
+chair answers at each scope, the refusals, nothing changed under a game, the chairs un-readied),
+`play.spec.ts` and `tables.spec.ts` hold it; the voice pass seats four at a table of two sides and
+wants each connected to their partner and to nobody else, then all four in one call once the host
+widens it between games and they join again. **The other worktree shares the development
+database**, and its boot rewrites `tables_voice_known` back to two words, which fails on any row
+left at `team`: a pass that opens such a table sets its voice back before it leaves.
 
 Two things here had no test and would have passed every gate while broken. `voiceAllowed`'s
 predicate is SQL in a string - `t.voice = true` - that no compiler reads, and no spec had ever run
@@ -727,19 +1476,319 @@ candidates arrive in bursts.
 **What the encryption claim is, precisely.** Media is DTLS-SRTP between the browsers. The DTLS
 fingerprints ride inside SDP this server relays, so a server that wanted to could sit in the middle;
 the chat is end-to-end because every line is signed by a device the reader verifies, and voice
-introductions are not signed yet. The copy therefore says the sound goes directly between players
-and is encrypted by the browser - not "end-to-end" - until each fingerprint is signed with the
-device key the sealing already verifies.
+introductions are not signed yet. A call this server carries is not DTLS-SRTP at all: it rides the
+page's own connection, encrypted to nginx, and this server reads it to pass it on, and every call
+begins that way. The copy therefore says a call starts through this server and goes straight
+between two players once their connections reach each other - never "end-to-end", and no longer
+"this server never carries it" - until each fingerprint is signed with the device key the sealing
+already verifies. The landing's "straight between players whenever it can" is still true.
 
 **ICE comes from configuration and a TURN secret never reaches a browser.** `GET /api/voice/ice`
 answers `VOICE_STUN_URLS`, and for `VOICE_TURN_URLS` a TURN REST username that expires in an hour
-with its HMAC. With nothing configured the list is empty: one network works, two NATs do not, and
-the roster says "could not connect".
+with its HMAC. With nothing configured the list is empty: one network connects directly, and two
+NATs are carried by this server.
 
-**The microphone is asked for when somebody presses Join, never before**, and refused or missing it
-joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn that off in settings.
+**A call is carried by this server until a line between the two connects.** The owner asked, of
+the boot warning that voice had no STUN or TURN server: "can we handle it without this?" It can,
+and later: "fix all of these things that is fixed about latency ... these things should be real".
+Each end used to wait three seconds (`RELAY_AFTER_MS`) for its line before it sent anything
+through the server, so every call between two networks began with three seconds of nobody
+hearing anybody. Now each end sends its microphone through the realtime socket as `sound` frames
+from the moment it sees the other on the roster, plays what comes back, and tries the line beside
+it. What moves the call is measured, never timed:
+
+- **The line takes over when it proves it works.** Once it connects, the page reads its
+  statistics every `WATCH_MS` (200 ms): the voice is played from the line when packets have
+  arrived on it (`inbound-rtp`), and the server stops carrying ours when the other end's report
+  says it receives the line (`remote-inbound-rtp`), so the two overlap rather than leave a gap.
+- **A line that drops gives the call back to the server at once**, and is taken up again if it
+  comes back. One that fails is hung up, and so is one that has not connected within
+  `patienceFor(rtt)`: 2 s and 20 round trips to the server, between 3 and 15 s, 5 s when none has
+  been measured. Nobody waits on it, because the server is already carrying the call; it is hung
+  up because one left trying fails again and again, and Firefox logs "ICE failed, add a STUN
+  server" each time it gives up.
+- **Where nothing can carry the call** (no audio context, or no relay) it waits for its line as it
+  always did, and that line is never given up on.
+
+Somebody who comes back as a new joining is tried on a line again.
+
+- **One frame every 60 ms.** An `AudioWorklet` taps the microphone (`services/voice.relay.ts`,
+  loaded from a Blob, which needs a secure page, as the microphone does). A frame is Opus at the
+  quality chosen (*Quality is the reader's to choose*), through WebCodecs where both ends can write
+  and read it, and G.711 μ-law at 16 kHz where
+  either cannot: the `voice` frame says `opus`, the roster carries it, and a sender picks the
+  codec its targets all hear. A frame of pure silence is not sent, and nothing is sent while muted
+  or between presses of the talk key. Every frame the microphone gives is COUNTED, sent or not:
+  `at` is the sender's capture clock in frames, so a pause is a gap in the count and never a
+  shift in time, and the receiver can measure how late each frame is. The telephone code is
+  brought to 16 kHz and back through a windowed-sinc filter (`services/voice.resample.ts`), which
+  also brings Opus to a call that does not run at 48 kHz; it used to average three samples
+  together, which folded the top of the voice back into it as a hiss.
+- **The hub forwards it and nothing more.** `hub.sound` sends a frame only to joinings it names in
+  the sender's own call who may talk with the sender, never back to the sender and never from one
+  who has said they are muted. It is metered by the `sound` budget, 250 frames in ten seconds,
+  where a call sends about seventeen a second. It is the one LOSSY send in the hub (`sounded`): a
+  frame goes only when the socket has nothing waiting, so sound never queues behind a move and a
+  move never waits behind sound, and a socket that cannot keep up loses sound and is never closed
+  for it. The browser does the same on its side: a frame is dropped rather than sent behind 8 KB the
+  socket has not sent yet (`SOUND_BACKLOG`).
+- **The receiver measures the line and plays as far behind as it needs, no further.** The owner:
+  "Quality of voice is too bad", and later "fix all of these things that is fixed about latency
+  ... these things should be real". It played every voice a fixed 120 ms behind, started again
+  that far behind whenever a frame was late, and dropped any frame more than 400 ms late: on a
+  real line every hiccup was a hole and a jump. Measured in two browsers through a proxy that
+  holds bytes in order with Wi-Fi-like and mobile-like delays, 1.65% and 2.82% of the speech was
+  missing, and nothing had been lost in transit. `Playout` (`services/voice.playout.ts`) runs
+  in the audio thread, inside the same Blob module as the tap:
+  - each frame's delay is measured against the sender's clock, and the buffer is the 99th
+    percentile of the last 400 (about 24 s of speech) plus 12 ms. A frame that arrives in a burst
+    behind another is not counted again, so one stall is one late moment and not ten: counted
+    every time, a single hiccup raised the buffer for the next half a minute;
+  - a call starts as far behind as the old fixed buffer and comes down to what the line shows as
+    it learns it, over about six seconds of speech;
+  - a phrase starts exactly that far behind its first frame; inside one, the player steers by
+    playing up to 3% faster or 2% slower, and catches up by skipping only quiet sound;
+  - a frame that is late is waited for under a fading mirror of the last sound (no hole, no
+    click, at most 60 ms), and played whole when it comes; one or two frames missing inside a
+    phrase are covered and the phrase goes on in time; a pause in what was sent is silence.
+  What it plays is a `MediaStream` from the call's own `AudioContext`, handed to the same audio
+  element a line's stream is, so the volume, turning somebody past full, the speaker, deafening
+  and the speaking ring all work unchanged. The class is written with no reference outside itself
+  because the worklet is built from its `toString()`. Measured again through the same proxy:
+  0.4% and 0.81% missing over 30 s, the only break of any length in the first two seconds of a
+  call while the line is learned; simulated over a minute, no click, no frame lost, a good line
+  played about 20 ms behind where it was 120.
+- **Hearing somebody through the server while the line is down is answered the same way**, so a
+  call the other end carries is carried both ways. A signal for a line that was hung up is let
+  fall, and an answer that the hanging up cut short does not call the call failed.
+- **A carried call counts as connected** from its first moment. The Players list never says
+  "Could not connect" for it. That sentence is left for a call nothing can carry (no audio
+  context, or no socket).
+
+`voice-relay.spec.ts` holds the codecs, the tap, the count, the player's frames and the codec
+choice; `voice-playout.spec.ts` the player (a steady line, a jittery one, a late frame, a lost
+one, a pause, a stall and the catching up, the cautious start, nothing clicking);
+`voice-resample.spec.ts` the rates;
+`voice-rtc.spec.ts` (*a call the server carries from its first moment*) the call carried at once,
+the line taking over on its packets and the other end's report, the drop and the line that comes
+back, the failure, the patience and the call nothing can carry; `voice.spec.ts` (*a call the server carries*) the store;
+`realtime-hub.spec.ts` and `voice-frames.spec.ts` the server. Seen in two real browsers on the
+built server with every candidate taken out of both ends, so no line could ever connect: each hears
+the other's tone through the server within four seconds of joining, "Speaking" lights, nobody is
+called unreachable after the ten seconds that would have said so, a mute sends nothing, every frame
+sent arrives (205 of 205 and 62 of 62), and with Opus taken out of one browser both ends speak
+μ-law, and Chromium talks to Firefox the same way, with nothing in either console. Two things it
+costs, stated. Some browsers' echo cancelling covers what a line plays and not
+what Web Audio does, so a carried voice may echo for a reader on speakers, as a voice turned past
+full may. And this server carries about 40 kbps for each speaker and each listener in Opus, and
+about 180 in μ-law.
+
+**The microphone is asked for when the call is joined, never before**, and refused or missing it
+joins LISTEN-ONLY rather than failing, and says so in a toast (`joinVoice` in `lib/join-voice.ts`,
+which the Join button, the offer's button and joining automatically all go through). By default a
+call is joined automatically and with the microphone open (the owner, 2026-10-15: "join voice
+automaticly should true and start with the microphone mute should false"): `voiceAutoJoin` is
+on and `voiceStartMuted` off, and Settings › Voice turns either round. A browser that has saved
+its settings keeps what it saved: nothing has shipped, so nothing rewrites a stored choice. `play.spec.ts` (*joining the call without being asked*, *the offer to join the call*) and `voice.spec.ts` hold it, and seven faults were each caught; in two fresh browsers on the built server each joined a table's call by itself, with the microphone open, and heard the other.
 `services/voice.rtc.ts` is framework-free, and `stores/voice.store.ts` takes it through
 `setVoiceCall` so a spec can observe the store without a real `RTCPeerConnection`.
+
+**The microphone is prepared before anybody hears it** (`services/voice.input.ts`,
+`services/voice.gate.ts`). The owner: "do something about noies it should have options such as
+discord". The browser is asked for the microphone the way Settings say (echo cancellation,
+automatic gain, the browser's own noise suppression for "Standard"), in mono, and the call's own
+`AudioContext` runs it through the input volume (up to twice) and a gate in an `AudioWorklet`
+before either path takes it:
+
+- **Voice activity.** Left automatic, the gate learns the room: its idea of the noise falls at
+  once to anything quieter and rises 3 dB a second, and it opens 12 dB above that, never under
+  -70 dB or over -30. Or it opens at the bar the reader set.
+- **Nothing is cut.** It listens 10 ms ahead of what it lets through, so it is open before a
+  word's first sound; it holds 300 ms through a pause; it fades in over 5 ms and out over 80.
+- **Push to talk is the same gate**: open while the key is held and for the release delay after
+  it (`voiceRelease`), with the same fades. The microphone's own track is cut for it only where
+  nothing can prepare the voice, as it always was.
+- **Strong suppression is RNNoise** (`services/voice.denoise.ts`, from
+  `@sapphi-red/web-noise-suppressor`), chosen by measurement: run on the same speech over a fan
+  and a keyboard, it took the fan down 28 dB and the clicks 34, kept the voice's level and its full
+  band and added 21 ms, where GTCRN took 15 and 24, works at 16 kHz inside and added 32, and Speex
+  left the clicks alone. It is fetched only when somebody picks it (a worklet and a 157 KB model,
+  111 KB as brotli), runs before the volume and the gate, and needs a call at 48 kHz. Where the
+  call runs at another rate (Firefox keeps the device's) or the model will not load, the browser's
+  own suppression is used, the microphone is asked for again with it, and `voice.suppression()`
+  says which is working. The browser's own is off while RNNoise runs: the two together cut the
+  weak ends of words (2.6% of the speech missing, against 0.29). The microphone is mixed to one
+  channel before it, because it cleans one channel and leaves the other silent, and a stereo
+  microphone came out at half its level. Measured in two browsers by the voice quality pass, over
+  a room of pink noise, hum and typing, with the gate held open: the room 6 dB quieter than
+  Standard (-61 against -55 dB, and -40 with neither), the typing as quiet as Standard's or up to
+  3 dB quieter from run to run (Standard already takes it 11 dB under none), the voice at the same
+  level, nothing cut. Strong is for the room, not the keyboard. A note here said the clicks were
+  12 dB quieter; that came from an earlier harness and is not what this pass measures. With the
+  gate working, what is heard in a pause is mostly the gate (typing opens it, and it closes between
+  bursts), which is why the pass compares the two with it held open.
+- **What it hears is told to the page** about twenty times a second (`voice.reading()`: the
+  level, whether it is open, and the bar), which is what a meter draws.
+- **The microphone itself is sent until the context runs**, because a prepared voice from a
+  context that is not running is silence; the call moves to the prepared voice when it runs.
+- **A microphone the call lets go of is switched back on.** The call mutes by switching off the
+  track it holds. Joined muted while the context was still starting (in Firefox every time; in
+  Chromium when the context runs late), it switched off the raw microphone, then moved to the
+  prepared voice, which is made FROM that microphone, and nothing switched it back on: unmuted,
+  the call sent silence. The voice pass on Firefox found it (nobody heard speaking, the line
+  carrying 1 kbps, a turned-up voice measured at nothing), and a probe read the raw track
+  `enabled: false` after the unmute. `setMic` now switches the track it lets go of back on
+  (`voice-rtc.spec.ts`, *turns a microphone it lets go of back on*).
+- `tune()` hands the gate and the volume a change at once; `reprocess()` lets go of the
+  microphone and then asks for it again when what the browser does to it changes. **In that
+  order, because Chromium keeps one source per device while any track of it is live**, with the
+  processing it was opened with: asked for again while the old one was still open, the browser
+  handed back the old source whatever was asked. So turning echo cancellation, automatic gain or
+  noise suppression on or off in a call changed nothing, and a call whose strong suppression would
+  not load fell back to no suppression at all instead of the browser's (-41 dB of room, where
+  standard leaves -56). The voice quality pass found it, run against a build whose model never
+  loads; a bare page in Chromium shows the rule (a second request while the first is open says
+  `noiseSuppression: false` and measures like it, and the same request after a stop is
+  suppressed). The mic test and the call's fallback let go first too. A microphone the reader
+  CHOOSES is still asked for before the old one goes: it is another device, and a refusal there
+  should leave the old one working. A model that would not load is tried again in the next call
+  (`refused` is cleared when a call ends; `reset()` had left it set, and so had every spec after
+  the first that made the model fail). `voice.spec.ts` (*lets the first microphone go*) holds
+  the order on a fake microphone that hands back a live source as Chromium does.
+
+Measured with clean speech carried by the server: between sentences nothing at all goes out (the
+gate closed, -70.6 dB at the listener, about 30% less sent). A gate that only hears level is
+opened by a keyboard's clicks, so the noisy recording kept it open; telling a click from a voice
+is what strong suppression is for. `voice-gate.spec.ts`, `voice-input.spec.ts` and
+`voice.spec.ts` (*the microphone, prepared before anybody hears it*) hold it.
+
+**Quality is the reader's to choose, and the line decides how much of it gets through.** Settings
+offer Standard, High and Best (`voiceQuality`, `BITRATES`: 32, 64 and 96 kbps, High by default,
+as Discord's default is). Chrome sent every line at its own default of 32 kbps, and the server
+carried 24.
+
+- **A line**: the other end's description is tuned as it is taken in (`tuneOpus` in
+  `services/voice.sdp.ts`), so Opus may be sent up to 96 kbps, in mono, with forward error
+  correction and without DTX; the sender is held to the preset with `maxBitrate` and asks the
+  network for `priority: 'high'`. It is set after every description, when the line connects and
+  when the preset changes, and never twice to the same number.
+- **The server** carries the preset up to 64 kbps (`RELAY_MOST`), since it pays for every
+  listener, from an encoder at complexity 10 in its voice mode. When the socket falls behind (a
+  frame refused for the backlog) the encoder steps down a rung (48, 32, 24, 16 kbps), at most once
+  a second (`STRAIN_S`), and climbs back a rung once the socket has been calm for ten
+  (`EASE_S`). The audio clock times it, so a spec can drive it.
+
+Measured on the built server: a line's target was 32, 64 and 96 kbps for the three presets and it
+sent 30, 62 and 96; the server carried 29, 60 and 59. `voice-sdp.spec.ts`, `voice-relay.spec.ts`
+(*speaks Opus as well as it is asked*), `voice-rtc.spec.ts` and `voice.spec.ts` hold it.
+
+**Settings › Voice is laid out as Discord's, and the microphone can be tried there.** The owner:
+"CReate and complete voice setting and voice manager you know everyone should have feel good best
+quality". The section was two device pickers, a volume and four switches. It is three panels now,
+each a component in `components/voice/` that the table's own sheet can reuse:
+
+- **Input** (`VoiceInputSettings`): the microphone, its volume up to twice, a meter and a test.
+  Then the input mode, voice activity or the talk key, with the sensitivity set automatically or
+  by hand for the first, and the key and its release delay for the second. The bar to set by hand
+  is offered only once the reader turns automatic off; until then the meter draws where the gate
+  opens, and a slider nobody can move is not drawn. Then the processing:
+  noise suppression Off, Standard or Strong, with a sentence for each and one more when strong
+  cannot run here (`voice.suppression()`), then echo cancellation and automatic gain.
+- **Output** (`VoiceOutputSettings`): the speaker where the browser can choose one and has one to
+  choose, how loud everybody is up to twice, and the quality with the rate it sends at.
+- **At the table**: the four switches that were there.
+
+**The meter** (`VoiceMeter`) draws `voice.reading()`: the level from -80 dB to nothing, green
+while the gate is open, and a bar across it where the gate opens. It is a `role="meter"` that
+says the level and "Sending" or "Quiet", fills from the side the page starts, and moves the same
+nodes at twenty readings a second.
+
+**The test** (`voice.startTest`) is the call's own preparation with no call. Its own
+`AudioContext`; the microphone asked for as a call asks for it; strong suppression where it can
+run and the browser's own where it cannot, the microphone asked for again with it as a call does;
+the volume and the gate; and what comes out played back through a hidden audio element on the
+chosen speaker, so the reader hears themselves as the others will. The gate is held open
+whatever the input mode, because the talk key only works at a table. A change of level or of the
+bar reaches it at once (`tune`); a change of what the browser does to the microphone, or of the
+microphone, starts it again; a new speaker plays it there. Joining a call ends it, and during one
+nothing is offered: the meter is then the call's. A microphone the browser refuses, one that is
+not there, and a browser that cannot prepare the voice each say so under the button
+(`voice.testFault()`), in words, until the next test or until the test is put away. A
+microphone that arrives after the test was stopped is stopped, and leaving the page stops the
+test.
+
+**At the table the voice has a sheet of its own, and it says what was measured.** The owner asked
+for "a voice manager". From the dock on a wide screen (a gear, "Voice settings") and from the
+table's sheet on a phone, `manageVoice(table)` (`lib/voice-manager.ts`) opens `VoiceManager`, a
+chunk of its own, so the play route carries nothing of it. Out of the call it offers Join, with the
+microphone and what is heard there to be set up first (the same two panels as Settings, the test
+included). In the call it has Mute, Stop hearing everybody and Leave voice, then everybody else in
+the call, a row each (`VoicePeer`, kept through every change of the roster): the speaking ring,
+the name, pressed for the sheet about that person, what is known of the line, a volume up to twice
+and the button that silences them for the reader. Then the two panels, with the call's own meter.
+
+**What is known of a line is measured, never assumed.** `call.facts(now)` in `voice.rtc.ts` is asked
+once a second (`LINES_MS`) by `voice.watchLines()` while the sheet is open, and never when it is
+not:
+
+- **A direct line** answers from its own statistics: the round trip of the candidate pair the
+  transport chose (`selectedCandidatePairId`, else the nominated pair that succeeded, else the
+  other end's `remote-inbound-rtp`), the jitter of `inbound-rtp`, the playout buffer as
+  `jitterBufferDelay` over `jitterBufferEmittedCount`, and what was lost and how fast it came
+  since the last time it was asked, not since the call began.
+- **A carried voice** answers with the socket's own measured round trip, said as "To the server",
+  because the other half of the way is the other player's and cannot be measured from here; and
+  with what its player in the audio thread measured, which it posts about twice a second
+  (`STATS_EVERY` quanta of 128 samples): its jitter, its buffer, and the share of frames that came
+  too late to be played (late over taken: a late frame is among those taken, and was once counted
+  twice). The rate is counted from the bytes carried.
+- A person whose line is still connecting says so, one whose line has not been measured yet says
+  it is being measured, and one who cannot talk with the reader says so and is offered no volume.
+  An answer that comes back after its call has ended is dropped.
+
+`voice-manager.spec.ts`, `voice-rtc.spec.ts` (*what is known about each line*), `voice-relay.spec.ts`
+(the worklet's real source run in the test, reporting on its 188th quantum), `voice-playout.spec.ts`,
+`voice.spec.ts` (*what the reader is told about each line*) and `play.spec.ts` (the two ways in)
+hold it, and twenty-eight faults put into it one at a time were each caught. The voice pass opens the sheet in a live call between two real browsers and wants the other player listed with a measured round trip, then a rate once the line has been asked about again; seen as well at 1280 in English from the dock and at 390 in Persian from the table's sheet, a direct line on this machine reading a round trip of 0 to 1 ms and 36 to 65 kbps.
+
+**Everybody can be turned up to twice, and a loud voice is held under full scale.** The reader's
+own volume stopped at full. It goes to `LOUDEST` now, times each person's own, so a voice can be
+played four times as loud as it arrives. Above full it goes through the gain, a limiter and a trim
+(`LIMIT` in `voice.rtc.ts`: -1 dB, a ratio of 20, 2 ms to act). The voice pass found two things
+wrong with the first limiter by measuring what was heard, where every spec had read its settings:
+
+- **Its ceiling sat under what a voice reaches at full.** At -3 dB, a voice that peaked at full
+  scale at 100% was held at about three quarters of that once it was turned up: turning somebody
+  up made their loudest moments quieter. It is -1 dB now, so a voice turned up is held just under
+  what it already reached at full.
+- **A `DynamicsCompressorNode` adds a gain of its own after it limits**, to everything, limited or
+  not: the Web Audio specification's makeup gain, one over the curve at full scale, raised to
+  0.6. At -3 dB it was 1.7 dB, so 150% played at 183%. `MAKEUP` is that gain worked out by the
+  same formula, and the trim after the limiter is one over it. `voice-rtc.spec.ts` works it out
+  again from the specification's own words and holds the trim to it, and holds the knee at nought,
+  which the formula takes for granted.
+
+Measured in Chromium with a tone through the same chain: a quiet voice at 150% and at 200% is heard
+at 1.500 and 2.000 times its level (1.827 and 2.435 before); a voice at full scale turned to 150% or
+200% peaks at 0.93 and 0.95; and the first moment of a sound that starts at full scale, at 200%,
+at 0.99. Four times is not held: with everybody and that person both at twice, the first
+milliseconds of such a sound reach 1.07 whatever the attack (0, 1, 2 and 3 ms were tried), and the
+device clips them there. The attack stays at 2 ms, which bends a low voice least.
+
+The units are the reader's too: a level is "dB" in English and «دسی‌بل» in Persian, a delay "ms" and
+«میلی‌ثانیه». A slider takes its unit as `unit` and draws it beside the number, outside `tally`:
+inside it, forced left to right, «دسی‌بل» stood before its number for a Persian reader, which is
+the fault the rule about `tally` in `frontend/CLAUDE.md` describes. Seen at 390 in Persian.
+
+`voice-settings.spec.ts`, `voice.spec.ts` (*a test of the microphone, away from any table*),
+`voice-rtc.spec.ts`, `settings.spec.ts` and `primitives.spec.ts` (*Slider*) hold it. Sixty-six
+faults put into the code one at a time were each caught, three only once the spec was mended: Tab
+has to go on moving the keyboard while a talk key is being recorded, the bar set by hand has to
+start from the reader's own value, which the default of -50 had hidden, and the release delay has
+to say its unit. In a real browser with a fake microphone (noise,
+clicks and speech), in both languages: the test plays the voice back (peak 0.7), the meter
+moves, Strong fetches RNNoise and runs with no fallback, a change of suppression starts the test
+again, stopping it or leaving the page lets everything go, and the console is clean.
 
 **One side places the call.** Of two players the one whose JOINING sorts first adds the audio line
 and offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
@@ -832,6 +1881,20 @@ page's own `RTCPeerConnection` now - connected, one line, packets counted out an
 players leave and join together three more times, because a fault that shows two times in five passes
 a single try more often than not.
 
+**And then four, because two is one connection and a table seats four.** Four players in a call
+are six connections, each placed by whichever of its two handles sorts first, and nothing had ever
+had more than one. The pass seats four wallet fixtures and wants every page connected to the other
+three, one line each, packets counted both ways on all of them; then one leaves (the other three
+connected to each other and to nobody else) and comes back, one player's socket is cut from the
+page (all three call it again), and one reloads (out, and back with all three once it joins). It
+runs on Firefox as well (`QA_BROWSER=firefox`): thirty-seven checks on each. **The "ICE failed"
+the owner's Firefox logged was looked for and not found again**: twenty runs of a tracing
+diagnostic with two Firefox processes and no STUN connected every time, as did four whole passes.
+What that line meant on two networks was what it said - with `VOICE_STUN_URLS` and
+`VOICE_TURN_URLS` empty there was no direct path between two machines that are not on one
+network - and such a call is now carried by this server (*A call that cannot connect directly is
+carried by this server*).
+
 ### Voice while the game plays
 
 **The host switches voice, and the switch is a table ring.** `POST /tables/:id/voice` is host-only and
@@ -867,6 +1930,43 @@ this person for me" is a volume of nought and the slider in the players list is 
 The heard volume is master times personal, times nought while deafened, applied on every link as it
 connects.
 
+**A person is turned up or down from wherever they are pressed, past full too, and this browser
+remembers.** The owner: "we cannot increate or decrease seperetly user volum". The slider lived only
+in the Players tab inside the table's chat, went no higher than full, and was forgotten when the
+call ended. Now:
+
+- **The sheet about a person carries it.** Pressing a plate, a chair or a row in the Players list
+  opens the sheet about that person (`aboutPerson`), and while the reader and that person are both in
+  the call, and may talk, the sheet leads with "How loud Mina is for you" and the button that
+  silences her for the reader. It asks a `derived` boolean (`hearing`), so the roster changing under
+  it, which it does at every word anybody says, keeps the slider and the keyboard on it.
+- **From nothing to twice as loud** (`LOUDEST`, 2), with full marked on the way. An audio element
+  stops at a volume of 1, so somebody turned past full is played through a `GainNode` on the call's
+  own `AudioContext`: `MediaStreamSource` to the gain to a `MediaStreamDestination`, whose stream the
+  element plays at 1. A muted element keeps her raw stream playing beside it, because Chromium has
+  been known to hand Web Audio silence for a remote stream that no element plays. At full and below
+  she is the element alone, as before, so nothing changes for anybody nobody turned up. That keeps
+  the browser's echo cancelling where it has always been: on some browsers it covers what an element
+  plays and not what Web Audio does, so a reader with speakers who turns somebody past full may hear
+  that one person echo. Without an `AudioContext` the element alone plays her, at full.
+- **Kept on this device, by handle** (`settings.voiceLevels`), and only where it differs from full,
+  so the next call, at any table, hears her as the reader left her: a link that connects is told its
+  level, as it always was. Silencing remembers the level she had, and hearing her again puts it back
+  rather than full. The levels are a list of other people's handles, so signing out forgets them
+  (`surrenderKeys`), as it forgets search terms.
+
+`voice.spec.ts`, `voice-rtc.spec.ts` (*how loud one person is heard*), `person-actions.spec.ts`
+(*how loud somebody in the call is*), `table-chat.spec.ts` and `app-stores.spec.ts` hold it; the
+voice pass turns Mina past full from the sheet in two real browsers and MEASURES her. The fake
+microphone's beep reaches full scale, and nothing can play that one and a half times as loud
+without clipping, so she first turns her own input to half from the voice settings at the table:
+at 150% the sound the reader hears is then about one and a half times the sound she sends (1.48,
+her peak at 0.59). Then she turns her input to twice, so she sends at full scale, the reader turns
+her to twice, and the loudest moment heard has to stay under full scale (0.992). The check at 150%
+read 0.75 against the first limiter, which is how its ceiling was found. Firefox's fake microphone
+is a tone at -20 dB, which twice brings to 0.2 and never to full scale, so on Firefox the pass asks
+instead that at twice she is heard at twice what she sends (2.0); the ceiling is Chromium's to show.
+
 **The microphone and the speaker are CHOICES, never requirements.** The mic is asked for with
 `deviceId: { ideal }`, so a headset that has been unplugged falls back to the default instead of
 failing the join; the speaker is `setSinkId` on every peer's audio element, offered only where the
@@ -877,6 +1977,36 @@ settings page says so rather than listing "Device 1".
 draws it as a small badge on the avatar; nobody in the call draws nothing. `voiceTables` opens a
 person's own tables with voice on, quick play included - joining the call stays each player's
 decision, and the microphone is still asked for only on the press.
+
+**Whoever is heard wears a ring on every screen, and the meter behind it has to be woken.** The ring
+is on a lobby chair, on the whole plate on the felt (`.table-plate[data-speaking]`: round the picture
+alone it sat under the turn clock, so the player whose turn it was showed nothing) and in the Players
+list. Each browser measures it for itself, from its own microphone and from every line it receives,
+through analysers on ONE `AudioContext` that `join` makes before it asks for the microphone. A
+browser starts such a context suspended unless the page has been pressed or is already capturing, and
+nothing resumed it: a call joined with no press - "join automatically", which is every reload -
+measured silence for ever, and nobody was seen to speak. The store resumes it once the microphone is
+given (a page that is capturing may play) and at each press and key while it still sleeps, and the
+call layer starts a voice the browser held back at the next press. That last is the listen-only
+reader: no microphone and no press means neither sound nor ring until the first one, and nothing a
+page can do about it. The ring is held for `SPEAKING_HOLD_MS` after the last sound, or it goes out
+at every breath. `voice.spec.ts` hands the store a sleeping context, `voice-rtc.spec.ts` a refused
+`play()`, `table-plate.spec.ts` the ring on a plate that is kept. `voice-pass` ran Chromium with
+autoplay allowed for every page, which is what hid all of it; it does not now, and it runs on
+Firefox with `QA_BROWSER=firefox`. **Playwright's `evaluate` is a press as far as Chromium is
+concerned** (it runs with a user gesture), so a check of a page nobody has pressed asks that page
+nothing until the moment it judges it.
+
+**A call that cannot be made says so in words, and goes on saying it while it tries.** A line that
+has not connected for `UNREACHED_MS` is not reached: the Players list reads "Could not connect" for
+as long as that lasts, and the page says once who it is and that it is the network between the two,
+not the microphone. The wait is counted on NOT CONNECTED, never on `failed`: the side that called
+restarts ICE the moment a connection fails, so a line that will never work reads failed for an
+instant and connecting for the next half minute, for ever - the "Connecting" that never ended.
+Connecting takes the words back, and so does the person leaving. A call this server carries counts
+as connected, so the words are now for a call nothing can carry. The server says at boot, as
+information, when it has neither a STUN nor a TURN server: a call between two networks is then
+carried by this server, and STUN would let more of them talk directly.
 
 **A `<Show>` with a thunk child rebuilds whenever its `when` re-evaluates, so a control inside one
 that reads a roster loses its focus.** The per-person volume slider sat in a `when` that read the
@@ -1075,14 +2205,95 @@ that brings eight home moves both partners by one amount, a walkout's partner sh
 the board had them behind, and is `void` when it had them ahead - on the quitter's own tokens
 included - or when the clock took the quitter.
 
-**No table can reach that game yet, and that is deliberate.** The seed keeps ludo's `partners` at
-`none`, so `create` stores no team table for it, and `engine-contract.spec.ts` asks only that every
-format the catalogue can open is one the engine plays, not the other way round. The board is not told
-a seat's side or whose tokens the seat on turn is moving, and the browser's helpers still read every
-other seat as an opponent: `walkersOf` hands `obstacle` each seat as its own side, which is true of
-every board the wire can carry today. All three come with the table, in the commit that flips the
-seed. The wire's `ludoMove` gains `owner`, `side` and `seats` now, because the ledger writes them
-now, and loses `winner`, which nothing ever read: a board's winner is the envelope's.
+**Ludo two against two reached a table in the commit that could draw it.** The engine played it
+first, behind a seed that kept ludo's `partners` at `none`: no table could be opened for it, the
+board was not told a seat's side or whose tokens the seat on turn was moving, and the browser's
+helpers read every other seat as an opponent. The seed says `optional` now, so `create` stores a
+team table when its opener asks, and `engine-contract.spec.ts` asks its question both ways: every
+format the catalogue can open is one the engine plays, and every format an engine plays is one some
+table can be opened as. It asked only the first half while the team game waited, and an engine that
+plays a game nothing can reach fails there from here on. `table-teams.db.spec.ts` asks the row
+`create` stores for ludo at four, asked and not asked, and `match.db.spec.ts` (*starting*) starts the
+table that asked and reads partners opposite off the envelope and off the board of every reader.
+
+The board carries the two facts every reader was missing, and both are the state's own.
+`ludoBoard.seats[].side` is who plays with whom. `controls` is the seat whose tokens the seat on
+turn is moving, `state.players[controlled(state)].seat`: that seat, or its partner once its own four
+are home. Both are required on the wire and the same for every reader, and a token named in `moves`
+is always one of `controls`' four, so the browser never works a hand-over out for the seat on turn.
+On a finished board `controls` still names a seat, as a hokm or backgammon board still carries its
+`turn`; every reader asks `finishedAt` first. `engine-seam.spec.ts` plays whole games in both
+formats, reads the board as every seat and as nobody, and refuses a board that leaves either out.
+
+What reads them:
+
+- **The helpers act on `controls`.** `movedTo`, `outcomeOf` and `pieceFor` in `game/helpers/ludo.ts`
+  lost their seat argument: the board says whose tokens move. `standingOn` leaves out the mover's
+  SIDE, so a partner is never named a victim, and a token coming out counts the opponents on the
+  start square of the colour that moves. `walkersOf` hands `obstacle` every seat's own side, so the
+  coach explains a pair as the engine judged it, in the words for sides at a team table
+  (`tip.blockedTeams`). It says that landing on a partner makes a block (`tip.partner`), and once,
+  when the reader's own fourth token comes home, that their rolls move their partner's tokens from
+  now on (`tip.helping`): on the roll a six earned, or as the turn passes. `ends` asks the side, so a
+  six that brings a fourth home is still told it rolls again and the one that brings the eighth is
+  not.
+- **One rule has a second reading in the browser, and a spec holds it to the first.** Once a turn
+  has passed, `controls` is about the next seat, and explaining a pass that a block caused needs
+  whose tokens the READER moves. `handOf(board, seat)` answers from the board: its partner's, once
+  the seat's own four are home. `helpers-ludo.spec.ts` asks it of the seat on turn at every state of
+  whole team games and requires the board's `controls`.
+- **`seatsFor` lights the tokens of `controls`**, for a reader who has a seat, and `pick` takes a
+  tap only from the seat on turn and only on a token of `controls`. It asks whether the reader has a
+  seat before it compares that seat with the turn, for the reason *A finished match names nobody on
+  turn* gives. The server offers `moves` to the seat on turn alone, so nothing lights for the
+  partner whose tokens are being moved, and two assertions that said so handed the board no moves
+  and would have held under any code. `ludo-table.spec.ts` hands that partner a board that does
+  offer one, which only a server gone wrong would send, taps a token and wants no play sent: the
+  turn in `pick` is all that stands between such a board and a play the server would refuse.
+- **The plates wear their side.** `YardBadge` hands `TablePlate` the mark every table of two sides
+  wears. The tag says "Partner" on the reader's partner and "Helping" on the seat on turn while
+  `controls` is not that seat. A result or a missed turn still takes the tag, and then the mark says
+  "Partner" to a screen reader instead, so it is said once either way. Who the reader's partner is,
+  is `partnerOf(seat, format)`: it lands in `match/sides.ts` beside `sideOf`, with the board as its
+  first caller. **Whose tokens move is read from what the table has shown**, as the turn on the
+  plates is (6.2): the shown turn's own seat, or its partner once the table shows that seat's four
+  home (`shownControls` in `match-board`). The plates were handed the view's `controls` beside the
+  shown turn, so while a move was still walking and the server had passed the turn on, the seat
+  that had moved was tagged "Helping", at a table of two with no partners. The four-game walk at the
+  end of the clean production run caught it; `ludo-table.spec.ts` holds the walking moment and a
+  table of two sides read from the pawns the table shows.
+- **At a ludo table the mark is the side's own two colours.** The pip every table shares is blue
+  for one side and amber for the other, and here a colour is a player: red and yellow wore the blue
+  player's colour, and green and blue one that reads as yellow, in the only mark somebody watching
+  can see for who plays with whom. The board hands each `YardBadge` the colours that play for its
+  seat's side, as the board it was sent has them, and `.yard-badge` paints the pip half and half
+  from them (`--team-a`, `--team-b`), so red's plate and yellow's wear one disc and no second copy
+  of the pairing lives in a stylesheet. Hokm keeps the shared pip.
+- **The turn sentence says whose tokens are moving.** "Your four are home: move {name}'s tokens."
+  stands where "Your turn." stood, for a screen reader now that the strip is gone, and the plate
+  says "Helping" for everybody. Everybody else reads
+  "{name} is moving {partner}'s tokens.", and the partner reads "{name} is moving your tokens.": a
+  third sentence, because the second names a reader to themselves in the third person.
+- **The renderer draws a block by side** (`BoardToken.side`), so a pair of partners stands one pawn
+  on the other like any block and two opponents on a star stand side by side. `BoardView.winner` is
+  `winners`, the colour of every seat whose result is `won`: a side's win throws confetti in both
+  colours, and a game nobody won throws none.
+
+Two sentences a helper made false were reworded rather than doubled. The entry label said "the token
+on your start" and the tip "Your start square holds one of your own tokens"; a reader moving their
+partner's tokens has neither, so both name the start square of the token that moves.
+
+One thing it costs, stated. A quick search that names no sides matches both kinds of ludo table of
+four (*Matchmaking is one request*), so somebody pressing Quick play can be seated at a table of two
+sides. The lobby, the header and the plates say which it is, and the search still opens the plain
+game when it finds neither.
+
+`helpers-ludo.spec.ts` (*two against two*) plays whole team games and compares every prediction with
+the engine, `ludo-table.spec.ts` (*the ludo table, two against two*) holds the plates, the strip, the
+heading, the tap and the confetti, and `game.spec.ts` the pieces.
+
+The wire's `ludoMove` gained `owner`, `side` and `seats` with the engine, because the ledger wrote
+them from then, and lost `winner`, which nothing ever read: a board's winner is the envelope's.
 `engine-seam.spec.ts` parses a log to hold both, and plays whole team games through the adapter, in
 which a seat moves its partner's tokens. `v` stays 1. Nothing has shipped, so a ludo match left live
 in a development database from before this has no sides in its state and is dropped, never migrated.
@@ -1131,7 +2342,8 @@ cannot drift from it. Ludo, backgammon and poker answer with the shared one.
 
 `engine-contract.spec.ts` and `ladders.spec.ts` run over formats. The contract spec requires every
 format the catalogue can open - `teamsOf` over the seed's seats and its `partners`, asked both ways -
-to be one the engine plays, and keeps its bound on a game's length per variant. `ladders.spec.ts`
+to be one the engine plays, and every format an engine plays to be one the catalogue can open, and
+keeps its bound on a game's length per variant. `ladders.spec.ts`
 asks a counter of the GAME as a whole, and again of each team format by itself. Not of every format:
 the thirty three-handed hokm matches it plays take no kot, so that check fails on a format with
 nothing wrong in it. A team game is where an engine's events change shape, though - a hand names a
@@ -1260,7 +2472,8 @@ and `start` writes those events as an `open` row at the opening revision - seat 
 key - in the transaction that inserts the match. Every engine opens at revision 1, so the ledger is
 gapless from 1 and `since?rev=0` reads the whole game, opening included: poker's first deal and blinds
 (the `hole` events stay in the row and `log` drops them, exactly as for every later hand), hokm's
-first `deal`, backgammon's opening roll; ludo's opening has nothing to say and its row is empty.
+first `deal`; ludo's and backgammon's openings have nothing to say and their rows are empty, because in
+backgammon each player throws their own die (*Every roll is the player's own*, under *Backgammon*).
 `start` pushes from the revision before it, so every seat is handed the opening through the same
 `game` frame as a move. It used to be thrown away: hand one began mid-hand in the feed, and a board's
 beats had no deal to draw.
@@ -1381,19 +2594,23 @@ reader, never one payload filtered. Nothing waits for a window: a push leaves th
 transaction commits.
 
 The HTTP routes stay, and not as a shim: the browser sends a play over HTTP, under the SAME key, when
-the socket is not connected or no ack came within three seconds, and the idempotency ledger makes the
-second copy answer `already`. The API passes play hundreds of turns through them. A browser whose socket
+the socket is not connected or no ack came within a second and a half (`ACK_MS`; it was three, the
+wait a press over a dead socket costs), and the idempotency ledger makes the second copy answer
+`already`. A late ack also asks the socket for an answer (`check`), so a dead one is replaced four
+seconds later instead of at the next probe. The API passes play hundreds of turns through them. A browser whose socket
 keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
 a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching -
 but is RUNG once a move is old enough to show them (`WATCH_DELAY_MS` and a second, `gameWatched` in the
-hub, players excluded), and re-reads through the watch route; its poll is a thirty-second safety net
-rather than the only way a watcher's board moved.
+hub, players excluded), and re-reads through the watch route, which answers what happened since the
+revision the watcher holds; its poll is a thirty-second safety net rather than the only way a
+watcher's board moved.
 
 **Every board answers the press before the server does, and only with what the press decides.** A
 hokm card leaves the hand and flies to the felt at once, and the server's echo of that same card is
 taken out of the batch rather than flown twice; a ludo token walks to `movedTo`'s square, computed from
-the server's own `ludo/board.ts`; a poker call, raise, all-in or fold is drawn in front of the reader
-by `predicted`; a backgammon turn stays staged on the board until the revision moves. Nothing that
+the server's own `ludo/board.ts`; a poker call, raise, all-in or fold is put on the table as the move
+`pressed` names, which is the first event the engine logs for it; a backgammon turn stays staged on
+the board until the revision moves. Nothing that
 chance or another player decides is ever guessed - no die, no card dealt, no capture, no pot, no
 street, no turn - so the prediction can only be wrong when the server refuses, and `board.play`
 answers `stale` or `failed` for exactly that and the board takes it back. A prediction is keyed to the
@@ -1404,8 +2621,9 @@ engine did over self-played games.
 The gateway checks a play twice: the frame shape strictly, then `matchPlayInput` with a comparison that
 refuses any key the schema would have stripped, so a `die` inside a play is refused rather than quietly
 dropped. One socket's plays run one after another, so a socket never holds two match transactions. Every
-frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `play`
-40, `ping` 10), and past it the socket is closed 4429.
+frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `sound`
+250, `play` 40, `ping` 10: `FRAME_BUDGETS` in `realtime/frames.ts`, which the browser keeps to as
+well), and past it the socket is closed 4429.
 
 **There is no catch-up verb on the socket.** The realtime store rings every scope once whenever a
 connection opens, and the match store answers that `game` ring by reading `since` from the revision
@@ -1484,6 +2702,13 @@ spectator with a live board can say which token to move, and coaching is cheatin
 whether or not the board is secret. A finished game has no delay, because nothing is left to leak,
 and that is also what makes watching a game back possible.
 
+The delay is one turn of a live table, thirty seconds (`WATCH_DELAY_MS` in `match/turns.ts`), and
+it is the weaker of the two settings that were considered: at one turn a spectator's board is one
+move stale, so advice from the sidelines is about a position that has just changed rather than
+one that changed three turns ago. It stops somebody reading a board over a shoulder in real time;
+it does not stop a determined pair who accept that what they know is a move old. A small multiple
+of the turn timer is the change to make if that ever matters more than watching feeling live.
+
 The board was always R's and the seats were not (LUDO-14). `match_players` was read as it stands NOW,
 and two of its columns move while a game goes on. `result` becomes `abandoned` the moment a forfeit
 commits, though ludo plays on at three and four seats and poker at three or more, so for thirty
@@ -1518,24 +2743,297 @@ at one that is no uuid, or at a table that stopped being public under its game -
 alike, while somebody in a chair there is still shown it. `envelope.spec.ts` holds the missing count
 with no Postgres, and `table-plate.spec.ts` and `ludo-table.spec.ts` hold the plates.
 
-Two things still reach somebody early, and neither is this route's. The play page closes the watch
-the moment the table drops its `matchId`, which is the LIVE finish, so a watcher learns a game ended
-thirty seconds before their board would have shown it and never sees the last board. And a seat that
-quit a game still being played keeps its `match_players` row, so it is still pushed the live board.
+**A watcher is told what happened, up to the board they are shown and no further.** The watch
+read carried a board and nothing else, so a watcher's board could only be slid from one position
+to the next: no walk, no hit, no thrown die, in a product whose brief is that nothing is a fade
+and a re-render. `GET /matches/:id/watch?rev=N` answers `events` beside the board: the actions in
+(N, R], where R is the revision of the board in the same answer.
 
-The play page also still says a thing this route no longer means. A refused watch is drawn as
-`watch.waiting`, "The game has just started. There is nothing old enough to show yet.", the sentence
-for a game too young to have a board to show - and a young game is shown its opening, so the only
-404 left is not there, or not for this reader. Somebody on either side of a block with the host
-reads it for as long as they stay: `byId` still shows them the table, because `visibleTo` has no
-block clause, and `watchableTable` refuses the game on it. The watch store's `waiting` and `missing`
-are that state with no reader, and `fit-pass.mjs` still waits forty-five seconds for a watch that is
-ready at once.
+- **One reader, bounded by the load it is handed.** `match.told(load, rev)` clamps the revision to
+  the load's own, reads the rows between, and composes them for the load's reader: nobody, for a
+  load with no seat. A player's `since` calls it after `shownTo` has chosen the load, and the watch
+  port calls it with the DELAYED load, so "no event past the board beside it" is one line for a
+  player, a seat that quit and a watcher alike. Two shapes that already existed would each have
+  handed over the whole thirty seconds and are not used: `match.feed`, which reads every row after
+  a revision against the LIVE game (it stays the push's reader), and the live row that is in
+  scope inside the delayed read. `engine-seam.spec.ts` reads the port for both.
+- **What `rev` means.** Absent, or anything that is not a whole number of at most fifteen digits:
+  the board and no events, because read as zero it would be the most expensive answer there is,
+  the whole game. Zero: the rows from the beginning, which for a game nobody has moved in is the
+  one row that began it (seat -1). N: the rows after N, in order, ending at the board's revision;
+  nothing is read when N is R, which is every idle read. More than `WATCH_TAIL`, twelve, behind:
+  the board alone. A tail that long is more than a board will play, and a caller who asks from far
+  back would otherwise be handed every earlier showdown and every action's time in one request.
+- **The events are read after the reader has been asked about.** The port's order is the delayed
+  read, then `watchableTable`, then `told`. Read sooner, a refused reader would make the server
+  read a ledger for a revision they chose, and how long a 404 took would tell a private game from
+  a missing id.
+- **A watcher's log holds nothing a seat's log hides.** With the real engines that proves
+  nothing, because their logs ignore their reader; `redaction.db.spec.ts` asks `told` with its
+  engine of one secret a seat and a load with no seat.
+
+**The browser folds each answer into a board and, when the events explain it, a batch.**
+`watch.store.ts` was a resource whose data was the view. It keeps a cursor now and asks from it:
+zero on the first read of a game, the revision it holds after that.
+
+- **One rule for what is handed to a board, and both stores read it.** `runOf(events, floor,
+  upTo)` in `stage/feed.ts` answers the fresh run, whether it starts where the revision in hand
+  left off (`gap`, which the board store mends by reading `since`) and whether it reaches the
+  board one revision after another (`whole`). A watcher is handed a batch only for a whole run.
+  Anything else - a hole, a tail past the cap, an older answer, a game opened in its middle - is
+  the board alone, and the presenter slides to it quietly.
+- **The board and its batch are one write, and reads are one chain.** A second read asked for
+  while one is out is that read and one more after it, so two answers never fold at once and an
+  answer for a game the store has stopped watching is dropped whole. The batch counter only grows
+  and the cursor is dropped with the game, so a rematch starts from its own beginning.
+- **The opening is thrown for a watcher who arrives while the board is still the opening**: the
+  first answer is exactly the row that began the game, at the board's revision, and the batch
+  carries the same once-only `opens` the board store's does.
+- **It looks again** when it is rung about its game, when everything is rung (all a browser with
+  no socket ever hears: the half-minute poll was otherwise the only thing that moved such a
+  watcher's board, thirty seconds of play at a time), and every half minute while the tab is on
+  show. A game that is over is not asked about again.
+- **`view()` hands out the game, how far behind it is, the rule and whether it is live; the batch
+  has a getter of its own**, so the raw events never ride on the view into something that could
+  read them unfolded. `WatchBoard` takes both and hands them to the board it draws.
+
+**A watcher stays through the end.** The page closed the watch the moment the table let go of
+its game, which is the LIVE finish: the board was taken down with up to thirty seconds of play
+unseen and a panel offering a chair took its place. When the table lets go of the game the watch
+holds, the page asks the store to `settle`: it reads the same game once more, and a finished game
+is answered whole, so the last moves arrive as events when they are inside the cap and as the
+board alone when they are not. The board plays them and then shows the result, with nothing to
+play again. The watch is closed by the table naming another game, which the page then follows, by
+the reader sitting down, or by the reader: over a finished game `WatchBoard` offers "Back to the
+table", and the panel that offers a chair waits for that press. `play.spec.ts` (*a table that is
+read again*) holds the end read once, from the revision on screen, no chair offered over it, the
+way back, and the next game.
+
+**The words over a watched board wait for the board.** `WatchBoard` read `live` from the view
+and nothing else, so the moment the last answer arrived it said "This game is over" and offered
+the way back, about four seconds before the board under it had borne off its last checker: the
+view running ahead of the felt, in the one frame that had not been taught otherwise, and a
+button that took the board away in the middle of the scene this whole change exists to show. A
+board on the stage now tells whoever drew it when it is playing: `onPresenting` on `BoardProps`,
+which the backgammon board calls from the presenter's `watch` and once more, with false, when it
+is taken down, so a frame is never left waiting on a board that has gone. `WatchBoard` calls a
+game over when it is finished AND its board is still, and the sentence a screen reader is given
+about why the board is behind is said only until then: a finished game is not behind, and "This
+game is over. Everyone watching is behind by the same amount" was what every watcher's reader
+heard at the end of every game once the end was something a watcher stayed for. A board that is
+not on the stage yet says nothing and its frame follows the view, as before; each one takes this
+on in the commit that puts it on the stage. `watch-board.spec.ts` holds the frame waiting.
+`backgammon-board.spec.ts` holds the board telling, and the real board in the real frame handed
+the end and its events in one write: at no step of the clock is the game called over under a
+table still showing it.
+
+`match.db.spec.ts` (*watching*) holds the read against Postgres: three actions of which two are
+old enough, asked from the beginning, and exactly those revisions back; the opening row of a
+young game; the revisions after the one asked from, once and in order; nothing for nobody who
+asked from nowhere; the board alone past the cap; a finished game's rest; and a stranger at a
+friends' table answered nothing whatever revision they name, live and finished.
+`match-quit.db.spec.ts` holds a watcher and a seat that quit to the same events, and a forfeit to
+arriving with the plate that shows it. `well-formed.db.spec.ts` sends the revisions `since` is
+sent. `app.spec.ts` (*watching a game*) holds the route. `watch-store.spec.ts` holds the fold,
+`watch-board.spec.ts` what the board is handed, and `backgammon-motion-pass.mjs` a third,
+watching browser.
+
+One thing it costs, stated. A watcher learns that a game has ended when it ends, as before, and
+is then shown its last half minute at once, at double speed when there is much of it: the delay
+protects a game that is being played, and a finished one has nothing left to protect.
+
+**A seat that quit a game still being played is a watcher from the move it quit on** (D31, the
+owner, 2026-10-05). Ludo plays on at three and four seats and poker at three or more, and whoever
+gave up, walked away or was timed out of one kept its `match_players` row - so it was still pushed
+every board as it was made, and `view` and `since` still answered it live. That is the watcher's
+delay with a door left open beside it, and the door did not even need the page: `since` is a GET.
+Now:
+
+- **Which seats.** One whose `match_players.result` is set while `matches.finished_at` is not. Only
+  a forfeit writes a result before the finish (`commit`), so that is exactly the seats with a
+  forfeit row. A poker seat that is out of chips has none and is untouched; a game of two, a
+  Hokm game and a Ludo team game end on a forfeit, so nothing about them changes.
+- **What it is shown.** `match.shownTo(load)`: the newest row at least `WATCH_DELAY_MS` old, or the
+  opening, OR any row up to its own forfeit - `boardShown(db, match, players, seenUpTo)`, the
+  composition the watch route already used, with one more clause. Without that clause the answer
+  to "Give up" was a board from before the giving up, with the Give up button back on it; the
+  seat watched the game live until the move it left on, and that is where its board starts. It
+  keeps `mine`, so the page still knows which plate is the reader's, and gets a watcher's seats:
+  no clock, no counts of misses, no rating.
+- **Every answer a seat can get** goes through it, and there are five: `view`, `since` (whose
+  events stop at the revision shown), the answer to a play or a resignation, the answer to
+  `start`, and the push. The third matters because a resignation is idempotent: asked again with
+  the same key it answers `already` WITH A BOARD, which was the live one - a quitter could have
+  polled its own resignation. The fourth because `start` at a table with a game on answers that
+  game. `read` itself stays live, because `act` and the turn notice reason from it.
+- **The push.** `pushMatch` sends to the seats still playing and names only those as players to
+  `gameWatched`, so a seat that quit is rung with the watchers, a delay and a second later, if it
+  is looking at the table, and its page reads `since` like any other doorbell. The finishing push
+  goes to everybody.
+- **The page says so.** Above the board: "You are out of this game." and the watcher's own
+  sentence about being thirty seconds behind. And it no longer offers "Give up" to somebody who
+  already has, which it did, to be refused.
+- **A chair given up from somewhere else makes a watcher of the page that is still open.** The
+  page kept the board of a game for as long as the game belonged to the table, seated or not,
+  which is what keeps a finished game's result in front of somebody. A walkout takes the chair
+  as well as the game, and the page that asked for it goes to the games list; but the same
+  account's page on another device stays, with a table that has a game on and no chair of its
+  own - so it kept the player's board, was offered the watcher's as well, and drew the game
+  twice, one under the other. Seen in a real browser on a public table after a pass had cleared
+  the fixture's tables from under it. The page now lets the board go when the table has a game
+  on and the reader has no chair at it, and the watch is the one board. An invite-only table
+  goes with the chair, so there it is still "No such table".
+
+  Letting the board go was a crash before it was a fix. The page handed its board
+  `board.match()!`, and a Ludo board that was still on the page read a game that was no longer
+  there in the tick before its branch was taken down: "The lights went out." It showed only in
+  a real browser. Which runs first, the branch or the board's own effects, turns on what else
+  on the page read the same signals that round, and neither spec could be made to throw. The
+  board now takes its match through the branch's own value (`<Show when={ played } let={ match
+  }>`), which answers with the last real match while the branch is being taken down: the rule
+  `frontend/CLAUDE.md` already had for a table, applied to the one read it had missed.
+  `play.spec.ts` holds the one board at a poker table and `play-quit.spec.ts` at a Ludo table
+  with the real board on the page; the Ludo play pass walks out over the api under an open
+  page and asks that the page still stands and draws the game once, which is the check that
+  fails on the crash.
+
+`WATCH_DELAY_MS` moved to `match/turns.ts`, which imports nothing, so the page can say the number
+the server keeps. `match-quit.db.spec.ts` holds each of the five answers at a three-seat Ludo
+table, a walkout as well as a resignation, the end told to everybody, and a game of two
+unchanged; `play.spec.ts` the sentence in both languages and the button that is gone.
+
+**How a seat went is on the wire, because "Left the game" was said of three different things.**
+Somebody who pressed Give up, somebody who walked away from the table and somebody the clock ran
+out on three times all wore the same tag, and the first of them had not left anything: they were
+sitting there. The ledger always knew which - a forfeit row's payload carries `resign`, `left` or
+`timeout` - so `matchPlayer.exit` is that word, read with the seats (`seatsOf`, one sub-query on
+the forfeit row) and sent only with the `abandoned` it explains: a watcher is told how a seat went
+when the board they are shown has it gone, and not thirty seconds before. A plate, a Ludo yard's
+badge and the result panel say "Gave up", "Left" or "Timeout" (`goneKey` in `plate-tag.ts`); a
+seat that comes without the word reads as one that left. The walkout's tag is the one word because
+"Left the game" was a pixel wider than a yard's badge has on a wide screen (92 of 91, measured on
+the production build) and was drawn cut. `match-quit.db.spec.ts` holds each of the three through
+the real routes, the sweep's three missed turns included, and `envelope.spec.ts` that the word
+never travels without the result.
+
+**A plate can be pressed, and it is not a move.** The owner: "when you click on user it should
+have option for example see profiel or etc". At a table the person is their plate, so `TablePlate`
+lays one transparent button over everything on the plate of anybody but the reader
+(`.table-plate-press`, the last child, so nothing drawn on a plate lies over it), and it opens the
+sheet about that person, their profile first. A plate is not the felt: nothing a game is played
+with lies under one, the revision does not change, and the press takes no room from a board (D10,
+D11). `lib/person-menu.ts` (`aboutPerson`) fetches the sheet at the press, so no board carries
+it, opens one sheet however often it is pressed and says so when it cannot be fetched.
+
+- **It is out of the Tab key's way** (`tabindex="-1"`): a table is played from the keyboard by a
+  cursor on the table (D14), and four to nine more stops in front of it would be a tax on every
+  turn. A key reaches the same sheet from the Players list beside the table, where a name is the
+  button and its `::before` covers the row; the mark of the call, the button that silences and the
+  volume are positioned and come after it, so they stay their own.
+- **Whose plate is the reader's is asked of the account, not of the board**, so no board can get
+  it wrong and a watcher can press every plate. The board specs sign nobody in, so every plate in
+  them is pressed: the guards that count the buttons on a table, in the specs and in the four play
+  passes, leave `.table-plate-press` out by name, and one test in each board spec signs the reader
+  in and wants "You" to be the one plate nobody is offered.
+- **Under a finger it reaches 44px.** Ludo's plate at 320 and 768, Hokm's partner, poker's flat
+  plate and every plate on a phone on its side are shorter (28px to 43px), so under a coarse
+  pointer the press has a `::before` that reaches 44px above and below it and no wider. Measured
+  in the four games at thirteen sizes on the built server, that band holds nothing else to press.
+  No dressing of the plate may clip it (`overflow`, `clip-path`, `contain`) or take away the box it
+  is laid against.
+- **It lies over what a seat pins to its plate.** Hokm pins the turn's clock to the edge of a
+  plate, a third of a rem inside it and above it (`z-index: 1`). In Persian that clock is wide
+  enough to reach the middle of the plate across the table, and a finger there was on the clock,
+  which answers nothing: the matrix found it in every Persian phone cell and in no English one.
+  The press is `z-index: 2`, and the plate has no `z-index` of its own, so the press rises above
+  the clock inside the seat.
+
+`table-plate.spec.ts`, `person-menu.spec.ts`, `table-chat.spec.ts` and
+`backend/tests/table-plate-press-art.spec.ts` hold it; `tools/qa/plate.mjs` presses a plate in
+both browsers of each play pass.
+
+**A plate's tag is a word or two, because a plate is narrow.** A tag that does not fit is cut with
+an ellipsis, and the narrowest plate in the product has about 57px for one: a poker plate on a
+phone, four rem wide. A Ludo yard's badge has 79px on a phone held sideways and 91px on a wide
+screen. Measured on the production build, each word put into a real plate of every game at six
+sizes in both languages, these were drawn cut: "missed a turn", "missed 2 turns" and "One more miss
+ends it" at Ludo in both languages, and the last of them is the warning a player most needs to
+read; "No contest" on every poker plate and every four-handed Hokm plate on a phone, by up to 23px;
+"Timed out", «وقتش تمام شد» and «بازی را ترک کرد» on the same plates.
+
+So the tag counts and the sentence explains. A missed turn is "Missed 1", "Missed 2"
+(`card.missed`), gold until the next miss is the one that ends the game for that seat and red
+then; the words about what the next one costs are in the Players list, which has the room
+(`match.missed`, and `match.missed.last`, a key that had copy and no caller).
+
+**The tag follows the turn it is about** (6.2). The count comes in the view, and the view arrives
+with the move the server played for the seat, so a plate said "Missed 1" while that move was
+still on its way across the table, and stopped saying it while the move that mends it was. A
+board keeps the counts as they stood the last time it had caught up (`missed`, from `missesOf`)
+and tags a plate from those (`withMisses`): taken where each board already puts itself right at
+rest (after it has heard something, if nothing is playing, and when what was playing has
+finished), so a count that changes on a table with nothing to show is said at once. It is NOT
+taken in an effect that watches the view: the view and its events arrive in one write, and for
+one round of that flush the table does not yet say it is showing anything, which is the round
+the result card latched on. Ludo's `yard-badge` reads the count from the player it is handed,
+so the board hands it one with the held count. The Players list still reads the newest view: it
+is a panel beside the table, not a mark on it. A game that did
+not count is "Void" on a plate and still "No contest" in the result, a seat the clock took is
+"Timeout", and in Persian a walkout is «ترک کرد» and a timeout «وقت تمام». The result panel says
+a seat's way out in the plate's own words, so the three are one set in each language. Poker's
+phone plates give the tag most of its side padding as well (`@container (max-width: 22rem)`),
+the four pixels "Missed 2" was short of there. Nothing is cut now, on any plate of any game at
+any of those sizes. `fit-pass.mjs` fails any cell in which a plate's tag is drawn cut, which is
+how the poker plates were found: the Ludo measurement had not looked at them.
+
+**A refused watch says what it is.** The play page drew it as `watch.waiting`, "The game has just
+started. There is nothing old enough to show yet.", the sentence for a game too young to have a
+board to show - and a young game is shown its opening, so the only 404 left is not there, or not
+for this reader. Somebody on either side of a block with the host read that sentence for as long
+as they stayed: `byId` still shows them the table, because `visibleTo` has no block clause, and
+`watchableTable` refuses the game on it. It says "There is nothing here for you to watch. The game
+may have just ended, or it is not open to you." now (`watch.refused`), which is all a 404 lets
+anybody say and names nobody. The page asks the store whether the watch was REFUSED
+(`watch.refused()`, the store's `missing` flag that had no reader) where it used to work it out
+as "no board, not loading, not failed" - and "not loading" goes false every time the page asks
+again, so the sentence was taken away and drawn again at each doorbell and each half-minute poll.
+`play.spec.ts` holds the sentence in both languages, its absence while the first answer is on
+its way, and that it is the same node while a later answer is. `fit-pass.mjs` no longer waits
+forty-five seconds for a watch that is ready at once.
 
 **`tools/qa/ludo-pass.mjs` plays complete games over the real api**, at two, three and four players,
 through the routes a browser uses. It is API-level on purpose: it proves the rules, the persistence,
 the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
 What it cannot prove is that any of it is visible, which is the browser pass's job.
+
+Its fourth game is two against two, opened as a table that asked for it. It reads the sides off the
+board and off the envelope, and it plays to build pairs and keep them: a move that lands on one
+token of the mover's side comes first, a token standing in a pair moves only when nothing else can,
+and otherwise the token furthest back goes, one in the yard before any on the ring. It used to take
+the first legal token unless a move happened to land on its own side, so each seat ran one token at
+a time round the ring: in 295 of 300 games against the engine no token ever had a pair of the other
+side within its roll. And all it asked was whether a pair had been moved by the other side, which
+sees a pair sent home and never one walked past.
+
+It asks the board, not the move it chose. On every roll with a move to make, no token on offer may
+have a pair of the other side on a square the roll would cross or land on, which is `obstacle`'s
+question asked of the wire; and after every action no ring square holds three tokens of one side
+and no square without a star holds both sides, the two things `ludo-purity.spec.ts` asks of the
+engine. Neither may pass on nothing. A pair has to have stood while the other side had a roll to
+play, and somewhere in the run a token has to have been held back by nothing but a pair of two
+colours, with no pair of one colour in its way as well and room where it would land: a server
+whose partners did not block would have offered that token. Two thousand team games against the
+engine with the pass's own way of choosing a move: a pair stood in every one, at 240 rolls a game,
+74 tokens a game were held back, and 171 games had none held back by partners alone. Run against
+an engine whose `obstacle` counts a pair by colour again, the pass failed forty times in forty.
+
+At the end both partners have won and the other two lost, the finish in the log names the side and
+both seats, nothing was sent home by its own side, and every token a partner moved has its owner in
+the log. A seat whose four are home has to have moved its partner's tokens, and 104 of those two
+thousand games ended without that: the second partner comes home on their own rolls. So it plays up
+to four team games and stops once both have happened, and a run in which one of them never does is
+about one in sixteen thousand. It imports `ludo/board.ts` and `match/sides.ts` for the ring and the
+pairing rather than restating either.
 
 ## Hokm
 
@@ -1657,15 +3155,15 @@ out after seventeen. It used to send `trickCount(3)`, seventeen, under a docbloc
 tricks that win a hand, and no reader existed at any player count to notice. The wire takes seven or
 nothing now; `hokm-seam.spec.ts` refuses the seventeen and plays whole matches at two and four,
 requiring every hand to end on the trick that brings a side to the number its board named. The reader
-is the caption in the middle of the felt, which shows while nothing lies on it: "7 tricks take the
-hand" as a `tally` and a count-free plural, or at three "A lead nobody can catch takes the hand" with
-no number in it, and the `.hokm-side` summary says the same to a screen reader.
+is the `.hokm-side` summary, which a screen reader is read: "7 tricks take the hand", or at three "A
+lead nobody can catch takes the hand" with no number in it. For a while it was a caption in the
+middle of the felt as well; nothing is written there now (*The middle of the felt is a medal*).
 
 **The dealer has a mark, and the browser keeps no copy of who deals.** `dealer` was on every board
 and nothing read it, while `hokm-beats.ts` carried a `dealerOf` of its own to throw the deal from the
-right seat. The beats import the server's from `hokm/scoring.ts` now - they cannot read
+right seat. The model imports the server's from `hokm/scoring.ts` now (`hokm-felt.ts`) - it cannot read
 `view.dealer`, because a batch can span a hand change and each `deal` event names its own Hâkem - and
-the plate reads the view: the crown on the Hâkem, a hand in a disc on the dealer, never both on one
+the plate reads the model: the crown on the Hâkem, a hand in a disc on the dealer, never both on one
 plate, and the word "Dealer" in the facts a screen reader gets. At two players that is the seat that
 puts two cards down and draws second, and the mark stays there through the trump call, both discards
 and all twenty-one draws.
@@ -1691,6 +3189,22 @@ match and for any player the current cube would already carry to the target (USB
 Crawford, no Jacoby and no beavers - and `backgammon-rules.spec.ts` holds the move generator to a
 naive enumerator written inside the spec, over hundreds of self-played positions.
 
+**Every roll is the player's own (owner, 2026-10-14).** "on backgammon the first move is
+automaticly without click": the engine rolled the opening for both players as the match was
+made, and rolled for every player who could not double inside the action that ended the turn
+before, so a game began, and most turns began, with dice nobody had thrown. Nothing is rolled
+for anybody now. A turn starts in `roll` and the player taps the dice; a take leaves the doubler
+to roll; a roll with nothing to play passes, and the other player rolls their own. A game opens
+in `opening`: each player throws ONE die of their own, in either order (`thrown` in the state,
+by seat, 0 for one not thrown; `opening` on the wire, the dice thrown so far), and a second
+throw is refused `already-rolled`. Two dice the same are a `tie` and both throw again; two that
+differ are the `opening` event, and whoever threw the higher plays both, as the rules say. The
+clock and the turn notice follow the lowest seat still to throw (`turnOf`); a tie and the start
+are new turns, so a deadline is fresh; the sweep throws for a seat that does not; `legalMoves`
+offers each seat its own throw. The rules pass (*the match opens with nothing thrown*), the play
+pass (each player taps their own die, the other browser is shown it thrown) and the motion pass
+drive it, and `backgammon-engine.spec.ts` (*the opening*, *rolling*) holds it.
+
 **The board stages a turn one hop at a time, and the SERVER's rules say which hops are left.**
 `moves.ts` exports `stage(side, roll, staged)`, which answers, for any prefix of hops in any order,
 the hops some complete legal turn still continues with - so the board highlights only checkers that
@@ -1702,13 +3216,504 @@ server right up until the position where it mattered. The rules coach asks the s
 found. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
 
-**Every move is a button as well as a tap.** The board is one inline SVG drawn from
-`game/backgammon-layout.ts` and is `aria-hidden`; the hops on offer are listed beneath it as real
-buttons with sentences for names, and a screen reader is given each side's stacks in words. That is
-the canvas rule ludo already follows, for the same two reasons: a keyboard and a screen reader can
-play, and the responsive matrix has something to hit-test. The SVG takes the tap itself and turns the
-pointer into a point with `pointAt`, rather than twenty-four invisible buttons none of which could be
-44px wide on a phone.
+**Every move is made on the table, and nowhere else.** The owner asked
+for it in so many words: "remove those html css buttons for next move or smth like this everything
+should be on table by touch or click it is production mode realm game". Roll, Double, Take, Drop,
+Undo, "Play the move" and a row of hop chips used to sit under the board, which reads as a web form
+beside a picture of a game. The field - frame, points, bar and tray - is one inline SVG drawn from
+`game/backgammon-layout.ts`, and the checkers, the dice, the cube, the marks on the points a picked
+checker can reach and the count of a double's moves are elements in a layer over it (`.bg-layer`),
+placed in the same 1000 by 820 units through `cqw`. What is pressed now:
+
+- **The dice roll, and the dice end the turn.** When the roll is the reader's to make, two blank
+  dice lie where dice rest, in a ring that breathes, and a tap on them is the roll: they shake
+  while the request is out, are picked up, and the dice that were rolled are thrown in from the
+  reader's edge. When the staged turn is whole the same ring comes back round the rolled dice and a
+  tap plays the turn, as picking the dice up ends a turn across a real board. The table keeps this
+  itself (`invite`): the blank dice are laid only when no dice are on the table and nothing is
+  being thrown, and they are back after the table is drawn again.
+- **The cube doubles, and it asks first.** While a double may be offered the cube wears a ring; a
+  tap opens a question ON the board ("Offer a double to 2?", Double, Not now), because the cube
+  sits on the bar among checkers people are tapping and a double cannot be taken back. A double
+  that waits on the reader is answered in the same place, Take and Give up, in front of the reader
+  it was offered to and nobody else. These two questions are the only buttons a backgammon table
+  has: the game is asking, and there is no object on a board to say no with.
+- **A checker moves when it is tapped, and goes back when it is tapped again.** One way to go and
+  the tap is the move; more than one and the checker lifts and its points are marked. The checker
+  moved LAST is the exception that makes taking back possible without a button: a tap on it never
+  moves it on. With nowhere further to go it wears a small arrow and the tap takes it back; with
+  somewhere to go it lifts, its ways on are marked, and so is the point it came from, in brass with
+  the same arrow.
+- **A checker lifts under the finger.** On the press, not on the release, and at once for a move
+  that then has to wait its turn behind a scene: `hold` is a state of the checker, outside the
+  queue. The first live check of 1.2 found a pressed checker doing nothing for up to half a second.
+  The lift is put on the checker BEFORE its move is handed to the queue (`add` and `undo` do it),
+  never after: a move with nothing in front of it starts in the same turn of the loop, so holding
+  "whatever is on the point" after the tap held the checker UNDERNEATH, and with a mouse resting on
+  the board it stayed lifted. A finger hid it, because a touch ends in a `pointerleave`.
+- **A checker can be carried.** A press that moves further than a slip of the hand (4px for a
+  mouse, 10 for a finger) takes the top checker of the point into the hand (`grab`, `drag`,
+  `release` on the table): it follows the pointer above everything on the board, the points it
+  can be put down on are marked, and the count on the point it left goes down by one. Let go on a
+  point it can reach and that is the move, set down from where it was let go in one short flight
+  and not walked along the points again (93 to 155ms on the production build, for 47 and 145px);
+  a lone checker there is knocked away when it lands, not when the hand opens. Let go anywhere else
+  and it goes back, with the refusal sound when the place was a point it may not have. Put back on
+  its own point it is put back and nothing more: a checker carried away and brought home is not a
+  tap, or one with a single way to go would be played by a change of mind. The checker moved last
+  is carried home to take the move back.
+- **It is played where it is shown.** Under a finger the checker is held 2.2 radii above the
+  touch (26px on a phone), where it can be seen, and the point it is dropped on is the point it
+  is drawn over, kept inside the frame. So a finger resting on a point at the very edge of the
+  board plays that point although the checker is drawn above the finger, and a mouse let go a few
+  pixels over the frame plays the point the checker is on. Let go well off the board - neither the
+  pointer nor the checker within a radius of it - is a change of mind.
+- **One drop can be both dice.** `reachOf` (`game/helpers/backgammon.ts`) asks the server's own
+  `stage()` how far the chosen checker can go this turn: one die, the other, or both, and up to
+  four hops of a double. A point more than one hop away is offered only when every way there
+  leaves the same board; when one way hits a checker and the other does not, nobody's intention is
+  guessed and the checker goes a die at a time. Bearing off with one die is never offered as two.
+  Those points are marked with the others, and a tap on one works as a drop does. Carried, the
+  checker stays in the hand over the points it only passes (`hop(move, onward)`; a lone checker
+  there is still knocked away) and is set down once, at the end; tapped, it walks to the first
+  point, lands and walks on. A tap on a checker with one die's way to go is still the move, at
+  once, whatever both dice could do.
+
+The SVG takes the tap itself and turns the pointer into a point with `pointAt`, rather than
+twenty-four invisible buttons none of which could be 44px wide on a phone; the dice and the cube
+are the only things in the layer that take a pointer, each only while it can be pressed, the cube
+through a 44px area of its own.
+
+**While there is a checker to carry, the board owns the gesture, and the page is told so.** The
+SVG captures the pointer on the press and takes `touch-action: none`, but only while the reader
+has a move to make, so the board scrolls and zooms like the rest of the page the rest of the time.
+That was not enough, and only a phone showed it: `Page` listens for TOUCH events of its own, and a
+touch that starts within 30px of the screen's leading edge and moves inwards is its swipe back.
+The 12 and 13 points are 28px from that edge on a 390px screen. Measured on the production build
+before the fix, a checker carried from the 13 point across the board slid the whole page under the
+finger, 22 to 174px, and letting go left the table for the games list. An element that takes drags
+of its own says `data-drags`, and `attachGestures` leaves a touch that starts on one alone
+(`touch.spec.ts`); the board carries it exactly as long as it carries `touch-none`. One checker is
+carried at a time: a second finger moves nothing, a gesture the browser takes away puts the checker
+back, and a new first pointer going down on a carry that never ended starts over, so a lost
+`pointerup` cannot leave the board deaf.
+
+**There is no list of moves in the page, not even a hidden one.** For three commits the same moves
+were kept as real buttons in a panel (`.bg-keys`) that was `sr-only` until keyboard focus entered
+it and was then drawn over the foot of the stage: Roll, "Double to 2", Undo, "Play the move" and a
+chip for every hop on offer. It was my addition, for a keyboard and a screen reader, and the owner
+took it out the day they saw it - one press of Tab after a click on the board opens it on a
+desktop: "also remove that dom helper paly the move 23 > 18 and etc.. on desktop delete these
+things on all of games game should be real player should tocuh or click on game things such as
+card dice and etc..". So it is gone, with the hop sentences, the Hit tag and the eight strings
+only it used, and **no game gets one**: not shown, not hidden, not for a wider screen. For a
+while that cost a keyboard its turn: a backgammon move could not be made from one or by a screen
+reader at all. It is played from a keyboard now, ON the table, by a cursor that stands on the
+points (*The board is played from a keyboard*, below), which is what the owner's second brief
+asked for and what this paragraph named as the only way back. What stays beside it is what nobody
+sees and nothing can press: the turn sentence as a live region, the match line, and each side's
+stacks in words. The stage says how many hops are staged (`data-staged`), which is how a spec and
+the play pass know a tap was taken now that no button reports it.
+
+**Nothing textual sits under the board.** The owner again, the same day: "description for movement
+is useless on games", "we can have more space of game", "game board is more important that
+descriptions". The bar that held the turn sentence, the match line, the tip and the buttons took up
+to 126px of a phone, and because the board is centred in what the bar leaves it moved the whole
+board as it grew and shrank: 58px at 390 by 844 when the turn changed, and still 31px with the
+buttons gone, while the tip came and went. On an upright screen the bar is out of the layout, and
+the grid there is the fit cell alone. What it said is kept three ways:
+
+- **The sentences are a screen reader's.** The turn sentence is still the live region, and the
+  match line still follows it, both `sr-only`. Whose turn it is, a sighted player reads off the
+  table: the plate that glows, the dice in their ring, the checkers that are lit. The sentences
+  name the gesture ("Tap the dice to roll", "Tap the dice to play it"), because the table is the
+  only place a turn is made; while the hidden buttons existed they named those instead.
+- **The clock is on the plate of whoever is on turn.** Each plate is drawn in two places and CSS
+  shows one, so there are two clocks; only the one in the fit cell is told the turn is the
+  reader's, so the last five seconds tick once whichever copy is on screen.
+- **The tip is a lamp in the corner of the stage.** 44px, it opens over the board when it is
+  pressed and takes nothing from it closed; its words stay in the accessibility tree while it is
+  closed. It is a lamp at every size and in every game that has let its bar go
+  (`<CoachLine lamp>`): for one commit a wide screen showed the tip in full in the column beside
+  the board, and the owner's next message took every helper off the page.
+
+Measured on the production build at 390 by 844, through a roll, a hop, a whole turn and the other
+player's turn, the board does not move at all.
+
+`backgammon-board.spec.ts` (*moves made on the table itself*, and *a checker that is dragged*
+inside it) taps the dice, the cube and points of the board and carries checkers across it,
+`backgammon-table.spec.ts` (*what is pressed on the table itself*, *a checker carried by hand*)
+holds the table's half, `helpers-backgammon.spec.ts` (*how far one checker can be carried in a
+turn*) holds `reachOf`, and `backgammon-play-pass.mjs` plays its turns on the table in two real
+browsers, carrying the first checker of each turn and tapping the rest.
+
+**The checkers are objects, and a move is that checker travelling.** The board was a drawing of
+counts: every action drew thirty circles again where the new position put them, with a sound.
+`game/backgammon-men.ts` gives each checker an identity and a place in its stack, so the one that
+leaves a point is the one that arrives. `game/backgammon-felt.ts` is the rest of what the table
+shows - the two dice and the cube - and the one place the log is read: `beatsOf` turns the events of
+ONE action into what there is to show (a cast, a hop, a pass, the dice picked up, a double offered,
+taken or dropped, a game won, the rack, the finish) and `step` applies one of them. Three things in
+it are rules of the game's log rather than of drawing, and each was wrong or missing while the board
+read counts:
+
+- **The dice leave when their turn is over.** No event says so. A turn that ends with the next
+  player's roll replaces them; one that ends with a player who may still double leaves the felt
+  empty, and so does a game that ends and a match somebody leaves. `beatsOf` knows the end of an
+  action, which is why it is handed one action at a time.
+- **An opening is one die from each player, each thrown by its own player.** A `throw` lays its
+  die in its seat's place in the dice zone and throws it in from that player's edge; the other
+  player's die stays where it lies. A `tie` picks both up. The `opening` that names who starts is
+  a `start`: both dice are picked up and the two of them laid as the dice of the move they open.
+  The opening's dice are not a roll's dice - they are `Felt.opening`, by seat, 0 for one not yet
+  thrown - so nothing a roll's dice do changed. The reader still to throw is offered ONE blank die
+  in their own place, and only a blank die breathes and shakes.
+- **What comes next is in the same action, when anything does.** Nothing is rolled for anybody,
+  so a take leaves the doubler to roll and a game's last checker leaves the next game with nothing
+  thrown. Played from two snapshots, the dice were once thrown first and the cube travelled after
+  them; the beats are in the log's order: the cube is handed over and turned before anything else
+  of that action, and every checker is back where a game starts, the cube back in the middle,
+  before anybody throws for the next game.
+
+`backgammon-felt.spec.ts` plays whole matches through the real engine - to one, three and five
+points, doubles taken and dropped, somebody leaving in the middle - applies every logged action with
+`beatsOf` and `step`, and requires the result to be the board the engine's own `view` describes
+after every revision, from either seat. It also requires that it met every kind of beat while it
+checked, so a kind the games never produced cannot pass by not being there.
+
+**`game/board/backgammon-table.ts` draws it, and is the table the presenter drives** (*The stage*,
+below). What it does with each beat:
+
+- **A roll is thrown.** Two CSS cubes (`stage/die.ts`) follow a plan made by `stage/dice.ts`: a
+  release from the roller's edge of the board, three or four bounces each softer than the last, a
+  roll to rest - and the plan is solved backwards from the face that was rolled, so the die turns
+  freely in the air and still comes to rest on that face. `dice-plan.spec.ts` checks the face, the
+  bounces, that no step between two frames turns further than the eye follows, and that the cube
+  as it is DRAWN has each face where the maths says it is. A `die-land` sounds at each bounce,
+  louder for a harder one. The layer clips, so a die enters over the rim rather than over the page.
+  How far out it is let go is measured for each cast: half the layer's height in the die's own
+  size, and a little over. A die stops growing at 2.75rem while the board goes on growing, so the
+  fixed distance the first renderer used let nine dice in ten go from inside a desktop board,
+  where they appeared in the middle of the field.
+- **A checker walks its points.** One hop for each point on the way, touching each, a little
+  longer on the first and the last (`stage/route.ts`, `walk`); a checker coming in from the bar,
+  and anything that only slides, is one arc. A leg takes as long as it is far, and the whole walk
+  between 320 and 900 ms: every leg had the same time at first, so the one that crosses from one
+  row of points to the other was over before anybody could follow it, which a real browser showed
+  and no spec could. It is drawn above every resting checker for as long as it is in the air: the
+  first renderer wrote the resting layer back in the same call that started the flight, so a
+  checker passed under the stacks it crossed. The renderer's spec caught that; no gate could have.
+- **A hit is contact.** The blot stays on its point until the checker is nearly down, then goes to
+  the bar in an arc of its own, turning; the capture sounds at contact and is felt then (`capture`
+  for whoever hit, `hit` for whoever was hit, nothing for somebody watching), and the blot is heard
+  again when it lands. A blot that is the reader's own is the one checker they may move next, so
+  it wears the ring from the moment it lands on the bar and not before: the first renderer put the
+  ring on it while the hitter was still on its way, took it off in the air and never put it back.
+- **Bearing off** ends as a slab in the tray, with the sound of a checker put down off the field
+  (`token-yard`, which a blot reaching the bar makes too).
+- **The dice dim as they are used.** For the reader they follow the hops staged so far; for
+  anybody else, each `move` event's own `die`. What the board says about a roll outlives the scene
+  that threw it: a hop staged while the dice were still in the air dimmed its die, and the scene
+  then ended on the dice as they had been when it began and lit it again.
+- **A double is four moves on two dice, and the table counts them.** What is spent is one flag
+  for each USE of a roll, two for an ordinary one and four for a double (`spentBy`). Both dice of a
+  double stay lit until the fourth move, and "×3" beside them says how many are left, in the
+  reader's digits. The table draws it in the dice zone, once the dice have landed, so it never
+  says a roll is a double while the dice are in the air, and it counts down as the other player's
+  checkers land. It stands on the middle line beside the pair, and across the bar from it on a
+  board under 23rem, where there is no room beside the dice. The page used to draw it as a chip
+  2rem under the dice, which on a phone is the fifth checker of the stack below.
+- **The dice of one roll rest in one place for everybody.** Where and at what angle is seeded by
+  the match and the revision (`seedOf`), and a board drawn from nothing seeds the dice it finds the
+  same way, because dice on a board were always rolled in that board's own revision. They used to
+  be seeded by an event's index in whatever the reader had been sent, so the two players saw them
+  in different places and a reload moved them.
+- **Where a checker may go is marked in the layer.** A mark is an element at the next free slot
+  of its point, on a rung of its own above the checkers and under the cube. Drawn in the SVG under
+  the layer, a mark on a point that held checkers was hidden by them.
+- **A number on the board is the reader's.** The count on a tall stack and the cube's value go
+  through the formatter the board hands over (`say`) and are written again when the language
+  changes (`relabel`). The layer sits inside the wrapper that keeps the board from mirroring, and
+  drew Latin digits on a Persian page.
+- **The cube never covers a checker on the bar.** The bar's checkers start half a cube and two
+  units from the middle (`BAR_GAP`, worked out from `CUBE` in the layout module), and
+  `backgammon-men.spec.ts` holds the clearance.
+
+`backgammon-table.spec.ts` holds each of those on the real renderer with the clock in hand,
+including the order of the cube and the rack, and that after everything is stopped and drawn again
+the dice, the cube and the count on a tall stack are all still on the page.
+
+**For somebody who asked for less motion nothing travels and nothing is lost.** Every run becomes a
+140 ms fade where the thing ends up, and every sound and the hit are still made, in the same order,
+each when its fade ends. The first renderer returned early in that case, before any of them was
+scheduled: a roll and four hops arrived in one frame in silence, which is the fault this project
+already had in Ludo. The rule lives in the stage now, so a renderer has one path. Two checkers
+still land one after the other, a fade apart. A thrown die fades as a whole: an opacity under one
+on the cube's own body flattens its six faces into one plane, which drew nothing for four of the
+faces and a 1 for a 6 until the fade ended, so the fade is on the die's outer node.
+
+**A roll is told when it has landed, and by nothing before that.** The view arrives with the dice
+in it a second or more before they are at rest on the felt, and everything that read the view gave
+the roll away: the reader's checkers lit up and the points were marked while the dice were still
+in the air, and in a match where the engine rolls for the next player they did it while the OTHER
+player's checker was still walking. The table says what dice are on it (`onRoll(seed, faces,
+landed)`: a throw beginning, dice at rest, the felt bare), and the board holds ONE value, `landed`,
+at the source: the plan is not made until it is true. So the lit checkers, the marks, every tap and
+drag, the dice's ring, the tip, the dice's label and the sentence a screen reader is told all wait
+together, with nothing to remember per element. `landed` is the dice of this very roll at rest
+(the seed), or, when nothing is being played, dice at rest with the view's faces - without that
+second half a board read again at a later revision with the same dice would hold its reader out
+for good, because nothing is thrown for a re-read.
+
+Measured on the production build in a match where the engine rolls: the other player's move
+arrived, their two checkers walked for a second, the reader's dice were thrown and came to rest
+2.06s after the arrival, and the lit checkers, the drag surface and the sentence all appeared on
+the next frame, 8ms later. Before, they appeared with the arrival.
+
+Two things in the design were not built, on purpose. **There is no timer that ends the hold.** The
+design capped a roll's hold at 1200ms from the view's arrival and hastened whatever stood in front
+to make room. The dice of an engine-rolled turn come at the END of the other player's move, two to
+four seconds behind the view; a cap fires with the dice in the air, which is the leak the hold
+exists to stop, and a move played at four times its speed cannot be read - and reading the other
+side's move is the game. So the other player's move plays at its own speed and the hold ends when
+the dice land. The 1200ms is kept as what it was for, the reader's own wait for a throw:
+`backgammon-table.spec.ts` holds pick-up plus throw under `ROLL_CAP`. What stops a hold growing is
+what already bounds the queue (fast past a second and a half behind, the board past its history),
+and one rule from the design that IS built: with under eight seconds of the turn left, nothing is
+held (`HURRY_MS`).
+
+**The first roll of a match is thrown for whoever was there when it was rolled.** The server
+pushes the frame that begins a game before it rings the table, so it reaches a browser that does
+not have that game open yet, and the store used to drop it: every match began with its dice
+already down. Three pieces carry it now, and each is the whole of its part:
+
+- **The store keeps the frame.** A `game` frame for a game that is not open, whose game stands at
+  revision 1 with one event at revision 1, is kept for ten seconds (`OPENING_MS`, `early` in
+  `match.store.ts`), and `open(id)` hands it over as it would a frame that had just arrived. The
+  batch it becomes carries `opens`, a function that answers true ONCE per game and only within
+  ten seconds of the frame's arrival. A frame that arrives after `open()` and before the board
+  was fetched is an opening too. One that arrives after the board was fetched at revision 1 says
+  nothing new, as before: that reader's dice are already down, and they stay down.
+- **The presenter asks, and plays from the table as it stood.** On a mount or on a change of
+  game, and only there, a batch whose `opens()` answers true is played from revision 0: the table
+  is first drawn as `Table.before(sight)` says it stood (backgammon: the same table with no dice
+  on it). It is drawn as it stands instead when the tab is hidden, when the board in hand has
+  moved past the opening, or when the table has no `before`. A presenter already showing the
+  game uses the opening up and plays nothing, so a late frame never takes dice off a table.
+- **The board holds its words from the first frame.** `landed` is false while the board is
+  unrigged and its batch may open the game (`opening`), so the sentence, the lit checkers and
+  the taps wait for this throw as they wait for any other.
+
+A reload has no such frame and shows the position, and so does a table opened late. Hokm and
+poker are handed the same batch and do nothing with it yet: each takes the batch it is mounted
+with, and the one that arrives with a new game, as heard. `match-store.spec.ts`,
+`presenter.spec.ts` (*the opening of a game*) and `backgammon-board.spec.ts` (*the opening roll*)
+hold it.
+
+**A roll nobody could play says so, on the dice.** The engine passes for a seat with no move in
+the action that rolled, so the dice were thrown, dimmed and taken away with no word of why. While the table holds them (`PASS_MS`, 1.1 s, cut to `PASS_LEAST`, half a second,
+when something waits: both were shorter until there were words to read in that time) a
+small pill under the dice reads "No move" (`.bgt-pass`, drawn by the table from a string the
+board hands it, and gone with the dice), and the screen reader's sentence is "Omid rolled 6 and
+5 and cannot move." (`onPass`, `passed` on the board). That sentence stands until the next one
+replaces it, which is when the dice that follow have landed, or until the table goes idle when
+nothing was rolled after it. The pill is the one word drawn on this table that is not a number:
+without it the commonest surprise in the game has no explanation a sighted player can see.
+
+**A game that ends is called on the board, and the plates count what the board shows.** A game
+won inside a match used to change the score, the pips and the game's number on the plates the
+moment the answer arrived, while the last checker was still in the air, and then the board was
+simply the next game.
+
+- **The table raises a banner** (`.bgt-banner`, on `LAYER.banner`, above everything on the felt)
+  with the lines the board hands it: who won the game ("You win the game", "Omid wins the
+  game") and how ("1 point", "Gammon, 4 points", "Backgammon, 3 points"). It stands for
+  `GAME_MS`, 1.8 s (`GAME_LEAST`, 0.9 s, when something waits), comes down, and only then are
+  the thirty checkers racked, the cube sent back and the next opening thrown. The game that
+  ends the match is called too, for `LAST_MS`, 1.3 s (0.7 at the least), and the result card
+  waits for it as it waits for everything the table plays.
+- **The same words go to the live region** ("Omid wins the game. Gammon, 4 points."), by the
+  route the sentence of a roll nobody could play takes.
+- **The banner reads in the page's direction** (`reads`, which becomes its `dir`). The board is
+  `direction: ltr` because it is a printed object, and a Persian sentence that begins with a
+  Latin name is laid out from the wrong end in a left-to-right paragraph.
+- **Score, pips and the game's number are part of the shown model** (`Shown.score`,
+  `Shown.round`, `pipsOf`). `step` gives the points at `game` and counts the next game at
+  `rack`, and the parity spec holds both against the engine at every revision. The table tells
+  the board when one of them changes (`onFacts`, once for each change): the pips when a
+  checker has LANDED, the points when the game is called, the next game when the checkers are
+  racked. The plates and the screen reader's match line read that, and the view only before
+  the table is rigged. So the reader's own pips fall as they put a checker down and come back
+  when they take it back.
+- **What a finished match puts on the plates waits for the result, as the card does.** "Won"
+  and "Lost" came with the view, two seconds before the banner had come down, and the live
+  region left with the bar the moment the match was over, so the last game was called to
+  nobody who could not see it. The plates' tags read a player with no result while the last
+  scene plays (`tagOf`), and the bar, the live region in it, stays until the result is shown
+  (`barOpen` reads `result`). Both were seen in the recording of a real match to one point.
+- **A unit spec's scene needs its estimate.** The director gives a scene three times its
+  estimate and four seconds before it calls it stuck. The table spec enqueued with none, which
+  was four seconds flat, and a game that ends is now longer than that: the spec's `play`
+  passes `table.estimate(acts)`, as the presenter does.
+- **The play pass counts the calls, and holds its driver while they are made.** `watchGames`
+  counts the banners each browser was shown against the games the match had, and fails a
+  result card under a banner or a plate that says who won while the table is still playing.
+  Built without the banner and with the tags told early it failed both, for both players. Its
+  finish over the api stops for both boards when a side has four checkers or fewer still to
+  bear off AND when a game has just begun, and waits for each board to be level (`level`: the
+  stage's `data-rev` at the server's revision and `data-presenting` gone). The first version
+  stopped only near a game's end. The checkers of the next game stand at the start, so the
+  flood of its moves began under the banner, and the snap that rule 5 gives a board that far
+  behind took the banner off: one game of four was called, on a correct build. A pass that
+  asks whether something was SHOWN has to hold whatever would snap it away. `data-presenting`
+  alone is not "caught up" either: it is absent in the moment before a frame arrives.
+
+`backgammon-felt.spec.ts`, `backgammon-table.spec.ts` (*a game that is won*; *the score,
+the game and the pips, as the table shows them*) and `backgammon-board.spec.ts` (*a game that
+ends on the board*) hold it.
+
+**The turn is passed when the table has shown it passing** (6.2). The ring round a face and the
+clock beside the pegs read the view, and the view runs ahead: the ring was on whoever starts
+while the two dice that decide it were still in the air, seen on the production build 700 ms
+into a game and again after Play again, and it left a mover while their checkers were still
+walking. The turn is part of the shown model now (`Shown.turn`, a side or nobody), told with the
+score and the pips (`Facts.turn`), and the two seats read that.
+
+- **The dice give it.** A throw gives the turn to whoever threw as the dice leave their side:
+  who throws is no secret, and a ring that waited a second for the dice to land sat on the
+  player before while somebody else's dice flew. An opening throw gives it to whoever is still to
+  throw; the throw that decides who starts gives it to the higher one only once it has LANDED:
+  the model is stepped as the throw begins and told when it ends, like the pips of a checker in
+  the air. A tie gives it back to the first to throw, and so does a new game when it is racked.
+- **A roll that cannot be played, a double that is offered and a double that is taken pass it**
+  to the other side. A game that is called takes it from everybody until the next one is
+  opened, and so does the end of the match. The table as it stood before an opening
+  (`before`) has nobody on turn.
+- **A move says nothing about who is next**, and the log has nothing else to say it with, because
+  nobody is rolled for. So the turn is
+  put right from the view when everything told has been played (`mend`), which is the moment
+  the last checker lands. `same` counts the turn, so a board that differs from the table only
+  in whose turn it is still gets put right.
+- What still reads the view is what decides: whether the reader may roll or move, their chime,
+  the number on the clock. Rule 1.
+
+`backgammon-felt.spec.ts` (*whose turn the table has shown*) holds each step, and the engine
+parity holds the whole: after every action of whole matches the model's turn is the board's,
+or the action ended on a checker and the board's is the other side. `backgammon-table.spec.ts`
+holds when it is told (with the throw of a roll, after the landing of an opening) and
+`backgammon-board.spec.ts` the ring and the clock at an opening and at a hand-off. The play pass watches both browsers through
+the first roll and fails if a seat wears the turn while the dice fly.
+
+**The two seats are rails of the board's own wood** (`.bg-rail`, one of each, `data-me` on the
+reader's; B.1 of the graphics design). A pill at two corners of a board 310 px tall left a tall
+phone mostly bare page, and on a desktop two pills stood a hand's width from the board. A rail is
+as wide as the board, walnut with the brass line, and carries the face with its turn ring, the
+name, the match as pegs (a hole for each point there is to win and a brass peg for each one won;
+figures past nine points), the clock in its brief form beside the pegs, the pips as a figure of
+20 px and more with its word under it, and on the reader's rail the lamp. What a rail draws is
+said once for somebody who cannot see it: the pegs and the figure are hidden from a screen reader
+and "1 of 3" and "90 pips" are written for it.
+
+- **How tall a rail is comes from the room**: `--rail` is what is left of the stage's height
+  when the board has taken its width, halved, between 4rem and 7.5rem. At 390x844 the board and
+  its seats are 73% of the stage (the design asked for 80%; a rail of 153 px is a card with
+  nothing in it, and 120 reads as a seat). The fit pass holds 70% on an upright stage.
+- **Where the stage is wide for its height the seats stand beside the board**, one over the
+  other, and the lot is centred (`@container stage (min-aspect-ratio: 4 / 3)`): a board as tall
+  as the stage is larger than one with a rail over and under it from about that shape on.
+- **`.bg-grid` takes back the column** the shared wide rule gives every table for its words.
+  Left alone it gave the board 904 px of a 1304 px stage and pushed the seats off its edge.
+- **The lamp's tip opens back along the rail** from the lamp, and from the whole card where the
+  seats stand beside the board, where a tip anchored to the lamp lay on the seat's own name.
+- **Under a chat sheet the two seats share one row over the board**, half the board's width
+  each. The stage's columns are worked out from the stage, and the board from the fit, which is
+  20 px wider on a phone where it bleeds to the screen's edge: `--bleed` puts that back so a
+  rail ends where the board ends.
+
+`backgammon-board.spec.ts` (*the two seats of a backgammon table*) and
+`backend/tests/backgammon-table-art.spec.ts` hold it, and the fit pass measures it: two seats,
+neither on the board, 70% of an upright stage, the lot centred, the pips at 20 px. Against a
+production build whose sheet was broken four ways (a rail never taller than its least, the
+seats not centred beside the board, the pips at 16 px, a seat lying on the board) it failed 20
+of its 44 checks on the backgammon cell, each of the four by name.
+
+**The board is played from a keyboard, by a cursor that stands on the points** (B.2 of the
+graphics design, D14). No panel and no list came back: what a key can press lies on the board,
+over the thing a finger would press.
+
+- **A stop is a place where something can be done.** `.bg-cursor` lies over the board, a group
+  named "The board", and holds one `.bg-stop` for each: the dice when they are to be rolled, the
+  cube when a double may be offered, every point (and the bar) with a checker that may move, from
+  the bar down, and the checker that last moved when all it can do is go back. With a checker
+  lifted the stops are the places it may go, its own point, and the point it came from if it had
+  just moved. When the move is whole the dice are a stop again. Somebody watching has no cursor,
+  and nobody has a stop when it is not their turn.
+- **A stop's name says what stands there and what the key does**, in the reader's language
+  (`backgammon.stop.*`): "Point 13, 5 checkers. Lift one.", "Point 18. Put it down here and
+  hit.", "Point 24. Put it back.", "Point 18. Take the last move back.", "The dice. Play this
+  move." A checker with one place to go is not lifted, it goes, exactly as a tap sends it, and
+  its stop says where: "Point 6, 5 checkers. Move one to point 5.", "... and hit.", "Bear one
+  off.", "The bar, 1 checker. Bring it in on point 24." The first build said "Lift one" on all
+  of them, and for somebody who cannot see the board Enter on "lift" was a checker gone with
+  nothing said of where. A checker that has just moved and may go on IS lifted, whatever else
+  is true, because from there it may also go back.
+- **A stop lies over its own place.** `patchOf` in `backgammon-layout.ts` gives the half of a
+  point's column the reader's checkers stand in, the reader's half of the bar and of the tray;
+  the dice stop is the size of the place a finger presses them (`.bgt-hit`), and the cube's is
+  the cube. `DICE_X` and `cubeY` moved to the layout so the renderer and the cursor read one
+  number. A stop takes no pointer: a press is still read off the board by where it lands.
+- **One stop is in the order of the Tab key and the arrows walk the rest**, round and round,
+  Home and End to the first and the last (`roving`). Enter or the space bar uses a stop, and so
+  does a click that comes with no pointer (`detail` 0). Escape puts back what is lifted and is
+  left to the page when nothing is. **A key held down acts once** (`event.repeat`): held for
+  half a second, Enter would otherwise lift, put down and send a whole turn at thirty presses a
+  second.
+- **The keyboard goes where the move goes**, for a reader who is using it (`byKey`: a key sets
+  it, a pointer on the board or in the cube's question clears it). With a checker that may go
+  on; to the first place a lifted checker may go; to the dice when the move is whole; to the
+  first checker when the dice a key rolled have landed; to the dice when the turn comes back.
+  Never onto a stop that takes a move back, lifted or not. It is moved only from a stop or from
+  nowhere (`document.body`), so a reader who has gone to the chat is left there, and a key that
+  could do nothing moves nothing.
+- **The cube's question takes the keyboard.** `.bg-ask` is a group named by its own title and
+  can be focused. It takes the keyboard when it opens, from the cube or from nowhere, and holds
+  it on the card, not on a button: an Enter that was already on its way answers nothing. Tab
+  goes to the answers. Escape is "Not now" to the reader's own question and nothing at all to a
+  double that has to be answered. When the question goes, the keyboard is on the dice.
+- **Focus is a ring drawn inside the stop** in the product's focus colour with a light line
+  inside it, and under them an outline no eye sees, which is what a screen with forced colours
+  draws when it throws the shadow away.
+
+Four things no test had asked. The stop called "Put it back" lifted the checker again
+(`choose` of the point it stands on): a fault put into the code survived, and reading why
+found it. Lifting a checker that had just moved put the keyboard on the stop that takes the
+move back, one Enter from undoing it: found by playing a turn with the keyboard on the
+production build, where the three stops are 13, 11 and 6 and the first that is not the lifted
+one is the way back. The first test of the arrows pressed each key on a stop it named and not
+on the stop the keyboard was on, so down, up and Home could each go the wrong way and pass;
+it types where the keyboard is now and reads where it went after every key. And two guards
+the faults could not tell from their absence went.
+
+`backgammon-board.spec.ts` (*a backgammon board played from a keyboard*) holds the stops, the
+names in both languages, every key, the held key, the press with no pointer, where the keyboard
+goes after each of them, the question and the answer, a reader playing by hand and one who has
+gone elsewhere. `backgammon-table-art.spec.ts` (*the cursor of a backgammon table*) holds the
+sheet. The play pass makes a whole turn with Enter alone and asks the cube's question with the
+keyboard. One hundred faults put into the code one at a time were each caught by a spec.
+Against a production build whose cursor never puts the keyboard anywhere the pass failed four
+of its six keyboard lines, and the fifth, that the other browser sees the move, passed with no
+move made, because the dice were still landing there; it waits for the revision the move makes
+now. Against a build where a key on the dice or the cube does nothing it failed all six.
+
+**The motion itself is held by a lab and a pass**: `tools/qa/backgammon-motion-lab.mjs` on the
+dev server and `tools/qa/backgammon-motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`,
+*The motion labs and the motion passes*). They follow each checker and each die by its name
+through every frame, and fail one that jumps, cuts a corner, vanishes and comes back, or moves
+when nothing moved it. The pass
+makes its moves on the table at five sizes, with the chat shut and open, and reads both browsers.
+So every checker and every die carries `data-key`: a checker's for its whole life, a die's
+(`die-<n>`) for one laying, because dice that are thrown again did not slide to where they land.
+`backgammon-table.spec.ts` holds the names.
 
 **The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
 `.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat
@@ -1753,20 +3758,504 @@ places the next seat to the reader's left; `poker-board.spec.ts` pins it. See
 `docs/games/03-poker.md`, *The table*, for the pot split the view shows and why a folded player is
 sent no cards.
 
+**A poker table has no bar: the reader's own chips and a pair of cards are what is pressed.** Under the
+table sat a bar: a sentence about the turn, the clock, the tip, what a call costs, and Fold,
+Check or Call, and Raise as buttons. The owner had every such thing taken off every game on
+2026-10-11 (*Every move is made on the table, and nowhere else*, under *Backgammon*). A poker
+action is a choice and sometimes an amount, so the choices are the reader's own things, in
+their hand under the table:
+
+- **Folding is a thing of its own: two cards face down, pushed away** (`.poker-muck`), first
+  of the three, and there only while there is a bet to meet, as Fold was offered only then.
+  One press folds, as one press calls and one goes all in. The reader's cards are CARDS and
+  nothing to press: the same two nodes whether or not there is a bet to meet.
+  For a while the cards themselves were the fold: a button while there was a bet to meet,
+  armed by a first press under a red ring and sent by a second. It read as something wrong
+  with the reader's hand (a red line and the word "Fold" on their own cards, finding P4 of
+  the graphics audit), the cards were drawn again each time the turn came round with a bet,
+  the row grew by a caption and moved the table 17px at 1280, and the second press was the
+  one confirmation at a table where a call and an all-in take one press. The tip that
+  speaks while there is a bet to meet no longer names a gesture: the thing says "Fold".
+- **A chip calls, and in the same place a disc checks.** The chip is red and its caption says
+  the amount ("Call 20", "Call all in, 300"); with nothing to call it is a plain disc with a hand
+  on it.
+- **A chip with a plus raises.** It opens the chooser over the foot of the felt: the slider, Min,
+  Half pot and Pot, and one button that says what will be sent ("Raise to 120"). The amount is a
+  question the game has to ask, and it is asked on the table, as the trump is at hokm. When the
+  whole stack is the only raise left the chip is gold and says "All in, 300", and pressing it is
+  the all-in.
+- **Each thing wears a word or two under it** ("Fold", "Call 20", "Raise"). That caption is the
+  button's own text, so it is its name to a screen reader and to the passes, and no `aria-label`
+  can drift from what is drawn.
+- **The sentences are a screen reader's**: the turn, and what a call costs against the pot. The
+  name of the reader's best hand is one line over their cards (`.poker-hand-name`: "A pair of
+  kings", "The board: a straight, ace high"), which is all `hintOutcome` still draws, and the
+  whole sentence is beside it for a screen reader. It was a sentence beside the cards that
+  wrapped to three lines on a narrow phone. The line keeps its height when it has nothing to
+  say, and on a stage under 24rem tall it lies beside the cards, where a line over them would
+  be taken from the table's height.
+- **Nothing stands in a corner of the table.** A clock, a lamp, the blinds and "Last hand"
+  stood in the corners of the table's box, which a stadium leaves bare, until the table took
+  the whole stage. A seat on a bend stands in such a corner at six seats on a wide table, at
+  nine on a tall one, and on any table about as wide as it is tall: the fit pass found a chip
+  or a clock on a plate in 166 of 430 cells. So each went where no seat can be:
+  - **the seconds are on the reader's own plate** while it is their turn (`.poker-clock`, in
+    the plate's `trail`). Another seat on turn wears the ring round its face and no number, and
+    its time is said to a screen reader from the same plate;
+  - **the tip's lamp is the last thing in the reader's hand**, as hokm's is in its row, and its
+    bubble opens from the lamp's own end, back over the things to press and no wider than
+    they are, so it never lies on the reader's cards;
+  - **"Last hand" and the blinds are beside the pot** (`.poker-tally`): a round button with the
+    history mark, the pot, and "10/20". The street, the hands until the blinds rise and the
+    level are said in the same place to a screen reader: the cards on the board already show
+    which street it is. The panel opens over the board, and a press anywhere else on the page
+    shuts it.
+- **The grid is the table and the hand** (`.table-grid.poker-grid`). Beside a chat on a phone
+  held sideways it gives up its far end, as ludo's and hokm's do.
+- **A bet is a stack of discs beside its number, and so is the pot** (`.chip-stack`, drawn by
+  the stylesheet: an ellipse and the edges of the discs under it). One to five discs by the
+  size of the bet against the big blind (`discsFor` in `game/stage/chips.ts`: over 1, 2.5, 6
+  and 15 blinds), so the same 600 is a tall stack early and a short one when the blinds have
+  risen. The stack is drawn inside the box the old dot had (0.85em square), so a pill is the
+  size it was and every bet's place is the place it had (D20: chips at rest are still a
+  number in a pill). The pot wore a coin icon and wears the same stack.
+
+`poker-board.spec.ts` holds the fold as a control of its own and the reader's cards as cards
+(one press folds, a press on the cards does nothing, the two cards are the same nodes when a
+bet comes), the discs of a bet and of the pot and the stack kept while its bet grows, the plate
+that carries the seconds, the lamp's place and the seat that is not on turn; `chips.spec.ts`
+holds how many discs an amount is. `fit-pass.mjs` counts the fold among the things in the
+reader's hand that may not reach a plate.
+
+**The table is drawn once and stays**, as hokm's is (*The table is drawn once and stays*, under
+*The table, and the cards on it*). The whole table sat in one branch that read the board, and
+the board is a new object with every answer: every action, and every re-read the page makes,
+drew 164 elements again. Nothing looked different. "Last hand" shut under whoever
+had it open, a bet was a new pill at every raise, and nothing on the felt could be the thing a
+chip or a card lands on.
+
+- Every branch reads a `derived` boolean (`seated`, `sided`, `lastKnown`, `owing`, `raisable`).
+- **The seats are a list of seat numbers**, and each is a `PokerSeat` handed strings and
+  booleans (`plateAt(seat)` answers by number). The dealer's mark, the stack, the backs and the
+  bet are its own markup, so a plate is the same plate through a hand.
+- **The board is five slots that stay**, each holding the card that lies in it or nothing, so
+  the turn card is drawn in the slot that was kept for it. A slot with no card draws its own
+  outline (`.poker-slot:empty`; a `<For>`'s markers are comments, which `:empty` does not count).
+- The plate's tag reads a `derived` in the shared `TablePlate`, so "All in" becomes "Out" in
+  the node it has, at every game.
+- **A number in a branch is read through a `derived`.** `{ props.bet }` inside a branch is
+  compiled to ONE read (`frontend/CLAUDE.md`, *Three things ride on the rebuild*): a bet raised
+  from 40 to 200 kept "40" for as long as its pill lived, from the moment the pill stopped
+  being drawn again.
+- **Reading the same answer again changes nothing the reader was doing.** The effect that
+  puts a raise back to its least read the revision through the game, and the game is a new
+  object with every answer. So any second read of the table (a socket that came back, a
+  doorbell) shut the chooser under the reader's finger and put the amount back to the
+  least. It reads a `derived` of the id and the revision, which changes only when the table
+  moves on.
+
+`poker-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
+the board the answer it had as a new object and wants all of them still in the page; then a
+call by another seat (only the clock of the turn that ended may go), a raise and a street
+closing, a card coming and a new hand, the button moving, a tag changing its word, "Last hand"
+left open, the chip under the keyboard while the clock runs down, and a raise left open at the
+amount chosen.
+
+**The table takes the room, and what is on it is sized by it.** It was drawn at 4:5 or 16:10
+inside whatever room the stage had: 58% of a phone's height, 51% of a turned phone's width,
+and on a large screen a table 1,480 wide with plates 100 wide and a board 280 wide on it.
+
+- **Any shape between half as wide as tall and 2.4 times as wide** (`.poker-stage
+  .table-surface.poker-table`): the stage's whole box. On a phone the fit box also gives up
+  the page's gutter, as hokm's does.
+- **`--u` is a hundredth of the table's shorter side** (`.poker-table > *`, registered with
+  `@property` so that it is a length where it is declared and inherits as one). The face, the
+  type, a plate's width, a card back, the puck and the gaps are multiples of it between a
+  floor and a ceiling. Nothing on the table is written under 11px.
+- **The seats stand on the rail, evenly along it** (`game/poker-seats.ts`, `aroundStadium`):
+  the reader at the middle of the near rail and the rest clockwise, at equal steps along a
+  stadium drawn half the rail's width in from the table's edge. An ellipse put a seat on the
+  felt wherever the table was not an ellipse. The shape is MEASURED (`shape()`: at mount, in
+  the resize observer, which watches the felt as well as the stage, and in the layout pass). A
+  table is round until then, which is what a spec sees.
+- **A plate lies along its rail** (`data-lies`): a row, the face beside the name and the
+  stack, where the rail runs across (`flat`); a column where it runs down (`upright`). A
+  column shows no name on a table under 30rem wide or 22rem tall, as hokm's side seats do
+  not. A tag ("Folded", "All in", a result) takes the stack's line and never adds one: a plate
+  that grew by a line moved everything measured from it.
+- **Each seat faces square across its rail** (`--ux` and `--uy`: one of them is 1 or -1 and
+  the other nothing). The cards it holds lie on the felt in front of its plate
+  (`.poker-backs`), and its bet in front of the cards (`seatBets`, which is told `toward` and
+  `lead`), with the places beside the seat as the fallback they always were. Cards laid along
+  the true line to the middle of the table went into a corner of the board from every seat on
+  a bend.
+- **A bet is not seen until it has been seated** (`data-placed`), and neither is the puck. A
+  frame at the stylesheet's own place was a bet lying on its seat's cards.
+- **ONE puck** (`.poker-puck`), the table's and not a plate's, laid by the layout pass on the
+  corner of the dealer's face that is nearest the felt and kept inside the plate's box, so it
+  is nothing new for a bet to avoid. It is the same node from hand to hand, and it is drawn
+  at every size: the mark it replaces was the avatar's, and went with the avatar on a small
+  felt, where nobody could see who dealt. The plate says "Dealer" to a screen reader.
+- **The board is as wide as the cloth lets it be**: an eighth of a tall table's width (47px
+  at 390 by 844, where it was 29); a tenth of a wide table's width, or 17.5% of its height.
+  Nine seats take a little less from a table that is nearly round or wide, where a seat on a
+  bend holds its cards near the board's end, and at a table that is not wide they raise the
+  middle to 43%, between the two rows of seats down each side.
+- **Two sizes shed things, and they are the table's own** (`@container`): under 19rem wide or
+  15rem tall no cards lie in front of the seats; under 17rem wide or 12rem tall the plates
+  lose their faces and are a name and a stack. A phone turned over (844 by 390) keeps both.
+- **The reader's row keeps its box while they are in the game.** A fold left it with no cards
+  and it went: the table grew by its height and every measured place moved. It shows two
+  empty places now, as the board shows its slots. It goes when the reader is out, and a
+  watcher has none. On a stage under 24rem tall the reader's cards are 36px wide, which is
+  what lets the table be 70% of a turned phone's width.
+- **The reader's cards keep their place when the things to press come and go.** The row was
+  one centred group of cards, things to press and lamp, so the cards stood about 110px
+  further along whenever it was not the reader's turn, and moved over when it was: every
+  turn, and under a card that was being dealt to them. The row is a grid of three columns
+  now, with the cards in the middle one and the things to press and the lamp in
+  `.poker-side`, from the start of the third. The outer two are `1fr`, and the third has a
+  floor that does not depend on what stands in it: 16rem, or on a narrow row whatever the
+  two cards leave. So on a wide stage the two share what is left evenly and the cards are
+  under the reader's plate; on a phone the third takes all there is, the cards stand at the
+  start of the row, and a longer word under a chip ("All in, 1,480") has room without
+  moving them. No query does it: the row can be narrower than the stage a query would ask
+  about (`data-beside`). The columns have NO gap: the space after the cards is
+  `.poker-side`'s own margin, because a column gap is kept before the cards as well, where
+  a phone has nothing, and those twelve pixels are what three things and a lamp need at
+  320px. On a stage under 36rem wide the row reaches into the page's padding as the table
+  does, for the same reason. The matrix has cells 320px wide and the fit pass has none: for
+  anything that changes this row, run the matrix first.
+- **The lamp keeps its place too, after the room of three things.** `.poker-acts` is never
+  narrower than three things and the two gaps between them, and while there is nothing to
+  press an empty `::before` of `.poker-side` keeps the same room (`:has()` takes it away
+  when the things come): a reader who is all in has a tip and nothing to press. The tip is
+  no wider than that room and the lamp, and opens from the lamp's own end, so it lies over
+  the things to press and never over the cards. Two versions were tried and dropped. The
+  lamp BEFORE the cards: its bubble opened over the corners of both cards, where their
+  ranks are. Room kept by what was in the column: check and raise are two things, a thing
+  narrower than fold, call and raise, and the play pass found a phone's cards 54px along.
+  `poker-table-art.spec.ts` holds the columns, the floor, the room kept and the bubble's
+  width, and `poker-play-pass.mjs` wants each player's first card at ONE place through
+  eight turns, on a desk and on a phone.
+- **The name of the hand does not move the cards either.** Over the cards it widened their
+  box whenever it was longer than two cards ("Full house, aces over kings" on a phone), and
+  on a stage under 24rem tall, where it stands beside them, it shared their box and every
+  change of name moved them by half of it. Over the cards it has `inline-size: 0;
+  min-inline-size: 100%` now: it takes no room of its own and is as wide as the cards,
+  centred when it fits and running on past their end when it does not (a line too long for
+  `text-align: center` is start-aligned, which is what is wanted). It is no longer cut
+  with an ellipsis. On a low stage `.poker-own` is `display: contents`, the cards have the
+  middle column to themselves and the name the column before it, ending against them and
+  cut if that column is too narrow. Seen in the browser by writing four names, from none to
+  36 letters, into the caption at five sizes: no card and no thing to press moved.
+
+`poker-seats.spec.ts` holds the rail (every seat the same way in from the edge, at two, six and
+nine seats and eight shapes), the mirror, the even steps and the facing; `poker-board.spec.ts`
+(*a table of the shape its room gives it*, *a bet in front of its seat*) holds the measuring,
+the bet's place and its fallback; `fit-pass.mjs` holds the floors (85% of an upright stage's
+height with the reader's row, 70% of a wide one's width, the board's card at 44px on a phone
+and at 5.5% of a table 1,700 wide and more, faces on a wide stage, the hand's name on one
+line), no seat's cards on a plate, on the board or off the table, the puck on the plate of the
+seat that deals, and a table of nine (`poker-9`).
+
+**The felt is a model of what has been shown, and the table draws from nothing else**
+(`game/poker-felt.ts`, as hokm's is `hokm-felt.ts`; the cloth's tile under `public/` shares the
+word and nothing else). `feltOf` reads a view, `step` applies one logged move, `through` is every
+table a batch goes through and `told` the last of them, `before` is the table before the first
+hand was dealt. The board keeps ONE model from batch to batch and steps it with what it is told.
+
+- **It is kept, and not read again from the view at rest.** The wire carries the bets of the
+  street and the pot's layers, and not what each seat has put in over the hand (`put`), without
+  which the layers cannot be moved on. A model that has seen a hand from its deal knows it. One
+  picked up after the flop says `null`, keeps the layers it was given until the batch has landed,
+  takes them from the view then, and knows again from the next deal. `sameAs` compares what is
+  drawn and leaves `put` out, so a model that knows is not thrown away for a view that cannot
+  say, at a reset as well as at rest.
+- **`deal` clears and re-arms; `end` keeps.** The board, the hands shown (`tabled`) and the pots
+  paid (`paid`) stay on the table when a hand ends and under a result, as the engine leaves
+  them, and the next deal takes them. So everything the model holds but `put` can be read from
+  a view at rest: `tabled` and `paid` are empty between hands and are `last`'s at a finished
+  game, and the spec compares WHOLE tables. From a `pot` to the `end` the layers are not listed:
+  the total counts down while they are paid.
+- **The reader's cards come only with a deal**, from the view the batch carried, and only the
+  newest deal of a batch has them. A hand that was over before the reader saw it shows no face:
+  the cards the batch carries are the next hand's. A fold, a bust or walking out takes them, as
+  the view stops sending them.
+- **What reads which.** The plates (stack, bet, tag, dim, the backs), the puck, the board, the
+  pot and its layers, the blinds, "Last hand", the reader's cards and the name of their hand
+  read the model. The turn's ring, the clock, what a call costs, the raise's bounds, the tip
+  and the turn's sentence read the view, so nobody waits to be allowed to act. The result is
+  `over && !presenting`, and a plate does not say "Won" before it.
+- **A press is a scene of its own**, played at once and ahead of nothing (`presenter.act`):
+  it steps the model with the move `pressed` names (`game/helpers/poker.ts`), and the
+  presenter is told (`predict`). The first move of the answer is dropped from the batch when
+  it is that event, seat and amount, and anything else is a snap to the view. The move still
+  out is part of the table the presenter is shown (`sightNow`), so reading the same revision
+  again takes nothing back. `stale` or `failed` does, by a scene that flies the chips home.
+- **A batch is played a move at a time** (*Chips travel*, below), from the events the board is
+  HANDED. It listened to the store of the reader's own game for its sounds, and somebody
+  watching heard nothing.
+
+`poker-felt.spec.ts` plays whole games through the real engine with a seeded die, at two, six
+and nine seats. For every seat and for nobody, the model stepped from `before` is the model of
+the engine's own view after EVERY action, and what it says each seat has put in is the engine's
+own `put`; with seats walking out on their turn, out of turn and heads-up; and picked up from
+the view at forty moments of each game. The games are required to contain a dead small blind, a
+dead button, two hands in one action, a side pot, a split pot, chips given back and a showdown,
+and no step may make or lose a chip. `helpers-poker.spec.ts` compares `pressed` with the first
+move the engine logs for every action of three games. `poker-board.spec.ts` (*a table that
+shows what has happened on it*) holds the press, its answer, the second read, the refusal,
+somebody else's action reaching the table first, the opening, the result's wait, the game
+after it, and the events handed in.
+
+**Chips travel, and a number counts them when they land.** One scene a move, in the order of the
+log (`play` in the board). A batch that arrives through the events effect waits one microtask
+before its first scene, as hokm's does: a scene started inside an effect cannot measure a page
+the effect has not finished drawing, and every flight would be skipped for want of a place to
+land.
+
+- **`blind`, `call`, `raise`, `allin`**: one to five discs, the count the bet will show, leave
+  the plate and land on the bet's own stack of discs (`pour` in `game/stage/chips.ts`, 300 ms,
+  45 ms apart). The seat's stack drops when they leave. The bet and "Total pot" count them when
+  the last one lands, so D7 holds as it was written: the total is every chip put in.
+- **The ledger** is `drawnOf(felt, air)` in `poker-felt.ts`. The model is stepped at the
+  launch, and what is drawn is the model less the chips in the air: `air.bets` on their way to
+  a seat's bet, `air.stacks` on their way to a seat's stack. Drawn stacks, the drawn pot and
+  the air are together what the table holds at every step, and `poker-felt.spec.ts` holds
+  that over a whole game.
+- **A first bet has its pill before its chips**: there, hidden (`data-landing`), and saying the
+  number it will have, so the disc the chips fly to is measured where it will stand
+  (`seatChips` is run before the measuring, not a frame later). A bet that grows keeps saying
+  what it said until the rest lands, and is the pill it was.
+- **A street closes**: before a `board`, a `show` or a `pot`, the bets in front are swept to
+  the middle (`swept`). The pills go as their discs leave, the discs fly to the pot's own
+  stack 40 ms apart, and no number changes, because the pot had counted them already.
+- **`refund`**: from the bet's discs, or the pot's when the bets are in, back to the plate.
+  The stack counts them when they are home.
+- **`check`**: the plate knocks. It is the real plate, moved by `translate`.
+- **A refused press** flies its chips back from the bet to the plate (`takeBack`, with
+  `deny`) and then sets the table to what the server says.
+- **The cues are the scenes'.** `pokerBeats` and `tableCues` are gone, and poker was their only
+  caller: a chip is heard when it lands, the shuffle and the slides inside the deal's scene,
+  the reader's own win as a pot leaves for them and its chips when they land, never one on
+  top of the other. Everything is heard in the order it is seen,
+  by somebody watching too, and with less motion every cue still fires in its place, because
+  the kit turns a flight into a fade and leaves the timers alone. A table set down as it
+  stands (a jump, a tab hidden in the middle of a scene) is silent.
+- **Two gaps, two names.** `CHIP_GAP` in the board is the 4 pixels between a bet and whatever
+  it stands beside. The 45 ms between two discs is `DISC_GAP` in `game/poker-beats.ts`. They
+  were one name for an hour: the import was shadowed without a word from the bundler, three
+  discs landed 4 ms apart, and it was the stepped clock of the spec that said so.
+
+`poker-motion.spec.ts` (the page's boxes given sizes, as hokm's specs give them) holds the
+launch and the landing of a raise, a bet that grows, the gather before the flop, the press, a
+refusal flown home, a table read afresh in the middle of a flight, and less motion.
+`poker-cues.spec.ts` holds the order of what is heard, for a player, with less motion and for
+a watcher, a press laid once, and the silence of a table that is set down. `chips.spec.ts`
+holds the pour. `poker-play-pass.mjs` wants the reader's stack to have dropped at the press
+with a disc in the air, and the pot to count the chips only once they have landed.
+
+**Cards are dealt, turned and mucked.** The scenes are `newHand`, `dealOut`, `street` and
+`sweep` in the board; the pure halves are in `poker-felt.ts` and `poker-beats.ts`.
+
+- **No deck and no muck rest on the felt.** The dealer's mark is where cards come from and go
+  to (`deckSpot`: a box 0.7 of a back wide on the mark, on the dealer's plate while the mark
+  has not been laid, on the middle of the table if neither can be measured). So nothing new
+  is a solid for the bet solver or the fit pass.
+- **`deal`.** What lies on the table is swept to the NEW dealer: the board's cards and the
+  reader's own go face up and shrink away, each other seat's two as a pair of backs. The
+  mark slides to the new dealer: the REAL element, by `translate`, from the place the layout
+  pass had laid it to the place it lays it now. `card-shuffle`. After `DEAL_LEAD` the cards
+  go out one at a time, round the table twice from the left of the button (`dealOrder`),
+  `dealGap` apart: 70 ms, or less when eighteen cards have to fit `DEAL_MOST`. A back appears
+  in front of a seat when its flight lands. The reader's land in the two places of their hand
+  and are turned.
+- **The blinds do not wait for the cards**, nor the cards for the blinds: `play` starts
+  `dealOut` and goes on to the next move, and waits for it before any move that is not a
+  `blind`, and at the end of the batch.
+- **Cards in the air are in the ledger with the chips** (`Air.cards`, `Air.board`): the model
+  is stepped when the hand is dealt, and what is drawn is the model less what has not
+  landed. A seat's two backs are always both in their box and the one still coming is hidden
+  (`data-coming`), so the blind in front of them is seated where it will stand.
+- **`dealt` is on the model**: false for the table before the first deal, so the opening
+  draws no cards in front of anybody and collects none.
+- **`fold`, `forfeit`, `bust`**: any move after which a seat holds no cards (`inHand`) sweeps
+  them to the dealer. The reader's are turned face down where they lie, then go. In a batch
+  the flight does not hold the next move (`trail`): chips are pushed in while the cards are
+  still going, and the batch is not over until they have landed. A press waits for its own.
+- **`board`**: after the bets are gathered, each card of the street comes out face down,
+  `BOARD_OUT` apart, and they are turned in the order they came, `BOARD_GAP` apart. A place
+  on the board is empty until its card is face up.
+- **A sweep shrinks and a deal grows.** A card that goes to the dealer is drawn at the size
+  it had and scaled down; one that comes from the dealer is drawn at the size it will have
+  and scaled up from 0.7 of a back, fading in over 90 ms (`leave`) so that it does not cover
+  the mark. Nothing is ever a small drawing scaled up.
+- **The reader is not asked before they have seen what they are asked about** (`between`,
+  `waiting`, `acting`): the things to press, the price, the tip, the chime and the sentence
+  wait while the table's hand is not the view's, a card of the reader's is in the air, or
+  the board has fewer cards face up than the view's. A table nothing has been dealt on is
+  not a case of its own: an opening is set down and dealt before the page is drawn again
+  (`play` waits one microtask and `newHand` steps the model), and a clause for it changed
+  nothing any test or browser could see. The ring and the seconds never wait. After
+  `BETWEEN_CAP` (2500 ms on the clock from the moment the wait began) it is over whatever
+  the table shows: a reader whose turn it is has their cards shown from the view, and is
+  asked. `show()` writes its three states in ONE `batch`: written one after another, the
+  wait ended for the length of a write in the middle of a deal and the cap was armed afresh.
+- **The usual chain fits the cap, and only just.** "Fold, chips back, gather, pot, sweep,
+  deal" for a reader who is dealt first and acts first is about 2400 ms: that is why a fold
+  does not hold the next move, `POT_SPAN` is 300, `DEAL_LEAD` 150, and the reader's old hand
+  is not turned over before it is swept at a deal. A hand that ends in a showdown is longer
+  and the cap ends its wait: its holds are at their least for a reader who is to act, that
+  reader is asked while the hands are still being paid, and the table then catches up.
+- **A batch that holds two deals or more** is set down as it stood just before the newest and
+  played from there (`latest`), and its length is counted from there.
+- **A refused fold** brings the two cards back from the dealer to the hand, turning up, with
+  `deny`.
+- **The table catches up when the reader is asked over one that is behind** (`hurry`): an
+  urgent entry with nothing in it runs what is still to be played at four times its pace,
+  so a reader who is asked in the middle of a showdown has the table they are asked about
+  half a second later. There are two ways to be asked over a table that is behind and both
+  hurry it: the cap fires for a reader who is to act, or it has fired already while
+  somebody else was to act and the reader's own turn comes with the table still a hand
+  behind (two folds are quicker than a called all-in is shown). It is rule 7's "everything
+  in front runs fast when the view says it is the reader's turn", built for a reader who
+  has been ASKED and not for one who is still waiting: from the start it would run every
+  other deal of a heads-up game at four times its pace. An ordinary hand ends and the next
+  is dealt inside the cap, at its own pace, and a table nobody is waiting on is not
+  hurried.
+- **Not built:** a hold that ends "when little of the turn is left" (the cap is 2.5 s of a
+  30 s turn).
+
+`poker-cards.spec.ts` (with the page's boxes given sizes) holds the order and the pace of a
+deal, where each card flies from and to, the sweep and the mark's slide, the cap, a fold by
+another seat and by the reader, a refused fold, a fold that does not hold the next move, the
+flop and when the reader is asked, less motion, a table set down in the middle of a deal, and
+somebody watching. `poker-felt.spec.ts` holds the cards in the air, the order of a deal,
+`inHand` and `latest`; `poker-beats.spec.ts` the gaps and the lengths; `poker-cues.spec.ts`
+what a deal and a street sound like, and that only the newest of two hands is played.
+`poker-play-pass.mjs` folds a hand and wants each player to give up the old one and be dealt
+two cards with cards seen in the air between, and to be asked nothing meanwhile.
+
+**A hand ends in front of the table.** The scenes are `tableHand`, `payOut` and `rackOff`, and
+the order they are played in is `staged`'s.
+
+- **A run-out is played the way a table plays it** (`staged` in `poker-felt.ts`): the log has
+  the streets, then the chips nobody called, then the hands; the table gives the chips back,
+  turns the hands over, and only then brings the streets. Only a run of `board` moves that is
+  followed at once by a `show` is moved, so a street that is bet on stays where it was. The
+  reducer ends on the same table either way, and a spec folds both orders over every action
+  of the seeded games.
+- **`show`**: the seat's two backs are turned over where they lie, each growing from its back
+  to a face half as large again (`--shown-w`, 9.5 hundredths of the table's shorter side),
+  the second a beat after the first. A card is up when its own turn lands (`landed`), and the
+  hand is named when both are. The faces are a `.poker-backs.poker-shown` in the backs' own
+  place, laid from the left in either language, so the bets' solver seats round them as it
+  does round backs. The reader's own hand is not turned: it lies face up in their row
+  already, and is only named.
+- **A shown hand is larger only where there is room for it.** `seatChips` measures each
+  `.poker-shown` before it seats the bets: one whose larger size would lie on another seat's
+  plate or cards, on the board or the pot's row, or over the table's edge is marked
+  `data-tight` and drawn at the size and the overlap of its backs, which the fit pass holds.
+  It is measured again at every seating, and `tableHand` seats before it measures the faces,
+  so the cards are turned over at the size they will lie at. The motion pass's first held
+  table of nine at 320 wide found a side seat's larger cards lying on the pot's row.
+- **The name of a hand is a pill** (`.poker-named`, the words of `poker.category.*`), seated
+  by the solver that seats a bet, in the place a bet would have: a hand that is shown has no
+  bet. It is NOT a plate tag: a plate with a tag hides its stack, and the winner's stack is
+  the thing to watch when the pot lands. It turns gold when its seat has been paid
+  (`winnersOf`).
+- **The table is held to be read** (`heldBefore`, `tabling` in `poker-beats.ts`): 500 ms
+  before each street of a run-out and 2200 ms before the first pot of a hand that was shown
+  down, as `ctx.linger`, so a batch that follows cuts them to 150 and 900. For a reader who
+  is to act they are at their least from the start. Nothing is held when a fold ended the
+  hand. With less motion they are as long: they are time to read, not motion.
+- **`pot`**: its discs leave the middle for each winner's plate (`POT_FLY` 180, 20 ms apart),
+  a split pot to each of its winners at once, side pots one after another. The total drops
+  as they leave and each stack counts its share when they land (`air.stacks`, `sharesOf`,
+  which is the engine's own split). A reader who won hears `hand-won` as the pot leaves for
+  them, everybody hears `chips-stack` when it lands, and the scene lasts the 300 ms a pot
+  always had (`POT_SPAN`), so the shuffle of the next hand is never on top of the chips.
+- **`forfeit`**: the stack is racked off the felt first, discs leaving the plate for the rail
+  behind it and fading (`rackOff`, `pour` with `gone`), and the plate goes dark when they
+  have gone. A `bust` is told after `end`, so its plate goes dark when the pots are paid.
+- **A pot is said as it is pushed**, for somebody who cannot see the table: a second polite
+  line under the table (`paidSays`) says who won how much and with what, in the words of
+  the last-hand panel (`wonLines`), and is empty between hands.
+- **What was shown is swept face up** at the next deal, with the board, at the size it had.
+  Nobody who is out has a hand on the table, so a table opened after the game is over shows
+  the winner's last hand and its name, in gold, and nobody else's.
+- **Not built:** a shown hand that lost is not dimmed, and the five cards that make the
+  winning hand are not picked out.
+
+`poker-showdown.spec.ts` holds the turn of a hand card by card and where each clone lies, the
+reader's own hand, the two holds and their least, a pot in chips to one winner and to two, a
+run-out's order, the sweep of shown hands, a walk-out, less motion and a finished table.
+`poker-felt.spec.ts` holds `staged`, `sharesOf`, `winnersOf` and the cards of a hand in the
+air; `poker-beats.spec.ts` the holds and the pot's beat; `poker-cues.spec.ts` what a pot
+sounds like. `poker-play-pass.mjs` sends two players all in and wants each to see the other
+hand turned over and both named before the run-out, the whole board and time to read it
+before the pot goes in chips, and the name of a hand lying on nothing. The fit pass has no
+cell for a table that is shown down: it stands for two seconds and cannot be opened at rest.
+`poker-motion-pass.mjs` holds one with the page's clock stopped and measures it at nine
+sizes from 320 to 1440 wide, and a table of nine at six.
+
+**The turn is passed when the table has shown it passing** (6.2). The ring round a face read
+`view.turn`, and the view is the hand the server is in: a raise's chips were still in the air
+and the next seat already wore the ring, and after a fold that ended a hand the ring went to
+whoever opens the NEXT hand while the felt still showed the old one, on a plate that said
+Folded. The turn is part of the felt now (`Felt.turn`), and the plates read `felt.turn`.
+
+- **A seat that checks, calls, raises or goes all-in is on turn while that is shown**, and
+  nobody is while the table does anything else: a fold, a blind, a deal, a street, a refund,
+  a hand shown, a pot paid, a hand ended, a seat put out. `step` says so for every move.
+- **Nothing told says who is next**, so the turn is put right from the view when the table is
+  level with it: `reset`, which `mend` runs whenever nothing is playing, keeps the felt it
+  holds and takes the view's turn. That is when the chips have landed.
+- **`sameAs` does not count the turn**, as it does not count `put`: two tables are the same
+  table whoever is to act at them, and the parity with the engine is chip for chip. The
+  board's own `same` is `level`, which does count it, so a table that differs from the view
+  only in its turn is still put right.
+- A press that is out is part of the view the board asks for (`sightNow` steps it), so the
+  ring stays on the reader through their own call or raise until the server has answered,
+  and leaves them at once when they fold.
+
+`poker-felt.spec.ts` holds the step for every kind of move and that the model never has a seat
+on turn that did nothing in the action, over whole games; `poker-motion.spec.ts` holds the
+ring on a raiser until the chips have landed and on nobody through a fold and the deal after
+it. Sixteen faults put into the code one at a time were each caught by a spec.
+
+**What moves on the table has a pass of its own**, `tools/qa/poker-motion-pass.mjs`, six seats
+and somebody watching, then a table of nine: where every disc and card set off from and came
+to rest, the chips in play at every frame, the press answered within two frames, a flop
+turned in order, the showdown before its run-out, a held table at nine sizes, the pot
+counted when it lands, a reload, a hidden tab, less motion and the watcher's delay.
+`tools/qa/CLAUDE.md` has what it asks and the build it was proved red against.
+
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
-table rather than touring a lobby for the rest of the run. A finish clears readiness, so that is
-three requests: the partner's ready (the matrix keeps the partner's session for the whole run), the
+table rather than touring a lobby for the rest of the run. A finish clears readiness, and the
+partner is a session with no socket, which the sweep of the waiting tables stands up from a finished
+one (*A waiting chair belongs to somebody who is there*). So that is four requests: the partner's
+chair again, the partner's ready (the matrix keeps the partner's session for the whole run), the
 tour account's ready, then the start. `fit-pass.mjs` readies every player before it restarts a
-finished table for the same reason.
+finished table for the same reason, and looks before every cell, which is sooner than a second sweep
+can come round.
+
+**And it ends that game as soon as the poker cell is measured** (`stopDealing`, a resignation).
+Left running, its clock handed the turn to the tour account every minute while the matrix was
+measuring other pages, and the cues store said "Your turn at Poker" over whichever one it was. On
+a table page that toast is held at the top, over the seat across, and a run on 2026-10-14 failed
+`en-430l-play-backgammon` because a probe of the opponent's plate landed on it. The page was
+right and so was the toast; the matrix had a game going that nobody was watching.
 
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
 `tools/art/boards.mjs` (`npm run art`). It imports `frontend/src/game/layout.ts` for where the
 grid sits and `backend/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the
-safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg`, `pawn-shadow.svg` and
-`ludo-dice.svg` into `frontend/public/board/`. So a start square, a star or an arrow cannot sit
+safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg` and `pawn-shadow.svg` into
+`frontend/public/board/`. So a start square, a star or an arrow cannot sit
 anywhere the rules do not put one, and the generator throws if the ring stops being 52 cells.
 
 The board has been a Blender photograph, a glossy vector board, a satin render and the vector board
@@ -1776,6 +4265,22 @@ ink line (`#2A1E5C`) on every shape, flat colours a shade brighter than the piec
 (a lighter band across the top, a darker lip under the bottom, never a gradient), cream card inside a
 toy-wood frame, round yard houses whose four seats are recessed rings, chunky outlined stars, and a
 gold star at the centre.
+
+**The frame is plain wood with a lip, and the board ends where the frame does.** The frame used to
+carry the sticker's lighter band across its top and ten short strokes of grain. On a strip that
+thin the band read as a stray line along the top of the board, and the owner asked for it gone
+(2026-10-12); the strokes went with it, being the same thing at every edge. The frame fills its
+square to the edge, and its corner is one number, `FRAME_ROUND` in `game/layout.ts`, read by the
+art, by the plate that clips the board and by the stage that casts its shadow. The plate was
+rounded at the panel's 14px under a frame rounded at six percent of the board, so the shadow was a
+squarer box than the board that cast it.
+
+**The die in the middle wears no ring.** The roll button drew the product's blue ring and a wide
+blue glow round itself: a translucent box over the squares beside the die, on a board where nothing
+else is translucent. It is the other thing the owner asked to have removed. The die says it can be
+rolled by lying in the middle and bobbing. Under a mouse it grows a little, and it gives under a
+press before it is lifted (`:has()` on the stage, because the button and the die are in different
+subtrees). A keyboard's focus is still the button's own outline.
 
 **The board and the pieces are ONE paint and ONE line.** `PAINT` in the generator (`fill`, `light`,
 `dark`, plus `tint` and `well` for the seats) colours the board and the pawns alike, `INK` outlines
@@ -1788,10 +4293,11 @@ a 2D cartoon board do not belong together however well either is lit.
 stripe on the lit side, the dark side, a white glint) under the board's indigo line, drawn in a
 256-square sprite whose foot is at 199 so it keeps the geometry the renderer places by - 170 pixels
 to the square, drawn at 1.687 squares so it fills its square like a toy piece, sitting `DROP` below the
-cell centre. Depth is y, as for any standing piece. The die is a flat sticker face with indigo pips,
-eight slots of 256 in one sheet. Nothing is printed on a pawn's head: the letter that used to be there
-was a smudge at phone size and a sticker at desktop size, and the yard, the plates and the move list's
-words already say whose piece it is.
+cell centre. Depth is y, as for any standing piece. The die is not a picture any more. The table
+draws it and throws it (*The die is thrown*, below), in the colours the sheet of sticker faces had,
+and that sheet and its generator are gone. Nothing is printed on a pawn's head: the letter that
+used to be there was a smudge at phone size and a sticker at desktop size, and the yard and the
+plates already say whose piece it is.
 
 **A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
 to vanish from the view entirely. Two pawns of one colour on a ring square are a block and are drawn
@@ -1852,8 +4358,9 @@ reads, so a client can ship before the server flips a status and never offer a g
 The leaderboard keeps `status`, because a board of results needs no renderer.
 
 A spectator gets the same board a player does, with no `mine`, which every board already reads as
-"no controls". It has no clock either: a watcher's board is thirty seconds old, and a countdown for
-the live turn beside a board from three moves ago says two different things at once.
+"no controls", and the watch store's events where a player's board gets the board store's. It has
+no clock either: a watcher's board is thirty seconds old, and a countdown for the live turn beside
+a board from three moves ago says two different things at once.
 
 **`game/scenes.ts` decides WHICH renderer draws which game, and it is the only place that does.**
 `board-canvas` named one module, one export and one image file, so a second game's board meant
@@ -1866,13 +4373,33 @@ it has never heard of. `budgets.mjs` reads that registry - one dynamic import pe
 each module on disk and in a chunk of its own - so the rule is about the property rather than about
 one file.
 
-**The board is the illustration, not the interface.** Every move is takeable from a button beside
-it, the turn is an `aria-live` region, and the pieces are `aria-hidden` inside a labelled host. That
-is what makes the game playable by keyboard and readable by a screen reader. Pointing at a token is a
-shortcut to the move list and nothing more: a tap anywhere near a token the server called legal picks
-it (`pickNear`), and a tap on anything else does nothing. On a six every token still in the yard is
-playable, because they are interchangeable: `pieceFor` turns a tap on any of them into the one entry
-the move list offers, and the engine accepts any yard token for it (D12).
+**The board IS the interface: a pawn is moved by the pawn, and the die by the die.** For a long
+time the rule here was the opposite, "the board is the illustration, not the interface": every
+move was a button in a list beside the board ("Bring token 1 out of the yard"), under a sentence
+about the turn, a hint and the clock, and pointing at a token was a shortcut to that list. The
+owner had it removed from every game on 2026-10-11 ("remove that dom helper ... on all of games
+game should be real player should tocuh or click on game things such as card dice"), after
+saying the same of the buttons and of the sentences earlier that day. So:
+
+- A tap anywhere near a token the server called legal moves it, a tap on the square marked for
+  that token does the same (`aimNear`), and a tap on anything else does nothing. On a six every
+  token still in the yard is playable, because they are
+  interchangeable: `pieceFor` turns a tap on any of them into the one entry the server offered,
+  and the engine accepts any yard token for it (D12 of the games plan).
+- The die in the middle of the board is the roll. It is the one real button a ludo table has,
+  because it is drawn as the thing it is.
+- There is no list of moves in the page, shown or hidden, and no sentence under or beside the
+  board. The turn sentence is an `sr-only` live region. The board is a labelled group, and in it
+  only what can be pressed is anything to a screen reader: the pawns that may move, each a
+  button with a name. The tip is a lamp at the foot of the stage (`<CoachLine lamp>`), the clock
+  a pill at the other end of the foot, and "turn your phone upright" a small note between them
+  on a phone held sideways. The stage's grid is the board alone at every size: the 18rem column
+  a wide screen gave the panel is the board's now.
+- For a while that cost a keyboard its moves: a ludo turn could be rolled from one and not
+  moved. It is played from a keyboard now, on the board (*The board is played from a keyboard*,
+  below). `outcomeOf`, which worked out what a move would do for the words on those buttons,
+  went with them, and its sixteen cases with it; the engine-parity runs of
+  `helpers-ludo.spec.ts` still hold `movedTo`, which the board draws from.
 
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
 board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,
@@ -1892,8 +4419,439 @@ because being sent home is done TO a piece and must not look like a move its own
 white, arcs up and spins as it flies, and a ring bursts where it stood. A token that comes home walks
 the home run, slides into its triangle and a gold ring bursts. Each step of a walk is an arc - the
 pawn lifts off the square while its shadow stays on the ground - rather than the piece swelling in
-place. A second update landing mid-walk cancels the first rather than queueing behind it, because the
-newest state is always the one worth being on the way to.
+place. What it is asked to draw is what happened, in the order it happened, and no longer the
+difference between two positions: the next paragraph.
+
+**The ludo board is played from what happened, one action at a time.** Until this the renderer was
+handed a position, compared it with the last one and started every difference at once on
+`window.setTimeout`. A capture began with the attacker, so the victim was already flying home while
+the pawn that took it was squares away. A forfeit played as four captures. A pawn that had not
+moved changed nests when another left. A second position landing mid-walk cancelled the first. And
+somebody who asked for less motion lost the sounds with the motion. The board is on the stage now
+(*The stage*), as backgammon's is, and `MatchBoard` holds its presenter whether or not the renderer
+has arrived: with none, every batch is simply the board, and nothing is replayed when it does
+arrive.
+
+- **`game/ludo-felt.ts` is the model, and it is pure.** A pawn is `{ key, owner, piece, colour,
+  side, progress }` and its key is `owner-piece`, so at a team table the pawn that walks is its
+  owner's whoever pressed it. `feltOf` reads a view; `beatsOf` turns a batch into beats, one list
+  for each ACTION (`roll`, `move`, `forfeit`, `finish`); `step` applies one beat to what is
+  shown. A move's beat carries its victims and whether it came home, because the engine logs
+  `capture` and `home` after the step and the renderer has to know both before the pawn sets
+  off. `ludo-felt.spec.ts` plays whole games through the real engine at two, three and four
+  seats and in teams, with a forfeit by the seat that rolled and by one that had not, and
+  requires the model to equal the model of the engine's view after every action and for every
+  reader: the pawns, who is out, and the die's face and roller.
+- **The die is something the table shows, not something the log says**: `{ roller, face, fate }`,
+  and the fate is `pending` (a move follows), `no-move`, `three-sixes` or `wasted`. The last is a
+  six with nothing to move. The engine logs `roll` alone for it, clears the die and keeps the
+  turn, which are the same events as a six that is waiting for its move. `fateOf` tells them
+  apart by what follows in the batch (the same seat rolling again is a wasted six; a move, or
+  that seat's own forfeit, is not) and, when nothing follows, by whether the view that came with
+  the batch still holds a die.
+- **One scene for each action, in the order things happened.** The walk; the landing; then every
+  victim leaves together, which only an entry onto a held start can make more than one; then the
+  home flourish, or the pair forming. A victim's flight starts when the attacker has LANDED. A
+  forfeit the game survives slides that seat's pawns home with no spin and no sound, and one
+  that ends the game moves nothing, which is what the engine does. A swept turn of several rolls
+  and moves plays every one of them, with the hold on a roll nobody could play cut to its least
+  (`PASS_LEAST`) while more of the batch waits.
+- **A pawn keeps its place.** A nest seat and a home slot belong to a pawn until it leaves them
+  (`nest` and `slot` in the renderer: presentation state, never in the model, forgotten with the
+  match). A pawn that comes home takes the first free slot, so nothing already in the triangle
+  moves for it: the board this replaces filled the triangle in piece order, and a pawn that was
+  home stepped aside when a lower-numbered one arrived. A reader who taps a yard pawn other than
+  the one the server will move has the two swap seats first (`swap`), so the pawn that was
+  touched is the one that leaves.
+- **Two of one side on a ring square stand one on the other, and anything else that shares a
+  square stands side by side** (`BLOCK`, `stackSpot`). When a pair forms or breaks, the other
+  pawn slides to its spot in `PAIR_MS`.
+- **The reader's own pawn walks at the press and is `pending` until the server answers**
+  (`advance`, through `presenter.act`). A pending pawn stands at the middle of its square, is not
+  laid out with what is there and is not counted home, because a capture and a home are the
+  server's to say. The answer is played without the walk: a move whose pawn already stands
+  where it ends walks nothing, which also covers a push that beats the acknowledgement. A
+  refusal walks the pawn back over its squares and puts the die back (*A press the server will
+  not take*, below).
+- **The plates read what the table has shown** (`onFacts`: `{ home, out, die, plate }`). The home
+  dots count a pawn when its flourish has played. The die is on its roller's plate once it has
+  been picked up from the board (`plate`) and until it is used, and when the seat that rolled it
+  leaves it goes from the board and the plate together. A seat is called out when its pawns have
+  slid home.
+  `MatchBoard` hands each plate the seat and the player as the table shows them (`seatAt`,
+  `playerAt`): "Won" and "Lost" come with the result card, and "Left", "Gave up" and "Timed out"
+  when the table has shown the seat going. The view is read only until the renderer has arrived,
+  and when it could not be drawn. Seen in the recording of a real game before it was written:
+  the plates named the winner while the confetti was in the air and the result had not come.
+- **The end is held for the table.** Confetti is thrown when the last pawn is home (the queue
+  says when; the view's winners say whether, and in which colours) and the scene then holds for
+  `WIN_MS`, 1.3 s (`WIN_LEAST`, 0.7 s, when something waits). The design called confetti
+  ambient, outside the queue. In a real browser the result card, which waits only for the
+  queue, came down over it in the frame it was thrown. Nothing is thrown and nothing is held for
+  somebody who asked for less motion, and a finished game opened again throws nothing.
+- **Less motion keeps every cue.** The stage turns each run into a short fade where the thing
+  ends up, and a walk plays one `token-step` at its end in place of one a square.
+- **A resignation is explained to the board like any other move.** `POST /matches/:id/resign`
+  answers the match and no events. The store then reads `since` from the revision it held, in
+  the time a gap is given (`MEND_MS`), and hands the board the forfeit and the finish. When that
+  read fails the board gets the answer as it came and settles quietly.
+- **The renderer owns no clock and no sound.** `BoardOptions` hands it the stage, a way to ask
+  for the page's sound and a way to tick the phone (`feel`, which `MatchBoard` leaves silent for
+  somebody watching). `BoardHandle` is the presenter's `Table` and a few verbs beside it: `lit`
+  (which pawns may be pressed, whether to show it, and where each would land), `advance`, `swap`,
+  `still`, `offer` and
+  `rattle` (the die in the reader's hand, and under the press), and `pause` and `resume` under a
+  sheet that blocks the page.
+
+`ludo-felt.spec.ts` holds the model. `ludo-board.spec.ts` holds the renderer on a manual clock
+with the real engine's events: the order of a capture, an entry onto a held start, each fate of
+a roll, the pair, both forfeits, the end and its hold, less motion, the reader's own pawn, and a
+swept turn of six actions through the real presenter. `ludo-table.spec.ts` (*the ludo table,
+played from what happened*) holds the component: the result and the tags after the last scene,
+the plate's dots and die, the press and its refusal, nothing replayed before the board could
+draw, and the real board inside the real `WatchBoard` frame. Each was run against the fault it
+is there for.
+
+**The die is thrown, and a roll is told when it has landed.** Until this the die was a sprite
+that spun in the middle of the board through seven swaps of its face, and the turn sentence, the
+tip, the glow on the pawns and their taps came with the answer: a roll was given away a second
+before its die had stopped. The table has one die now. It is the stage's own (`stage/die.ts`),
+the die backgammon throws, and the renderer keeps where it is: nowhere, in the reader's hand, in
+the air, on the board, leaving it, or on a plate.
+
+- **It is drawn flat (D1).** `createDie({ flat: true })` keeps the throw's plan (the path, the
+  bounces, the turning, the face it lands on) and drops the perspective. The body is a translate,
+  a scale and the cube's own turning, tipped a tenth of a radian so a die at rest shows a lip. A
+  die in the air is drawn larger for being nearer whoever looks (`nearness`), where the other die
+  moves toward the eye. The faces are white with the board's ink line and ink pips. Each face
+  carries a tone, the lip colour of a white piece, by how far it has turned away, and a veil that
+  hides its pips before it is edge-on, where they would be a smear. `dice-plan.spec.ts` (*the
+  die, drawn flat*) holds the pose, the tones and the sizes.
+- **At rest it is a face on a base, drawn the way the board draws a tile.** The owner, 2026-10-12:
+  "on ludo dice does not have good looking it is low quality". Looked at closely, it was. The
+  cube at a tenth of a radian showed its sides as a lip, and a side seen that steeply has its
+  own ink line squashed to nothing: a bold line round the face, a hairline under it, and a hard
+  offset line standing in for the rest. Tipping the cube further was tried first and was worse.
+  Faces with round corners do not meet, so the corners gaped, and the side that is nearly
+  edge-on is a sliver with an outline. So the cube is what tumbles and nothing else. A die that
+  has come to rest marks the one face that looks at the reader (`data-up`), the others are not
+  drawn, and it stands on a base of its own (`.die3d-base`): the face's shape again in the lip
+  colour of a white piece with a darker foot, inside the same ink line, set straight down the
+  screen and turned the way the face is turned. That is `sticker()` in `tools/art/boards.mjs`,
+  which is how every tile on the board is drawn. The base is put away while the die is in the
+  air (`data-air`) and comes back when the throw's run is done; a throw that another overtakes
+  neither lands the newer one early nor leaves it in the air, and a die that only fades in, for
+  somebody who asked for less motion, is never in the air at all. The pips are beads with a
+  glint, as a pawn's head has, and the shadow is the pawn's: a flat ellipse of ink under the
+  base that shrinks and fades as the die rises. The drawing was tried on a page of its own
+  first, built from the die's real code at the sizes it is seen at (26px in a phone's yard, 34
+  on a phone's plate, 44 in a phone's hand, 82 in a desktop's), because a build is three minutes
+  and a drawing is not right the first time. `dice-plan.spec.ts` holds the base, the mark and
+  the two states; the play pass asks of every throw, in both browsers, that the die in the air
+  is a whole cube with nothing under it and that the one that has landed is the face that was
+  rolled, alone, on its base. Built with the base left under a die in the air and every face
+  drawn at rest, the pass failed those two lines and no other. Eleven faults put into the die's
+  code one at a time were each caught by a spec.
+- **It waits in the reader's hand, in the middle of the board.** While the roll is the reader's
+  the die lies there two squares across (`HAND`), bobbing, under the roll button, which draws
+  nothing of its own once the renderer has arrived: the button is the die. The press lifts it and
+  shakes it (`rattle`, `die-shake`) for as long as the request is out, and a roll that is refused
+  puts it down again.
+- **The reader's own die is thrown from the hand, and anybody else's comes in over its roller's
+  corner**, from outside the frame. From the hand it leaves at the size it was held and comes
+  down to its own as it travels. Both land in one place: the outer corner of the roller's own
+  yard (`dieRest`), 1.2 squares across (`DIE_SIZE`), where it meets no seat of the nest, no home
+  slot and not the hand. The plan is seeded by the match and the revision, so both players and
+  somebody watching see one throw. `die-land` sounds at every bounce, softer each time, and
+  `bonus` for a six that keeps the turn.
+- **A roll that waits for its move lies where it fell for 1.1 s** (`DIE_REST_MS`, outside the
+  queue: rule 8), is picked up outward over its corner, and is then on its roller's plate. The
+  plate's die is the same drawing at rest (`DieFace`), named "You rolled 3." on the reader's own
+  plate and "Omid rolled 3." on anybody else's. The move takes it away: off the board it fades
+  where it lies, off the plate it is gone, and one that is being picked up finishes leaving.
+- **A roll nobody could play says so.** The die turns grey, or red for a third six, wobbles and
+  is held for 0.9 s (`PASS_MS`; 0.3 when more waits), and a sentence is said to a screen reader in
+  the words for whoever rolled: "You rolled 3 and cannot move.", "A third six in a row. Your turn
+  passes.", "You rolled a six with nothing to move. Roll again." (`onPass`, `passed`). Then it
+  fades where it lies, and only then is the die handed to whoever rolls next.
+- **What a roll gives away waits for the table (rule 7).** `landed` is one value: the table has
+  shown the revision the view is at (`shownRev`, written by `level()` when the presenter has
+  nothing left to play), or under eight seconds of the turn are left (`HURRY_MS`). The turn
+  sentence, the tip, the lit pawns and with them their taps, and the die in the reader's hand all
+  read it, and the plate's die waits by the table's own word (`plate`). Nothing is remembered per
+  element, and a board read again at a later revision with nothing to play holds nobody. There
+  is no timer: the hold ends when the table is level, as backgammon's does when its dice land.
+- **The roll button is never held, and its face is.** The button is there the moment the view
+  says the roll is the reader's, so a press is always taken. The die it is drawn as arrives when
+  the table has shown the turn passing. The first build handed the die over with the view. In a
+  burst of another seat's rolls and moves it blinked into the middle between their rolls, and
+  their next die was then thrown out of the reader's hand: found in the recording of a real
+  browser, by no spec. A throw starts from the hand only when the roller is the reader, and a
+  press the reader made is kept through somebody else's throw. Once the die is in the reader's
+  hand it stays there while the roll is theirs (`handed`), whatever else the table has to show: a
+  seat that leaves on the reader's turn does not take the die out of their hand and put it back.
+- **The die is sized on the die itself.** The stylesheet gives every `.die3d` a size of its own
+  (`--die: 2rem`), and that replaces one inherited from above. Set on the holder, the size the
+  renderer asked for never applied. The die was 32px on every screen, 1.5 squares on a phone and
+  too big for its corner, and every throw was a quarter longer than its path, so a die left the
+  hand towards the wrong side before it turned for its corner. No spec could see it: happy-dom
+  reads no stylesheet. A probe of the first frames of a throw in a real browser did.
+  `ludo-board.spec.ts` holds where the size is set, and the play pass measures the die in both
+  browsers.
+- **Less motion keeps the roll.** Nothing bobs or shakes, and the press still lifts the die. The
+  throw is a fade where the die rests, with one `die-land`, and the sentence, the lit pawns and
+  the plate come after it as they do after a throw.
+
+`ludo-board.spec.ts` (*a ludo roll, played*; *where a ludo die comes to rest*) holds the renderer
+on a manual clock with the real engine's events, and `ludo-table.spec.ts` the component: the die
+in the hand and under the press, the hold and each thing it holds, the three sentences in both
+languages, the plate's die and its two names, and the die handed over only when the table has
+shown the turn. Each was run against the fault it is there for.
+
+**A press the server will not take is walked back, and a pressed roll hurries the table.** The
+reader's pawn walks at the press, so a refusal finds it somewhere it never was. It used to slide
+home in a straight line, as a board put right quietly does. The renderer keeps where each pressed
+pawn stood (`pressed`), and when the board it is settled to has that pawn back where it started,
+the pawn walks back over the squares it crossed, last square first, or goes back into its own seat
+in the one arc it came out by (`retreat`), with the refusal's sound and its haptic, once. The roll
+is on its roller's plate again and the pawn can be pressed again. A press is forgotten when its
+answer is played and when the board is settled for any other reason, so a pawn sent home later by
+a board that says nothing is slid there and is refused nothing.
+
+A roll pressed while the table is still showing somebody else's move makes that move play at four
+times its pace: an urgent scene with nothing in it (`presenter.act`). Measured on the production
+build, three squares took a tenth of a second where they take a third. A roll pressed at a still
+table starts no scene, so nobody is told the table is playing.
+
+`ludo-board.spec.ts` (*a move the server would not take*) holds the walk back, its order, the arc
+of a refused entry and the two ways a press is forgotten; `ludo-table.spec.ts` the hurried walk
+and the still table. Seen in a real browser by rewriting the revision in the reader's own play
+frame on its way to the server, which answers that the board has moved on.
+
+**A lit pawn shows where it would land, and the square can be pressed.** A pawn that may move
+said so with a ring under its foot and said nothing of where it would go: a player counted
+squares, and with two or three pawns lit counted them for each. The owner's second brief asks
+that where a move ends be drawn before it is made (D17 of
+`docs/superpowers/specs/2026-10-12-table-graphics-ux-design.md`).
+
+- **Where each move ends is the server's rules asked a question.** `goalsOf(board)` in
+  `game/helpers/ludo.ts` answers, for every token the board offers, the progress it would reach
+  and how many pawns it would send home there: `capturesAt` for the square, the mover's side
+  left out, as the engine counts them. `helpers-ludo.spec.ts` (*where each move on offer would
+  end*) applies every move on offer in whole games, alone and two against two, and compares both
+  numbers with what the engine then did.
+- **The mark is a pad in the pawn's own colour**, inside the board's ink line with a white ring
+  in it, drawn where the pawn's foot will stand. At a table of two sides the mark for a
+  partner's pawn is the partner's colour. The first drawing was the ring a lit pawn wears, two
+  strokes with a small seed in it, and on a phone, where a square is 22 px, it could not be
+  made out. A landing that sends somebody home is another SHAPE, a spiked burst that shows
+  round the feet of whoever stands there, and that pawn trembles (`data-threat`), because a
+  colour alone says nothing to a reader who cannot tell red from green. A landing at home is
+  drawn in the home, at the slot the pawn would take, and takes no slot to do it (`freeSlot`
+  asks, `slotOf` takes). The squares on the way are beads in the same colour. An entry has
+  none: it is one arc.
+- **Marks lie under every pawn** (`Z_GOAL`, below the pieces' rung), so a pawn standing on a
+  marked square is never hidden by the mark and a burst shows only round its feet.
+- **They are told with the lit pawns and held with them.** `lit(keys, hints, goals)` is one
+  call, and the renderer draws a mark only for a pawn among the keys, on a square ahead of where
+  that pawn stands. So the hold on a roll (rule 7) holds the marks with no rule of its own: no
+  pawn is lit until the die has landed, none for a reader who is not on turn, and nothing is
+  marked while `hintMoves` is off, when a pawn still takes a tap. Every mark goes at the press,
+  and they are drawn again when a refused pawn is back and when the board is drawn again, as
+  the pawns are relit.
+- **A press on a mark is a press on its pawn.** `aimNear` in `game/layout.ts` takes both: the
+  nearest pawn that may move, within `PICK_REACH`, and the nearest mark, within `GOAL_REACH`. A
+  press within `PAWN_REACH` of a pawn's body is that pawn, whatever is marked on the square it
+  stands on. Otherwise the mark wins, so a press on a marked square beside another lit pawn no
+  longer moves that other pawn. `pickNear` is gone with its one caller.
+- **Under a mouse the pawn and its mark answer together** (`data-aim`): the pawn's ring turns
+  solid, its mark grows and stops breathing, and every other mark and bead steps back
+  (`data-aiming`). A finger has no hover, so nothing depends on it: every mark and every bead is
+  drawn from the moment the die lands.
+- **Less motion draws them still**: no arrival, no breathing and no trembling.
+
+`ludo-board.spec.ts` (*where a lit pawn would land*) holds the renderer, `game.spec.ts`
+(*pointing at a token on a phone*) the reach, `ludo-table.spec.ts` the hold, the press, the
+refusal and a partner's colour, and `match-board-helpers.spec.ts` the switch. The play pass
+presses every second move on its mark and asks that the pawn comes to rest where the mark was,
+that every roll that lights a pawn marks a square, and that the other browser is shown none.
+Built with a mark drawn one square further on and a press on a mark not taken, the pass failed
+the line about where a pawn comes to rest and the two about a pressed pawn walking; built with
+no mark drawn at all, it failed the three lines about the marks. Forty-three faults put into the
+code one at a time were each caught by a spec, and six guards that no fault could tell from
+their absence were taken out.
+
+**The board is played from a keyboard, and the keyboard is on the board.** The owner's second
+brief asks for keyboard play and a focus that can be seen, and the decision that took the list
+of moves out of the page named the way back: play on the table itself (D14 of the graphics
+spec). No panel and no list came back.
+
+- **A pawn that may move is a button.** Each pawn carries a `.lp-hit`, a box of 44px over its
+  body (`max(2.75rem, 1.2 squares)`), and while the pawn may move that box has `role="button"`,
+  a name and a place in the tab order. A pawn that may not move has none of the three, so a
+  screen reader finds on the board exactly what can be pressed. The box takes no pointer: a
+  press is still read off the board by where it lands (`aimNear`), and a 44px box on a 22px
+  square would otherwise swallow its neighbours' presses. It is there for the keyboard, for a
+  screen reader that explores by touch, and so that the matrix's 44px rule has something to
+  measure. A pawn stays a button with the hints off: turning a helper off never removes a way
+  to play.
+- **One pawn is in the tab order, and the arrows walk the rest** (`roving`): right and down to
+  the next pawn that may move, left and up to the one before, round and round, Home and End to
+  the first and the last. The pawn the keyboard last stood on keeps the tab stop. Enter or the
+  space bar moves it. A click that comes with no pointer (`detail` 0, which is how a screen
+  reader presses) moves it too; a click a pointer made is left to the board, which has already
+  taken the press.
+- **The name says what the move does**, in the reader's language (`match.token.*`): "Token 2:
+  move 3 squares", "... and send a token home", "... and reach home", "Bring a token out of the
+  yard". The words are the component's, handed over with each landing (`BoardGoal.says`), and
+  every pawn of a yard that may come out says the one way out. `goalsOf` gained `from` for the
+  count of squares.
+- **Focus is drawn as the pawn's own ring**, in the product's focus colour, with the hints off
+  as well (`.lp:has(.lp-hit:focus-visible) > .lp-ring`). The pawn under the keyboard shows
+  where it would land exactly as one under a mouse does (`data-aim`).
+- **The keyboard follows the turn, for a reader who is using it.** A roll made with a key
+  (`detail` 0 on the die's click) or a pawn moved with one sets `keyed`, and a press by pointer
+  clears it. While it is set, the keyboard is put on a pawn that may move when the die has
+  landed (`table.focus()`), and back on the die when the roll comes back. Both only while the
+  keyboard is on the page's body or on the board (`inReach`): a reader who has gone to the chat
+  to type is left there.
+- **The die takes the keyboard when it can be pressed, not when it appears.** The first build
+  asked only whether the roll was the reader's. Over a socket the board that brings the roll
+  back arrives before the answer to the move that earned it, the button is still disabled for
+  that moment, and a browser will not focus a disabled button: after a six the keyboard was
+  left on nothing. Found by playing with the keyboard on the production build. happy-dom
+  focuses a disabled button without complaint, so the spec that holds this installs the real
+  rule first and delivers the board before the answer, as a socket does.
+- **The board is a group, not a picture.** `.board-plate` was `role="img"` over a canvas hidden
+  from a screen reader, which made every pawn in it unreachable by definition. It is
+  `role="group"` with the same label, the canvas is no longer hidden, and the die that lies on
+  the board is: the plate and the live sentence already say what was rolled.
+
+`ludo-board.spec.ts` (*the ludo board, played from a keyboard*) holds the buttons, the names,
+the tab order, every key and the press with no pointer. `ludo-table.spec.ts` holds the names in
+both languages, the keyboard handed from the die to a pawn and back, a pointer's roll and a
+reader who has gone elsewhere left alone, and the board that arrives before the answer. The
+play pass makes one turn with the keyboard and nothing else: Enter on the die, and Enter on the
+pawn the keyboard is then found on, which has to have a name and wear its ring in the focus
+colour. Built with that ring in the board's own ink and Enter on a pawn doing nothing, the pass
+failed the lines about the ring and about Enter; built with the keyboard never put on a pawn,
+it failed those two and the line that finds it there. Forty-nine faults put into the code one
+at a time were each caught by a spec.
+
+**The turn is passed when the board has shown it passing** (6.2). A plate's ring and its clock
+followed `game.turn`, which is the board the server sent: when somebody else rolled and moved
+in one answer, their ring was gone and the next player's was lit while their die was still in
+the air and before their pawn had taken a step. The turn is part of the shown model now
+(`Shown.turn`) and of what the table tells (`Facts.turn`), and the plates read that
+(`shownTurn` in `match-board`, which falls back to the board's turn where there is no table to
+ask: the flat tokens of a browser with no canvas).
+
+- **Whoever rolls is on turn from the moment the die leaves their corner**, whatever the roll
+  comes to. Who throws is no secret; only the face is held for the landing.
+- **A pawn that moves says nothing about who is next**, and nothing else in the log does: a
+  six, a capture and a pawn come home keep the turn, and that is the engine's to know. So the
+  turn is put right from the view when everything told has been played, which is when the
+  pawn has landed. `same` counts the turn, and so does the check that ends a batch.
+- **A seat that leaves while it is theirs has the turn taken from it**, and a finished game has
+  nobody on turn.
+
+`ludo-felt.spec.ts` (*whose turn the ludo table has shown*) holds each step, and the engine
+parity never finds the table naming a seat that neither acted nor is next. `ludo-board.spec.ts`
+(*whose turn the ludo table says it is*) holds when it is told, and `ludo-table.spec.ts` the
+ring on a plate while a pawn walks. Twelve faults put into the code one at a time were each
+caught by a spec.
+
+**The clock is on the plate of whoever is to play, and the lamp stands in the board's own
+frame.** The bar at the foot of the ludo table held three things: the lamp at its start, the
+"plays best upright" sentence on a phone held sideways, and the clock at its end. It was laid
+out against the cell, and the plates are laid out against the board, so wherever the board
+filled the cell the bar lay on a plate. Measured on the build before this one: the sentence over
+the bottom-left plate and the board on every phone held sideways; the clock over the
+bottom-right plate at 740x360, 667x375, 1024x768, and with the chat open at 1280x800, 1920x1080,
+768x1024 and on every phone; the lamp over the bottom-left plate at 1024x768. Nothing is drawn
+at the foot of the table now. The bar keeps the sentence a screen reader hears and nothing else.
+
+- **The advice to turn the phone is the lamp's.** `match.upright` is a tip that `match-board`
+  hands the lamp when the coach has nothing to say; a rule of the game is said over it. It
+  follows the `hintRules` switch with the other tips, which the sentence did not.
+- **A plate's tag and its clock are one strip in the plate's own line** (`.plate-tabs`, in
+  `YardBadge`'s `facts`), and the tag is no longer a piece of the pill. On a phone the pill has
+  half a row, and a face, four dots and "Partner" or "Missed 1" are wider than that: the tag lay
+  on the dots, by two pixels for years and by thirty once the plates grew. The clock is
+  `TurnClock`, short, on the plate that is to play, and it ticks for the reader on the reader's
+  own plate. Where the strip stands is the arrangement's:
+  - *an upright cell with no room in the pill* (anything narrower than 560px or shorter than
+    672px, and every tall cell): the strip hangs off the plate as two chips, over a top plate
+    and under a bottom one, from the plate's outer end. It needs 19px. A tall cell has the bare
+    wood for it; any other keeps 12px back from the board (`--tabs`) and the table's own padding
+    gives the rest, which costs a board that fills its cell 2% of its width;
+  - *an upright cell with room* (a tablet, a wide desktop with the chat card open): the tag and
+    the clock follow the dots in the pill, where a face, a name, four dots, a tag, a clock and a
+    die all fit in half a row;
+  - *a wide cell*: the plate is a column and each takes a line of its own when it has to;
+  - *under an open chat*: the strip is not drawn. Neither is the lamp. The ring round the face
+    still runs and the last five seconds still tick.
+- **The lamp has a place that is free in each arrangement.** Under the board in a tall cell, in
+  a strip the frame leaves below itself (`--foot`, deep enough that the lamp clears the chips
+  under the bottom plates); between the two bottom plates in any other upright cell, where the
+  bottom plates are held 1.75rem short of their half so that the gap exists whoever sits there;
+  and in the middle of the plate column on the reader's side in a wide cell. The frame is laid
+  out left to right in both languages; the lamp and the clock carry the reader's direction
+  themselves (`dir` on the lamp's holder and round the clock).
+- **On a tall phone the plates grow into the wood they stand on** (finding L4). The whole plate
+  is zoomed: 1.2 from a cell 324px wide, 1.3 from 356px and 1.4 from 380px where the cell is
+  also very tall, which is a face of 38, 42 and 45px and a die on the plate of 34, 36 and 39px
+  (L5 asked for 30). The step is set by the width and not by the height, because two plates
+  share a row and the one that holds the die must fit a face, four dots and a die in half of
+  it. The first cut zoomed by the height, 1.5 on a 360px phone, and put the dots under the die.
+- **In a wide cell the die on a plate lies beside the face**, toward the board. It used to be a
+  row of its own that made the plate 31px taller for as long as the roll stood, and on a phone
+  held sideways that is the room the lamp stands in. **On a pill with no room for both the die
+  stands in for the name and the dots** while it is there; they are still read out. That is an
+  upright cell 28.25rem tall or less, or one under 20.4rem wide that is not tall: a phone with
+  the chat up, or inside a browser that leaves the table little height. The second was found by
+  the pass and not by hand: its own pages carry a row mine did not, the cell was 58px shorter,
+  and the dots lay on the die.
+- **A name is held to its column on every plate.** A right-hand plate lays its text out from
+  the far end, and there a name was as wide as its words: once the plate grew and the die took
+  its share, "Sara Kamali" ran under the die. Seen in the first sweep of the built pages.
+
+`TablePlate` built everything it was handed twice, which is how the clock came to tick twice a
+second; that is its own note in `frontend/CLAUDE.md` and its own commit. `ludo-table.spec.ts`
+holds the empty foot, the clock on the plate that is to play in both languages and its absence
+at a table that keeps no time, the strip with a partner's tag and the clock in it and no tag in
+the pill, and the lamp in the frame with the advice and the direction. `turn-clock.spec.ts`
+holds the ticks on the reader's own plate and the silence on anybody else's. The fit pass holds
+the rest for the ludo cells, at one more size than poker and backgammon are yet held to (360x560
+with the chat shut: a phone inside a browser with its bars up) and in one more position than it
+had: `ludo-4-rolled` plays over the api until a seat on the right of the board holds a roll
+with a move on offer, so every size is looked at with a die on a plate, a clock beside it and
+pawns lit, by the seat that rolled and by one that did not, whose page spells the roller's
+name out beside the die. It has to be a seat on the right: a plate there is laid out from its
+far end, and that is where the name ran under the die. The cell stopped on whoever rolled
+first to begin with, and a build with the name let go passed it clean, 87 checks, because the
+roller sat on the left. (A
+lit pawn's box is a button that takes no pointer, because the board reads a press by where it
+lands; the pass's rule about a covered button leaves such a button alone.) The lamp, a clock and a tag that
+are drawn meet no other plate, not the board and not each other, and stay on the screen; a tag
+or a clock that is in the page IS drawn unless the chat lies over the table, which is what
+fails a strip that has quietly wrapped out of sight; nothing is drawn at the foot; a face in a
+tall cell is at least 38, 41 or 44px by the cell's width and a die on a plate there at least
+30; and in a plate the face, the name, the dots, the die, the tag and the clock do not lie on
+one another, nor the first four spill out of it. The pass's older rule about a tag drawn cut
+now leaves alone a tag that is deliberately not drawn.
+
+Proved red on real builds. Built with eight faults at once (the lamp in the corner of a wide
+frame, no room kept for it under a tall one, the strip left in the pill, the lamp back at the
+foot, a plate zoomed half as large again, the die no longer standing in for the dots in a short
+cell or a narrow one), the pass failed 96 of the 138 ludo cells: something drawn at the foot in
+87, the lamp on a plate in 51, a clock not drawn in 29 and a tag in 5, the dots on the die in
+10. Built with the plates left at their old size and the tag put back in the pill, it failed
+ten: a face of 32px in every tall cell, and the dots on the tag at the table of two sides.
+Built with a name no longer held to its column, it failed the five tall cells in which a seat
+that did not roll looks at one that did. Twenty-six faults put into the components and the
+page one at a time were each caught by a spec, two of them only after the spec was mended: it
+had asked for a direction on any ancestor of the clock and found the document's.
 
 **What happened travels with what is.** A move's reply carries `events` - the redacted log since the
 revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
@@ -1905,6 +4863,37 @@ higher revision. The first thing this bought: a roll that passes the turn used t
 because by the time the view arrives the die is already spent and gone. The renderer now reads the
 beats, and a roll followed by a `pass` tumbles, wobbles and dims before it fades - "deny" and a red
 tint for three sixes. A batch already on screen when the board mounts is never replayed.
+
+**A board is told of a move once, and only of its own game.** The store wrote the new position and
+then the events as two signal writes, and each top-level write drains its effects, so everything
+that reads both ran twice per action: first with the new position beside the LAST batch, then with
+the new batch. A board that draws from the difference between two positions moved its pieces on the
+first run and was told why on the second. `heard` makes the two writes inside one `batch()`. It
+also asks whether the answer in hand is for the game that is open: a play sent at one table and
+answered after the reader had opened another used to hand the first game's events to the second
+game's board, which then found a gap in revisions that were never its own, and a catch-up read that
+was still out when the table changed did the same. An answer for a game that is not the open one is
+dropped. `match-store.spec.ts` holds the single run and both late answers.
+
+**A batch names its game, says whether it is live, and never runs ahead of the board.** What the
+store hands a board is `{ seq, id, events, live, jump }`. `id` is the match the events belong to,
+so a board that kept its instance across a rematch, or one mounted under a batch left by the last
+game, can tell. `live` is true for an answer to a play and for a pushed frame and false for anything
+read through `since`: a board plays the first and may go straight to the position for the second.
+The events are cut at the revision of the board they arrive with, because a push reads the match
+and then the ledger, and a commit in between used to hand a board events for a move its own view
+had not reached. And a gap is no longer dropped. A push for a later move can overtake the push for
+an earlier one, since each reads the ledger after its own commit. The store used to take the new
+board and throw the events away, so the pieces of two moves jumped. It holds that answer back now
+and reads `since` once from the last revision it handed on. The board and the whole run of events
+then arrive in one write, or, when that read fails, the board arrives with `jump: true` and no
+events, which is the store saying that it cannot explain the move. One read is out at a time, and a
+gap seen while it is out is read after it. The read is given three seconds (`MEND_MS`), because a
+request can stall on a dead connection for the client's whole fifteen seconds while the socket is healthy
+and the reader's clock is running: past that the newest board the store was sent is shown, as a
+jump. And nothing is called a jump that is not one. A read that fails after a push has already
+brought every move changes nothing and says nothing, where it used to cut the moves that were
+being played. `match-store.spec.ts` (*what a board is told of a move*) holds each of these.
 
 **The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
 glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
@@ -1921,13 +4910,23 @@ one and `dispose` gives it back, and the last one back SUSPENDS the context rath
 switching tables never has to unlock audio again. The spec is
 `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`; the rules that cost something:
 
-- **`pointerdown` is not a gesture on an iPhone.** The context is created and resumed inside
-  `pointerup`, `touchend`, `click` or `keydown`. The old engine armed on `pointerdown` and never
-  called `resume()`, so every table was silent on iOS and Chrome logged "The AudioContext was not
-  allowed to start" on a cold deep link - which the matrix counts as a failure.
-- **The cue of the unlocking tap still plays.** `resume()` is asynchronous, so the tap that unlocks
-  would otherwise lose its own sound; a `resuming` flag lets cues be scheduled while it is on its way.
-  Outside that window nothing is scheduled on a context that is not running.
+- **`pointerdown` is not a gesture on an iPhone.** The context is resumed inside `pointerup`,
+  `touchend`, `click` or `keydown`. The old engine armed on `pointerdown` and never called
+  `resume()`, so every table was silent on iOS and Chrome logged "The AudioContext was not allowed
+  to start" on a cold deep link - which the matrix counts as a failure.
+- **No press waits for the context to be made.** Making one took 120 ms on Windows, and it was made
+  in a capture listener that ran before the press's own handler, so the first roll after every page
+  load left 125 ms late. Where the page has already been pressed
+  (`navigator.userActivation.hasBeenActive`), a board's handle makes it at the next idle moment
+  after the board appears, and it starts running with no console line: in the product that is
+  every table reached by a press, so the first roll finds it made. Where it has not (a deep link
+  pressed for the first time) the tap starts a timer and the tap's own handlers run first: a timer
+  of up to a second started inside a gesture carries the gesture in WebKit and Gecko, and Chromium's
+  sticky activation covers it. A context that already exists is resumed inside the tap, as before.
+- **The cue of the unlocking tap still plays.** Cues asked for while a tap's context is on its way
+  are kept, four at most, and played as soon as it is made; `resume()` is asynchronous, so a
+  `resuming` flag lets cues be scheduled while it is on its way. Outside those windows nothing is
+  scheduled on a context that is not running.
 - **An interruption re-arms it.** A call, Siri or a screen lock puts WebKit into `interrupted`; the
   `statechange` listener puts the tap listeners back, and a context still not running 300ms after a tap
   is rebuilt, because WebKit's can get stuck there.
@@ -1951,58 +4950,139 @@ switching tables never has to unlock audio again. The spec is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
-- **Every table sounds like its own pieces, from the server's log.** Hokm has its own queue (below);
-  backgammon and poker go through `components/games/table-cues.ts`, which maps a batch of their
-  events to timed cues and haptics and plays nothing for a batch that was on screen at mount, that
-  has a gap in it, or that arrives in a hidden tab. Poker's chips are two more Kenney recordings,
+- **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);
+  backgammon's sounds are made by the table itself, each at the moment the thing it belongs to
+  lands (*The stage*, below); poker's by its scenes as well (*Chips travel*, under *Poker*). It
+  went through a table of timed cues worked out from a batch (`pokerBeats`), tied to nothing on
+  the felt, until its chips flew. The chime for a turn that becomes the reader's is `turnChime`
+  in `components/games/table-cues.ts`, handed whichever sound handle the board holds, so a
+  board has one handle. Poker's chips are two more Kenney recordings,
   `chip-lay` for a bet and `chips-stack` for a pot, which is why the pack is 20 takes of 14 cues.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
 
-**Hokm is played in motion, and the table runs a little behind the server on purpose.** The spec is
-`docs/superpowers/specs/2026-09-23-table-motion-sound-design.md` §3.2. A card flies from the seat that
-played it - from the exact spot in the reader's own hand, recorded before the request - and the real
-card on the felt stays hidden (`data-landing`) until its copy lands; a finished trick is held 900ms
-(450 when the next lead is already queued), the winning card glows, and the four are gathered to the
-winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs from the dealer.
-`game/hokm-beats.ts` turns log events into that timeline and is pure, so every timing is a test in
-`hokm-beats.spec.ts`; `game/motion.ts` flies copies with the Web Animations API in a clipped
-`.board-flight` layer, so nothing in flight can widen a page the matrix measures.
+**Hokm is played in motion, on the stage every table shares, and the table runs a little behind the
+server on purpose.** The spec is `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`
+§3.2 and the kit is *The stage*, below. A card flies from the seat that played it - from the exact
+spot in the reader's own hand, measured as it leaves - and the real card on the felt stays hidden
+(`data-landing`) until its copy lands; a finished trick is held 900ms (450 when the next lead is
+already known), the winning card glows, and the four are gathered to the winner's plate, where the
+trick is counted when they get there and a "+1" floats off the plate; a hand ends on a "+n" banner
+or a kot; the deal throws backs from the dealer. Copies fly in the clipped `.board-flight` layer, so
+nothing in flight can widen a page the matrix measures.
 
-- **The felt reads the queue; everything else reads the view.** While beats are playing, `laid` comes
-  from `shown`, which the queue owns; the controls, the live region, the hand and the turn read the
-  current view, so nobody waits for an animation to be allowed to act. When the queue drains, `shown`
-  goes back to null and the felt follows the view again, which is also what reconciles it.
+- **The "+1" leaves the plate towards the middle of the felt** (`outside` in `game/motion.ts`: the
+  point a gap beyond the edge of a box that faces where it is going, and which way that is). The box
+  is the whole seat, its plate and the pile under it. So the one is under the pile of the seat across,
+  over the reader's plate, beside a side seat's. It was first made to rise
+  from the middle of whichever plate, which for the seat across is over the name on the plate and
+  into the clock that hangs above it: seen in the first picture taken of it, at 1280 in Persian. It
+  is written in the reader's digits in a run that reads left to right, so the sign leads the number.
+
+- **The felt is a model of what has been shown, and the board draws from nothing else.**
+  `game/hokm-felt.ts`: `feltOf` reads a view, `step` applies one logged move, `before` is the table
+  as it stood before the first deal, `unplay` takes a card back. `hokm-felt.spec.ts` plays whole
+  matches through the real engine at two, three and four seats, from every seat and for somebody
+  watching, with seats walking out, and requires the model to be the model of the engine's own view
+  after every revision. Plates, piles, the turn's ring, the medal, the chips, the last trick, the
+  stock and the summary read the model. Legality, the hand, the controls and the live sentence read
+  the view, so nobody waits for an animation to be allowed to act.
+- **The model is written by a scene, by a reset, and when the queue drains.** At the drain it is set
+  to the view, which is what would mend it if a scene ever left it wrong, and `mend` does the same
+  for a board that was read again and found different with nothing to play. It is NOT read from the
+  view while the table is idle, which is how the first draft of this was written and what the plan
+  said: a match and its events arrive in one write, so the felt drew the newest board for one round
+  of that flush and was then set back to the board before the events, and a `<Show let>` that the
+  first round had built threw in the second (the register's 39, with its reproduction). A value only
+  scenes write cannot move in the flush that brings the match.
+- **A scene is an `async` function on the stage, one for each batch** (`play`). A card steps the
+  model as it leaves and the next card waits `SEQ_GAP`; anything else waits for every card to be
+  down first. A trick lies there for its hold (`lying`, which the felt draws over the model), its
+  copies leave for the winner, and only then is the model stepped, so the count on the plate and the
+  last-trick tile move when the cards get there. The turn's ring follows the LANDING: `turnAt` is
+  whoever took the trick that is lying there, else the seat whose card is still in the air, else
+  the model's turn. A pile loses its back when the card leaves it.
+- **`game/hokm-beats.ts` holds the lengths and nothing else**: the order and length of a gather, the
+  gap between packets, the hold before what follows a trick, and `spanOf`, the estimate the
+  presenter is given. It counts a trick that ends a batch to the moment it is taken and never the
+  time it lies there: counted, a table showing a trick would be a table that has fallen behind, and
+  the next lead would be played at double speed. `hokm-beats.spec.ts` holds each of them.
 - **A finished trick no longer sits on the felt until the next lead.** It is gathered, and the
   last-trick tile keeps it readable. A table opened mid-hand shows only the trick in progress.
-- **Pacing is the clock's, never an animation's `finished`**, so a throttled tab cannot strand the
-  queue. More than 1.5s behind plays at double speed - flights included, or the real card lands
-  while its copy is only halfway - and more than 3s behind, a gap in the log, a hidden tab, or a
-  catch-up of more than twelve actions or more than one hand jumps straight to the board, because a
-  reconnect replaying half a hand at full pace is a table showing the past beside controls showing
-  the present. Under reduced motion every flight is a 140ms fade at its destination, the real card
-  shows after the fade rather than after the flight it no longer has, and the sound and the haptics
-  stay - the gather and the deal play their foley with no copies flying.
-- **A trick that ends a batch is HELD, not scheduled away.** The timeline leaves it on the felt and
-  the board gathers it after 900ms itself; a next lead arriving in a later batch cancels that and
-  gathers after 450ms counted from when the trick was taken. Scheduled up front, the gather sat in
-  the queue and every lead waited the full hold behind it.
-- **The watermark belongs to a MATCH.** A rematch at the same table can reuse the board instance,
-  so the board resets its revision, its felt and its event cursor when `props.match.id` changes, and
-  `table-cues` resets the same way - otherwise every event of the new match sits below the old one's
-  last revision and the whole rematch plays in silence. `hokm-board.spec.ts` fails without it.
+- **Pacing is the stage's clock, and what is played at all is the presenter's.** More than 1.5s
+  behind plays at double speed, flights included. More than the felt's `HISTORY`, six seconds of
+  scenes, jumps to the board, and so do a gap in the log and the first sight of a match (a hidden
+  tab keeps what it missed and plays it on return, *The presenter*, below): a reconnect replaying half a hand at full pace is a table showing the past beside controls
+  showing the present. Under reduced motion a card is a 140ms fade where it lands and is shown after
+  the fade; the gather, the deal and the draw are `quiet: 'skip'`, so their foley is heard and no
+  copy is made; the "+1" is not made at all.
+- **A trick that ends a batch is a `linger`, not a wait.** `ctx.linger(HOLD, HOLD_MIN)` ends at
+  900ms with nothing behind it and at 450ms, counted from when the trick was taken, when a later
+  batch arrives. A trick with something after it in the same batch waits `holdBefore(next)`: the
+  whole hold before a hand is called or the match ends, the short one before anything else.
+- **A press is answered at once, and hurries what is in front of it.** `playCard` records `sent`
+  (the match, the card, the revision), tells the presenter what its echo will cover and queues an
+  urgent scene. On an idle felt the scene runs in the same tick. On a busy one what is in front
+  runs at four times the pace with its holds at their least, and the card waits in the hand, lifted
+  (`data-picked`). `lifted` is what keeps it there: the card and where it lay in the hand, held
+  until a scene lays that card, or a reset or a refusal lets it go. The hand reads the view, and a
+  server that answers before the felt has caught up takes the card out of the view: without
+  `lifted` it left the hand a quarter of a second before anything flew. No spec had that order of
+  events; it was seen on the production build, with three seats played over the api, where the
+  answer took 20ms and the hurried cards in front 270. The old executor predicted only on an idle
+  felt, because it could not reorder
+  what it had scheduled. `sending` is that record while the view is still at that revision of that
+  match, so an answer of any kind ends it and nobody has to clear it. The hand hides the card only
+  once it has left (`gone`), and `covers` answers 0 for a card that has not, so an echo that
+  arrives first plays the card whole and the queued scene finds nothing to do. A snap keeps a card
+  that has left on the felt, because `sightNow` adds it to the view it describes.
+- **A refusal takes the card back off the model, and does not reset to the view.** `stale` and
+  `failed` queue an urgent scene that gives the card back to the hand as `unplay` takes it off the
+  felt. Resetting to the view there is wrong in one order of events: the refusal, then a batch that
+  queues behind the scene. The view the reset would read is already past that batch, and the batch
+  would then be played on top of it. `failed` also means the answer was lost, not that the card was
+  refused, so the presenter is told to expect no echo: if the server took the card after all, it is
+  played from what the server says. Flying the card back is 4.6.
+- **The result waits for the table.** `result` is a state that the drain and `mend` write, not
+  `over`. The row under the table, the cards left in the reader's hand, the turn's ring, the tags
+  that say who won and the result panel read it, so the last trick is played out on a table that
+  does not change size under it. A match that ends is not dealt again, so its last view still
+  carries the hand and the plays it listed: `legal` is empty once the game is over, or the cards
+  that stay could be pressed. A derived
+  `over && !presenting` is true for one round of the flush that brings the final batch, which draws
+  the result and takes the row away before the scene that shows the last card has begun.
+  **And it does not outstay its game.** `mend` drops it the moment the game on the table is not
+  over, whatever is playing. It used to return first whenever something was playing, and at a
+  rematch something always is: the next game arrives with its opening deal. Measured on the
+  production build at a table for two, the result of the game before stood over the next one
+  for 720 ms and went in one frame when the five had been dealt, and for all of that the row
+  the five are dealt into was not on the page. `hokm-board.spec.ts` (*takes the result of the
+  game before away the moment another game is dealt at the table*) holds it.
+- **The watermark belongs to a MATCH, and it is the presenter's.** A rematch at the same table can
+  reuse the board instance; the first sight of a match id is a reset, and a batch after it plays
+  from its first card. `sent` names its match for the same reason: the next match comes to the
+  same revision.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
-- **The two-handed draw is drawn on the felt and rings once.** A stock pile with its count sits at the
-  felt's edge; a draw flies one card back from it to the drawer (`draw` beat) and a discard is a sound
-  with nothing flying. The drawer alone gets a panel shaped like the trump chooser - the card, Keep and
-  Take the next card - and the seat putting cards down toggles them in the hand, with a confirm that
-  enables only at the exact count and a "5/13" chip beside the clock. Nothing on screen describes the
-  cards put face down beyond the drawer's own "The 9 of hearts went face down". The turn alternates on
-  every draw, so the turn chime rings on a seat's FIRST draw of the hand and the draw's card-slide is
-  the cue after that.
+- **The two-handed draw is played on the felt, by the card and the stock, and rings once.** A stock
+  pile with its count sits at the felt's edge, and what flies from it and to it is under *The
+  two-handed draw is played with cards that move*, below. The seat putting cards down lifts
+  them in the hand. The stock counts them ("2/3") and, at the exact count, lights up and takes
+  them when it is pressed; a lift past the count is refused with the deny cue, so the count never
+  reads "4/3". The drawer alone is shown the drawn card, face up in the middle of the felt:
+  pressing the card keeps it, pressing the stock passes it and takes the next. The card that went
+  face down after a keep is shown to that seat alone, dimmed beside the stock (`.hokm-glimpse`),
+  until its next draw, and said in words to a screen reader. Nothing else on screen describes the
+  cards put face down. The turn alternates on every draw, so the turn chime rings on a seat's
+  FIRST draw of the hand and the draw's card-slide is the cue after that.
 - **`mount` runs in a microtask**, so a spec that renders a component and advances the manual clock
   in the same tick advances it before the component's timers exist. `turn-clock.spec.ts` awaits one.
+  A scene's awaits run in microtasks too, and its presenter is made in `mount`, so a Hokm spec seats
+  its board through `tests/hokm-mounted.ts`: `mounted` waits for the mount, `elapse` steps the manual
+  clock and lets the promises run between steps, and `send` writes a match and its events in ONE
+  `batch`, as the store does, with the view the model says those events lead to. Written apart, the
+  presenter sees a board that moved with nothing said about how and follows it quietly, and a test
+  of a card in flight passes on a card that never flew.
 
 **The board does not mirror, and `.board-plate` and `.ludo-frame` declare `direction: ltr` to say
 so.** Everything else in this product is authored in logical properties precisely so it flips with
@@ -2028,13 +5108,251 @@ Nothing throws and nothing logs. `world-canvas` has always had the right shape a
 for: read the signal into a local, THEN reach through the handle. Nothing checks it now, and the
 difference exists nowhere else, so it is on the reader.
 
+## The stage
+
+One way for a table to play what happened, shared by every game as each moves onto it. Backgammon
+was the first, ludo the second and Hokm the third; poker still runs on what it had. The design, the audit
+behind it and each game's checklist are in
+`docs/superpowers/specs/2026-10-11-table-presentation-design.md`. Everything under
+`frontend/src/game/stage/` imports nothing from AzerothJS.
+
+```
+the store's batch and the board it arrives with
+        |
+   presenter   what to do with them: play, go straight to the board, or slide quietly
+        |
+   director    scenes in order; a press hastens what is in front of it
+        |
+   stage       runs and timers on the product clock; less motion is decided here
+        |
+   the game's own model  ->  its renderer (transform and opacity only)
+```
+
+**The stage keeps time, and owns nothing on the page.** `stage.animate` starts a Web Animation and
+answers a run whose `done` resolves on `runtime().clock`, never on the animation's own `finished`,
+so a throttled tab cannot strand a queue and a spec drives it with a manual clock. `stage.after` and
+`stage.wait` are the same clock. `stage.pace(rate)` re-rates what is already in flight - live
+animations by `updatePlaybackRate`, timers re-armed for what they had left - so a change of pace
+never fires two cues in one tick. `stage.clear()` cancels every run and timer and removes NOTHING:
+the first kit ended `clear()` with `layer.replaceChildren()` while backgammon handed one element to
+the stage as its layer and to the renderer as its home, so the first hidden tab, gap or rematch took
+the dice, the cube and the stack counts off the page for the rest of the board's life, with every
+gate green. Seen in a real browser before it was read in the code. A stage has no layer at all now.
+
+**A table whose box changes size under a move lands what is in the air, and plays the rest.** A
+flight is measured on the screen when it starts, so a table that changed size under one (the
+chat card opening beside the board, a phone turned over, full screen) sent it to where its
+target used to be. Each board gives its presenter the box it is played in
+(`presenter.frame(root)`), and the presenter watches it: more than a pixel of change
+(`BOX_SLACK`) while the queue is busy lands every run in the air at once (`stage.land()`: each
+ends at its end, with its landing heard), and the scene goes on, so what it does next is measured
+on the table as it now is. Waits and holds are left alone: what rests or lingers is placed by the
+board's own layout, which follows the box. For one commit it was the snap a hidden tab takes, and
+that threw away whatever the table had still to show: the poker motion pass turns the table
+through nine sizes while a showdown is held, and the first size took the shown hands, their names
+and the pot's push off the table, so a phone turned over in an all-in lost the end of the hand.
+The FIRST size is not a change, a size is held against the last one acted on (a box that grows a
+pixel at a time is still seen to grow), a table at rest is left alone, and `dispose` lets the box
+go. Watch the OUTER box only, the stage: what a game opens and closes inside it (a hand row, a
+lamp) must never be a reason, or the scene that opens a row would cut itself. A spec speaks for
+the browser through `tests/fake-boxes.ts` (`watchedBoxes()`: happy-dom lays nothing out), which
+every board's spec uses for its one test of this.
+
+**A copy that flies between two places is `launch`, in a layer the game names.**
+`stage/flight.ts` puts the copy where it ENDS and runs it there with a fill, so a clock that is late
+never shows it landed and gone back; it takes the copy out when it lands and then tells whoever
+asked. `quiet: 'out'` leaves a thing that ends in nothing where it began, and `quiet: 'skip'` puts
+nothing in the layer and still says it landed. A run that is cleared is not told it landed and its
+copy stays, so a table's reset empties its own layer: that is the one place a layer is emptied, and
+it is the table's, never the stage's. `stage/cards.ts` makes a card to fly (`cardNode`), cuts a
+card's shape round the middle of a place (`cardAt`) and finds where a card leaves from (`anchor`):
+the first place it is given that is really drawn, and the last one given when none is. Hokm hides
+its piles on a small table, and a hidden pile measures as the top corner of the page, which is
+where a side seat's card used to start at four players on a phone. `stage-flight.spec.ts` holds
+both modules. Hokm is their first caller.
+
+**A card that turns over on its way is `turn`, and it is one copy with both faces.** `turnNode`
+is a back with the face under it; `turn` flies it from one place to another, edge on half way
+(`EDGE`), and the back and the face change places at that moment by opacity, on the same clock
+and the same easing as the turn, so a spring that overshoots cannot show a face early. It is
+transform and opacity only. A reader who asked for less motion is flown nothing and is still
+told it landed. `stackNode` is a packet: as many backs as it has cards, three at most, one on
+another. The deal is their first caller; another seat's played card is to be the second (4.6).
+
+**A run that has ended can still be taken back.** A run made with a fill goes on holding its last
+frame after its time is up, and the fade the stage plays for something that ends in nothing is
+always one. `run.cancel()` after the end cancels the animation the run still holds, once. It used
+to do nothing, because the end is done once. Ludo's die leaves the board in a fade with a fill
+and is shown again by cancelling that fade, so for one commit every die after the first was
+thrown at opacity 0: measured on that commit's production build, where the first roll of a game
+was drawn and every later one flashed only as its own fade began. `stage-kit.spec.ts` holds it.
+
+**A run tells its own landing before anybody who waits for it.** `timing.landed` is called when a
+run comes to its end by itself, inside the end and before `done` resolves. A run that is cancelled
+or cleared calls nothing. It is there because a cue scheduled with `stage.after` for the moment a
+run ends is a second timer due at the same instant, and a browser runs promises between two
+timers. The run's timer is made first, so whoever awaited the run went first, and a ludo pawn's
+last step was heard AFTER the capture or the home chime it had set off: `token-step,
+token-capture, token-step, token-yard`. A manual clock fires every timer that is due in one go and
+runs the promises afterwards, so every spec heard the right order while the browser played the
+wrong one. The ludo lab found it, in a real browser (`tools/qa/CLAUDE.md`). A pawn's last step and
+an entry's one step are told by `landed` now; the steps before the last are still timers, which
+fall due before the run does. `stage-kit.spec.ts` holds the hook, and `ludo-board.spec.ts` (*a
+ludo landing, with timers that fire one at a time as a browser's do*) plays a capture, a home and
+an entry onto a held square on a clock that runs the promises between its timers. With the old
+timing it hears the order the browser played.
+
+**Less motion is the stage's decision, so a renderer has one path.** With the reader's setting on,
+`animate` swaps a run's frames for a 140 ms fade where the thing ends up (`quiet: 'out'` fades out
+something that ends in nothing and leaves it gone; `quiet: 'skip'` drops a flourish altogether) and
+keeps its delay. Timers are untouched. A run says how long it really is (`run.length`), and a
+renderer schedules a cue against that, which is what keeps every sound and haptic, in order, when
+nothing moves. (A cue that belongs to the run's own end goes in `landed`, above.)
+
+**The director plays scenes one after another.** A scene is a function that awaits runs; the next
+starts when it returns. `fast` plays one at double speed. `urgent` is the reader's own press: it
+marks everything in front as rushed - four times the pace, cues kept apart and in order, nothing
+finished in place - and is itself played at its own pace; pressed on an idle director it starts in
+that turn and leaves no haste behind. The kit it replaces had `hurry()`, which finished whatever was
+in flight where it stood, fired every remaining cue at once, and then played the reader's own piece
+at twelve times the pace; nothing but its own spec ever called it.
+
+- **A hold on the felt is `ctx.linger(ms, least)`.** It lasts `ms`, or ends at `least` once
+  something that may cut it is waiting or arrives (`cuts`), or at once if it is already past its
+  least. At double speed both numbers halve, never under 300 ms. A press takes it to its least.
+- **How far behind the table is** (`backlog`) counts what is queued and what the scene in hand has
+  left, at the pace it is played and with a hold counted at its least.
+- **A scene that never ends is given up on**: three times its estimate and four seconds on, it is
+  reported and the queue stopped, so nothing that waits for the table can wait for ever.
+- **A scene that throws is reported, and the next one plays.**
+
+**The presenter is the one place that decides what a board does with what it is told.** One for
+each board; the board calls `see(batch)` when its match or its batch changes and hands over a way to
+ask for the board as it should stand now (`sight`). In order:
+
+- A match it has not shown - the first, or a rematch on the same board - is drawn from nothing
+  (`table.reset`) and nothing that already happened is played.
+- A batch for another match is ignored and moves nothing.
+- A batch that says `jump` and a gap in what it was told go straight to the board. So does a tab
+  that is hidden while something plays.
+- **What arrives while the tab is hidden is kept, and played when the tab is shown again**, as one
+  catch-up: double speed past a second and a half, like any other. All the while the presenter says
+  it is presenting, so no board mends itself to the newest view under it, the result waits for it,
+  and a pass waiting on `data-presenting` waits for it too. What is kept never outgrows the game's
+  own limit: the oldest of it goes, and the board is drawn as it stood before what is left, so a
+  long absence comes back to its last few moves played. A gap, a board that moved with nothing said,
+  another game, and the answer to the reader's own press arriving while the tab is away still go
+  straight to the board. It used to be drawn as it stands at once, which is how the owner saw a roll
+  made in one tab never thrown in the other: the board took the new revision while nobody looked,
+  and once the pawn had walked no die anywhere said what had been rolled.
+- Otherwise the actions after the last revision it has shown, and no later than the board in hand,
+  are played to that board. `live` ones are played, at double speed once more than a second and a
+  half stands IN FRONT of the newest action: the queue, plus the earlier actions that arrived with
+  it. Weighing only the queue let a reconnect replay a dozen actions at full pace beside controls
+  that showed the present. Weighing the newest action as well played an ordinary turn of two hops
+  and a hit at double speed, for being exactly as long as it is. What was read to catch up is
+  played only if the queue and all of it fit the game's own limit (four seconds of scene at
+  backgammon and at ludo), and is otherwise the board.
+- A live move that finds the table already more than two of those limits behind goes straight to
+  the board, and play goes on from there. Live play had no bound at first. A seat that moved faster
+  than its moves could be shown - a script did, forty-four revisions in three seconds - left the
+  table half a minute in the past at double speed, and the result of the game waiting behind it.
+- A board that moved with nothing said about it is reached by sliding (`table.settle`): no sound,
+  nothing captured. A watcher's board does this for an answer the server would not explain: a
+  tail past the cap, or a game opened in its middle.
+- A scene that throws is logged, and then the table is drawn again.
+
+A snap is always `director.cancel()` and then `table.reset(sight)`, and **`reset` rebuilds
+everything the renderer owns** - which is what made the stage wiping the page survivable to fix
+rather than something to work around.
+
+**What the reader did before the server said so is one record.** A board that moves something at
+the press tells the presenter (`predict`) which revision it guessed against and how to recognise
+its own action in the answer. The answer to it - the action at the next revision, by the reader's
+seat - is played without the part already on the table. Anything else is the guess given up: the
+table is drawn again. The board it should stand at already includes what the reader has staged, so
+a snap in the middle of staging a turn keeps the turn. And the reader's own piece goes through
+`presenter.act`, which is an urgent scene: it never waits its turn at full length behind somebody
+else's move.
+
+**A table is told it is playing.** `presenter.watch` mirrors the queue into the board, which
+writes `data-presenting` on `.table-stage`; the result panel waits for it, and a browser pass
+waits for it to clear instead of sleeping. The board hands the same word to whoever drew it
+(`onPresenting`), which is how the frame round a watched board knows not to call a game over
+yet.
+
+**The layers of a table are one ladder** (`stage/layers.ts`): resting pieces, the count on a tall
+stack, a mark, the cube, a piece that is moving, one in the air, the dice, a burst, a banner. The
+renderer sets the numbers and hands the same ones to the stylesheet as `--layer-*`, so a number is
+written once. `.table-stage` isolates its stacking, and its two tokens are `--stage-flight` and
+`--stage-result`, named apart from the theme's `--z-*`: the result panel is above anything in
+flight.
+
+Ludo's pawns are tall and stand over the row above them, so its pieces are ordered by depth inside
+ONE rung: the renderer gives each rung a band of two thousand (`BAND`) and adds the row. A walking
+pawn stays in the pieces' rung, fifty above the lowest row of its path, so it passes behind a pawn
+standing nearer the reader instead of in front of it. A pawn knocked home takes `airborne`, the die
+`dice`, and confetti `burst`, the rung that arrived with it. `ludo-board.spec.ts` (*the layers of
+a ludo board*) holds the order, and that the die and the air are rungs of one ladder.
+
+`stage-kit.spec.ts` holds the stage, the director, the holds, the feed, the layers and the routes;
+`presenter.spec.ts` every branch above against a table that only records what it was asked.
+
 ## The play pass
 
 `tools/qa/play-pass.mjs` is two real browsers playing one game through the interface, run by hand
 against the built server. It seats two wallet fixtures at one table, presses Start, takes ten turns
-by CLICKING the roll button and the move list, plays the rest out over the api, and then asserts in
+by CLICKING the die and the pawns on the board (it fails if a list of moves or a button for one
+is in the page beside them), plays the rest out over the api, and then asserts in
 BOTH browsers that the finished game is still on screen, says what it did to the ratings and offers
-another.
+another. Of every pawn it presses it asks two more things: that the pawn is walking when the
+press returns, and that the OTHER browser sees it walk rather than appear. And it does not sleep
+before it reads the end. It waits until each board has shown the game to its finish (`level`: the
+stage's `data-rev` at the server's revision and `data-presenting` gone), which is the only wait
+that is still right when a finish takes as long as its last walk and its confetti. Built with a
+board that is told nothing of what happened, that waits for the server before it moves the
+reader's pawn and that never stops saying it is playing, the pass failed those four lines. It
+failed the eight about the result card with them, for a reason of its own: a board that is told
+nothing slides to every position in turn, and after the rest of the game had been played over the
+api it was still far behind when the pass stopped waiting.
+
+Of every roll it presses it follows the die in BOTH browsers, frame by frame (`throwOf`), and
+asks nine things. The roller's own die leaves the middle of the board, where it was pressed. The
+other browser sees it come in over the roller's corner. It comes to rest where the renderer's own
+`dieRest` puts that seat's die, in both. No pawn is lit while it is in the air. It shows the face
+the server rolled, in both. There is one die on the board, never two. And it is `DIE_SIZE`
+squares across in both, measured against the board. In the air it is a whole cube with nothing
+under it, and once it has landed it is the one face that was rolled, standing on its base (the
+two lines the die's redrawing added). The resting place and the size are the
+renderer's own numbers, imported, so the pass holds the browser to the code and not to a copy of
+it. Built with six faults (the size set above the die, every seat's die thrown from the hand,
+every die resting in green's yard, the face after the one rolled, the pawns lit with the answer,
+and a die of the button's own under the table's), the pass failed those seven lines and no other.
+
+It reads the die at rest a fifth of a second after the die's own animation has ended, and that
+fifth of a second is the clock's. It was thirteen frames first, which is the same thing on a
+screen that draws sixty frames a second and ninety milliseconds on one that draws a hundred and
+forty-four: the time the base takes to come back under a die that has landed. On such a screen
+the base was read at 0.97 and a die that was right was failed, four times out of four, with a
+detail that said "0 of 4" and nothing else. **A wait counted in frames is a wait of no known
+length**, and a line that fails says what it saw: both of the die's lines now name the faces and
+the base they read.
+
+When the game is over the pass seats four at a second table, opens it as one of them and walks
+that one out over the api, which is what the same account's other device is to the page. Two
+lines are asked of the page that stayed: that it still stands, and that it draws the game once,
+as a watcher's. Built with the board reading the store's own match under itself, as it used to,
+the page fell to the error boundary and the pass failed both, and the line about a clean console
+with them (*A chair given up from somewhere else*, under *Playing a game*). No spec can be made
+to: the order in which the outer branch and the board's own effects run is the browser's.
+
+It presses a pawn where it is, with the mouse (`press`), and not through a locator. A pawn that may
+be moved hops, and a locator's click waits for its element to hold still for two frames in a row and
+looks again after a growing pause. Pressed three tenths of a second after its die had landed, that
+wait fell in step with the hop: 1.8 seconds every time and more for the first pawn of a game, so the
+line about the other browser failed on a board that had answered the press in under a tenth of a
+second. Whether a pawn walks is asked inside the page, of every frame, and a failure says what the
+other board did instead: never heard of the move, heard and slid to it, or was busy.
 
 It exists because of what the other gates cannot see. `ludo-pass.mjs` plays complete games over the
 api in seconds and never presses a button; `npm run qa` tours the play route in 680 cells and never
@@ -2046,6 +5364,16 @@ wrong product.
 
 Two of its assertions are deliberately made in the OTHER browser, because a move only the mover can
 see is the failure it exists to catch.
+
+**The motion itself is held by ludo's own lab and pass**: `tools/qa/ludo-motion-lab.mjs` on the
+dev server and `tools/qa/ludo-motion-pass.mjs` on the built one (`tools/qa/CLAUDE.md`, *The motion
+labs and the motion passes*). They follow each pawn by its name through every frame and fail one
+that jumps, cuts a corner, moves when nothing moved it or does not come to rest in its place. The
+lab plays the positions chance will not give, with the engine's own events; the pass presses the
+pawns at five sizes in two browsers with a third watching. So the die carries a name as the
+pawns do (`die-<n>`, `layDie`): a new one each time it is put in the reader's hand or another
+seat's is thrown in, and the one it had in the hand when it is thrown from there, because that
+is the same die. `ludo-board.spec.ts` (*a ludo roll, played*) holds the names.
 
 **`tools/qa/hokm-play-pass.mjs` is its sibling, and a separate file rather than a parameter.** The
 two games are different interfaces with different failure modes: ludo's is a canvas with a dice
@@ -2063,15 +5391,31 @@ none of them. The only way to know is to fetch the url again from inside the pag
 back - every layer of it, so a table whose felt loaded and whose ornaments did not still fails; the
 check answers 0 for a broken file and -1 for no such element, because a pass asking the
 wrong browser at the wrong moment is a different failure from a broken build. It is asked after trump
-is called, of the browser that did not call it. The pass then puts the cards face down by pressing them
-(the confirm only enables at the exact count), presses Keep and Take the next card for four draws with
-the offer present in the drawer's browser and absent from the other, and finishes the draw over the api
-before it clicks cards.
+is called, of the browser that did not call it. The pass then lifts the cards to put face down by
+pressing them and presses the stock, which takes them only at the exact count; presses the drawn card
+and the stock by turns for four draws, with the card on the felt of the drawer's browser and absent
+from the other; finishes the draw over the api before it clicks cards; and fails if a button on the
+page plays a card other than the card, or a bar of sentences is drawn under the table.
+
+**It waits for the table to say it has caught up before it reads how the match ended.** The result
+waits for the queue, and after a match played out over the api the table is still showing its last
+few seconds when the server finished long ago, so the two sleeps that used to stand there were a
+guess at how long that is. It waits for `data-presenting` to leave the stage at the finished
+revision, in each browser, and records whether it did.
 
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
-for themselves. Backgammon plays eight turns by pressing Roll, Double, Take and the move list, poker
+for themselves. Backgammon plays eight turns ON THE TABLE - it taps the dice to roll and to end a
+turn, the cube and then Double, Take on the board, carries the first checker of each turn to its
+point with the mouse held down and taps the points of the board for the other hops, with where a
+point is taken from the layout module the board is drawn from - and fails if a button for a move
+is on show under the board. Then it makes one turn with the keyboard and nothing else, Enter on
+the dice and Enter on whatever stop the keyboard is then found on until the turn is sent, and
+asks the cube's question and puts it away with keys. Poker plays
 eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
+wants the raise out of the reader's stack and in the air in the turn of the press, at the
+revision it was pressed on (the press and the read are one evaluation in the page, so no
+answer can have come between them), and in the pot only once it has landed,
 and both finish over the api and assert the result in both browsers. What "the other browser saw it"
 means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,
 so the opponent's "Dana is playing" is rightly unchanged, and the first version of the pass called
@@ -2079,9 +5423,9 @@ that a defect.
 
 ## The table, and the cards on it
 
-Hokm is played on `hokm-table-wide` (16:10) or `hokm-table-tall` (5:6), chosen by the SHAPE of the
-fit cell (`@container fit (min-aspect-ratio: 15 / 13)`, where the wide table starts to be the larger
-of the two), and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
+Hokm is played on a table that takes the room it is given, between about half as wide as it is
+tall and three times as wide, drawn from `hokm-table-tall` or `hokm-table-wide` by which way the
+table lies, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
 
 **A table is two layers: a photograph of the object and a drawing of its ornament.** The felt, the
 bevelled walnut rim, the brass inlay and the dark groove are rendered by `tools/blender/surfaces.py`
@@ -2089,28 +5433,85 @@ in Cycles - real geometry, so the rim casts its shadow onto the edge of the clot
 CC0 `scuba_suede` (taken to grey and tinted baize green, with a procedural mottle and nap on top,
 because a flat fill reads as plastic) and `dark_wood`. The rim is a hand-built mesh with no UV map, so
 its wood is mapped in OBJECT space; mapped by UV it sampled one pixel and came out a flat orange. The
-gold lines, corner flourishes and medallion stay vector in `hokm-ornaments-*.svg` from
-`tools/art/boards.mjs`, laid over the render as a second background, because a thin gold line is the
-one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
+gold lines, corner flourishes and medallion stay vector, in `hokm-frame.svg` and
+`hokm-medallion.svg` from `tools/art/boards.mjs`, laid over the render, because a thin gold line is
+the one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
 smooth cloth compresses well.
 
-**Poker has a table of its own at the same standard**, because the owner asked for one: a stadium with
-a padded black leather rail (Poly Haven's CC0 `brown_leather` normals under a near-black tint), a
-walnut racetrack with a brass inlay and a deep emerald felt, rendered by `tools/blender/poker-table.py`
-into `poker-table-{wide,tall}.webp` (1600x1000 and 1000x1250), with the betting line and a faint
-four-suit medallion as vector in `poker-ornaments-*.svg` from `tools/art/poker.mjs`. It is a separate
-script on purpose: `surfaces.py` renders the hokm and ludo tables, the owner does not want those
-re-rendered, and the helpers both use moved to `tools/blender/lib/tables.py` unchanged. Run it with
-`blender -b --factory-startup --python tools/blender/poker-table.py` (`NURA_SURFACE` picks one,
-`NURA_SAMPLES` sets quality); the two numbers the SVG needs - rail, track and groove as fractions of the
-short side - are written in both files and have to agree. The deck comes from `tools/art/deck.mjs`, and the suits from
+**Poker's table is a drawing, and the stylesheet makes it.** The owner asked for a table of
+poker's own, and for a while it was a photograph: a stadium rendered in Blender with a padded
+BLACK leather rail, in two shapes. The owner then called it ugly, the black border most of all
+(2026-10-13). On a navy page a black rail is a smudge with no edge; rail and racetrack took
+15.5% of the table's shorter side on every edge; and a photograph of a stadium cannot be cut
+in nine for a table of another shape without a seam down its middle. So `.poker-table::before`
+is the rail and `.poker-table::after` is the wood and the cloth, each a box with
+`border-radius: 999px`, which is a stadium at any shape:
+
+- **the rail** is leather the colour of a saddle, lit from above (a gradient), rolled (an
+  inset shadow darkens both its edges) and stitched (a dashed `outline` drawn inside it);
+- **a brass bead** where the leather meets the wood, and **a walnut ring**: the ring is the
+  `::after`'s BORDER, painted by a background clipped to `border-box`, and the cloth is the
+  same element's `padding-box`. Two pseudo-elements carry four materials;
+- **the cloth** is teal baize under a light from above, with the groove and the rim's shadow
+  as inset shadows, the betting line as an `outline` at a negative offset, and the four-suit
+  medallion as a background in the middle;
+- **grain** is three small SVG tiles of `feTurbulence` from `tools/art/poker.mjs`
+  (`poker-leather`, `poker-wood`, `poker-felt`), each drawn at the size it was made, so
+  nothing is stretched. The four files are 2.6 KB together, where the photographs were 105 KB,
+  and the table is sharp at any size.
+
+Rail and wood are 10.2% of the shorter side (7 and 3.2), a third less than the photograph's, so
+the cloth is wider. `backend/tests/poker-table-art.spec.ts` holds the files, the medallion's
+scale, the grain's sizes, that the rail is not dark again, and that `RAIL` in
+`game/poker-seats.ts` is the rail the sheet draws. `tools/blender/poker-table.py` is gone:
+nothing draws what it rendered. The deck comes from `tools/art/deck.mjs`, and the suits from
 `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card and a spade in the
 hero art are one path.
 
-**Two tables, not one stretched.** A phone column is taller than it is wide and a desktop one is the
-other way round; a single image at `100% 100%` would squash the corner flourishes and the medallion
-into ovals on one of them. Everything on the felt is placed in percent and `cqmin`, so the seats and
-the trick follow whichever table is showing.
+**One table of any shape, cut in nine and never stretched.** For a long time there were two
+tables, 5:6 and 16:10, each drawn at `100% 100%` of a box of exactly its shape, because a single
+image stretched over another shape squashes the corner flourishes and the medallion into ovals.
+The price was the room: on a tall phone the table sat in the middle of the stage between bands of
+bare page (the table and the hand took 70% of the stage's height at 390 by 844), and on a phone
+turned over it was 48% of the stage's width. A photograph of a table does not have to be drawn
+whole. `.hokm-table::before` draws it as a `border-image` cut in nine: the four corners keep
+their shape, the four edges stretch along their own length, where a grain and an inlay run
+anyway, and the cloth fills the middle. `.hokm-table::after` lays the gold thread and the corner
+leaves over it from `hokm-frame.svg`, cut in nine the same way, and the medallion in the middle
+as a background of its own. So the table is as tall as a tall phone allows and as wide as a wide
+screen does, and its rim is as thick as it ever was.
+
+- **A thousand of the drawing is the table's shorter side.** The photograph is cut 110 from each
+  edge and drawn 11cqmin wide; the frame is a square of a thousand, cut at 330 and drawn at
+  33cqmin; the medallion is 360 across and drawn at 36cqmin. Those are three pairs of numbers
+  that have to agree, in a stylesheet and in three drawings, and
+  `backend/tests/hokm-table-art.spec.ts` reads both and holds them: the same scale for all three,
+  a cut that clears the corner leaves, every file the stylesheet asks for present, and none left
+  in `public/board` that nothing draws. It is a server spec because the browser's test runner
+  hands every stylesheet over as an empty string.
+- **A `cqmin` in a pseudo-element is the element's own.** The table is the size container, and
+  its `::before` and `::after` measure by it, which the table itself cannot.
+- **The seats and the trick are placed in percent and `cqmin`**, so they follow whatever shape
+  the table has. A played card is `16cqmin` wide, a sixth of the table's shorter side, where it
+  was an eighth and read as a stamp on a desktop. It is also no wider than the two side seats
+  leave for three of them (`--side-room`), and it keeps clear of its neighbours by its own
+  width and an eighth more (`--reach-x`): cards lie tilted, a tilted card's box is wider than
+  the card, and the fit pass found the bigger cards touching at every desktop size.
+- **On an upright table the two side seats are a face and two numbers**, and on any table under
+  32rem wide. On a phone a side plate with a name on it covered a block of felt 90 by 75 on both
+  sides of the trick; the name is for a screen reader there (the plate still has it) and the
+  plate is 44 wide. A table that lies wide gives its side seats their names, in a plate no wider
+  than 8.5rem, and from 44rem their piles. Beside an open chat on a tablet the table is 560 by
+  433, and a pile on each side left a card on the felt under its 15%.
+- **A side seat's clock is flush with the plate's outer edge**, not centred on it: "۲۴ ساعت" is
+  74 wide, a compact plate is 44, and centred the tab hung three pixels off the table in
+  Persian and in no other language. Over a named plate (the seat across, and a side seat on a
+  wide table) the tab stands at the plate's far end, away from the crown and the dealer's mark,
+  which sit on the face.
+- `fit-pass.mjs` holds the room: on an upright stage the table and the row under it take 85% of
+  the stage's height, on a wide one the table takes 70% of its width, and a card on the felt is
+  15% of the table's shorter side. All three with the chat shut, which is when the stage is the
+  table's.
 
 **The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending, so
 the column is `card % 13` and the row is `card / 13` and there is no packing for the client to know.
@@ -2131,15 +5532,575 @@ indices are large: they are what shows of a card overlapped in a hand.
 
 **The layout follows the reference and the rules, not a generic card table.** Seats are placed by
 their place round the table - bottom, then right, top and left at four; top-right and top-left at
-three; top at two - and the trick lies between each seat and the centre. On a phone the order is
-table, hand, then the tiles, so the cards you are holding are never below the fold; on a wide
-container the tiles (trump, score, last trick) are a column beside the table. The hand fans with a
-step that shrinks to fit, and breaks into two rows past thirteen, because the seventeen cards of the
-three-handed game in one row on a phone is a strip too narrow to read.
+three; top at two - and the trick lies between each seat and the centre. The stage is the table and
+under it the hand, at every size, and the trump, the score and the last trick are on the felt. The
+hand fans with a step that shrinks to fit, and breaks into two rows past thirteen where one row
+would show too little of each card, because the seventeen cards of the three-handed game in one
+row on a phone is a strip too narrow to read.
+
+**The hand is a fan the stylesheet lays out and moves, and the board slides it only where the
+stylesheet cannot.**
+
+- **A card is moved, not placed.** Each `li` stands at `left: 50%` and is carried to its slot by
+  `translate`, on a step that is a LENGTH: `100cqi` of the fan, which is an inline-size container.
+  A percentage in `translate` is a percentage of the card itself, so the step the fan used to have
+  in `left` would have stacked every card on one point. A card that stays when another is played
+  slides to its new place by a transition on `translate` and `rotate`, which is all that closing a
+  gap needs: nothing is taken out of the page and put back.
+- **The card's width is worked out once.** `--hand-card` is registered with `@property` and
+  declared on `.hokm-hands`, so it is a length by the time the fan inherits it. Unregistered it is
+  text, worked out again wherever it is used, which is inside the fan and so against the fan's
+  width instead of the row's. A registered property's `initial-value` may not depend on anything a
+  rule can move, and `3.5rem` does: that registers nothing and says nothing. The tablet's card going
+  from 81 px to 68 under the first prototype is how it was found. It is `56px`.
+- **On a phone a card is 56 by 79**, where it was 41 to 45 wide, and the fit pass holds that with
+  the sliver each card shows: 25 px of thirteen at 390, 23.9 at 375, 22.7 at 360. The design asked
+  for 24. Thirteen 56 px cards fanned at six degrees need 367 px to show 24 each and a 360 px
+  phone has 348 between its gutters; a second row there would take 65 px from the table. So
+  thirteen are one row at any width and the pass holds 22.5. A wide phone keeps its 38 px card,
+  because the stage is 330 px tall there and the table needs it, and any stage under 467 px
+  tall gives up some of the 56 the same way: `12cqb` is the card giving way before the table
+  does. A 360 by 560 phone with another table's notice over the stage has 433 px of it, a 52 px
+  card and a table 288 px tall. The pass's floor is the lesser of 56 px and those twelve
+  hundredths (`FILLS.short`), or it would fail the design; it holds `hokm-2-draw`, `hokm-3` and
+  `hokm-4-trick` to that phone as well as to the sizes every cell has.
+- **More than thirteen make two rows where one would show less than that** (`rowed`, from the
+  stage's measured size, with the stylesheet's own clamp mirrored in it): seventeen, sixteen and
+  fifteen on a 390 px phone, one row from fourteen down, and one row for seventeen on anything
+  wide. Before the size is known a hand is never broken, or a wide table would draw two rows for
+  a frame. **A stage under 480 px tall never gets a second row** (`TWO_ROWS_FROM`): under an
+  open chat a 390 by 844 phone has a stage 373 px tall, and a second row there left the table
+  219. That rule was here before the fan and no spec held it, so the fan's rewrite of `rowed`
+  dropped it and every gate stayed green; reading the diff against the last commit found it.
+  **Both rows are of the same 56 px card.** The floor gave way in a second row at first
+  (`15cqb / rows`), which dealt the three-handed game 43 px cards on a 360 by 640 phone: the
+  size this section exists to end. The fit pass said so the first time it ran on that cell.
+  Seventeen there are two rows showing 34 px each over a table 357 px tall; inside a browser's
+  own bars (360 by 560) the table is 277 px tall and takes its compact arrangement for the
+  three tricks the hand is two rows.
+- **The hand is pulled up under Sort and the lamp by the room a card that may be played leaves
+  over itself, and no further**: `top: 0.9rem` less the `0.55rem` such a card stands higher is
+  the `-0.35rem` of `.hokm-foot > .hokm-hands`. It was `-0.6rem`, fitted to a 41 px card in a
+  fan that kept 10 px clear at each end. With wider cards across the whole row the third card
+  from each end lies under a control, and lifted it stood 2 px into the control's box on every
+  phone. `hokm-table-art.spec.ts` holds the sum; the fit pass's corner check holds the picture.
+- **Where Sort and the lamp stand BESIDE the hand** (a foot of 34rem or more) **the fan keeps
+  the swing of its end cards to itself**: `padding-inline` of the card's height times 1.4 times
+  `sin(6deg)`, the pivot and the tilt once more. Without it the fan fills its column and the top
+  corner of an end card turns 17 px outward, across the 8 px between the two and into the
+  control: on a tablet the card and the button really crossed. On a phone the swing goes into
+  the page's gutter, where it costs no card a sliver, so the padding is not there. It costs the
+  three-handed game on a stage 544 to 566 px wide a pixel of each of seventeen cards (21.5 to
+  22.5 shown); one row is still right there, since a second would take 60 px from the table.
+- **Sort is slid by hand, and so is a row that goes.** A keyed list re-inserts every node it
+  cannot leave in place, and a node that was taken out and put back starts no transition: it
+  jumps. `rearrange` reads where every card lies, makes the change, and `follow` plays each card
+  from where it lay to where it lies with an ADDITIVE animation on `translate` and `rotate`, so
+  the slot stays the stylesheet's and a resize in the middle of it still lands right.
+- **While the board slides the cards the stylesheet lets go of them** (`data-sliding` on
+  `.hokm-hands`, for the length of the slide, and an earlier slide's end does not cut a later one
+  short). The list leaves two or three cards in place on any sort, and those got the stylesheet's
+  transition AND the board's slide: in the browser they jumped to their place while the others
+  slid. No spec could see it, since a page with no stylesheet has no transition to collide with.
+- **A tilted card is reckoned by where it stands.** It turns about a point below it
+  (`transform-origin: 50% 140%`), so the middle of its box is swung aside by its tilt, up to 7 px
+  at the ends of the fan. `places` takes the swing out. `FAN_TILT`, `FAN_PIVOT` and `FAN_MS` in
+  the board are the stylesheet's `6deg`, `140%` and `320ms`; `hokm-table-art.spec.ts` reads both
+  files and fails when they part, with the width's clamp and the registration.
+- **A card that cannot be played is veiled, not drained.** It was `saturate(0.3) brightness(0.6)`,
+  which made twelve of thirteen cards one grey. It is a `::before` on the face at 45% of the
+  page's dark now, under which a red card is still red. A card that can be played stands 0.55rem
+  higher under a ring that is `::after` on the face. Both fade by opacity, and the face itself
+  animates `translate` and nothing that has to be painted.
+
+**The hand is played from a keyboard, and a card that cannot be played is not taken off it.**
+
+- **A card is a button whether it may be played or not**, and says which with `aria-disabled`.
+  It was `disabled`, and a disabled button cannot be given the keyboard and loses it the moment
+  it is disabled: every card went dead while a play was with the server, so each press dropped
+  the keyboard on the page's body. The press is refused where it lands instead (`touchCard` and
+  `toggleAway` on `board.busy()`). That refusal is not a courtesy: the store answers a play
+  made while another is out with `failed`, and the board takes a failed play back off the
+  felt, so a second press let through would un-play the first.
+- **One card is in the order of the Tab key** (`stop`): the card the keyboard last stood on
+  (`kept`, written by the card's own `focus`) while it is still held, else the first that may
+  be played, else the first. A hand used to be a stop for every card that might be played. The
+  arrows walk EVERY card, the ones that cannot be played as well, because a hand is read
+  before it is played and the Hakem reads five cards nobody may play yet: right and left along
+  the hand, round and round, up and down between two rows to the card over or under, Home and
+  End. The fan does not mirror, so right is right in both languages. A chord with Control, Alt
+  or the Meta key is the browser's and is left to it.
+- **A card played with a key hands the keyboard to the next card** (the one before, when it
+  was the last) at the moment it is laid, and only if the keyboard is still on it. A card a
+  pointer played hands nothing on: `lifted.keyed`, read from the click's `detail`, which is 0
+  when no pointer made the click and is also how a screen reader presses (the ludo board's
+  `keyed` is the same rule). The first build handed the focus on after every press. The fan
+  draws a focused card over its neighbours (`li:focus-within`), so after a click of the mouse
+  the next card stood in front of the fan for good. Found by clicking in the built page:
+  happy-dom draws nothing, and `:focus-visible` said the card was not seen, which was true.
+- **The keyboard's place is drawn on the card.** The button's own outline would ring the box
+  the card has risen out of, so it goes, and the face carries a gap and a ring in the
+  product's focus colour 0.9rem up, over the veil as well. A lifted card's gold ring wins.
+- Not here yet: the keyboard going back to a card the server refused (4.6, with its flight
+  back). And the keyboard does not follow the turn: when the turn comes round it is where it
+  was left.
+
+`hokm-board.spec.ts` (*the hand under a keyboard*) holds the stop, every key, the hand-over
+and the refusals. A spec that means "pressed with a key" dispatches a `MouseEvent` with
+`detail: 0` itself, because the kit's `fire()` sends a plain `Event`, which has no `detail`.
+`hokm-table-art.spec.ts` holds that the stylesheet asks a card for no `:disabled` or `:enabled`
+and that a ring is drawn where the outline went. The passes read `aria-disabled` where they
+read `disabled` (`hokm-play-pass.mjs` `hand()`, the fit pass's `lift`).
+
+**The play pass asks the rules what a hand may play, on every turn.** Its follow-suit check
+counted the hands in which some card had gone quiet and wanted one in three tricks. A table
+that was right failed it: the pass puts each seat's lowest cards face down and calls clubs,
+the lowest suit, so a seat can come to the tricks with no trump at all and follow three leads
+of it with anything, and nothing goes quiet. It reads the mover's own `plays` from the api now
+and wants the page to let through exactly that many (`agreed`), and a quiet card wherever the
+rules narrowed the hand. Seen red on a build whose cards never say they cannot be played.
+
+**A hand is dealt in packets from a deck that is on the table, and nothing is told before it is
+dealt.**
+
+- **The deal's in-between is the board's, not the model's.** `step` still deals a hand in two
+  moves, as the engine does: five to the Hâkem on `deal`, everybody full on `trump`. What a
+  table shows between those is ritual with no information in it, so it lives where `lying`
+  lives: `dealing` holds the count each plate shows while the packets fly (and where the deck
+  is, and at two seats what is left in the stock), and goes when the scene does. The parity
+  spec is untouched.
+- **The packets are the ones a dealer deals** (`openingPackets`, `restPackets`): five to the
+  Hâkem; then five to every other seat and fours all round from the Hâkem, eleven packets at
+  three seats and at four, with `dealGap` holding them inside 1.3 s. At two, five each from the
+  stock, whose count falls 52, 47, 42 as each five leaves it. A plate counts a packet when it
+  LANDS. The cue spec's one slide a seat became one slide a packet.
+- **The deck is on the felt in front of the dealer** (`.hokm-deck`, placed by the trick card's
+  own rule at the dealer's `REACH`), from the first card to the last packet's leaving, the
+  whole trump pause included: `deckAt` reads the shown model's phase, so a reader who comes to
+  the table in the pause sees it too. A table for two has none, because what is not dealt
+  there is the stock. The dealer's pile slot was the first idea, and it is not always drawn
+  (side seats on a phone, any compact table): rule 3 wants a flight to start and end on
+  something that is.
+- **A reader's cards are in their slots before they are dealt, and not to be seen.** `seen` is
+  the reader's cards the felt has dealt, with the round they were dealt in. A card of the hand
+  that is not in it is `data-dealt="false"`: laid out and `visibility: hidden`, so it takes
+  its place, cannot be focused and is not read out. A reader's packet lands in the middle of
+  the row, and each card of it leaves as a back, goes edge on half way and arrives as a face
+  (`turn` in the kit: one clone with both faces), 35 ms after the one before. The card is in
+  the hand when its clone lands.
+- **Which cards a packet holds is nobody's knowledge**: the view gives a hand, not the order
+  it was dealt in. `dealtIn` splits the cards not yet seen with a shuffle seeded by the match
+  and the round, so the same hand is dealt the same way each time it is shown, and never in
+  the order it is held, which would say where every suit lies. A packet takes its own count
+  and no more: the last one once took whatever was left, and a deal and a trump that came in
+  one answer gave the Hâkem all thirteen in the first five. A fault that no spec caught said
+  so.
+- **The round is in `seen`** because the cards a hand leaves unplayed are often among the
+  first five of the next, and without it they were shown before their packet.
+- **At rest the hand shows the view's hand.** `rest`, `reset`, the cap and the hurry each write
+  `seen` whole, so a card can be hidden only while something is still to be played. A reset to
+  the table before the opening, where the reader holds nothing, hides them all.
+- **The row a hand is dealt into is there from the first** (`handed`, for any seated reader),
+  with the room the whole hand will need: `--rows` is `roomy`, which is two where seventeen
+  cards will make two rows, from the moment the deck is out. The table had one size while a
+  reader waited for trump and another when the cards came, and at three seats on a phone it
+  moved once more, by 66 px, when the hand turned out to need a second row. It keeps one size
+  now from the deal until a row goes. Somebody watching is dealt nothing and has no row.
+- **One count of rows sizes the card and keeps its room, and it is never nought.** The row
+  said `--rows: 0` when it held no card, the stylesheet divides by it (`10cqb / var(--rows)`),
+  and the card the empty row kept room for came out at its 84 px ceiling where the cards that
+  arrived were 66: at 1280 wide the table was 25 px shorter for as long as the row was empty,
+  which is every trump pause of a reader who is not the Hâkem and every gather. The room was
+  kept by a second count (`--keep`), which is gone. Two rows are only ever used where the card
+  is already at its floor, so sizing the five of a pause by the rows to come moves nothing.
+- **The Hâkem is asked nothing until the five are up** (rule 7): the chooser, the sentence a
+  screen reader is given, the tip, the chime and its haptic all wait on `veiled`, and so does
+  Sort. A hold on a decision is capped at 2000 ms (`DEALT_CAP`, on the runtime clock, armed
+  once and not at every card), counted from where the next block says. Before the hold, a
+  Hâkem who was at the table for the opening heard no chime at all, since the turn was theirs
+  from the first frame.
+
+
+`hokm-beats.spec.ts` holds the packets, the seeded split and the time a deal takes;
+`stage-flight.spec.ts` holds the packet's stack and the turn; `hokm-board.spec.ts` (*a hand
+dealt in packets*) holds the deck, the counts, the hidden cards and their turning up, the row,
+the hold and its cap, a jump and reduced motion; `hokm-cues.spec.ts` holds the eleven slides
+and the chime that waits.
+
+**A hand ends on the table: what is left of it goes back to the dealer, and the deck is passed
+on.**
+
+- **The reader's cards stay until the felt gathers them.** The view drops a hand's unplayed
+  cards the moment the server deals the next one, four or five seconds before the table has
+  called the hand. `stale` is the hand as the row last showed it, mirrored by an effect while
+  `current` holds (the view's round is the round `seen` is in), and `hand` is `stale` whenever
+  it does not. The cards are the same nodes throughout. `lay` takes the reader's own last card
+  out of `stale`, or it would lie on the felt and in the hand at once. `data-dealt` asks for
+  `current` too: a card of the last hand that the next one also holds was hidden in the row it
+  was still lying in.
+- **Everything a seat has goes back**: the cards it did not play and the tricks it took, as
+  one packet of backs from its pile (or its plate) to where the deck will lie, the reader's
+  own first and the others 60 ms apart (`COLLECT_GAP`). A plate counts both down to nothing as
+  its packet LEAVES (`dealing.won` beside `dealing.counts`). A hand played to its last card is
+  gathered by its tricks. The first version gathered unplayed cards only, and after thirteen
+  tricks the deck appeared in front of the new dealer from nowhere.
+- **The reader's cards are turned face down where they lie** and close into one packet in the
+  middle of the row before it leaves (`fold`: `turn` with `down`, the face until half way and
+  the back from then on, each card from its own width so it does not change size as it
+  starts). They were swapped for a packet of backs in one frame, which is the state swap this
+  work exists to remove. A hand a hurried reader has already been shown is not folded: the
+  row holds the next hand by then, and the packet leaves from the plate.
+- **The deck is laid down by the first packet to reach it.** It is in its place from the
+  start of the gather, because the packets need somewhere to fly to, and `visibility: hidden`
+  until one lands (`ghost`). At a table for two the place is the stock's: `piled` draws the
+  stock while `dealing` is set there, with its count out of sight (`data-idle`) until the deal
+  gives it one, since the cards coming back are twenty-six and the count would have read that
+  and climbed. `reset` clears `ghost`, `carried` and `dealing`, and it alone: a table that
+  jumps in the middle of a gather would keep its deck out of sight for the whole trump pause,
+  and one that jumps during the carry would have a mark on no plate. `rest` cleared them as
+  well, and with both doing it a fault in either one was caught by no test.
+- **Then the model steps, and the deck and the marks are carried** (`pass`, `CARRY` 420 ms):
+  the deck node itself slides from the old dealer's place by an additive translate, and the
+  crown and the dealer's mark fly as copies while their plates draw none (`carried`). Nothing
+  moves when the Hâkem stays the Hâkem. The shuffle and the deal follow.
+- **`seen` moves to the new round in the deal's scene**, and `show` adds to it only while
+  `current`. `show` used to take the view's round with it, so a felt that was a whole hand
+  behind put the newest hand in the row of the hand it was still playing, at the first card
+  it turned up.
+- **The cap counts from the felt reaching the hand, and the reader's own clock ends the
+  hold.** This is where the board departs from rule 7's wording, "from the view's arrival". A
+  hand's end takes about five seconds for everybody, so a cap from the arrival cut every one
+  of them short for the Hâkem: the new five were up, and trump asked for, with the last trick
+  still on the table. `capped` is `veiled && current`. What keeps a reader from waiting too
+  long is their clock, not a count of milliseconds: with cards unseen and the turn theirs
+  (`owed`), all of them are shown when less than eight seconds of it are left (`HURRY_MS`), at
+  once if that is how the view arrives and on a timer armed from `remainingMs` if not. A read
+  of `remainingMs` alone let a reader with nine seconds watch all five of a hand's end, and
+  any turn's clock showed a reader who was not on turn thirteen cards before one was dealt.
+- **`spanOf` gives a deal that follows a `hand` its gather and its pass** (`collectLength`,
+  `CARRY`), once, and the first deal of a match neither.
+- **For a reader who asked for less motion nothing is flown.** No packet, no card turning over
+  and no mark is drawn, and no mark leaves its plate: `carry` does nothing when the stage is
+  quiet, where it used to hide the mark for the one tick a skipped flight takes. The deck is
+  in sight from the start of the gather, since no packet is coming to lay it down, and it
+  fades in where its new dealer sits (rule 4: an arrival fades in). The counts, the gaps and
+  the cue run in order as they do for everybody.
+- Known and kept: at three seats on a phone the table loses 66 px when a hand needs its
+  second row, which is now the moment the deck is passed on, and gets it back when the row
+  goes.
+
+`hokm-board.spec.ts` (*a hand that ends on the table*) holds the cards that stay, the fold,
+the gather with its counts, the deck and the stock that wait, the slide and the carry, the
+cap, the clock, a felt a hand behind, two jumps, the match's end and reduced motion;
+`hokm-beats.spec.ts` holds the time it is given; `stage-flight.spec.ts` holds the turn face
+down; `hokm-cues.spec.ts` holds the one gather and a shuffle that waits for the pass.
+
+**A card another seat plays leaves their hand as a back and is turned over on its way.**
+
+- It was a face from the first frame, fading in at the seat: the one card on the table whose
+  face nobody had seen appeared already showing it. It is the kit's two-faced clone now
+  (`turnNode`), a back until it is edge on and a face after, landing at the tilt the card
+  lies at. The reader's own card stays a face flown from its slot: they have been looking at
+  it. Reduced motion keeps the fade where the card lies.
+- **It leaves from the top card of the pile, at that card's size** (`backSpot`), measured
+  BEFORE the model takes the card: under eleven cards the pile draws one back fewer the
+  moment the card is played, and the back in the air is the one that left it. Where no pile
+  is drawn (the side seats of a phone, any compact table) it leaves the plate at a back's
+  size, as a packet does.
+- **`turn` is two animations on the clone, the flight and the flip**, because one curve cannot
+  serve both. A flight is over early: nine tenths of the way there after six tenths of its time.
+  A turn on that curve is edge on in its first frames and the back is hardly seen. The flip
+  takes its own curve where one is given (`flip`, `EASE.flip`), and the card is a back for
+  the first 125 ms of 360, which is most of the way across the table, and opens face up as
+  it settles. A deal's turn gives none and is as it was.
+- **A flight gathers speed before it flies** (`EASE.fly`, `cubic-bezier(0.3, 0.3, 0.1, 1)`).
+  The curve it had, Material's emphasized decelerate, is made for something that comes on to
+  a screen already moving. A card that sets off from where the reader is looking crossed 44%
+  of its way in its first frame at 340 ms and 51% at 260 ms: it was half way there before it
+  had been seen to move, which is a jump with a long settle after it. It takes three to five
+  frames to reach its speed now, never crosses a fifth of its way in one, and is nine
+  tenths of the way there after six tenths of its time. `stage-flight.spec.ts` holds the three.
+- A flight is counted by its clone in the specs (`moved`), not by its animations: one card is
+  four of them now.
+
+**Trump is named on the medal, and the Hâkem who names it does not wait for the server.**
+
+- **A suit travels to the medal.** `trump` used to swap the medal's face and the corner chip
+  in one frame, with a sound. A disc with the suit on it (`.hokm-token`, the size of the
+  medal's face) flies there in 340 ms (`NAMING`), from the Hâkem's plate where the crown is,
+  and the medal is struck when it lands: `trump` is heard then, and the medal and the disc
+  are popped together. The model is shown at the landing (`shown = held`), so the corner chip
+  changes with the medal and not before it.
+- **The Hâkem's own press is a prelude** (rule 6). The four suits go at once, the disc leaves
+  the button that was pressed, and the request is out. The prediction covers nothing: when
+  the server's `trump` comes, the scene finds the reader's own disc on its way
+  (`token.pledged`), waits for it to land and deals. A refusal takes the disc back with
+  `deny`, to the ear and the hand, and the suits return. A suit the server named that is not
+  the one pressed is flown from the plate like anybody's. The disc is flown on the stage and
+  not through the director: a prelude orders nothing, and behind a scene still finishing it
+  would have lain on the medal until its turn came and then flown there.
+- **The disc is a real node at its resting place** (`<Show when={ token }>`), moved from
+  where it came by `flightFrames`, as the deck is slid: it is where it belongs if its flight
+  is cut, and reduced motion fades it in there and strikes nothing. It says its suit
+  (`data-suit`), because an icon is drawn from paths and nothing else in the page names the
+  suit that is on its way; the specs cannot tell one suit's drawing from another's.
+- **The four suits are one row under the medal and the deck** (`--under`: the lower of the
+  medal's edge and of a deck lying beside it). Their names are drawn where a table is 44rem
+  wide, and kept for a screen reader where it is not (`.hokm-choose-name`, clipped, never
+  `display: none`). Under 30rem of height the title goes the same way. Under 23rem the row
+  is the four buttons and no panel, 44 px high, which is what fits between a deck and the
+  reader's plate there. On a table under 17rem high, where nothing fits under the medal, the
+  suits are two rows of two beside it if the table is 30rem wide and one row across the medal
+  if it is not (a phone with its chat open). It was a panel over the middle of the felt: on the
+  medal, on the deck for the Hâkem at four seats, and on the side plates of a 360 px phone.
+  `--mid` and `--deck-h` moved to `.hokm-table > *`, so the chooser, the deck and the trick
+  are placed by one arithmetic. The fit pass's `hokm-4-trump` cell holds it: the chooser on
+  the table, on no plate, pile, chip or clock, on neither medal nor deck unless the chat is
+  open, and no suit under 44 px. Its first run failed twelve cells (the two rows of two were
+  given to every short table, and on a narrow one they lay on the right-hand plate) and its
+  second three (the row wore a panel 58 px high where 47 lay between the deck and the
+  reader's plate).
+- **The rest of a deal has its own cap, 2500 ms** (`REST_CAP`; the five keep 2000). With the
+  suit's flight in front of it a deal after trump ends 2.1 s after the answer by its own
+  arithmetic, and the one cap of two seconds turned the last four cards up a tenth of a second
+  before their turn.
+- A suit chosen with a key hands the keyboard to the hand: the buttons are gone, and it would
+  be left on the page's body.
+
+`hokm-board.spec.ts` (*trump named on the medal*) holds the press, the confirmation, the
+refusal, another seat's call, a suit that is not the one pressed, the keyboard, a jump, two
+seats and reduced motion; `hokm-cues.spec.ts` holds `trump` at the landing and `deny`;
+`hokm-table-art.spec.ts` holds the disc and the chooser's three places.
+
+**A refused card flies back to the hand.**
+
+- A card the server would not take, after it had flown to the felt, was taken off the model
+  and put back in the hand in one frame. It is carried back now (`refuse`): a face from where
+  it lay, straightening as it goes, to its own slot, in the time it took to get there. The
+  hand has the card again from the first frame, in its place and not to be seen (`homing`,
+  `data-back`, the rule a card not yet dealt has), so the fan has made room before it
+  arrives; it is shown when the copy lands.
+- The flight is not waited for. What the server says happened instead is played at once, as
+  it was. If that is the same card after all (a lost answer, and then its echo), `originOf`
+  takes the copy out of the air and the card goes out again from where the copy was
+  (`recalled`). Landed already, it goes out from the slot it came back to, which the refusal
+  wrote down (`origins`): the hand reads the view and holds the card no longer by the time
+  the scene runs, and it used to fade in from the reader's plate.
+- **A refusal is one only while the reader still holds the card.** The store reads the match
+  again before it answers `failed`, so that answer can come AFTER the view that shows the
+  card was taken: the socket's frame applied, its ack lost, the retry over HTTP refused.
+  `refuse` then says nothing and undoes nothing. It used to take the card off the felt, and
+  nothing put it back before the next action at the table.
+- Where the table has moved on without the card, the jump has given it back already: `deny`
+  is heard and no scene is queued (`sending`, not `sent`), so nothing in front is hurried
+  for a refusal that has nothing left to undo.
+- `deny` is heard and felt for every refused card, one that had left the hand and one that
+  was still waiting in it. Neither said a word before.
+- A card played with a key gets the keyboard back when it can be seen again (`sent.keyed`):
+  it was handed to the neighbour when the card was laid, and a card that is not drawn cannot
+  take it.
+
+`hokm-board.spec.ts` (*playing ahead of the server*) holds the flight back and its landing,
+the keyboard, reduced motion, a jump, the echo in the air and after it, the card the server
+had taken and the table that had moved on; `hokm-cues.spec.ts` holds `deny` and its absence;
+`hokm-table-art.spec.ts` holds the hidden slot.
+
+**The two-handed draw is played with cards that move.**
+
+- It was a card that appeared in the middle of the felt, one back that flew to the hand
+  whatever had been chosen, and cards put down that were a sound. Every card that leaves the
+  stock is seen leaving it now, and every card that goes face down is seen going.
+- **The number on the stock is the cards in the pile** (`pileOf`). The server's `stock` does
+  not count the card on offer, and only the drawer is sent that card. For the seat it is
+  offered to it lies face up on the felt. For everybody else it is still the top card of the
+  pile and is counted there, so a waiting seat and a watcher read one more than the drawer
+  does: 42, 40, 38 against 41, 39, 37. The number changes when a card is seen to move
+  (`dealing.stock` through a scene), and a card the reader is keeping, passing or being given
+  back is out of it all the while (`outOfStock`).
+- **The card on offer is lifted** from the top of the stock, growing and turning over, to the
+  middle of the felt (`lift`, 360 ms), at the end of the scene that made it the reader's turn.
+  It is drawn from what has been SHOWN (`seen.offer`, `lain`) and not from the view, and the
+  card, the stock's press, the sentence, the chime and the turn's ring wait for it to land
+  (`veiled` holds them, and the cap and the hurry that release the five cards release this).
+  A jump shows it at once (`shownAll`).
+- **A draw is two cards.** A keep flies the card from the felt to its place in the hand, and
+  the next card comes off the stock, turns over for the reader alone beside it and lies there
+  dimmed (`.hokm-glimpse`; it lands at the tilt it lies at and is dimmed over 0.4 s). A pass
+  turns the card face down where it lies and slides it away, and the card taken instead comes
+  off the stock and turns face up into its slot. Another seat's draw is one back to their
+  pile and one back away, ALWAYS in that order, because which they chose is theirs to know.
+  So is a draw of the reader's own that the newest view cannot tell (`latest`): one two
+  actions back in a batch.
+- **Cards put down go as one packet** to the place beside the stock, at the size of a card of
+  the stock, and are released there (D4: no pile, no count, no class with "discard" or "burn"
+  in it). The reader's own turn face down first and gather where they were held.
+- **Two places on the felt are measured and never drawn**: `.hokm-lift`, the offer's box, and
+  `.hokm-down`, the glimpse's. A flight needs somewhere to go before the thing that will lie
+  there is in the page, and after it has left.
+- **A press is answered at once**, with a prelude (`pledge`, `pledged`): the kept card leaves
+  for the hand, the passed card turns over and goes, the chosen cards turn over and go, and
+  the prediction covers nothing. The scene for the server's `draw` or `discard` plays what
+  the press could not (the second card, the card taken instead, the counts) and waits for
+  what is still on its way before the turn passes. A refusal brings the card back to the felt
+  (from the hand, out of the air, or turned face up from beside the stock) or the cards back
+  to their places, with `deny`, and the keyboard with it (`undraw`, `unput`). A jump drops
+  the pledge: the table is drawn from the view, and the whole draw is played when it is
+  answered. The scene and the refusal tell their own pledge by the object itself, so an
+  answer that comes after a jump says nothing.
+- **The reader is not asked for cards before they have been dealt them**: `due` waits for
+  `veiled`. A fast Hâkem could put the dealer into the discard while their felt was still
+  dealing, and a tap on a card that could not be seen counted as a choice.
+- The keyboard goes to a kept card when it is in the hand, and to the hand at once when a
+  card is passed or cards are put down: the thing that was pressed is gone.
+
+`hokm-board.spec.ts` (*the two-handed draw*) holds the count for each reader, the two
+places, another seat's draw, the lift and where it comes from, a jump, the clock's keep and
+pass, the press for each of the three and what the server's answer still plays, each
+refusal, a draw the view cannot tell, a later turn's card, the packets, reduced motion and
+the keyboard; *a hand dealt in packets* holds the cards not asked for early;
+`hokm-cues.spec.ts` holds what is heard at the press and at the answer, the chime at the
+landing and `deny`; `hokm-beats.spec.ts` holds the time each is given;
+`hokm-table-art.spec.ts` holds the two places and the dimming.
+
+**A card may be carried to the felt, or thrown at it.**
+
+- D18: dragging is offered where it is the natural gesture and is never the only one. A card
+  that may be played is held by its pointer (`hold`), and past a slop (10 px under a finger,
+  4 with a mouse held down) a copy of it follows the pointer in the flight layer (`drag`,
+  `.hokm-carried`) while its place in the hand is kept for it, unseen, exactly as the place
+  of a card on its way back is (`homing`, and `homeward` with a run that does nothing).
+- Let go on the table, or thrown towards it (half a pixel a millisecond over its last 120 ms,
+  and 36 px from where it was taken), it is played, and it flies from where it was let go:
+  `originOf` finds the copy in the air first (`recalled`), which is what a refused card that
+  is played again uses. Let go anywhere else, or with the pointer taken away, it flies back to
+  its place (`sendHome`). So does a card dropped for a press that is refused before it could
+  leave, for a turn that was played for the reader while the table was busy, or after it
+  stopped being the reader's to play.
+- The click that ends a drag is not a press (`slipped`), and the next press on that card is.
+- `touch-action: none` on a card of the hand: a finger that starts on a card and goes up the
+  screen is carrying it, not scrolling the page. The copy has no transition, so it does not
+  lag behind the finger.
+- A tap is what it was, a key is what it was, and nothing can only be done by dragging. With
+  a finger a tap lifts a card and a second tap plays it; a drag plays it in one.
+
+`hokm-board.spec.ts` (*a card carried to the felt*) holds the two slops, the copy and the
+place kept, the drop on the table and where the flight starts, the drop short of it, the
+three throws that are not one and the one that is, who may not carry, a pointer taken away,
+a second finger, a jump, and the three ways a dropped card comes home;
+`hokm-table-art.spec.ts` holds `touch-action`, the copy that does not ease and the four
+handlers; `hokm-motion-pass.mjs` carries a card to the table and lets one go short of it
+with a real pointer at two sizes.
+
+**The motion itself is held by hokm's own pass**, `tools/qa/hokm-motion-pass.mjs` on the built
+server (`tools/qa/CLAUDE.md`, *The motion labs and the motion passes*). A card has no name in
+the page, so the pass follows every copy in the flight layer by what it is, and fails one
+that does not set off from its place, does not come to rest in its place, leaps, fades and
+comes back, or is a fifth of the way there one frame after it set off. It is the only thing
+that sees a real browser deal, turn a card over, lift one from the stock and answer a press.
+There is no lab: a hand's end is under a second of play over the api.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
 server's order is suit-major ascending and stays what `view.hand` is.
+
+**A hokm table has no bar: the cards, the stock and the four suits are everything that is
+pressed.** Under the hand sat a bar: a sentence about the turn, a chip of the trump and the score,
+"5/13" while a hand was being filled, the clock and Sort, and under those "Play the king of
+hearts", "Put these 3 face down", what the card under the pointer would do, the tip and two
+hints. The owner had every such thing taken off every game on 2026-10-11 (*Every move is made on
+the table, and nowhere else*, under *Backgammon*). What is left, and where:
+
+- **A card is played by the card.** A mouse plays on the first click. A finger lifts the card on
+  the first tap and plays it on the second. The lifted card wears a gold ring that breathes
+  (`data-go`, the `bgt-invite` pulse the stock, the drawn card and backgammon's dice wear while
+  they can be pressed), which is all that is left of "Tap a card to lift it, then tap it again
+  to play it." The lift under a pointer is inside `@media (hover: hover)`: on a phone `:hover`
+  stays on the last thing tapped, and its rule outranked the lift of a picked card, so a lifted
+  card rose 0.9rem where it should rise 1.6. At first the sign was a chevron bobbing above the
+  card, and nothing above a lifted card is clear at every size: at 1024 by 768 a card under the
+  reader's own plate put the chevron on the plate. The ring is the card's own outline and
+  reaches nothing the card does not. `fit-pass.mjs` lifts a card in every cell with a coarse
+  pointer and the chat shut, and fails one that does not breathe or whose ring reaches a plate.
+- **The stock and the drawn card are buttons drawn as the things they are**, like ludo's die. Each
+  has a name a screen reader reads ("Put these 3 face down", "Take the next card", "Keep the 9 of
+  Hearts") and takes a keyboard, and neither exists for a seat with nothing to press. The cards
+  and the trump chooser are buttons too, which is why hokm, unlike backgammon and ludo, can still
+  be played from a keyboard.
+- **The sentences are a screen reader's.** The turn sentence is an `sr-only` live region, and so
+  are "You have to follow the suit that was led." (while the coach is not saying it) and "The 9
+  of hearts went face down." Nothing on the felt prints the turn: the plate of whoever is to
+  play wears the ring and the clock. What a card would do is in the card's own name and nowhere
+  on screen, so `hintOutcome` changes nothing a sighted player sees here either.
+- **The clock is on the plate of whoever is to play.** A small tab, `<TurnClock brief>`, "23s" or
+  "24h", hung on the edge of the plate that faces away from the middle of the table: under the
+  reader's plate, over the one across from them, so it never lies where a trick does. It is ONE
+  clock, mounted for the seat on turn by that seat's own component (`HokmSeat`, which keeps a
+  boolean of its own for it) and for no other seat, which is also what keeps the reader's last
+  seconds from being ticked four times. At three players the two corner seats wear theirs
+  underneath: hung above, it left the top of a short table. On a table 21rem tall or less there
+  is no room over or under a plate, so the reader's own stands beside their plate (from 18rem of
+  table) and the one across from them does where the table is 30rem wide; a clock with no room
+  is not drawn, and the ring round the face still runs. A screen reader is still read the
+  sentence.
+- **Sort and the tip's lamp are the hand's** (`.hokm-rail`, in `.hokm-foot`, the row under the
+  table): Sort at one end and the lamp at the other, 44px each. Where the row is 34rem wide they
+  stand beside the fan. On a phone they stand above the fan's two ends, and the cards' own room
+  to rise is tucked under them, so the row costs the table 34px and not 44. The room is kept for a reader whether or not there is a tip (`data-tools`): a
+  row that grew when the lamp came on would change the size of the table with every turn.
+- **The trump and the score join that row** when the felt cannot carry them (the open chat, a
+  cramped felt): two chips, the trump's suit beside Sort and the score without its
+  target beside the lamp. With the chat open, upright or sideways, Sort and the lamp are not
+  drawn and the two chips are lifted over the two bottom corners of the table's cell, so the
+  row is the cards alone: on a 740 by 360 phone a row of tools took the table under its usable
+  size.
+- **The row is a grid of three columns** (an end, the fan, an end), so the fan has exactly the
+  room the two ends leave, whatever is in them: at three players the score is three numbers
+  wide, and a fan given a fixed margin for one 44px tool ran under it. The row does not mirror
+  (`direction: ltr`, as the table and the fan do not), and the lamp's own words are put back in
+  the reader's direction by a wrapper that takes no place in the row.
+- **The grid is the table and that row** (`.table-grid.hokm-grid`), at every size, and nothing of
+  the page's own lies over the table. For a while the clock, Sort and the lamp were three things
+  in the bottom right corner of the table's cell: on a small phone that was the table's own
+  corner, and on a desktop it was empty page beside it. The row is a container of its own
+  (`foot`): beside an open chat on a phone held sideways the grid gives up its far end (*A stage
+  with no column beside its board makes the room itself*) and the row is half the stage wide.
+  Asked of the stage, the tools stood beside a fan that had no room for them, and the fit pass
+  found the two chips lying on the cards.
+
+`fit-pass.mjs` fails a hokm cell in which Sort, the lamp, a chip in that row or a plate's clock is
+off the screen or meets a plate (a clock may touch its own), a pile, the last trick, a trick
+card, the stock, the drawn card, the card put face down or a card in the hand; one in which a
+clock hangs off the table; and one in which the stock, the drawn card or the card put face down
+hangs off the table or meets any of those. `hokm-board.spec.ts` (*the clock on a plate, and the
+two things beside the hand*, *playing a card with a finger*, *the two-handed draw*) holds the
+rest.
+
+**The table is drawn once and stays.** Its felt, its hand and its corner each sat in a branch
+that read the board, and the board is a new object with every answer. So every move at the
+table, the reader's own press and Sort built every plate, card and chip again: 252 elements for
+an answer that changed nothing. Nothing looked different. A keyboard player lost their card with
+every move, and nothing on the table could carry a transition, which is why everything that
+moves there is a copy in the flight layer (`frontend/CLAUDE.md`, *A `<Show>` with a thunk child
+is rebuilt by anything its `when` READS*).
+
+- The branches read derived booleans (`dealt`, `handed`, `bare`) or take what they show through
+  `let=`: the trump's suit, the last trick, a hand's banner.
+- **The seats are a list of seat NUMBERS.** A row over the plates' own objects is handed a new
+  item by every new board, and whatever the row reads off its item runs again: the crown and the
+  counts are markup handed to the plate as a prop, and were built again at every read. A row
+  whose item is a number is handed nothing, and asks for what it shows by number (`plateAt`).
+- The crown and the dealer's hand are `HokmMark`, which chooses between them with booleans of
+  its own, so the crown is the same node until the Hâkem changes.
+- A pile is always in the page and says when it holds nothing (`data-empty`), so it is the same
+  pile when a deal fills it.
+- **A card is thrown from a pile only if the pile has a box** (`drawn`). The side piles are not
+  drawn on a table under 36rem, and no pile is on a short one; a pile with no box measures as
+  the corner of the page, which is where a side seat's card started from on a phone.
+
+`hokm-board.spec.ts` (*a table that is read again*) marks every element under the stage, hands
+the board the answer it had as a new object and wants all of them still in the page; then a
+move by another seat, the reader's own card, Sort and a change of Hâkem, each taking away only
+what it should.
 
 **Each board is its own chunk.** The play page loads `hokm-board` or `match-board` through a dynamic
 import once it knows which game the match is, and renders it through `<Dynamic>` with a props THUNK,
@@ -2155,6 +6116,152 @@ the failure a watch already draws, and its Try again fetches the board before it
 again. `play.spec.ts` opens the page as somebody watching, which no spec did - the specs' server had
 no answer for a watch at all, so that page had only ever been drawn failing - and presses an empty
 chair as the host.
+
+**The waiting room is fetched too, and asked for early.** `lobby-panel` and the chair cards under it
+are a chunk of 3.4 KB: somebody who arrives at a game already on the board never needed them, and the
+route chunk was back at 14.7 of its 15 KB with the removal control and the call's header controls in
+it. It is 12.5 now. A chunk asked for only once the table had answered would draw the header and
+then, a round trip later, the chairs, on the one screen every quick player sees first. So the page
+asks for it as soon as ANYTHING says the reader sits at this table with no game on: the table
+itself, or the reader's own list (`lobby.seated()`), which a create, a quick play and a claim have
+each read again before they navigate. Measured on the production build after "Find a game": the list
+answers at 65 ms, the route chunk at 81, the waiting room is asked for at 89 and the table at 90, and
+the waiting room has arrived at 94, four milliseconds before the table it will draw. After a hard
+reload it is asked for the moment the list answers, a millisecond before the table does. It is asked
+for once; one that will not come goes the way of every lost chunk (`frontend/CLAUDE.md`, *A part of
+the app that would not load*), and its complaint is drawn under the table's header and goes when a
+game takes the page. `play-chunks.spec.ts` mounts the page with a waiting room and a watcher's board
+that never arrive - a module mock that throws - and counts the asks.
+
+**A game that is being fetched is not a waiting table.** The page drew the waiting room whenever it
+had no board in hand, so somebody arriving at a game in progress was shown the chairs, a Ready button
+and, as the host, "Close the table" until the game's own request answered - for 2.7 seconds on the
+production build with that request held back - and for good when the request failed, with nothing
+said. The page asks now whether it is BEHIND: seated at a table that says a game is on which is not
+the game in hand. Behind with nothing in hand (`dealing`) it draws the board's placeholder, the same
+one the board's chunk draws next, and the waiting room is neither drawn nor fetched. Behind with the
+LAST game still in hand it goes on showing that, which is what "Play again" has always looked like:
+the board store hands out the last game it fetched while the next is on its way (a resource keeps
+its value while another key loads), so the finished board stays until the next one takes its place.
+It hands out that game as far as it GOT. The resource keeps the copy it first fetched, and every
+move since arrived as an answer or a push the store keeps beside it; for the open game the newer of
+the two was always the one handed out, and for the game just left only the fetched copy was. So for
+the moment between pressing Play again and the next game arriving, a finished board went back to
+the revision it had been opened at, its score, its plates and its result with it: seen in a real
+browser as a board's revision reading 16, 15, 1. The newer copy of one game is the answer whichever
+game is open. `match-store.spec.ts` (*the game in hand while the next one is on its way*) holds it.
+And behind with the store saying the game could not be fetched (`unfetched`), the complaint takes
+the board's place, with a Try again that asks for the game.
+
+**A table arrives** (6.1). Pressing Start took the waiting room away and put a whole board in
+its place within three frames: measured on the production build, the room gone, 25 ms of the
+placeholder, the board. The stage comes in over 240 ms now, fading in as it rises half a rem
+into its place (`stage-in` on `.table-stage`), whichever game it is and whoever is looking,
+somebody watching too. It is opacity and `translate` and nothing else, on purpose: what flies
+over a table is measured in rectangles on the screen, a table that moves moves both ends of a
+flight alike, and a table that is SCALED on its way is a different measure from the one the
+flight lands on. The animation holds no last frame, so a table that has arrived is not one that
+is moving, and somebody who asked for less motion gets a table that simply stands there. A
+game that starts again at the same table is the same board, so it does not arrive twice.
+`backend/tests/table-stage-art.spec.ts` holds the rule.
+
+**The result leaves as it came** (6.1). Play again took the result off the table in one frame:
+it had faded in over 240 ms and was gone between two paints, with the opening of the next game
+already playing where it had been. `table-result` keeps itself on the page now. The four boards
+mount it bare, with `shown={ result }`, and it decides for itself how it goes:
+
+- **Another game takes the table** (the match's id is another one): it goes over `RESULT_OUT`,
+  240 ms, by opacity alone, marked `data-leaving` and `inert`. Inert is the page's own way of
+  saying a thing cannot be pressed or held by the keyboard, and it lets a touch through to the
+  table underneath, so no `pointer-events` rule says it a second time.
+- **The game it tells of is still the one on the table**: it is taken away at once, as it always
+  was. Two things reach here. The derived `over && !presenting` of three boards is true for one
+  round of the flush that brings the final batch (the note under *The result waits for the
+  table* says why Hokm holds a state instead), and a card that latched on that one round faded
+  for a quarter of a second over a table still showing how its game ended: six specs caught it.
+  And a late batch can make a finished table play again.
+- **It tells only of a game that is over.** Hokm's held `result` falls one round AFTER the next
+  game arrives, and for that round the card was handed a game that had only just begun with
+  `shown` still true: it took that game as its own, and so went at once when `shown` fell, for
+  the id had not changed since. `shown` counts only with a finished match beside it.
+- **It goes as it stood.** The match, the reader's chair, who is ready and the press that is
+  out are kept from the last time it stood (`last`). A rematch may seat the reader in another
+  chair, and a card that followed `props.mine` turned "You won." into the other player's name
+  on its way out; one that followed the match told of a game with no result in it.
+- **The count is released with the scope, not with the mount** (`onCleanup`). `onMount` runs in
+  a microtask and registers nothing when the scope has gone before it, so a cleanup returned
+  from `mount` was never run for a card taken away in the turn it was made.
+
+**It comes and goes by ONE transition, not by two keyframes.** `.table-result` has
+`transition: opacity 240ms`, comes from `@starting-style { opacity: 0 }` and goes to
+`[data-leaving] { opacity: 0 }`. It was `result-in` and a new `result-out` at first, and a card
+taken away before it had finished arriving was drawn at full strength for a frame and then
+faded: a keyframe starts from the value the sheet gives the element, not from where the element
+has got to. Seen on the production build with a press 93 ms after the card arrived. Nobody
+presses that fast, but somebody watching is half a minute behind and is taken on to the next
+game whenever the watch says so, which can be inside that quarter second. A transition turns
+back from wherever it is. What does NOT work, tried in Chromium: keeping the keyframe for the
+way in and writing `animation: none; opacity: 0` with a transition for the way out. No
+transition starts from a value an animation was holding, and the card vanished at once.
+
+**The opening waits behind it.** The presenter takes `lead`, asked once for each opening after
+the table has been drawn as it stood before (`before`), and plays a wait that long in front of
+the opening, with its estimate, so a batch that follows counts it as time the table is behind.
+The dice, the deal and the first cards are therefore seen on a clear table and not through a
+card that is leaving, and `data-presenting` is set for the whole of it. The board cannot answer
+`lead` from `result`: the card stands as a tab when it is folded and stands while it leaves, so
+the card says so itself (`onStand`) and three boards keep that one word. Ludo plays nothing when
+it starts, so its board keeps none.
+
+Less motion: `base.css` gives every transition no time there, so the card is simply there and
+simply gone, and `.table-result` left the list that stills animations, having none. The table
+still waits its quarter second, because rule 4 leaves timers alone.
+
+**The result waits for the table, but only so long** (6.1). `over && !presenting` holds the
+result back until the table has shown how the game ended, and nothing said how long that may
+take. The presenter takes `due`, asked whenever it hears something while it has something to
+show, and the four boards answer `RESULT_WAIT` once the game on the table is over and null
+before. When that time is up whatever is still in front is hastened by the urgent empty entry a
+press uses: runs and timers at four times their pace, lingers at their least, every cue in its
+order. Nothing is cut. There is ONE count for each stretch the table is busy: hearing more
+neither restarts it nor adds to it, and a table that has caught up keeps none (the count is
+dropped at idle, or it would run out on a table with nothing to show and say it was busy for a
+moment).
+
+**The count is 12 000 ms, and it is a net, not a pace.** The longest endings are poker's, and
+they were measured on the production build from the revision that ended the match to the
+result: 8400 ms with two players all in before the flop, and 9400 ms with six, each action
+given time to be shown (the chips, the hands tabled, three streets run, 2200 ms for the hands
+to be read, the pot pushed, five seats racked). The first draft said 6000, "under the eight
+seconds the play passes give a finished game to appear". Against the heads-up ending it would
+have cut the reading of the last hand to 900 ms and pushed its pot at four times the pace, the
+one moment of a match nobody wants hurried, and the passes' eight seconds turned out to be
+counted from a table that has caught up, not from the end of the game. So the count stands
+above every ending a table plays at its own pace and bounds what is not one. (Six all in
+within a quarter of a second, as a script does it, is shown in 6900 ms: the table is behind
+by then and plays the last action at twice the pace, by rule 5.)
+
+Held by `presenter.spec.ts` (*a table that is given only so long*) and by `match-result.spec.ts`,
+which keeps the count above the endings measured. An ordinary ending is shorter than the count
+and shows nothing either way, so each board spec has a pair that reads the clock instead: one
+count of that length once the game is over, and none while it goes on.
+
+Held by `match-result.spec.ts` (*the result, leaving the table it stood over*), a rematch in each
+of the four board specs, `presenter.spec.ts` (*the opening of a game*), and
+`backend/tests/table-result-art.spec.ts`, which also holds the sheet's 240 ms and `RESULT_OUT` to
+one another. In a browser: `leavingFindings` in `tools/qa/motion.mjs`, asked by the backgammon and
+Ludo motion passes and by a rematch that the Hokm and poker play passes now play.
+
+**`board.lost()` is a latch, not the resource's error,** because the store asks again by itself - at
+every `game` doorbell, and every three seconds while the socket is down - and a resource clears its
+error while a request is in flight: read directly, the complaint was taken away and drawn again each
+time, a `role="alert"` announced every three seconds. A failed answer for the OPEN game sets it; an
+answer, an open, a close and `refresh()` clear it, and `refresh()` is the reader's own Try again.
+Those asks of the store's own went to the wrong game as well: `catchUp` asked `since` about
+whatever board was in hand, and with the last game still in hand that was the game that had ended,
+so a next game whose first fetch failed was never asked for again until a whole frame of it
+arrived. It asks for the open game whenever the board in hand is not that game. `loading`, `failed`
+and `refresh` had been declared on the store with no caller anywhere; the first two are gone.
 
 **`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
 shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise
@@ -2184,8 +6291,9 @@ the moment anything a player needs is below the fold.
   `min(100cqw, 100cqh * var(--ratio))` wide - the board is sized from BOTH axes of the room it has, so
   a tall phone and a short laptop each get the largest board that fits. A game that has two drawings
   of its table picks one by the fit cell's aspect, not by the screen's.
-- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts the bar in
-  a side column; backgammon and ludo put the whole side column beside the board instead.
+- No table keeps a bar of words or a column for one now: the grids are the board alone, or the
+  table and the hand. Backgammon's grid is its fit, and inside the fit the board stands with a
+  seat over and under it, or beside it where the stage is wide for its height.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
@@ -2199,10 +6307,19 @@ the moment anything a player needs is below the fold.
   follow. A watcher is sent no `remainingMs`, so a watcher sees no ring, and no `timeouts` while the
   game is live, so no plate of theirs says a turn was missed.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
-  only worth their height when one row would squeeze each card below a readable strip.
-- `MatchResult` overlays the stage rather than pushing it down.
-- Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
-  the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
+  only worth their height when one row would squeeze each card below a readable strip (*The hand
+  is a fan*, above, has the numbers).
+- `MatchResult` overlays the stage rather than pushing it down. The overlay dims and blurs the
+  board, and the standings stand on a card of their own (`.table-result-card`), the `lifted`
+  surface every sheet, toast and popover in the product floats on. The panel's own background is a
+  5% tint, made for a page; laid straight on the blurred board it let the board show through the
+  names and the scores, and the owner asked why the background was transparent. "See the board"
+  stays outside the card and is a solid button: it was grey words drawn straight on the blurred
+  board. `match-result.spec.ts` (*the result, laid over a board*) holds the card
+  and the fold, and the ludo and backgammon play passes ask a real browser whether the card's
+  background is opaque, which no spec can: happy-dom reads no stylesheet.
+- Poker's raise opens the slider over the foot of the table from the chip that raises; the last
+  hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
 - A poker plate is centred on the rail, at 10% and 90% of the table's height, and is CLAMPED onto the
   table (`.poker-seat`, a `translate` over the table's own `cqw`/`cqh`), because a plate with its avatar
   and a tag is 93px: on a 266px table - a phone held sideways, reader folded - it hung 20px past the
@@ -2229,16 +6346,21 @@ poker-6-folded opens each page as a seat that has folded (no hole cards, so no h
 tallest table and the biggest plates), poker-6-allin as a seat that has shoved (a tag and a 1,500
 bet in front of the reader), and poker-2-facing as the seat facing a shove (a tagged top seat with
 the big bet), and poker-6-crowd as the seat to act after a limp and three all-ins over the blinds - six
-chips round a pot of three shoves, the most a table carries. Two hokm cells have a trick on the felt:
+chips round a pot of three shoves, the most a table carries. poker-9 is a table of nine, the most
+seats a rail carries: three plates down each side of a tall table and two at its head, three along
+the near rail of a wide one. Two hokm cells have a trick on the felt:
 hokm-2-follow opens as the dealer facing the Hâkem's lead, the card the reader has to follow, and
-hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-3 is the one
-table with no dana and nobody parked: three guests, named long enough to fill a plate and to wrap the
-caption's last line in both languages, opened as the seat whose turn it is and as one waiting on it.
-Three hands put two plates in the felt's top corners under the longest sentence the caption has, and
-there the TALLER stage is the worse one: a waiting reader with no other table is drawn the upright
-table at 360x640 and 375x667, 324 to 329px tall, where the caption's crown reached both plates, while
-the other-tables row leaves those screens only the wide table, whose crest has gone. Each re-makes its
-state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
+hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-4-trump stops
+before trump is named and opens as the Hâkem, who has the four suits on the felt, and as a seat
+waiting on them. hokm-3 is the one
+table with no dana and nobody parked: three guests, named long enough to fill a plate, opened as the
+seat whose turn it is and as one waiting on it. Three hands put two plates in the felt's top
+corners, which is where the felt's two chips are, so it is the cell that meets a cramped felt.
+ludo-4-teams is
+ludo opened two against two: its plates sit beside the board and not on a felt, so the cell asks of
+every plate on the page what a felt asks of its own, a side mark that is drawn, inside the screen
+and clear of every other plate, and it carries the "Partner" tag the plain game never has. Each
+re-makes its state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
 it is at 360x740, 390x844, 375x667, 360x640, 768x1024, 1024x768, 1280x720, 1280x800, 1440x900,
 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger watching. It fails
 on a scrolling page, a plate, the surface or any button outside the viewport, a button whose centre
@@ -2247,9 +6369,12 @@ plate on the table that reaches past its edge, a felt chip on a plate, a bet chi
 anything but itself, a bet chip that meets a plate, another chip, the cards, the pot or the felt's own
 chips and their tap areas, a trick card that meets a plate, a pile of backs or another trick card or
 whose centre or either index corner hits anything but the card, and an open bottom sheet whose top
-edge is above the bottom of the board's fit cell. On a hokm felt with nothing on it, it also fails on
-a line of the caption that meets a plate, a pile of backs or the stock, and on a caption that does
-not say what takes the hand. Three exceptions are deliberate: a button in a
+edge is above the bottom of the board's fit cell. On a phone held sideways it fails an open chat
+that meets the board of a stage with no column beside the board, and from a stage 48rem wide one
+that meets a plate there. On a hokm felt it also fails where the medal in the middle is missing
+or lies under a plate, a pile of backs, the stock, a chip, the last trick or a clock, and where
+any word is drawn on the felt that is not on a plate, a chip, the last trick, the chooser or a
+hand's banner. Three exceptions are deliberate: a button in a
 horizontally scrolling rail is judged by its rail; the open chat may overlay the bar on a phone held
 sideways, and on an upright phone too short for the board and the chat together (`data-sheet="over"`),
 because there the chat has nowhere else to be and closing it brings the controls back - never
@@ -2286,19 +6411,18 @@ the vignette are CSS gradients over it, because the photo is cover-cropped to a 
 and a desktop's wide one and a baked pool would sit in the wrong place on both. A felt table like
 hokm's was tried here and taken back the same day: the user liked this tabletop and wanted the BOARD
 on it improved, which is a different thing.
-Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
-yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
-beside the avatar - so there is no row of cards above and below the board taking height from it, and
-the board is the full width of the phone. Whose turn it is is the whole yard breathing in its colour.
-The badges are `pointer-events: none`, so a tap on a token in the yard goes through to the token.
+Each player has a plate at their own corner, outside the board (`YardBadge`; *The players sit OUTSIDE
+the board*): the avatar, the name, four home dots and the die they rolled. The dots, the die and the
+plate's tag are what the table has shown rather than what the view says (*The ludo board is played
+from what happened*).
 
 The roll is a die in the MIDDLE of the board, a real `<button>` named "Roll the dice", shown only
-when the reader can roll: tap it, it shakes while the request is in flight, and it is gone; the tokens
-that can move then glow and a tap on one moves it. The strip on the table under the board carries the
-turn, the clock, a one-line hint ("Tap the die in the middle of the board.") and the move choices,
-which are the keyboard and screen-reader path to the same moves. On a 390x844 phone the roll used to be
-100px below the fold; now nothing scrolls. The table bleeds almost to the screen edge on a phone
-(`margin-inline` against `--page-pad`), and hokm's table does the same.
+when the reader can roll: tap it, it is lifted and shakes while the request is in flight, and it is
+thrown from there to the corner of the reader's own yard (*The die is thrown*). When it has landed
+the tokens that can move glow and a tap on one moves it. Nothing sits under the board but the lamp
+and the clock at the two ends of the stage's foot (*The board IS the interface*). On a 390x844
+phone the roll used to be 100px below the fold; now nothing scrolls. The table bleeds almost to the
+screen edge on a phone (`margin-inline` against `--page-pad`), and hokm's table does the same.
 
 Everything on the board is placed from `game/layout.ts`: the board stage sets `--cell-cq` and
 `--margin-cq` in `cqi` from `CELL` and `MARGIN`, so a badge sits in its yard at every size for the
@@ -2320,36 +6444,42 @@ upright, which is also what it looks like.
 **Ludo is played upright, and landscape is its safety net rather than its layout.** The board is
 square, so turning a phone sideways only makes it smaller - 258px against 360px upright on the same
 phone. A browser cannot stop a phone rotating, so the landscape layout stays and fits the screen, and
-it says so: "Ludo plays best upright" in the strip. Full screen from a ludo table also asks
+it says so: "Ludo plays best upright", in the lamp. Full screen from a ludo table also asks
 `screen.orientation.lock('portrait')`, which Android grants in full screen and everything else
 refuses quietly. Hokm keeps a real landscape layout, because a card table is wide.
 
 **The felt carries the two numbers somebody glances at.** The trump, the round and the score are two
 chips in the felt's top corners at every size, and the last trick is a tile in its bottom-left; the
-full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
-24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
-the last trick would sit on top of the plates, so they leave the felt and the chips move into the bar.
-One line of the caption stays: what takes the hand, which the bar has no room to say. A chip for it
-there was tried first and cost the bar a third row at 360 wide, where the clock alone is 123px - 32px
-that at 360x740 pushed the bottom of the bar under the open chat. The caption is as wide as its words,
-up to the medallion's width or nine rem, and never wider than the room between the two side plates
-(`93cqw - 2 * --side-w - 1rem`), so no line of it can sit on one; and a table 17.5rem tall or less -
-where the plates have already given up their piles - drops the caption's crown and name, which pays
-for the line where the room is shortest.
-Three hands pay sooner on the upright table. Their two top plates hang 17% down in the corners and all
-but meet over the middle - 44% of the width each, 13px apart at 360x640 - and the whole caption with
-its last line wrapped is 141px, which centred on the felt reaches them on any table under 342px and
-wedges its crown between the two. So an upright three-handed table 21.5rem tall or less drops the
-crown and the name as well, and one 19rem or less the piles under those two plates too, because the
-lines that are left sit 22px higher and the widest of them would reach a pile under 298px. The wide
-table keeps both - its corner plates stop well short of the middle, and at 1024x768 it is 343px tall
-with its crest clear.
-A narrow table does the same for the chips alone: upright at 360x740 the tall table is 289px wide under
-a 127px top plate, and both chips sat 16px under it. The board measures it rather than guessing a
+full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. With the
+chat open the chips, the centre caption and the last trick would sit on top of the plates, so
+they leave the felt and the chips move into the row under the table (into the bar, while there
+was one). That was the rule for every stage 24rem tall or less too, a phone turned over, while
+the table there was 365 wide; it is 685 now, its top corners are clear of the seat across, and
+the chips and the last trick stay on it. A felt that still cannot carry its chips says so
+itself (`data-felt="cramped"`, measured).
+
+**The middle of the felt is a medal, and nothing is written there.** It was five lines of type
+while nothing lay on the felt: a crown, the game's name, which hand of the match it was, what
+takes a hand, the trump in words and whose turn it was. Each of them is somewhere a glance
+finds it without reading: the hand's number and the trump on the felt's left chip, the score on
+its right, the turn on a plate, and the sentences in `.hokm-side` for a screen reader. The
+audit of the tables called the caption H7, and it had been the costliest thing on a small felt:
+a table 17.5rem tall dropped its crown and name, an upright three-handed one 21.5rem tall did,
+and a stage 24rem tall kept one line of it. All of that is gone with it. `.hokm-medal` is a
+brass disc at the centre of the rosette, a child of the table that every card is played over:
+the suit that is trump set in it, red or black as the suit is, and a crown on dark enamel
+while the Hâkem has not named one. It is the same node from the deal to the last trick, which
+is what lets the naming of trump be drawn ON it. `hokm-board.spec.ts` holds the medal, its two
+states and that nothing is written on the felt in either language.
+
+**A felt too narrow for its chips says so itself.** Upright at 360x740 the old tall table was 289px
+wide under a 127px top plate, and both chips sat 16px under it. The board measures it rather than guessing a
 width - a chip touching a plate or a pile sets `data-felt="cramped"` on the stage, the chips go
 `visibility: hidden` (so they keep their box and the next measurement is of the same layout) and the
-bar shows the trump and the score. It is only ever re-judged from scratch when the stage changes size;
-otherwise it can turn on and never off, so the bar cannot grow a chip, shrink the table and bounce.
+row under the table shows the trump and the score. It is only ever re-judged from scratch when the stage changes
+size; otherwise it can turn on and never off. That latch was written for the bar, which grew a chip,
+shrank the table and bounced; the ends of the row take no room, and the latch is kept because a chip that
+came and went at one size would be no better.
 
 **The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
 beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
@@ -2391,8 +6521,9 @@ floor without the notice yielding was refused: the composer went off the bottom 
 
 The floors are the boards' own needs, and `fit-pass.mjs` holds the surface to each (`USABLE`):
 backgammon 16rem wide, where the two 1.75rem dice still clear the point tips (124 of the 820 viewBox
-units) and a checker is 15.7px across - the move list is the 44px path, because a point column is
-17px wide on any phone; ludo 13rem, where the roll die in the middle (3.2 cells) is still a 44px
+units) and a checker is 15.7px across - no target there is 44px, because a point column is 17px
+wide at that floor and 26px on a 390px phone, and since the owner had the move list removed the
+whole column of a point is the only target a checker has; ludo 13rem, where the roll die in the middle (3.2 cells) is still a 44px
 target, in a 20rem fit cell with its plates; hokm a 13rem fit cell for a table of 12rem by 18rem,
 the height four trick cards at their 2.6rem minimum need clear of the top plate and the bottom one
 (`--top-room`, `--band` and `--trick-w` on the table, with the piles of backs and the avatars gone
@@ -2402,9 +6533,9 @@ them. Poker's tall table is drawn only in a fit cell at least 19.5rem tall, its 
 just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
-or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt for the bar
-and its caption keeps only the line that says what takes the hand,
-poker's blinds chip and cost line go, backgammon's match line and pick hint go and its two plates share
+or `over`, on the arena), rules of its own where they were once a short stage's: hokm's trump and
+score leave the felt for the row under the table,
+poker's blinds chip leaves the felt for the corner, backgammon's match line and pick hint go and its two seats share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
 difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
 not. It used to get the short layout for free, because the 48dvh sheet made the stage that short; a
@@ -2421,12 +6552,82 @@ poker reader's at 236x295, under both floors, so `watchFold` folds it whenever t
 its floor with the sheet closed, and unfolds it only when the screen's height changes - folding grows
 the board, so a fold re-judged on every layout would fold and unfold forever.
 
+**On a wide head the title's own line keeps its room, and the strip of other tables takes what is
+left.** On one row the strip held 45% of the head and would not shrink, so with four other tables
+the title was left a word and a half: at 1280 with the chat open "Turn-based" was cut to nothing
+and read "T.", and the code, which may not shrink, lay 34px over the strip, where a press on it went
+to the strip. Nothing had seen it: the fit pass's players have one other table, and the matrix,
+whose fixture has four, measures size and never asks what a pointer would hit. Now the title is
+`flex: 0 1 22rem` beside a strip (it is a size container, so it cannot be sized by its content, and
+22rem is the back arrow, the mark and the longest line), the strip is `flex-1 min-w-0` and stands at
+the row's end, the row does not wrap from 42rem, and the title's line is `overflow-x-clip`: what
+cannot fit is cut at the line's edge and never lies over a neighbour, while the code's 44px box
+keeps its height (`overflow: hidden` would cut that too). Between 42rem and 56rem of head a table
+in the strip is its mark alone with a dot when it waits on the reader, as the folded strip has
+it, and its game, code and "Your go" stay in the page for a screen reader (`data-words`:
+`contents`, then `sr-only`, then `contents` again); with the words drawn the strip showed half of
+one table.
+
+**Inside the title, everything asks the title how much room there is, never the head.** The
+code, its dot and the words of a voice table used to ask the outer container (`@2xl/head`,
+`@md/head`) from inside the title's own (`@container/title`). In Chromium such an answer is kept
+from when the page was drawn: at 1024, where opening the chat card takes the head from 888px to
+496, the code stayed hidden after the card was closed and stayed drawn after it was opened, for
+as long as nothing else restyled the page. The strip's own rules ask the head from OUTSIDE the
+title and were always right, which is how it was told apart. They ask the title now
+(`@min-[21rem]/title`, `@min-[26rem]/title`), so the code is also drawn on a two-row head whose
+title has the room. `play-header.spec.ts` refuses any class inside the title that names the head;
+the browser run that toggles the card after a load at 1024, 1280 and 834 and resizes with no
+reload holds the rest. **The same shape anywhere else is the same fault**: a rule inside one size
+container that asks about an outer one.
+
+**The title row keeps the game's name on a phone, whatever else is in it.** A table with voice puts
+the call in that row, and the row gave way in the wrong order: every control is `shrink-0` and the
+name was the one thing that could shrink. At 390 the "Join voice" button was 118 px of the row and
+the name had 36; in the call the four controls left it 6, and at 360 none - a header that read
+"… '" where the game's name should be, seen in a Persian screenshot with four people talking. Now
+the name is the last to go. On a narrow header the Join button is its icon (the words stay in the
+button for a screen reader, `sr-only @md:not-sr-only`); the call shows the microphone and the
+hang-up, and "Stop hearing everybody" and the count of others come back at `@md`; the game's icon
+is drawn only while the block it shares with the name is at least 14rem, and the name drops one
+size with it. That block is a container of its own (`@container/title`), which is why the header's
+is named (`/head`) and the queries inside the block say so: a container between them would
+otherwise answer for the header. On a phone "Stop hearing everybody" is in the table's sheet, for
+somebody in the call (`TableDock` hands it to `TableMenu`). Measured on a production build before
+joining and in the call, in both languages: at 360 the name has 138 px and 88, at 390 168 and 118,
+at 430 156 and 158; the one name still cut is "Backgammon" in a call at 360. `voice-pass` measures
+it at 390 and 360 with four people in the call.
+
 The rule is about which way the SPARE ROOM runs, not about width. It used to float the card at
 every width above a phone and make room only at sidebar width, so a phone turned sideways (844x390,
 which is rail posture) opened a 23rem card straight over the board, and an upright tablet did the
 same over the bottom of the board. A board is sized by the screen's height in landscape, which
 leaves room beside it, and by its width upright, which leaves room below it - so the card goes where
 the room is. `play.spec.ts` holds both shapes.
+
+**A stage with no column beside its board makes the room itself.** On a phone held sideways the
+chat is a sheet down the side of the screen, 23rem wide, and it used to lie over the column every
+stage kept there for its bar. Ludo's stage lost that column the day its panel went (*The board IS
+the interface*), so the board was centred in the whole width and the chat covered 95px of it at
+844x390 and 132px at 740x360, and two plates with it. No gate failed: a sideways chat was judged
+only by the buttons under it, and those are excused. The arena says when a chat lies beside it
+(`data-beside`, `narrow` or `wide`), and a stage whose grid is the board alone gives up its inline
+end to it:
+
+- From a stage 48rem wide it gives up the whole of the sheet, and the board and all four plates
+  stand beside the chat: 216px of board at 844x390.
+- Under that there is no room for both. Clear of the chat with its plates, the board at 740x360
+  was 164px, under its usable 13rem. So the stage gives up the sheet less one column of plates:
+  the two far plates go under the chat, as they did while the bar's column was there, and the
+  board is whole at 216px.
+- The foot's lamp, its clock and "turn your phone upright" are not drawn beside a chat. With no
+  margin left beside the board they lay on the two bottom plates. The turn sentence stays for a
+  screen reader.
+
+The result of a game gives up the same room at every table, where its card used to be centred
+half under the chat. Backgammon's seats go back over and under the board beside a chat, because
+the stage is no longer wide for its height. `play.spec.ts` holds the attribute through narrow,
+wide and closed.
 
 **One chat instance, never unmounted while the table is open.** The card and the sheet are the same
 `TableChat` in one container whose classes change with the posture and which is `hidden` when closed.
@@ -2440,11 +6641,12 @@ map and publishes a version stamp rather than writing `speech` from itself, whic
 loaded, so opening a table does not replay the history as bubbles.
 
 **Things a finger can actually hit.** A tap on the Ludo canvas picks the nearest MOVABLE token within
-1.25 squares of it (`pickNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
+1.25 squares of it (`aimNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
 because a pawn on a phone is 17px across and nobody taps a sprite that exactly. On a coarse pointer a
-hokm card is lifted by the first tap and played by the second, or by the "Play the ..." button that
-appears - a hand of thirteen shows each card as a 26px strip, and one mistap used to throw the wrong
-card. A mouse still plays on the first click, because hover already lifts the card.
+hokm card is lifted by the first tap and played by the second - a hand of thirteen shows each card
+as a 26px strip, and one mistap used to throw the wrong card. The "Play the ..." button that used
+to appear beside it went with every other button for a move. A mouse still plays on the first
+click, because hover already lifts the card.
 
 **A badge says only what is unusual.** "Your go" and "Waiting" are what the breathing yard and the
 strip already say, and beside four home dots they truncated to "Your...". They are `sr-only`; won,
@@ -2470,7 +6672,14 @@ its half ("an answer, not a failure") and no spec mounted either page in that st
 `docs/superpowers/specs/2026-09-24-game-helpers-design.md` is the design. Three helpers, each a device
 preference that is on by default and can be switched off on the settings page or from the table menu
 without leaving the game: `hintMoves` lights up what can move, `hintOutcome` says what a move does
-before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status.
+before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status,
+or a lamp that opens over the board where the bar under it has gone (ludo and hokm; backgammon's
+lamp is in the reader's seat).
+`hintOutcome` has nothing left to switch that a sighted player sees in those three. In backgammon
+and ludo it switched the wording of the move buttons, and the owner had every list of moves
+removed. In hokm it still writes what a card would do into the card's accessible name, and the
+sentence it drew under the hand is gone. In poker it still draws the name of the reader's best
+hand beside their cards, and what a call costs is said to a screen reader.
 
 **Every helper is the SERVER's rules asked a question.** `game/helpers/<game>.ts` is pure, imports
 nothing from AzerothJS, and computes from the same modules the engine runs - ludo's board, hokm's
@@ -2479,15 +6688,25 @@ browser agrees with the server right up until the position where it matters. Eac
 games through the real engine and fails on any sentence the engine would contradict. `coachOf`
 answers null when nothing is worth saying: a tip that is always there is one nobody reads.
 
-**Turning a helper off never removes a way to play.** The move lists beside every board are the
-keyboard and screen-reader path, and they stay whatever `hintMoves` says; what goes is the lighting
-on the board. Hokm's hand says why a card is dimmed with the follow line, which stays when the coach
-is off and gives way to the coach's own words when it is on, so it is never said twice.
+**Turning a helper off never removes a way to play.** A piece that can move takes a tap whether or
+not it is lit; what `hintMoves` takes away is the lighting on the board, never the move. (The move
+lists and the buttons that confirmed a move are gone from backgammon, ludo and hokm, and poker's
+controls move onto its felt: see *Every move is made on the table, and nowhere else*.) Hokm's
+hand says why a card is dimmed with the follow line, to a screen reader, which stays when the
+coach is off and gives way to the coach's own words when it is on, so it is never said twice.
 
 **A poker hand is named by its ranks**: "a pair of kings", "sevens full of twos", and "you are playing
 the board" when the five shared cards alone make the hand, because "a pair" is true of a pair that is
 nobody's. `namedHand` reads the ranks out of the evaluator's own score, whose digits after the
 category are the ranks in the order that decides a tie.
+
+**The lamp is one node for as long as there is something to say.** `CoachLine` asked
+`props.tip !== null && ...` in its own `when`, and a tip is a new object with every answer a
+board is handed, so the lamp was taken down and built again by every move at every table.
+Nothing looked different. Somebody reading a tip from the keyboard was put back on the page body
+by the next move, at all four games. It reads `lit`, a derived boolean, and its words change where
+they stand; `coach-line.spec.ts` hands it the tip it had as a new object and wants the same node,
+still open and still under the keyboard.
 
 ## The game page splits on its container
 
@@ -2658,6 +6877,31 @@ RNG, and the rule written beside it was that it goes the moment the server answe
 game comes back as a zero rather than as a missing row. `waitSeconds` went with it and is not coming
 back as a zero either: nothing measures how long somebody waits for a chair, because matchmaking is
 a query over open tables rather than a queue with a length.
+
+**"Tables open" is tables somebody could sit down at.** It counted every public table that had not
+closed: a full one, one with a game on, one whose last chair was kept for an invitee. A reader told
+"3 tables open" who pressed through found none of them would have them. A table is open when it is
+public, has no game on, and has a chair that is neither taken nor kept (`count(distinct t.id) filter
+(where m.id is null and s.user_id is null and s.invited_id is null)` over a LEFT JOIN of the live
+match and the chairs). "Playing now" is still everybody seated at a public table, waiting or in a
+game: people at the tables is what it says on Home. `catalogue.db.spec.ts` holds both, and was the
+first test of the counts at all.
+
+**The counts and the Watch list keep themselves up to date.** They were polls: the counts every
+thirty seconds from every signed-in browser, whatever page it was on, and the Watch list every
+fifteen. Both ride the realtime `pulse` frame now (`chat-and-keys.md`, *Realtime*). The catalogue
+store takes the numbers from the frame and asks over HTTP only when it starts, on a pull to
+refresh, and when everything is rung while there is no socket (the lifeline's beat), which is
+also the only time the Watch page reads on a ring. Two answers can cross, so each read is
+numbered: a frame wins over a read that was asked for before the frame arrived, and a read asked
+for after it wins until the next frame (`pulse.spec.ts`). The Watch page reads its list again when
+the frame's `watching` mark changes and at no other time, because that list is per reader (a
+block hides a host) and the mark is not; "started 5 minutes ago" is kept true by a minute's tick
+of its own, where it used to be a side effect of the poll. The time it is measured from is the
+later of that tick and the newest start on the page, because the first live check read "started
+in 2 seconds" for a game that began after the page was opened - and a browser whose clock is
+behind the server's had always been able to read that. `realtime-pass` watches the Games page
+and the Watch page in one browser while two others open, fill, start, end and close a table.
 
 **A finished match stays on screen, and the test for that is which TABLE it belongs to.**
 `tables.match_id` is the LIVE one, so it clears the instant somebody wins - and closing the board on
@@ -2833,7 +7077,8 @@ Six of them were serious enough to be worth stating as rules.
 could see the table and that the messaging policy allowed the approach, and never asked whether the
 invitee could ever sit down. On a `room` table that wrote a chair nothing could free: `claimSeat`
 skips a chair held for somebody else, the invitee's own claim 404s before it reaches one, and no
-route anywhere clears `invited_id`. One misdirected invitation made a table permanently
+route cleared `invited_id` (a host's removal lets go of the one held for whoever it takes out, and
+of no other). One misdirected invitation made a table permanently
 un-startable, and told a non-member a table existed that every read of it denies. `create` had the
 same hole through its `invitees` list. The rule: on every level but `invite`, the invitee must
 already pass `visibleTo` - and on `invite` there is nothing to check, because the invitation is what

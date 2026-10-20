@@ -4,6 +4,7 @@ export const TABLE_REFUSALS = {
     'table-closed': 409,
     'chairs-empty': 409,
     'not-ready': 409,
+    'kept-out': 409,
     'no-invitee': 404,
     'quick-game': 422,
     'quick-options': 422

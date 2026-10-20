@@ -5,6 +5,8 @@ import { setKeyStore } from '../src/lib/device-keys.ts';
 import { currentEpoch, forgetSigners } from '../src/lib/sealing.ts';
 import { forgetArchive } from '../src/services/chat.source.ts';
 import { createApiSource, type ChatScope } from '../src/services/chat.source.ts';
+import { runtime } from '../src/lib/runtime.ts';
+import type { ChatMessage } from '../src/api.ts';
 import type { Message } from '../src/data/chat.ts';
 import { server, fixtureDevice } from './fake-api.ts';
 import { heldKeyStore, makeDevice, TEST_ACCOUNTS, type TestDevice } from './keys.ts';
@@ -45,8 +47,12 @@ const said = (text: string): Message => ({
     ref: null
 });
 
+const ELSEWHERE = 'c-elsewhere';
+
+const other = (text: string) => `${ text.startsWith('A') ? 'B' : 'A' }${ text.slice(1) }`;
+
 /** One direct thread, both sides provable, nothing said yet. */
-function arrange(options: { theirKind?: 'wallet' | 'guest' } = {})
+function arrange(options: { theirDevice?: boolean } = {})
 {
     server.reset();
     server.me = 'alex';
@@ -66,13 +72,12 @@ function arrange(options: { theirKind?: 'wallet' | 'guest' } = {})
     server.conversationDevices = {
         [THREAD]: {
             members: [
-                { accountId: 'u-alex', handle: 'alex', kind: 'wallet', address: mine.address, devices: [mine.peer] },
+                { accountId: 'u-alex', handle: 'alex', address: mine.address, devices: [mine.peer] },
                 {
                     accountId: 'u-sara.k',
                     handle: 'sara.k',
-                    kind: options.theirKind ?? 'wallet',
-                    ...(options.theirKind === 'guest' ? {} : { address: theirs.address }),
-                    devices: options.theirKind === 'guest' ? [] : [theirs.peer]
+                    address: theirs.address,
+                    devices: options.theirDevice === false ? [] : [theirs.peer]
                 }
             ]
         }
@@ -125,7 +130,7 @@ describe('sealing a thread for the first time', () =>
 
     it('refuses to seal at all when the other side has no provable device', async () =>
     {
-        arrange({ theirKind: 'guest' });
+        arrange({ theirDevice: false });
 
         const outcome = await currentEpoch(THREAD, 'alex');
 
@@ -344,6 +349,50 @@ describe('what leaves the browser when somebody signs out', () =>
         await source.thread(THREAD, scope, new AbortController().signal);
         expect(source.archive(scope)).toEqual([]);
     });
+
+    it('keeps nothing of a thread that was still being read when the account signed out', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const reading = source.thread(THREAD, scope, new AbortController().signal);
+
+        forgetArchive();
+
+        expect((await reading).messages.map((one) => one.text)).toEqual(['still on its way']);
+        expect(source.archive(scope), 'what was opened after the account had gone was kept for whoever searches next').toEqual([]);
+    });
+
+    it('opens nothing for the next reader from what such a read had opened', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const reading = source.thread(THREAD, scope, new AbortController().signal);
+
+        forgetArchive();
+        await reading;
+
+        const [row] = (await source.conversations(scope, new AbortController().signal)).rows;
+
+        expect([row.last?.locked, row.last?.text], 'a line was read without its key, from what a read that outlived its account had left').toEqual(['no-epoch-key', '']);
+    });
+
+    it('keeps nothing of a list that was still being read when the account signed out, not even who wrote last', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('still on its way'));
+
+        const listing = source.conversations(scope, new AbortController().signal);
+
+        forgetArchive();
+        await listing;
+
+        expect(source.archive(scope)).toEqual([]);
+    });
 });
 
 describe('rotation', () =>
@@ -459,6 +508,103 @@ describe('replies, reactions and deletions, all inside the seal', () =>
 
         expect(again.map((message) => message.text)).toEqual(first.map((message) => message.text));
         expect(server.calls.filter((call) => call !== 'chat.messages')).toEqual([]);
+    });
+
+    it.each<[string, (wire: ChatMessage) => Partial<ChatMessage>]>([
+        ['its time', () => ({ clientAt: new Date(1_600_000_000_000).toISOString() })],
+        ['a last moment it was not sent with', () => ({ expiresAt: new Date(runtime().clock.now() + 3_600_000).toISOString() })],
+        ['its place in what its sender has sent', (wire) => ({ seq: (wire.seq ?? 0) + 1 })],
+        ['its epoch', (wire) => ({ epoch: (wire.epoch ?? 0) + 1 })],
+        ['the account it is from', () => ({ senderAccountId: 'u-sara.k' })],
+        ['the device it is from', () => ({ senderDeviceId: stranger.id })],
+        ['what it was committed to', (wire) => ({ commitment: other(wire.commitment ?? '') })],
+        ['its nonce', (wire) => ({ iv: other(wire.iv ?? '') })],
+        ['its words', (wire) => ({ body: other(wire.body ?? '') })],
+        ['its signature', (wire) => ({ signature: other(wire.signature ?? '') })],
+        ['its id', () => ({ id: '00000000-0000-4000-8000-000000000000' })]
+    ])('asks again about a message it had opened, when the server serves it with %s changed', async (_what, changed) =>
+    {
+        const source = createApiSource();
+        await source.post(said('as it was sent'));
+
+        const first = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        expect([first[0].locked, first[0].text]).toEqual([undefined, 'as it was sent']);
+
+        Object.assign(server.messages[0], changed(server.messages[0]));
+        forgetSigners();
+
+        const again = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+
+        expect(again[0].locked, 'what had been opened was shown again without being asked about').toBeDefined();
+        expect(again[0].text).toBe('');
+    });
+
+    it('will not show in one room what it had opened in another', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('said in the first room'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        server.conversations.push({ ...server.conversations[0], id: ELSEWHERE });
+        server.conversationDevices[ELSEWHERE] = server.conversationDevices[THREAD];
+        server.messages[0].conversationId = ELSEWHERE;
+        forgetSigners();
+
+        const moved = (await source.thread(ELSEWHERE, scope, new AbortController().signal)).messages;
+
+        expect([moved[0].locked, moved[0].text], 'a line was carried from the room it was said in to another').not.toEqual([undefined, 'said in the first room']);
+        expect(moved[0].text).toBe('');
+    });
+
+    it('will not take a line it had opened in one room for the last line of another', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('said in the first room'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        server.conversations.push({ ...server.conversations[0], id: ELSEWHERE });
+
+        const rows = (await source.conversations(scope, new AbortController().signal)).rows;
+
+        expect(rows.map((row) => [row.conversation.id, row.last?.locked, row.last?.text])).toEqual([
+            [THREAD, undefined, 'said in the first room'],
+            [ELSEWHERE, 'tampered', '']
+        ]);
+    });
+
+    it('will not read a reaction it had opened as a message, and refuses it for its signature', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('one'));
+        await source.react(THREAD, 'alex', server.messages[0].id, '👍', 1_700_000_000_500, 0);
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        server.messages.push({ ...server.messages[0].reactions![0], kind: 'text' });
+        forgetSigners();
+
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+
+        expect([thread[1].locked, thread[1].text]).toEqual(['bad-signature', '']);
+    });
+
+    it('will not keep a message readable past the moment its sender signed, for a server that moves the moment', async () =>
+    {
+        const source = createApiSource();
+        const until = runtime().clock.now() + 60_000;
+
+        await source.post(said('not for long'), until);
+        server.messages[0].expiresAt = new Date(until).toISOString();
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        expect(source.archive(scope).map((one) => one.text)).toEqual(['not for long']);
+
+        server.messages[0].expiresAt = new Date(until + 3_600_000).toISOString();
+        forgetSigners();
+
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+
+        expect([thread[0].locked, thread[0].text]).toEqual(['bad-signature', '']);
+        expect(source.archive(scope).map((one) => one.text), 'its words were still there to be searched').toEqual(['']);
     });
 
     it('turns a deleted message into a tombstone and drops its words from the archive', async () =>

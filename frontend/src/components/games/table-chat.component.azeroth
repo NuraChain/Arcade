@@ -4,6 +4,7 @@ import { attachStick } from '../../lib/stick.ts';
 import { threadRows } from '../../lib/thread.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { aboutPerson } from '../../lib/person-menu.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
 import QuietNote from '../chat/quiet-note.component.azeroth';
@@ -16,23 +17,25 @@ import { plainOf } from '../../lib/markdown.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { ludoOf } from '../../data/match.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-import { useVoice } from '../../stores/voice.store.ts';
+import { LOUDEST, useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import { CHAT_WELL } from '../ui/variants.ts';
+import { nextMissForfeits } from '../../../../backend/src/domains/match/turns.ts';
 
 const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
 
@@ -52,10 +55,10 @@ export default component TableChat(props: {
     const people = usePeople();
     const seal = useSeal();
     const devices = useDevices();
-    const account = useAccount();
     const toasts = useToasts();
     const overlay = useOverlay();
     const voice = useVoice();
+    const social = useSocial();
 
     derived voiced = voice.people();
 
@@ -112,11 +115,20 @@ export default component TableChat(props: {
 
     let opened = '';
 
+    derived apart = (lobby.table()?.chairs ?? []).some((chair) => chair.who !== undefined && social.apart(chair.who));
+
     effect
     {
         const id = props.conversationId;
 
-        if (id !== '')
+        if (apart)
+        {
+            if (opened !== '' && untrack(chat.openId) === opened)
+            {
+                chat.closeThread();
+            }
+        }
+        else if (id !== '')
         {
             opened = id;
             chat.openThread(id);
@@ -169,7 +181,6 @@ export default component TableChat(props: {
         sealability: seal.sealability(),
         readiness: devices.readiness(),
         known: devices.known(),
-        isWallet: account.isWallet(),
         pending: seal.loading()
     });
 
@@ -288,13 +299,17 @@ export default component TableChat(props: {
 
     derived quiet = table?.chat === false;
 
-    derived noticed = !quiet && !seal.loading() && stop !== null;
+    derived lost = chat.threadError() !== null && messages.length === 0;
+
+    derived unread = apart || lost;
+
+    derived noticed = !quiet && !unread && !seal.loading() && stop !== null;
 
     derived shut = !quiet && stop !== null;
 
     derived inviting = !shut;
 
-    derived hushed = messages.length === 0 && !chat.threadLoading();
+    derived hushed = messages.length === 0 && !unread && !chat.threadLoading();
 
     derived match = board.match();
 
@@ -366,6 +381,19 @@ export default component TableChat(props: {
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
                     <ul ref={ (element) => watch(element) } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto' ].join(' ') } aria-live="polite">
+                        <Show when={ unread }>
+                            { () =>
+                                <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center" data-unread={ apart ? 'apart' : 'lost' }>
+                                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
+                                        <Icon name="chat-off" size={ 20 } />
+                                    </span>
+                                    <p class="text-ui-sm font-semibold text-text">{ locale.t(apart ? 'play.table.apart' : 'chat.loadFailed') }</p>
+                                    <Show when={ apart } fallback={ <Button variant="outline" size="sm" onClick={ () => void chat.refresh() }>{ locale.t('common.retry') }</Button> }>
+                                        { () => <p class="text-ui-xs text-muted">{ locale.t('play.table.apartLead') }</p> }
+                                    </Show>
+                                </li>
+                            }
+                        </Show>
                         <Show when={ hushed }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
@@ -417,7 +445,7 @@ export default component TableChat(props: {
                         }
                     </Show>
 
-                    <div class={ () => quiet ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
+                    <div class={ () => quiet || unread ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
                         <Show when={ stop === null }>
                             { () =>
                                 <Rail class="-mx-3 mb-2" inner="px-3">
@@ -459,7 +487,7 @@ export default component TableChat(props: {
                     <For each={ players } key={ (row) => row.seat } let={ row }>
                         <li
                             class={ () => [
-                                'flex flex-wrap items-center gap-3 rounded-tile border px-3 py-2.5 transition-colors',
+                                'relative flex flex-wrap items-center gap-3 rounded-tile border px-3 py-2.5 transition-colors',
                                 row.turn ? 'border-accent/60 bg-accent/10' : 'border-line bg-sunk/60'
                             ].join(' ') }
                             aria-current={ row.turn ? 'true' : undefined }
@@ -475,7 +503,20 @@ export default component TableChat(props: {
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                                 <span class="flex min-w-0 items-center gap-1.5">
-                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.who) }</span>
+                                    <Show when={ row.who !== lobby.me() } fallback={ <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.who) }</span> }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class="min-w-0 cursor-pointer truncate text-start text-ui-sm font-semibold text-text before:absolute before:inset-0 before:rounded-tile hover:before:bg-white/5"
+                                                dir="auto"
+                                                aria-haspopup="dialog"
+                                                aria-label={ locale.t('actions.about', { name: nameOf(row.who) }) }
+                                                onClick={ () => aboutPerson(row.who) }
+                                            >
+                                                { nameOf(row.who) }
+                                            </button>
+                                        }
+                                    </Show>
                                     <Show when={ row.host }>
                                         { () => <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                     </Show>
@@ -487,13 +528,13 @@ export default component TableChat(props: {
                             <Show when={ calling(row.who) } let={ caller }>
                                 <span
                                     class={ () => [
-                                        'flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
+                                        'relative flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
                                         !caller.talk || caller.link === 'failed' ? 'bg-danger/12 text-danger' : (caller.speaking ? 'bg-live/15 text-live' : 'bg-raised text-muted')
                                     ].join(' ') }
                                     title={ voiceLine(row.who) }
                                 >
                                     <Icon name={ caller.muted ? 'voice-off' : 'voice' } size={ 12 } />
-                                    <span class="sr-only">{ voiceLine(row.who) }</span>
+                                    <span class={ () => (!caller.talk || caller.link === 'failed' ? '' : 'sr-only') }>{ voiceLine(row.who) }</span>
                                 </span>
                             </Show>
                             <Show when={ silenceable(row.who) } let={ caller }>
@@ -507,7 +548,7 @@ export default component TableChat(props: {
                                 />
                             </Show>
                             <Show when={ row.timeouts > 0 }>
-                                { () => <Badge dot text={ locale.plural('match.missed', row.timeouts) } tone="danger" /> }
+                                { () => <Badge dot text={ locale.plural(nextMissForfeits(row.timeouts) ? 'match.missed.last' : 'match.missed', row.timeouts) } tone="danger" /> }
                             </Show>
                             <Show when={ row.home !== undefined }>
                                 { () =>
@@ -519,11 +560,12 @@ export default component TableChat(props: {
                                 }
                             </Show>
                             <Show when={ hearable(row.who) } let={ who }>
-                                <div class="basis-full">
+                                <div class="relative basis-full">
                                     <Slider
                                         value={ voice.volumeOf(who) }
                                         min={ 0 }
-                                        max={ 1 }
+                                        max={ LOUDEST }
+                                        ticks={ [1] }
                                         step={ 0.05 }
                                         label={ locale.t('voice.volumeOf', { name: nameOf(who) }) }
                                         valueText={ locale.n(voice.volumeOf(who), { style: 'percent' }) }

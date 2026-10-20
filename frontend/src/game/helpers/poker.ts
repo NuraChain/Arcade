@@ -11,12 +11,6 @@ export interface Named
     board: boolean;
 }
 
-export interface PokerOutcome
-{
-    hand: Named | null;
-    call: { chips: number; pot: number } | null;
-}
-
 const RANK_BASE = 13;
 
 const digit = (score: number, place: number) => Math.floor(score / RANK_BASE ** place) % RANK_BASE;
@@ -55,45 +49,24 @@ function playing(view: PokerBoard, mine: number | undefined)
 
 export type PokerVerb = 'fold' | 'check' | 'call' | 'raise' | 'allin';
 
-export function predicted(view: PokerBoard, seat: number, verb: PokerVerb, amount = 0): PokerBoard
+export function pressed(view: Pick<PokerBoard, 'seats' | 'toCall'>, seat: number, verb: PokerVerb, amount = 0)
 {
-    const highest = Math.max(0, ...view.seats.map((row) => row.bet));
+    const row = view.seats.find((one) => one.seat === seat);
+    const whole = (row?.bet ?? 0) + (row?.stack ?? 0);
 
-    return {
-        ...view,
-        seats: view.seats.map((row) =>
-        {
-            if (row.seat !== seat)
-            {
-                return row;
-            }
-
-            if (verb === 'fold')
-            {
-                return { ...row, folded: true };
-            }
-
-            const to = verb === 'call' ? row.bet + (view.toCall ?? highest - row.bet) : verb === 'raise' ? amount : verb === 'allin' ? row.bet + row.stack : row.bet;
-            const pay = Math.max(0, Math.min(row.stack, to - row.bet));
-
-            return { ...row, bet: row.bet + pay, stack: row.stack - pay, allIn: row.stack === pay && pay > 0 ? true : row.allIn };
-        })
-    };
+    return { e: verb, seat, amount: verb === 'call' ? view.toCall ?? 0 : verb === 'raise' ? amount : verb === 'allin' ? whole : 0 };
 }
 
-export function outcomeOf(view: PokerBoard, mine: number | undefined): PokerOutcome | null
+export function handOf(table: { hole: readonly number[]; board: readonly number[]; winner?: number | null })
 {
-    if (!playing(view, mine))
-    {
-        return null;
-    }
+    return table.winner == null ? namedHand(table.hole, table.board) : null;
+}
 
-    const owe = view.turn === mine ? view.toCall ?? 0 : 0;
+export function priceOf(view: PokerBoard, mine: number | undefined)
+{
+    const owe = playing(view, mine) && view.turn === mine ? view.toCall ?? 0 : 0;
 
-    return {
-        hand: namedHand(view.hole, view.board),
-        call: owe > 0 ? { chips: owe, pot: view.pot } : null
-    };
+    return owe > 0 ? { chips: owe, pot: view.pot } : null;
 }
 
 export function coachOf(view: PokerBoard, mine: number | undefined): Tip | null

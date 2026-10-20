@@ -1,0 +1,186 @@
+import { untrack } from 'azerothjs';
+
+import type { PartyInvite as Invitation } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
+import { countdown } from '../../lib/countdown.ts';
+import { playWith } from '../../lib/play-with.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay, type OverlayEntry } from '../../stores/overlay.store.ts';
+import { useParty } from '../../stores/party.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { INVITE_MS } from '../../../../backend/src/domains/party/rules.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+
+type Drawable = Invitation & { game: GameId };
+
+const TOASTS = '[role="region"][data-placement]:not([data-party-invites])';
+
+const sheeted = (entries: OverlayEntry[], phone: boolean) =>
+    entries.some((entry) => entry.phase !== 'closing' && (entry.kind === 'sheet' || (entry.kind === 'auto' && phone)));
+
+export default component PartyInvite()
+{
+    const party = useParty();
+    const people = usePeople();
+    const locale = useLocale();
+    const device = useDevice();
+    const lobby = useLobby();
+    const toasts = useToasts();
+    const overlay = useOverlay();
+    const catalogue = useCatalogue();
+
+    let region: HTMLElement | null = null;
+
+    const drawable = (invite: Invitation): invite is Drawable => catalogue.games.some((game) => game.id === invite.game);
+
+    derived invites = party.invites().filter(drawable);
+
+    derived waiting = invites.length > 0;
+
+    derived raised = toasts.lifted() || sheeted(overlay.items(), device.posture() === 'phone');
+
+    derived top = raised || lobby.openId() !== '';
+
+    derived crowded = waiting && raised === top;
+
+    derived shown = top ? invites.slice(0, 1) : invites;
+
+    derived others = invites.length - shown.length;
+
+    derived counted = others > 0;
+
+    const clear = () =>
+    {
+        const theirs = document.querySelector<HTMLElement>(TOASTS);
+        const room = crowded && region !== null ? region.offsetHeight : 0;
+
+        if (room === 0)
+        {
+            theirs?.style.removeProperty('translate');
+        }
+        else
+        {
+            theirs?.style.setProperty('translate', `0 ${ top ? room : -room }px`);
+        }
+    };
+
+    const accept = (partyId: string, from: string) =>
+    {
+        void party.accept(partyId).then((teamed) =>
+        {
+            if (teamed)
+            {
+                playWith(from, true);
+            }
+        });
+    };
+
+    effect
+    {
+        void crowded;
+        void top;
+        clear();
+    }
+
+    mount
+    {
+        const watch = typeof ResizeObserver === 'undefined' || region === null ? null : new ResizeObserver(clear);
+
+        if (region !== null)
+        {
+            watch?.observe(region);
+        }
+
+        return () =>
+        {
+            watch?.disconnect();
+            document.querySelector<HTMLElement>(TOASTS)?.style.removeProperty('translate');
+        };
+    }
+
+    <div
+        ref={ (element) => region = element }
+        class="group/party fixed inset-x-0 z-(--z-toast) flex max-block-[45dvh] flex-col items-center gap-2 overflow-y-auto overscroll-contain [scrollbar-width:none] px-3 py-1 pointer-events-none data-[placement=bottom]:inset-be-[calc(var(--nav-room)+0.5rem)] data-[placement=bottom]:flex-col-reverse data-[placement=top]:inset-bs-[calc(env(safe-area-inset-top,0px)+0.5rem)] rail:data-[placement=bottom]:inset-be-3 rail:data-[placement=bottom]:items-end rail:data-[placement=bottom]:px-4 sidebar:data-[placement=bottom]:inset-be-3 sidebar:data-[placement=bottom]:items-end sidebar:data-[placement=bottom]:px-4"
+        data-party-invites
+        data-placement={ top ? 'top' : 'bottom' }
+        data-posture={ device.posture() }
+        role="region"
+        aria-label={ locale.t('party.invite.region') }
+        aria-live="polite"
+    >
+        <For each={ shown } key={ (invite) => invite.id } let={ invite }>
+            <div
+                class="pointer-events-auto relative flex inline-full max-inline-[26rem] shrink-0 flex-col gap-3 overflow-hidden rounded-panel border border-line bg-lifted p-3 [box-shadow:var(--shadow-3)] animate-toast-in group-data-[placement=top]/party:flex-row group-data-[placement=top]/party:items-center group-data-[placement=top]/party:gap-2 group-data-[placement=top]/party:p-2"
+                data-invite={ invite.id }
+                role="status"
+            >
+                <div class="flex min-w-0 flex-1 items-center gap-3 group-data-[placement=top]/party:gap-2">
+                    <span class="flex shrink-0" aria-hidden="true">
+                        <Avatar
+                            person={ people.byHandle(invite.from) }
+                            size="md"
+                            class="group-data-[placement=top]/party:h-8 group-data-[placement=top]/party:w-8 group-data-[placement=top]/party:text-ui-xs"
+                        />
+                    </span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="flex min-w-0 items-center gap-1.5">
+                            <span class="truncate text-ui-base font-semibold text-text" dir="auto">{ people.byHandle(invite.from)?.displayName ?? invite.from }</span>
+                            <Show when={ counted }>
+                                <span
+                                    class="tally inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent-fill px-1 text-ui-2xs font-bold leading-none text-accent-ink"
+                                    data-more
+                                    aria-hidden="true"
+                                >
+                                    +{ locale.n(others) }
+                                </span>
+                            </Show>
+                        </span>
+                        <span class="truncate text-ui-sm text-muted group-data-[placement=top]/party:sr-only">
+                            { locale.t('party.invite.asks', { game: locale.t(catalogue.byId(invite.game).nameKey) }) }
+                        </span>
+                        <Show when={ counted }>
+                            <span class="sr-only">{ locale.plural('party.invite.more', others) }</span>
+                        </Show>
+                        <span class="hidden truncate text-ui-sm text-muted group-data-[placement=top]/party:block" aria-hidden="true">
+                            { locale.t(catalogue.byId(invite.game).nameKey) }
+                        </span>
+                    </span>
+                    <GameIcon game={ invite.game } class="h-9 w-9 shrink-0 group-data-[placement=top]/party:hidden" />
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        class="flex-1 whitespace-nowrap group-data-[placement=top]/party:flex-none"
+                        loading={ party.working(invite.id) }
+                        onClick={ () => accept(invite.id, invite.from) }
+                    >
+                        { locale.t('party.teamUp') }
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="flex-1 whitespace-nowrap group-data-[placement=top]/party:flex-none"
+                        disabled={ party.working(invite.id) }
+                        onClick={ () => void party.decline(invite.id) }
+                    >
+                        { locale.t('party.invite.decline') }
+                    </Button>
+                </div>
+                <span class="absolute inset-x-0 inset-be-0 block-[2px] bg-line/60" aria-hidden="true">
+                    <span
+                        class="block block-full origin-left rtl:origin-right bg-accent [animation:toast-bar_var(--left)_linear_forwards]"
+                        data-clock
+                        style={ untrack(() => countdown(party.remaining(invite.remainingMs), INVITE_MS)) }
+                    ></span>
+                </span>
+            </div>
+        </For>
+    </div>
+}

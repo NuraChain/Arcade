@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
+import { Between, IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
 import { MatchPlayer, type MatchResult } from '../../entities/match-player.entity.ts';
@@ -19,9 +19,10 @@ import { pokerEngine } from './engines/poker.ts';
 import { REFUSALS, isRefusal, type RefusalWord } from './refusals.ts';
 import { variantOf } from './sides.ts';
 import { nextMissForfeits, turnMs } from './turns.ts';
+import { boardShown } from './watch.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
-import type { Draws, Engine, TableConfig } from './engine.ts';
+import type { Draws, Engine, ForfeitReason, TableConfig } from './engine.ts';
 import type { MatchPlay } from '../../schemas.ts';
 
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
@@ -41,6 +42,16 @@ interface HistoryRow
 const UNIQUE_VIOLATION = '23505';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const HISTORY_CURSOR = /^([0-9T:.\-Z]+)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+const historyAfter = (cursor: string | null) =>
+{
+    const found = cursor === null ? null : HISTORY_CURSOR.exec(cursor);
+    const at = found === null ? null : new Date(found[1]);
+
+    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
+};
 
 export type Applied = 'now' | 'already' | 'stale';
 
@@ -63,6 +74,7 @@ export interface MatchSeatRow
     colour: number;
     timeouts: number | null;
     result: MatchResult | null;
+    exit: ForfeitReason | null;
     rating_before: number | null;
     rating_after: number | null;
 }
@@ -188,6 +200,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             .addSelect('p.user_id', 'user_id')
             .addSelect('p.timeouts', 'timeouts')
             .addSelect('p.result', 'result')
+            .addSelect(
+                `(select a.payload ->> 'verb' from match_actions a
+                   where a.match_id = p.match_id and a.kind = 'forfeit' and a.seat = p.seat
+                   order by a.rev desc limit 1)`,
+                'exit'
+            )
             .addSelect('p.rating_before', 'rating_before')
             .addSelect('p.rating_after', 'rating_after')
             .where('p.match_id = :matchId', { matchId })
@@ -219,6 +237,55 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         }
 
         return { match, state: stateOf(match), players: await seatsOf(db, matchId), mine: seat.seat };
+    };
+
+    const shownTo = async (load: MatchLoad): Promise<MatchLoad> =>
+    {
+        const mine = load.players.find((player) => player.seat === load.mine);
+
+        if (load.match.finishedAt !== null || mine === undefined || mine.result === null)
+        {
+            return load;
+        }
+
+        const left = await db.getRepository(MatchAction).findOne({
+            select: { rev: true },
+            where: { matchId: load.match.id, kind: 'forfeit', seat: load.mine },
+            order: { rev: 'DESC' }
+        });
+        const shown = await boardShown(db, load.match, load.players, left?.rev ?? -1);
+
+        if (shown === null)
+        {
+            throw new NotFoundError('No game there.');
+        }
+
+        return { ...shown.load, mine: load.mine };
+    };
+
+    const told = async (load: MatchLoad, rev: number): Promise<ActionLog[]> =>
+    {
+        const engine = engineFor(load.match.game);
+        const from = Number.isFinite(rev) ? Math.min(Math.max(Math.trunc(rev), 0), load.match.rev) : load.match.rev;
+
+        if (engine === null || from >= load.match.rev)
+        {
+            return [];
+        }
+
+        const rows = await db.getRepository(MatchAction).find({
+            select: { rev: true, seat: true, createdAt: true, events: true },
+            where: { matchId: load.match.id, rev: Between(from + 1, load.match.rev) },
+            order: { rev: 'ASC' }
+        });
+        const reader = load.mine < 0 ? null : load.mine;
+
+        return rows.map((row) => ({
+            rev: row.rev,
+            seat: row.seat,
+            at: row.createdAt,
+            log: engine.log((row.events ?? []) as unknown[], reader)
+        }));
     };
 
     const dealtIn = async (me: string, matchId: string) =>
@@ -328,14 +395,19 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     `;
 
     return {
-        view: read,
+        async view(me: string, matchId: string)
+        {
+            const load = await read(me, matchId);
+
+            return load === null ? null : await shownTo(load);
+        },
+
+        shownTo,
 
         async history(me: string, cursor: string | null): Promise<MatchHistory>
         {
-            const at = cursor === null ? null : cursor.slice(0, cursor.lastIndexOf('|'));
-            const after = cursor === null ? null : cursor.slice(cursor.lastIndexOf('|') + 1);
-
-            const rows = await db.query(HISTORY_SQL, [me, at, after, HISTORY_PAGE + 1]) as HistoryRow[];
+            const after = historyAfter(cursor);
+            const rows = await db.query(HISTORY_SQL, [me, after?.at ?? null, after?.id ?? null, HISTORY_PAGE + 1]) as HistoryRow[];
             const page = rows.slice(0, HISTORY_PAGE);
             const last = page[page.length - 1];
 
@@ -384,46 +456,24 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         since: async (me: string, matchId: string, rev: number): Promise<{ load: MatchLoad; events: ActionLog[] } | null> =>
         {
-            const load = await read(me, matchId);
+            const dealt = await read(me, matchId);
 
-            if (load === null)
+            if (dealt === null)
             {
                 return null;
             }
 
-            const engine = engineFor(load.match.game);
-
-            if (engine === null)
+            if (engineFor(dealt.match.game) === null)
             {
                 return null;
             }
 
-            const rows = await db.getRepository(MatchAction).find({
-                select: { rev: true, seat: true, createdAt: true, events: true },
-                where: { matchId, rev: MoreThan(rev) },
-                order: { rev: 'ASC' }
-            });
+            const load = await shownTo(dealt);
 
-            /**
-             * Composed for the READER, not for the seat that acted.
-             *
-             * `row.seat` says who took the action and `load.mine` says who is asking, and it is the
-             * second one the engine is handed - otherwise a log would be redacted for whoever
-             * happened to move, which is the one person it never needed hiding from. A watcher
-             * arrives with `mine: -1` and is handed `null`, like the board.
-             */
-            const reader = load.mine < 0 ? null : load.mine;
-
-            return {
-                load,
-                events: rows.map((row) => ({
-                    rev: row.rev,
-                    seat: row.seat,
-                    at: row.createdAt,
-                    log: engine.log((row.events ?? []) as unknown[], reader)
-                }))
-            };
+            return { load, events: await told(load, rev) };
         },
+
+        told,
 
         start: async (me: string, tableId: string) =>
         {
@@ -676,6 +726,31 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
+        playingAt: async (tx: EntityManager, me: string) =>
+        {
+            const seats = await tx.getRepository(MatchPlayer)
+                .createQueryBuilder('p')
+                .innerJoin(Match, 'm', 'm.id = p.match_id and m.finished_at is null')
+                .innerJoin(Table, 't', `t.id = m.table_id and t.mode = 'live'`)
+                .select('p.match_id', 'matchId')
+                .addSelect('p.seat', 'seat')
+                .where('p.user_id = :me', { me })
+                .getRawMany<{ matchId: string; seat: number }>();
+
+            for (const { matchId, seat } of seats)
+            {
+                const match = await tx.getRepository(Match).findOneByOrFail({ id: matchId });
+                const engine = engineFor(match.game);
+
+                if (engine !== null && engine.apply(stateOf(match), engine.forfeit(seat, 'left'), draws).ok)
+                {
+                    return match.tableId;
+                }
+            }
+
+            return null;
+        },
+
         walkOut: async (tx: EntityManager, me: string, tableId: string, mayForfeit: boolean) =>
         {
             const match = await tx.getRepository(Match).findOne({
@@ -699,16 +774,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 return null;
             }
 
-            if (!mayForfeit)
-            {
-                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
-            }
-
             const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), draws);
 
             if (!outcome.ok)
             {
                 return null;
+            }
+
+            if (!mayForfeit)
+            {
+                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
             }
 
             await commit(tx, match, engine, outcome.state, outcome.events, {
@@ -932,5 +1007,3 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         }
     };
 }
-
-export type MatchService = ReturnType<typeof createMatchService>;

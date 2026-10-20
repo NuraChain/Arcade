@@ -141,12 +141,14 @@ describe('the landing game card', () =>
 
 describe('the play button', () =>
 {
-    it('offers a guest seat only where it is asked to', () =>
+    it('offers one way in, with no second door beside it', () =>
     {
         const plain = routed(() => PlayCta({ returning: false }));
         expect(plain.querySelector('a[href="/sign-in"]')).toBeNull();
+        expect(plain.textContent).toContain(useLocale().t('landing.cta.start'));
+
         cleanup();
-        const finale = routed(() => PlayCta({ returning: false, guest: true }));
-        expect(finale.querySelector('a[href="/sign-in"]')).not.toBeNull();
+        const returning = routed(() => PlayCta({ returning: true }));
+        expect(returning.querySelector('a[href="/sign-in"]')).toBeNull();
     });
 });

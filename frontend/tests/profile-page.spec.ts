@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, RouterProvider, Routes, type Route }
 import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import ProfileHeader from '../src/components/social/profile-header.component.azeroth';
 import AchievementTile from '../src/components/social/achievement-tile.component.azeroth';
+import PlayWithSheet from '../src/components/social/play-with-sheet.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
 import PersonPage from '../src/pages/app/person.page.azeroth';
 import '../src/locales/app-catalogue.ts';
@@ -90,7 +91,7 @@ describe('the profile header', () =>
 
 describe('my profile page', () =>
 {
-    const signIn = (kind: 'wallet' | 'guest' = 'guest') =>
+    const signIn = () =>
     {
         const account: Account = {
             id: 'u-dana',
@@ -98,9 +99,8 @@ describe('my profile page', () =>
             displayName: 'Server Name',
             bio: 'Server bio',
             hue: 12,
-            kind,
             isMinor: false,
-            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+            address: '0x1111111111111111111111111111111111111111'
         };
         server.account = account;
         useSession().establish(account);
@@ -129,7 +129,7 @@ describe('my profile page', () =>
 
     it('shows the name, bio and picture the Nura Profile holds, never the server copy', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
         const container = await page();
@@ -143,7 +143,7 @@ describe('my profile page', () =>
 
     it('says the Nura Profile could not be read, rather than drawing an empty one, and tries again', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
         server.refuse = 'chain-unreachable';
@@ -165,7 +165,7 @@ describe('my profile page', () =>
 
     it('is empty but for the handle when there is no Nura Profile', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         const container = await page();
 
@@ -186,7 +186,7 @@ describe('my profile page', () =>
 
     it('leads with the wallet address, which copies from the chip', async () =>
     {
-        signIn('wallet');
+        signIn();
         const container = await page();
 
         const chip = container.querySelector('button[aria-label="Copy wallet address"]');
@@ -197,7 +197,7 @@ describe('my profile page', () =>
 
     it('gives each copy chip a 44px row of its own on a coarse pointer, which its touch area fills and never leaves', async () =>
     {
-        signIn('wallet');
+        signIn();
         useSession().establish({ ...useSession().account()!, joinedAt: '2026-03-01T00:00:00.000Z' });
         const container = await page();
         const px = (element: Element, prefix: string) =>
@@ -228,7 +228,7 @@ describe('my profile page', () =>
 
     it('has no Overview and no About section', async () =>
     {
-        signIn('wallet');
+        signIn();
         server.chain = { configured: true, profile: null };
         const container = await page();
         const tabs = [...container.querySelectorAll('[role=tab]')].map((one) => one.textContent?.trim());
@@ -240,7 +240,7 @@ describe('my profile page', () =>
 
 describe('signing out from my profile', () =>
 {
-    const signIn = (kind: 'wallet' | 'guest') =>
+    const signIn = () =>
     {
         const account: Account = {
             id: 'u-dana',
@@ -248,9 +248,8 @@ describe('signing out from my profile', () =>
             displayName: 'Dana',
             bio: '',
             hue: 12,
-            kind,
             isMinor: false,
-            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+            address: '0x1111111111111111111111111111111111111111'
         };
         server.account = account;
         useSession().establish(account);
@@ -277,7 +276,7 @@ describe('signing out from my profile', () =>
 
     it('signs a wallet account out at once and loads the sign-in page', async () =>
     {
-        signIn('wallet');
+        signIn();
         const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
 
         await press(container);
@@ -287,41 +286,6 @@ describe('signing out from my profile', () =>
         expect(useSession().signedIn()).toBe(false);
         expect(replace).toHaveBeenCalledWith('/sign-in');
         expect(container.textContent).not.toContain('No such person');
-    });
-
-    it('asks a guest first, because nothing signs back into a guest seat, and Cancel keeps them in', async () =>
-    {
-        signIn('guest');
-        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
-
-        await press(container);
-
-        const asked = useOverlay().items();
-        expect(asked.map((one) => one.label)).toEqual(['Sign out of this guest seat?']);
-        expect(asked[0]!.props.lead).toContain('no way back into a guest account');
-        expect(server.calls).not.toContain('auth.sign-out');
-
-        useOverlay().close(asked[0]!.id, false);
-        await settle();
-
-        expect(server.calls).not.toContain('auth.sign-out');
-        expect(useSession().signedIn()).toBe(true);
-        expect(replace).not.toHaveBeenCalled();
-        expect((container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    it('signs a guest out once they confirm', async () =>
-    {
-        signIn('guest');
-        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
-
-        await press(container);
-        useOverlay().close(useOverlay().items()[0]!.id, true);
-        await settle();
-
-        expect(server.calls).toContain('auth.sign-out');
-        expect(useSession().signedIn()).toBe(false);
-        expect(replace).toHaveBeenCalledWith('/sign-in');
     });
 });
 
@@ -337,7 +301,7 @@ describe('somebody else\'s profile page', () =>
 
     beforeEach(() =>
     {
-        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, isMinor: false };
         server.account = account;
         useSession().establish(account);
         usePeople().reset();
@@ -455,13 +419,51 @@ describe('somebody else\'s profile page', () =>
         expect(container.textContent).toContain(useLocale().t('actions.unblock', { name: 'mina' }));
         expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
     });
+
+    const pressPlay = async (handle: string) =>
+    {
+        useOverlay().reset();
+
+        const container = visit(handle);
+
+        await vi.waitFor(() => expect(server.calls).toContain('social.person'), { timeout: 4000 });
+        await settle();
+        server.calls = [];
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('person.play'))!.click();
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        const [sheet] = useOverlay().items();
+
+        useOverlay().reset();
+
+        return sheet;
+    };
+
+    it('opens the sheet to play with them on Play, and opens no table by itself', async () =>
+    {
+        const sheet = await pressPlay('mina');
+
+        expect(sheet.component).toBe(PlayWithSheet);
+        expect(sheet).toMatchObject({ id: 'play-with', props: { personId: 'mina', teamable: true } });
+        expect(server.calls, 'the button chose a game and opened a table for it').not.toContain('tables.create');
+        expect(server.calls).not.toContain('parties.invite');
+    });
+
+    it('offers no team-up with somebody whose page says they cannot be reached', async () =>
+    {
+        server.refusals.mina = 'strangers-off';
+
+        expect((await pressPlay('mina')).props).toMatchObject({ personId: 'mina', teamable: false });
+    });
 });
 
 describe('the edit sheet', () =>
 {
     const sheet = (only?: 'picture'): Promise<HTMLElement> =>
     {
-        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, isMinor: false };
         server.account = account;
         useSession().establish(account);
         return render(() => ProfileSheet({ overlayId: 'sheet', close: () => undefined, ...(only === undefined ? {} : { only }) }) as unknown as HTMLElement, '/app/me');

@@ -1,0 +1,88 @@
+import { untrack } from 'azerothjs';
+
+import { countdown } from '../../lib/countdown.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useParty } from '../../stores/party.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { INVITE_MS } from '../../../../backend/src/domains/party/rules.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+
+export default component PartyPanel()
+{
+    const party = useParty();
+    const people = usePeople();
+    const account = useAccount();
+    const catalogue = useCatalogue();
+    const locale = useLocale();
+
+    derived mine = party.party();
+
+    derived id = mine?.id ?? '';
+
+    derived me = account.user();
+
+    derived leading = mine !== null && mine.leader === me?.id;
+
+    derived partner = mine === null ? '' : (leading ? mine.member : mine.leader);
+
+    derived partnerName = people.byHandle(partner)?.displayName ?? partner;
+
+    derived waiting = mine?.stage === 'inviting';
+
+    derived says = waiting
+        ? locale.t('party.waiting', { name: partnerName })
+        : locale.t(leading ? 'party.ready.leader' : 'party.ready.member', { name: partnerName });
+
+    derived game = catalogue.games.find((one) => one.id === mine?.game) ?? null;
+
+    derived clocks = waiting && mine !== null ? [mine] : [];
+
+    <Panel section stack="md" label={ locale.t('team.yours') }>
+        <div class="flex items-center justify-between gap-3">
+            <h3 class="label text-ui-sm text-muted">{ locale.t('team.yours') }</h3>
+            <Show when={ game } let={ played }>
+                <span class="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-raised py-0.5 pe-2.5 ps-1.5 text-ui-xs font-semibold text-muted">
+                    <GameIcon game={ played.id } class="h-4 w-4 shrink-0" />
+                    <span class="truncate">{ locale.t(played.nameKey) }</span>
+                </span>
+            </Show>
+        </div>
+
+        <ul class="flex flex-col gap-2">
+            <li class="flex items-center gap-3">
+                <span class="flex shrink-0" aria-hidden="true">
+                    <Avatar person={ me } size="md" />
+                </span>
+                <span class="min-w-0 truncate text-ui-base font-semibold text-text" dir="auto">{ me?.displayName ?? '' }</span>
+                <span class="shrink-0 text-ui-xs text-faint">{ locale.t('common.you') }</span>
+            </li>
+            <li class={ () => (waiting ? 'flex items-center gap-3 opacity-60' : 'flex items-center gap-3') }>
+                <span class="flex shrink-0" aria-hidden="true">
+                    <Avatar person={ people.byHandle(partner) } size="md" />
+                </span>
+                <span class="min-w-0 truncate text-ui-base font-semibold text-text" dir="auto">{ partnerName }</span>
+            </li>
+        </ul>
+
+        <p class="text-ui-base text-text" role="status">{ says }</p>
+
+        <For each={ clocks } key={ (one) => one.id } let={ one }>
+            <span class="block block-[3px] overflow-hidden rounded-full bg-line/60" aria-hidden="true">
+                <span
+                    class="block block-full origin-left rtl:origin-right rounded-full bg-accent [animation:toast-bar_var(--left)_linear_forwards]"
+                    data-clock
+                    style={ untrack(() => countdown(party.remaining(one.remainingMs), INVITE_MS)) }
+                ></span>
+            </span>
+        </For>
+
+        <Button variant="destructive" block loading={ party.working(id) } onClick={ () => void party.leave(id) }>
+            { locale.t('party.leave') }
+        </Button>
+    </Panel>
+}

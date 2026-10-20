@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { BASE, clearTables, launch, recorder, seat } from './seats.mjs';
+import { BASE, clearTables, launch, recorder, seat, walletSeat } from './seats.mjs';
 import { tableBody } from './tables.mjs';
+import { chainUnreached } from './unreached.mjs';
 
 const { record, finish } = recorder('tour-pass');
 
@@ -70,6 +71,11 @@ const listen = (page, who, errors) =>
 {
     page.on('console', (event) =>
     {
+        if (chainUnreached(event, who))
+        {
+            return;
+        }
+
         if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
         {
             const where = event.text().startsWith('Failed to load resource') ? ` @ ${ event.location().url ?? '' }` : '';
@@ -104,7 +110,7 @@ const stranger = async (browser, viewport) =>
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
 
     const page = await context.newPage();
-    const actor = { handle: 'visitor', context, page, errors: [], api: apiOf(context) };
+    const actor = { handle: 'newcomer', context, page, errors: [], api: apiOf(context) };
 
     listen(page, actor.handle, actor.errors);
     cast.push(actor);
@@ -199,6 +205,7 @@ const part = async (title, run, ignore = []) =>
 const browser = await launch();
 
 let visitor = null;
+let newcomer = null;
 let dana = null;
 let pocket = null;
 let keys = null;
@@ -239,26 +246,33 @@ try
     await clearTables(dana, reza, leila);
     await dana.api('POST', '/notifications/read-all');
 
-    await part('1 guest sign-in', async () =>
+    await part('1 wallet sign-in', async () =>
     {
-        visitor = await stranger(browser, WIDE);
+        // First the page itself, through a browser nobody has signed in on: the wallet is the
+        // only door now, and there is no name box left beside it.
+        newcomer = await stranger(browser, WIDE);
+        await go(newcomer.page, '/sign-in');
 
-        const name = `Tour ${ STAMP }`;
+        const asked = [];
+        newcomer.page.on('request', (r) => { if (r.url().includes('/auth/guest')) { asked.push(r.url()); } });
 
-        await go(visitor.page, '/sign-in');
-        await visitor.page.locator('#sign-in-name').fill(name);
+        const typed = await newcomer.page.locator('#sign-in-name').count();
+        record('the sign-in page asks for no name at all', typed === 0, typed === 0 ? 'no name box' : 'a name box is still there');
+        const connect = await newcomer.page.getByRole('button', { name: /Connect a wallet|Connect/ }).count();
+        record('and offers the wallet as the one way in', connect === 1, `found ${ connect }`);
 
-        const sit = visitor.page.getByRole('button', { name: `Sit down as ${ name }` });
-        record('the sign-in button names the guest as they type', await soon(async () => await sit.count() > 0, 3000));
-
-        await sit.click();
-        await visitor.page.waitForURL((url) => url.pathname === '/app', { timeout: 15000 }).catch(() => undefined);
-        record('typing a name and pressing the button lands on /app', path(visitor.page) === '/app', path(visitor.page));
+        // Then a real sign-in, through the routes a browser uses. `/auth/wallet` mints a NEW
+        // account from the address, so this is somebody nobody has ever been - and the pass needs
+        // an untouched seat for every "you have no friends yet" below.
+        visitor = await walletSeat(browser, `Tour ${ STAMP }`, WIDE);
+        await go(visitor.page, '/app');
+        record('signing in with a wallet lands on /app', path(visitor.page) === '/app', path(visitor.page));
 
         const me = await visitor.api('GET', '/auth/me');
         visitor.handle = me.body?.account?.handle ?? 'visitor';
-        record('the session the page made is a guest account', me.body?.account?.kind === 'guest', `${ me.body?.account?.kind } @${ visitor.handle }`);
-        record('the home page greets the guest with a main landmark', await visitor.page.locator('main').count() > 0);
+        record('the session it made is an account with a wallet on it', typeof me.body?.account?.address === 'string', `${ me.body?.account?.address } @${ visitor.handle }`);
+        record('nothing asked the server for a guest', asked.length === 0, asked.length === 0 ? 'no /auth/guest' : asked[0]);
+        record('the home page greets them with a main landmark', await visitor.page.locator('main').count() > 0);
     });
 
     await part('2 profile', async () =>
@@ -285,7 +299,7 @@ try
         record('after a reload the account holds the new display name and bio', saved.body?.account?.displayName === newName && saved.body?.account?.bio === newBio, `${ saved.body?.account?.displayName } | ${ saved.body?.account?.bio }`);
 
         const title = page.locator('main h1').first();
-        record('a guest has no Nura Profile, so the page is titled by the handle', await soon(async () => (await title.innerText()).trim() === visitor.handle, 5000), (await title.innerText()).trim());
+        record('with nothing published the page is titled by the handle', await soon(async () => (await title.innerText()).trim() === visitor.handle, 5000), (await title.innerText()).trim());
 
         await page.locator('main').getByRole('button', { name: 'Edit profile', exact: true }).click();
         await sheet.waitFor({ state: 'visible', timeout: 5000 });
@@ -464,7 +478,7 @@ try
         }
 
         const seated = await visitor.api('GET', '/tables/mine');
-        record('leaving every table left the guest seated nowhere', (seated.body?.tables ?? []).length === 0, String((seated.body?.tables ?? []).length));
+        record('leaving every table left them seated nowhere', (seated.body?.tables ?? []).length === 0, String((seated.body?.tables ?? []).length));
     }, [/status of 404.*\/api\/(chat|tables)\//, /status of 422.*\/api\/tables$/]);
 
     await part('5 quick play', async () =>
@@ -487,13 +501,22 @@ try
         record('the Ludo page offers Quick play', await soon(async () => await quick.isVisible(), 5000));
         page.on('request', heard);
         await quick.click();
+
+        const find = page.getByRole('button', { name: 'Find a game', exact: true });
+
+        record('Quick play asks what to look for', await soon(async () => await find.isVisible(), 5000));
+        record('and has looked for nothing yet', asked.filter((one) => !one.startsWith('GET ')).length === 0, asked.filter((one) => !one.startsWith('GET ')).join(', '));
+        await page.getByRole('button', { name: '2 players', exact: true }).click();
+        await find.click();
         await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
-        record('Quick play lands on a play page', /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
+        record('finding a game lands on a play page', /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
 
         const seated = await visitor.api('GET', '/tables/mine');
         const mine = (seated.body?.tables ?? []).find((one) => path(page).endsWith(one.id));
-        record('the guest is sitting at that table', mine !== undefined);
+        record('the visitor is sitting at that table', mine !== undefined);
+        record('which is a table for two, as asked', mine?.seats === 2, `${ mine?.seats } seats`);
         record('and is ready there without pressing anything', mine?.chairs?.find((chair) => chair.seat === mine.mine)?.ready === true);
+        record('the lobby says it is looking for players', await soon(async () => (await page.locator('main').innerText()).includes('Looking for players: 1 of 2 here'), 5000));
 
         await settledOn(page);
         page.off('request', heard);
@@ -507,6 +530,21 @@ try
         await go(page, '/app/games');
 
         record('leaving a table over the api while its page is open does not send the page asking for that table and its chat', tableChat404.length === 0, `${ tableChat404.length } 404s: ${ [...new Set(tableChat404.map((one) => one.replace(/[0-9a-f-]{36}/, ':id')))].join(', ') }`);
+
+        await go(page, '/app/games/ludo');
+        await quick.click();
+        record('the finder opens on what was asked for last time', await soon(async () => await page.getByRole('button', { name: '2 players', exact: true }).getAttribute('aria-pressed') === 'true', 5000));
+        await find.click();
+        await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
+        await settledOn(page);
+        await go(page, '/app/games');
+
+        const strip = page.locator('[data-looking]');
+
+        record('a strip says the search is on, on another page', await soon(async () => await strip.count() === 1 && (await strip.innerText()).includes('1 of 2 here'), 5000));
+        await strip.getByRole('button', { name: 'Stop looking', exact: true }).click();
+        record('Stop looking takes the strip away', await soon(async () => await strip.count() === 0, 5000));
+        record('and gives the chair back', ((await visitor.api('GET', '/tables/mine')).body?.tables ?? []).length === 0);
     }, [/status of 404.*\/api\/(chat|tables)\//]);
 
     await part('6 watch', async () =>
@@ -609,9 +647,32 @@ try
         await go(page, '/app/search');
         const box = page.locator('main input[type="search"]');
 
-        await box.fill('Omid');
-        record('search finds a fixture by name', await soon(async () => (await page.getByRole('list', { name: 'People', exact: true }).innerText()).includes('Omid Karimi'), 8000));
+        const asked = [];
+        const heard = (request) =>
+        {
+            const { pathname, search } = new URL(request.url());
 
+            if (pathname === '/api/social/search')
+            {
+                asked.push(search);
+            }
+        };
+
+        page.on('request', heard);
+        await box.fill('Omid');
+
+        const everybody = page.locator('main').getByRole('button', { name: 'Look for “Omid” among everybody', exact: true });
+
+        record('a search of everything offers to look among everybody', await soon(async () => await everybody.isVisible(), 5000));
+        await pause(900);
+        record('and has asked the server nothing about what was typed', asked.length === 0, asked.join(' '));
+        await everybody.click();
+        record('looking among everybody finds somebody by name, however many accounts there are',
+            await soon(async () => (await page.getByRole('list', { name: 'People', exact: true }).innerText()).includes('Omid Karimi'), 8000));
+        record('and that was one question', asked.length === 1 && asked[0].toLowerCase().includes('q=omid'), asked.join(' '));
+        page.off('request', heard);
+
+        await page.locator('main').getByRole('button', { name: 'All', exact: true }).click();
         await box.fill('Balcony');
         record('search finds a group by name', await soon(async () => (await page.getByRole('list', { name: 'Groups', exact: true }).innerText()).includes('Balcony Backgammon'), 8000));
     });
@@ -627,6 +688,18 @@ try
         const add = people.getByRole('button', { name: 'Add friend', exact: true }).first();
 
         record('Discover suggests somebody to add', await soon(async () => await add.count() > 0, 8000));
+
+        const seeAll = (title) => page.locator('main section').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).getByRole('link', { name: 'See all', exact: true });
+        const whole = page.getByRole('list', { name: 'Suggestions', exact: true });
+
+        record('Discover\'s See all beside the people it suggests names the Suggestions tab', await seeAll('People you may know').getAttribute('href').catch(() => null) === '/app/friends?tab=suggestions');
+        await seeAll('People you may know').click();
+        record('following it opens Friends on Suggestions, with everybody suggested', await soon(async () => path(page) === '/app/friends'
+            && await page.getByRole('tab', { name: 'Suggestions', selected: true }).count() > 0
+            && await whole.getByRole('button', { name: 'Add friend', exact: true }).count() > 0, 8000), path(page));
+        await go(page, '/app/discover');
+        record('Discover\'s See all beside the groups it shows names the Groups tab', await seeAll('Groups worth joining').getAttribute('href').catch(() => null) === '/app/friends?tab=groups');
+        await soon(async () => await add.count() > 0, 8000);
 
         await page.route('**/api/social/requests', async (route) =>
         {
@@ -961,7 +1034,7 @@ try
         const page = keys.page;
         await go(page, `/app/chats/${ direct.id }`);
 
-        const give = page.getByRole('button', { name: /Give it keys|Give this browser keys/ }).first();
+        const give = page.getByRole('button', { name: /^Connect wallet$/ }).first();
         record('a browser with no keys is offered them', await soon(async () => await give.isVisible(), 10000));
         await give.click();
 

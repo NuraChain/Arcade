@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 
+import { MISSES_ALLOWED } from '../../backend/src/domains/match/turns.ts';
+import type { MatchView } from '../src/api.ts';
 import TableChat from '../src/components/games/table-chat.component.azeroth';
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -10,13 +12,16 @@ import '../src/locales/app-catalogue.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
+import { useBoard } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSeal } from '../src/stores/seal.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
-import { server } from './fake-api.ts';
+import { useSocial } from '../src/stores/social.store.ts';
+import { LOUDEST, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -43,6 +48,11 @@ const shown = (conversationId: string) =>
 {
     const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
 
+    if (!server.conversations.some((row) => row.id === conversationId))
+    {
+        server.conversations.push({ id: conversationId, kind: 'group', members: ['alex', 'sara.k'], pinned: false, unread: 0 } as never);
+    }
+
     return renderTest(() => RouterProvider({ router, children: () => TableChat({ conversationId }) }) as Rendered).container;
 };
 
@@ -57,7 +67,7 @@ beforeEach(() =>
     server.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useRealtime().reset();
     socket.reset();
     useRealtime().start();
@@ -71,8 +81,11 @@ beforeEach(() =>
         setMuted: () => undefined,
         sync: () => undefined,
         receive: async () => undefined,
+        heard: () => undefined,
         setVolume: () => undefined,
         setSink: () => undefined,
+        setQuality: () => undefined,
+        facts: async () => ({}),
         close: () => undefined
     }));
     useVoice().reset();
@@ -104,8 +117,8 @@ describe('the players beside a table’s chat, while a call is on', () =>
             joined: true,
             mine: 'join-alex',
             peers: [
-                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
-                { who: 'sara.k', muted: sara.muted ?? false, talk: true, join: 'join-sara' }
+                { who: 'alex', muted: true, talk: true, join: 'join-alex', opus: false },
+                { who: 'sara.k', muted: sara.muted ?? false, talk: true, join: 'join-sara', opus: false }
             ]
         });
     };
@@ -136,6 +149,48 @@ describe('the players beside a table’s chat, while a call is on', () =>
 
         return { tableId, container, hers };
     };
+
+    it('offers what can be done about somebody else at a press on their name, which takes their whole row and leaves the controls on it their own', async () =>
+    {
+        const { container, hers } = await atTheTable();
+        const mine = container.querySelector<HTMLElement>(`ul[aria-label="${ useLocale().t('play.tab.players') }"] > li`)!;
+        const presses = (row: HTMLElement) => [...row.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')];
+        const press = presses(hers())[0];
+
+        expect(presses(mine), 'the reader is offered a sheet about themselves').toEqual([]);
+        expect(mine.textContent).toContain('You');
+        expect(presses(hers()).map((one) => [one.type, one.getAttribute('aria-label'), one.textContent?.trim(), one.getAttribute('dir')]))
+            .toEqual([['button', 'More about Sara Kamali', 'Sara Kamali', 'auto']]);
+        expect(press.hasAttribute('tabindex'), 'a key cannot reach it').toBe(false);
+
+        expect(hers().classList.contains('relative'), 'the press would spread past its row').toBe(true);
+        expect(['before:absolute', 'before:inset-0'].every((one) => press.classList.contains(one))).toBe(true);
+
+        const kept = [hers().querySelector<HTMLElement>('button[aria-pressed]')!, hers().querySelector<HTMLElement>('[role="slider"]')!.closest<HTMLElement>('.basis-full')!, hers().querySelector<HTMLElement>('span[title].text-ui-2xs')!];
+
+        expect(kept.map((one) => one.classList.contains('relative')), 'something on the row is under the press').toEqual([true, true, true]);
+        expect(kept.every((one) => (press.compareDocumentPosition(one) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0), 'something on the row is drawn before the press').toBe(true);
+
+        useOverlay().reset();
+        fire(press, 'click');
+        fire(press, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items().map((entry) => [entry.id, entry.label, entry.props.personId])).toEqual([['person-menu', 'More', 'sara.k']]);
+
+        useOverlay().reset();
+    });
+
+    it('offers to turn somebody up past full as well as down, with full marked on the way', async () =>
+    {
+        const { hers } = await atTheTable();
+        const slider = hers().querySelector<HTMLElement>('[role="slider"]')!;
+
+        expect(slider.getAttribute('aria-valuemin')).toBe('0');
+        expect(slider.getAttribute('aria-valuemax'), 'nobody can be heard louder than they send').toBe(String(LOUDEST));
+        expect(slider.querySelectorAll('span[style*="inset-inline-start: 50%"]').length, 'full is not marked on the way').toBeGreaterThan(0);
+    });
 
     it('keeps the button that silences somebody, and the reader on it, while the call around them changes', async () =>
     {
@@ -196,6 +251,59 @@ describe('the players beside a table’s chat, while a call is on', () =>
         expect(mark.innerHTML, 'a muted microphone is drawn the same as an open one').not.toBe(open);
     });
 
+    it('says in words anybody can read that the call has not reached her, on the mark that was already there', async () =>
+    {
+        let link: (who: string, state: 'connecting' | 'connected' | 'failed' | null) => void = () => undefined;
+        const clock = manualClock(400_000);
+
+        setRuntime({ clock, seed: 12 });
+        setVoiceCall((deps) =>
+        {
+            link = deps.onLink;
+
+            return {
+                setMic: async () => undefined,
+                setMuted: () => undefined,
+                sync: () => undefined,
+                receive: async () => undefined,
+                heard: () => undefined,
+                setVolume: () => undefined,
+                setSink: () => undefined,
+                setQuality: () => undefined,
+                facts: async () => ({}),
+                close: () => undefined
+            };
+        });
+
+        const { hers } = await atTheTable();
+        const mark = hers().querySelector<HTMLElement>('[title]')!;
+
+        const words = () =>
+        {
+            const said = mark.querySelector<HTMLElement>(':scope > span:last-child')!;
+
+            return said.classList.contains('sr-only') ? '' : said.textContent.trim();
+        };
+
+        link('sara.k', 'connecting');
+        await settle();
+
+        expect(mark.title).toBe(useLocale().t('voice.connecting'));
+        expect(words(), 'a call still being placed was put in words on the row').toBe('');
+
+        clock.advance(UNREACHED_MS);
+        await settle();
+
+        expect(hers().querySelector('[title]'), 'the mark was drawn again').toBe(mark);
+        expect(mark.title).toBe(useLocale().t('voice.failed'));
+        expect(words(), 'only a colour and a tooltip said the call could not reach her').toBe(useLocale().t('voice.failed'));
+
+        link('sara.k', 'connected');
+        await settle();
+
+        expect(words(), 'the row still said it of a line that has connected').toBe('');
+    });
+
     it('takes both away when the call ends, and brings them back with it', async () =>
     {
         const { tableId, hers } = await atTheTable();
@@ -211,14 +319,294 @@ describe('the players beside a table’s chat, while a call is on', () =>
     });
 });
 
+describe('a table’s chat that cannot be read', () =>
+{
+    const seated = async () =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2 }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: true, host: false };
+        held.taken = 2;
+        lobby.open(tableId);
+        await lobby.refresh();
+        await settle();
+    };
+
+    const read = () => server.calls.filter((one) => one === 'chat.messages' || one === 'chat.devices');
+
+    const said = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-unread]');
+
+    const foot = (container: HTMLElement) => container.querySelector('textarea')?.closest('.hidden') ?? null;
+
+    const notice = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.dataset.yield !== undefined) ?? null;
+
+    beforeEach(() =>
+    {
+        useSocial().reset();
+    });
+
+    afterEach(() =>
+    {
+        useSocial().reset();
+        vi.restoreAllMocks();
+    });
+
+    it('says the reader has blocked somebody sitting there, asks the server for none of it while that stands, and reads it again when the block is lifted', async () =>
+    {
+        await seated();
+        await useSocial().block('sara.k');
+        await settle();
+        server.calls = [];
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['You have blocked somebody at this table.', 'Its chat is hidden from both of you while the block stands. The game goes on.']);
+        expect(said(container)!.querySelector('button'), 'trying again is offered where it would be refused again').toBeNull();
+        expect(container.textContent).not.toContain('No messages yet');
+        expect(foot(container), 'something can be said into a chat that is hidden').not.toBeNull();
+        expect(notice(container), 'a notice about keys stands under a chat nobody can write in for another reason').toBeNull();
+        expect(read(), 'the chat was asked for while it is hidden').toEqual([]);
+        expect(useChat().openId()).toBe('');
+
+        await useSocial().unblock('sara.k');
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(read()).toContain('chat.messages');
+        expect(useChat().openId()).toBe('conv-a');
+    });
+
+    it('puts the chat away the moment somebody sitting there is blocked, and asks for none of it when the server says something has changed', async () =>
+    {
+        await seated();
+
+        const room = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1)!;
+        const container = shown(room.id);
+        const lines = () => container.querySelectorAll('ul[aria-live] > li').length;
+
+        await vi.waitFor(() => expect(lines()).toBeGreaterThan(1), { timeout: 4000 });
+
+        expect(said(container)).toBeNull();
+        expect(useChat().openId()).toBe(room.id);
+
+        await useSocial().block('sara.k');
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect(lines(), 'what was read before the block is still drawn under the sentence').toBe(1);
+        expect(useChat().openId()).toBe('');
+
+        server.calls = [];
+        await useChat().refresh();
+        await settle();
+
+        expect(server.calls, 'nothing was asked about at all').toContain('chat.list');
+        expect(read(), 'the chat was asked for while the block hides it').toEqual([]);
+    });
+
+    it('goes on saying so while a block is being lifted, and asks for the chat only once the server has lifted it', async () =>
+    {
+        await seated();
+        await useSocial().block('sara.k');
+        await settle();
+
+        const container = shown('conv-a');
+        const lift = client.social.unblock.bind(client.social);
+        let lifted: () => void = () => undefined;
+
+        await settle();
+        vi.spyOn(client.social, 'unblock').mockImplementation(async (asked) =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                lifted = resolve;
+            });
+
+            return await lift(asked);
+        });
+        server.calls = [];
+
+        const freed = useSocial().unblock('sara.k');
+
+        await settle();
+
+        expect(useSocial().isBlocked('sara.k'), 'the guess was not made').toBe(false);
+        expect(said(container)?.getAttribute('data-unread')).toBe('apart');
+        expect(read(), 'the chat was asked for while the server still hides it').toEqual([]);
+
+        lifted();
+        await freed;
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(read()).toContain('chat.messages');
+    });
+
+    it('is not put away for a block of somebody who is not at the table', async () =>
+    {
+        await seated();
+        await useSocial().block('mina');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(useChat().openId()).toBe('conv-a');
+    });
+
+    it('says so when the read is refused, with nothing to say into it, and reads it when asked to try again', async () =>
+    {
+        await seated();
+        server.conversationDevices['conv-a'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
+        vi.spyOn(client.chat, 'messages').mockRejectedValueOnce(new ApiError(404, 'not-found', 'No conversation with that id.', undefined));
+
+        const container = shown('conv-a');
+
+        await vi.waitFor(() => expect(server.calls, 'the room was never asked who can read it').toContain('chat.devices'), { timeout: 4000 });
+        await settle();
+
+        expect(said(container)?.getAttribute('data-unread')).toBe('lost');
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['Could not load this conversation.']);
+        expect(container.textContent).not.toContain('No messages yet');
+        expect(foot(container), 'something can be said into a chat that could not be read').not.toBeNull();
+        expect(notice(container), 'a notice about keys stands under a chat that could not be read').toBeNull();
+
+        fire(pressable(container, 'Try again'), 'click');
+        await settle();
+
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+        expect(notice(container), 'the notice about keys did not come back with the chat').not.toBeNull();
+    });
+
+    it('keeps what it has read when a later read is refused, and goes on offering to say something', async () =>
+    {
+        await seated();
+
+        const room = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1)!;
+        const container = shown(room.id);
+        const lines = () => container.querySelectorAll('ul[aria-live] > li').length;
+
+        await vi.waitFor(() => expect(lines()).toBeGreaterThan(1), { timeout: 4000 });
+
+        const before = lines();
+
+        vi.spyOn(client.chat, 'messages').mockRejectedValueOnce(new ApiError(503, 'unavailable', 'Try again in a moment.', undefined));
+        await useChat().refresh().catch(() => undefined);
+        await settle();
+
+        expect(useChat().threadError(), 'the read was not refused').not.toBeNull();
+        expect(lines()).toBe(before);
+        expect(said(container)).toBeNull();
+        expect(foot(container)).toBeNull();
+    });
+
+    it('says both in Persian', async () =>
+    {
+        await seated();
+        useLocale().setLocale('fa');
+        await useSocial().block('sara.k');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        expect([...said(container)!.querySelectorAll('p')].map((one) => one.textContent)).toEqual(['یکی رو سر این میز بلاک کردی.', 'تا وقتی بلاکه، چت این میز برای هر دوتون مخفیه. بازی ادامه داره.']);
+        useLocale().setLocale('en');
+    });
+});
+
+describe('the players beside a table’s chat, while a game is on', () =>
+{
+    const playing = async (missed: number) =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2 }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: true, host: false };
+        held.taken = 2;
+        held.matchId = 'live-missed';
+
+        (client.matches as unknown as Record<string, unknown>).view = async () => ({
+            id: 'live-missed',
+            tableId,
+            game: 'ludo',
+            rev: 6,
+            seats: 2,
+            players: [{ seat: 0, who: 'alex', timeouts: 0, side: 0 }, { seat: 1, who: 'sara.k', timeouts: missed, side: 1 }],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: {
+                kind: 'ludo',
+                moves: [],
+                controls: 0,
+                seats: ['red', 'yellow'].map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+            }
+        }) as MatchView;
+
+        lobby.open(tableId);
+        await lobby.refresh();
+        useBoard().open('live-missed');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+        fire(pressable(container, useLocale().t('play.tab.players')), 'click');
+        await settle();
+
+        return [...container.querySelectorAll<HTMLElement>(`ul[aria-label="${ useLocale().t('play.tab.players') }"] > li`)].map((row) => row.textContent ?? '');
+    };
+
+    afterEach(() =>
+    {
+        useBoard().close();
+        delete (client.matches as unknown as Record<string, unknown>).view;
+        useLocale().setLocale('en');
+    });
+
+    it('says what a seat has missed, and nothing about what comes next while the next miss costs nothing', async () =>
+    {
+        const [mine, hers] = await playing(1);
+
+        expect(hers).toContain('missed a turn');
+        expect(hers).not.toContain('one more ends their game');
+        expect(mine).not.toContain('missed');
+    });
+
+    it.each([
+        ['en', 'missed 2 turns, and one more ends their game'],
+        ['fa', '۲ تا نوبت رو از دست داد و یکی دیگه از دست بده، بازیش تموم می‌شه']
+    ] as const)('says what the next miss costs once it is the one that ends the game for that seat, in %s', async (language, words) =>
+    {
+        useLocale().setLocale(language);
+
+        const [, hers] = await playing(MISSES_ALLOWED - 1);
+
+        expect(hers).toContain(words);
+    });
+});
+
 describe('the notice above a table chat that cannot be sealed', () =>
 {
     it('stays where it is when the room is asked about again', async () =>
     {
-        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
 
         const container = shown('conv-seal');
-        const said = useLocale().t('seal.noWalletMine');
+        const said = useLocale().t('seal.noDeviceMine');
 
         await vi.waitFor(() => expect(container.textContent).toContain(said), { timeout: 4000 });
 
@@ -238,11 +626,11 @@ describe('the notice above a table chat that cannot be sealed', () =>
 
     it('does not ask somebody to say something where nothing can be sent', async () =>
     {
-        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', devices: [] }] } as never;
 
         const container = shown('conv-seal');
 
-        await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('seal.noWalletMine')), { timeout: 4000 });
+        await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('seal.noDeviceMine')), { timeout: 4000 });
 
         expect(container.querySelector('textarea')?.disabled).toBe(true);
         expect(container.textContent).toContain('No messages yet.');

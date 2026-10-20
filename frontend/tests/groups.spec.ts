@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
+import GroupCard from '../src/components/social/group-card.component.azeroth';
 import GroupForm from '../src/components/social/group-form.component.azeroth';
 import { CRESTS, crestOf } from '../src/data/crests.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -10,11 +11,13 @@ import GroupPage from '../src/pages/app/group.page.azeroth';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
+import { PEOPLE_FIXTURES } from './fixtures.ts';
 import '../src/locales/app-catalogue.ts';
 
 let clock: ReturnType<typeof manualClock>;
@@ -44,7 +47,6 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useSocial().reset();
@@ -78,6 +80,58 @@ describe('the group page', () =>
 
         expect(container.textContent).toContain(useLocale().t('groups.notFound'));
         expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+    });
+
+    it('asks before handing the group over as it asks before anything the reader cannot take back', async () =>
+    {
+        const held = server.groups.find((one) => one.slug === 'friday-night-crew')!;
+
+        held.owner = 'alex';
+        held.role = 'owner';
+        useOverlay().reset();
+
+        const container = opened('friday-night-crew');
+        const handOver = () => [...container.querySelectorAll(`ul[aria-label="${ useLocale().t('groups.members') }"] li`)]
+            .find((row) => row.textContent?.includes('Sara Kamali'))
+            ?.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('groups.transfer') }"]`);
+
+        await vi.waitFor(() => expect(handOver()).toBeDefined(), { timeout: 4000 });
+
+        fire(handOver()!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props, 'the group can be handed over by one stray Enter').toMatchObject({ confirm: useLocale().t('groups.transfer'), destructive: true });
+        useOverlay().reset();
+    });
+
+    it('opens what can be done with a member at a press on them, and draws no More beside the row', async () =>
+    {
+        const container = opened('friday-night-crew');
+        const members = () => container.querySelector(`ul[aria-label="${ useLocale().t('groups.members') }"]`);
+
+        await vi.waitFor(() => expect(members()?.querySelectorAll('li').length).toBeGreaterThan(2), { timeout: 4000 });
+        await settle();
+        useOverlay().reset();
+
+        for (const row of members()!.querySelectorAll('li'))
+        {
+            const drawn = PEOPLE_FIXTURES.filter((one) => row.textContent?.includes(one.displayName));
+            const person = row.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+
+            expect(drawn, 'a member\'s row draws one person').toHaveLength(1);
+            expect(person?.textContent, 'a member is not a press').toContain(drawn[0].displayName);
+            expect([...row.querySelectorAll('button')].filter((one) => /^More/.test(one.getAttribute('aria-label') ?? '')), `${ drawn[0].displayName }'s row still has a More beside them`).toEqual([]);
+
+            fire(person!, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+            expect(useOverlay().items()[0].props).toMatchObject({ personId: drawn[0].handle });
+            useOverlay().reset();
+        }
+
+        expect(members()!.querySelector('a[href^="/app/people/"]'), 'a member is still a link to their page').toBeNull();
     });
 
     it('does not say it could not load a group it is still loading', () =>
@@ -382,6 +436,18 @@ describe('the group form', () =>
         expect(close).toHaveBeenCalled();
     });
 
+    it('names its button for what it makes, as the table form does, in either language', () =>
+    {
+        const submit = (container: HTMLElement) => container.querySelector('form button[type="submit"]')?.textContent?.trim();
+
+        expect(submit(open().container)).toBe('Create group');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        expect(submit(open().container)).toBe('ساخت گروه');
+    });
+
     it('offers every crest and no others', () =>
     {
         const { container } = open();
@@ -389,5 +455,46 @@ describe('the group form', () =>
             .filter((button) => button.getAttribute('aria-label')?.startsWith('Crest') === true);
 
         expect(buttons.length).toBe(CRESTS.length);
+    });
+});
+
+describe('a group\'s card', () =>
+{
+    const drawn = (changes: Partial<(typeof server.groups)[number]> = {}) =>
+    {
+        const group = { ...server.groups[0], ...changes };
+        const routes: Route[] = [{ path: '/app/friends', component: (): HTMLElement => GroupCard({ group }) as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/friends'), scroll: false });
+
+        return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement).container;
+    };
+
+    const online = (who: string) =>
+    {
+        useRealtime().start();
+        socket.accept();
+        socket.deliver({ v: 1, t: 'presence', n: 2, full: true, people: [{ who, state: 'online', since: clock.now() }] });
+    };
+
+    it.each(['en', 'fa'] as const)('sets its facts apart with a drawn dot, never a character a Persian reader takes for a zero, in %s', (language) =>
+    {
+        useLocale().setLocale(language);
+        online(server.groups[0].members[0]);
+
+        const container = drawn({ game: 'hokm' });
+        const facts = container.querySelector('[data-facts]')!;
+
+        expect(facts.textContent).not.toContain('·');
+        expect(facts.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+        expect(facts.textContent).toContain(useLocale().t('games.hokm.name'));
+    });
+
+    it('draws no dot before a fact that is not there', () =>
+    {
+        const container = drawn({ game: undefined });
+        const facts = container.querySelector('[data-facts]')!;
+
+        expect(facts.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+        expect(facts.textContent).not.toContain('·');
     });
 });

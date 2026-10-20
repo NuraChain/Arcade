@@ -33,8 +33,8 @@ const makeUser = async () =>
     seq += 1;
 
     return rowsOf<{ id: string }>(await db.query(
-        `insert into users (handle, display_name, hue, kind)
-         values ($1, $2, $3, 'guest')
+        `insert into users (handle, display_name, hue)
+         values ($1, $2, $3)
          returning id`,
         [`r${ seq }x${ Date.now() % 100000 }`, `Record ${ seq }`, seq % 360]
     ))[0].id;

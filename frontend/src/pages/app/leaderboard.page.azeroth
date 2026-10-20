@@ -1,4 +1,4 @@
-import { untrack, useHead, useQuery } from 'azerothjs';
+import { useHead } from 'azerothjs';
 
 import Rail from '../../components/ui/rail.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
@@ -6,7 +6,7 @@ import PageHeader from '../../components/app/page-header.component.azeroth';
 import GameIcon from '../../components/games/game-icon.component.azeroth';
 import Leaderboard from '../../components/games/leaderboard.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
-import type { GameId } from '../../data/games.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
@@ -17,17 +17,11 @@ export default component LeaderboardPage()
 
     useHead({ title: () => locale.t('app.nav.leaderboard') });
 
-    const query = useQuery();
-
-    state picked = (() =>
-    {
-        const asked = untrack(query).game;
-        return typeof asked === 'string' ? asked as GameId : null;
-    })();
+    const address = useAddress();
 
     derived games = catalogue.games.filter((game) => catalogue.status(game.id) === 'available');
 
-    derived chosen = picked !== null && games.some((game) => game.id === picked) ? picked : (games[0]?.id ?? null);
+    derived chosen = (games.find((game) => game.id === address.text('game')) ?? games[0])?.id ?? null;
 
     <Page label={ locale.t('app.nav.leaderboard') }>
         <div class="flex flex-col gap-6">
@@ -50,7 +44,7 @@ export default component LeaderboardPage()
                                             chosen === game.id ? 'border-accent/60 bg-accent/12 text-text' : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
                                         ].join(' ') }
                                         aria-pressed={ chosen === game.id }
-                                        onClick={ () => picked = game.id }
+                                        onClick={ () => address.write({ game: game.id }) }
                                     >
                                         <GameIcon game={ game.id } class="h-9 w-9" />
                                         <span class="text-ui-md font-semibold">{ locale.t(game.nameKey) }</span>

@@ -6,8 +6,11 @@ import WatchPage from '../src/pages/app/watch.page.azeroth';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { server } from './fake-api.ts';
+import { socket } from './fake-realtime.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -43,6 +46,20 @@ const row = (id: string, game: string): (typeof server.watching)[number] => ({
     startedAt: new Date(4000).toISOString()
 });
 
+const reads = () => server.calls.filter((call) => call === 'tables.watchable').length;
+
+const pulse = (n: number, watching: string) =>
+    socket.deliver({ v: 1, t: 'pulse', n, games: [], watching });
+
+const connected = async () =>
+{
+    useCatalogue().start();
+    useRealtime().start();
+    socket.accept();
+    clock.advance(NUDGE_WINDOW_MS);
+    await settle();
+};
+
 beforeEach(() =>
 {
     cleanup();
@@ -51,9 +68,17 @@ beforeEach(() =>
     setRuntime({ clock, seed: 4 });
     useLocale().setLocale('en');
     server.reset();
+    socket.reset();
+    useRealtime().reset();
+    useCatalogue().reset();
 });
 
-afterEach(() => cleanup());
+afterEach(() =>
+{
+    cleanup();
+    useCatalogue().stop();
+    useRealtime().reset();
+});
 
 describe('the live games page', () =>
 {
@@ -67,27 +92,190 @@ describe('the live games page', () =>
         expect(links.map((one) => one.getAttribute('href'))).toEqual(['/app/play/table-hokm', '/app/play/table-ludo']);
     });
 
-    it('keeps the games it has listed through its own re-read, and adds one that started since', async () =>
+    it('adds a game that has started the moment the socket says the list has changed, and keeps the rows it had', async () =>
     {
         server.watching = [row('table-hokm', 'hokm'), row('table-ludo', 'ludo')];
+        await connected();
+        pulse(3, 'two-games-on');
 
         const container = await show();
         const list = container.querySelector('ul');
         const listed = [...container.querySelectorAll('ul > li')];
-        const reads = server.calls.filter((call) => call === 'tables.watchable').length;
+        const before = reads();
 
         expect(listed).toHaveLength(2);
 
         server.watching = [...server.watching, row('table-poker', 'poker')];
-        clock.advance(15_000);
+        pulse(4, 'three-games-on');
         await settle();
 
         const after = [...container.querySelectorAll('ul > li')];
 
-        expect(server.calls.filter((call) => call === 'tables.watchable').length).toBeGreaterThan(reads);
+        expect(reads()).toBe(before + 1);
         expect(container.querySelector('ul')).toBe(list);
         expect(after).toHaveLength(3);
         expect(after.slice(0, 2)).toEqual(listed);
+    });
+
+    it('does not read its list again for a pulse that only moved a number', async () =>
+    {
+        server.watching = [row('table-hokm', 'hokm')];
+        await connected();
+        pulse(3, 'one-game-on');
+
+        const container = await show();
+        const before = reads();
+
+        pulse(4, 'one-game-on');
+        pulse(5, 'one-game-on');
+        await settle();
+
+        expect(reads()).toBe(before);
+        expect(container.querySelectorAll('ul > li')).toHaveLength(1);
+    });
+
+    it('does not read its list on a timer any more', async () =>
+    {
+        server.watching = [row('table-hokm', 'hokm')];
+        await connected();
+        pulse(3, 'one-game-on');
+        await show();
+
+        const before = reads();
+
+        clock.advance(10 * 60_000);
+        await settle();
+
+        expect(reads()).toBe(before);
+    });
+
+    it('reads its list again whenever everything is rung and there is no socket to say what changed', async () =>
+    {
+        server.watching = [row('table-hokm', 'hokm')];
+        useRealtime().start();
+
+        const container = await show();
+        const before = reads();
+
+        server.watching = [...server.watching, row('table-ludo', 'ludo')];
+        useRealtime().ring();
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        expect(reads()).toBe(before + 1);
+        expect(container.querySelectorAll('ul > li')).toHaveLength(2);
+    });
+
+    it('leaves the reading to the pulse when a socket that came back rings everything', async () =>
+    {
+        server.watching = [row('table-hokm', 'hokm')];
+        await connected();
+        pulse(3, 'one-game-on');
+        await show();
+
+        const before = reads();
+
+        useRealtime().ring();
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        expect(reads()).toBe(before);
+    });
+
+    it('keeps a game\'s name whole on its row and lets the time it started give way', async () =>
+    {
+        server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() - 60_000).toISOString() }];
+        await connected();
+        pulse(3, 'one-game-on');
+
+        const container = await show();
+        const first = container.querySelector('ul li span span');
+        const [name, since] = [...(first?.children ?? [])];
+
+        expect(name?.textContent).toBe('Hokm');
+        expect([name?.classList.contains('shrink-0'), name?.classList.contains('truncate')], 'the game\'s name gives way first').toEqual([true, false]);
+        expect([since?.classList.contains('truncate'), since?.textContent], 'the time it started does not give way, or says it at length').toEqual([true, 'started 1 min. ago']);
+    });
+
+    it('goes on saying how long ago a game started without reading anything', async () =>
+    {
+        server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() - 60_000).toISOString() }];
+        await connected();
+        pulse(3, 'one-game-on');
+
+        const container = await show();
+        const before = reads();
+
+        expect(container.textContent).toContain('1 min. ago');
+
+        clock.advance(4 * 60_000);
+        await settle();
+
+        expect(container.textContent).toContain('5 min. ago');
+        expect(reads()).toBe(before);
+    });
+
+    it('never says a game started in the future: one that began after the page was opened started now', async () =>
+    {
+        server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() - 120_000).toISOString() }];
+        await connected();
+        pulse(3, 'one-game-on');
+
+        const container = await show();
+
+        clock.advance(30_000);
+        server.watching = [{ ...row('table-ludo', 'ludo'), startedAt: new Date(clock.now() - 2000).toISOString() }, ...server.watching];
+        pulse(4, 'two-games-on');
+        await settle();
+
+        const [newest, older] = [...container.querySelectorAll('ul > li')].map((one) => one.textContent ?? '');
+
+        expect(newest).toContain('started now');
+        expect(newest).not.toMatch(/started in /);
+        expect(older).toContain('2 min. ago');
+    });
+
+    it('does not say so either when this browser’s clock is behind the server’s', async () =>
+    {
+        server.watching = [{ ...row('table-hokm', 'hokm'), startedAt: new Date(clock.now() + 5 * 60_000).toISOString() }];
+
+        const container = await show();
+
+        expect(container.textContent).toContain('started now');
+        expect(container.textContent).not.toMatch(/started in /);
+    });
+
+    it('keeps the game and the page it shows in the address, and opens on them', async () =>
+    {
+        server.watching = Array.from({ length: 30 }, (_, at) => row(`table-ludo-${ String(at).padStart(2, '0') }`, 'ludo'));
+
+        const page = WatchPage as unknown as () => HTMLElement;
+        const router = createRouter({ routes: [{ path: '/app/watch', component: page }], history: createMemoryHistory('/app/watch?game=ludo&page=2'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: page }) as Rendered);
+        const press = (label: string) => fire([...container.querySelectorAll<HTMLElement>('button')].find((one) => one.getAttribute('aria-label') === label || one.textContent?.trim() === label)!, 'click');
+
+        await settle();
+
+        expect(container.textContent, 'the page in the address was not the page shown').toContain('13–24 of 30');
+
+        press('Next page');
+        await settle();
+
+        expect(router.location().fullPath).toBe('/app/watch?game=ludo&page=3');
+        expect(container.textContent).toContain('25–30 of 30');
+
+        press('Previous page');
+        press('Previous page');
+        await settle();
+
+        expect(router.location().fullPath, 'the first page was written into the address').toBe('/app/watch?game=ludo');
+
+        press('Next page');
+        await settle();
+        press('Poker');
+        await settle();
+
+        expect(router.location().fullPath, 'a game chosen kept the page of the game before').toBe('/app/watch?game=poker');
     });
 
     it('narrows the list to one game and says so when nobody is playing it', async () =>

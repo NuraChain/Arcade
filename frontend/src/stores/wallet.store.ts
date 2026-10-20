@@ -6,6 +6,7 @@ import {
     detect,
     discoverWallets,
     failureOf,
+    permitted,
     personalSign,
     rdnsOf,
     readAccounts,
@@ -18,6 +19,7 @@ import {
     type Eip1193Provider,
     type WalletFailure
 } from '../lib/wallet.ts';
+import { namesDevice } from '../../../backend/src/domains/device/resource.ts';
 import { client, ApiError, type Account } from '../api.ts';
 import { useDevice } from './device.store.ts';
 import { useLocale } from './locale.store.ts';
@@ -30,7 +32,7 @@ export interface WalletApi
     address: Getter<string | null>;
     chainId: Getter<string>;
     available: Getter<boolean>;
-    name: Getter<string>;
+    name: Getter<string | null>;
     failure: Getter<WalletFailure | null>;
     onNuraChain: Getter<boolean>;
     connect(): Promise<Account | null>;
@@ -57,9 +59,21 @@ export interface WalletApi
     reach(): Promise<string | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
+
+    /**
+     * The account this wallet offered here has gone: it now offers another, or this site was
+     * disconnected from it. A wallet that is only locked is still connected and says nothing, and
+     * nor does one that cannot say which of the two it is.
+     */
+    onLeft(listener: (address: string) => void): () => void;
     start(): () => void;
     stop(): void;
     reset(): void;
+}
+
+function serverFailure(error: unknown)
+{
+    return error instanceof ApiError && error.status === 429 ? 'busy' : 'unavailable';
 }
 
 export const useWallet = createStore((): WalletApi =>
@@ -85,16 +99,47 @@ export const useWallet = createStore((): WalletApi =>
         return injected;
     };
 
+    const leaving = new Set<(address: string) => void>();
+
+    const left = (gone: string) =>
+    {
+        for (const listener of [...leaving])
+        {
+            listener(gone);
+        }
+    };
+
     const onAccounts = (...args: unknown[]) =>
     {
         const accounts = Array.isArray(args[0]) ? (args[0] as string[]) : [];
+        const was = untrack(address);
+        const wallet = injected;
+
         if (accounts.length === 0)
         {
             setAddress(null);
             setStatus('idle');
+
+            if (was !== null && wallet !== null)
+            {
+                void permitted(wallet).then((still) =>
+                {
+                    if (still === false)
+                    {
+                        left(was);
+                    }
+                });
+            }
+
             return;
         }
+
         setAddress(accounts[0]);
+
+        if (was !== null && was.toLowerCase() !== accounts[0].toLowerCase())
+        {
+            left(was);
+        }
     };
 
     const onChain = (...args: unknown[]) =>
@@ -107,7 +152,7 @@ export const useWallet = createStore((): WalletApi =>
         console.warn('[wallet]', step, reason);
     };
 
-    const browserKeys = async (): Promise<DeviceKeys | null> =>
+    const heldKeys = async (): Promise<DeviceKeys | null> =>
     {
         const store = keyStore();
         if (!store.available())
@@ -116,7 +161,25 @@ export const useWallet = createStore((): WalletApi =>
         }
         try
         {
-            return await store.load() ?? await store.mint();
+            return await store.load();
+        }
+        catch (error)
+        {
+            why('keys', error);
+            return null;
+        }
+    };
+
+    const newKeys = async (): Promise<DeviceKeys | null> =>
+    {
+        const store = keyStore();
+        if (!store.available())
+        {
+            return null;
+        }
+        try
+        {
+            return await store.mint();
         }
         catch (error)
         {
@@ -263,17 +326,26 @@ export const useWallet = createStore((): WalletApi =>
 
             setStatus('signing');
 
-            const keys = await browserKeys();
+            const held = await heldKeys();
+            let keys = held ?? await newKeys();
 
             let challenge;
             try
             {
                 challenge = await client.auth.challenge({ input: { address: account, ...(keys === null ? {} : { device: keys.id }) } });
+
+                const fresh = held !== null && namesDevice(challenge.message, held.id) ? await newKeys() : null;
+
+                if (fresh !== null)
+                {
+                    keys = fresh;
+                    challenge = await client.auth.challenge({ input: { address: account, device: fresh.id } });
+                }
             }
             catch (error)
             {
                 why('auth.challenge', error);
-                setFailure('unavailable');
+                setFailure(serverFailure(error));
                 setStatus('error');
                 return null;
             }
@@ -310,7 +382,7 @@ export const useWallet = createStore((): WalletApi =>
             catch (error)
             {
                 why('auth.wallet', error);
-                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : 'unavailable');
+                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : serverFailure(error));
                 setStatus('error');
                 return null;
             }
@@ -357,6 +429,16 @@ export const useWallet = createStore((): WalletApi =>
             setChainId('');
             setStatus('idle');
             setFailure(null);
+        },
+
+        onLeft(listener)
+        {
+            leaving.add(listener);
+
+            return () =>
+            {
+                leaving.delete(listener);
+            };
         },
 
         /**

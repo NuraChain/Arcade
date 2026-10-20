@@ -7,6 +7,8 @@ import Badge from '../src/components/ui/badge.component.azeroth';
 import FilterBar from '../src/components/ui/filter-bar.component.azeroth';
 import LoadMore from '../src/components/ui/load-more.component.azeroth';
 import Pagination from '../src/components/ui/pagination.component.azeroth';
+import Rail from '../src/components/ui/rail.component.azeroth';
+import SearchInput from '../src/components/ui/search-input.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
 import Tooltip from '../src/components/ui/tooltip.component.azeroth';
 import { place, physicalSide } from '../src/lib/anchor.ts';
@@ -371,6 +373,43 @@ describe('Pagination', () =>
         fire(button, 'click');
         expect(onPage).toHaveBeenCalledWith(2);
     });
+    it('says how far a growing list has come, and keeps its button under the keyboard as it grows', async () =>
+    {
+        const [page, setPage] = createSignal(1);
+        const { container } = renderTest(() => Pagination({
+            total: 40,
+            size: 8,
+            get page()
+            {
+                return page();
+            },
+            mode: 'more',
+            label: 'More',
+            onPage: setPage
+        }) as Rendered);
+
+        await settle();
+
+        const button = container.querySelector('button') as HTMLButtonElement;
+
+        expect(container.textContent).toContain('Showing 8 of 40');
+
+        button.focus();
+        fire(button, 'click');
+        await settle();
+
+        expect(container.textContent).toContain('Showing 16 of 40');
+        expect(container.querySelector('button'), 'the button was drawn again as the list grew').toBe(button);
+        expect(document.activeElement, 'the keyboard was dropped off a list that grew').toBe(button);
+        expect(button.textContent).toContain('24');
+
+        setPage(5);
+        await settle();
+
+        expect(container.textContent).toContain('Showing 40 of 40');
+        expect(container.querySelector('button'), 'a list with nothing left offered more').toBeNull();
+    });
+
     it('says which page of how many on a narrow column, where a row of numbers does not fit', async () =>
     {
         const { container } = renderTest(() => Pagination({ total: 120, size: 10, page: 4, label: 'Pages', onPage: noop }) as Rendered);
@@ -426,6 +465,51 @@ describe('Pagination', () =>
     });
 });
 
+describe('SearchInput', () =>
+{
+    it('clears its words on Escape, and leaves Escape to whatever it sits in once there are none', () =>
+    {
+        const [value, setValue] = createSignal('sara');
+        const closed = vi.fn();
+        const holder = document.createElement('div');
+        const sheet = (event: KeyboardEvent) =>
+        {
+            if (event.key === 'Escape' && !event.defaultPrevented)
+            {
+                closed();
+            }
+        };
+
+        document.body.append(holder);
+
+        const { container } = renderTest(() => SearchInput({
+            get value()
+            {
+                return value();
+            },
+            onInput: setValue,
+            placeholder: 'Search',
+            label: 'Search'
+        }) as Rendered);
+
+        holder.append(container);
+        document.addEventListener('keydown', sheet);
+
+        const field = container.querySelector('input')!;
+
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+        expect(value(), 'Escape left the words in the field').toBe('');
+        expect(closed, 'what the field sits in was closed with words still in it').not.toHaveBeenCalled();
+
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+        expect(closed, 'an empty field kept Escape from what it sits in').toHaveBeenCalledTimes(1);
+        document.removeEventListener('keydown', sheet);
+        holder.remove();
+    });
+});
+
 describe('FilterBar', () =>
 {
     it('marks the chosen filter, counts each one, and says which was pressed', async () =>
@@ -450,6 +534,75 @@ describe('FilterBar', () =>
 
         fire(chips[2], 'click');
         expect(onChange).toHaveBeenCalledWith('board');
+    });
+});
+
+describe('Rail', () =>
+{
+    const box = (left: number, width: number) => ({ x: left, y: 0, left, top: 0, right: left + width, bottom: 40, width, height: 40, toJSON: () => ({}) }) as DOMRect;
+
+    const chips = (pressed: number) => Array.from({ length: 6 }, (_, at) =>
+    {
+        const chip = document.createElement('button');
+
+        chip.dataset.at = String(at);
+        chip.setAttribute('aria-pressed', at === pressed ? 'true' : 'false');
+        chip.textContent = 'Chip ' + String(at);
+
+        return chip;
+    });
+
+    it('brings the chosen chip into view as it arrives and when another is chosen, clear of the fade, and leaves one in view alone', async () =>
+    {
+        const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            return this.classList.contains('rail-x') ? box(0, 320) : box(Number((this as HTMLElement).dataset.at ?? 0) * 110, 100);
+        });
+        const moves: number[] = [];
+        const row = chips(5);
+        const { container } = renderTest(() => Rail({ label: 'Games', children: row }) as Rendered);
+        const scroller = container.querySelector<HTMLElement>('.rail-x')!;
+
+        Object.defineProperty(scroller, 'scrollTo', { value: (options: ScrollToOptions) => moves.push(options.left ?? 0) });
+        await settle();
+
+        expect(moves, 'the sixth chip, 550 to 650 in a row 320 wide with 56 of fade, is 386 past what shows').toEqual([386]);
+
+        row[5].setAttribute('aria-pressed', 'false');
+        row[3].setAttribute('aria-pressed', 'true');
+        await settle();
+
+        expect(moves, 'another chosen is brought into view').toEqual([386, 166]);
+
+        row[3].setAttribute('aria-pressed', 'false');
+        row[1].setAttribute('aria-pressed', 'true');
+        await settle();
+
+        expect(moves, 'a chip already in view is left where it is').toEqual([386, 166]);
+
+        measured.mockRestore();
+    });
+
+    it('reads a page chosen in a list of links the same way', async () =>
+    {
+        const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element)
+        {
+            return this.classList.contains('rail-x') ? box(0, 320) : box(Number((this as HTMLElement).dataset.at ?? 0) * 110, 100);
+        });
+        const moves: number[] = [];
+        const row = chips(-1);
+
+        row[4].setAttribute('aria-current', 'true');
+
+        const { container } = renderTest(() => Rail({ label: 'Sections', children: row }) as Rendered);
+        const scroller = container.querySelector<HTMLElement>('.rail-x')!;
+
+        Object.defineProperty(scroller, 'scrollTo', { value: (options: ScrollToOptions) => moves.push(options.left ?? 0) });
+        await settle();
+
+        expect(moves).toEqual([276]);
+
+        measured.mockRestore();
     });
 });
 
@@ -513,6 +666,36 @@ describe('Slider', () =>
         await settle();
         (container.querySelector('[role="slider"]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
         expect(onChange).toHaveBeenLastCalledWith(1);
+    });
+
+    it('stands a unit beside its number, in the reader’s direction, and says the two together', async () =>
+    {
+        const { container } = renderTest(() => Slider({ value: -50, min: -80, max: 0, step: 1, label: 'Bar', unit: 'dB', onChange: noop }) as Rendered);
+        await settle();
+
+        const figure = container.querySelector('.tally')!;
+
+        expect(figure.textContent, 'the unit was forced left to right with its number').toBe('-50');
+        expect(figure.nextElementSibling?.textContent).toBe('dB');
+        expect(figure.nextElementSibling?.classList.contains('tally')).toBe(false);
+        expect(container.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).toBe('-50 dB');
+    });
+
+    it('says what it was told to say, and the number alone when it was told nothing', async () =>
+    {
+        const told = renderTest(() => Slider({ value: 0.5, label: 'Loud', valueText: '50%', onChange: noop }) as Rendered);
+        await settle();
+
+        expect(told.container.querySelector('.tally')?.textContent).toBe('50%');
+        expect(told.container.querySelector('[role="slider"]')!.getAttribute('aria-valuetext')).toBe('50%');
+
+        cleanup();
+
+        const bare = renderTest(() => Slider({ value: 0.5, label: 'Loud', onChange: noop }) as Rendered);
+        await settle();
+
+        expect(bare.container.querySelector('.tally')?.textContent).toBe('0.5');
+        expect(bare.container.querySelector('[role="slider"]')!.hasAttribute('aria-valuetext')).toBe(false);
     });
 
     it('refuses keyboard and pointer input while disabled', async () =>
@@ -812,6 +995,19 @@ describe('toasts', () =>
         expect(toasts.items()[0].text).toBe('failed');
         clock.advance(60_000);
         expect(toasts.items().length).toBe(1);
+    });
+
+    it('says a refusal in the words it is given for that refusal, and never in the error’s own', async () =>
+    {
+        const toasts = useToasts();
+
+        await expect(toasts.promise(Promise.reject('refused'), { pending: 'working', done: () => 'done', failed: (why) => `said ${ String(why) }` })).rejects.toBe('refused');
+        expect(toasts.items()[0].text).toBe('said refused');
+
+        toasts.dismissAll();
+
+        await expect(toasts.promise(Promise.reject(new Error('An English sentence from somewhere')), { pending: 'working', done: () => 'done' })).rejects.toThrow();
+        expect(toasts.items()[0].text, 'the error’s own words were shown').toBe(useLocale().t('common.actionFailed'));
     });
 
     it('reports how much of a toast has burned down', () =>

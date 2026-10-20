@@ -1,4 +1,4 @@
-import { createResource, untrack, useHead, useQuery } from 'azerothjs';
+import { createResource, untrack, useHead, useNavigate, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -13,13 +13,15 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { GAMES, type GameId } from '../../data/games.ts';
 import { client } from '../../api.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
+import { usePageParams } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 
-const REFRESH_MS = 15_000;
+const MINUTE_MS = 60_000;
 
 const WATCH_PAGE = 12;
 
@@ -28,14 +30,12 @@ export default component WatchPage()
     const locale = useLocale();
     const people = usePeople();
     const catalogue = useCatalogue();
+    const realtime = useRealtime();
 
     const query = useQuery();
+    const { replace } = useNavigate();
 
-    state picked = (() =>
-    {
-        const asked = untrack(query).game;
-        return typeof asked === 'string' && GAMES.some((game) => game.id === asked) ? asked : 'all';
-    })();
+    derived picked = typeof query().game === 'string' && GAMES.some((game) => game.id === query().game) ? query().game as string : 'all';
 
     const tables = createResource(
         () => picked,
@@ -47,7 +47,9 @@ export default component WatchPage()
 
     const device = useDevice();
 
-    state page = 1;
+    const pages = usePageParams(['page']);
+
+    derived page = pages.page('page');
 
     derived paging = pagingFor(device.posture() === 'phone');
 
@@ -67,19 +69,44 @@ export default component WatchPage()
 
         if (handles.length > 0)
         {
-            people.want(handles);
+            void people.want(handles);
         }
+    }
+
+    state minute = runtime().clock.now();
+
+    derived asOf = Math.max(minute, ...rows.map((row) => Date.parse(row.startedAt)));
+
+    let marked: string | null | undefined;
+
+    effect
+    {
+        const mark = catalogue.watching();
+
+        if (marked !== undefined && mark !== marked)
+        {
+            untrack(() => void tables.refetch());
+        }
+
+        marked = mark;
     }
 
     mount
     {
-        return runtime().clock.every(REFRESH_MS, () =>
+        const untick = runtime().clock.every(MINUTE_MS, () => minute = runtime().clock.now());
+        const unring = realtime.onNudge((scope) =>
         {
-            if (document.visibilityState === 'visible' && navigator.onLine !== false)
+            if (scope === 'table' && realtime.status() !== 'connected')
             {
                 void tables.refetch();
             }
         });
+
+        return () =>
+        {
+            untick();
+            unring();
+        };
     }
 
     derived choices = [
@@ -102,8 +129,7 @@ export default component WatchPage()
         <div class="flex flex-col gap-4">
             <FilterBar items={ choices } value={ picked } label={ locale.t('watch.page.filter') } onChange={ (id) =>
             {
-                picked = id;
-                page = 1;
+                void replace(id === 'all' ? '/app/watch' : `/app/watch?game=${ id }`);
             } } />
 
             <Show when={ loading }>
@@ -141,8 +167,8 @@ export default component WatchPage()
                                 <GameIcon game={ row.game as GameId } class="h-10 w-10 shrink-0" />
                                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                                     <span class="flex min-w-0 items-center gap-2">
-                                        <span class="truncate text-ui-sm font-semibold text-text">{ locale.t(catalogue.byId(row.game as GameId).nameKey) }</span>
-                                        <span class="shrink-0 text-ui-2xs text-muted">{ locale.t('watch.page.started', { when: locale.relative(new Date(row.startedAt)) }) }</span>
+                                        <span class="shrink-0 text-ui-sm font-semibold text-text">{ locale.t(catalogue.byId(row.game as GameId).nameKey) }</span>
+                                        <span class="min-w-0 truncate text-ui-2xs text-muted">{ locale.t('watch.page.started', { when: locale.relative(new Date(row.startedAt), { now: asOf, style: 'short' }) }) }</span>
                                     </span>
                                     <span class="flex min-w-0 items-center gap-2">
                                         <AvatarGroup
@@ -161,7 +187,7 @@ export default component WatchPage()
                     </ul>
                 }
             </Show>
-            <Pagination total={ rows.length } size={ WATCH_PAGE } page={ page } mode={ paging } label={ locale.t('watch.page.title') } onPage={ (next) => page = next } />
+            <Pagination total={ rows.length } size={ WATCH_PAGE } page={ page } mode={ paging } label={ locale.t('watch.page.title') } onPage={ (next) => pages.turn('page', next) } />
         </div>
     </Page>
 }

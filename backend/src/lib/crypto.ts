@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 /**
  * Server-side primitives. Small on purpose - everything here is either a one-liner over
@@ -58,19 +58,6 @@ export function mintNonce()
 export function hashToken(token: string)
 {
     return createHash('sha256').update(token).digest('hex');
-}
-
-/**
- * Constant-time comparison for anything secret.
- *
- * `===` on a secret leaks its prefix through timing. Lengths are compared first because
- * `timingSafeEqual` throws on a mismatch - that leak is the length, which is not the secret.
- */
-export function secretsMatch(left: string, right: string)
-{
-    const a = Buffer.from(left);
-    const b = Buffer.from(right);
-    return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**

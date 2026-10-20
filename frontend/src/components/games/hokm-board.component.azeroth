@@ -2,22 +2,30 @@ import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult from './table-result.component.azeroth';
-import TurnClock from './turn-clock.component.azeroth';
-import TablePlate from './table-plate.component.azeroth';
-import { plateTag } from './plate-tag.ts';
-import Button from '../ui/button.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
+import HokmSeat, { SIDE_TONE } from './hokm-seat.component.azeroth';
+import type { SeatMark } from './hokm-mark.component.azeroth';
+import { missesOf, plateTag, withMisses } from './plate-tag.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } from '../../data/cards.ts';
 import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
 import { coachOf, outcomeOf } from '../../game/helpers/hokm.ts';
-import { EMPTY, beatsOf, feltOf, gatherLength, gatherOrder, overflows, scaled, type Beat, type Felt, type HokmMove, type Laid } from '../../game/hokm-beats.ts';
-import { EASE, TIMING, centreOf, fly, land, rectIn, type Rect } from '../../game/motion.ts';
+import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, DRAW_GAP, LIFT, NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
+import { EMPTY, HISTORY, before, feltOf, sameAs, step, unplay, type Felt, type Laid, type Told } from '../../game/hokm-felt.ts';
+import { EASE, TIMING, centreOf, flightFrames, outside, rectIn, type Rect } from '../../game/motion.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../../game/stage/cards.ts';
+import { hashOf } from '../../game/stage/curves.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import type { Act } from '../../game/stage/feed.ts';
+import { launch, put, turn } from '../../game/stage/flight.ts';
+import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
+import { createStage, type Run, type Stage } from '../../game/stage/stage.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { useBoard, type MatchEvent } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
@@ -38,59 +46,100 @@ const REACH: Record<Side, readonly [number, number]> = {
     'top-right': [0.8, -0.6]
 };
 
-const SIDE_TONE = ['text-accent', 'text-gold', 'text-live'];
-
 const RED_SUITS: readonly Suit[] = ['hearts', 'diamonds'];
 
 const ROW_LIMIT = 13;
 
 const TWO_ROWS_FROM = 480;
 
-const WIDE_FROM = 704;
-
-const WIDE_RATIO = 1.5;
-
-const BAR_BESIDE = 400;
-
 const CARD_MIN = 38.4;
+
+const CARD_FLOOR = 56;
 
 const CARD_MAX = 84;
 
+const SHOWS = 22.5;
+
+const FAN_TILT = 6;
+
+const FAN_PIVOT = 0.9;
+
+const FAN_MS = 320;
+
 const BACKS_SHOWN = 10;
-
-const JUMP_OVER = 3000;
-
-const FAST_OVER = 1500;
 
 const BACK_W = 30;
 
+const DEALT_CAP = 2000;
+
+const REST_CAP = 2500;
+
+const HURRY_MS = 8000;
+
+const GLIMPSE_TILT = 9;
+
+const DRAG_SLOP = 10;
+
+const DRAG_SLOP_MOUSE = 4;
+
+const FLICK = 0.5;
+
+const FLICK_REACH = 36;
+
+const FLICK_SPAN = 120;
+
+const CARRIED: Run = { done: Promise.resolve(), length: 0, cancel: () => undefined, finish: () => undefined };
+
+const SIGN_IN: Keyframe[] = [{ opacity: 0, scale: '0.8' }, { opacity: 1, scale: '1' }];
+
+const KOT_IN: Keyframe[] = [{ opacity: 0, scale: '1.6', rotate: '-8deg' }, { opacity: 1, scale: '1', rotate: '0deg' }];
+
+const SIGN_OUT: Keyframe[] = [{ opacity: 1 }, { opacity: 0 }];
+
+const STRUCK: Keyframe[] = [{ scale: '1.2' }, { scale: '1' }];
+
+const STRUCK_MS = 220;
+
+const PLUS_GAP = 14;
+
+const PLUS_DRIFT = 22;
+
 const tiltOf = (card: number) => ((card * 37) % 11) - 5;
 
-const cardNode = (card: number | null, width: number): HTMLElement =>
+const suitNamed = (said: string | null) => SUITS.find((suit) => suit === said) ?? null;
+
+const markOf = (seat: number, hakem: number, dealer: number): SeatMark => (seat === hakem ? 'hakem' : (seat === dealer ? 'dealer' : null));
+
+const noPlate = (seat: number) => ({ row: { seat, side: 0, held: 0, tricks: 0, out: false }, side: 'top' as Side, mark: null, backs: 0 });
+
+const shownAll = (view: ReturnType<typeof hokmOf>) => ({
+    round: view?.round ?? 0,
+    cards: new Set([...(view?.hand ?? []), ...(view?.glimpse === undefined ? [] : [view.glimpse])]),
+    offer: view?.offer ?? null
+});
+
+const pileOf = (felt: Felt, lifted: boolean) => (felt.stock === null ? null : felt.stock + (felt.phase === 'draw' && !lifted ? 1 : 0));
+
+interface Pledge
 {
-    const box = document.createElement('div');
-    const face = document.createElement('span');
+    verb: 'keep' | 'reject' | 'discard';
+    cards: readonly number[];
+    keyed: boolean;
+}
 
-    box.style.setProperty('--card-w', `${ width }px`);
-    box.style.setProperty('--back-w', `${ width }px`);
-
-    if (card === null)
+const pledgedHand = (hand: readonly number[], pledge: Pledge | null) =>
+{
+    if (pledge === null || pledge.verb === 'reject')
     {
-        face.className = 'card-back';
-    }
-    else
-    {
-        face.className = 'card-face';
-        face.style.setProperty('--at-rank', String(card % 13));
-        face.style.setProperty('--at-suit', String(Math.floor(card / 13)));
+        return hand;
     }
 
-    box.append(face);
-
-    return box;
+    return pledge.verb === 'keep'
+        ? [...new Set([...hand, ...pledge.cards])].sort((one, other) => one - other)
+        : hand.filter((card) => !pledge.cards.includes(card));
 };
 
-export default component HokmBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+export default component HokmBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -102,17 +151,47 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     state picked: number | null = null;
 
-    state aimed: number | null = null;
-
     state shown: Felt | null = null;
+
+    state lying: { cards: readonly Laid[]; took: number } | null = null;
 
     state landing: readonly number[] = [];
 
     state banner: { points: number; kot: boolean; ours: boolean } | null = null;
 
-    state sending: number | null = null;
+    state sent: { id: string; card: number; rev: number; gone: boolean; keyed: boolean } | null = null;
+
+    state homing: number | null = null;
+
+    state lifted: { card: number; at: number; keyed: boolean } | null = null;
+
+    state sliding = false;
+
+    state kept: number | null = null;
+
+    state seen: { round: number; cards: ReadonlySet<number>; offer: number | null } = untrack(() => shownAll(hokmOf(props.match)));
+
+    state dealing: { counts: readonly number[]; won: readonly number[] | null; deck: number | null; stock: number | null } | null = null;
+
+    state stale: readonly number[] = untrack(() => hokmOf(props.match)?.hand ?? []);
+
+    state carried: { hakem: boolean; dealer: boolean } = { hakem: false, dealer: false };
+
+    state ghost = false;
+
+    state token: { suit: Suit; pledged: boolean } | null = null;
+
+    state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
+
+    state result = untrack(() => props.match.finishedAt !== undefined);
 
     state away: readonly number[] = [];
+
+    state pledge: Pledge | null = null;
+
+    state returning = false;
 
     derived game = props.match;
 
@@ -120,7 +199,23 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived over = game.finishedAt !== undefined;
 
+    derived sending = sent !== null && sent.id === game.id && sent.rev === game.rev ? sent : null;
+
     derived mine = game.mine;
+
+    derived current = view !== null && view.round === seen.round;
+
+    derived offering = view !== null && !over && view.phase === 'draw' && view.turn === mine && view.offer !== undefined ? view.offer : null;
+
+    derived lain = current && !over ? seen.offer : null;
+
+    derived unseen = new Set((view?.hand ?? []).filter((card) => !current || !seen.cards.has(card)));
+
+    derived veiled = unseen.size > 0 || (offering !== null && offering !== lain && pledge === null);
+
+    derived outOfStock = lain !== null || returning || pledge !== null;
+
+    derived capped = veiled && current;
 
     derived whoAt = (seat: number) => game.players.find((one) => one.seat === seat)?.who ?? '';
 
@@ -153,21 +248,21 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         if (view.phase === 'trump')
         {
             return view.hakem === mine
-                ? locale.t('hokm.trump.yours')
+                ? (veiled ? '' : locale.t('hokm.trump.yours'))
                 : locale.t('hokm.trump.theirs', { name: nameOf(view.hakem) });
         }
 
         if (view.phase === 'discard')
         {
             return view.turn === mine
-                ? locale.t('hokm.discard.yours', { count: locale.n(view.discard ?? 0) })
+                ? (veiled ? '' : locale.t('hokm.discard.yours', { count: locale.n(view.discard ?? 0) }))
                 : locale.t('hokm.discard.theirs', { name: nameOf(view.turn) });
         }
 
         if (view.phase === 'draw')
         {
             return view.turn === mine
-                ? locale.t('hokm.draw.yours')
+                ? (veiled ? '' : locale.t('hokm.draw.yours'))
                 : locale.t('hokm.draw.theirs', { name: nameOf(view.turn) });
         }
 
@@ -200,17 +295,32 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return FOUR[chair.place] ?? 'top';
     };
 
-    derived plates = view === null ? [] : view.seats.map((row) =>
+    derived felt = shown ?? (view === null ? EMPTY : feltOf(view, game.seats));
+
+    derived plates = felt.chairs.map((row) =>
     {
         const chair = chairs[row.seat];
+        const held = dealing?.counts[row.seat] ?? row.held;
+        const tricks = dealing?.won?.[row.seat] ?? row.tricks;
+        const mark = markOf(row.seat, felt.hakem, felt.dealer);
 
         return {
-            row,
+            row: { ...row, held, tricks },
             side: sideOf(chair),
-            mark: row.seat === view!.hakem ? 'hakem' : (row.seat === view!.dealer ? 'dealer' : null),
-            backs: row.seat === mine ? [] : Array.from({ length: Math.min(row.held, BACKS_SHOWN) }, (_, index) => index)
+            mark: mark !== null && carried[mark] ? null : mark,
+            backs: row.seat === mine ? 0 : Math.min(held, BACKS_SHOWN)
         };
     });
+
+    derived seated = plates.map((plate) => plate.row.seat);
+
+    derived plateAt = (seat: number) => plates.find((plate) => plate.row.seat === seat) ?? noPlate(seat);
+
+    derived deckAt = dealing !== null ? dealing.deck : (felt.phase === 'trump' && felt.seats > 2 && felt.round > 0 ? felt.dealer : null);
+
+    derived decked = deckAt !== null;
+
+    derived deckReach = REACH[plateAt(deckAt ?? 0).side];
 
     derived teamed = view !== null && new Set(view.seats.map((row) => row.side)).size < view.seats.length;
 
@@ -236,38 +346,73 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         };
     };
 
-    derived felt = shown ?? (view === null ? EMPTY : feltOf(view.trick, view.lead, game.seats));
-
     derived laid = {
-        cards: felt.cards.map((one: Laid) => ({ ...one, side: sideOf(chairs[one.seat]) })),
-        took: felt.took
+        cards: (lying ?? felt).cards.map((one: Laid) => ({ ...one, side: sideOf(chairs[one.seat]) })),
+        took: lying?.took ?? null
     };
 
-    derived legal = new Set(view === null ? [] : view.plays);
+    derived turnAt = result ? null : (lying?.took ?? laid.cards.find((one) => landing.includes(one.card))?.seat ?? felt.turn);
+
+    derived legal = new Set(view === null || over ? [] : view.plays);
 
     derived myTurn = view !== null && !over && view.phase === 'tricks' && view.turn === mine;
 
-    derived acting = view !== null && !over && mine !== undefined && (view.phase === 'trump' ? view.hakem === mine : view.turn === mine);
+    derived owed = view !== null && !over && mine !== undefined && (view.phase === 'trump' ? view.hakem === mine : view.turn === mine);
+
+    derived acting = owed && !(view !== null && view.phase !== 'tricks' && veiled);
+
+    derived spare = veiled && owed ? game.remainingMs : undefined;
 
     derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
 
-    derived choosing = view !== null && !over && view.phase === 'trump' && view.hakem === mine;
+    derived choosing = view !== null && !over && view.phase === 'trump' && view.hakem === mine && !veiled && token === null;
 
-    derived due = view !== null && !over && view.phase === 'discard' && view.turn === mine ? (view.discard ?? 0) : 0;
+    derived due = view !== null && !over && view.phase === 'discard' && view.turn === mine && !veiled && pledge === null ? (view.discard ?? 0) : 0;
 
     derived discarding = due > 0;
 
     derived picks = discarding && view !== null ? away.filter((card) => view!.hand.includes(card)) : [];
 
-    derived offered = view !== null && !over && view.phase === 'draw' && view.turn === mine && view.offer !== undefined ? { card: view.offer } : null;
+    derived offered = lain === null ? null : { card: lain };
 
-    derived drawing = offered !== null;
+    derived drawing = offering !== null && offering === lain;
 
-    derived glimpsed = view !== null && !over && view.glimpse !== undefined ? { card: view.glimpse } : null;
+    derived glimpsed = view !== null && !over && view.glimpse !== undefined && current && seen.cards.has(view.glimpse) ? { card: view.glimpse } : null;
 
-    derived filling = view !== null && !over && mine !== undefined && (view.phase === 'discard' || view.phase === 'draw');
+    derived putting = discarding && picks.length === due;
 
-    derived tagOf = (seat: number) => plateTag(locale, game.players.find((one) => one.seat === seat), over);
+    derived stocked = felt.stock !== null;
+
+    derived dealt = view !== null;
+
+    derived trump = suitNamed(felt.trump);
+
+    derived last = felt.took;
+
+    derived stockLive = putting || drawing;
+
+    derived piled = stocked || (dealing !== null && felt.seats === 2);
+
+    derived stockLeft = dealing?.stock ?? pileOf(felt, outOfStock);
+
+    derived counted = stockLeft !== null;
+
+    derived stockBacks = [0, 1, 2].slice(0, Math.min(3, stockLeft ?? (piled ? 3 : 0)));
+
+    derived tagOf = (seat: number) =>
+    {
+        const seated = game.players.find((one) => one.seat === seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
+
+        if (player === undefined || !over || result)
+        {
+            return plateTag(locale, player, over);
+        }
+
+        const { result: _unshown, ...playing } = player;
+
+        return plateTag(locale, playing, over);
+    };
 
     derived hints = settings.settings();
 
@@ -278,44 +423,59 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return says === null ? null : locale.t(says.key);
     };
 
-    derived aimedAt = chosen ?? aimed;
+    derived tip = view === null || over || (veiled && view.phase === 'trump') ? null : coachOf(view, mine, game.seats);
 
-    derived outcome = aimedAt === null ? null : outcomeFor(aimedAt);
+    derived following = myTurn && legal.size < (view?.hand.length ?? 0) && !(hints.hintRules && tip !== null);
 
-    derived tip = view === null || over ? null : coachOf(view, mine, game.seats);
+    derived sortable = (view?.hand.length ?? 0) > 1 && !veiled;
 
-    derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]).filter((card) => card !== sending);
+    derived inHand = view === null ? [] : pledgedHand(view.hand, pledge);
+
+    derived holds = view === null ? [] : (sorted ? arrangeHand(inHand, view.trump) : [...inHand])
+        .filter((card) => !(sending !== null && sending.gone && card === sending.card));
+
+    derived fresh = lifted === null || holds.includes(lifted.card)
+        ? holds
+        : [...holds.slice(0, lifted.at), lifted.card, ...holds.slice(lifted.at)];
+
+    derived hand = current ? fresh : stale;
+
+    derived handed = view !== null && !result && (hand.length > 0 || mine !== undefined);
+
+    derived footed = view !== null && !result;
 
     state room = { width: 0, height: 0 };
 
-    derived rows = ((): number[][] =>
+    derived rowed = (cards: readonly number[]): number[][] =>
     {
-        if (hand.length === 0)
+        if (cards.length === 0)
         {
             return [];
         }
 
-        if (hand.length <= ROW_LIMIT || room.height < TWO_ROWS_FROM)
-        {
-            return [hand];
-        }
+        const least = Math.max(CARD_MIN, Math.min(CARD_FLOOR, room.height * 0.12));
+        const card = Math.min(CARD_MAX, Math.max(least, Math.min(room.width * 0.125, room.height * 0.1)));
+        const shows = (room.width - card) / Math.max(1, cards.length - 1);
 
-        const wide = room.width >= WIDE_FROM && room.width >= room.height * WIDE_RATIO;
-        const reach = wide ? room.width - BAR_BESIDE : room.width;
-        const card = Math.min(CARD_MAX, Math.max(CARD_MIN, Math.min(room.width * 0.125, room.height * 0.1)));
-        const step = (reach - card - 20) / (hand.length - 1);
+        return cards.length <= ROW_LIMIT || room.height < TWO_ROWS_FROM || shows >= SHOWS
+            ? [[...cards]]
+            : [cards.slice(0, Math.ceil(cards.length / 2)), cards.slice(Math.ceil(cards.length / 2))];
+    };
 
-        return step >= card * 0.42 ? [hand] : [hand.slice(0, Math.ceil(hand.length / 2)), hand.slice(Math.ceil(hand.length / 2))];
-    })();
+    derived rows = rowed(hand);
 
-    derived handTricks = view === null ? [] : view.points.map((_, side) =>
-        view!.seats.filter((row) => row.side === side).reduce((sum, row) => sum + row.tricks, 0));
+    derived roomy = Math.max(1, rows.length, felt.phase === 'trump' ? rowed(Array.from({ length: felt.full }, (_, nth) => nth)).length : 0);
 
-    derived sides = view === null ? [] : view.points.map((points, index) => ({
+    derived stop = kept !== null && hand.includes(kept) ? kept : (hand.find((card) => legal.has(card)) ?? hand[0] ?? null);
+
+    derived handTricks = felt.points.map((_, side) =>
+        felt.chairs.filter((row) => row.side === side).reduce((sum, row) => sum + row.tricks, 0));
+
+    derived sides = felt.points.map((points, index) => ({
         index,
         points,
         tricks: handTricks[index] ?? 0,
-        names: locale.list(view!.seats.filter((row) => row.side === index).map((row) => nameOf(row.seat)))
+        names: locale.list(felt.chairs.filter((row) => row.side === index).map((row) => nameOf(row.seat)))
     }));
 
     const fan = (index: number, count: number) =>
@@ -344,24 +504,16 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return says === null ? play : `${ play }. ${ says }`;
     };
 
-    const aim = (card: number) =>
-    {
-        aimed = card;
-    };
-
-    const unaim = (card: number) =>
-    {
-        aimed = aimed === card ? null : aimed;
-    };
-
-    const playCard = async (card: number) =>
+    const playCard = async (card: number, keyed: boolean) =>
     {
         if (!legal.has(card))
         {
             return;
         }
 
-        const face = arena?.querySelector(`.card-hold[data-card="${ card }"] .card-face`) ?? null;
+        const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+        const seat = untrack(() => mine);
+        const { id, rev } = untrack(() => game);
 
         if (layer !== null && face !== null)
         {
@@ -369,35 +521,51 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         }
 
         picked = null;
-        aimed = null;
         haptic('select');
 
-        const seat = untrack(() => mine);
-        const ahead = seat !== undefined && shown === null && holding === null && busyUntil <= runtime().clock.now();
-
-        if (ahead)
+        if (seat !== undefined && presenter !== null)
         {
-            predict(card, seat);
+            let gone = false;
+
+            lifted = { card, at: hand.indexOf(card), keyed };
+            sent = { id, card, rev, gone, keyed };
+            presenter.predict({ rev, covers: (moves) => (gone ? (moves[0]?.e === 'card' && moves[0].card === card ? 1 : null) : 0) });
+            presenter.act((ctx) =>
+            {
+                if (sending === null || sending.card !== card)
+                {
+                    sendHome(card);
+
+                    return;
+                }
+
+                const own = originOf(card);
+
+                gone = true;
+                sent = { id, card, rev, gone, keyed };
+
+                return lay(ctx.stage, seat, card, own);
+            }, TIMING.FLY);
         }
 
         const outcome = await board.play({ kind: 'hokm', verb: 'card', card });
 
-        if (ahead && sending === card && (outcome === 'stale' || outcome === 'failed'))
+        if (outcome === 'stale' || outcome === 'failed')
         {
-            jump();
+            refuse(id, card, rev);
         }
     };
 
-    const touchCard = (card: number) =>
+    const touchCard = (card: number, keyed: boolean) =>
     {
-        if (!legal.has(card))
+        if (!legal.has(card) || board.busy())
         {
             return;
         }
 
         if (!device.coarse() || chosen === card)
         {
-            void playCard(card);
+            void playCard(card, keyed);
             return;
         }
 
@@ -405,20 +573,206 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         haptic('tick');
     };
 
-    const callTrump = async (suit: Suit) =>
+    const press = (event: MouseEvent, card: number) =>
     {
-        if (mine !== undefined)
+        if (slipped === card)
         {
-            haptic('select');
+            slipped = null;
+
+            return;
         }
 
-        await board.play({ kind: 'hokm', verb: 'trump', suit });
+        if (discarding)
+        {
+            toggleAway(card);
+        }
+        else
+        {
+            touchCard(card, event.detail === 0);
+        }
+    };
+
+    const hold = (event: PointerEvent, card: number) =>
+    {
+        const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+
+        slipped = null;
+
+        if (event.button > 0 || grip !== null || !legal.has(card) || board.busy() || layer === null || face === null)
+        {
+            return;
+        }
+
+        grip = { id: event.pointerId, card, x: event.clientX, y: event.clientY, from: rectIn(layer, face), clone: null, trail: [] };
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    };
+
+    const drag = (event: PointerEvent) =>
+    {
+        const held = grip;
+
+        if (held === null || held.id !== event.pointerId || layer === null)
+        {
+            return;
+        }
+
+        const dx = event.clientX - held.x;
+        const dy = event.clientY - held.y;
+        const now = runtime().clock.now();
+
+        if (held.clone === null)
+        {
+            if (Math.hypot(dx, dy) < (event.pointerType === 'mouse' ? DRAG_SLOP_MOUSE : DRAG_SLOP))
+            {
+                return;
+            }
+
+            held.clone = cardNode(held.card, held.from.width);
+            held.clone.classList.add('hokm-carried');
+            put(layer, held.clone, held.from);
+            homing = held.card;
+            homeward = { clone: held.clone, run: CARRIED };
+            picked = null;
+            haptic('tick');
+        }
+
+        held.clone.style.translate = `${ dx }px ${ dy }px`;
+        held.trail = [...held.trail.filter((one) => now - one.at < FLICK_SPAN), { y: event.clientY, at: now }];
+    };
+
+    const sendHome = (card: number) =>
+    {
+        const from = recalled(card);
+        const to = slotOf(card);
+        const stage = rig;
+
+        if (from === null || to === null || layer === null || stage === null)
+        {
+            return;
+        }
+
+        const clone = cardNode(card, to.width);
+
+        homing = card;
+        homeward = { clone, run: launch(stage, layer, clone, from, to, { duration: TIMING.FLY, easing: EASE.fly, landed: unhome }) };
+    };
+
+    const letGo = (event: PointerEvent) =>
+    {
+        const held = grip;
+
+        if (held === null || held.id !== event.pointerId)
+        {
+            return;
+        }
+
+        grip = null;
+
+        if (held.clone === null)
+        {
+            return;
+        }
+
+        const table = find('.hokm-table')?.getBoundingClientRect();
+        const now = runtime().clock.now();
+        const since = held.trail[0];
+        const over = table !== undefined && event.clientX >= table.left && event.clientX <= table.right && event.clientY >= table.top && event.clientY <= table.bottom;
+        const flicked = since !== undefined && now > since.at && (since.y - event.clientY) / (now - since.at) >= FLICK && held.y - event.clientY >= FLICK_REACH;
+
+        slipped = held.card;
+
+        if (event.type === 'pointerup' && (over || flicked) && legal.has(held.card) && !board.busy())
+        {
+            void playCard(held.card, false);
+        }
+        else
+        {
+            sendHome(held.card);
+        }
+    };
+
+    const struck = (stage: Stage) =>
+    {
+        sound?.play('trump');
+        sound?.play('card-place', { gain: 0.6 });
+
+        for (const one of [find('.hokm-medal'), find('.hokm-token')])
+        {
+            if (one !== null)
+            {
+                stage.animate(one, STRUCK, { duration: STRUCK_MS, easing: EASE.pop, quiet: 'skip' });
+            }
+        }
+    };
+
+    const name = (from: Rect | null, stage: Stage) =>
+    {
+        const disc = find('.hokm-token');
+        const to = spotOf(disc);
+
+        if (disc === null || from === null || to === null)
+        {
+            struck(stage);
+
+            return Promise.resolve();
+        }
+
+        return stage.animate(disc, flightFrames(from, to), { duration: NAMING, easing: EASE.fly, landed: () => struck(stage) }).done;
+    };
+
+    const unname = () =>
+    {
+        if (token === null || !token.pledged)
+        {
+            return;
+        }
+
+        presenter?.predict(null);
+        token = null;
+        sound?.play('deny');
+        haptic('deny');
+    };
+
+    const callTrump = async (suit: Suit, event: MouseEvent) =>
+    {
+        const rev = untrack(() => game.rev);
+        const from = spotOf(find(`.hokm-choose-suit[data-suit="${ suit }"]`));
+        const keyed = event.detail === 0;
+        const next = stop;
+
+        haptic('select');
+
+        if (presenter !== null && rig !== null)
+        {
+            token = { suit, pledged: true };
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === 'trump' ? 0 : null) });
+            named = name(from, rig);
+
+            if (keyed && next !== null)
+            {
+                stand(next);
+            }
+        }
+
+        const outcome = await board.play({ kind: 'hokm', verb: 'trump', suit });
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            unname();
+        }
     };
 
     const toggleAway = (card: number) =>
     {
-        if (!discarding)
+        if (!discarding || board.busy())
         {
+            return;
+        }
+
+        if (!picks.includes(card) && picks.length >= due)
+        {
+            sound?.play('deny');
+            haptic('deny');
             return;
         }
 
@@ -426,7 +780,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         haptic('tick');
     };
 
-    const putDown = async () =>
+    const putDown = async (keyed: boolean) =>
     {
         if (picks.length !== due)
         {
@@ -434,85 +788,112 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         }
 
         const cards = [...picks].sort((a, b) => a - b);
+        const rev = untrack(() => game.rev);
+        const asked: Pledge = { verb: 'discard', cards, keyed };
+        const stage = rig;
 
         away = [];
         haptic('select');
-        await board.play({ kind: 'hokm', verb: 'discard', cards });
+
+        if (presenter !== null && stage !== null)
+        {
+            const faces = facesOf(cards);
+            const from = handSpot();
+
+            pledge = asked;
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === 'discard' ? 0 : null) });
+            pledged = (from === null ? Promise.resolve() : fold(stage, faces, from))
+                .then(() => setDown(stage, from, cards.length, 1))
+                .then(() =>
+                {
+                    sound?.play('card-place', { gain: 0.5 });
+                });
+
+            if (keyed && stop !== null)
+            {
+                stand(stop);
+            }
+        }
+
+        const outcome = await board.play({ kind: 'hokm', verb: 'discard', cards });
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            unput(asked);
+        }
     };
 
-    const draw = async (verb: 'keep' | 'reject') =>
+    const draw = async (verb: 'keep' | 'reject', keyed: boolean) =>
     {
+        const card = untrack(() => lain);
+        const rev = untrack(() => game.rev);
+        const asked: Pledge | null = card === null ? null : { verb, cards: [card], keyed };
+        const stage = rig;
+        const next = stop;
+
         haptic('select');
-        await board.play({ kind: 'hokm', verb });
+
+        if (asked !== null && card !== null && presenter !== null && stage !== null)
+        {
+            const from = spotOf(find('.hokm-lift'));
+
+            pledge = asked;
+            seen = { ...seen, offer: null };
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === 'draw' ? 0 : null) });
+            pledged = verb === 'keep' ? keepIt(stage, card, from, keyed) : passIt(stage, card, from);
+
+            if (keyed && verb === 'reject' && next !== null)
+            {
+                stand(next);
+            }
+        }
+
+        const outcome = await board.play({ kind: 'hokm', verb });
+
+        if (asked !== null && (outcome === 'stale' || outcome === 'failed'))
+        {
+            undraw(asked);
+        }
+    };
+
+    const pressStock = (event: MouseEvent) =>
+    {
+        void (drawing ? draw('reject', event.detail === 0) : putDown(event.detail === 0));
     };
 
     let arena: HTMLElement | null = null;
     let layer: HTMLElement | null = null;
     let sound: SoundHandle | null = null;
-    let timers: (() => void)[] = [];
-    let busyUntil = 0;
-    let generation = 0;
-    let matchId = untrack(() => props.match.id);
-    let lastRev = untrack(() => props.match.rev);
-    let heardSeq = untrack(() => board.events().seq);
+    let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
+    let rig: Stage | null = null;
+    let steady: () => void = () => undefined;
+    let held: Felt = EMPTY;
     let wasActing = untrack(() => acting);
     let chimedDraw = -1;
-    let settled: Felt = untrack(() => felt);
-    let heldSince: number | null = null;
-    let holding: (() => void) | null = null;
+    let pledged: Promise<void> | null = null;
+    let grip: { id: number; card: number; x: number; y: number; from: Rect; clone: HTMLElement | null; trail: { y: number; at: number }[] } | null = null;
+    let slipped: number | null = null;
     const origins = new Map<number, Rect>();
 
-    const viewFelt = () =>
-    {
-        const held = hokmOf(props.match);
+    const viewFelt = () => (view === null ? EMPTY : feltOf(view, game.seats));
 
-        return held === null ? EMPTY : feltOf(held.trick, held.lead, props.match.seats);
-    };
-
-    const later = (ms: number, run: () => void) =>
+    const sightNow = (): Sight<Felt> | null =>
     {
-        const stop = runtime().clock.after(Math.max(0, ms), () =>
+        if (view === null)
         {
-            timers = timers.filter((one) => one !== stop);
-            run();
-        });
-
-        timers.push(stop);
-    };
-
-    const quiet = () => device.reducedMotion();
-
-    const stopAll = () =>
-    {
-        timers.forEach((stop) => stop());
-        timers = [];
-        holding?.();
-        holding = null;
-        heldSince = null;
-
-        if (layer !== null)
-        {
-            land(layer);
+            return null;
         }
-    };
 
-    const jump = () =>
-    {
-        stopAll();
-        generation += 1;
-        busyUntil = 0;
-        sending = null;
-        shown = null;
-        landing = [];
-        banner = null;
-        settled = viewFelt();
-    };
+        const now = feltOf(view, game.seats);
 
-    const reader = (): { seat: number | null; seats: number; sideOf: (seat: number) => number } => ({
-        seat: props.match.mine ?? null,
-        seats: props.match.seats,
-        sideOf: (seat: number) => hokmOf(props.match)?.seats.find((row) => row.seat === seat)?.side ?? seat % 2
-    });
+        return {
+            id: game.id,
+            rev: game.rev,
+            seat: mine ?? null,
+            view: sending !== null && sending.gone && mine !== undefined ? step(now, { e: 'card', seat: mine, card: sending.card }) : now
+        };
+    };
 
     const find = (selector: string) => arena?.querySelector<HTMLElement>(selector) ?? null;
 
@@ -523,395 +904,1262 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return rect === null || width === 0 ? 0 : Math.max(-0.5, Math.min(0.5, centreOf(rect).x / width - 0.5));
     };
 
+    const plateOf = (seat: number) => find(`.hokm-seat[data-seat="${ seat }"] .table-plate`);
+
     const seatRect = (seat: number) =>
-    {
-        const place = find(`.hokm-seat[data-seat="${ seat }"] .hokm-pile`) ?? find(`.hokm-seat[data-seat="${ seat }"] .table-plate`);
+        (layer === null ? null : anchor(layer, [find(`.hokm-seat[data-seat="${ seat }"] .hokm-pile`), plateOf(seat)]));
 
-        return place === null || layer === null ? null : rectIn(layer, place);
+    const handOr = (seat: number) =>
+    {
+        const own = seat === mine ? find('.hokm-hand') : null;
+
+        return own !== null && layer !== null ? rectIn(layer, own) : seatRect(seat);
     };
 
-    const sized = (around: Rect, width: number, height: number): Rect =>
-    {
-        const middle = centreOf(around);
+    const sideAt = (seat: number) => held.chairs.find((chair) => chair.seat === seat)?.side ?? seat % 2;
 
-        return { x: middle.x - width / 2, y: middle.y - height / 2, width, height };
+    const heldAt = (felt: Felt) => Array.from({ length: felt.seats }, (_, seat) => felt.chairs.find((chair) => chair.seat === seat)?.held ?? 0);
+
+    const wonAt = (felt: Felt) => Array.from({ length: felt.seats }, (_, seat) => felt.chairs.find((chair) => chair.seat === seat)?.tricks ?? 0);
+
+    const withMe = (side: number | undefined) => mine !== undefined && side !== undefined && sideAt(mine) === side;
+
+    const unhome = () =>
+    {
+        homing = null;
+        homeward = null;
     };
 
-    const flyCard = (card: number, seat: number, duration: number) =>
+    const recalled = (card: number) =>
     {
+        if (homing !== card || homeward === null)
+        {
+            return null;
+        }
+
+        const { clone, run } = homeward;
+        const at = layer === null ? null : rectIn(layer, clone);
+
+        run.cancel();
+        clone.remove();
+        unhome();
+
+        return at;
+    };
+
+    const originOf = (card: number) =>
+    {
+        const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+        const from = recalled(card) ?? (face === null || layer === null ? origins.get(card) : rectIn(layer, face));
+
+        origins.delete(card);
+
+        return from ?? null;
+    };
+
+    const places = () => new Map([...(arena?.querySelectorAll<HTMLElement>('.hokm-hand > li') ?? [])].map((slot) =>
+    {
+        const box = slot.getBoundingClientRect();
+        const tilt = Number(slot.style.getPropertyValue('--t'));
+        const swung = Math.sin(tilt * FAN_TILT * Math.PI / 180) * FAN_PIVOT * slot.offsetHeight;
+
+        return [slot.querySelector<HTMLElement>('.card-hold')?.dataset.card ?? '', { slot, tilt, x: box.left + box.width / 2 - swung, y: box.top + box.height / 2 }] as const;
+    }));
+
+    const follow = (before: ReturnType<typeof places>) =>
+    {
+        for (const [card, now] of places())
+        {
+            const was = before.get(card);
+            const dx = (was?.x ?? now.x) - now.x;
+            const dy = (was?.y ?? now.y) - now.y;
+
+            if (rig === null || was === undefined || (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5))
+            {
+                continue;
+            }
+
+            rig.animate(now.slot, [
+                { translate: `${ dx }px ${ dy }px`, rotate: `${ (was.tilt - now.tilt) * FAN_TILT }deg`, composite: 'add' },
+                { translate: '0px 0px', rotate: '0deg', composite: 'add' }
+            ], { duration: FAN_MS, easing: EASE.snap, quiet: 'skip' });
+        }
+    };
+
+    const rearrange = (change: () => void) =>
+    {
+        const before = places();
+
+        steady();
+        sliding = true;
+        steady = runtime().clock.after(FAN_MS, () => sliding = false);
+        change();
+        follow(before);
+    };
+
+    const resort = () => rearrange(() => sorted = !sorted);
+
+    const stand = (card: number) => find(`.card-hold[data-card="${ card }"]`)?.focus({ preventScroll: true });
+
+    const walk = (event: KeyboardEvent, card: number) =>
+    {
+        const flat = rows.flat();
+        const at = flat.indexOf(card);
+        const row = rows.findIndex((one) => one.includes(card));
+        const across = rows[row]?.indexOf(card) ?? 0;
+        const facing = (line: number[] | undefined) => (line === undefined ? undefined : line[Math.min(across, line.length - 1)]);
+        const to = new Map([
+            ['ArrowRight', flat[(at + 1) % flat.length]],
+            ['ArrowLeft', flat[(at - 1 + flat.length) % flat.length]],
+            ['ArrowDown', facing(rows[row + 1])],
+            ['ArrowUp', facing(rows[row - 1])],
+            ['Home', flat[0]],
+            ['End', flat[flat.length - 1]]
+        ]).get(event.key);
+
+        if (to === undefined || event.altKey || event.ctrlKey || event.metaKey)
+        {
+            return;
+        }
+
+        event.preventDefault();
+        stand(to);
+    };
+
+    const backSpot = (seat: number) =>
+    {
+        const top = find(`.hokm-seat[data-seat="${ seat }"] .hokm-pile > .card-back:last-child`);
+        const around = seatRect(seat);
+
+        return layer !== null && drawn(top) ? rectIn(layer, top) : (around === null ? null : cardAt(around, BACK_W));
+    };
+
+    const lay = (stage: Stage, seat: number, card: number, own: Rect | null) =>
+    {
+        const back = seat === mine || stage.quiet() ? null : backSpot(seat);
+
+        if (seat === mine)
+        {
+            stale = stale.filter((one) => one !== card);
+        }
+
+        if (seat === mine && lifted !== null && lifted.card === card)
+        {
+            const free = () => lifted = null;
+            const flat = rows.flat();
+            const next = flat[flat.indexOf(card) + 1] ?? flat[flat.indexOf(card) - 1];
+            const here = find(`.card-hold[data-card="${ card }"]`);
+            const stood = lifted.keyed && here !== null && document.activeElement === here;
+
+            if (rowed(hand.filter((one) => one !== card)).length === rows.length)
+            {
+                free();
+            }
+            else
+            {
+                rearrange(free);
+            }
+
+            if (next !== undefined && stood)
+            {
+                stand(next);
+            }
+        }
+
+        held = step(held, { e: 'card', seat, card });
+        landing = [...landing, card];
+        shown = held;
+
         const target = find(`.hokm-trick[data-card="${ card }"]`);
 
         if (layer === null || target === null)
         {
-            return;
+            landing = landing.filter((one) => one !== card);
+
+            return Promise.resolve();
         }
 
         const to = rectIn(layer, target);
-        const own = seat === props.match.mine ? origins.get(card) : undefined;
-        const from = own ?? sized(seatRect(seat) ?? to, to.width * 0.6, to.height * 0.6);
+        const from = own ?? back ?? cardAt(seatRect(seat) ?? to, to.width * 0.6);
+        const landed = () =>
+        {
+            landing = landing.filter((one) => one !== card);
+            sound?.play('card-place', { gain: 0.9 });
+        };
 
-        origins.delete(card);
-        fly(layer, cardNode(card, to.width), from, to, {
-            duration,
-            easing: EASE.fly,
-            toRotate: tiltOf(card),
-            fromOpacity: own === undefined ? 0 : 1,
-            reduced: quiet()
-        });
         sound?.play('card-slide', { pan: panOf(from) });
+
+        return back === null
+            ? launch(stage, layer, cardNode(card, to.width), from, to, {
+                duration: seat === mine ? TIMING.FLY : TIMING.FLY_THEIRS,
+                easing: EASE.fly,
+                toRotate: tiltOf(card),
+                fromOpacity: own === null ? 0 : 1,
+                landed
+            }).done
+            : turn(stage, layer, turnNode(card, to.width), back, to, { duration: TIMING.FLY_THEIRS, easing: EASE.fly, flip: EASE.flip, toRotate: tiltOf(card), landed }).done;
     };
 
-    const gatherTo = (seat: number, cards: readonly Laid[]) =>
+    const tally = (stage: Stage, seat: number) =>
     {
-        const plate = find(`.hokm-seat[data-seat="${ seat }"] .table-plate`);
-        const target = plate === null || layer === null ? null : rectIn(layer, plate);
+        const place = find(`.hokm-seat[data-seat="${ seat }"]`);
+        const cloth = find('.hokm-table');
 
-        sound?.play('card-gather', { pan: panOf(target) });
-
-        if (layer === null || target === null || quiet())
+        if (layer === null || place === null || cloth === null || stage.quiet())
         {
             return;
         }
 
-        const measured = cards.map((one) =>
+        const spot = outside(rectIn(layer, place), centreOf(rectIn(layer, cloth)), PLUS_GAP);
+        const drifted = (by: number) => `calc(-50% + ${ spot.dx * by }px) calc(-50% + ${ spot.dy * by }px)`;
+        const plus = document.createElement('span');
+
+        plus.className = 'hokm-plus tally';
+        plus.dir = 'ltr';
+        plus.textContent = `+${ locale.n(1) }`;
+        plus.style.left = `${ spot.x }px`;
+        plus.style.top = `${ spot.y }px`;
+        layer.append(plus);
+        stage.animate(plus, [
+            { opacity: 0, translate: drifted(-PLUS_DRIFT / 2), offset: 0 },
+            { opacity: 1, translate: drifted(0), offset: 0.2 },
+            { opacity: 1, translate: drifted(PLUS_DRIFT / 2), offset: 0.7 },
+            { opacity: 0, translate: drifted(PLUS_DRIFT), offset: 1 }
+        ], { duration: PLUS, easing: 'ease-out', fill: 'both', landed: () => plus.remove() });
+    };
+
+    const take = async (seat: number, next: Told | undefined, ctx: Ctx) =>
+    {
+        const cards = gatherOrder(held.cards, seat);
+
+        lying = { cards: held.cards, took: seat };
+
+        if (withMe(sideAt(seat)))
+        {
+            sound?.play('trick');
+            haptic('select');
+        }
+
+        await (next === undefined ? ctx.linger(TIMING.HOLD, TIMING.HOLD_MIN) : ctx.stage.wait(holdBefore(next)));
+
+        const plate = plateOf(seat);
+        const to = plate === null || layer === null ? null : rectIn(layer, plate);
+        const from = cards.map((one) =>
         {
             const real = find(`.hokm-trick[data-card="${ one.card }"]`);
 
-            return real === null ? null : { one, from: rectIn(layer!, real) };
+            return real === null || layer === null ? null : rectIn(layer, real);
         });
 
-        measured.forEach((entry, index) =>
+        sound?.play('card-gather', { pan: panOf(to) });
+        lying = { cards: [], took: seat };
+
+        await Promise.all(cards.map((one, nth) =>
         {
-            if (entry === null)
+            const start = from[nth];
+
+            return layer === null || to === null || start === null
+                ? Promise.resolve()
+                : launch(ctx.stage, layer, cardNode(one.card, start.width), start, cardAt(to, start.width), {
+                    duration: TIMING.GATHER,
+                    easing: EASE.gather,
+                    delay: nth * TIMING.GATHER_GAP,
+                    fromRotate: tiltOf(one.card),
+                    toScale: 0.45,
+                    toOpacity: 0,
+                    fadeFrom: 0.6,
+                    quiet: 'skip'
+                }).done;
+        }));
+
+        if (!ctx.live())
+        {
+            return;
+        }
+
+        held = step(held, { e: 'trick', seat });
+        shown = held;
+        lying = null;
+        tally(ctx.stage, seat);
+    };
+
+    const call = async (move: Told, ctx: Ctx) =>
+    {
+        const ours = withMe(move.side);
+        const kot = move.kot === true;
+
+        held = step(held, move);
+        shown = held;
+        banner = { points: move.points ?? 0, kot, ours };
+
+        if (kot)
+        {
+            sound?.play('win');
+        }
+        else if (ours)
+        {
+            sound?.play('hand-won');
+        }
+
+        if (ours)
+        {
+            haptic(kot ? 'kot' : 'hand');
+        }
+
+        const sign = find('.hokm-banner');
+
+        if (sign !== null)
+        {
+            ctx.stage.animate(sign, kot ? KOT_IN : SIGN_IN, { duration: BANNER_IN, easing: EASE.pop });
+        }
+
+        await ctx.stage.wait(TIMING.BANNER - BANNER_OUT);
+
+        if (sign !== null)
+        {
+            ctx.stage.animate(sign, SIGN_OUT, { duration: BANNER_OUT, easing: 'ease-in', fill: 'forwards', quiet: 'out' });
+        }
+
+        await ctx.stage.wait(BANNER_OUT);
+        banner = null;
+    };
+
+    const slide = (stage: Stage, from: Rect | null, around: Rect | null, rate: number) =>
+    {
+        const to = around === null ? null : cardAt(around, BACK_W);
+
+        sound?.play('card-slide', { pan: panOf(to), rate });
+
+        return layer === null || from === null || to === null
+            ? Promise.resolve()
+            : launch(stage, layer, cardNode(null, BACK_W), from, to, { duration: TIMING.DEAL_FLY, easing: EASE.fly, toOpacity: 0, fadeFrom: 0.8, quiet: 'skip' }).done;
+    };
+
+    const show = (cards: readonly number[]) =>
+    {
+        if (current)
+        {
+            seen = { ...seen, cards: new Set([...seen.cards, ...cards]) };
+        }
+    };
+
+    const deckSpot = () =>
+    {
+        const top = find('.hokm-deck > .card-back:last-child') ?? find('.hokm-stock-pile > .card-back:last-child');
+        const dealer = seatRect(held.dealer);
+
+        return top !== null && layer !== null ? rectIn(layer, top) : (dealer === null ? null : cardAt(dealer, BACK_W));
+    };
+
+    const handSpot = () =>
+    {
+        const row = find('.hokm-hands');
+        const face = find('.hokm-hand .card-face');
+
+        return row === null || layer === null ? null : cardAt(rectIn(layer, row), face?.offsetWidth || BACK_W);
+    };
+
+    const open = (stage: Stage, cards: readonly number[], from: Rect | null) => Promise.all([...cards]
+        .sort((one, other) => hand.indexOf(one) - hand.indexOf(other))
+        .map((card, nth) =>
+        {
+            const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+            const to = face === null || layer === null ? null : rectIn(layer, face);
+
+            if (layer === null || from === null || to === null)
+            {
+                show([card]);
+
+                return Promise.resolve();
+            }
+
+            return turn(stage, layer, turnNode(card, to.width), from, to, { duration: TURN, delay: nth * TURN_GAP, easing: EASE.snap, landed: () => show([card]) }).done;
+        }));
+
+    const send = (stage: Stage, packet: Packet, cards: readonly number[] | null, rate: number) =>
+    {
+        const from = deckSpot();
+        const pile = seatRect(packet.seat);
+        const to = cards === null ? (pile === null ? null : cardAt(pile, BACK_W)) : handSpot();
+        let opened: Promise<unknown> = Promise.resolve();
+        const landed = () =>
+        {
+            if (dealing !== null)
+            {
+                dealing = { ...dealing, counts: dealing.counts.map((count, seat) => (seat === packet.seat ? count + packet.count : count)) };
+            }
+
+            if (cards !== null)
+            {
+                opened = open(stage, cards, to);
+            }
+        };
+
+        if (dealing !== null && dealing.stock !== null)
+        {
+            dealing = { ...dealing, stock: dealing.stock - packet.count };
+        }
+
+        sound?.play('card-slide', { pan: panOf(to), rate });
+
+        if (layer === null || from === null || to === null)
+        {
+            landed();
+
+            return opened;
+        }
+
+        return launch(stage, layer, stackNode(packet.count, to.width), from, to, {
+            duration: TIMING.DEAL_FLY,
+            easing: EASE.fly,
+            toOpacity: cards === null ? 0 : 1,
+            fadeFrom: cards === null ? 0.8 : undefined,
+            quiet: 'skip',
+            landed
+        }).done.then(() => opened);
+    };
+
+    const markOn = (seat: number) => find(`.hokm-seat[data-seat="${ seat }"] .table-plate-marker`);
+
+    const spotOf = (place: Element | null) => (place === null || layer === null ? null : rectIn(layer, place));
+
+    const facesOf = (cards: readonly number[]) => cards.map((card) =>
+    {
+        const face = find(`.card-hold[data-card="${ card }"] .card-face`);
+
+        return { card, at: face === null || layer === null ? null : cardAt(rectIn(layer, face), face.offsetWidth || BACK_W) };
+    });
+
+    const fold = (stage: Stage, faces: readonly { card: number; at: Rect | null }[], to: Rect) => Promise.all(faces.map((one) => (layer === null || one.at === null
+        ? Promise.resolve()
+        : turn(stage, layer, turnNode(one.card, to.width), one.at, to, { duration: TURN, easing: EASE.snap, down: true }).done)));
+
+    const collect = async (had: readonly number[], won: readonly number[], ctx: Ctx) =>
+    {
+        const flown: Promise<void>[] = [];
+        const to = deckSpot();
+        const left = had.map((count, seat) => ({ seat, count: count + won[seat] * had.length }))
+            .filter((one) => one.count > 0)
+            .sort((one, other) => Number(other.seat === mine) - Number(one.seat === mine));
+
+        const leave = async (one: { seat: number; count: number }) =>
+        {
+            const fanned = one.seat === mine && !current && stale.length > 0;
+            const pile = seatRect(one.seat);
+            const from = fanned ? handSpot() : (pile === null ? null : cardAt(pile, BACK_W));
+            const closed = fanned && from !== null ? fold(ctx.stage, facesOf(stale), from) : null;
+
+            if (dealing !== null)
+            {
+                dealing = {
+                    ...dealing,
+                    counts: dealing.counts.map((count, seat) => (seat === one.seat ? 0 : count)),
+                    won: dealing.won === null ? null : dealing.won.map((count, seat) => (seat === one.seat ? 0 : count))
+                };
+            }
+
+            if (fanned)
+            {
+                stale = [];
+            }
+
+            if (closed !== null)
+            {
+                await closed;
+            }
+
+            if (!ctx.live() || layer === null || from === null || to === null)
             {
                 return;
             }
 
-            const { one, from } = entry;
-
-            fly(layer!, cardNode(one.card, from.width), from, sized(target, from.width, from.height), {
-                duration: TIMING.GATHER,
+            await launch(ctx.stage, layer, stackNode(one.count, to.width), from, to, {
+                duration: TIMING.DEAL_FLY,
                 easing: EASE.gather,
-                delay: index * TIMING.GATHER_GAP,
-                fromRotate: tiltOf(one.card),
-                toScale: 0.45,
-                toOpacity: 0,
-                fadeFrom: 0.6
-            });
-        });
-    };
+                quiet: 'skip',
+                landed: () =>
+                {
+                    ghost = false;
+                }
+            }).done;
+        };
 
-    const dealTo = (from: number, to: readonly number[], gap: number, duration: number, shuffle: boolean) =>
-    {
-        if (shuffle)
+        if (left.length === 0)
         {
-            sound?.play('card-shuffle', { gain: 0.7 });
+            return;
         }
 
-        to.forEach((seat, index) =>
+        sound?.play('card-gather');
+
+        for (const [nth, one] of left.entries())
         {
-            later((shuffle ? 450 : 0) + index * gap, () =>
+            if (!ctx.live())
             {
-                const start = seatRect(from);
-                const hand = seat === props.match.mine ? find('.hokm-hand') : null;
-                const end = hand !== null && layer !== null ? sized(rectIn(layer, hand), BACK_W, BACK_W * 288 / 204) : seatRect(seat);
-                const box = end === null ? null : sized(end, BACK_W, BACK_W * 288 / 204);
+                return;
+            }
 
-                sound?.play('card-slide', { pan: panOf(box), rate: 0.97 + (index % 3) * 0.04 });
+            flown.push(leave(one));
 
-                if (layer === null || start === null || box === null || quiet())
+            if (nth < left.length - 1)
+            {
+                await ctx.stage.wait(COLLECT_GAP);
+            }
+        }
+
+        await Promise.all(flown);
+    };
+
+    const carry = (mark: 'hakem' | 'dealer', from: Rect | null, stage: Stage) =>
+    {
+        const seat = mark === 'hakem' ? held.hakem : held.dealer;
+        const drawn = markOn(seat)?.firstElementChild?.cloneNode(true);
+        const to = spotOf(markOn(seat));
+        const clone = document.createElement('div');
+
+        if (stage.quiet() || layer === null || from === null || to === null || !(drawn instanceof Element))
+        {
+            return Promise.resolve();
+        }
+
+        clone.append(drawn);
+        carried = { ...carried, [mark]: true };
+
+        return launch(stage, layer, clone, from, to, {
+            duration: CARRY,
+            easing: EASE.fly,
+            landed: () =>
+            {
+                carried = { ...carried, [mark]: false };
+            }
+        }).done;
+    };
+
+    const pass = async (from: { hakem: number; dealer: number; crown: Rect | null; hand: Rect | null; deck: Rect | null }, stage: Stage) =>
+    {
+        const deck = find('.hokm-deck');
+        const to = spotOf(deck);
+        const moved: Promise<void>[] = [];
+
+        if (from.dealer !== held.dealer && deck !== null && from.deck !== null && to !== null)
+        {
+            moved.push(stage.animate(deck, [
+                { translate: `${ centreOf(from.deck).x - centreOf(to).x }px ${ centreOf(from.deck).y - centreOf(to).y }px`, composite: 'add' },
+                { translate: '0px 0px', composite: 'add' }
+            ], { duration: CARRY, easing: EASE.fly }).done);
+        }
+
+        if (from.dealer !== held.dealer)
+        {
+            moved.push(carry('dealer', from.hand, stage));
+        }
+
+        if (from.hakem !== held.hakem)
+        {
+            moved.push(carry('hakem', from.crown, stage));
+        }
+
+        await Promise.all(moved);
+    };
+
+    const dealOut = async (packets: readonly Packet[], shuffled: boolean, ctx: Ctx) =>
+    {
+        const gap = dealGap(packets.length);
+        const flown: Promise<unknown>[] = [];
+        const own = dealtIn([...unseen], packets.filter((one) => one.seat === mine).map((one) => one.count), hashOf(game.id, held.round, shuffled ? 'deal' : 'rest'));
+
+        if (shuffled)
+        {
+            sound?.play('card-shuffle', { gain: 0.7 });
+            await ctx.stage.wait(SHUFFLE);
+        }
+
+        for (const [nth, packet] of packets.entries())
+        {
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            flown.push(send(ctx.stage, packet, packet.seat === mine ? (own.shift() ?? []) : null, 0.97 + (nth % 3) * 0.04));
+
+            if (nth < packets.length - 1)
+            {
+                await ctx.stage.wait(gap);
+            }
+            else if (dealing !== null && held.phase !== 'trump')
+            {
+                dealing = { ...dealing, deck: null };
+            }
+        }
+
+        await Promise.all(flown);
+    };
+
+    const lessStock = () =>
+    {
+        if (dealing !== null && dealing.stock !== null)
+        {
+            dealing = { ...dealing, stock: dealing.stock - 1 };
+        }
+    };
+
+    const moreHeld = (seat: number, by: number) =>
+    {
+        if (dealing !== null)
+        {
+            dealing = { ...dealing, counts: dealing.counts.map((count, at) => (at === seat ? count + by : count)) };
+        }
+    };
+
+    const faceUp = (stage: Stage, card: number, from: Rect | null, to: Rect | null, tilt: number, landed: () => void) =>
+    {
+        sound?.play('card-slide', { pan: panOf(to) });
+
+        if (layer === null || from === null || to === null)
+        {
+            landed();
+
+            return Promise.resolve();
+        }
+
+        return turn(stage, layer, turnNode(card, to.width), from, to, { duration: LIFT, easing: EASE.fly, flip: EASE.flip, toRotate: tilt, landed }).done;
+    };
+
+    const setDown = (stage: Stage, from: Rect | null, count: number, rate: number) =>
+    {
+        const to = spotOf(find('.hokm-down'));
+
+        sound?.play('card-slide', { pan: panOf(to), rate });
+
+        return layer === null || from === null || to === null
+            ? Promise.resolve()
+            : launch(stage, layer, count === 1 ? cardNode(null, to.width) : stackNode(count, to.width), from, to, { duration: TIMING.DEAL_FLY, easing: EASE.fly, toRotate: GLIMPSE_TILT, toOpacity: 0, fadeFrom: 0.8, quiet: 'skip' }).done;
+    };
+
+    const slotOf = (card: number) => spotOf(find(`.card-hold[data-card="${ card }"] .card-face`));
+
+    const latest = (felt: Felt) => view !== null && felt.round === view.round && felt.phase === view.phase && felt.turn === view.turn && felt.stock === (view.stock ?? null);
+
+    const lift = (stage: Stage, stock: Rect | null) =>
+    {
+        const card = latest(held) ? offering : null;
+
+        if (card === null)
+        {
+            return Promise.resolve();
+        }
+
+        lessStock();
+
+        return faceUp(stage, card, stock, spotOf(find('.hokm-lift')), 0, () => seen = { ...seen, offer: card });
+    };
+
+    const aside = async (seat: number, count: number, ctx: Ctx) =>
+    {
+        const stock = deckSpot();
+        const pile = seatRect(seat);
+        const from = seat === mine ? handSpot() : (pile === null ? null : cardAt(pile, BACK_W));
+        const done = seat === mine && pledge !== null && pledge.verb === 'discard' ? pledged : null;
+
+        if (done !== null)
+        {
+            pledge = null;
+            pledged = null;
+        }
+
+        moreHeld(seat, -count);
+        await (done ?? setDown(ctx.stage, from, count, 1));
+
+        if (!ctx.live())
+        {
+            return;
+        }
+
+        if (done === null)
+        {
+            sound?.play('card-place', { gain: 0.5 });
+        }
+
+        await lift(ctx.stage, stock);
+    };
+
+    const drawBlind = async (seat: number, stock: Rect | null, ctx: Ctx) =>
+    {
+        const lying = seat === mine && lain !== null;
+
+        if (lying)
+        {
+            seen = { ...seen, offer: null };
+        }
+        else
+        {
+            lessStock();
+        }
+
+        const taken = slide(ctx.stage, lying ? spotOf(find('.hokm-lift')) : stock, handOr(seat), 1).then(() => moreHeld(seat, 1));
+
+        await ctx.stage.wait(DRAW_GAP);
+
+        if (!ctx.live())
+        {
+            return;
+        }
+
+        lessStock();
+        await Promise.all([taken, setDown(ctx.stage, stock, 1, 1.06)]);
+
+        if (seat === mine)
+        {
+            show([...unseen]);
+        }
+    };
+
+    const keepIt = (stage: Stage, card: number, from: Rect | null, keyed: boolean) =>
+    {
+        const to = slotOf(card);
+        const home = () =>
+        {
+            unhome();
+            show([card]);
+
+            if (keyed)
+            {
+                stand(card);
+            }
+        };
+
+        sound?.play('card-slide', { pan: panOf(to) });
+
+        if (layer === null || from === null || to === null)
+        {
+            home();
+
+            return Promise.resolve();
+        }
+
+        const clone = cardNode(card, to.width);
+
+        homing = card;
+        homeward = { clone, run: launch(stage, layer, clone, from, to, { duration: TIMING.FLY, easing: EASE.fly, landed: home }) };
+
+        return homeward.run.done;
+    };
+
+    const passIt = async (stage: Stage, card: number, from: Rect | null) =>
+    {
+        if (layer !== null && from !== null)
+        {
+            await turn(stage, layer, turnNode(card, from.width), from, from, { duration: TURN, easing: EASE.snap, down: true }).done;
+        }
+
+        await setDown(stage, from, 1, 1.06);
+    };
+
+    const drawMine = async (seat: number, offer: number, stock: Rect | null, done: Promise<void> | null, ctx: Ctx) =>
+    {
+        const from = spotOf(find('.hokm-lift'));
+        const second = view?.glimpse;
+
+        seen = { ...seen, offer: null };
+
+        if (view?.hand.includes(offer) === true)
+        {
+            const taken = (done ?? keepIt(ctx.stage, offer, from, false)).then(() => moreHeld(seat, 1));
+
+            if (done === null)
+            {
+                await ctx.stage.wait(DRAW_GAP);
+            }
+
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            lessStock();
+            await Promise.all([taken, second === undefined ? setDown(ctx.stage, stock, 1, 1.06) : faceUp(ctx.stage, second, stock, spotOf(find('.hokm-down')), GLIMPSE_TILT, () => show([second]))]);
+
+            return;
+        }
+
+        const passed = done ?? passIt(ctx.stage, offer, from);
+
+        if (done === null)
+        {
+            await ctx.stage.wait(TURN);
+        }
+
+        if (!ctx.live())
+        {
+            return;
+        }
+
+        lessStock();
+        await Promise.all([passed, ...[...unseen].map((card) => faceUp(ctx.stage, card, stock, slotOf(card), 0, () => show([card])))]);
+        moreHeld(seat, 1);
+    };
+
+    const drawCard = async (seat: number, ctx: Ctx) =>
+    {
+        const stock = deckSpot();
+        const asked = seat === mine && pledge !== null && pledge.verb !== 'discard' ? pledge : null;
+        const offer = asked === null ? lain : (asked.cards[0] ?? null);
+        const done = asked === null ? null : pledged;
+
+        if (asked !== null)
+        {
+            pledge = null;
+            pledged = null;
+        }
+
+        if (seat === mine && offer !== null && (asked !== null || latest(held)))
+        {
+            await drawMine(seat, offer, stock, done, ctx);
+        }
+        else
+        {
+            await drawBlind(seat, stock, ctx);
+        }
+
+        if (ctx.live())
+        {
+            await lift(ctx.stage, stock);
+        }
+    };
+
+    const undraw = (asked: Pledge) =>
+    {
+        const card = asked.cards[0];
+        const stage = rig;
+
+        if (pledge !== asked || card === undefined)
+        {
+            return;
+        }
+
+        const to = spotOf(find('.hokm-lift'));
+        const from = asked.verb === 'keep' ? (recalled(card) ?? slotOf(card)) : spotOf(find('.hokm-down'));
+        const back = () =>
+        {
+            returning = false;
+            seen = { ...seen, offer: card };
+
+            if (asked.keyed)
+            {
+                find('button.hokm-offer')?.focus({ preventScroll: true });
+            }
+        };
+
+        pledge = null;
+        pledged = null;
+        returning = true;
+        seen = { ...seen, cards: new Set([...seen.cards].filter((one) => one !== card)) };
+        presenter?.predict(null);
+        sound?.play('deny');
+        haptic('deny');
+
+        if (stage === null || layer === null || from === null || to === null)
+        {
+            back();
+        }
+        else if (asked.verb === 'keep')
+        {
+            launch(stage, layer, cardNode(card, to.width), from, to, { duration: TIMING.FLY, easing: EASE.fly, landed: back });
+        }
+        else
+        {
+            void faceUp(stage, card, from, to, 0, back);
+        }
+    };
+
+    const unput = (asked: Pledge) =>
+    {
+        if (pledge !== asked)
+        {
+            return;
+        }
+
+        pledge = null;
+        pledged = null;
+        seen = { ...seen, cards: new Set([...seen.cards].filter((card) => !asked.cards.includes(card))) };
+        presenter?.predict(null);
+        sound?.play('deny');
+        haptic('deny');
+
+        if (rig !== null)
+        {
+            void open(rig, asked.cards, spotOf(find('.hokm-down')));
+        }
+    };
+
+    const play = async (acts: readonly Act<Told>[], ctx: Ctx) =>
+    {
+        const moves = acts.flatMap((act) => act.moves);
+        let flying: Promise<void>[] = [];
+
+        const down = () =>
+        {
+            const landed = Promise.all(flying);
+
+            flying = [];
+
+            return landed;
+        };
+
+        await Promise.resolve();
+
+        for (const [index, move] of moves.entries())
+        {
+            const next = moves[index + 1];
+
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            if (move.e === 'card' && move.seat !== undefined && move.card !== undefined)
+            {
+                flying.push(lay(ctx.stage, move.seat, move.card, move.seat === mine ? originOf(move.card) : null));
+
+                if (next?.e === 'card')
+                {
+                    await ctx.stage.wait(TIMING.SEQ_GAP);
+                }
+
+                continue;
+            }
+
+            await down();
+
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            if (move.e === 'trick' && move.seat !== undefined)
+            {
+                await ctx.stage.wait(TIMING.SETTLE);
+                await take(move.seat, next, ctx);
+
+                continue;
+            }
+
+            if (move.e === 'hand')
+            {
+                await call(move, ctx);
+
+                continue;
+            }
+
+            if (move.e === 'finish')
+            {
+                if (withMe(move.side))
+                {
+                    sound?.play('win');
+                    haptic('win');
+                }
+
+                continue;
+            }
+
+            const had = heldAt(held);
+            const won = wonAt(held);
+
+            if (move.e === 'deal' && [...had, ...won].some((count) => count > 0))
+            {
+                ghost = !ctx.stage.quiet();
+                dealing = { counts: had, won, deck: held.seats === 2 ? null : held.dealer, stock: null };
+                await collect(had, won, ctx);
+
+                if (!ctx.live())
+                {
+                    return;
+                }
+            }
+
+            const leaving = move.e === 'deal'
+                ? { hakem: held.hakem, dealer: held.dealer, crown: spotOf(markOn(held.hakem)), hand: spotOf(markOn(held.dealer)), deck: spotOf(find('.hokm-deck')) }
+                : null;
+            const pile = pileOf(held, outOfStock);
+
+            held = step(held, move);
+
+            if (leaving !== null)
+            {
+                const packets = openingPackets(held.seats, held.hakem);
+
+                ghost = false;
+                seen = seen.round === held.round ? seen : { round: held.round, cards: new Set(), offer: null };
+                dealing = {
+                    counts: had.map(() => 0),
+                    won: null,
+                    deck: held.seats === 2 ? null : held.dealer,
+                    stock: held.stock === null ? null : held.stock + packets.reduce((sum, one) => sum + one.count, 0)
+                };
+                shown = held;
+                await pass(leaving, ctx.stage);
+                await dealOut(packets, true, ctx);
+            }
+            else if (move.e === 'trump')
+            {
+                const suit = suitNamed(move.suit ?? null);
+
+                if (suit !== null && (token === null || !token.pledged || token.suit !== suit))
+                {
+                    token = { suit, pledged: false };
+                    named = name(spotOf(markOn(held.hakem)), ctx.stage);
+                }
+
+                await named;
+
+                if (!ctx.live())
                 {
                     return;
                 }
 
-                fly(layer, cardNode(null, BACK_W), sized(start, BACK_W * 0.55, BACK_W * 0.55 * 288 / 204), box, {
-                    duration,
-                    easing: EASE.fly,
-                    toOpacity: 0,
-                    fadeFrom: 0.8
-                });
-            });
-        });
+                dealing = held.seats === 2 ? null : { counts: had, won: null, deck: held.dealer, stock: null };
+                shown = held;
+                token = null;
+                await ctx.stage.wait(TIMING.FADE);
+                await dealOut(restPackets(held.seats, held.full, held.hakem), false, ctx);
+            }
+            else if ((move.e === 'draw' || move.e === 'discard') && move.seat !== undefined)
+            {
+                dealing = { counts: had, won: null, deck: null, stock: pile };
+
+                if (move.e === 'draw')
+                {
+                    await drawCard(move.seat, ctx);
+                }
+                else
+                {
+                    await aside(move.seat, had[move.seat] - heldAt(held)[move.seat], ctx);
+                }
+
+                if (!ctx.live())
+                {
+                    return;
+                }
+
+                shown = held;
+            }
+            else
+            {
+                shown = held;
+            }
+
+            if (ctx.live())
+            {
+                dealing = null;
+            }
+        }
+
+        await down();
     };
 
-    const drawTo = (seat: number, duration: number) =>
+    const reset = (sight: Sight<Felt>) =>
     {
-        const stock = find('.hokm-stock-pile');
-        const start = stock === null || layer === null ? null : rectIn(layer, stock);
-        const hand = seat === props.match.mine ? find('.hokm-hand') : null;
-        const end = hand !== null && layer !== null ? rectIn(layer, hand) : seatRect(seat);
-        const box = end === null ? null : sized(end, BACK_W, BACK_W * 288 / 204);
-
-        sound?.play('card-slide', { pan: panOf(box) });
-
-        if (layer === null || start === null || box === null || quiet())
-        {
-            return;
-        }
-
-        fly(layer, cardNode(null, BACK_W), sized(start, BACK_W, BACK_W * 288 / 204), box, {
-            duration,
-            easing: EASE.fly,
-            toOpacity: 0,
-            fadeFrom: 0.8
-        });
+        layer?.replaceChildren();
+        origins.clear();
+        held = sight.view;
+        dealing = null;
+        ghost = false;
+        carried = { hakem: false, dealer: false };
+        token = null;
+        pledge = null;
+        pledged = null;
+        returning = false;
+        grip = null;
+        unhome();
+        seen = heldAt(held)[mine ?? -1] === 0 ? { round: view?.round ?? 0, cards: new Set(), offer: null } : shownAll(view);
+        shown = held;
+        lying = null;
+        landing = [];
+        banner = null;
+        lifted = null;
     };
 
-    const run = (beat: Beat) =>
+    const rest = () =>
     {
-        const spectator = props.match.mine === undefined;
+        result = over;
+        missed = missesOf(game.players);
+        seen = shownAll(view);
 
-        if (beat.kind === 'discard')
+        if (sending === null || !sending.gone)
         {
-            sound?.play('card-place', { gain: 0.5 });
-            return;
-        }
-
-        if (beat.kind === 'draw')
-        {
-            drawTo(beat.seat, beat.duration);
-            return;
-        }
-
-        if (beat.kind === 'card')
-        {
-            const held = shown ?? EMPTY;
-
-            shown = { cards: [...held.cards, { card: beat.card, seat: beat.seat }], took: held.took };
-            landing = [...landing, beat.card];
-            flyCard(beat.card, beat.seat, beat.duration);
-
-            if (quiet())
-            {
-                later(TIMING.FADE, () => landing = landing.filter((card) => card !== beat.card));
-            }
-
-            return;
-        }
-
-        if (beat.kind === 'land')
-        {
-            landing = landing.filter((card) => card !== beat.card);
-            sound?.play('card-place', { gain: 0.9 });
-            return;
-        }
-
-        if (beat.kind === 'took')
-        {
-            shown = { cards: (shown ?? EMPTY).cards, took: beat.seat };
-
-            if (beat.ours && !spectator)
-            {
-                sound?.play('trick');
-                haptic('select');
-            }
-
-            return;
-        }
-
-        if (beat.kind === 'gather')
-        {
-            gatherTo(beat.seat, beat.cards);
-            shown = EMPTY;
-            return;
-        }
-
-        if (beat.kind === 'trump')
-        {
-            sound?.play('trump');
-            sound?.play('card-place', { gain: 0.6 });
-            return;
-        }
-
-        if (beat.kind === 'deal')
-        {
-            dealTo(beat.from, beat.to, beat.gap, beat.duration, beat.shuffle);
-            return;
-        }
-
-        if (beat.kind === 'hand')
-        {
-            banner = { points: beat.points, kot: beat.kot, ours: beat.ours };
-            later(TIMING.BANNER, () => banner = null);
-
-            if (beat.kot)
-            {
-                sound?.play('win');
-            }
-            else if (beat.ours)
-            {
-                sound?.play('hand-won');
-            }
-
-            if (beat.ours && !spectator)
-            {
-                haptic(beat.kot ? 'kot' : 'hand');
-            }
-
-            return;
-        }
-
-        if (beat.kind === 'finish' && beat.won && !spectator)
-        {
-            sound?.play('win');
-            haptic('win');
+            held = viewFelt();
+            shown = held;
         }
     };
 
-    const predict = (card: number, seat: number) =>
+    const mend = () =>
     {
-        const table = viewFelt();
+        const sight = sightNow();
 
-        generation += 1;
-        sending = card;
-        shown = table;
-        settled = { cards: [...table.cards, { card, seat }], took: null };
-        busyUntil = runtime().clock.now() + TIMING.FLY;
-        run({ at: 0, kind: 'card', card, seat, duration: TIMING.FLY });
-        later(TIMING.FLY, () => run({ at: 0, kind: 'land', card, seat }));
-    };
-
-    const release = (round: number) =>
-    {
-        if (generation === round)
+        if (!over)
         {
-            shown = null;
-            landing = [];
-            settled = viewFelt();
-            busyUntil = 0;
+            result = false;
+        }
+
+        if (presenter?.presenting() === true)
+        {
+            return;
+        }
+
+        result = over;
+        missed = missesOf(game.players);
+
+        if (presenter !== null && sight !== null && !sameAs(held, sight.view))
+        {
+            reset(sight);
         }
     };
 
-    const hold = (round: number, tookAt: number) =>
+    const staging: Table<Felt, Told> = {
+        kind: 'hokm',
+        history: HISTORY,
+        before: (sight) => ({ ...sight, view: before(sight.view) }),
+        reset,
+        same: (sight) => sameAs(held, sight.view),
+        settle: reset,
+        play: (acts, _sight, ctx) => play(acts, ctx),
+        estimate: (acts) => spanOf(acts.flatMap((act) => act.moves), game.seats, mine ?? null)
+    };
+
+    const refuse = (id: string, card: number, rev: number) =>
     {
-        const gatherAt = tookAt + TIMING.HOLD;
+        const same = () => sent !== null && sent.id === id && sent.card === card && sent.rev === rev;
 
-        heldSince = tookAt;
-        busyUntil = gatherAt + gatherLength(settled.cards.length);
-        holding = runtime().clock.after(Math.max(0, gatherAt - runtime().clock.now()), () =>
+        origins.delete(card);
+
+        if (!same() || view?.hand.includes(card) !== true)
         {
-            const table = settled;
+            return;
+        }
 
-            holding = null;
-            heldSince = null;
+        presenter?.predict(null);
+        sound?.play('deny');
+        haptic('deny');
 
-            if (table.took === null)
+        if (sending?.gone !== true)
+        {
+            sent = null;
+            lifted = null;
+            sendHome(card);
+
+            return;
+        }
+
+        presenter?.act((ctx) =>
+        {
+            if (!same() || mine === undefined)
             {
                 return;
             }
 
-            const order = gatherOrder(table.cards, table.took);
+            const placed = find(`.hokm-trick[data-card="${ card }"]`);
+            const from = placed === null || layer === null ? null : rectIn(layer, placed);
+            const keyed = sent?.keyed === true;
 
-            run({ at: 0, kind: 'gather', seat: table.took, cards: order });
-            settled = EMPTY;
-            later(gatherLength(order.length) + 40, () => release(round));
+            sent = null;
+            held = unplay(held, mine, card);
+            shown = held;
+            homing = card;
+
+            const slot = find(`.card-hold[data-card="${ card }"] .card-face`);
+            const to = slot === null || layer === null ? null : rectIn(layer, slot);
+            const clone = cardNode(card, to?.width ?? BACK_W);
+            const home = () =>
+            {
+                unhome();
+
+                if (keyed)
+                {
+                    stand(card);
+                }
+            };
+
+            if (layer === null || from === null || to === null)
+            {
+                home();
+
+                return;
+            }
+
+            origins.set(card, to);
+            homeward = { clone, run: launch(ctx.stage, layer, clone, from, to, { duration: TIMING.FLY, easing: EASE.fly, fromRotate: tiltOf(card), landed: home }) };
         });
     };
 
-    const feed = (events: readonly MatchEvent[]) =>
-    {
-        const fresh = events.filter((one) => one.rev > lastRev && one.log.kind === 'hokm');
+    let named: Promise<void> = Promise.resolve();
 
-        if (fresh.length === 0)
-        {
-            return;
-        }
+    let homeward: { clone: HTMLElement; run: Run } | null = null;
 
-        const gap = fresh[0].rev !== lastRev + 1;
-        const now = runtime().clock.now();
-        const heard = fresh.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : [])) as HokmMove[];
-        const echo = sending === null ? -1 : heard.findIndex((move) => move.e === 'card' && move.card === sending);
-        const moves = echo < 0 ? heard : heard.filter((_, index) => index !== echo);
-        let start = Math.max(now, busyUntil);
-        let heldFor = 0;
-
-        lastRev = Math.max(lastRev, ...fresh.map((one) => one.rev));
-
-        if (holding !== null)
-        {
-            holding();
-            holding = null;
-            start = Math.max(now, heldSince ?? now);
-            heldFor = Math.max(0, now - (heldSince ?? now));
-            heldSince = null;
-        }
-
-        const behind = Math.max(0, start - now);
-
-        if (sending !== null && echo < 0)
-        {
-            jump();
-            return;
-        }
-
-        sending = null;
-
-        if (gap || behind > JUMP_OVER || overflows(fresh.length, moves) || layer === null
-            || (typeof document !== 'undefined' && document.visibilityState === 'hidden'))
-        {
-            jump();
-            return;
-        }
-
-        const plan = beatsOf(moves, settled, reader(), heldFor);
-        const timeline = behind > FAST_OVER ? scaled(plan, 0.5) : plan;
-        const round = generation + 1;
-
-        if (shown === null)
-        {
-            shown = settled;
-        }
-
-        generation = round;
-        settled = timeline.felt;
-        busyUntil = start + timeline.ends;
-
-        for (const beat of timeline.beats)
-        {
-            later(start + beat.at - now, () => run(beat));
-        }
-
-        if (timeline.held !== null)
-        {
-            hold(round, start + timeline.held);
-            return;
-        }
-
-        later(busyUntil - now + 40, () => release(round));
-    };
+    let uncap: () => void = () => undefined;
 
     effect
     {
-        const id = props.match.id;
+        const hidden = capped;
 
         untrack(() =>
         {
-            if (id === matchId)
-            {
-                return;
-            }
+            uncap();
+            uncap = hidden ? runtime().clock.after(view?.phase === 'trump' ? DEALT_CAP : REST_CAP, () => seen = shownAll(view)) : () => undefined;
+        });
+    }
 
-            matchId = id;
-            jump();
-            lastRev = props.match.rev;
-            heardSeq = board.events().seq;
-            wasActing = acting;
+    let unhurry: () => void = () => undefined;
+
+    effect
+    {
+        const left = spare;
+
+        untrack(() =>
+        {
+            const all = () =>
+            {
+                seen = shownAll(view);
+            };
+
+            unhurry();
+            unhurry = () => undefined;
+
+            if (left !== undefined && left < HURRY_MS)
+            {
+                all();
+            }
+            else if (left !== undefined)
+            {
+                unhurry = runtime().clock.after(left - HURRY_MS, all);
+            }
         });
     }
 
     effect
     {
-        const batch = board.events();
+        const mirrored = fresh;
+        const on = current;
 
         untrack(() =>
         {
-            if (batch.seq <= heardSeq)
+            if (on)
             {
-                return;
+                stale = mirrored;
             }
+        });
+    }
 
-            heardSeq = batch.seq;
-            feed(batch.events);
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            mend();
         });
     }
 
@@ -1020,7 +2268,30 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     mount
     {
+        let unwatch: () => void = () => undefined;
+
         sound = createSound(untrack(() => settings.settings().sound));
+
+        if (layer !== null)
+        {
+            const clock = runtime().clock;
+            const report = (error: unknown) => console.error(error);
+            rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: staging, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
+            presenter.frame(arena);
+            unwatch = presenter.watch((busy) =>
+            {
+                presenting = busy;
+                props.onPresenting?.(busy);
+
+                if (!busy)
+                {
+                    untrack(rest);
+                }
+            });
+
+            untrack(() => presenter!.see(props.events));
+        }
 
         void document.fonts?.ready.then(judgeSoon);
 
@@ -1053,31 +2324,49 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 cancelAnimationFrame(judging);
             }
 
-            stopAll();
+            unwatch();
+            props.onPresenting?.(false);
+            presenter?.dispose();
+            presenter = null;
+            rig = null;
+            steady();
+            uncap();
+            unhurry();
             sound?.dispose();
             sound = null;
         };
     }
 
-    <div data-rev={ props.match.rev } data-felt={ cramped ? 'cramped' : undefined } class="table-stage hokm-stage" ref={ (element) => arena = element }>
-        <div class="table-grid">
-            <Show when={ view !== null }>
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } data-felt={ cramped ? 'cramped' : undefined } class="table-stage hokm-stage" ref={ (element) => arena = element }>
+        <div class="table-grid hokm-grid">
+            <Show when={ dealt }>
                 { () =>
                     <div class="table-fit">
                         <div class="table-surface hokm-table">
+                            <div class="hokm-medal" data-set={ trump === null ? undefined : 'true' } aria-hidden="true">
+                                <Show when={ trump } let={ suit } fallback={ <Icon name="crest-crown" size={ 20 } class="text-gold" /> }>
+                                    <Icon name={ SUIT_ICON[suit] } size={ 20 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                </Show>
+                            </div>
+
+                            <Show when={ token } let={ call }>
+                                <span class="hokm-token" data-suit={ call.suit } aria-hidden="true">
+                                    <Icon name={ SUIT_ICON[call.suit] } size={ 20 } class={ RED_SUITS.includes(call.suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                </span>
+                            </Show>
+
                             <div class="hokm-felt-info" aria-hidden="true">
                                 <span class="hokm-chip">
                                     <Show
-                                        when={ view?.trump !== undefined }
+                                        when={ trump }
+                                        let={ suit }
                                         fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                     >
-                                        { () =>
-                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                            </span>
-                                        }
+                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                            <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                        </span>
                                     </Show>
-                                    <span>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
+                                    <span>{ locale.t('hokm.round', { n: locale.n(felt.round) }) }</span>
                                 </span>
                                 <span class="hokm-chip">
                                     <For each={ sides } key={ (side) => side.index } let={ side }>
@@ -1090,84 +2379,77 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 </span>
                             </div>
 
-                            <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
-                                <div class="hokm-seat" data-side={ plate.side } data-seat={ plate.row.seat }>
-                                    <TablePlate
-                                        who={ whoAt(plate.row.seat) }
-                                        name={ nameOf(plate.row.seat) }
-                                        turn={ !over && plate.row.seat === view!.turn }
+                            <For each={ seated } key={ (seat) => seat } let={ seat }>
+                                <div class="hokm-seat" data-side={ plateAt(seat).side } data-seat={ seat }>
+                                    <HokmSeat
+                                        side={ plateAt(seat).side }
+                                        who={ whoAt(seat) }
+                                        name={ nameOf(seat) }
+                                        turn={ seat === turnAt }
+                                        yours={ seat === mine }
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
-                                        dim={ plate.row.out }
-                                        team={ teamOf(plate.row) }
-                                        tag={ tagOf(plate.row.seat)?.text }
-                                        tone={ tagOf(plate.row.seat)?.tone }
-                                        bubble={ props.speech?.[whoAt(plate.row.seat)] }
-                                        below={ plate.side !== 'bottom' }
-                                        anchor={ plate.side.endsWith('right') ? 'end' : (plate.side.endsWith('left') ? 'start' : 'centre') }
-                                        marker={ plate.mark === 'hakem'
-                                            ? <Icon name="crest-crown" size={ 14 } class="text-gold" />
-                                            : (plate.mark === 'dealer'
-                                                ? <span class="hokm-dealer flex h-3.5 w-3.5 items-center justify-center rounded-full bg-text text-bright-ink shadow-1" title={ locale.t('hokm.dealer') }><Icon name="hand" size={ 10 } /></span>
-                                                : undefined) }
-                                        facts={
-                                            <span class="contents">
-                                                <span class="flex items-center gap-0.5" aria-hidden="true">
-                                                    <Icon name="trophy" size={ 11 } class={ SIDE_TONE[plate.row.side % SIDE_TONE.length] } />
-                                                    <span class="tally">{ locale.n(plate.row.tricks) }</span>
-                                                </span>
-                                                <span class="flex items-center gap-0.5" aria-hidden="true">
-                                                    <Icon name="cards" size={ 11 } />
-                                                    <span class="tally">{ locale.n(plate.row.held) }</span>
-                                                </span>
-                                                <span class="sr-only">{ locale.plural('hokm.tricks', plate.row.tricks) }, { locale.plural('hokm.held', plate.row.held) }{ plate.mark === 'dealer' ? `, ${ locale.t('hokm.dealer') }` : '' }</span>
-                                            </span>
-                                        }
+                                        out={ plateAt(seat).row.out }
+                                        team={ teamOf(plateAt(seat).row) }
+                                        tag={ tagOf(seat)?.text }
+                                        tone={ tagOf(seat)?.tone }
+                                        bubble={ props.speech?.[whoAt(seat)] }
+                                        mark={ plateAt(seat).mark }
+                                        colour={ plateAt(seat).row.side }
+                                        tricks={ plateAt(seat).row.tricks }
+                                        held={ plateAt(seat).row.held }
+                                        backs={ plateAt(seat).backs }
                                     />
-                                    <Show when={ plate.backs.length > 0 }>
-                                        { () =>
-                                            <span class="hokm-pile" style={ `--n: ${ plate.backs.length }` } aria-hidden="true">
-                                                <For each={ plate.backs } key={ (back) => back } let={ back }>
-                                                    <span class="card-back" style={ `--i: ${ back }` }></span>
-                                                </For>
-                                            </span>
-                                        }
-                                    </Show>
                                 </div>
                             </For>
 
-                            <Show when={ view?.stock !== undefined }>
+                            <Show when={ decked }>
                                 { () =>
-                                    <div class="hokm-stock" aria-hidden="true">
-                                        <span class="hokm-stock-pile">
-                                            <For each={ [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0)) } key={ (back) => back } let={ back }>
+                                    <span class="hokm-deck" data-ghost={ ghost ? 'true' : undefined } style={ `--dx: ${ deckReach[0] }; --dy: ${ deckReach[1] }` } aria-hidden="true">
+                                        <span class="card-back" style="--i: 0"></span>
+                                        <span class="card-back" style="--i: 1"></span>
+                                        <span class="card-back" style="--i: 2"></span>
+                                    </span>
+                                }
+                            </Show>
+
+                            <Show when={ piled }>
+                                { () =>
+                                    <div class="hokm-stock" data-live={ stockLive ? 'true' : undefined } data-ghost={ ghost ? 'true' : undefined }>
+                                        <span class="hokm-stock-pile" aria-hidden="true">
+                                            <For each={ stockBacks } key={ (back) => back } let={ back }>
                                                 <span class="card-back" style={ `--i: ${ back }` }></span>
                                             </For>
                                         </span>
-                                        <span class="hokm-chip hokm-stock-count"><span class="tally">{ locale.n(view?.stock ?? 0) }</span></span>
+                                        <span class="hokm-chip hokm-stock-count" data-idle={ counted ? undefined : 'true' } aria-hidden="true"><span class="tally">{ locale.n(stockLeft ?? 0) }</span></span>
+                                        <Show when={ discarding }>
+                                            { () =>
+                                                <span class="hokm-stock-due" data-full={ putting ? 'true' : undefined } aria-hidden="true">
+                                                    <span class="tally">{ locale.n(picks.length) }/{ locale.n(due) }</span>
+                                                </span>
+                                            }
+                                        </Show>
+                                        <Show when={ stockLive }>
+                                            { () =>
+                                                <button
+                                                    type="button"
+                                                    class="hokm-stock-press"
+                                                    aria-label={ drawing ? locale.t('hokm.draw.next') : locale.t('hokm.discard.put', { count: locale.n(due) }) }
+                                                    disabled={ board.busy() }
+                                                    onClick={ pressStock }
+                                                ></button>
+                                            }
+                                        </Show>
                                     </div>
                                 }
                             </Show>
 
-                            <Show when={ laid.cards.length === 0 && !over && !choosing && !drawing }>
+                            <Show when={ piled }>
                                 { () =>
-                                    <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
-                                        <Icon name="crest-crown" size={ 18 } class="hokm-crest text-gold" />
-                                        <span class="hokm-crest font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
-                                        <span class="text-ui-2xs font-semibold text-gold">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
-                                        <Show when={ needed !== undefined } fallback={ <span class="hokm-needed text-balance text-ui-2xs">{ locale.t('hokm.needed.triple') }</span> }>
-                                            { () => <span class="hokm-needed text-balance text-ui-2xs"><span class="tally">{ locale.n(needed!) }</span> { locale.plural('hokm.needed', needed!) }</span> }
-                                        </Show>
-                                        <Show when={ view?.trump !== undefined }>
-                                            { () =>
-                                                <span class="flex items-center gap-1 text-ui-2xs">
-                                                    <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger' : 'text-white' } />
-                                                    <span>{ locale.t(`hokm.suit.${ view!.trump! }` as never) }</span>
-                                                </span>
-                                            }
-                                        </Show>
-                                        <span class="text-ui-2xs font-semibold text-white">{ says }</span>
-                                    </div>
+                                    <span class="contents" aria-hidden="true">
+                                        <span class="hokm-lift"></span>
+                                        <span class="hokm-down"></span>
+                                    </span>
                                 }
                             </Show>
 
@@ -1175,19 +2457,19 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 { () =>
                                     <div class="hokm-choose" dir={ locale.dir() }>
                                         <p class="hokm-choose-title">{ locale.t('hokm.trump.choose') }</p>
-                                        <ul class="grid grid-cols-2 gap-2">
+                                        <ul class="hokm-choose-suits">
                                             <For each={ [...SUITS] } key={ (suit) => suit } let={ suit }>
                                                 <li class="flex min-w-0">
                                                     <button
                                                         type="button"
                                                         class="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-tile border border-white/15 bg-void/85 px-2 text-ui-sm font-semibold text-text shadow-2 transition hover:border-accent hover:bg-lifted disabled:cursor-not-allowed disabled:opacity-50"
                                                         disabled={ board.busy() }
-                                                        onClick={ () => void callTrump(suit) }
+                                                        onClick={ (event: MouseEvent) => void callTrump(suit, event) }
                                                     >
-                                                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text">
+                                                        <span class="hokm-choose-suit flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text" data-suit={ suit }>
                                                             <Icon name={ SUIT_ICON[suit] } size={ 16 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
                                                         </span>
-                                                        <span class="truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
+                                                        <span class="hokm-choose-name truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
                                                     </button>
                                                 </li>
                                             </For>
@@ -1197,18 +2479,19 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                             </Show>
 
                             <Show when={ offered } let={ drawn }>
-                                <div class="hokm-choose hokm-draw" dir={ locale.dir() }>
-                                    <p class="hokm-choose-title">{ locale.t('hokm.draw.title') }</p>
-                                    <span class="hokm-draw-card"><CardFace card={ drawn.card } /></span>
-                                    <div class="flex flex-col gap-2">
-                                        <Button variant="primary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('keep') }>
-                                            { locale.t('hokm.draw.keep', { card: cardSays(drawn.card) }) }
-                                        </Button>
-                                        <Button variant="secondary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('reject') }>
-                                            { locale.t('hokm.draw.next') }
-                                        </Button>
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    class="hokm-offer"
+                                    aria-label={ locale.t('hokm.draw.keep', { card: cardSays(drawn.card) }) }
+                                    disabled={ board.busy() || !drawing }
+                                    onClick={ (event: MouseEvent) => void draw('keep', event.detail === 0) }
+                                >
+                                    <CardFace card={ drawn.card } />
+                                </button>
+                            </Show>
+
+                            <Show when={ glimpsed } let={ seen }>
+                                <span class="hokm-glimpse" aria-hidden="true"><CardFace card={ seen.card } /></span>
                             </Show>
 
                             <For each={ laid.cards } key={ (one) => one.card } let={ one }>
@@ -1217,34 +2500,30 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                     data-card={ one.card }
                                     data-landing={ landing.includes(one.card) ? 'true' : undefined }
                                     data-took={ one.seat === laid.took ? 'true' : 'false' }
-                                    style={ `--dx: ${ REACH[one.side][0] }; --dy: ${ REACH[one.side][1] }; --tilt: ${ ((one.card * 37) % 11) - 5 }deg` }
+                                    style={ `--dx: ${ REACH[one.side][0] }; --dy: ${ REACH[one.side][1] }; --tilt: ${ tiltOf(one.card) }deg` }
                                     aria-hidden="true"
                                 >
                                     <CardFace card={ one.card } />
                                 </div>
                             </For>
 
-                            <Show when={ view?.took !== undefined }>
-                                { () =>
-                                    <div class="hokm-last-tile" aria-hidden="true">
-                                        <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
-                                        <ul class="hokm-last">
-                                            <For each={ view!.took!.cards } key={ (card) => card } let={ card }>
-                                                <li><CardFace card={ card } /></li>
-                                            </For>
-                                        </ul>
-                                    </div>
-                                }
+                            <Show when={ last } let={ taken }>
+                                <div class="hokm-last-tile" aria-hidden="true">
+                                    <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
+                                    <ul class="hokm-last">
+                                        <For each={ taken.cards } key={ (card) => card } let={ card }>
+                                            <li><CardFace card={ card } /></li>
+                                        </For>
+                                    </ul>
+                                </div>
                             </Show>
 
-                            <Show when={ banner !== null }>
-                                { () =>
-                                    <div class="hokm-banner" data-kot={ banner!.kot ? 'true' : 'false' } data-ours={ banner!.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
-                                        <Show when={ banner!.kot } fallback={ <span class="tally">+{ locale.n(banner!.points) }</span> }>
-                                            { () => <span>{ locale.t('hokm.kot') }</span> }
-                                        </Show>
-                                    </div>
-                                }
+                            <Show when={ banner } let={ called }>
+                                <div class="hokm-banner" data-kot={ called.kot ? 'true' : 'false' } data-ours={ called.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
+                                    <Show when={ called.kot } fallback={ <span class="tally">+{ locale.n(called.points) }</span> }>
+                                        { () => <span>{ locale.t('hokm.kot') }</span> }
+                                    </Show>
+                                </div>
                             </Show>
 
                             <ul class="sr-only">
@@ -1256,15 +2535,15 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                             <aside class="hokm-side sr-only" aria-label={ locale.t('hokm.summary') }>
                                 <section>
                                     <h3>{ locale.t('hokm.trump') }</h3>
-                                    <p>{ view?.trump === undefined ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ view!.trump! }` as never) }</p>
-                                    <p>{ view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</p>
-                                    <Show when={ view?.stock !== undefined }>
-                                        { () => <p>{ locale.plural('hokm.stock', view?.stock ?? 0) }</p> }
+                                    <p>{ trump === null ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ trump }` as never) }</p>
+                                    <p>{ felt.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(felt.hakem) }) }</p>
+                                    <Show when={ stocked }>
+                                        { () => <p>{ locale.plural('hokm.stock', stockLeft ?? 0) }</p> }
                                     </Show>
                                 </section>
                                 <section>
                                     <h3>{ locale.t('hokm.score') }</h3>
-                                    <p>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</p>
+                                    <p>{ locale.t('hokm.round', { n: locale.n(felt.round) }) }</p>
                                     <Show when={ needed !== undefined } fallback={ <p>{ locale.t('hokm.needed.triple') }</p> }>
                                         { () => <p>{ locale.n(needed!) } { locale.plural('hokm.needed', needed!) }</p> }
                                     </Show>
@@ -1282,7 +2561,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 </section>
                                 <section>
                                     <h3>{ locale.t('hokm.lastTrick') }</h3>
-                                    <p>{ view?.took === undefined ? locale.t('hokm.lastTrick.none') : locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
+                                    <p>{ last === null ? locale.t('hokm.lastTrick.none') : locale.t('hokm.table.took', { name: nameOf(last.seat) }) }</p>
                                 </section>
                             </aside>
                         </div>
@@ -1290,135 +2569,88 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 }
             </Show>
 
-            <Show when={ view !== null && !over && rows.length > 0 }>
+            <Show when={ footed }>
                 { () =>
-                    <div class="table-hand hokm-hands" style={ `--rows: ${ rows.length }` }>
-                        <For each={ rows } key={ (_, index) => index } let={ row }>
-                            <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
-                                <For each={ row } key={ (card) => card } let={ card } index={ index }>
-                                    <li style={ fan(index, row.length) }>
-                                        <button
-                                            type="button"
-                                            class="card-hold"
-                                            data-card={ card }
-                                            data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
-                                            data-picked={ chosen === card || picks.includes(card) ? 'true' : undefined }
-                                            disabled={ discarding ? board.busy() : (!legal.has(card) || board.busy()) }
-                                            aria-label={ discarding ? cardSays(card) : cardLabel(card) }
-                                            aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
-                                            onClick={ () => (discarding ? toggleAway(card) : touchCard(card)) }
-                                            onPointerEnter={ (event) => (event.pointerType === 'mouse' ? aim(card) : undefined) }
-                                            onPointerLeave={ () => unaim(card) }
-                                            onFocus={ () => aim(card) }
-                                            onBlur={ () => unaim(card) }
-                                        >
-                                            <CardFace card={ card } />
-                                        </button>
-                                    </li>
-                                </For>
-                            </ul>
-                        </For>
-                    </div>
-                }
-            </Show>
-
-            <Show when={ view !== null && !over }>
-                { () =>
-                    <section class="table-bar hokm-play">
-                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                            <p class="min-w-0 flex-[1_1_6.5rem] truncate text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
-                            <span class="hokm-bar-facts" aria-hidden="true">
-                                <span class="hokm-chip">
+                    <div class="table-hand hokm-foot" data-tools={ mine !== undefined ? 'true' : undefined }>
+                        <section class="table-bar hokm-rail">
+                            <p class="sr-only" aria-live="polite">{ says }</p>
+                            <Show when={ following }>
+                                { () => <p class="sr-only">{ locale.t('hokm.follow') }</p> }
+                            </Show>
+                            <Show when={ glimpsed } let={ seen }>
+                                <p class="sr-only">{ locale.t('hokm.draw.glimpse', { card: cardSays(seen.card) }) }</p>
+                            </Show>
+                            <span class="hokm-rail-end">
+                                <Show when={ sortable }>
+                                    { () => <IconButton icon="sort" label={ locale.t('hokm.sort') } variant="secondary" pressed={ sorted } class="hokm-sort" onClick={ resort } /> }
+                                </Show>
+                                <span class="hokm-chip hokm-bar-trump" aria-hidden="true">
                                     <Show
-                                        when={ view?.trump !== undefined }
+                                        when={ trump }
+                                        let={ suit }
                                         fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
                                     >
-                                        { () =>
-                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                            </span>
-                                        }
+                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                            <Icon name={ SUIT_ICON[suit] } size={ 12 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                        </span>
                                     </Show>
+                                </span>
+                            </span>
+                            <span class="hokm-rail-end">
+                                <span class="hokm-chip hokm-bar-score" aria-hidden="true">
                                     <For each={ sides } key={ (side) => side.index } let={ side }>
                                         <span class="flex items-center gap-1">
                                             <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
                                             <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
                                         </span>
                                     </For>
-                                    <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
+                                </span>
+                                <span class="contents" dir={ locale.dir() }>
+                                    <CoachLine tip={ tip } lamp />
                                 </span>
                             </span>
-                            <Show when={ filling }>
-                                { () =>
-                                    <span class="hokm-chip hokm-filled">
-                                        <span class="tally" aria-hidden="true">{ locale.n(view?.hand.length ?? 0) }/{ locale.n(view?.full ?? 0) }</span>
-                                        <span class="sr-only">{ locale.t('hokm.filled', { held: locale.n(view?.hand.length ?? 0), full: locale.n(view?.full ?? 0) }) }</span>
-                                    </span>
-                                }
-                            </Show>
-                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } />
-                            <Show when={ (view?.hand.length ?? 0) > 1 }>
-                                { () =>
-                                    <Button variant="secondary" size="sm" leading="sort" pressed={ sorted } onClick={ () => sorted = !sorted }>
-                                        { locale.t('hokm.sort') }
-                                    </Button>
-                                }
-                            </Show>
-                        </div>
-
-                        <Show when={ mine !== undefined }>
+                        </section>
+                        <Show when={ handed }>
                             { () =>
-                                <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1">
-                                    <Show when={ discarding }>
-                                        { () =>
-                                            <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
-                                                <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } disabled={ picks.length !== due } onClick={ () => void putDown() }>
-                                                    { locale.t('hokm.discard.put', { count: locale.n(due) }) }
-                                                </Button>
-                                            </span>
-                                        }
-                                    </Show>
-                                    <Show when={ glimpsed } let={ seen }>
-                                        <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.draw.glimpse', { card: cardSays(seen.card) }) }</p>
-                                    </Show>
-                                    <Show when={ chosen !== null }>
-                                        { () =>
-                                            <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
-                                                <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } label={ cardLabel(chosen!) } onClick={ () => void playCard(chosen!) }>
-                                                    { locale.t('hokm.play', { card: cardSays(chosen!) }) }
-                                                </Button>
-                                            </span>
-                                        }
-                                    </Show>
-                                    <Show when={ hints.hintOutcome && myTurn }>
-                                        { () => <p class="hokm-outcome min-h-5 text-center text-ui-xs font-semibold text-text" aria-hidden="true">{ outcome ?? '' }</p> }
-                                    </Show>
-                                    <Show when={ chosen === null }>
-                                        { () =>
-                                            <span class="contents">
-                                                <CoachLine tip={ tip } />
-                                                <Show when={ myTurn && device.coarse() }>
-                                                    { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.pick') }</p> }
-                                                </Show>
-                                                <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) && !(hints.hintRules && tip !== null) }>
-                                                    { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.follow') }</p> }
-                                                </Show>
-                                            </span>
-                                        }
-                                    </Show>
+                                <div class="hokm-hands" data-sliding={ sliding ? 'true' : undefined } style={ `--rows: ${ roomy }` }>
+                                <For each={ rows } key={ (_, index) => index } let={ row }>
+                                    <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
+                                        <For each={ row } key={ (card) => card } let={ card } index={ index }>
+                                            <li style={ fan(index, row.length) } data-dealt={ current && unseen.has(card) ? 'false' : undefined } data-back={ homing === card ? 'true' : undefined }>
+                                                <button
+                                                    type="button"
+                                                    class="card-hold"
+                                                    data-card={ card }
+                                                    data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
+                                                    data-picked={ chosen === card || picks.includes(card) || lifted?.card === card ? 'true' : undefined }
+                                                    data-go={ chosen === card ? 'true' : undefined }
+                                                    tabindex={ stop === card ? 0 : -1 }
+                                                    aria-disabled={ board.busy() || (!discarding && !legal.has(card)) ? 'true' : undefined }
+                                                    aria-label={ discarding ? cardSays(card) : cardLabel(card) }
+                                                    aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
+                                                    onFocus={ () => kept = card }
+                                                    onKeyDown={ (event: KeyboardEvent) => walk(event, card) }
+                                                    onPointerDown={ (event: PointerEvent) => hold(event, card) }
+                                                    onPointerMove={ drag }
+                                                    onPointerUp={ letGo }
+                                                    onPointerCancel={ letGo }
+                                                    onClick={ (event: MouseEvent) => press(event, card) }
+                                                >
+                                                    <CardFace card={ card } />
+                                                </button>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </For>
                                 </div>
                             }
                         </Show>
-                    </section>
+                    </div>
                 }
             </Show>
         </div>
 
-        <Show when={ over }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
 
         <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>

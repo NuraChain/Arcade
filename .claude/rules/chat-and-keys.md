@@ -35,6 +35,15 @@ meant one person pinning a thread pinned it for everybody in it. Unread is a cou
 after my own watermark - which is also the only way to count them once the bodies are sealed and
 the server cannot read one.
 
+**A line that lands in the thread on screen is read.** The chat page moved the watermark once, when
+the thread opened, so a reply that arrived while the reader was looking at it stayed unread: its row
+and the Chats tab said 1 for as long as the thread stayed open. The clean production run found it
+between two brand-new wallets. The page marks the thread again whenever the newest line from
+somebody else changes, while the page is seen (`visibilityState`) and scrolled to its newest line
+(`near`), and only once the thread has answered, so opening one is still one read. `markRead` holds
+nothing back: it dropped any mark within a second of the last, which is exactly when a quick reply
+comes. `chat-page.spec.ts` (*a line that arrives in the thread on screen*) holds it.
+
 **A message is words XOR a line.** `body` for what somebody typed, `payload` `{ key, params }` for
 the three kinds the server authors, and a CHECK constraint so a row can never be both or neither.
 The browser renders a line through `lib/lines.ts`, which declares the keys it knows; an unknown
@@ -74,6 +83,30 @@ address bar into a server error. `membership()` checks the shape before the quer
 **A block hides the thread, not just the person.** The membership row stays - unblocking has to
 give the conversation back - so the list and every read filter on the block instead.
 
+**At a table that is the table's chat, for both of them, while the game goes on - and the chat
+says so.** Somebody can be blocked from their plate, so this is one press away. `table-chat` drew
+a refused read as "No messages yet" over a composer that could not send, which is the empty list
+a refused fetch must never be. It has two states for it now (`data-unread`), and nothing to say
+into in either.
+
+- `apart`: the READER has blocked somebody sitting there, which the browser knows without
+  asking. The chat says that, and that it is hidden from both while the block stands. The thread
+  is closed, so nothing asks the server for it: opening such a table used to log five 404s.
+- It comes back when the SERVER has lifted the block. `social.apart(id)` is true while the guess
+  or the server's last word says blocked: a block shows at once, and a lift shows when it is
+  true. `isBlocked` follows the guess alone, and with it the chat was asked for in the same turn
+  as the unblock was sent, ahead of it, and refused twice. A lift the server refuses never shows
+  the chat at all.
+- `lost`: the read was refused for any other reason. It says the conversation could not be loaded
+  and offers to try again, which is all the OTHER side of a block is told: the reason is not
+  theirs to learn, and a 404 is no more of an oracle with a sentence over it. What had been read
+  stays when a later read fails.
+
+The one read that goes out in the flush that makes the guess of a block is sent before the block
+itself is, so it is answered. `table-chat.spec.ts` and `social.spec.ts` hold all of it, in both
+languages. The chat spec's fixtures used to mount the chat on rooms the fake server refuses to
+read and never noticed; `shown()` gives the server the room now.
+
 **Nothing invents a message any more.** The store used to run an ambient timer that wrote lines
 from people who were not there, and a per-send timer that typed a reply back; both are deleted.
 Until the realtime work lands, the only thing that produces a message is somebody sending one, and
@@ -89,6 +122,15 @@ is ABSENT and the caller renders the handle.
 Two rules make that store safe to read anywhere. It only ever holds what the server sent - nothing
 is derived or defaulted - and `byHandle` never fetches, so it is safe inside a `derived`; asking is
 a separate `want()` the owning store calls once its own list has landed.
+
+`want` answers with a promise that settles once everybody it named has been answered or refused,
+and never rejects. Most callers drop it (`void people.want(...)`): their screen redraws when the
+name lands. The one that waits is whatever says a name ONCE - a toast and a system notice are not
+redrawn (`named` in the cues store). A handle is asked about once: a second asker while the request
+is out waits on the same answer, and somebody the server would not describe is not asked about
+again. A REFUSED request forgets its handles, so the next mention asks again: a refusal is not an
+answer, and before this one failed request left a person a bare handle until the page was reloaded.
+`app-stores.spec.ts` (*people nobody has described yet*) holds each of those.
 
 The chat view types moved to `data/chat.ts`, which is where they always belonged: they are the
 client's view of a `ConversationSummary` and a `ChatMessage`, not fixture shapes. `Message.text` is
@@ -162,6 +204,17 @@ opened for, and search terms move to `lib/search-terms.ts` so they are dropped o
 A search term against a sealed conversation is a fragment of what was said in it, and it was the one
 thing this product wrote down in cleartext.
 
+**A read that outlives its account keeps nothing.** `forgetArchive()` empties the archive and the
+cache of opened messages, and a read that was still on its way when it was called carried on and
+wrote what it opened into both, after they had been emptied. A source counts its resets (`age`), a
+read notes the count when it begins, and neither `remember` nor the cache keeps anything for a read
+whose count has moved. A browser never showed it, because the tab is loaded afresh a moment later.
+The suite did: one spec's thread landed in the list of the next whenever the machine was busy, the
+row then carried the author its signature names over a time the next spec had written, and
+`cues.spec.ts` failed about three shuffled runs in ten on a seed that puts a spec that opens a room
+two before one that re-dates that room's last line. `sealing.spec.ts` holds it without a race: a
+read is begun, the archive is forgotten in the same turn, and the read is awaited.
+
 **The archive filters expiry on the way OUT, not only on the way in.** A message that runs out while
 it is being held is never read again — the server stops returning it — so nothing ever comes back to
 evict it, and it stayed findable by its words for as long as the tab was open. The eviction that
@@ -169,7 +222,11 @@ looked like the fix was unreachable in the normal path.
 
 **Search says what it covers, because a person who finds nothing concludes it is not there.**
 `search.thisDevice` states the scope where somebody starts a search, and `search.locked` counts the
-messages this browser holds but could not open. "It is not there" and "it is not here" are very
+messages this browser holds but could not open. The one thing the box ever sends to the server is
+a PERSON's name, and only once the reader has chosen People or begun with @: a search of everything
+stays in this browser, because what is typed there may be the words of a message.
+`search.peopleElsewhere` says so on the page at that moment, and a search of everything offers
+"look among everybody" rather than doing it. "It is not there" and "it is not here" are very
 different answers when the thing being looked for is something somebody remembers reading. A locked
 message is also excluded from the results outright: its `text` is empty but its `from` is not, so it
 would otherwise match on the sender's handle and render an empty row that reads as a bug.
@@ -349,7 +406,11 @@ session opens, the SAME verified proof records the device through `device.enrol`
 live, attested by the wallet that signed, and the session bound - but only when `namesDevice` holds
 and the proof's address is the account's wallet, so a sign-in that named no device is never stored
 as an attestation. A `ConflictError` there (keys revoked, or somebody else's) does not fail the
-sign-in; the browser falls back to the separate enrolment, which mints fresh keys. The standalone
+sign-in; the browser falls back to the separate enrolment, which mints fresh keys. It rarely gets
+there: when the message the server issues names the keys this browser already held, those keys
+are not a live device of this account, so the browser makes fresh ones and asks for the message
+again, and the one signature adds them. A browser whose keys are this account's is asked for the
+short text and keeps them. The standalone
 enrolment route stays for a signed-in browser that lost its keys, with its own sentence (`Let this
 browser read and send your messages on Nura Games (<site>).`).
 
@@ -666,6 +727,23 @@ are the sender's `clientAt`, also in the AAD, not `created_at`, which the server
 rewrite. The envelope's stated guarantees are only true if the read path actually looks at the
 authenticated values, and for four commits it did not.
 
+**What was opened once is believed only for the row it was opened from.** The reader keeps what it
+has opened so that a list or a thread read again costs nothing, and it kept it by `(id, signature)`.
+But `asMessage` takes the time, the last moment and the room from the ROW, so for any message this
+tab had already opened a server could serve it re-dated (the cue announced it as just sent), give a
+disappearing one longer (it stayed readable past the moment its sender signed), or serve it in
+another room (it was shown as said there), and none of it was asked about again. Those are exactly
+what binding `clientAt`, `expiresAt` and `conversationId` into the AAD is for. The key is now every
+field the signature covers (`sealedAs`), so a row that differs in any of them is opened afresh and
+refused, as one that had never been opened always was. Found by reading, on the way to a spec that
+failed three shuffled runs in ten; `sealing.spec.ts` holds every field, one at a time.
+
+**A room's last line is one of its own.** The list reads a room's last line from the row the server
+sends for that room, and nothing asked whether the line was that room's. A line this tab had opened
+in one room could be served as the last line of another and was read there from what had been
+opened: byte for byte what its sender signed, so no field of it differs, in a place its sender never
+put it. `openHeld` refuses a row whose line names another room as `tampered`.
+
 **`sessions.device_id` is written by a first enrolment and never moved again.** Re-enrolling used to
 rebind it, and everything that branch checks is satisfied by PUBLIC data — the id is a hash of two
 published keys, and `GET /devices` hands every device's keys to any session on the account — so any
@@ -805,6 +883,14 @@ conditional UPDATE, so two replays of one signature race in the database and one
 verifies and decrypts nothing, and the wrapped archive key and its check value are sealed under a
 phrase that has never been here. Holding the whole table gets an attacker no closer to a message
 than holding none of it.
+
+**Nothing compares the check value.** It was made so a wrong phrase and a corrupt archive would
+not be the same message, and the server's verdict on the phrase's signature already keeps them
+apart: refused, the phrase is wrong; accepted and the archive will not open, the archive is.
+`checkValueOf` is still written with every vault and served with its state, and `phraseMatches`
+is called only by `recovery.spec.ts`, where it proves the wrapping key comes out the same twice.
+Dropping the column is a change to a database another working tree shares, so it waits for the
+owner (`docs/superpowers/specs/2026-10-14-repository-audit.md`).
 
 **Writing a vault needs a live device of the account on the session**, so a stolen cookie alone
 cannot replace somebody's phrase.
@@ -953,12 +1039,15 @@ is the same defect `nura-e2ee/v1` calls out for chat lines and the same fix.
 `(user_id, dedupe_key)` and the write is an upsert that bumps `count`, moves `created_at` to
 now and clears `read_at`. Twelve messages in one conversation are ONE row saying twelve, not
 twelve rows to swipe away. The producer composes the key — `chat:<conversationId>`,
-`friend:<actorId>`, `group:<groupId>`, `table:<tableId>` — and choosing it is the only
-interesting decision in writing one.
+`friend:<actorId>`, `group:<groupId>`, `table:<tableId>`, `removed:<tableId>` — and choosing it is
+the only interesting decision in writing one.
 
-**Six kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
-`friend-accepted`, `group-added`, `table-invite`, `message`, `turn`. A kind with nothing writing
-it is filler copy standing in for something nobody has built.
+**Seven kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
+`friend-accepted`, `group-added`, `table-invite`, `table-removed`, `message`, `turn`. A kind with
+nothing writing it is filler copy standing in for something nobody has built. `table-removed` is
+written when a host takes somebody out of a chair (*The host can take somebody out of a chair* in
+`games.md`), under a key of its own and not the invitation's: a row that only changes kind does not
+raise the unread count, and the cue that speaks when the count rises would stay silent.
 
 **What somebody wants to be told about is a MUTE, and it belongs to the account.** The settings page
 used to offer five switches kept in `localStorage` that nothing ever read - "Game results" and
@@ -967,7 +1056,9 @@ since the server writes the row and pushes the wake-up. A preference the writer 
 switch with nothing behind it. The categories are `NOTICES` in `domains/notify/notices.ts`, a
 zero-import module the settings page reads too, and `NOTICE_OF` maps each kind onto one; turning a
 category off is a `notice` mute, which `tell` checks in the same `exists` as the actor and the
-conversation. `mutes_notice_known` is a CHECK, so a category with no kinds behind it cannot be
+conversation. The `turns` category reads "Games: your turn, and a game starting" since the page
+itself began to say both (the cues store honours the same mute for them, though neither is a
+row the server writes at a live table). `mutes_notice_known` is a CHECK, so a category with no kinds behind it cannot be
 stored, and `reference-parity.spec.ts` holds every kind to exactly one category.
 
 **The mute is checked when the row is WRITTEN**, not when it is rendered. A notification that
@@ -975,30 +1066,166 @@ exists and is hidden is still a badge somebody has to clear. Same for a block, a
 actions: nobody is told about something they did.
 
 **`ref` is a closed set** — `conversationId`, `tableId`, `groupId`, `requestId`,
-`personId` — filtered on the way in. The column is `jsonb` and would happily take a sentence;
-that filter is what stops a "structured" notification from carrying prose.
+`personId`, `game` — filtered on the way in. The column is `jsonb` and would happily take a
+sentence; that filter is what stops a "structured" notification from carrying prose. `game` is a
+game's id, there because somebody taken out of a table by invitation is told which game it was and
+can no longer read the table to find out.
 
 **The list pages by keyset**, `(created_at, id)` descending, like chat history. `more()` appends;
 anything that CHANGES the list drops the older pages and refetches the first, because stitching a
 fresh head onto a stale tail is how a list shows one row twice.
+
+**The list asks for the names of the people in it.** A row names its actor by handle, and an
+invitation can come from somebody this page has never loaded: the row and the activity rail read
+`people.byHandle`, so a stranger was a bare handle in both ("mina saved you a seat") until
+something else happened to describe them. `listed` in `notifications.store.ts` is the one read
+of the list - the first page, the newest rows read apart from a filtered list, a later page -
+and hands every actor to `people.want`, which asks once and in one request.
+`notifications.spec.ts` (*whoever a notification is about*) holds the three reads.
 
 **A push carries no payload at all**, and that is why `domains/notify/push.ts` is forty lines
 rather than four hundred. A payload would have to be encrypted to the subscription's
 `p256dh`/`auth` with HKDF and AES128GCM — and an encrypted payload of a message this server will
 not be able to read under `nura-e2ee/v1` is a contradiction. What is left is the VAPID half: an
 ES256 JWT naming the endpoint's ORIGIN (never its path, which identifies the subscription) and
-expiring within the hour. The browser wakes the worker with an empty event, the worker shows one
-generic notice, and the content comes from the api when the app is opened — over a session the
-reader is already authorised on.
+expiring within the hour. The browser wakes the worker with an empty event, and the worker asks
+the api what happened over the session the browser already holds (*The worker says what
+happened*, below): nothing about who did what to whom crosses a push service.
 
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are all three optional and all
 three needed TOGETHER. With none set, `GET /notifications/push` answers with no key and the
-client never asks the browser for permission: a prompt for something that cannot be delivered is
-one somebody denies once and never sees again.
+client subscribes to nothing.
+
+**The switch for this device does not wait for push keys.** A browser can show a notification
+for a page that is open and not being looked at with no push service involved, so
+`device-notices.component.azeroth` (it was `PushToggle`, drawn only when the server had keys)
+offers "Notifications on this device" everywhere a browser has them. Turning it on is the
+reader's own press, so that is when permission is asked: it registers the worker, keeps
+`settings.notify` in this browser the way the other device settings are kept, and subscribes
+as well when the server published a key. The panel then says which it is: "Also when Nura Games
+is closed." or "While Nura Games is open in a tab." A browser that says no is shown how to
+change its mind and no button that cannot work. Nothing is asked before that press: a prompt
+nobody asked for is one somebody denies once and never sees again. What is shown, and when, is
+the cues store's (`frontend/CLAUDE.md`, *What a cue says is also told to the system*).
 
 **`public/push-worker.js` is plain JavaScript served as-is, never bundled.** A service worker's
 url is its identity, so a hashed filename would register a new worker on every deploy while the
 old one kept running.
+
+**The worker says what happened.** It used to show one sentence for every push, "Something
+happened. Open Nura Games to see.", in English. On a push it now reads `GET /api/notifications/`
+with the reader's own cookie and shows a notice for each unread row newer than the last it saw:
+the page's sentence for that kind, the actor's name (one `GET /api/social/names` for all of
+them, the handle when that fails), the page's tag and the page's target, so a push and a hidden
+page are one notice. It keeps the newest row's time in a cache (`/notice-mark.json` in
+`nura-notices`), says only the newest row the first time and three at most after that, oldest
+first. The words are not in the worker: the cues store keeps them in the same cache
+(`/notice-words.json`, `wordsOf` in `lib/notice-words.ts`: the language, its tag and direction,
+one message for each kind with its plural forms, the game names) while the device switch is on,
+at start and whenever the language changes, and the worker repeats `interpolate` and
+`selectForm` over them. With no words kept it says "Something new in Nura Games" in English;
+when it cannot read the list (signed out, offline) it says that sentence in the kept language,
+aloud; when it can read it and nothing is new it says it quietly (`silent`, no `renotify`),
+because a push that shows nothing is answered by the browser's own "this site has been updated
+in the background". For the same reason nothing inside the push may end it empty-handed: what
+the page kept is laid over the plain words, so a cache written by another build with a part
+missing still has the rest, and anything that throws ends in the plain sentence, aloud.
+
+**One speaker for one thing.** While a tab inside the app is VISIBLE the worker shows nothing,
+the page has a toast, and the mark still moves so what the page showed is not said later. While
+the page is hidden and a push reaches this device (`pushManager.getSubscription()`), the page
+says nothing of what the server pushes (a message, a friend request, a row: `pushed` in
+`tellSystem`) and leaves it to the worker; it still says the two things no push carries, a turn
+at a live table and a game starting. With no subscription the page says all of it. Without this
+a server with push keys alerted twice for one message, once from the socket and once from the
+push, for everybody with the tab in the background. A `turn` row carries its game in `ref`, so
+the list, the toast, the page's system notice and the worker all say one sentence, "Your turn at
+Ludo" (`notify.turn`), under one tag and to one target; the page's second wording,
+`notify.system.turn`, went with the difference that kept it.
+
+`push-worker.spec.ts` (*a push*) runs the worker's real source against a fake scope with a
+cache and an api. `cues.spec.ts` holds the contract between the two files (*the worker and the
+page, of the same thing*: the real store raises its notice for an event, the real worker is
+pushed with the row the server writes for it, and the sentence, tag, target, language and
+direction must be equal, in English and in Persian), the words (*the words kept for the
+worker*) and the one speaker (*a device a push reaches*).
+
+**A device that is switched on keeps its reach.** "A push reaches this device" is read from the
+browser, so it has to stay true, and three things made it false. Keys set on the server after
+the switch was turned on reached nobody until each reader switched off and on; this deployment
+has none today, so that was its path. A row the server had lost (retired after a 410, a rebuilt
+database, another account signed in on this browser) left the browser subscribed to nothing.
+And a subscription made with a key the server no longer has, or held with the switch off, left
+the page waiting for a push that would never come. `keepReach(on)` in `lib/push.ts` runs once
+when the cues store starts and when the panel turns the switch on. With the switch on, a
+published key and the browser's yes, it subscribes where nothing is held, tells the server
+again where something is (the route is an upsert on the endpoint and clears `failed_at`), and
+makes the subscription again when the key has changed; otherwise it gives up whatever the
+browser holds. With the switch off, which is how every device begins, it asks the server
+nothing at all. Two rules keep it from doing harm: a server that does not answer changes
+nothing, and an existing subscription is never given up because telling the server failed,
+while a NEW one the server refused is, so the browser never holds a subscription no server
+was told of. It never asks for permission: that is the panel's press.
+
+**Signing out gives the reach up.** `components/app/sign-out.ts` calls `leaveReach()` before
+the session ends, while the server can still be told. Signing out everywhere drops every push
+subscription of the account on the server (`forgetReach`, a courtesy after the sessions are
+ended, so a failure there cannot keep the sockets open). Before, a browser nobody was signed
+in on went on being woken, and the worker, with no session to read the list, told whoever was
+sitting there that something was new.
+
+`reach.spec.ts` holds each case, `device-notices.spec.ts` the two presses, `cues.spec.ts` the
+call at start, and `housekeeping.db.spec.ts` the server's half.
+
+**The keyed path can be looked at without keys in `.env`.** Start the built server with a
+throwaway pair on the command line (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`;
+the one-liner that makes a pair is in `.env.example`) and a driven Chrome subscribes for real,
+to its own push service. Done once, 2026-10-12: the panel said "Also when Nura Games is
+closed."; an invitation was pushed and the worker showed its sentence with nothing scripted;
+at the next start the app asked for the key and told the server again without making a new
+subscription; on a page that believed itself hidden the invitation was left to the push while
+a game starting was told by the page; signing out posted the removal before the sign-out and
+the browser, signed out, was not woken by the next invitation. One thing a driven browser will
+not do is be truly hidden (a second tab and a minimised window both leave `visibilityState`
+at `visible`), so the worker's side of "one speaker" for a hidden tab is held by
+`push-worker.spec.ts` alone.
+
+Not verified: Safari is said to end a subscription after a few pushes that show no notice, and
+this worker shows none while the app is on the screen. No Safari was at hand; look at it on
+one before relying on push there.
+
+**A pressed notice goes to the thing itself.** Every notice carries `data.target`, the page's
+and the worker's alike, and the worker's `notificationclick` is the one place either is pressed.
+It closes the notice and then, in this order: a tab already showing the target is brought
+forward and told nothing (a table's own page, hidden, is the common case, and a second copy of
+a board is a second socket); a tab inside the app is brought forward and posted
+`{ type: 'nura.go', to }`; with no tab inside the app, or one that went away while it was being
+focused, it opens the target itself. The landing page open in a tab is not "inside the app": it
+has no shell to hear the message. Inside is `/app` itself or anything under it (`inApp`): the
+home page IS `/app`, and the rule as first written asked for `/app/`, which would have opened a
+second window for anybody sitting on the home page. Only the look in a real browser showed it,
+because every spec had invented a `/app/home` that does not exist; the specs use real paths now.
+The worker asks for every window of ours, controlled or not (`includeUncontrolled`): a page
+that was open before the worker was registered, which is the page the switch was just turned
+on in, is not controlled by it. In a real browser `matchAll` without that option answered
+nothing for such a page, while a message posted to it still arrived and it went.
+On the page `onWent` in `lib/system-notice.ts` listens on
+`navigator.serviceWorker` and the cues store hands the path to the shell's `navigate`: the
+store already holds the router's hand, and the shell chunk has no room for a listener. A target
+that is not a path under `/app/` is the list in the worker and nothing at all in the page:
+each side checks, since neither can know what the other was sent. It used to focus whichever
+tab came first and stop there, so a notice about a message opened the page the reader had left.
+
+**A new worker takes over at once** (`skipWaiting` on `install`). It has no `fetch` handler and
+keeps nothing a page depends on, so there is no version of a page it could break; without it a
+browser that never closes every tab goes on running the worker it first registered, and a
+changed click or a changed notice reaches nobody who keeps the app open.
+
+A click cannot be made in a test browser: a synthetic `notificationclick` is untrusted and
+`waitUntil` throws on it. So `push-worker.spec.ts` runs the worker's real source against a fake
+scope (`tests/fake-worker.ts`) and hands what it posts to `wentTo`, the page's own reader, which
+is the contract between the two files; `cues.spec.ts` (*a notice that was pressed*) holds the
+page's half.
 
 Sending is fire-and-forget and never blocks a request: a slow push service must not make sending a
 message slow, and a dead one must not make it fail. A 404 or 410 from the service means the
@@ -1023,6 +1250,18 @@ the notice was a way for a stranger to reach a minor.
 same key is a different fact and stays. A request that is no longer pending and still sits in the
 bell with Accept on it is a button that can only fail.
 
+**A turn notice lasts as long as the go.** `turn:<matchId>` is written for whoever the go passed
+to at a `turns` table and said only "It is your go", with no game: a row the server wrote with the
+table alone, though `ref.game` was always allowed. Nothing took it back, so a reader who moved from
+the board, or whose game ended, kept "It is your go" in the bell for good, and the fixture account
+held thirty-five of them. `nudgeTurn` now runs after every move, sweep, walk-out and host's start
+(the host's start told nobody before; Quick play's did), withdraws the notice of every player who is
+not on turn, everybody's once the game has ended, and tells the one who is, naming the game.
+`retract` rings a reader only when a row actually went. A turn row that names no game (`ref.game`
+is optional to the type, as every kind shares it) says "Your turn" (`notify.turnAnywhere`) rather
+than a sentence with a gap at its end. `turn-notice.db.spec.ts` plays turns against a real
+Postgres and resigns one; `notifications.spec.ts` (*what a notice says*) holds the two sentences.
+
 ## Realtime — `nura-rt/v1`
 
 One WebSocket at `/ws`, and it is a **doorbell, not a delivery**. A frame says "something about
@@ -1032,10 +1271,31 @@ delivery path carrying message bodies would be a second place to get all three w
 have to be rewritten again the moment a body becomes ciphertext.
 
 `backend/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
-`typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pong`. Client frames: `sync`, `presence`,
-`typing`, `voice`, `signal`, `play`, `ping`. And
+`typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pulse`, `pong`. Client frames: `sync`,
+`presence`, `typing`, `voice`, `signal`, `play`, `ping`. And
 `parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
 field this version does not know is a frame from something that is not this client.
+
+**`pulse` is a delivery, and it may be because nothing on it belongs to anybody.** It carries how
+busy each game is - the numbers `GET /catalogue/live` answers to anyone - and `watching`, an opaque
+mark of which games are on at public tables. There is no membership, block or watermark for a second
+path to get wrong, and the alternative was worse: a doorbell rung for everybody makes everybody
+ask, one aggregate query per connected browser every couple of seconds on a busy evening, where
+the frame is one query for all of them. The hub asks (`HubDeps.pulse`, which is
+`services.pulse()`: the counts and `table.watchingMark()`) when a table changed, when somebody
+connects and at each sweep; never more than once in `PULSE_MS` (two seconds), never twice at
+once, and a change that arrives while it is asking is asked about again. It tells EVERYBODY, and
+only when the answer differs from the last one it told; a socket that connects is handed what
+the hub already knows, after its greeting and its snapshot. A table that changed and moved no
+number - a private one, a Ready - costs a query and no frame. `realtime-hub.spec.ts` (*how busy
+the games are*) holds each of those, `realtime.socket.spec.ts` that it reaches a real socket.
+
+The mark is `md5` over the ids of the live matches at tables that are public and not closed, in
+id order: the same set `table.watchable()` lists, by the same `ON_SHOW` clause, so it changes
+exactly when that list could. It is a hash and not a count on purpose. The list a reader is shown
+leaves out a host on either side of a block, and a count beside it would say "one more game is on
+than you can see". `catalogue.db.spec.ts` holds that it moves for a start and an end, for one
+ending as another starts, and not for a game at a table that is not public.
 
 **`n` is a per-connection sequence number and is NOT the e2ee `seq`.** It stamps the order frames
 left this server for one socket, nothing more. The envelope's `seq` in `nura-e2ee/v1` is bound
@@ -1051,9 +1311,10 @@ isSameOrigin(origin, request.headers.host) || origin === config.origin
 `config.origin` alone refuses every socket in the mandatory QA run: the browser is on `:3200`
 against the built server while `PUBLIC_ORIGIN` is `:3100`, and a refused handshake writes exactly
 one console error that `tools/qa` cannot suppress — 600 failing cells. `isSameOrigin` is
-reimplemented in `realtime/admit.ts` because `@azerothjs/ws` does not export its own copy; that is
+reimplemented in `http/origin.ts` because `@azerothjs/ws` does not export its own copy; that is
 recorded in the framework register, and the copy is not trivial (implied ports, the opaque `null`
-origin a sandboxed frame sends).
+origin a sandboxed frame sends). The union itself is `isOurs` there, which the handshake and the
+check every write passes (`backend/CLAUDE.md`, *A write from a page on another site*) both ask.
 
 **Nothing in `onConnection` may await.** The package replays the bytes that arrived in the same TCP
 segment as the handshake AFTER `onConnection` returns, so a handler assigned behind an `await`
@@ -1069,8 +1330,8 @@ server that is on its way out.
 
 **`isMetered('/ws')` is now nearly dead code.** The rate limiter still scopes to `/api` and
 `/ws`, but a socket costs one request per connection and the gateway meters frames itself
-(`sync` 5s, `presence` 2s, `typing` 3s, ten faults and the socket is closed 4400; the budgets under
-*A game is played over the socket*). Keep the
+(`sync` 5s, `presence` 2s, `typing` 3s, `FRAME_FLOORS` in `realtime/frames.ts`; ten faults and the
+socket is closed 4400; the budgets under *A game is played over the socket*). Keep the
 prefix — a handshake flood is still a flood — but the per-frame budget is where the real metering
 happens.
 
@@ -1098,7 +1359,13 @@ from outside, and `presence.dot()` draws nothing for either.
 in which conversation, and when — that is on the same list as who talked to whom and how large it
 was, and it belongs in the privacy copy alongside them. A notice carries its own 4s expiry because
 nobody ever sends "I stopped": the tab may have closed, the socket may have dropped, or they may
-have walked away.
+have walked away. A line from them ends it at once: the indicator leaves out anybody whose line has
+become the newest in the room since their notice came (`answered` in the chat store), where it went
+on saying they were typing the line that had already arrived, for up to four seconds. Seen in the
+clean production run; `realtime-stores.spec.ts` (*typing*) holds it. A notice that came before the
+room had been read at all keeps its four seconds: the first version took an unread room for an
+empty one, so an old line of theirs read in a moment later hid somebody who was typing, while a
+room read and found empty is still answered by their first line.
 
 The client half is `services/realtime.source.ts` (the only module that constructs a `WebSocket`)
 and `stores/realtime.store.ts` (one connection, jittered backoff seeded from `runtime().seed`, a
@@ -1106,17 +1373,61 @@ visibility pause, coalesced nudges). **Connecting does not reset the backoff —
 for `STEADY_MS` does**, or a socket that opens and dies 200ms later in a loop is hammered at one
 second forever. 4400, 4401 and 4429 are terminal and never retried.
 
+**A doorbell is heard at once, and a burst is still one read.** The hub batched every change for
+`TICK_MS` (150 ms) and the browser every doorbell for `NUDGE_WINDOW_MS` (250 ms), both counted from
+the first change, so a Ready, a seat taken, a message in a chat list reached the other browser no
+sooner than 400 ms plus two round trips: 444 ms on loopback, measured by `sync-pass.mjs` from the
+request to the chair turning green in the other page. Both windows are now a ceiling on the rate,
+not a delay: a change after a quiet window goes out on the next turn of the event loop, and what
+comes inside the window after a flush waits for the window's end and goes out together
+(`flushedAt` in `hub.ts` and in `realtime.store.ts`). The same Ready now reaches the other page in 18 ms
+(p50; 43 ms when it is pressed straight after another). A wait is never longer than one window, so a
+clock that jumps cannot hold a doorbell back, and the browser forgets its last flush when it tears
+down. `realtime.spec.ts` (*hears a doorbell after a quiet window at once*) and
+`realtime-hub.spec.ts` (*a doorbell in time*) hold both halves.
+
+**The browser keeps to the gateway's floors and budgets, and they are written once.** The gateway
+closes a socket that sends a kind of frame more often than it takes it: past its budget in ten
+seconds (`voice` 30, `signal` 120, `sound` 250, `play` 40, `ping` 10) with 4429, and on the
+eleventh frame inside its floor in a minute (`sync` 5 s, `presence` 2 s, `typing` 3 s) with 4400.
+The browser never retries either. And the browser itself broke two of them: every change of the
+tab's visibility sent a `presence` frame and a `ping`, so twelve flicks between tabs in five
+seconds closed the socket for good with 4400, and every move after that reached the page by the
+three-second poll (`sync-pass.mjs`, *flick*, on the build before this); on the build after it the
+same twelve flicks keep the socket and every move after them is pushed. A mute pressed eleven times
+was eleven `voice` frames. The numbers live in `realtime/frames.ts` now (`FRAME_FLOORS`,
+`FRAME_BUDGETS`, `BUDGET_WINDOW_MS`), the gateway reads them from there, and the browser keeps to
+them: a floored frame (`paced` in `realtime.store.ts`) goes at once after a quiet floor and
+otherwise once at the floor's end, with the latest of what was asked, half a second over the floor
+for a line that bunches frames together; a connection check pings no more than once in
+`CHECK_FLOOR_MS`; and the call tells the room about a mute at most twice a second, the last of it
+last (`ANNOUNCE_MS` in `voice.store.ts`). Switching tabs and pressing mute as fast as a hand can no
+longer trips either rule; a script still can, and `load-pass.mjs` paces its sockets for that reason. `realtime.spec.ts` (*what the
+socket is asked to say, kept to what the server takes*) and `voice.spec.ts` (*tells the room about
+a mute no more than twice a second*) hold it.
+
 **The seed is random per browser.** It was the constant 1, so every client on the deployment drew the
 same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.
 
-**A table holds the socket, and a held socket is probed.** The play page holds it while a live match is
-on screen, and while the reader sits ready at a live table waiting for one (*Somebody waiting at a live
-table keeps their socket* in `games.md`), which keeps it through a hidden tab. Ten seconds without a
+**A table holds the socket, and a held socket is probed.** The lobby store holds it while the reader
+has a live match on, and while they sit ready at a live table waiting for one, on whatever page
+(*Somebody waiting at a live table keeps their socket* in `games.md`), which keeps it through a
+hidden tab. A release that belongs to a connection that has been reset since is let fall, so it
+cannot take a newer hold with it. Ten seconds without a
 frame sends a `ping`; four more without an answer hang it up and reopen it at once, because a socket
 whose far end has gone quiet without a FIN is otherwise trusted until TCP gives up minutes later. The
 pongs also give the round trip and the server clock's offset, from the fastest of the last eight. The
 server's own heartbeat is 15 s with a 10 s pong timeout. The fake socket answers pings the way the
 server does and has a `deaf` switch for the case where it does not.
+
+**Any socket is asked at once when it is most likely to have died** (`check`): when the tab is shown
+again, when the network comes back, and when a play's ack is late. A ping goes out and the same four
+seconds decide. A socket is killed without a word by a phone that slept or a laptop that changed
+network, and the browser keeps it open; only a held socket was ever probed, so on any other page it
+was trusted until a reload, and at a table the next roll waited out the ten seconds. The `check`
+specs in `realtime.spec.ts` and `match-store.spec.ts` hold it, and in a real browser a socket
+silenced by `routeWebSocket` is replaced four seconds after the tab comes back or `online` fires,
+while one that answers is kept.
 
 `stores/connection.store.ts` reports only what it can see: the socket's own status plus
 `navigator.onLine`. The `latency` it used to publish was never measured by any request, and the
@@ -1124,6 +1435,19 @@ fixed 1800ms "reconnecting" animation had nothing to do with a reconnection. It 
 NOT follow every flap — between drop and retry the socket is `down`, during the retry it is
 `connecting`, and at the first backoff rung that alternates once a second — so `offline` means
 something that will not fix itself and everything in between is one steady `reconnecting`.
+
+It says one more thing, and does one. A socket that NEVER connected used to be passed over in
+silence: the strip spoke only after a first connection, on the reasoning that the app was then "a
+working pull-model app" - and it pulled nothing. Behind a proxy that does not pass the upgrade, or
+on an origin the handshake refuses, somebody pressed Ready and nobody else saw it until they
+reloaded, and the owner reported exactly that. After `UNREACHED_MS` (six seconds) without a first
+connection the state is `unreached` and the strip says live updates are not getting through. And
+while the socket is apart - never up, or dropped - every `LIFELINE_MS` (eight seconds) rings every
+scope locally through `realtime.ring()`, the call a new connection makes, so every store reads
+itself again: a chair, a Ready, a game that started arrive late, not never. Not while the browser
+says offline, not in a hidden tab, and not once the socket is up. A play already went by HTTP when
+there was no socket. `app-stores.spec.ts` holds the grace, the beat, the silence once connected
+and the offline case.
 
 **The socket starts FIRST in the app shell's `stops` array**, which means it stops LAST, because
 the teardown runs in reverse and every store under it holds an unsubscribe against it. Each stop is
@@ -1134,7 +1458,16 @@ every store after it.
 
 Five scopes, and each is one question somebody can be asked: `chat` (this conversation moved),
 `social` (your graph moved), `game` (this board moved), `table` (this table moved) and `me` (a thing
-of your own moved - `notifications`, `devices` or `profile`, carried as the id).
+of your own moved - `notifications`, `devices`, `profile` or `party`, carried as the id).
+
+**A team-up rings `me` with `party`, and that is all it does.** An invitation, a yes, a not now, a
+leave and an ending each ring the `me` scope of the people it is about (`selfChanged(userId,
+'party')`), and the party store reads `GET /parties` again. Nothing else is written: no notification
+row, which would outlive the ninety seconds an invitation lasts; no push, which could not say what
+it is for; and no frame a browser can send, because every verb is a route that asks who may reach
+whom. An invitation the invitee muted rings whoever asked and nobody else. `realtime-hub.spec.ts`
+holds the ring to its people and `realtime-frames.spec.ts` refuses a `party` frame from a client.
+The rules are in `games.md`, *Parties*.
 
 **A social doorbell and an edge change are two different calls, and conflating them was the bug.**
 `socialChanged` used to drop the person's cached friends-and-blocks AND send a fresh presence
@@ -1195,6 +1528,16 @@ later, his socket bound 130ms after that, and the two threads the block hid stay
 reload. A second tab is the same window, and a server-side replay would miss it: the account already
 has a socket, so nothing looks missed. The price is one re-read per store per page load.
 
+**"Read it all again" still asks only for what the reader may read.** The chat store's answer to a
+bare ring used to be the list and the open thread together, with the seal store asked about the open
+room before either came back. Somebody taken out of that conversation while they were away - stood
+up from a waiting table by the sweep, with the table's chat still on their screen - asked for a
+thread and a device list that were no longer theirs, and a 404 is a console error however right the
+answer is. The ring that names a conversation always read the list first and the thread only if it
+was still listed; the bare ring does the same (`nudgedAll`): the list, then nothing more if the open
+conversation was listed and has gone, otherwise the listeners and the thread. A thread the list's
+pages have not reached is read as before. `realtime-stores.spec.ts` holds all three.
+
 **A voice call HOLDS the socket.** A hidden tab lets its socket go after a minute, and the server
 empties the voice room when the socket closes - so switching away from a call hung it up for good.
 `realtime.hold()` keeps the socket through a hidden tab, and the voice store holds it from join to
@@ -1204,8 +1547,10 @@ teardown.
 watching - and every check is made in the OTHER browser without a reload: a request lights the
 badge and the bell, an accept shows the friend with a live dot while everybody else keeps theirs,
 the bell forgets an answered request, a group thread arrives and leaves, a rename reaches a friend's
-list, an invitation at create rings the bell, a spectator's page turns into the board and back, and
-reading everything in one tab clears the other.
+list, an invitation at create rings the bell, a spectator's page turns into the board and back, a
+host takes a player out of a chair (their page says so and offers no seat, their claim is `kept-out`,
+quick play seats them elsewhere, and the host's invitation offers the seat again), and reading
+everything in one tab clears the other.
 
 ## The audit, and what it found in shipped code
 

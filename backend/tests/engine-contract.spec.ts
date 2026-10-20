@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Draws, Engine, ForfeitReason } from '../src/domains/match/engine.ts';
 import { ENGINES, FOLD_MAX, sameTurn } from '../src/domains/match/service.ts';
-import { sideOf, variantOf, type Format, type Variant } from '../src/domains/match/sides.ts';
+import { partnerOf, sideOf, variantOf, type Format, type Variant } from '../src/domains/match/sides.ts';
 import type { RefusalWord } from '../src/domains/match/refusals.ts';
 import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
@@ -144,24 +144,46 @@ describe('the sides of a format', () =>
             expect(all.map((seat) => sideOf(seat, { seats, variant: 'standard' })), `${ seats } seats`).toEqual(all);
         }
     });
+
+    it('give every seat of a team game the partner sitting opposite, and nobody a partner in any other', () =>
+    {
+        const paired: Format = { seats: 4, variant: 'teams' };
+
+        expect([0, 1, 2, 3].map((seat) => partnerOf(seat, paired))).toEqual([2, 3, 0, 1]);
+
+        for (const seat of [0, 1, 2, 3])
+        {
+            expect(sideOf(partnerOf(seat, paired)!, paired), `seat ${ seat }`).toBe(sideOf(seat, paired));
+        }
+
+        for (const seats of [2, 3, 4, 6, 9])
+        {
+            const all = Array.from({ length: seats }, (_, seat) => seat);
+
+            expect(all.map((seat) => partnerOf(seat, { seats, variant: 'standard' })), `${ seats } seats`).toEqual(all.map(() => null));
+        }
+    });
 });
 
 describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s engine keeps the contract', (_id, engine: Engine) =>
 {
-    it('offers every format the catalogue seeds', () =>
+    it('plays every format the catalogue seeds, and no format the catalogue cannot open a table for', () =>
     {
         const seeded = GAME_SEEDS.find((game) => game.id === engine.id);
 
         expect(seeded).toBeDefined();
 
-        for (const seats of seeded!.seats)
-        {
-            for (const asked of [false, true])
-            {
-                const format: Format = { seats, variant: variantOf(teamsOf(seeded!.partners, seats, asked)) };
+        const opened = seeded!.seats.flatMap((seats) =>
+            [false, true].map((asked): Format => ({ seats, variant: variantOf(teamsOf(seeded!.partners, seats, asked)) })));
 
-                expect(engine.formats, `${ engine.id } does not play ${ nameOf(format) }`).toContainEqual(format);
-            }
+        for (const format of opened)
+        {
+            expect(engine.formats, `${ engine.id } does not play ${ nameOf(format) }`).toContainEqual(format);
+        }
+
+        for (const format of engine.formats)
+        {
+            expect(opened, `no table can be opened for ${ engine.id } at ${ nameOf(format) }`).toContainEqual(format);
         }
     });
 

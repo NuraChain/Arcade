@@ -11,13 +11,16 @@ import type { TablePrivacy, TableStatus } from '../../schemas.ts';
 import { keyedQueue } from '../../lib/keyed-queue.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { QuickTable } from '../../entities/quick-table.entity.ts';
+import { TableRemoval } from '../../entities/table-removal.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
 import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
-import type { VoiceScope } from './voices.ts';
+import { scopeFor, type VoiceScope } from './voices.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -88,6 +91,7 @@ export interface TableRow
     mine: number | null;
 
     is_host: boolean;
+    quick: boolean;
     conversation_id: string | null;
 
     /** The conversation this table was opened IN, or null for one opened from the games pages. */
@@ -95,6 +99,12 @@ export interface TableRow
 
     /** The game running here, or null when nobody has started one. */
     match_id: string | null;
+
+    last_match_id: string | null;
+
+    removed: boolean;
+
+    kept_out: string[];
 }
 
 /** The alphabet a table code is drawn from: no 0/O, no 1/I/l, so it survives being read aloud. */
@@ -107,6 +117,8 @@ const CLAIM_ATTEMPTS = 6;
 const QUICK_CANDIDATES = 32;
 
 const UNIQUE_VIOLATION = '23505';
+
+const DEADLOCK = '40P01';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -173,12 +185,21 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
         `(select m.id from matches m where m.table_id = t.id and m.finished_at is null)`,
         'match_id'
     )
+    .addSelect(
+        `(select m.id from matches m
+           where m.table_id = t.id
+             and m.finished_at = (select max(x.finished_at) from matches x where x.table_id = t.id)
+             and exists (select 1 from match_players p where p.match_id = m.id and p.user_id = :me)
+           limit 1)`,
+        'last_match_id'
+    )
     .addSelect(`(select u.handle::text from users u where u.id = t.host_id)`, 'host')
     .addSelect(
         `(select s.seat from table_seats s where s.table_id = t.id and s.user_id = :me)`,
         'mine'
     )
     .addSelect('(t.host_id = :me)', 'is_host')
+    .addSelect('(exists (select 1 from quick_tables q where q.table_id = t.id))', 'quick')
     .addSelect(
         `(select count(*)::int from table_seats s where s.table_id = t.id and s.user_id is not null)`,
         'taken'
@@ -186,6 +207,22 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect(
         `(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`,
         'conversation_id'
+    )
+    .addSelect(
+        `(exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :me))`,
+        'removed'
+    )
+    .addSelect(
+        `(select coalesce(jsonb_agg(u.handle::text order by r.removed_at desc, u.handle::text), '[]'::jsonb)
+            from table_removals r join users u on u.id = r.user_id
+           where r.table_id = t.id
+             and t.host_id = :me
+             and exists (select 1 from table_seats s where s.table_id = t.id and s.user_id = :me)
+             and u.is_suspended = false
+             and not exists (select 1 from blocks b
+                              where (b.user_id = :me and b.blocked_id = u.id)
+                                 or (b.user_id = u.id and b.blocked_id = :me)))`,
+        'kept_out'
     )
     .addSelect(
         `(select coalesce(
@@ -232,6 +269,8 @@ const visibleTo = (viewer: string) => `(
      or (t.privacy = 'room' and exists (select 1 from conversation_members cm
                                          where cm.conversation_id = t.room_id and cm.user_id = ${ viewer }))
 )`;
+
+const ON_SHOW = `t.status <> 'closed' and t.privacy = 'public'`;
 
 export const SEATED_MAX = 50;
 
@@ -335,6 +374,8 @@ const openRow = async (tx: EntityManager, host: string, opening: Opening, guests
 
 const OCCUPANTS = 'select s.user_id from table_seats s where s.table_id = t.id and s.user_id is not null';
 
+const passedOver = (away: number, missed: number) => away + missed === 0 ? {} : { passed: { away, missed } };
+
 const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter) => tx.getRepository(Table)
     .createQueryBuilder('t')
     .where(`t.game = :game and t.status = 'open' and t.mode = :mode`, { game, mode: filter.mode })
@@ -350,11 +391,18 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
     .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
     .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
     .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+    .andWhere('not exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :lead)')
     .andWhere(
         `not exists (select 1 from blocks b
                       where (b.user_id = :lead and (b.blocked_id = t.host_id or b.blocked_id in (${ OCCUPANTS })))
                          or (b.blocked_id = :lead and (b.user_id = t.host_id or b.user_id in (${ OCCUPANTS }))))`
     );
+
+const waitingChairs = (from: DataSource | EntityManager) => from.getRepository(TableSeat)
+    .createQueryBuilder('s')
+    .innerJoin(Table, 't', `t.id = s.table_id and t.status = 'open' and t.mode = 'live' and t.privacy in ('public', 'friends')`)
+    .where('s.user_id is not null')
+    .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)');
 
 const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: string) =>
 {
@@ -402,6 +450,45 @@ const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: str
     }
 
     return true;
+};
+
+const letGo = async (tx: EntityManager, lead: string) =>
+{
+    const waits = await tx.getRepository(TableSeat)
+        .createQueryBuilder('s')
+        .innerJoin(QuickTable, 'q', 'q.table_id = s.table_id')
+        .innerJoin(Table, 't', `t.id = s.table_id and t.mode = 'live'`)
+        .select('s.table_id', 'id')
+        .where('s.user_id = :lead', { lead })
+        .orderBy('s.table_id')
+        .getRawMany<{ id: string }>();
+    const left: { tableId: string; conversationId: string | null; closed: boolean }[] = [];
+
+    for (const { id } of waits)
+    {
+        await lockTable(tx, id);
+
+        const still = await tx.getRepository(TableSeat)
+            .createQueryBuilder('s')
+            .where('s.table_id = :id and s.user_id = :lead and s.ready', { id, lead })
+            .andWhere('not exists (select 1 from matches m where m.table_id = s.table_id and m.finished_at is null)')
+            .getExists();
+
+        if (!still)
+        {
+            continue;
+        }
+
+        const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId: id, kind: 'game' } });
+        const stood = await standUp(tx, id, lead);
+
+        if (stood.left)
+        {
+            left.push({ tableId: id, conversationId: thread?.id ?? null, closed: stood.closed });
+        }
+    }
+
+    return left;
 };
 
 export function createTableService(db: DataSource, social: SocialService)
@@ -510,7 +597,8 @@ export function createTableService(db: DataSource, social: SocialService)
         async quick(
             lead: string,
             ask: QuickAsk & { game: string; voice: VoiceScope },
-            present: (userIds: readonly string[]) => ReadonlySet<string>
+            present: (userIds: readonly string[]) => ReadonlySet<string>,
+            playing: (tx: EntityManager) => Promise<string | null> = async () => null
         )
         {
             const rules = await rulesOf(ask.game);
@@ -529,6 +617,15 @@ export function createTableService(db: DataSource, social: SocialService)
 
             const search = async (tx: EntityManager) =>
             {
+                await tx.query(`select pg_advisory_xact_lock(hashtext('quick:who'), hashtext($1))`, [lead]);
+
+                const busy = want.filter.mode === 'live' ? await playing(tx) : null;
+
+                if (busy !== null)
+                {
+                    return { id: busy, seated: false };
+                }
+
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
 
                 const waiting = await compatible(tx, lead, ask.game, want.filter)
@@ -544,6 +641,9 @@ export function createTableService(db: DataSource, social: SocialService)
                 }
 
                 await mustHaveRoom(lead, tx);
+
+                const left = want.filter.mode === 'live' ? await letGo(tx, lead) : [];
+                const gone = left.length === 0 ? {} : { left };
 
                 const candidates = await compatible(tx, lead, ask.game, want.filter)
                     .select('t.id', 'id')
@@ -570,12 +670,22 @@ export function createTableService(db: DataSource, social: SocialService)
                     .getRawMany<{ id: string; teams: boolean; occupants: string[] }>();
 
                 const here = want.filter.mode === 'live' ? present(candidates.flatMap((candidate) => candidate.occupants)) : null;
+                let away = 0;
+                let missed = 0;
 
                 for (const candidate of candidates)
                 {
-                    if ((here === null || candidate.occupants.every((occupant) => here.has(occupant))) && await sit(tx, candidate.id, candidate.teams, lead))
+                    if (here !== null && !candidate.occupants.every((occupant) => here.has(occupant)))
                     {
-                        return { id: candidate.id, seated: true };
+                        away += 1;
+                    }
+                    else if (await sit(tx, candidate.id, candidate.teams, lead))
+                    {
+                        return { id: candidate.id, seated: true, ...gone, ...passedOver(away, missed) };
+                    }
+                    else
+                    {
+                        missed += 1;
                     }
                 }
 
@@ -584,11 +694,13 @@ export function createTableService(db: DataSource, social: SocialService)
                     game: ask.game,
                     privacy: 'public',
                     chat: true,
-                    voice: ask.voice,
+                    voice: scopeFor(ask.voice, want.make.teams),
                     roomId: null
                 }, [], true);
 
-                return { id: opened, seated: true };
+                await tx.getRepository(QuickTable).insert({ tableId: opened });
+
+                return { id: opened, seated: true, ...gone, ...passedOver(away, missed) };
             };
 
             return await searches.run(ask.game, async () =>
@@ -601,7 +713,9 @@ export function createTableService(db: DataSource, social: SocialService)
                     }
                     catch (error)
                     {
-                        if ((error as { code?: string }).code !== UNIQUE_VIOLATION)
+                        const code = (error as { code?: string }).code;
+
+                        if (code !== UNIQUE_VIOLATION && code !== DEADLOCK)
                         {
                             throw error;
                         }
@@ -645,7 +759,7 @@ export function createTableService(db: DataSource, social: SocialService)
                        where p.match_id = m.id)`,
                     'players'
                 )
-                .where(`t.status <> 'closed' and t.privacy = 'public'`)
+                .where(ON_SHOW)
                 .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game })
                 .andWhere(
                     `not exists (select 1 from blocks b
@@ -663,6 +777,18 @@ export function createTableService(db: DataSource, social: SocialService)
                     players: string[];
                     started_at: Date;
                 }>();
+        },
+
+        async watchingMark()
+        {
+            const found = await db.getRepository(Table)
+                .createQueryBuilder('t')
+                .innerJoin(Match, 'm', 'm.table_id = t.id and m.finished_at is null')
+                .select(`md5(coalesce(string_agg(m.id::text, ',' order by m.id), ''))`, 'mark')
+                .where(ON_SHOW)
+                .getRawOne<{ mark: string }>();
+
+            return found?.mark ?? '';
         },
 
         /**
@@ -845,6 +971,11 @@ export function createTableService(db: DataSource, social: SocialService)
             const blinds = rules.has_blinds ? input.blinds : 'low';
             const teams = teamsOf(rules.partners, input.seats, input.teams);
 
+            if (input.voice === 'team' && !teams)
+            {
+                throw new ValidationError({ voice: 'A call for one side needs a table of two sides.' }, 'That is not a table this game makes.');
+            }
+
             if (guests.length > input.seats - 1)
             {
                 throw new ValidationError({ invitees: 'More guests than chairs.' }, 'That is more people than seats.');
@@ -961,6 +1092,11 @@ export function createTableService(db: DataSource, social: SocialService)
                         return existing.seat;
                     }
 
+                    if (await tx.getRepository(TableRemoval).existsBy({ tableId, userId: me }))
+                    {
+                        throw tableRefusal('kept-out', 'The host took you out of that table.');
+                    }
+
                     const claimed = await tx.query(
                         `update table_seats
                             set user_id = $2, joined_at = now()
@@ -1048,6 +1184,61 @@ export function createTableService(db: DataSource, social: SocialService)
             });
         },
 
+        async waitingByGame()
+        {
+            return await db.getRepository(TableSeat)
+                .createQueryBuilder('s')
+                .innerJoin(Table, 't', `t.id = s.table_id and t.status = 'open' and t.privacy in ('public', 'friends')`)
+                .select('t.game', 'game')
+                .addSelect('t.mode', 'mode')
+                .addSelect('count(*)::int', 'players')
+                .addSelect('count(distinct t.id)::int', 'tables')
+                .addSelect('floor(extract(epoch from now() - min(s.joined_at)))::int', 'oldest')
+                .where('s.ready')
+                .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+                .groupBy('t.game')
+                .addGroupBy('t.mode')
+                .orderBy('t.game')
+                .addOrderBy('t.mode')
+                .getRawMany<{ game: string; mode: string; players: number; tables: number; oldest: number }>();
+        },
+
+        async waitingSeats(limit: number)
+        {
+            const rows = await waitingChairs(db)
+                .select('s.table_id', 'table_id')
+                .addSelect('s.user_id', 'user_id')
+                .orderBy('s.joined_at', 'ASC')
+                .addOrderBy('s.table_id', 'ASC')
+                .addOrderBy('s.seat', 'ASC')
+                .limit(limit)
+                .getRawMany<{ table_id: string; user_id: string }>();
+
+            return rows.map((row) => ({ tableId: row.table_id, userId: row.user_id }));
+        },
+
+        async vacate(tableId: string, userId: string, present: (userIds: readonly string[]) => ReadonlySet<string>)
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const waiting = await waitingChairs(tx)
+                    .select(`(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`, 'conversation_id')
+                    .andWhere('s.table_id = :tableId and s.user_id = :userId', { tableId, userId })
+                    .getRawOne<{ conversation_id: string | null }>();
+
+                if (waiting === undefined || present([userId]).has(userId))
+                {
+                    return null;
+                }
+
+                const stood = await standUp(tx, tableId, userId);
+
+                return stood.left ? { closed: stood.closed, conversationId: waiting.conversation_id } : null;
+            });
+        },
+
         /** Says whether this seat is ready. Only the person in it may say. */
         async setReady(me: string, tableId: string, ready: boolean)
         {
@@ -1055,20 +1246,6 @@ export function createTableService(db: DataSource, social: SocialService)
             await db.getRepository(TableSeat).update({ tableId, userId: me }, { ready });
         },
 
-        /**
-         * Holds a chair for somebody, and only for somebody who could actually sit in it.
-         *
-         * On an `invite` table the invitation is what GRANTS the visibility - that is the whole
-         * level - so there is nothing to check first. On every other level the table's visibility
-         * comes from somewhere else entirely, and an invitation cannot add to it: a room table is
-         * the room's, a friends table is the host's friends', a public table is everybody's.
-         *
-         * Without that distinction this wrote a chair that nothing could ever free. `claimSeat`
-         * passes over a chair held for somebody else, the invitee's own claim 404s before it gets
-         * near one, and no route anywhere clears `invited_id` - so a four-seat room table with one
-         * outside invitation could never reach `ready` and could never be started, by anybody,
-         * ever. It also told that person a table existed which every read of it denies.
-         */
         async invite(me: string, tableId: string, otherId: string): Promise<boolean>
         {
             const table = await mustSee(me, tableId);
@@ -1084,25 +1261,92 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ForbiddenError('They cannot reach that table.');
             }
 
-            /**
-             * Raw, because the chair is chosen by a `for update skip locked` inside a scalar
-             * sub-query - the same shape as the seat claim and for the same reason. Two hosts
-             * inviting at once lock different chairs rather than one of them holding a chair the
-             * other has already given away.
-             */
-            const held = await db.query(
-                `update table_seats
-                    set invited_id = $2
-                  where table_id = $1
-                    and seat = (select s.seat from table_seats s
-                                 where s.table_id = $1 and s.user_id is null and s.invited_id is null
-                                 order by s.seat limit 1
-                                 for update skip locked)
-                  returning seat`,
-                [tableId, otherId]
-            );
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
 
-            return firstRow<{ seat: number }>(held) !== null;
+                const kept = tx.getRepository(TableRemoval);
+
+                if (table.is_host)
+                {
+                    await kept.delete({ tableId, userId: otherId });
+                }
+                else if (await kept.existsBy({ tableId, userId: otherId }))
+                {
+                    throw noInvitee();
+                }
+
+                /**
+                 * Raw, because the chair is chosen by a `for update skip locked` inside a scalar
+                 * sub-query - the same shape as the seat claim and for the same reason.
+                 */
+                const held = await tx.query(
+                    `update table_seats
+                        set invited_id = $2
+                      where table_id = $1
+                        and seat = (select s.seat from table_seats s
+                                     where s.table_id = $1 and s.user_id is null and s.invited_id is null
+                                     order by s.seat limit 1
+                                     for update skip locked)
+                      returning seat`,
+                    [tableId, otherId]
+                );
+
+                return firstRow<{ seat: number }>(held) !== null;
+            });
+        },
+
+        async remove(me: string, tableId: string, handle: string)
+        {
+            const seen = await mustSee(me, tableId);
+
+            if (!seen.is_host || seen.mine === null || seen.quick)
+            {
+                throw new NotFoundError('No table there.');
+            }
+
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const chairs = tx.getRepository(TableSeat);
+                const table = await tx.getRepository(Table).findOne({ select: { id: true, hostId: true, status: true }, where: { id: tableId } });
+
+                if (table === null || table.hostId !== me || !await chairs.existsBy({ tableId, userId: me }))
+                {
+                    throw new NotFoundError('No table there.');
+                }
+
+                if (table.status === 'closed')
+                {
+                    throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
+                if (await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'A game is being played at that table.');
+                }
+
+                const occupant = await chairs
+                    .createQueryBuilder('s')
+                    .innerJoin(User, 'u', 'u.id = s.user_id')
+                    .select('s.user_id', 'id')
+                    .where('s.table_id = :tableId and u.handle = :handle', { tableId, handle })
+                    .getRawOne<{ id: string }>();
+
+                if (occupant === undefined || occupant.id === me)
+                {
+                    throw new NotFoundError('No table there.');
+                }
+
+                const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId, kind: 'game' } });
+
+                await tx.getRepository(TableRemoval).upsert({ tableId, userId: occupant.id }, ['tableId', 'userId']);
+                await chairs.update({ tableId, invitedId: occupant.id }, { invitedId: null });
+                await standUp(tx, tableId, occupant.id);
+
+                return { userId: occupant.id, conversationId: thread?.id ?? null };
+            });
         },
 
         /** Ends the table. The host's call. */
@@ -1136,17 +1380,44 @@ export function createTableService(db: DataSource, social: SocialService)
         async setVoice(me: string, tableId: string, voice: VoiceScope)
         {
             const table = await mustSee(me, tableId);
-            if (!table.is_host)
+            if (!table.is_host || table.mine === null)
             {
                 throw new ForbiddenError('Only the host can turn voice on or off.');
             }
 
-            const changed = await db.getRepository(Table).update({ id: tableId, hostId: me, status: Not('closed') }, { voice });
-
-            if (changed.affected === 0)
+            if (voice === 'team' && !table.teams)
             {
-                throw tableRefusal('table-closed', 'That table has closed.');
+                throw new ValidationError({ voice: 'A call for one side needs a table of two sides.' }, 'That is not a table this game makes.');
             }
+
+            await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const held = await tx.getRepository(Table).findOne({ select: { id: true, voice: true, teams: true, status: true }, where: { id: tableId, hostId: me } });
+
+                if (held === null || held.status === 'closed')
+                {
+                    throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
+                if (held.voice === voice)
+                {
+                    return;
+                }
+
+                if (held.teams && await tx.getRepository(Match).existsBy({ tableId: held.id, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'The call a game began under stays until it ends.');
+                }
+
+                await tx.getRepository(Table).update({ id: held.id }, { voice });
+
+                if (held.voice === 'team' || voice === 'team')
+                {
+                    await tx.getRepository(TableSeat).update({ tableId: held.id }, { ready: false });
+                }
+            });
         },
 
         /**

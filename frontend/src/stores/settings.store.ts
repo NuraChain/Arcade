@@ -14,14 +14,30 @@ export interface Settings
     voiceAutoJoin: boolean;
     voiceVolume: number;
     voiceTables: boolean;
+    voiceTeam: boolean;
     voicePushToTalk: boolean;
     voiceTalkKey: string;
     voiceMic: string;
     voiceSpeaker: string;
+    voiceLevels: Record<string, number>;
+    voiceNoise: VoiceNoise;
+    voiceEcho: boolean;
+    voiceAgc: boolean;
+    voiceInput: number;
+    voiceAuto: boolean;
+    voiceThreshold: number;
+    voiceRelease: number;
+    voiceQuality: VoiceQuality;
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
+    quickAsks: Record<string, unknown>;
+    notify: boolean;
 }
+
+export type VoiceNoise = 'off' | 'standard' | 'strong';
+
+export type VoiceQuality = 'standard' | 'high' | 'best';
 
 const STORAGE_KEY = 'nura-games.settings';
 
@@ -34,17 +50,29 @@ export function defaultSettings(): Settings
         sidebarOpen: true,
         tableSidebarOpen: false,
         recentEmoji: [],
-        voiceStartMuted: true,
-        voiceAutoJoin: false,
+        voiceStartMuted: false,
+        voiceAutoJoin: true,
         voiceVolume: 1,
         voiceTables: false,
+        voiceTeam: false,
         voicePushToTalk: false,
         voiceTalkKey: 'KeyV',
         voiceMic: '',
         voiceSpeaker: '',
+        voiceLevels: {},
+        voiceNoise: 'standard',
+        voiceEcho: true,
+        voiceAgc: true,
+        voiceInput: 1,
+        voiceAuto: true,
+        voiceThreshold: -50,
+        voiceRelease: 200,
+        voiceQuality: 'high',
         hintMoves: true,
         hintOutcome: true,
-        hintRules: true
+        hintRules: true,
+        quickAsks: {},
+        notify: false
     };
 }
 

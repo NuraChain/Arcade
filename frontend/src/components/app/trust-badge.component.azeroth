@@ -7,39 +7,35 @@ import { useLocale } from '../../stores/locale.store.ts';
 
 const ICON: Record<Attestation, IconName> = {
     wallet: 'verified',
-    contract: 'shield',
-    server: 'info'
+    contract: 'shield'
 };
 
 const SAYS: Record<Attestation, MessageKey> = {
     wallet: 'devices.attested.wallet',
-    contract: 'devices.attested.contract',
-    server: 'devices.attested.server'
+    contract: 'devices.attested.contract'
 };
 
 const HINT: Record<Attestation, MessageKey> = {
     wallet: 'devices.attested.walletHint',
-    contract: 'devices.attested.contractHint',
-    server: 'devices.attested.serverHint'
+    contract: 'devices.attested.contractHint'
 };
 
 const TONE: Record<Attestation, string> = {
     wallet: 'text-live',
-    contract: 'text-accent',
-    server: 'text-muted'
+    contract: 'text-accent'
 };
 
 /**
  * Who vouched for a device.
  *
- * `attested` is REQUIRED and there is no default. That is the whole design: a device this server
- * asserts on the strength of a session alone must not be able to render as wallet-verified because
+ * `attested` is REQUIRED and there is no default. That is the whole design: a device that was not
+ * proven by the account's own wallet must not be able to render as wallet-verified because
  * somebody forgot to pass the prop, and the way to guarantee that is to make forgetting it fail to
  * compile rather than fail quietly on a screen.
  *
  * **The hint is the product's own `Tooltip`, not `title`.** It was the browser's for a while, which
- * on this badge is the worst place for it: the difference between a wallet-attested device and one
- * this server merely asserts is the whole of the peer story, and a native `title` cannot be styled,
+ * on this badge is the worst place for it: the difference between a wallet-attested device and a
+ * contract-attested one is the whole of the peer story, and a native `title` cannot be styled,
  * cannot be reached by a finger at all, waits about a second, and renders in the OS's font at the
  * OS's size - which on a Persian page is a Latin font drawing Persian text.
  */

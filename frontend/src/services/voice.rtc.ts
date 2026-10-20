@@ -1,4 +1,19 @@
+import { createRelayKit, type Codec, type Inbound, type Outbound, type RelayKit } from './voice.relay.ts';
+import { tuneOpus } from './voice.sdp.ts';
+
 export type PeerLink = 'connecting' | 'connected' | 'failed';
+
+export type LinePath = 'direct' | 'carried' | 'none';
+
+export interface LineFacts
+{
+    path: LinePath;
+    trip: number | null;
+    jitter: number | null;
+    buffer: number | null;
+    lost: number | null;
+    kbps: number | null;
+}
 
 export type SignalKind = 'offer' | 'answer' | 'ice';
 
@@ -12,6 +27,7 @@ export interface VoiceJoin
 {
     who: string;
     join: string;
+    opus: boolean;
 }
 
 export interface VoiceCallDeps
@@ -23,6 +39,11 @@ export interface VoiceCallDeps
     onLevel(who: string, level: number): void;
     connect?(config: RTCConfiguration): RTCPeerConnection;
     context?(): AudioContext | null;
+    relay?(to: string[], codec: Codec, at: number, data: string): boolean;
+    opus?: boolean;
+    kit?(context: AudioContext): RelayKit;
+    after?(ms: number, run: () => void): () => void;
+    rtt?(): number | null;
 }
 
 export interface VoiceCall
@@ -31,25 +52,103 @@ export interface VoiceCall
     setMuted(muted: boolean): void;
     sync(mine: string, peers: readonly VoiceJoin[]): void;
     receive(join: string, signal: VoiceSignal): Promise<void>;
+    heard(join: string, codec: Codec, at: number, data: string): void;
     setVolume(who: string, volume: number): void;
     setSink(id: string): void;
+    setQuality(bitrate: number): void;
+    facts(now: number): Promise<Record<string, LineFacts>>;
     close(): void;
+}
+
+export const WATCH_MS = 200;
+
+export function patienceFor(rtt: number | null)
+{
+    return rtt === null ? 5000 : Math.min(15_000, Math.max(3000, 2000 + rtt * 20));
 }
 
 interface Peer
 {
     who: string;
     join: string;
+    opus: boolean;
     link: PeerLink;
     connection: RTCPeerConnection;
     sender: RTCRtpSender | null;
     audio: HTMLAudioElement | null;
+    direct: MediaStream | null;
+    inbound: Inbound | null;
+    stream: MediaStream | null;
+    boost: Boost | null;
     meter: (() => void) | null;
     making: boolean;
     ignoring: boolean;
     settling: boolean;
     polite: boolean;
     volume: number;
+    relaying: boolean;
+    linked: boolean;
+    flowing: boolean;
+    hungUp: boolean;
+    patience: (() => void) | null;
+    watching: (() => void) | null;
+    seen: Seen | null;
+}
+
+interface Seen
+{
+    at: number;
+    path: LinePath;
+    packets: number;
+    lost: number;
+    bytes: number;
+    delayed: number;
+    emitted: number;
+}
+
+interface Stat
+{
+    id?: string;
+    type: string;
+    kind?: string;
+    state?: string;
+    nominated?: boolean;
+    selected?: boolean;
+    selectedCandidatePairId?: string;
+    currentRoundTripTime?: number;
+    roundTripTime?: number;
+    packetsReceived?: number;
+    packetsLost?: number;
+    bytesReceived?: number;
+    jitter?: number;
+    jitterBufferDelay?: number;
+    jitterBufferEmittedCount?: number;
+}
+
+const NOWHERE: LineFacts = { path: 'none', trip: null, jitter: null, buffer: null, lost: null, kbps: null };
+
+const shareOf = (lost: number, packets: number) =>
+{
+    const missing = Math.max(0, lost);
+    const total = missing + Math.max(0, packets);
+
+    return total === 0 ? null : missing / total;
+};
+
+const millis = (seconds: number | undefined) => (seconds === undefined ? null : Math.round(seconds * 1000));
+
+export const LIMIT = { threshold: -1, knee: 0, ratio: 20, attack: 0.002, release: 0.1 };
+
+const MAKEUP = 10 ** (-0.6 * LIMIT.threshold * (1 - 1 / LIMIT.ratio) / 20);
+
+interface Boost
+{
+    source: MediaStreamAudioSourceNode;
+    gain: GainNode;
+    limit: DynamicsCompressorNode;
+    trim: GainNode;
+    out: MediaStreamAudioDestinationNode;
+    hold: HTMLAudioElement;
 }
 
 const LEVEL_MS = 120;
@@ -91,6 +190,16 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
     let localMeter: (() => void) | null = null;
     let closed = false;
     let sink = '';
+    let kit: RelayKit | null = null;
+    let outbound: Outbound | null = null;
+    let quality = 64_000;
+
+    const after = deps.after ?? ((ms: number, run: () => void) =>
+    {
+        const timer = setTimeout(run, ms);
+
+        return () => clearTimeout(timer);
+    });
 
     const route = (audio: HTMLAudioElement) =>
     {
@@ -104,12 +213,408 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const connect = deps.connect ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
 
+    const wake = () =>
+    {
+        for (const peer of peers.values())
+        {
+            if (peer.audio !== null && peer.audio.paused)
+            {
+                void peer.audio.play().catch(() => undefined);
+            }
+        }
+    };
+
+    if (typeof window !== 'undefined')
+    {
+        window.addEventListener('pointerdown', wake);
+        window.addEventListener('keydown', wake);
+    }
+
     const mark = (peer: Peer, link: PeerLink) =>
     {
         if (peers.get(peer.join) === peer)
         {
             peer.link = link;
             deps.onLink(peer.who, link);
+        }
+    };
+
+    const relays = () =>
+    {
+        if (kit === null && deps.relay !== undefined)
+        {
+            const context = deps.context?.() ?? null;
+
+            if (context !== null)
+            {
+                kit = (deps.kit ?? createRelayKit)(context);
+            }
+        }
+
+        return kit;
+    };
+
+    const retarget = () =>
+    {
+        const targets = [...peers.values()].filter((peer) => peer.relaying).map((peer) => ({ join: peer.join, opus: peer.opus }));
+
+        if (outbound === null && targets.length > 0)
+        {
+            const made = relays();
+
+            if (made === null)
+            {
+                return;
+            }
+
+            outbound = made.outbound((to, codec, at, data) => deps.relay?.(to, codec, at, data) ?? false, deps.opus === true);
+            outbound.setMuted(muted);
+            outbound.setBitrate(quality);
+            outbound.setTrack(track);
+        }
+
+        outbound?.to(targets);
+    };
+
+    const unboost = (peer: Peer) =>
+    {
+        if (peer.boost === null)
+        {
+            return;
+        }
+
+        peer.boost.source.disconnect();
+        peer.boost.gain.disconnect();
+        peer.boost.limit.disconnect();
+        peer.boost.trim.disconnect();
+        peer.boost.hold.srcObject = null;
+        peer.boost.hold.remove();
+        peer.boost = null;
+    };
+
+    const play = (peer: Peer) =>
+    {
+        if (peer.audio === null || peer.stream === null)
+        {
+            return;
+        }
+
+        const context = deps.context?.() ?? null;
+        const loud = peer.volume > 1 && context !== null;
+
+        if (loud && peer.boost === null)
+        {
+            const hold = document.createElement('audio');
+            const source = context.createMediaStreamSource(peer.stream);
+            const gain = context.createGain();
+            const limit = context.createDynamicsCompressor();
+            const trim = context.createGain();
+            const out = context.createMediaStreamDestination();
+
+            hold.muted = true;
+            hold.autoplay = true;
+            hold.hidden = true;
+            hold.srcObject = peer.stream;
+            document.body.append(hold);
+            void hold.play().catch(() => undefined);
+            limit.threshold.value = LIMIT.threshold;
+            limit.knee.value = LIMIT.knee;
+            limit.ratio.value = LIMIT.ratio;
+            limit.attack.value = LIMIT.attack;
+            limit.release.value = LIMIT.release;
+            trim.gain.value = 1 / MAKEUP;
+            source.connect(gain).connect(limit).connect(trim).connect(out);
+            peer.boost = { source, gain, limit, trim, out, hold };
+            peer.audio.srcObject = out.stream;
+            void peer.audio.play().catch(() => undefined);
+        }
+        else if (!loud && peer.boost !== null)
+        {
+            unboost(peer);
+            peer.audio.srcObject = peer.stream;
+            void peer.audio.play().catch(() => undefined);
+        }
+
+        if (peer.boost === null)
+        {
+            peer.audio.volume = Math.min(Math.max(peer.volume, 0), 1);
+        }
+        else
+        {
+            peer.boost.gain.gain.value = peer.volume;
+            peer.audio.volume = 1;
+        }
+    };
+
+    const hear = (peer: Peer) =>
+    {
+        const stream = peer.flowing || peer.inbound === null ? (peer.direct ?? peer.inbound?.stream ?? null) : peer.inbound.stream;
+
+        if (stream === null || stream === peer.stream)
+        {
+            return;
+        }
+
+        if (peer.audio === null)
+        {
+            const audio = document.createElement('audio');
+            audio.autoplay = true;
+            audio.hidden = true;
+            document.body.append(audio);
+            peer.audio = audio;
+
+            if (sink !== '')
+            {
+                route(audio);
+            }
+        }
+
+        unboost(peer);
+        peer.stream = stream;
+        peer.audio.srcObject = stream;
+        void peer.audio.play().catch(() => undefined);
+        play(peer);
+
+        const context = deps.context?.() ?? null;
+        peer.meter?.();
+        peer.meter = context === null ? null : measure(context, stream, (level) => deps.onLevel(peer.who, level));
+    };
+
+    const carries = () => deps.relay !== undefined && relays() !== null;
+
+    const settle = (peer: Peer) =>
+    {
+        peer.patience?.();
+        peer.patience = null;
+    };
+
+    const unwatch = (peer: Peer) =>
+    {
+        peer.watching?.();
+        peer.watching = null;
+    };
+
+    const viaServer = (peer: Peer) =>
+    {
+        if (!peer.relaying && peers.get(peer.join) === peer && carries())
+        {
+            peer.relaying = true;
+            retarget();
+        }
+    };
+
+    const offServer = (peer: Peer) =>
+    {
+        if (peer.relaying)
+        {
+            peer.relaying = false;
+            retarget();
+        }
+    };
+
+    const hangUp = (peer: Peer) =>
+    {
+        settle(peer);
+        unwatch(peer);
+
+        if (peer.hungUp || peers.get(peer.join) !== peer)
+        {
+            return;
+        }
+
+        peer.hungUp = true;
+        peer.linked = false;
+        peer.flowing = false;
+        peer.connection.close();
+        viaServer(peer);
+        hear(peer);
+        mark(peer, 'connected');
+    };
+
+    const wait = (peer: Peer) =>
+    {
+        if (peer.patience === null && !peer.hungUp)
+        {
+            peer.patience = after(patienceFor(deps.rtt?.() ?? null), () =>
+            {
+                peer.patience = null;
+                hangUp(peer);
+            });
+        }
+    };
+
+    const watch = (peer: Peer) =>
+    {
+        unwatch(peer);
+
+        const look = async () =>
+        {
+            let got = 0;
+            let heard = 0;
+
+            try
+            {
+                for (const report of (await peer.connection.getStats()).values() as IterableIterator<Stat>)
+                {
+                    if (report.type === 'inbound-rtp' && report.kind === 'audio')
+                    {
+                        got += report.packetsReceived ?? 0;
+                    }
+
+                    if (report.type === 'remote-inbound-rtp' && report.kind === 'audio')
+                    {
+                        heard += 1;
+                    }
+                }
+            }
+            catch
+            {
+                got = 0;
+            }
+
+            if (peers.get(peer.join) !== peer || !peer.linked || closed)
+            {
+                return;
+            }
+
+            if (!peer.flowing && got > 0)
+            {
+                peer.flowing = true;
+                hear(peer);
+            }
+
+            if (heard > 0)
+            {
+                offServer(peer);
+            }
+
+            peer.watching = peer.flowing && !peer.relaying ? null : after(WATCH_MS, () => void look());
+        };
+
+        peer.watching = after(0, () => void look());
+    };
+
+    const rateOf = (seen: Seen, before: Seen | null) =>
+        before === null || before.path !== seen.path || seen.at <= before.at ? null : Math.round((seen.bytes - before.bytes) * 8 / (seen.at - before.at));
+
+    const lostOf = (seen: Seen, before: Seen | null) =>
+        before === null || before.path !== seen.path ? shareOf(seen.lost, seen.packets) : shareOf(seen.lost - before.lost, seen.packets - before.packets);
+
+    const directly = async (peer: Peer, now: number): Promise<LineFacts> =>
+    {
+        const pairs = new Map<string, Stat>();
+        let chosen: string | undefined;
+        let inbound: Stat | null = null;
+        let remote: Stat | null = null;
+
+        try
+        {
+            for (const report of (await peer.connection.getStats()).values() as IterableIterator<Stat>)
+            {
+                if (report.type === 'transport' && report.selectedCandidatePairId !== undefined)
+                {
+                    chosen = report.selectedCandidatePairId;
+                }
+
+                if (report.type === 'candidate-pair' && report.id !== undefined)
+                {
+                    pairs.set(report.id, report);
+                }
+
+                if (report.type === 'inbound-rtp' && report.kind === 'audio')
+                {
+                    inbound = report;
+                }
+
+                if (report.type === 'remote-inbound-rtp' && report.kind === 'audio')
+                {
+                    remote = report;
+                }
+            }
+        }
+        catch
+        {
+            return NOWHERE;
+        }
+
+        const pair = (chosen === undefined ? undefined : pairs.get(chosen))
+            ?? [...pairs.values()].find((one) => one.selected === true || (one.nominated === true && one.state === 'succeeded'));
+        const before = peer.seen;
+        const seen: Seen = {
+            at: now,
+            path: 'direct',
+            packets: inbound?.packetsReceived ?? 0,
+            lost: inbound?.packetsLost ?? 0,
+            bytes: inbound?.bytesReceived ?? 0,
+            delayed: inbound?.jitterBufferDelay ?? 0,
+            emitted: inbound?.jitterBufferEmittedCount ?? 0
+        };
+        const fresh = before !== null && before.path === 'direct' && seen.emitted > before.emitted;
+        const delayed = fresh ? seen.delayed - before.delayed : seen.delayed;
+        const emitted = fresh ? seen.emitted - before.emitted : seen.emitted;
+
+        peer.seen = seen;
+
+        return {
+            path: 'direct',
+            trip: millis(pair?.currentRoundTripTime ?? remote?.roundTripTime),
+            jitter: millis(inbound?.jitter),
+            buffer: emitted > 0 ? Math.round(delayed / emitted * 1000) : null,
+            lost: lostOf(seen, before),
+            kbps: rateOf(seen, before)
+        };
+    };
+
+    const carried = (peer: Peer, inbound: Inbound, now: number): LineFacts =>
+    {
+        const heard = inbound.heard();
+        const before = peer.seen;
+        const late = heard.playout?.late ?? 0;
+        const seen: Seen = { at: now, path: 'carried', packets: (heard.playout?.taken ?? 0) - late, lost: late, bytes: heard.bytes, delayed: 0, emitted: 0 };
+
+        peer.seen = seen;
+
+        return {
+            path: 'carried',
+            trip: deps.rtt?.() ?? null,
+            jitter: heard.playout === null ? null : heard.playout.jitter,
+            buffer: heard.playout === null ? null : heard.playout.buffer,
+            lost: heard.playout === null ? null : lostOf(seen, before),
+            kbps: rateOf(seen, before)
+        };
+    };
+
+    const factsOf = async (peer: Peer, now: number) =>
+    {
+        if (peer.flowing)
+        {
+            return directly(peer, now);
+        }
+
+        if (peer.inbound !== null)
+        {
+            return carried(peer, peer.inbound, now);
+        }
+
+        peer.seen = null;
+
+        return NOWHERE;
+    };
+
+    const broke = (peer: Peer) =>
+    {
+        if (peer.hungUp)
+        {
+            return;
+        }
+
+        if (carries())
+        {
+            hangUp(peer);
+        }
+        else
+        {
+            mark(peer, 'failed');
         }
     };
 
@@ -121,14 +626,54 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             return;
         }
         peers.delete(join);
+        settle(peer);
+        unwatch(peer);
         peer.meter?.();
+        unboost(peer);
+        peer.inbound?.close();
+        peer.inbound = null;
         if (peer.audio !== null)
         {
             peer.audio.srcObject = null;
             peer.audio.remove();
         }
         peer.connection.close();
+        if (peer.relaying)
+        {
+            peer.relaying = false;
+            retarget();
+        }
         deps.onLink(peer.who, null);
+    };
+
+    const tune = (peer: Peer) =>
+    {
+        const sender = peer.sender;
+
+        if (sender === null || typeof sender.getParameters !== 'function')
+        {
+            return;
+        }
+
+        try
+        {
+            const parameters = sender.getParameters();
+            const [first] = parameters.encodings ?? [];
+
+            if (first === undefined || first.maxBitrate === quality)
+            {
+                return;
+            }
+
+            first.maxBitrate = quality;
+            first.priority = 'high';
+            first.networkPriority = 'high';
+            void sender.setParameters(parameters).catch(() => undefined);
+        }
+        catch
+        {
+            return;
+        }
     };
 
     const carry = (peer: Peer, line: RTCRtpTransceiver) =>
@@ -142,27 +687,49 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
     };
 
-    const open = (join: string, who: string) =>
+    const open = (join: string, who: string, opus: boolean) =>
     {
         const connection = connect({ iceServers: deps.iceServers });
 
         const peer: Peer = {
             who,
             join,
+            opus,
             link: 'connecting',
             connection,
             sender: null,
             audio: null,
+            direct: null,
+            inbound: null,
+            stream: null,
+            boost: null,
             meter: null,
             making: false,
             ignoring: false,
             settling: false,
             polite: own > join,
-            volume: 1
+            volume: 1,
+            relaying: false,
+            linked: false,
+            flowing: false,
+            hungUp: false,
+            patience: null,
+            watching: null,
+            seen: null
         };
 
         peers.set(join, peer);
-        deps.onLink(who, 'connecting');
+
+        if (carries())
+        {
+            viaServer(peer);
+            deps.onLink(who, 'connected');
+            wait(peer);
+        }
+        else
+        {
+            deps.onLink(who, 'connecting');
+        }
 
         if (!peer.polite)
         {
@@ -182,7 +749,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             }
             catch
             {
-                mark(peer, 'failed');
+                broke(peer);
             }
             finally
             {
@@ -202,50 +769,77 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             const state = connection.connectionState;
 
+            if (peer.hungUp || peers.get(join) !== peer)
+            {
+                return;
+            }
+
             if (state === 'connected')
             {
+                settle(peer);
+                peer.linked = true;
+                tune(peer);
                 mark(peer, 'connected');
+
+                if (carries())
+                {
+                    watch(peer);
+                }
+                else
+                {
+                    peer.flowing = true;
+                    hear(peer);
+                }
             }
             else if (state === 'failed')
             {
-                mark(peer, 'failed');
+                peer.linked = false;
+                peer.flowing = false;
+                unwatch(peer);
 
-                if (!peer.polite)
+                if (carries())
                 {
-                    connection.restartIce();
+                    hangUp(peer);
+                }
+                else
+                {
+                    mark(peer, 'failed');
+
+                    if (!peer.polite)
+                    {
+                        connection.restartIce();
+                    }
                 }
             }
             else if (state === 'disconnected' || state === 'connecting' || state === 'new')
             {
-                mark(peer, 'connecting');
+                const was = peer.linked;
+
+                peer.linked = false;
+                unwatch(peer);
+
+                if (carries())
+                {
+                    peer.flowing = false;
+                    viaServer(peer);
+                    hear(peer);
+
+                    if (was)
+                    {
+                        wait(peer);
+                    }
+                }
+                else
+                {
+                    mark(peer, 'connecting');
+                }
             }
         };
 
         connection.ontrack = (event) =>
         {
-            const stream = event.streams[0] ?? new MediaStream([event.track]);
-
-            if (peer.audio === null)
-            {
-                const audio = document.createElement('audio');
-                audio.autoplay = true;
-                audio.hidden = true;
-                audio.volume = peer.volume;
-                document.body.append(audio);
-                peer.audio = audio;
-
-                if (sink !== '')
-                {
-                    route(audio);
-                }
-            }
-
-            peer.audio.srcObject = stream;
-            void peer.audio.play().catch(() => undefined);
-
-            const context = deps.context?.() ?? null;
-            peer.meter?.();
-            peer.meter = context === null ? null : measure(context, stream, (level) => deps.onLevel(peer.who, level));
+            peer.direct = event.streams[0] ?? new MediaStream([event.track]);
+            hear(peer);
         };
     };
 
@@ -255,7 +849,14 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             localMeter?.();
             localMeter = null;
 
+            const previous = track;
+
             track = stream?.getAudioTracks()[0] ?? null;
+
+            if (previous !== null && previous !== track)
+            {
+                previous.enabled = true;
+            }
 
             if (track !== null)
             {
@@ -267,6 +868,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 }
             }
 
+            outbound?.setTrack(track);
+
             await Promise.all([...peers.values()].map((peer) => peer.sender?.replaceTrack(track)));
         },
 
@@ -277,6 +880,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             {
                 track.enabled = !next;
             }
+            outbound?.setMuted(next);
             if (next)
             {
                 deps.onLevel(deps.me(), 0);
@@ -300,30 +904,44 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 own = mine;
             }
 
-            const keep = new Map(wanted.filter((one) => one.join !== mine).map((one) => [one.join, one.who]));
+            const keep = new Map(wanted.filter((one) => one.join !== mine).map((one) => [one.join, one]));
+            let moved = false;
 
             for (const [join, peer] of [...peers])
             {
-                const who = keep.get(join);
+                const one = keep.get(join);
 
-                if (who === undefined)
+                if (one === undefined)
                 {
                     drop(join);
+                    continue;
                 }
-                else if (who !== peer.who)
+
+                if (one.who !== peer.who)
                 {
                     deps.onLink(peer.who, null);
-                    peer.who = who;
-                    deps.onLink(who, peer.link);
+                    peer.who = one.who;
+                    deps.onLink(one.who, peer.link);
+                }
+
+                if (one.opus !== peer.opus)
+                {
+                    peer.opus = one.opus;
+                    moved = moved || peer.relaying;
                 }
             }
 
-            for (const [join, who] of keep)
+            for (const [join, one] of keep)
             {
                 if (!peers.has(join))
                 {
-                    open(join, who);
+                    open(join, one.who, one.opus);
                 }
+            }
+
+            if (moved)
+            {
+                retarget();
             }
         },
 
@@ -331,7 +949,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             const peer = peers.get(join);
 
-            if (closed || peer === undefined)
+            if (closed || peer === undefined || peer.hungUp)
             {
                 return;
             }
@@ -356,7 +974,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     return;
                 }
 
-                const description = JSON.parse(signal.data) as RTCSessionDescriptionInit;
+                const said = JSON.parse(signal.data) as RTCSessionDescriptionInit;
+                const description = said.sdp === undefined ? said : { ...said, sdp: tuneOpus(said.sdp) };
                 const free = !peer.making && (connection.signalingState === 'stable' || peer.settling);
                 const collision = description.type === 'offer' && !free;
 
@@ -399,10 +1018,41 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                         deps.send(peer.who, join, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
                     }
                 }
+
+                tune(peer);
             }
             catch
             {
-                mark(peer, 'failed');
+                broke(peer);
+            }
+        },
+
+        heard(join, codec, at, data)
+        {
+            const peer = peers.get(join);
+
+            if (closed || peer === undefined)
+            {
+                return;
+            }
+
+            if (peer.inbound === null)
+            {
+                const made = relays();
+
+                if (made === null)
+                {
+                    return;
+                }
+
+                peer.inbound = made.inbound();
+            }
+
+            peer.inbound.take(codec, at, data);
+
+            if (!peer.flowing)
+            {
+                hear(peer);
             }
         },
 
@@ -412,11 +1062,28 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             if (peer !== undefined)
             {
                 peer.volume = volume;
-                if (peer.audio !== null)
-                {
-                    peer.audio.volume = volume;
-                }
+                play(peer);
             }
+        },
+
+        async facts(now)
+        {
+            const listed = [...peers.values()];
+            const found = await Promise.all(listed.map((peer) => factsOf(peer, now)));
+
+            return Object.fromEntries(listed.map((peer, index) => [peer.who, found[index]]));
+        },
+
+        setQuality(bitrate)
+        {
+            quality = bitrate;
+
+            for (const peer of peers.values())
+            {
+                tune(peer);
+            }
+
+            outbound?.setBitrate(bitrate);
         },
 
         setSink(id)
@@ -435,12 +1102,22 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         close()
         {
             closed = true;
+
+            if (typeof window !== 'undefined')
+            {
+                window.removeEventListener('pointerdown', wake);
+                window.removeEventListener('keydown', wake);
+            }
+
             localMeter?.();
             localMeter = null;
             for (const join of [...peers.keys()])
             {
                 drop(join);
             }
+
+            outbound?.close();
+            outbound = null;
         }
     };
 }

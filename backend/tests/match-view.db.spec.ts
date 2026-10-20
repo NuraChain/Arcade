@@ -33,7 +33,8 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
-    sessionsRevoked: () => undefined
+    sessionsRevoked: () => undefined,
+    seen: () => undefined
 };
 
 const makeUser = async () =>
@@ -43,8 +44,7 @@ const makeUser = async () =>
     const made = await db.getRepository(User).save({
         handle: `v${ seq }x${ Math.floor(Math.random() * 100000) }`,
         displayName: `View ${ seq }`,
-        hue: seq % 360,
-        kind: 'guest'
+        hue: seq % 360
     });
 
     return made.id;
@@ -118,7 +118,7 @@ describe.skipIf(!active)('the match a reader is sent, against a real database', 
         const seen = [
             match,
             ...await Promise.all(players.map((player) => ports.match.view(player, match.id))),
-            (await ports.match.watch(watcher, match.id))?.match,
+            (await ports.match.watch(watcher, match.id, 0))?.match,
             ...pushed.map((push) => push.match)
         ];
 
@@ -139,7 +139,7 @@ describe.skipIf(!active)('the match a reader is sent, against a real database', 
             ended.match,
             ...await Promise.all(players.map((player) => ports.match.view(player, match.id))),
             (await ports.match.since(players[0], match.id, 0))?.match,
-            (await ports.match.watch(watcher, match.id))?.match,
+            (await ports.match.watch(watcher, match.id, 0))?.match,
             ...pushed.map((push) => push.match)
         ];
 

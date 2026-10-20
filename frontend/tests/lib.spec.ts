@@ -5,7 +5,7 @@ import { createRandom, hashSeed } from '../src/lib/random.ts';
 import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import { createScrollMemory } from '../src/lib/scroll-memory.ts';
 import { forget, recallJson, rememberJson } from '../src/lib/storage.ts';
-import { isLocalizedText, pickText } from '../src/lib/text.ts';
+import { pickText } from '../src/lib/text.ts';
 import { TABLE_RULES, defaultTable, isValidTable } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 
@@ -225,8 +225,6 @@ describe('localised text', () =>
     {
         expect(pickText({ en: 'Sara', fa: 'سارا' }, 'fa')).toBe('سارا');
         expect(pickText('plain', 'fa')).toBe('plain');
-        expect(isLocalizedText({ en: 'a', fa: 'b' })).toBe(true);
-        expect(isLocalizedText({ en: 'a' })).toBe(false);
     });
 });
 

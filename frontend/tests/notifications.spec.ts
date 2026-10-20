@@ -3,15 +3,17 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 
 import type { Notification } from '../src/api.ts';
 import NotificationRow from '../src/components/social/notification-row.component.azeroth';
+import { sayOf, targetOf } from '../src/lib/notifications.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -42,7 +44,6 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useSocial().reset();
@@ -55,6 +56,52 @@ afterEach(() =>
     cleanup();
     useNotifications().reset();
     useRealtime().reset();
+});
+
+describe('where a notice leads', () =>
+{
+    const notice = (kind: Notification['kind'], extra: Partial<Notification> = {}): Notification => ({
+        id: 'one',
+        kind,
+        ref: {},
+        count: 1,
+        read: false,
+        at: new Date(0).toISOString(),
+        ...extra
+    });
+
+    it('sends a friend request to the tab it is answered on, not to the sender’s profile', () =>
+    {
+        expect(targetOf(notice('friend-request', { actor: 'maya.c' }))).toBe('/app/friends?tab=requests');
+    });
+
+    it('sends every other kind to the thing it names', () =>
+    {
+        expect(targetOf(notice('friend-accepted', { actor: 'maya.c' }))).toBe('/app/people/maya.c');
+        expect(targetOf(notice('table-invite', { actor: 'maya.c', ref: { tableId: 't-1' } }))).toBe('/app/play/t-1');
+        expect(targetOf(notice('turn', { ref: { tableId: 't-2' } }))).toBe('/app/play/t-2');
+        expect(targetOf(notice('group-added', { actor: 'maya.c', ref: { groupId: 'g-1' } }))).toBe('/app/groups/g-1');
+        expect(targetOf(notice('message', { actor: 'maya.c', ref: { conversationId: 'c-1' } }))).toBe('/app/chats/c-1');
+    });
+
+    it('sends somebody a host took out of a table to the games, not back to a table with no chair for them', () =>
+    {
+        expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1', game: 'ludo' } }))).toBe('/app/games');
+        expect(targetOf(notice('table-removed', { actor: 'maya.c', ref: { tableId: 't-1' } }))).toBe('/app/games');
+    });
+});
+
+describe('what a notice says', () =>
+{
+    const turn = (ref: Notification['ref']): Notification => ({ id: 'one', kind: 'turn', ref, count: 1, read: false, at: new Date(0).toISOString() });
+
+    it.each([['en', 'Your turn at Hokm', 'Your turn'], ['fa', 'نوبتته توی حکم', 'نوبتته']] as const)('names the game a turn is in, and says a whole sentence for a row that names none, in %s', (language, named, bare) =>
+    {
+        useLocale().setLocale(language);
+
+        expect(sayOf(turn({ tableId: 't-1', game: 'hokm' }), '', useLocale())).toBe(named);
+        expect(sayOf(turn({ tableId: 't-1' }), '', useLocale()), 'a turn whose row names no game ends in a gap').toBe(bare);
+    });
 });
 
 describe('the notifications store', () =>
@@ -217,6 +264,539 @@ describe('the notifications store', () =>
     });
 });
 
+describe('what the reader did to a notification, shown before the server has said so', () =>
+{
+    const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+    const holding = async (verb: string, run: (out: { asked: unknown[]; answer: () => void }) => Promise<void>) =>
+    {
+        const real = routes[verb];
+        const asked: unknown[] = [];
+        const waiting: (() => void)[] = [];
+        let owed = 0;
+
+        const answer = () =>
+        {
+            const next = waiting.shift();
+
+            if (next === undefined)
+            {
+                owed += 1;
+            }
+            else
+            {
+                next();
+            }
+        };
+
+        routes[verb] = async (input) =>
+        {
+            asked.push(input);
+
+            if (owed > 0)
+            {
+                owed -= 1;
+            }
+            else
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+            }
+
+            return await real(input);
+        };
+
+        try
+        {
+            await run({ asked, answer });
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const answering = async (verb: string, answer: (input: unknown, real: (input: unknown) => Promise<unknown>) => Promise<unknown>, run: () => Promise<void>) =>
+    {
+        const real = routes[verb];
+
+        routes[verb] = (input) => answer(input, real);
+
+        try
+        {
+            await run();
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const late = async (verb: string, run: (answer: () => void) => Promise<void>) =>
+    {
+        let answer: () => void = () => undefined;
+
+        await answering(verb, async (input, real) =>
+        {
+            const done = await real(input);
+
+            await new Promise<void>((resolve) =>
+            {
+                answer = resolve;
+            });
+
+            return done;
+        }, async () =>
+        {
+            await run(() => answer());
+        });
+    };
+
+    const unanswered = () => new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+
+    const three = async () =>
+    {
+        const notifications = useNotifications();
+
+        server.notify({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 't-1' }, dedupeKey: 'table:t-1' });
+        server.notify({ kind: 'friend-request', actor: 'reza.t', dedupeKey: 'friend:reza.t' });
+        server.notify({ kind: 'message', actor: 'parisa', ref: { conversationId: 'c-1' }, dedupeKey: 'chat:c-1' });
+        await notifications.refresh();
+        await settle();
+
+        return notifications;
+    };
+
+    const unreadOf = (notifications: ReturnType<typeof useNotifications>) => notifications.items().filter((row) => !row.read).map((row) => row.id);
+
+    it('reads one in the same turn: the row, the list beside the page and the count', async () =>
+    {
+        const notifications = await three();
+        const [first, second] = notifications.items();
+
+        await holding('read', async ({ asked, answer }) =>
+        {
+            const read = notifications.markRead(first.id);
+
+            expect(notifications.unread()).toBe(2);
+            expect(notifications.items()[0]).toMatchObject({ id: first.id, read: true });
+            expect(notifications.latest()[0]).toMatchObject({ id: first.id, read: true });
+            expect(notifications.items()[1]).toBe(second);
+            expect(notifications.items()).toBe(notifications.items());
+
+            await settle();
+            expect(asked).toEqual([{ params: { id: first.id } }]);
+            expect(server.notifications.find((row) => row.id === first.id)?.read).toBe(false);
+
+            answer();
+            await read;
+
+            expect(notifications.unread()).toBe(2);
+            expect(unreadOf(notifications)).not.toContain(first.id);
+        });
+    });
+
+    it('does not count one twice that was already read', async () =>
+    {
+        const notifications = await three();
+        const [first] = notifications.items();
+
+        await notifications.markRead(first.id);
+        expect(notifications.unread()).toBe(2);
+
+        await holding('read', async ({ answer }) =>
+        {
+            const again = notifications.markRead(first.id);
+
+            expect(notifications.unread()).toBe(2);
+
+            answer();
+            await again;
+            expect(notifications.unread()).toBe(2);
+        });
+    });
+
+    it('reads all of them in the same turn', async () =>
+    {
+        const notifications = await three();
+
+        await holding('readAll', async ({ answer }) =>
+        {
+            const read = notifications.markAllRead();
+
+            expect(notifications.unread()).toBe(0);
+            expect(unreadOf(notifications)).toEqual([]);
+            expect(notifications.latest().some((row) => !row.read)).toBe(false);
+            expect(server.notifications.some((row) => !row.read)).toBe(true);
+
+            answer();
+            await read;
+            expect(notifications.unread()).toBe(0);
+            expect(server.notifications.some((row) => !row.read)).toBe(false);
+        });
+    });
+
+    it('takes one away in the same turn, with its place in the count if it had one', async () =>
+    {
+        const notifications = await three();
+        await notifications.markRead(notifications.items()[2].id);
+
+        const [first, second, third] = notifications.items();
+
+        expect(third.read).toBe(true);
+
+        await holding('dismiss', async ({ answer }) =>
+        {
+            const gone = notifications.dismiss(first.id);
+            const read = notifications.dismiss(third.id);
+
+            expect(notifications.items().map((row) => row.id)).toEqual([second.id]);
+            expect(notifications.latest().map((row) => row.id)).toEqual([second.id]);
+            expect(notifications.unread()).toBe(1);
+            expect(notifications.items()[0]).toBe(second);
+            expect(server.notifications).toHaveLength(3);
+
+            answer();
+            answer();
+            await Promise.all([gone, read]);
+
+            expect(notifications.items().map((row) => row.id)).toEqual([second.id]);
+            expect(notifications.unread()).toBe(1);
+            expect(server.notifications).toHaveLength(1);
+        });
+    });
+
+    it('puts it back, and hands the refusal on, when the server says no', async () =>
+    {
+        const notifications = await three();
+        const [first] = notifications.items();
+        const refusal = new ApiError(500, 'internal', 'Something went wrong.', undefined);
+        const refused = async () =>
+        {
+            throw refusal;
+        };
+
+        await answering('dismiss', refused, async () =>
+        {
+            const gone = notifications.dismiss(first.id);
+
+            expect(notifications.items().some((row) => row.id === first.id)).toBe(false);
+            await expect(gone).rejects.toBe(refusal);
+            expect(notifications.items()[0]).toBe(first);
+            expect(notifications.unread()).toBe(3);
+        });
+
+        await answering('read', refused, async () =>
+        {
+            const read = notifications.markRead(first.id);
+
+            expect(notifications.unread()).toBe(2);
+            await expect(read).rejects.toBe(refusal);
+            expect(notifications.unread()).toBe(3);
+            expect(notifications.items()[0]).toBe(first);
+        });
+
+        await answering('readAll', refused, async () =>
+        {
+            const read = notifications.markAllRead();
+
+            expect(notifications.unread()).toBe(0);
+            await expect(read).rejects.toBe(refusal);
+            expect(notifications.unread()).toBe(3);
+            expect(unreadOf(notifications)).toHaveLength(3);
+        });
+    });
+
+    it('keeps what was done when the request went through and the list could not be read again, until it can', async () =>
+    {
+        const notifications = await three();
+        const [first] = notifications.items();
+
+        await answering('list', async () =>
+        {
+            throw unanswered();
+        }, async () =>
+        {
+            await notifications.dismiss(first.id);
+            expect(notifications.items().some((row) => row.id === first.id)).toBe(false);
+            expect(notifications.unread()).toBe(2);
+
+            await notifications.refresh();
+            await settle();
+            expect(notifications.items().some((row) => row.id === first.id)).toBe(false);
+            expect(notifications.unread()).toBe(2);
+        });
+
+        expect(server.notifications.some((row) => row.id === first.id)).toBe(false);
+        expect(notifications.items().some((row) => row.id === first.id)).toBe(false);
+
+        server.notify({ kind: 'message', actor: 'parisa', ref: { conversationId: 'c-1' }, dedupeKey: first.id });
+        await notifications.refresh();
+        await settle();
+
+        expect(notifications.items().map((row) => row.id)).toContain(first.id);
+        expect(notifications.unread()).toBe(3);
+    });
+
+    it('shows nothing twice when the list is read again after the server has done it and before it has answered', async () =>
+    {
+        const notifications = await three();
+        const [first, second] = notifications.items();
+
+        await late('dismiss', async (answer) =>
+        {
+            const gone = notifications.dismiss(first.id);
+
+            await settle();
+            await notifications.refresh();
+            await settle();
+
+            expect(server.notifications.some((row) => row.id === first.id)).toBe(false);
+            expect(notifications.items().map((row) => row.id)).not.toContain(first.id);
+            expect(notifications.unread()).toBe(2);
+
+            answer();
+            await gone;
+            expect(notifications.unread()).toBe(2);
+        });
+
+        await late('read', async (answer) =>
+        {
+            const read = notifications.markRead(second.id);
+
+            await settle();
+            await notifications.refresh();
+            await settle();
+
+            expect(server.notifications.find((row) => row.id === second.id)?.read).toBe(true);
+            expect(notifications.unread()).toBe(1);
+
+            answer();
+            await read;
+            expect(notifications.unread()).toBe(1);
+        });
+    });
+
+    it('shows as unread one that came while everything was being read, once the server has said that it is', async () =>
+    {
+        const notifications = await three();
+
+        await late('readAll', async (answer) =>
+        {
+            const read = notifications.markAllRead();
+
+            await settle();
+            server.notify({ kind: 'group-added', actor: 'farhad', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+            await notifications.refresh();
+            await settle();
+
+            expect(notifications.unread()).toBe(0);
+
+            answer();
+            await read;
+
+            expect(notifications.unread()).toBe(1);
+            expect(unreadOf(notifications)).toEqual(['group:g-1']);
+        });
+    });
+
+    it('never counts below nothing, though a page read earlier still calls unread what was read somewhere else', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (let index = 0; index < 5; index += 1)
+        {
+            server.notify({ kind: 'message', actor: 'sara.k', ref: {}, dedupeKey: `chat:c-${ index }` });
+        }
+        await notifications.refresh();
+        await notifications.more();
+
+        for (const row of server.notifications)
+        {
+            row.read = true;
+        }
+
+        await notifications.dismiss(notifications.items()[0].id);
+
+        const deep = notifications.items()[notifications.items().length - 1];
+
+        expect(notifications.unread()).toBe(0);
+        expect(deep.read).toBe(false);
+
+        await holding('read', async ({ answer }) =>
+        {
+            const read = notifications.markRead(deep.id);
+
+            expect(notifications.unread()).toBe(0);
+            expect(notifications.items()[notifications.items().length - 1]).toMatchObject({ id: deep.id, read: true });
+
+            answer();
+            await read;
+            expect(notifications.unread()).toBe(0);
+        });
+    });
+
+    it('keeps the pages already read, changed as the reader changed them, through the read that follows', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (let index = 0; index < 7; index += 1)
+        {
+            server.notify({ kind: 'message', actor: 'sara.k', ref: {}, dedupeKey: `chat:c-${ index }` });
+        }
+        await notifications.refresh();
+        await notifications.more();
+
+        const deep = notifications.items()[5];
+
+        await holding('read', async ({ answer }) =>
+        {
+            const read = notifications.markRead(deep.id);
+
+            expect(notifications.items()[5]).toMatchObject({ id: deep.id, read: true });
+            expect(notifications.items()).toHaveLength(6);
+            expect(notifications.unread()).toBe(6);
+
+            answer();
+            await read;
+        });
+
+        expect(notifications.items()).toHaveLength(6);
+        expect(notifications.items()[5]).toMatchObject({ id: deep.id, read: true });
+        expect(notifications.hasMore()).toBe(true);
+
+        await notifications.markAllRead();
+
+        expect(notifications.items()).toHaveLength(6);
+        expect(unreadOf(notifications)).toEqual([]);
+    });
+
+    it('follows in the list beside the page while the page shows one kind, and keeps to it when that list cannot be read again', async () =>
+    {
+        const notifications = await three();
+
+        notifications.only('invites');
+        await settle();
+
+        const [invite] = notifications.items();
+
+        expect(notifications.items().map((row) => row.kind)).toEqual(['table-invite']);
+        expect(notifications.latest()).toHaveLength(3);
+
+        await answering('list', async (input, real) =>
+        {
+            if ((input as { query: { notice?: string } }).query.notice === undefined)
+            {
+                throw unanswered();
+            }
+
+            return await real(input);
+        }, async () =>
+        {
+            await notifications.dismiss(invite.id);
+
+            expect(notifications.items()).toEqual([]);
+            expect(notifications.latest().map((row) => row.id)).not.toContain(invite.id);
+            expect(notifications.latest()).toHaveLength(2);
+        });
+
+        await notifications.refresh();
+        await settle();
+
+        expect(notifications.latest()).toHaveLength(2);
+    });
+
+    it('counts one fewer for a row that only the list beside the page shows', async () =>
+    {
+        const notifications = await three();
+
+        notifications.only('invites');
+        await settle();
+
+        const message = notifications.latest().find((row) => row.kind === 'message')!;
+
+        expect(notifications.items().map((row) => row.kind)).toEqual(['table-invite']);
+
+        await holding('read', async ({ answer }) =>
+        {
+            const read = notifications.markRead(message.id);
+
+            expect(notifications.unread()).toBe(2);
+            expect(notifications.latest().find((row) => row.id === message.id)?.read).toBe(true);
+
+            answer();
+            await read;
+            expect(notifications.unread()).toBe(2);
+        });
+    });
+
+    it('lets go of a guess once the list has been read, though the list beside the page once could not be', async () =>
+    {
+        const notifications = await three();
+        const [newest] = notifications.items();
+
+        notifications.only('invites');
+        await settle();
+
+        await answering('list', async (input, real) =>
+        {
+            if ((input as { query: { notice?: string } }).query.notice === undefined)
+            {
+                throw unanswered();
+            }
+
+            return await real(input);
+        }, async () =>
+        {
+            await notifications.refresh();
+            await settle();
+        });
+
+        notifications.only(null);
+        await settle();
+
+        await notifications.markRead(newest.id);
+        expect(notifications.items()[0]).toMatchObject({ id: newest.id, read: true });
+
+        server.notify({ kind: 'message', actor: 'parisa', ref: { conversationId: 'c-1' }, dedupeKey: newest.id });
+        await notifications.refresh();
+        await settle();
+
+        expect(notifications.items()[0]).toMatchObject({ id: newest.id, read: false, count: 2 });
+        expect(notifications.unread()).toBe(3);
+    });
+
+    it('forgets what was pressed when the store is reset', async () =>
+    {
+        const notifications = await three();
+
+        await holding('readAll', async ({ answer }) =>
+        {
+            const read = notifications.markAllRead();
+
+            expect(notifications.unread()).toBe(0);
+
+            notifications.reset();
+            await notifications.refresh();
+            await settle();
+            expect(notifications.unread()).toBe(3);
+
+            answer();
+            await read.catch(() => undefined);
+        });
+    });
+
+    it('is the same list each time it is read while nothing has changed', async () =>
+    {
+        const notifications = await three();
+
+        expect(notifications.items()).toBe(notifications.items());
+        expect(notifications.latest()).toBe(notifications.latest());
+    });
+});
+
 describe('what a notification says', () =>
 {
     const render = (item: Notification) =>
@@ -237,7 +817,7 @@ describe('what a notification says', () =>
 
         cleanup();
         useLocale().setLocale('fa');
-        expect(render(item)).toContain('می‌خواهد دوست شود');
+        expect(render(item)).toContain('می‌خواد باهات دوست بشه');
     });
 
     it('says how many when there were many, and says it once when there was one', () =>
@@ -251,6 +831,51 @@ describe('what a notification says', () =>
         const many = render({ ...base, kind: 'message' as const, actor: 'sara.k', count: 12 });
         expect(many).toContain('12');
         expect(many).toContain('new messages');
+    });
+
+    it('says who took the reader out of a table, and of which game, in the language it is read in', () =>
+    {
+        const item = { ...base, kind: 'table-removed' as const, actor: 'sara.k', ref: { tableId: 't-1', game: 'ludo' } };
+
+        const told = (text: string, game: 'games.ludo.name' | 'games.backgammon.name') =>
+            ['sara.k', 'Sara'].some((who) => text.includes(useLocale().t('notify.tableRemoved', { who, game: useLocale().t(game) })));
+
+        useLocale().setLocale('en');
+
+        const english = render(item);
+
+        expect(english).toContain('took you out of a Ludo table');
+        expect(told(english, 'games.ludo.name')).toBe(true);
+
+        cleanup();
+        expect(render({ ...item, ref: { tableId: 't-2', game: 'backgammon' } })).toContain('took you out of a Backgammon table');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = render(item);
+
+        expect(told(persian, 'games.ludo.name')).toBe(true);
+        expect(persian).toContain('منچ');
+        expect(persian).not.toContain('took you out');
+    });
+
+    it('files it with the table invitations somebody can switch off, as the server does', async () =>
+    {
+        const notifications = useNotifications();
+
+        server.notify({ kind: 'table-removed', actor: 'sara.k', ref: { tableId: 't-1', game: 'ludo' }, dedupeKey: 'removed:t-1' });
+        server.notify({ kind: 'message', actor: 'reza.t', ref: {}, dedupeKey: 'chat:c-1' });
+        await notifications.refresh();
+
+        notifications.only('invites');
+        await settle();
+
+        expect(notifications.items().map((one) => one.kind)).toEqual(['table-removed']);
+        expect(notifications.items()[0].ref).toEqual({ tableId: 't-1', game: 'ludo' });
+
+        notifications.only(null);
+        await settle();
     });
 });
 
@@ -274,5 +899,80 @@ describe('the push key', () =>
         expect(decoded.length).toBe(65);
         expect(decoded[0]).toBe(4);
         expect([...decoded]).toEqual([...point]);
+    });
+});
+
+describe('whoever a notification is about', () =>
+{
+    const render = (item: Notification) =>
+    {
+        const { container } = renderTest(() =>
+            NotificationRow({ item, onOpen: () => undefined, onDismiss: () => undefined }) as HTMLElement);
+
+        return container.textContent ?? '';
+    };
+
+    const seat = (actor: string) =>
+    {
+        server.notify({ kind: 'table-invite', actor, ref: { tableId: `t-${ actor }` }, dedupeKey: `table:t-${ actor }` });
+    };
+
+    beforeEach(() =>
+    {
+        usePeople().reset();
+    });
+
+    it('is asked about when the list lands, everybody in it in one request, so a stranger has a name in the row', async () =>
+    {
+        const notifications = useNotifications();
+
+        seat('peyman');
+        server.notify({ kind: 'group-added', actor: 'mina', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+        server.notify({ kind: 'turn', ref: { tableId: 't-2', game: 'ludo' }, dedupeKey: 'turn:t-2' });
+        server.calls = [];
+
+        await notifications.refresh();
+        await settle();
+
+        const invite = notifications.items().find((item) => item.kind === 'table-invite');
+
+        expect(server.calls.filter((call) => call === 'social.names'), 'the people in one list were asked about one at a time, or not at all').toHaveLength(1);
+        expect(invite === undefined ? '' : render(invite)).toContain('Peyman saved you a seat');
+        expect(usePeople().byHandle('mina')?.displayName).toBe('Mina Sadeghi');
+    });
+
+    it('is asked about on a later page as well', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (const actor of ['peyman', 'sara.k', 'reza.t', 'mina'])
+        {
+            seat(actor);
+        }
+
+        await notifications.refresh();
+        await settle();
+
+        expect(notifications.items().map((item) => item.actor), 'the oldest row was not left for the second page').not.toContain('peyman');
+        expect(usePeople().byHandle('peyman')).toBeNull();
+
+        await notifications.more();
+        await settle();
+
+        expect(usePeople().byHandle('peyman')?.displayName).toBe('Peyman Salehi');
+    });
+
+    it('is asked about for the newest rows too, which are read apart from a list that is filtered', async () =>
+    {
+        const notifications = useNotifications();
+
+        server.notify({ kind: 'group-added', actor: 'mina', ref: { groupId: 'g-1' }, dedupeKey: 'group:g-1' });
+        notifications.only('invites');
+        await settle();
+        await settle();
+
+        expect(notifications.items().map((item) => item.kind), 'the filtered list held the row of another kind').toEqual([]);
+        expect(notifications.latest().map((item) => item.actor)).toEqual(['mina']);
+        expect(usePeople().byHandle('mina')?.displayName).toBe('Mina Sadeghi');
     });
 });

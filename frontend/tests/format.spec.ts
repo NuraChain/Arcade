@@ -80,7 +80,7 @@ describe('locale store formatting', () =>
     it('interpolates in the reader’s digits', () =>
     {
         const locale = useLocale();
-        expect(locale.t('signIn.continue', { name: 'Sara' })).toBe('Sit down as Sara');
+        expect(locale.t('page.go', { page: '3' })).toBe('Page 3');
         expect(locale.plural('common.players', 1)).toBe('1 player');
         expect(locale.plural('common.players', 4)).toBe('4 players');
         locale.setLocale('fa');
@@ -95,6 +95,18 @@ describe('locale store formatting', () =>
         expect(locale.relative(10 * MINUTE + DAY)).toBe('tomorrow');
         locale.setLocale('fa');
         expect(locale.relative(5 * MINUTE)).toContain('۵');
+    });
+
+    it('speaks a short relative time where a row has little room, in both languages', () =>
+    {
+        setRuntime({ clock: manualClock(10 * MINUTE) });
+        const locale = useLocale();
+
+        locale.setLocale('en');
+        expect(locale.relative(5 * MINUTE, { style: 'short' })).toBe('5 min. ago');
+        expect(locale.relative(5 * MINUTE, { style: 'short' }).length, 'the short form is not shorter').toBeLessThan(locale.relative(5 * MINUTE).length);
+        locale.setLocale('fa');
+        expect(locale.relative(5 * MINUTE, { style: 'short' })).toContain('۵');
     });
 
     it('formats lists and dates for the active locale', () =>

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
+import WalletPanel from '../src/components/app/wallet-panel.component.azeroth';
 import ConnectDialog from '../src/components/layout/connect-dialog.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { qrOf } from '../src/lib/qr.ts';
@@ -209,7 +210,7 @@ describe('the wallet chooser', () =>
         expect(row.tagName).toBe('BUTTON');
 
         fire(row, 'click');
-        await settle();
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalled(), { timeout: 4000 });
 
         expect(server.calls).toContain('auth.challenge');
         expect(server.calls).toContain('auth.wallet');
@@ -236,7 +237,7 @@ describe('the wallet chooser', () =>
         expect(rows[2].textContent).toContain('Not in this browser');
 
         fire(rows[0].querySelector('button')!, 'click');
-        await settle();
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalled(), { timeout: 4000 });
 
         expect(server.received?.providerRdns).toBe('net.nurachain.wallet');
         expect(navigate).toHaveBeenCalledWith('/app');
@@ -298,6 +299,65 @@ describe('the wallet chooser', () =>
         expect(dialog().querySelector('[role="alert"]')!.textContent).toContain('Couldn’t reach the server');
         expect(warn).toHaveBeenCalledWith('[wallet]', 'auth.challenge', expect.anything());
         expect(navigate).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it('says a sign-in the server is refusing for now is too many, not that the server is out of reach', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        server.refuse = 'challenge-busy';
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        const { navigate } = open();
+        await settle();
+
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        const said = dialog().querySelector('[role="alert"]')!.textContent;
+        expect(said).toContain('Too many sign-ins from this network');
+        expect(said).not.toContain('Couldn’t reach the server');
+        expect(navigate).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it('says it in Persian to a Persian reader', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        useLocale().setLocale('fa');
+        server.refuse = 'wallet-busy';
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        open();
+        await settle();
+
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        expect(dialog().querySelector('[role="alert"]')!.textContent).toContain('از این شبکه خیلی زیاد وارد شدن');
+        warn.mockRestore();
+    });
+
+    it('on the sign-in page, says the failure that happened last', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        useWallet().adopt(fakeProvider());
+        renderTest(() => WalletPanel({ onConnected: vi.fn() }) as HTMLElement);
+        await settle();
+
+        const press = () => fire([...document.querySelectorAll('button')].find((one) => /Connect wallet|Try again/.test(one.textContent ?? ''))!, 'click');
+        const said = () => document.querySelector('[role="alert"]')?.textContent ?? '';
+
+        server.refuse = 'challenge-unreachable';
+        press();
+        await settle();
+        expect(said()).toContain('Couldn’t reach the server');
+
+        server.refuse = 'challenge-busy';
+        press();
+        await settle();
+        expect(said()).toContain('Too many sign-ins from this network');
+        expect(said()).not.toContain('Couldn’t reach the server');
         warn.mockRestore();
     });
 

@@ -55,6 +55,13 @@ export function pokerOf(match: Pick<MatchView, 'view'>)
     return match.view.kind === 'poker' ? match.view : null;
 }
 
+export function inPlay(match: Pick<MatchView, 'finishedAt' | 'mine' | 'players' | 'view'>)
+{
+    return match.finishedAt === undefined
+        && match.players.some((player) => player.seat === match.mine && player.result === undefined)
+        && pokerOf(match)?.seats.some((seat) => seat.seat === match.mine && seat.out) !== true;
+}
+
 /**
  * The one number a result row puts beside a name, and what it MEANS is the game's business.
  *

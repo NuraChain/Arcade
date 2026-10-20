@@ -1,11 +1,12 @@
 import { createServer, type IncomingMessage, type RequestOptions, type ServerResponse } from 'node:http';
 import type * as Https from 'node:https';
 
+import { HttpError } from '@azerothjs/http';
 import { decodeFunctionData, encodeFunctionResult, parseAbi, toFunctionSelector } from 'viem';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { allowedUrl, createNftReader, fetchPublic, holdingsFrom, isPublicIp, resolveUri, sniffNftImage, type NftTransfer } from '../src/chain/nfts.ts';
-import { callOf, closeChains, fakeChain, listen, lookupGateway, offchainLookup, silentChain, type Answer } from './fake-chain.ts';
+import { callOf, closeChains, fakeChain, listen, lookupGateway, offchainLookup, silentChain, tiredHost, type Answer } from './fake-chain.ts';
 
 const metadataHost = vi.hoisted(() => ({ name: 'tarpit.test', port: 0 }));
 
@@ -205,6 +206,41 @@ describe('what counts as a picture', () =>
         expect(sniffNftImage(pad(0x47, 0x49, 0x46, 0x38, 0x39, 0x61))).toBe('image/gif');
         expect(sniffNftImage(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>'))).toBeNull();
     });
+});
+
+describe('what a wallet holds, asked of an explorer that sits on a connection it has answered once', () =>
+{
+    afterEach(closeChains);
+
+    it('asks on a connection of its own every time, and so is answered for the second wallet as for the first', async () =>
+    {
+        const explorer = await tiredHost(() => ({ status: '1', message: 'OK', result: [] }));
+        const reader = createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: `${ explorer.url }api` });
+        const started = performance.now();
+
+        await expect(reader.holdings(ME)).resolves.toEqual([]);
+        await new Promise((resolve) => later(200, () => resolve(undefined)));
+        await expect(reader.holdings(THEM)).resolves.toEqual([]);
+        expect(explorer.sockets()).toBe(4);
+        expect(performance.now() - started).toBeLessThan(3_000);
+    }, 30_000);
+
+    it('says the network could not be reached when the explorer answers badly, refuses, or cannot be asked at all', async () =>
+    {
+        const failing = createServer((_request, response) => response.writeHead(502).end());
+        const refusing = await tiredHost(() => ({ status: '0', message: 'Max rate limit reached', result: 'Max rate limit reached' }));
+        const readers = [
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: `${ await listen(failing) }api` }),
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: `${ refusing.url }api` }),
+            createNftReader({ rpcUrl: 'http://127.0.0.1:1/', explorerApi: 'http://127.0.0.1:1/api' })
+        ];
+        const settled = await Promise.allSettled(readers.map((reader) => reader.holdings(ME)));
+
+        failing.close();
+
+        expect(settled.map((one) => (one.status === 'rejected' && one.reason instanceof HttpError ? `${ one.reason.status } ${ one.reason.code }` : 'something else')))
+            .toEqual(['503 chain-unreachable', '503 chain-unreachable', '503 chain-unreachable']);
+    }, 30_000);
 });
 
 describe('naming a token through a chain that may not answer', () =>

@@ -77,7 +77,7 @@ async function makeUser(wallet: typeof alice)
     const handle = `r${ seq }x${ Math.floor(Math.random() * 100000) }`;
 
     const rows = await db.query(
-        `insert into users (handle, display_name, hue, kind) values ($1, $2, $3, 'wallet') returning id`,
+        `insert into users (handle, display_name, hue) values ($1, $2, $3) returning id`,
         [handle, `Person ${ seq }`, seq % 360]
     );
 

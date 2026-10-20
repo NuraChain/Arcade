@@ -1,6 +1,7 @@
 export const helpersPoker = {
     'helpers.poker.best': 'Your best hand so far: {hand}.',
     'helpers.poker.board': 'You are playing the board: {hand}.',
+    'helpers.poker.board.brief': 'The board: {hand}',
     'helpers.poker.hand.high-card': '{top} high',
     'helpers.poker.hand.pair': 'a pair of {tops}',
     'helpers.poker.hand.two-pair': 'two pair, {tops} and {seconds}',

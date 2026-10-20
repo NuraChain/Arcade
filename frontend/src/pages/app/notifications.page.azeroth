@@ -10,7 +10,9 @@ import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import { NOTICES, type Notice } from '../../../../backend/src/domains/notify/notices.ts';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Notification } from '../../api.ts';
+import { attempt } from '../../lib/attempt.ts';
 import { targetOf } from '../../lib/notifications.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
@@ -37,8 +39,17 @@ export default component NotificationsPage()
 
     derived kinds = [ 'all', ...NOTICES ].map((id) => ({ id, label: locale.t(`notifications.kind.${ id as Notice | 'all' }`) }));
 
+    const address = useAddress();
+
+    const choose = (id: string) =>
+    {
+        notifications.only(NOTICES.find((one) => one === id) ?? null);
+        address.write({ kind: id === 'all' ? '' : id });
+    };
+
     mount
     {
+        notifications.only(NOTICES.find((one) => one === address.text('kind')) ?? null);
         return () => notifications.only(null);
     }
 
@@ -65,9 +76,11 @@ export default component NotificationsPage()
 
     derived further = notifications.hasMore();
 
+    derived unread = notifications.unread() > 0;
+
     const open = (item: Notification) =>
     {
-        void notifications.markRead(item.id);
+        void notifications.markRead(item.id).catch(() => undefined);
         const target = targetOf(item);
         if (target !== null)
         {
@@ -75,17 +88,19 @@ export default component NotificationsPage()
         }
     };
 
+    const dismiss = (id: string) => void attempt(notifications.dismiss(id));
+
     <Page label={ locale.t('app.nav.notifications') } onRefresh={ () => void notifications.refresh() }>
         <PageHeader
             title={ locale.t('app.nav.notifications') }
             lead={ locale.t('notifications.lead') }
-            actions={ notifications.unread() > 0
-                ? <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button>
+            actions={ unread
+                ? <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void attempt(notifications.markAllRead()) }>{ locale.t('notifications.markAll') }</Button>
                 : undefined }
         />
 
         <Show when={ filterable }>
-            { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ (id) => notifications.only(id === 'all' ? null : id as Notice) } /> }
+            { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ choose } /> }
         </Show>
 
         <Show
@@ -104,7 +119,7 @@ export default component NotificationsPage()
                             <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('notifications.today') }>
                                 <For each={ today } key={ (item) => item.id } let={ item }>
                                     <li>
-                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => void notifications.dismiss(id) } />
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ dismiss } />
                                     </li>
                                 </For>
                             </ul>
@@ -117,7 +132,7 @@ export default component NotificationsPage()
                             <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('notifications.earlier') }>
                                 <For each={ earlier } key={ (item) => item.id } let={ item }>
                                     <li>
-                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => void notifications.dismiss(id) } />
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ dismiss } />
                                     </li>
                                 </For>
                             </ul>

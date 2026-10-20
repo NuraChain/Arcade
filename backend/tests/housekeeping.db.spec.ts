@@ -42,7 +42,7 @@ describe.skipIf(!active)('housekeeping, against a real database', () =>
         await db.query('delete from users');
 
         const user = rowsOf<{ id: string }>(await db.query(
-            `insert into users (handle, display_name, hue, kind) values ('tidy', 'Tidy', 1, 'guest') returning id`
+            `insert into users (handle, display_name, hue) values ('tidy', 'Tidy', 1) returning id`
         ))[0].id;
 
         await db.query(
@@ -71,5 +71,33 @@ describe.skipIf(!active)('housekeeping, against a real database', () =>
         expect(gone.sessions).toBe(1);
         expect(await count('push_subscriptions')).toBe(1);
         expect(await count('sessions')).toBe(1);
+    });
+
+    it('leaves no browser to be woken for an account that has been signed out everywhere, and everybody else\'s alone', async () =>
+    {
+        await db.query('truncate push_subscriptions, sessions cascade');
+        await db.query('delete from users');
+
+        const [leaver, stayer] = rowsOf<{ id: string }>(await db.query(
+            `insert into users (handle, display_name, hue) values ('leaver', 'Leaver', 1), ('stayer', 'Stayer', 2) returning id`
+        )).map((row) => row.id);
+
+        await db.query(
+            `insert into push_subscriptions (user_id, endpoint, p256dh, auth)
+             values ($1, 'https://push.example/one', 'k', 'a'), ($1, 'https://push.example/two', 'k', 'a'), ($2, 'https://push.example/three', 'k', 'a')`,
+            [leaver, stayer]
+        );
+
+        await db.query(
+            `insert into sessions (user_id, token_hash, expires_at)
+             values ($1, repeat('c', 64), now() + interval '1 day'), ($1, repeat('d', 64), now() + interval '1 day'), ($2, repeat('e', 64), now() + interval '1 day')`,
+            [leaver, stayer]
+        );
+
+        expect(await ports.identity.signOutEverywhere(leaver)).toBe(2);
+
+        const kept = rowsOf<{ endpoint: string }>(await db.query('select endpoint from push_subscriptions order by endpoint'));
+
+        expect(kept.map((row) => row.endpoint), 'a browser nobody is signed in on would still be woken').toEqual(['https://push.example/three']);
     });
 });

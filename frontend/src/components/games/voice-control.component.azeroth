@@ -1,9 +1,9 @@
 import Icon from '../../icons/icon.component.azeroth';
 import { haptic } from '../../lib/haptics.ts';
+import { joinVoice } from '../../lib/join-voice.ts';
 import { keyName } from '../../lib/talk-key.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
@@ -13,7 +13,6 @@ export default component VoiceControl(props: { table: string })
 {
     const locale = useLocale();
     const voice = useVoice();
-    const toasts = useToasts();
     const settings = useSettings();
 
     derived here = voice.table() === props.table;
@@ -33,15 +32,7 @@ export default component VoiceControl(props: { table: string })
     const join = () =>
     {
         haptic('select');
-        void voice.join(props.table).then(() =>
-        {
-            const mic = voice.mic();
-
-            if (mic === 'denied' || mic === 'absent')
-            {
-                toasts.show({ kind: 'info', text: locale.t(mic === 'denied' ? 'voice.micDenied' : 'voice.micAbsent'), dedupe: 'voice-mic' });
-            }
-        });
+        void joinVoice(props.table);
     };
 
     <Show
@@ -49,11 +40,11 @@ export default component VoiceControl(props: { table: string })
         fallback={
             <button
                 type="button"
-                class="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line-strong bg-field px-3.5 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60 hover:bg-raised coarse:h-11"
+                class="flex h-9 min-w-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border border-line-strong bg-field px-2.5 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60 hover:bg-raised coarse:h-11 coarse:min-w-11 @md:px-3.5"
                 onClick={ join }
             >
                 <Icon name="voice" size={ 16 } class="text-accent" />
-                { locale.t('voice.join') }
+                <span class="sr-only @md:not-sr-only">{ locale.t('voice.join') }</span>
             </button>
         }
     >
@@ -119,19 +110,21 @@ export default component VoiceControl(props: { table: string })
                         </Show>
                     }
                 </Show>
-                <IconButton
-                    icon={ voice.deaf() ? 'deafen' : 'listen' }
-                    label={ locale.t(voice.deaf() ? 'voice.undeafen' : 'voice.deafen') }
-                    variant="ghost"
-                    pressed={ voice.deaf() }
-                    class={ voice.deaf() ? 'rounded-full! text-danger' : 'rounded-full! text-muted' }
-                    onClick={ () =>
-                    {
-                        haptic('tick');
-                        voice.toggleDeafen();
-                    } }
-                />
-                <span class="tally min-w-5 px-1 text-center text-ui-xs font-semibold text-muted" aria-label={ locale.plural('voice.others', talking) }>{ locale.n(talking) }</span>
+                <span class="hidden @md:contents">
+                    <IconButton
+                        icon={ voice.deaf() ? 'deafen' : 'listen' }
+                        label={ locale.t(voice.deaf() ? 'voice.undeafen' : 'voice.deafen') }
+                        variant="ghost"
+                        pressed={ voice.deaf() }
+                        class={ voice.deaf() ? 'rounded-full! text-danger' : 'rounded-full! text-muted' }
+                        onClick={ () =>
+                        {
+                            haptic('tick');
+                            voice.toggleDeafen();
+                        } }
+                    />
+                </span>
+                <span class="tally hidden min-w-5 px-1 text-center text-ui-xs font-semibold text-muted @md:block" aria-label={ locale.plural('voice.others', talking) }>{ locale.n(talking) }</span>
                 <IconButton
                     icon="hang-up"
                     label={ locale.t('voice.leave') }

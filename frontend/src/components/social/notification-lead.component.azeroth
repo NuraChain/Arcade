@@ -6,8 +6,10 @@ import Avatar from '../ui/avatar.component.azeroth';
 
 export default component NotificationLead(props: { item: Notification; person: Person | null })
 {
+    derived known = props.person !== null;
+
     <Show
-        when={ props.person !== null }
+        when={ known }
         fallback={
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-accent">
                 <Icon name={ NOTIFICATION_ICON[props.item.kind] } size={ 18 } />

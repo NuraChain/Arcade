@@ -13,7 +13,7 @@ export interface Eip1193Provider
     providers?: Eip1193Provider[];
 }
 
-export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'unknown';
+export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'busy' | 'unknown';
 
 export interface AnnouncedWallet
 {
@@ -53,7 +53,7 @@ export function discoverWallets(onChange?: () => void): () => void
         }
         announced.set(rdns, {
             rdns,
-            name: detail.info?.name ?? 'Browser wallet',
+            name: detail.info?.name ?? '',
             icon: detail.info?.icon ?? '',
             provider: detail.provider
         });
@@ -103,6 +103,30 @@ const UNAUTHORIZED = 4100;
 const UNRECOGNISED_CHAIN = 4902;
 const ALREADY_PENDING = -32002;
 
+export async function permitted(provider: Eip1193Provider)
+{
+    try
+    {
+        const granted = await provider.request({ method: 'wallet_getPermissions' });
+
+        if (!Array.isArray(granted))
+        {
+            return null;
+        }
+
+        return granted.some((one: { parentCapability?: unknown } | null) =>
+        {
+            const capability = String(one?.parentCapability ?? '');
+
+            return capability === 'eth_accounts' || capability.startsWith('endowment:caip25');
+        });
+    }
+    catch
+    {
+        return null;
+    }
+}
+
 export function detect(): Eip1193Provider | null
 {
     if (typeof window === 'undefined')
@@ -128,15 +152,15 @@ export function detect(): Eip1193Provider | null
     return injected;
 }
 
-export function walletName(provider: Eip1193Provider | null): string
+export function walletName(provider: Eip1193Provider | null): string | null
 {
     if (provider === null)
     {
-        return 'Browser wallet';
+        return null;
     }
 
     const wallet = [...announced.values()].find((one) => one.provider === provider);
-    if (wallet !== undefined)
+    if (wallet !== undefined && wallet.name !== '')
     {
         return wallet.name;
     }
@@ -156,7 +180,7 @@ export function walletName(provider: Eip1193Provider | null): string
     {
         return 'Brave Wallet';
     }
-    return provider.isMetaMask === true ? 'MetaMask' : 'Browser wallet';
+    return provider.isMetaMask === true ? 'MetaMask' : null;
 }
 
 export function failureOf(error: unknown): WalletFailure
@@ -193,16 +217,6 @@ export function shortAddress(address: string, lead = 6, tail = 4)
         return address;
     }
     return `${ address.slice(0, lead) }…${ address.slice(-tail) }`;
-}
-
-export function addressHue(address: string)
-{
-    let hash = 0;
-    for (let index = 2; index < address.length; index += 1)
-    {
-        hash = (hash * 31 + address.charCodeAt(index)) % 360;
-    }
-    return hash;
 }
 
 export async function requestAccounts(provider: Eip1193Provider): Promise<string[]>

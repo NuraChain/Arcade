@@ -34,13 +34,19 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
         <GroupCrest crest={ props.group.crest } hue={ props.group.hue } size="md" />
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="truncate text-ui-md font-semibold text-text" dir="auto">{ props.group.name }</span>
-            <span class="truncate text-ui-xs text-muted">
-                { locale.plural('chat.members', props.group.memberCount) }
+            <span data-facts class="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted">
+                <span class="shrink-0">{ locale.plural('chat.members', props.group.memberCount) }</span>
                 <Show when={ lively }>
-                    <span class="text-live"> · { locale.plural('chat.online', online) }</span>
+                    <span class="flex shrink-0 items-center gap-1.5 text-live">
+                        <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
+                        { locale.plural('chat.online', online) }
+                    </span>
                 </Show>
                 <Show when={ props.group.game } let={ game }>
-                    <span> · { locale.t(catalogue.byId(game as GameId).nameKey) }</span>
+                    <span class="flex min-w-0 items-center gap-1.5">
+                        <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
+                        <span class="truncate">{ locale.t(catalogue.byId(game as GameId).nameKey) }</span>
+                    </span>
                 </Show>
             </span>
         </span>

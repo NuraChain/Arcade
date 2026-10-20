@@ -10,15 +10,17 @@ import PlayHeader from '../src/components/games/play-header.component.azeroth';
 import TableChat from '../src/components/games/table-chat.component.azeroth';
 import TableDock from '../src/components/games/table-dock.component.azeroth';
 import TableMenu from '../src/components/games/table-menu.component.azeroth';
+import { RESULT_OUT } from '../src/components/games/table-result.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { BOARDS } from '../src/components/games/boards.ts';
-import type { MatchView, MatchWatch } from '../src/api.ts';
+import type { MatchView } from '../src/api.ts';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
 import { defaultTable } from '../src/data/tables.ts';
+import { resetChunks } from '../src/lib/chunks.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -28,16 +30,19 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { NO_EVENTS, useBoard } from '../src/stores/match.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
-import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
+import { IDLE_MS, NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { useWatch, type Watched } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
+import { inPlay } from '../src/data/match.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -84,12 +89,34 @@ vi.mock('../src/components/games/match-board.component.azeroth', () =>
 
 let clock: ManualClock;
 
+let reloads = 0;
+
+let answering = false;
+
+const reloaded = () =>
+{
+    reloads += 1;
+};
+
 beforeEach(() =>
 {
     cleanup();
     resetRuntime();
     clock = manualClock(400_000);
-    setRuntime({ clock, seed: 11 });
+    reloads = 0;
+    answering = false;
+    setRuntime({ clock, seed: 11, reload: reloaded });
+    sessionStorage.clear();
+    resetChunks();
+    vi.stubGlobal('fetch', async () =>
+    {
+        if (!answering)
+        {
+            throw new TypeError('Failed to fetch');
+        }
+
+        return { status: 200 };
+    });
     useLocale().setLocale('en');
     useSession().reset();
     useSession().establish({
@@ -98,7 +125,6 @@ beforeEach(() =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useRealtime().reset();
@@ -123,6 +149,7 @@ afterEach(() =>
 {
     cleanup();
     useRealtime().reset();
+    vi.unstubAllGlobals();
 });
 
 describe('game artwork', () =>
@@ -161,25 +188,55 @@ describe('GameCard', () =>
         rules: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none', hasCube: false, hasBlinds: true }
     });
 
-    const mount = (id: string, onQuickPlay: (game: string) => void): HTMLElement =>
+    const shown = (id: string) =>
     {
         const Stub = (): HTMLElement => document.createElement('div');
         const table: Route[] = [{ path: '/app', component: Stub, children: [{ path: 'games/:slug', component: Stub }] }];
         const router = createRouter({ routes: table, history: createMemoryHistory('/app'), scroll: false });
         const game = GAMES.find((one) => one.id === id)!;
-        return renderTest(() => RouterProvider({ router, children: () => GameCard({ game, onQuickPlay }) }) as Rendered).container;
+        const { container } = renderTest(() => RouterProvider({ router, children: () => GameCard({ game }) }) as Rendered);
+
+        return { container, router };
     };
 
-    it('links to the game and quick-plays without leaving through the link', async () =>
+    const mount = (id: string) => shown(id).container;
+
+    it('opens the game from its Play now, as its picture and its name do, and looks for no table', async () =>
     {
-        const onQuickPlay = vi.fn();
-        const container = mount('hokm', onQuickPlay);
+        const { container, router } = shown('hokm');
         await settle();
 
         expect(container.querySelector('img')?.getAttribute('src')).toBe('/art/games/hokm.svg');
-        const button = container.querySelector('button')!;
-        fire(button, 'click');
-        expect(onQuickPlay).toHaveBeenCalledWith('hokm');
+        expect(container.querySelector('button'), 'a card leads to the game: nothing on it acts by itself').toBeNull();
+
+        const play = [...container.querySelectorAll('a')].find((one) => one.textContent?.trim() === 'Play now');
+
+        expect(play, 'the card says Play now').toBeDefined();
+        expect(play!.getAttribute('href')).toBe('/app/games/hokm');
+        expect(play!.getAttribute('aria-label')).toBe('Play now: Hokm');
+        expect([...container.querySelectorAll('a')].map((one) => one.getAttribute('href'))).toEqual(['/app/games/hokm', '/app/games/hokm', '/app/games/hokm']);
+
+        const asked = server.calls.length;
+
+        play!.click();
+        await settle();
+
+        expect(router.location().pathname).toBe('/app/games/hokm');
+        expect(server.calls.slice(asked), 'pressing Play now on a card looked for a table').not.toContain('tables.quick');
+        expect(useLobby().finding()).toEqual([]);
+    });
+
+    it('names the game in Persian on the same control', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = shown('hokm');
+        await settle();
+
+        const play = [...container.querySelectorAll('a')].find((one) => one.textContent?.trim() === useLocale().t('games.play'));
+
+        expect(play?.getAttribute('aria-label')).toBe(useLocale().t('games.playGame', { game: useLocale().t(GAMES.find((one) => one.id === 'hokm')!.nameKey) }));
+        expect(play?.getAttribute('aria-label')).not.toBe('Play now: Hokm');
     });
 
     it('offers no play and no Live pill for a game the server says is still coming', async () =>
@@ -187,24 +244,23 @@ describe('GameCard', () =>
         server.games = [summary('poker', 'coming-soon')];
         server.live = [{ game: 'poker', playing: 5, tables: 1 }];
         useCatalogue().reset();
-        const onQuickPlay = vi.fn();
-        const container = mount('poker', onQuickPlay);
+        const container = mount('poker');
         await settle();
 
         expect(container.textContent).not.toContain('Live');
         const button = container.querySelector('button')!;
         expect(button.disabled).toBe(true);
         expect(button.textContent).toContain('Coming soon');
-        fire(button, 'click');
-        expect(onQuickPlay).not.toHaveBeenCalled();
+        expect(container.textContent, 'a game that cannot be played yet says Play now').not.toContain('Play now');
     });
 
     it('holds its call to action until the catalogue has answered', () =>
     {
         useCatalogue().reset();
-        const container = mount('poker', vi.fn());
+        const container = mount('poker');
 
         expect(container.querySelector('button'), 'a Play button before the answer could be one the server refuses').toBeNull();
+        expect(container.textContent, 'a Play now before the answer could lead to a game that is not open yet').not.toContain('Play now');
         expect(container.textContent).not.toContain('Live');
     });
 });
@@ -380,6 +436,22 @@ describe('TurnClock', () =>
         expect(container.textContent).toContain('20');
     });
 
+    it('says the time in a few characters where it is asked to be brief, and keeps its sentence for a screen reader', () =>
+    {
+        const english = renderTest(() => TurnClock({ remainingMs: 23_000, over: false, brief: true }) as Rendered);
+
+        expect(english.container.querySelector('span[aria-hidden="true"]')?.textContent).toBe('23s');
+        expect(english.container.querySelector('.sr-only')?.textContent).toBe('About 23s left');
+        english.unmount();
+
+        useLocale().setLocale('fa');
+        const persian = renderTest(() => TurnClock({ remainingMs: 2 * 3600 * 1000, over: false, brief: true }) as Rendered);
+
+        expect(persian.container.querySelector('span[aria-hidden="true"]')?.textContent).toBe('۲ ساعت');
+        expect(persian.container.querySelector('.tally')).toBeNull();
+        useLocale().setLocale('en');
+    });
+
     it('draws nothing once the game is over', () =>
     {
         const { container } = renderTest(() => TurnClock({ remainingMs: 0, over: true }) as Rendered);
@@ -445,7 +517,7 @@ describe('PlayPage', () =>
         expect(container.querySelector('a[href="/app/games"]')).not.toBeNull();
     });
 
-    it('says the board could not load, and offers to try again, when its chunk will not come', async () =>
+    it('says the board could not load when its chunk will not come and the server is not answering, and loads the page again once it is asked to and the server is back', async () =>
     {
         const lobby = useLobby();
         const id = await lobby.host('ludo', defaultTable('ludo'), []);
@@ -478,14 +550,60 @@ describe('PlayPage', () =>
             const alert = container.querySelector('[role="alert"]');
             expect(alert?.textContent).toContain(useLocale().t('state.errorTitle'));
             expect(chunk.asked).toBe(asked + 1);
+            expect(reloads).toBe(0);
 
             fire(alert!.querySelector('button')!, 'click');
+            await settle();
 
-            await vi.waitFor(() => expect(chunk.asked).toBe(asked + 2), { timeout: 4000 });
-            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+            expect(reloads).toBe(0);
+            expect(chunk.asked).toBe(asked + 1);
+            expect(container.querySelector('[role="alert"]')).toBe(alert);
 
-            expect(chunk.asked).toBe(asked + 2);
-            expect(container.querySelector('[role="alert"]')).not.toBeNull();
+            answering = true;
+            fire(alert!.querySelector('button')!, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+
+            expect(chunk.asked).toBe(asked + 1);
+        }
+        finally
+        {
+            delete matches.view;
+        }
+    });
+
+    it('loads the page again by itself when the board will not come and the server answers, and draws no complaint on the way', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', defaultTable('ludo'), []);
+        server.tables.find((one) => one.id === id)!.matchId = 'match-1';
+        const matches = client.matches as unknown as Record<string, unknown>;
+        matches.view = async () => ({
+            id: 'match-1',
+            tableId: id,
+            game: 'ludo',
+            rev: 1,
+            seats: 4,
+            players: [],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: { kind: 'ludo' }
+        });
+        answering = true;
+
+        try
+        {
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(reloads).toBe(1);
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
         }
         finally
         {
@@ -523,11 +641,175 @@ describe('PlayPage', () =>
 
             expect(chunk.asked).toBe(asked);
             expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
+
+            answering = true;
+            fire(reload, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
         }
         finally
         {
             delete matches.view;
         }
+    });
+
+    describe('a game that is still being fetched', () =>
+    {
+        const lobbyOf = (container: HTMLElement) => container.querySelector<HTMLElement>(`section[aria-label="${ useLocale().t('play.title.lobby') }"]`);
+
+        const closing = (container: HTMLElement) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('play.close.confirm'));
+
+        const game = (tableId: string) => ({
+            id: 'match-21',
+            tableId,
+            game: 'chess',
+            rev: 1,
+            seats: 2,
+            players: [],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: { kind: 'ludo' }
+        });
+
+        const arriving = async (view: () => Promise<unknown>) =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+
+            server.tables.find((one) => one.id === id)!.matchId = 'match-21';
+            (client.matches as unknown as Record<string, unknown>).view = view;
+
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return { id, container };
+        };
+
+        afterEach(() =>
+        {
+            delete (client.matches as unknown as Record<string, unknown>).view;
+            useBoard().reset();
+        });
+
+        it('is not drawn as a waiting room: no chairs, no closing the table, a placeholder where the board will be', async () =>
+        {
+            let hand = (_match: unknown): void => undefined;
+            let asks = 0;
+            const { id, container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                return await new Promise((resolve) => hand = resolve);
+            });
+
+            expect(asks).toBe(1);
+            expect(lobbyOf(container)).toBeNull();
+            expect(closing(container)).toBeUndefined();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+
+            hand(game(id));
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(lobbyOf(container)).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+        });
+
+        it('says the game could not be fetched, and goes on saying so while the page asks again by itself', async () =>
+        {
+            let asks = 0;
+            let held: Promise<void> | null = null;
+            const { container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                if (held !== null)
+                {
+                    await held;
+                }
+
+                throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+            });
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            const alert = container.querySelector('[role="alert"]');
+            const before = asks;
+            let fail = (): void => undefined;
+
+            expect(lobbyOf(container)).toBeNull();
+            expect(closing(container)).toBeUndefined();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            held = new Promise((resolve) => fail = resolve);
+
+            const stop = useBoard().start();
+
+            try
+            {
+                socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'game', id: 'match-21', at: 0 });
+                clock.advance(NUDGE_WINDOW_MS);
+
+                await vi.waitFor(() => expect(asks).toBe(before + 1), { timeout: 4000 });
+
+                expect(container.querySelector('[role="alert"]')).toBe(alert);
+                expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+                fail();
+                await settle();
+
+                expect(container.querySelector('[role="alert"]')).toBe(alert);
+                expect(reloads).toBe(0);
+            }
+            finally
+            {
+                stop();
+            }
+        });
+
+        it('asks again when it is told to, draws the placeholder while it does, and the game when it comes', async () =>
+        {
+            let asks = 0;
+            let hand = (_match: unknown): void => undefined;
+            const { id, container } = await arriving(async () =>
+            {
+                asks += 1;
+
+                if (asks === 1)
+                {
+                    throw new TypeError('Failed to fetch');
+                }
+
+                return await new Promise((resolve) => hand = resolve);
+            });
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            answering = true;
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(asks).toBe(2), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+            expect(reloads).toBe(0);
+
+            hand(game(id));
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(reloads).toBe(0);
+        });
     });
 
     describe('a chair while a game is being played', () =>
@@ -756,6 +1038,88 @@ describe('PlayPage', () =>
             expect(held.voice).toBe('off');
         });
 
+        describe('at a table of two sides', () =>
+        {
+            const sides = async (voice: 'table' | 'team') =>
+            {
+                const id = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 4, teams: true, voice }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                held.chairs[1].who = 'sara.k';
+                held.chairs[2].who = 'mina';
+                held.chairs[3].who = 'reza.t';
+                useToasts().reset();
+
+                const container = opened(id);
+
+                await vi.waitFor(() => expect(pressable(container, 'play.close.confirm')).toBeDefined(), { timeout: 4000 });
+
+                return { container, held };
+            };
+
+            const button = (container: HTMLElement, key: 'voice.toTeam' | 'voice.toTable' | 'voice.hostOff') =>
+                container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t(key) }"]`);
+
+            it('lets the host give each side a call of its own between games, and the whole table one again, and says each', async () =>
+            {
+                const { container, held } = await sides('table');
+
+                fire(button(container, 'voice.toTeam')!, 'click');
+                await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.nowTeam')]), { timeout: 4000 });
+                expect(held.voice).toBe('team');
+
+                await vi.waitFor(() => expect(button(container, 'voice.toTable')).not.toBeNull(), { timeout: 4000 });
+                fire(button(container, 'voice.toTable')!, 'click');
+                await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.nowTable')]), { timeout: 4000 });
+                expect(held.voice).toBe('table');
+            });
+
+            it('offers the host no change of the call while a game is on there', async () =>
+            {
+                const { container, held } = await sides('team');
+
+                expect(button(container, 'voice.toTable')).not.toBeNull();
+
+                held.matchId = 'live-sides';
+                await useLobby().refresh();
+
+                await vi.waitFor(() => expect(button(container, 'voice.toTable')).toBeNull(), { timeout: 4000 });
+                expect(button(container, 'voice.hostOff'), 'voice could be switched off under the game').toBeNull();
+            });
+
+            it.each(['en', 'fa'] as const)('says the call stays until the game ends when the server keeps it, in %s', async (language) =>
+            {
+                useLocale().setLocale(language);
+
+                const { container } = await sides('table');
+
+                await swapped('voice', async () =>
+                {
+                    throw new ApiError(409, 'playing', 'The call a game began under stays until it ends.', undefined);
+                }, async () =>
+                {
+                    fire(button(container, 'voice.toTeam')!, 'click');
+
+                    await vi.waitFor(() => expect(said()).toContainEqual(['warning', useLocale().t('voice.refused.playing')]), { timeout: 4000 });
+                });
+            });
+
+            it('offers no call for each side at a table of one side each, though its call is on', async () =>
+            {
+                const id = await useLobby().host('backgammon', { ...defaultTable('backgammon'), voice: 'table' }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                held.chairs[1].who = 'sara.k';
+
+                const container = opened(id);
+
+                await vi.waitFor(() => expect(button(container, 'voice.hostOff')).not.toBeNull(), { timeout: 4000 });
+
+                expect(button(container, 'voice.toTeam')).toBeNull();
+                expect(button(container, 'voice.toTable')).toBeNull();
+            });
+        });
+
         it('says a game is still being played only when that is why the table would not close', async () =>
         {
             const { container, held } = await hosting(false);
@@ -794,10 +1158,179 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('somebody the host took out of a chair', () =>
+    {
+        const sitDown = (container: HTMLElement) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('play.table.sitDown'));
+
+        const lobbyOf = (container: HTMLElement) => container.querySelector<HTMLElement>(`section[aria-label="${ useLocale().t('play.title.lobby') }"]`);
+
+        const saying = (container: HTMLElement, key: MessageKey) =>
+            [...container.querySelectorAll<HTMLElement>('p')].find((one) => one.textContent?.trim() === useLocale().t(key));
+
+        const said = () => useToasts().items().map((one) => [one.kind, one.text]);
+
+        const guestAt = async (privacy: 'public' | 'invite') =>
+        {
+            const id = await useLobby().host('ludo', { ...defaultTable('ludo'), privacy }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.host = 'sara.k';
+            held.chairs[0].who = 'sara.k';
+            held.chairs[1].who = 'alex';
+            await useLobby().refresh();
+
+            return held;
+        };
+
+        const takenOut = (held: { id: string; chairs: { who?: string; ready: boolean }[] }) =>
+        {
+            delete held.chairs[1].who;
+            held.chairs[1].ready = false;
+            server.keptOut[held.id] = ['alex'];
+        };
+
+        const opened = (id: string) =>
+        {
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            return { container, router };
+        };
+
+        afterEach(() =>
+        {
+            useOverlay().reset();
+            useToasts().reset();
+            useLocale().setLocale('en');
+        });
+
+        it.each(['en', 'fa'] as const)('is told so on the table’s page without a reload, in %s, and is offered no seat there', async (language) =>
+        {
+            useLocale().setLocale(language);
+
+            const held = await guestAt('public');
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+
+            takenOut(held);
+            await useLobby().refresh();
+            await settle();
+
+            expect(saying(container, 'play.table.removed'), 'the page does not say the host took the reader out').toBeDefined();
+            expect(saying(container, 'play.table.watching')).toBeUndefined();
+            expect(sitDown(container), 'a seat is offered to somebody who would be refused it').toBeUndefined();
+            expect(lobbyOf(container), 'the table the reader was taken out of is not shown to them as it stands').not.toBeNull();
+            expect(container.querySelector('h1')).toBe(heading);
+            expect(useLocale().t('play.table.removed')).not.toBe(useLocale().t('play.table.watching'));
+        });
+
+        it('is offered the seat again in the same panel once the host has invited them, and can take it', async () =>
+        {
+            const held = await guestAt('public');
+
+            takenOut(held);
+
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(saying(container, 'play.table.removed')).toBeDefined(), { timeout: 4000 });
+
+            const sentence = saying(container, 'play.table.removed')!;
+
+            expect(sitDown(container)).toBeUndefined();
+
+            server.keptOut[held.id] = [];
+            held.chairs[1].invited = 'alex';
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.contains(sentence), 'the panel was drawn again to change what it says').toBe(true);
+            expect(sentence.textContent?.trim()).toBe(useLocale().t('play.table.watching'));
+            expect(sitDown(container)).toBeDefined();
+
+            fire(sitDown(container)!, 'click');
+
+            await vi.waitFor(() => expect(held.chairs[1].who).toBe('alex'), { timeout: 4000 });
+        });
+
+        it('is told why in words when a chair is refused on a page that still offered one, and is offered none after that', async () =>
+        {
+            const held = await guestAt('public');
+
+            delete held.chairs[1].who;
+            await useLobby().refresh();
+
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(sitDown(container)).toBeDefined(), { timeout: 4000 });
+
+            useToasts().reset();
+            server.keptOut[held.id] = ['alex'];
+            fire(sitDown(container)!, 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.kept-out')]]), { timeout: 4000 });
+            await vi.waitFor(() => expect(sitDown(container)).toBeUndefined(), { timeout: 4000 });
+
+            expect(saying(container, 'play.table.removed')).toBeDefined();
+            expect(held.chairs.some((chair) => chair.who === 'alex')).toBe(false);
+            expect(useLocale().t('tables.refused.kept-out')).not.toBe(useLocale().t('common.actionFailed'));
+        });
+
+        it('is shown no table where it was one by invitation, and asks nothing more about it', async () =>
+        {
+            const held = await guestAt('invite');
+            const { container } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            takenOut(held);
+            server.calls = [];
+            await useLobby().refresh();
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.textContent).toContain(useLocale().t('play.notFound'));
+            expect(saying(container, 'play.table.removed')).toBeUndefined();
+            expect(server.calls).not.toContain('tables.view');
+        });
+
+        it('sees that table again, from the page that said there was none, by following the host’s invitation to it', async () =>
+        {
+            const held = await guestAt('invite');
+            const { container, router } = opened(held.id);
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            takenOut(held);
+            await useLobby().refresh();
+            await settle();
+
+            expect(container.textContent).toContain(useLocale().t('play.notFound'));
+
+            server.keptOut[held.id] = [];
+            held.chairs[1].invited = 'alex';
+            router.navigate(`/app/play/${ held.id }`);
+
+            await vi.waitFor(() => expect(sitDown(container)).toBeDefined(), { timeout: 4000 });
+
+            expect(container.textContent).not.toContain(useLocale().t('play.notFound'));
+            expect(saying(container, 'play.table.watching')).toBeDefined();
+        });
+    });
+
     describe('what leaving says', () =>
     {
-        const at = (finishedAt: string | undefined, result: string | undefined) =>
-            ({ finishedAt, mine: 0, players: [{ seat: 0, result }, { seat: 1 }] }) as unknown as Parameters<typeof leaveLead>[0];
+        const at = (finishedAt: string | undefined, result: string | undefined, out = false) =>
+            ({
+                finishedAt,
+                mine: 0,
+                players: [{ seat: 0, result }, { seat: 1 }],
+                view: { kind: 'poker', seats: [{ seat: 0, out }, { seat: 1, out: false }] }
+            }) as unknown as Parameters<typeof leaveLead>[0];
 
         it('warns a player still in a live game that leaving forfeits it', () =>
         {
@@ -807,6 +1340,26 @@ describe('PlayPage', () =>
         it('tells a player who already gave up that the chair stays empty until the game ends', () =>
         {
             expect(leaveLead(at(undefined, 'abandoned'), 2)).toBe('play.leave.locked');
+        });
+
+        it('tells a player the game has put out the same, though no result is written for them until it ends', () =>
+        {
+            expect(leaveLead(at(undefined, undefined, true), 2)).toBe('play.leave.locked');
+        });
+
+        it('warns a player at a table where somebody ELSE is out', () =>
+        {
+            const theirs = at(undefined, undefined);
+
+            (theirs as unknown as { view: { seats: { seat: number; out: boolean }[] } }).view.seats[1].out = true;
+
+            expect(leaveLead(theirs, 2)).toBe('play.leave.forfeit');
+        });
+
+        it('counts nobody as still playing a game that is over, whatever their row says', () =>
+        {
+            expect(inPlay(at(undefined, undefined)!)).toBe(true);
+            expect(inPlay(at('2026-10-04T12:00:00Z', undefined)!)).toBe(false);
         });
 
         it('offers the chair back once the game is over, and closes an empty table', () =>
@@ -920,9 +1473,9 @@ describe('PlayPage', () =>
             return await opened(held, playing);
         };
 
-        const resignedAt = async () =>
+        const resignedAt = async (privacy: ReturnType<typeof defaultTable>['privacy'] = defaultTable('poker').privacy) =>
         {
-            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length, privacy }, []);
             const held = server.tables.find((one) => one.id === id)!;
 
             for (const chair of held.chairs)
@@ -1003,6 +1556,169 @@ describe('PlayPage', () =>
             expect(left()).toEqual(['tables.leave']);
             expect(held.chairs[0].who).toBeUndefined();
             expect(said()).toEqual([]);
+        });
+
+        it.each([
+            ['en', 'You are out of this game.', 'The board you see is at least 30 seconds behind the one they are playing on.'],
+            ['fa', 'از این بازی اومدی بیرون.', 'صفحه‌ای که می‌بینی دست‌کم ۳۰ ثانیه از بازی اصلی عقب‌تر']
+        ] as const)('tells somebody who gave up that they are watching the rest from behind, in %s', async (language, out, behind) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container } = await resignedAt();
+            const told = container.querySelector('[data-gone]');
+
+            expect(told?.textContent).toContain(out);
+            expect(told?.textContent).toContain(behind);
+            expect(told?.getAttribute('role')).toBe('status');
+        });
+
+        it('does not offer to give up a second time to somebody who already has', async () =>
+        {
+            const { container } = await resignedAt();
+
+            expect(control(container, 'match.resign')).toBeUndefined();
+            expect(control(container, 'play.lobby.leave')).toBeDefined();
+        });
+
+        it('draws one board for somebody whose chair was given up from somewhere else: the game they left is watched, not played and watched at once', async () =>
+        {
+            const thrown: unknown[] = [];
+            const caught = (event: ErrorEvent | PromiseRejectionEvent) => thrown.push('reason' in event ? event.reason : event.error);
+
+            window.addEventListener('error', caught);
+            window.addEventListener('unhandledrejection', caught);
+
+            const complaints = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { container, held } = await resignedAt('public');
+            const { mine: _theirs, ...watched } = gaveUp(held.id);
+
+            expect(container.querySelectorAll('.table-stage')).toHaveLength(1);
+            expect(container.querySelector('[data-gone]')).not.toBeNull();
+
+            server.watches[held.matchId!] = { match: watched, behind: 30, delay: 30, live: true };
+
+            try
+            {
+                delete held.chairs[0].who;
+                await useLobby().refresh();
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+                await vi.waitFor(() => expect(container.querySelector('.table-stage'), 'the watcher was never shown the board').not.toBeNull(), { timeout: 4000 });
+
+                expect(container.querySelector('[data-gone]'), 'the board of a chair they no longer hold stayed on the page').toBeNull();
+                expect(container.querySelectorAll('.table-stage'), 'the game is drawn twice, once as theirs and once as a watcher\'s').toHaveLength(1);
+                expect(useBoard().match(), 'the board of a game they are no longer in is still held').toBeNull();
+                expect(thrown, 'the board was told its game was gone while it was still on the page').toEqual([]);
+                expect(complaints.mock.calls.map((call) => String(call[0])), 'something on the page complained while the board was let go').toEqual([]);
+            }
+            finally
+            {
+                window.removeEventListener('error', caught);
+                window.removeEventListener('unhandledrejection', caught);
+                delete server.watches[held.matchId!];
+            }
+        });
+
+        it('says neither to somebody still playing, who is offered the way out', async () =>
+        {
+            const { container } = await seatedAt(true);
+
+            expect(container.querySelector('[data-gone]')).toBeNull();
+            expect(control(container, 'match.resign')).toBeDefined();
+        });
+
+        it('says neither to somebody still playing at a table where somebody else has given up', async () =>
+        {
+            const theirs = (tableId: string) =>
+            {
+                const live = gaveUp(tableId);
+                const view = live.view as { seats: { seat: number; stack: number; folded: boolean; out: boolean }[] };
+
+                return {
+                    ...live,
+                    players: live.players.map((player) => ({ seat: player.seat, who: player.who, timeouts: 0, ...(player.seat === 2 ? { result: 'abandoned' } : {}) })),
+                    view: { ...view, seats: view.seats.map((seat) => ({ ...seat, stack: seat.seat === 2 ? 0 : 1500, folded: seat.seat === 2, out: seat.seat === 2 })) }
+                } as MatchView;
+            };
+
+            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            for (const chair of held.chairs)
+            {
+                chair.who = SEATED[chair.seat];
+            }
+
+            begins(held, theirs);
+
+            const { container } = await opened(held, true);
+
+            expect(container.querySelector('[data-gone]')).toBeNull();
+            expect(control(container, 'match.resign')).toBeDefined();
+        });
+
+        describe('a seat the game has put out with nothing left to give up', () =>
+        {
+            const outOfChips = (tableId: string) =>
+            {
+                const live = gaveUp(tableId);
+
+                return { ...live, players: live.players.map((player) => ({ seat: player.seat, who: player.who, timeouts: 0 })) } as MatchView;
+            };
+
+            const bustedAt = async () =>
+            {
+                const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+                const held = server.tables.find((one) => one.id === id)!;
+
+                for (const chair of held.chairs)
+                {
+                    chair.who = SEATED[chair.seat];
+                }
+
+                begins(held, outOfChips);
+                server.outOfGame[`live-${ id }`] = ['alex'];
+
+                return await opened(held, true);
+            };
+
+            it('is not offered a way to give up, which the game would refuse', async () =>
+            {
+                const { container } = await bustedAt();
+
+                expect(control(container, 'match.resign')).toBeUndefined();
+                expect(control(container, 'play.lobby.leave')).toBeDefined();
+            });
+
+            it('is not told it is watching from behind, which only somebody who walked away is', async () =>
+            {
+                const { container } = await bustedAt();
+
+                expect(container.querySelector('[data-gone]')).toBeNull();
+            });
+
+            it.each([
+                ['en', 'The game goes on without you'],
+                ['fa', 'بازی بدون تو ادامه پیدا می‌کنه']
+            ] as const)('is told the game goes on without it, and leaves without agreeing to a forfeit it does not owe, in %s', async (language, words) =>
+            {
+                useLocale().setLocale(language);
+
+                const { container, held, router } = await bustedAt();
+                const sheet = await asked(container);
+
+                expect(sheet.props.lead).toBe(useLocale().t('play.leave.locked'));
+                expect(sheet.props.lead).toContain(words);
+
+                useOverlay().close(sheet.id, true);
+
+                await vi.waitFor(() => expect(router.location().pathname).toBe('/app/games'), { timeout: 4000 });
+
+                expect(left()).toEqual(['tables.leave']);
+                expect(held.chairs[0].who).toBeUndefined();
+                expect(said()).toEqual([]);
+            });
         });
 
         it('sends nothing when the sheet is turned down', async () =>
@@ -1161,6 +1877,44 @@ describe('PlayPage', () =>
             expect(container.querySelector('h1')).toBe(heading);
         });
 
+        it('gives a player the game in place of the waiting room when it starts, and keeps the header it had', async () =>
+        {
+            const { id, container, lobby, held } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const heading = container.querySelector('h1');
+            const matches = client.matches as unknown as Record<string, unknown>;
+
+            matches.view = async () => ({
+                id: 'match-11',
+                tableId: id,
+                game: 'chess',
+                rev: 1,
+                seats: 4,
+                players: [],
+                turn: 0,
+                mine: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo' }
+            });
+
+            try
+            {
+                held.matchId = 'match-11';
+                await lobby.refresh();
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+                expect(lobbyOf(container)).toBeNull();
+                expect(container.querySelector('h1')).toBe(heading);
+            }
+            finally
+            {
+                delete matches.view;
+            }
+        });
+
         it('draws the board somebody is watching, a while behind, once the page has fetched it', async () =>
         {
             const { container, lobby, held } = await opened('omid.k');
@@ -1181,7 +1935,8 @@ describe('PlayPage', () =>
                     view: {
                         kind: 'ludo',
                         moves: [],
-                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false }))
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
                     }
                 },
                 behind: 30,
@@ -1195,6 +1950,181 @@ describe('PlayPage', () =>
 
             expect(server.calls).toContain('matches.watch');
             expect(container.textContent).not.toContain(useLocale().t('play.table.sitDown'));
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+        });
+
+        it('keeps the board somebody is watching when the watch is read again, and still shows it a later move', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const seated = ['alex', 'sara.k', 'reza.t', 'mina'];
+            const colours = ['red', 'green', 'yellow', 'blue'];
+
+            const seen = {
+                match: {
+                    id: 'match-9',
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev: 3,
+                    seats: 4,
+                    players: seated.map((who, seat) => ({ seat, who, side: seat })),
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: {
+                        kind: 'ludo',
+                        moves: [],
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+                    }
+                },
+                behind: 30,
+                delay: 30,
+                live: true
+            };
+
+            server.watches['match-9'] = seen;
+            held.matchId = 'match-9';
+            await lobby.refresh();
+
+            const titled = () => [...container.querySelectorAll('span')].find((one) => one.textContent === useLocale().t('watch.title'));
+
+            await vi.waitFor(() => expect(titled()).toBeDefined(), { timeout: 4000 });
+            await settle();
+
+            const watch = useWatch();
+            const reads = () => server.calls.filter((one) => one === 'matches.watch').length;
+            const frame = titled()!.parentElement!.parentElement!;
+            const marked = [frame, ...frame.querySelectorAll('*')];
+            const before = reads();
+
+            expect(frame.textContent).not.toContain(useLocale().plural('watch.quiet', 3));
+
+            watch.retry();
+            await vi.waitFor(() => expect(reads()).toBeGreaterThan(before), { timeout: 4000 });
+            await settle();
+
+            expect(marked.filter((node) => !container.contains(node)).length, 'the watched board was drawn again').toBe(0);
+
+            seen.behind = 180;
+
+            const again = reads();
+
+            watch.retry();
+            await vi.waitFor(() => expect(reads()).toBeGreaterThan(again), { timeout: 4000 });
+            await settle();
+
+            expect(container.contains(frame), 'the watched board was drawn again').toBe(true);
+            expect(frame.textContent).toContain(useLocale().plural('watch.quiet', 3));
+        });
+
+        it('keeps the game somebody is watching through its end, reads the end once, and gives the table back when they ask', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const seated = ['alex', 'sara.k', 'reza.t', 'mina'];
+            const colours = ['red', 'green', 'yellow', 'blue'];
+
+            const seen = {
+                match: {
+                    id: 'match-9',
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev: 3,
+                    seats: 4,
+                    players: seated.map((who, seat) => ({ seat, who, side: seat })),
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: {
+                        kind: 'ludo',
+                        moves: [],
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+                    }
+                },
+                behind: 30,
+                delay: 30,
+                live: true
+            };
+
+            server.watches['match-9'] = seen;
+            held.matchId = 'match-9';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+            await settle();
+
+            const reads = () => server.calls.filter((one) => one === 'matches.watch').length;
+            const before = reads();
+            const back = () => [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('watch.back'));
+
+            expect(back(), 'the way back was offered over a game still being played').toBeUndefined();
+
+            seen.live = false;
+            seen.behind = 0;
+            seen.match.rev = 5;
+            delete held.matchId;
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.finished')), { timeout: 4000 });
+            await settle();
+
+            expect(reads(), 'the end of the game was not read').toBe(before + 1);
+            expect(server.watchedFrom.at(-1), 'the end was asked for from somewhere other than the board on screen').toBe('3');
+            expect(container.textContent, 'a chair was offered over a game still being shown').not.toContain(useLocale().t('play.table.sitDown'));
+
+            await lobby.refresh();
+            await settle();
+
+            expect(reads(), 'a finished game was read again').toBe(before + 1);
+            expect(container.textContent).toContain(useLocale().t('watch.finished'));
+
+            fire(back()!, 'click');
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('play.table.sitDown')), { timeout: 4000 });
+
+            expect(container.textContent).not.toContain(useLocale().t('watch.finished'));
+        });
+
+        it('moves on to the next game at the table when one starts while the last is still being shown', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const game = (id: string, rev: number, live: boolean) => ({
+                match: {
+                    id,
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev,
+                    seats: 4,
+                    players: [],
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
+                },
+                behind: live ? 30 : 0,
+                delay: 30,
+                live
+            });
+
+            server.watches['match-9'] = game('match-9', 3, true);
+            held.matchId = 'match-9';
+            await lobby.refresh();
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+
+            server.watches['match-9'] = game('match-9', 5, false);
+            delete held.matchId;
+            await lobby.refresh();
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.finished')), { timeout: 4000 });
+
+            server.watches['match-10'] = game('match-10', 1, true);
+            held.matchId = 'match-10';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+            await settle();
+
+            expect(useWatch().view()?.match.id).toBe('match-10');
+            expect(server.watchedFrom.at(-1), 'the next game was asked about from the last game\'s revision').toBe('0');
         });
 
         it('draws no board for a game the server will not show, and keeps the page', async () =>
@@ -1210,6 +2140,84 @@ describe('PlayPage', () =>
 
             expect(container.textContent).not.toContain(useLocale().t('watch.title'));
             expect(container.querySelector('h1')).toBe(heading);
+        });
+
+        it.each([
+            ['en', 'There is nothing here for you to watch.'],
+            ['fa', 'این‌جا چیزی نیست که بتونی تماشا کنی.']
+        ] as const)('says there is nothing to watch when the server will not show a game, not that the game is too young, in %s', async (language, words) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container, lobby, held } = await opened('omid.k');
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(container.querySelector('[data-unwatchable]')!.textContent).toContain(words);
+            expect(container.textContent).not.toContain('nothing old enough');
+            expect(container.textContent).not.toContain('به اندازهٔ کافی قدیمی');
+
+            useLocale().setLocale('en');
+        });
+
+        it('does not say so while the first answer is still on its way', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+            let answer: () => void = () => undefined;
+
+            vi.spyOn(client.matches, 'watch').mockImplementationOnce(() => new Promise((_resolve, reject) =>
+            {
+                answer = () => reject(new ApiError(404, 'not-found', 'Nothing to watch there.', undefined));
+            }));
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+            await settle();
+
+            expect(container.querySelector('[data-unwatchable]'), 'said before the server had answered').toBeNull();
+
+            answer();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            vi.restoreAllMocks();
+        });
+
+        it('goes on saying so while it asks again, and does not draw the sentence a second time', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unwatchable]')).not.toBeNull(), { timeout: 4000 });
+
+            const said = container.querySelector('[data-unwatchable]');
+            const stop = useWatch().start();
+            let answer: () => void = () => undefined;
+
+            const asked = vi.spyOn(client.matches, 'watch').mockImplementationOnce(() => new Promise((_resolve, reject) =>
+            {
+                answer = () => reject(new ApiError(404, 'not-found', 'Nothing to watch there.', undefined));
+            }));
+
+            socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'game', id: 'match-nobody-kept', at: 0 });
+            clock.advance(NUDGE_WINDOW_MS);
+            await settle();
+
+            expect(asked).toHaveBeenCalledTimes(1);
+            expect(container.querySelector('[data-unwatchable]'), 'taken away while the page asked again').toBe(said);
+
+            answer();
+            await settle();
+
+            expect(container.querySelector('[data-unwatchable]')).toBe(said);
+
+            stop();
+            vi.restoreAllMocks();
         });
 
         it('opens the sheet that invites a friend when the host presses an empty chair', async () =>
@@ -1264,6 +2272,7 @@ describe('PlayPage', () =>
 
             server.tables.find((one) => one.id === id)!.chairs[0].ready = ready;
             server.me = viewer;
+            await useLobby().refresh();
 
             const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
             const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
@@ -1275,8 +2284,11 @@ describe('PlayPage', () =>
             return server.tables.find((one) => one.id === id)!;
         };
 
-        beforeEach(() =>
+        beforeEach(async () =>
         {
+            server.reset();
+            useLobby().reset();
+            await settle();
             visibility = 'visible';
             Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
         });
@@ -1325,12 +2337,57 @@ describe('PlayPage', () =>
             expect(socket.closed).toHaveLength(1);
         });
 
-        it('is let go once they have left the page', async () =>
+        it('is kept after they have left the page, for as long as they still sit ready at that table', async () =>
         {
             await opened({});
 
             cleanup();
             await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed, 'somebody looking for a game lost their socket by looking at another page').toEqual([]);
+        });
+
+        it('is kept by a search from wherever it was made, with no table page ever opened, and let go once the chair is given back', async () =>
+        {
+            const id = await useLobby().quick('ludo');
+
+            await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed).toEqual([]);
+
+            await useLobby().leave(id, false);
+            await settle();
+            clock.advance(IDLE_MS + 1000);
+
+            expect(socket.closed, 'a chair that was given back still held the socket').toHaveLength(1);
+        });
+
+        it('is kept while a live game of theirs is on, whatever page they are on', async () =>
+        {
+            const held = await opened({}, 'alex', false);
+
+            cleanup();
+            held.matchId = 'match-on';
+            await useLobby().refresh();
+            await settle();
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed).toEqual([]);
+
+            delete held.matchId;
+            await useLobby().refresh();
+            await settle();
+            clock.advance(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go at a table that plays a move a day, ready or not', async () =>
+        {
+            await opened({ mode: 'turns' });
+
             hidden(IDLE_MS + 1000);
 
             expect(socket.closed).toHaveLength(1);
@@ -1392,15 +2449,17 @@ describe('PlayPage', () =>
         beforeEach(() =>
         {
             useSettings().reset();
-            useSettings().update({ voiceAutoJoin: true });
             setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
             setVoiceCall(() => ({
                 setMic: async () => undefined,
                 setMuted: () => undefined,
                 sync: () => undefined,
                 receive: async () => undefined,
+                heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
+                setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             }));
             useVoice().reset();
@@ -1414,6 +2473,33 @@ describe('PlayPage', () =>
             setVoiceCall(null);
             setVoiceMedia(null);
             useSettings().reset();
+        });
+
+        it('joins by default, with the microphone open', async () =>
+        {
+            await seated();
+
+            expect(socket.sent.filter((frame) => frame.t === 'voice').at(-1), 'a table with voice on was not joined by default').toMatchObject({ on: true, muted: false });
+        });
+
+        it('tells a reader whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            await seated();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().mic()).toBe('denied');
+        });
+
+        it('tells a reader with no microphone at all that they are only listening, in other words', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('none'), { name: 'NotFoundError' })) }) as unknown as MediaDevices);
+
+            await seated();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micAbsent')), { timeout: 4000 });
+
+            expect(useToasts().items().map((toast) => toast.text)).not.toContain(useLocale().t('voice.micDenied'));
         });
 
         it('joins once, and stays out when the reader leaves', async () =>
@@ -1478,6 +2564,7 @@ describe('PlayPage', () =>
         beforeEach(() =>
         {
             useSettings().reset();
+            useSettings().update({ voiceAutoJoin: false });
             useToasts().reset();
             setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
             setVoiceCall(() => ({
@@ -1485,8 +2572,11 @@ describe('PlayPage', () =>
                 setMuted: () => undefined,
                 sync: () => undefined,
                 receive: async () => undefined,
+                heard: () => undefined,
                 setVolume: () => undefined,
                 setSink: () => undefined,
+                setQuality: () => undefined,
+                facts: async () => ({}),
                 close: () => undefined
             }));
             useVoice().reset();
@@ -1535,6 +2625,318 @@ describe('PlayPage', () =>
             await settle();
 
             expect(offers(), 'a Join button for the call of a table the reader has left').toHaveLength(0);
+        });
+
+        it('lets somebody in the call stop hearing everybody from the table\'s sheet, where a phone\'s bar has no room for it', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+            await useVoice().join(id);
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const menu = () => [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!;
+
+            fire(menu(), 'click');
+
+            const first = useOverlay().top()!;
+
+            expect(first.props.deaf).toBe(false);
+            (first.props.onDeafen as () => void)();
+            useOverlay().close(first.id, undefined);
+
+            expect(useVoice().deaf()).toBe(true);
+
+            fire(menu(), 'click');
+
+            expect(useOverlay().top()!.props.deaf).toBe(true);
+
+            useOverlay().reset();
+        });
+
+        it('opens the voice settings from the table, from the dock on a wide screen and from the table\'s sheet on a phone', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const named = useLocale().t('voice.manager.open');
+            const wide = [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === named);
+
+            expect(wide, 'the dock offers no way to the voice settings').toBeDefined();
+
+            fire(wide!, 'click');
+            await vi.waitFor(() => expect(useOverlay().top()?.id).toBe('voice-manager'), { timeout: 4000 });
+
+            expect(useOverlay().top()!.props.table).toBe(id);
+            expect(useOverlay().top()!.label).toBe(named);
+
+            useOverlay().reset();
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            const onVoiceManager = useOverlay().top()!.props.onVoiceManager as (() => void) | undefined;
+
+            expect(onVoiceManager, 'the table\'s sheet offers no way to the voice settings').toBeDefined();
+
+            useOverlay().reset();
+            onVoiceManager!();
+            await vi.waitFor(() => expect(useOverlay().top()?.id).toBe('voice-manager'), { timeout: 4000 });
+
+            useOverlay().reset();
+        });
+
+        it('offers no voice settings at a table that has no voice', async () =>
+        {
+            const container = renderTest(() => TableDock({}) as Rendered).container;
+
+            expect([...container.querySelectorAll('button')].some((one) => one.getAttribute('aria-label') === useLocale().t('voice.manager.open'))).toBe(false);
+
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            expect(useOverlay().top()!.props.onVoiceManager).toBeUndefined();
+
+            useOverlay().reset();
+        });
+
+        it('offers no such thing from the sheet to somebody who is not in the call', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+
+            fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+            expect(useOverlay().top()!.props.onDeafen).toBeUndefined();
+            expect(useOverlay().top()!.props.deaf).toBeUndefined();
+
+            useOverlay().reset();
+        });
+
+        it('keeps the name on the button that joins the call when the button is only its icon', async () =>
+        {
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+            const join = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Join voice')!;
+            const word = [...join.querySelectorAll('span')].find((one) => one.textContent?.trim() === 'Join voice')!;
+
+            expect(word.className).toContain('sr-only');
+            expect(word.className).toContain('@md:not-sr-only');
+        });
+
+        it('tells a reader who took the offer and whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            const { id } = await seated();
+
+            offers()[0].action!.run();
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().table()).toBe(id);
+        });
+
+        it('tells a reader who pressed Join and whose microphone was refused that they are only listening', async () =>
+        {
+            setVoiceMedia(() => ({ getUserMedia: async () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })) }) as unknown as MediaDevices);
+
+            const { id, drawn } = await seated();
+
+            drawn.unmount();
+
+            const container = renderTest(() => TableDock({ voice: id }) as Rendered).container;
+
+            fire([...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Join voice')!, 'click');
+            await vi.waitFor(() => expect(useToasts().items().map((toast) => toast.text)).toContain(useLocale().t('voice.micDenied')), { timeout: 4000 });
+
+            expect(useVoice().table()).toBe(id);
+        });
+    });
+
+    describe('where a toast is drawn at a table', () =>
+    {
+        const at = async (posture: 'phone' | 'sidebar', railOpen: boolean) =>
+        {
+            useDevice().override(posture);
+            useSettings().update({ railOpen });
+
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const drawn = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(useLobby().table()?.id).toBe(id), { timeout: 4000 });
+            await settle();
+
+            return drawn;
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        afterEach(() =>
+        {
+            useDevice().override(null);
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        it('is at the top on a phone, where the bottom is the reader’s hand and the chat, and back where it was once the page is left', async () =>
+        {
+            expect(useToasts().lifted()).toBe(false);
+
+            const drawn = await at('phone', false);
+
+            expect(useToasts().lifted(), 'a toast at a phone’s table lay over the hand').toBe(true);
+
+            drawn.unmount();
+            await settle();
+
+            expect(useToasts().lifted(), 'the page took the toasts’ place with it').toBe(false);
+        });
+
+        it('is at the top on a wide screen too, with the chat open or closed: its corner is the chat\'s field or a corner of the table', async () =>
+        {
+            const drawn = await at('sidebar', false);
+
+            expect(useToasts().lifted(), 'a toast lay over the corner of a table that takes all the room it is given').toBe(true);
+
+            useSettings().update({ railOpen: true });
+            await settle();
+
+            expect(useToasts().lifted(), 'a toast lay over the field somebody was typing in').toBe(true);
+
+            useSettings().update({ railOpen: false });
+            await settle();
+
+            expect(useToasts().lifted(), 'closing the chat let the toasts down onto the table').toBe(true);
+
+            drawn.unmount();
+            await settle();
+
+            expect(useToasts().lifted(), 'the page took the toasts’ place with it').toBe(false);
+        });
+    });
+
+    describe('somebody the call cannot reach', () =>
+    {
+        const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;
+        const granted = { getTracks: () => [microphone], getAudioTracks: () => [microphone] } as unknown as MediaStream;
+        let stop: () => void = () => undefined;
+        let link: (who: string, state: 'connecting' | 'connected' | 'failed' | null) => void = () => undefined;
+
+        const told = () => useToasts().items().filter((toast) => toast.dedupe?.startsWith('voice-unreached-') === true);
+
+        const calling = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), voice: 'table' }, []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const drawn = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+            await settle();
+
+            return drawn;
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useSettings().update({ voiceAutoJoin: true });
+            useToasts().reset();
+            setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
+            setVoiceCall((deps) =>
+            {
+                link = deps.onLink;
+
+                return {
+                    setMic: async () => undefined,
+                    setMuted: () => undefined,
+                    sync: () => undefined,
+                    receive: async () => undefined,
+                    heard: () => undefined,
+                    setVolume: () => undefined,
+                    setSink: () => undefined,
+                    setQuality: () => undefined,
+                    facts: async () => ({}),
+                    close: () => undefined
+                };
+            });
+            useVoice().reset();
+            stop = useVoice().start();
+        });
+
+        afterEach(() =>
+        {
+            stop();
+            useVoice().reset();
+            setVoiceCall(null);
+            setVoiceMedia(null);
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        it('is named in words once the wait is over, and the words are taken back when the line connects', async () =>
+        {
+            await calling();
+
+            void usePeople().want(['sara.k']);
+            await vi.waitFor(() => expect(usePeople().byHandle('sara.k')).not.toBeNull(), { timeout: 4000 });
+
+            link('sara.k', 'connecting');
+            clock.advance(UNREACHED_MS - 1);
+            await settle();
+            expect(told(), 'the page gave up on a call it was still placing').toHaveLength(0);
+
+            clock.advance(1);
+            await settle();
+
+            expect(told().map((toast) => [toast.kind, toast.text, toast.detail]), 'a second line a toast cuts short held half of what it says').toEqual([[
+                'warning',
+                useLocale().t('voice.unreached', { name: 'Sara Kamali' }),
+                null
+            ]]);
+
+            link('sara.k', 'failed');
+            link('sara.k', 'connecting');
+            await settle();
+            expect(told(), 'another try said it all again').toHaveLength(1);
+
+            link('sara.k', 'connected');
+            await settle();
+            expect(told(), 'the page still said it could not reach somebody it is talking to').toHaveLength(0);
+        });
+
+        it('says it of each person by themselves, and does not follow the reader off the page', async () =>
+        {
+            const drawn = await calling();
+
+            link('sara.k', 'connecting');
+            link('reza.t', 'failed');
+            clock.advance(UNREACHED_MS);
+            await settle();
+
+            expect(told().map((toast) => toast.dedupe).sort()).toEqual(['voice-unreached-reza.t', 'voice-unreached-sara.k']);
+
+            link('reza.t', null);
+            await settle();
+            expect(told().map((toast) => toast.dedupe)).toEqual(['voice-unreached-sara.k']);
+
+            drawn.unmount();
+            await settle();
+            expect(told(), 'the words outlived the table they were about').toHaveLength(0);
         });
     });
 
@@ -1612,12 +3014,111 @@ describe('PlayPage', () =>
             fire(pressable(container, 'Play again')!, 'click');
 
             await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+            await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
 
             expect(server.calls).toContain('tables.ready');
             expect(server.calls).not.toContain('tables.start');
-            expect(held.chairs[0].ready).toBe(true);
             expect(pressable(container, 'Play again')).toBeUndefined();
             expect(pressable(container, 'Start the game')).toBeUndefined();
+        });
+
+        it('says who is waited for before the server has answered, and takes it back with a sentence when the server says no', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+            const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = routes.ready;
+            const waiting: (() => void)[] = [];
+
+            routes.ready = async () =>
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                throw new ApiError(409, 'table-closed', 'That table has closed.', undefined);
+            };
+
+            try
+            {
+                fire(pressable(container, 'Play again')!, 'click');
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+
+                expect(held.chairs[0].ready).toBe(false);
+                expect(pressable(container, 'Play again')).toBeUndefined();
+
+                await vi.waitFor(() => expect(waiting).toHaveLength(1), { timeout: 4000 });
+                expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+                waiting[0]();
+
+                await vi.waitFor(() => expect(pressable(container, 'Play again')).toBeDefined(), { timeout: 4000 });
+
+                expect(container.textContent).not.toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+                expect(useToasts().items().map((toast) => [toast.kind, toast.text])).toContainEqual(['warning', 'That table has closed.']);
+                expect(held.chairs[0].ready).toBe(false);
+            }
+            finally
+            {
+                routes.ready = real;
+            }
+        });
+
+        it('says who is waited for at once though the table it holds still names the game that ended', async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            held.chairs[0].ready = true;
+            held.chairs[1].ready = true;
+            held.matchId = `over-${ id }`;
+            usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+            (client.matches as unknown as Record<string, unknown>).view = async () => over(id);
+
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(pressable(container, 'Play again')).toBeDefined(), { timeout: 4000 });
+            expect(lobby.table()).toMatchObject({ matchId: `over-${ id }` });
+
+            const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+            const real = routes.ready;
+            const waiting: (() => void)[] = [];
+
+            routes.ready = async (input) =>
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                delete held.matchId;
+                held.chairs[1].ready = false;
+
+                return await real(input);
+            };
+
+            try
+            {
+                fire(pressable(container, 'Play again')!, 'click');
+
+                await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+                expect(pressable(container, 'Play again')).toBeUndefined();
+
+                await vi.waitFor(() => expect(waiting).toHaveLength(1), { timeout: 4000 });
+                waiting[0]();
+
+                await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
+                await settle();
+                expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' }));
+            }
+            finally
+            {
+                routes.ready = real;
+            }
         });
 
         it('starts the next game when the last player at the table presses Play again', async () =>
@@ -1633,6 +3134,61 @@ describe('PlayPage', () =>
             expect(ready).toBeGreaterThanOrEqual(0);
             expect(ready).toBeLessThan(server.calls.indexOf('tables.start'));
             expect(held.chairs[0].ready).toBe(true);
+        });
+
+        it('keeps the finished game on the table while the next one is fetched, and says so in its place when the next one cannot be', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+            const matches = client.matches as unknown as Record<string, unknown>;
+            let asks = 0;
+            let fail = (): void => undefined;
+            let next: () => Promise<unknown> = async () =>
+            {
+                await new Promise<void>((resolve) => fail = resolve);
+
+                throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+            };
+
+            matches.view = async () =>
+            {
+                asks += 1;
+
+                return await next();
+            };
+            held.matchId = `next-${ held.id }`;
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(asks).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('.bg-board')).not.toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+
+            fail();
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(container.querySelector('.bg-board')).toBeNull();
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+
+            next = async () => ({ ...over(held.id), id: `next-${ held.id }`, rev: 1, winner: undefined, outcome: undefined, finishedAt: undefined, players: [{ seat: 0, who: 'alex', timeouts: 0 }, { seat: 1, who: 'sara.k', timeouts: 0 }] });
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(container.querySelector('.bg-board')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            const offered = pressable(container, 'Play again');
+
+            expect(asks).toBe(2);
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+            expect(offered === undefined || offered.closest('.table-result[data-leaving][inert]') !== null, 'the next game was on the table with the last one still offering another').toBe(true);
+
+            clock.advance(RESULT_OUT);
+            await settle();
+
+            expect(pressable(container, 'Play again')).toBeUndefined();
+            expect(container.querySelector('.table-result')).toBeNull();
         });
 
         it('says a chair is free once the other player has left', async () =>
@@ -1658,18 +3214,92 @@ describe('PlayPage', () =>
                 players: [],
                 turn: 0,
                 startedAt: new Date(400_000).toISOString(),
-                view: { kind: 'ludo', moves: [], seats: [] }
+                view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
             },
             behind: 30,
             delay: 30,
             live: true
-        } as MatchWatch);
+        } as Watched);
 
-        const { container } = renderTest(() => WatchBoard({ watch: watching('chess') }) as Rendered);
+        const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
 
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
         expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo', 'poker']);
+    });
+
+    describe('a watched game whose page cannot draw it', () =>
+    {
+        const watching = (game: string) => ({
+            match: {
+                id: 'watched',
+                tableId: 'somewhere',
+                game,
+                rev: 3,
+                seats: 2,
+                players: [],
+                turn: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
+            },
+            behind: 30,
+            delay: 30,
+            live: true
+        } as Watched);
+
+        const settle = async () =>
+        {
+            for (let i = 0; i < 12; i += 1)
+            {
+                await Promise.resolve();
+            }
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        };
+
+        it('loads the page again from its Reload, which is what fetches a copy that can', async () =>
+        {
+            const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
+            const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
+
+            fire(reload, 'click');
+            await settle();
+
+            expect(reloads).toBe(0);
+
+            answering = true;
+            fire(reload, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+        });
+
+        it('says the board could not load when its chunk will not come, where it drew a placeholder for ever, and loads the page again when asked', async () =>
+        {
+            const asked = chunk.asked;
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo'), events: NO_EVENTS }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
+
+            expect(chunk.asked).toBe(asked + 1);
+            expect(container.querySelector('.animate-pulse')).toBeNull();
+            expect(reloads).toBe(0);
+
+            answering = true;
+            fire(container.querySelector('[role="alert"] button')!, 'click');
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+        });
+
+        it('loads the page again by itself when that board will not come and the server answers', async () =>
+        {
+            answering = true;
+
+            const { container } = renderTest(() => WatchBoard({ watch: watching('ludo'), events: NO_EVENTS }) as Rendered);
+
+            await vi.waitFor(() => expect(reloads).toBe(1), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+        });
     });
 
     it('is the same for a conversation replaced by another one while it leaves', async () =>
@@ -1986,15 +3616,22 @@ describe('the table’s chat and its controls', () =>
         expect(sheet.className).not.toContain('h-[var(--sheet-h,48dvh)]');
         expect(container.querySelector('[class*="pb-[var(--sheet"]')).toBeNull();
         expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(header().parentElement!.getAttribute('data-beside')).toBe('narrow');
         expect(header().className).toContain('pe-[min(23rem,60vw)]');
         expect(button(header(), 'Show chat')).toBeUndefined();
         expect(header().querySelector('nav.play-others')!.classList.contains('order-1')).toBe(true);
         expect([...header().querySelectorAll('nav.play-others a')].map((link) => link.getAttribute('href'))).toEqual([`/app/play/${ waiting }`]);
         expect(header().querySelector('nav.play-others p')!.textContent).toContain('waiting on you');
 
+        fire(await found(sheet, 'Make the chat bigger'), 'click');
+        await settle();
+
+        expect(header().parentElement!.getAttribute('data-beside')).toBe('wide');
+
         fire(await found(sheet, 'Hide chat'), 'click');
         await settle();
 
+        expect(header().parentElement!.hasAttribute('data-beside')).toBe(false);
         expect(header().className).not.toContain('pe-[');
         expect(button(header(), 'Show chat')).toBeDefined();
     });
@@ -2192,6 +3829,47 @@ describe('the table’s chat and its controls', () =>
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;
 
         expect(container.textContent).not.toContain('Give up');
+    });
+
+    it.each([
+        [false, 'Stop hearing everybody'],
+        [true, 'Hear everybody again']
+    ] as const)('offers the hearing of a call in the sheet to somebody in one (deaf: %s)', (deaf, label) =>
+    {
+        const close = vi.fn();
+        const deafen = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, deaf, onDeafen: deafen }) as Rendered).container;
+        const entry = [...container.querySelectorAll('ul button')].find((one) => one.textContent?.trim() === label);
+
+        expect(entry, [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim()).join(' | ')).toBeDefined();
+
+        fire(entry as HTMLElement, 'click');
+
+        expect(deafen).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers the voice settings in the sheet, and opens them', () =>
+    {
+        const close = vi.fn();
+        const manage = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onVoiceManager: manage }) as Rendered).container;
+        const entry = [...container.querySelectorAll('ul button')].find((one) => one.textContent?.trim() === 'Voice settings');
+
+        expect(entry).toBeDefined();
+
+        fire(entry as HTMLElement, 'click');
+
+        expect(manage).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers nothing about hearing in the sheet to somebody who is not in a call', () =>
+    {
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;
+
+        expect(container.textContent).not.toContain('hearing everybody');
+        expect(container.textContent).not.toContain('Hear everybody');
     });
 
     it('offers leaving the table from the sheet once a game is on the board, last of all', () =>

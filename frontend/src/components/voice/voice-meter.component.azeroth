@@ -1,0 +1,50 @@
+import type { GateReading } from '../../services/voice.gate.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export const METER_FLOOR = -80;
+
+const along = (db: number) => Math.min(1, Math.max(0, (db - METER_FLOOR) / -METER_FLOOR));
+
+export default component VoiceMeter(props: { reading: GateReading | null; label: string; idle: string })
+{
+    const locale = useLocale();
+
+    derived known = props.reading !== null;
+
+    derived open = props.reading !== null && props.reading.open;
+
+    derived level = props.reading === null ? METER_FLOOR : Math.round(Math.min(0, Math.max(METER_FLOOR, props.reading.level)));
+
+    derived fill = props.reading === null ? 0 : along(props.reading.level);
+
+    derived bar = props.reading === null ? 0 : Math.round(along(props.reading.threshold) * 1000) / 10;
+
+    derived idle = props.idle;
+
+    derived said = locale.t(open ? 'voice.levelOpenAt' : 'voice.levelClosedAt', { n: locale.n(level) });
+
+    <div class="flex flex-col gap-1.5">
+        <div
+            class="relative h-2.5 w-full overflow-hidden rounded-full bg-sunk"
+            role="meter"
+            aria-label={ props.label }
+            aria-valuemin={ METER_FLOOR }
+            aria-valuemax={ 0 }
+            aria-valuenow={ level }
+            aria-valuetext={ said }
+            data-open={ open ? 'true' : undefined }
+        >
+            <span
+                class={ () => [ 'voice-meter-fill absolute inset-0 rounded-full transition-transform duration-75', open ? 'bg-live' : 'bg-faint', locale.dir() === 'rtl' ? 'origin-right' : 'origin-left' ].join(' ') }
+                style={ `transform: scaleX(${ fill })` }
+                aria-hidden="true"
+            ></span>
+            <Show when={ known }>
+                <span class="voice-meter-bar absolute inset-y-0 w-0.5 -ms-px bg-text" style={ `inset-inline-start: ${ bar }%` } aria-hidden="true"></span>
+            </Show>
+        </div>
+        <Show when={ !known }>
+            <p class="text-ui-xs text-faint">{ idle }</p>
+        </Show>
+    </div>
+}

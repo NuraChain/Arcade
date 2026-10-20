@@ -1,6 +1,6 @@
 import { createResource, useHead } from 'azerothjs';
 
-import { client, type NftItem } from '../../api.ts';
+import { ApiError, client, type NftItem } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -25,7 +25,7 @@ export default component NftsPage()
     useHead({ title: () => locale.t('nfts.title') });
 
     const first = createResource(
-        () => account.isWallet() ? account.address() : null,
+        () => account.address(),
         () => client.chain.nfts({ query: { limit: String(PAGE) } }),
         { name: 'chain.nfts.page' }
     );
@@ -50,6 +50,10 @@ export default component NftsPage()
 
     derived failed = first.error() !== null && items.length === 0;
 
+    derived trouble = first.error();
+
+    derived unreached = trouble instanceof ApiError && trouble.code === 'chain-unreachable';
+
     derived offline = first.data()?.configured === false;
 
     derived holding = items.length > 0;
@@ -58,9 +62,7 @@ export default component NftsPage()
 
     derived refused = !first.loading() && failed;
 
-    derived guest = !account.isWallet();
-
-    derived bare = !first.loading() && !failed && !offline && !guest && !holding;
+    derived bare = !first.loading() && !failed && !offline && !holding;
 
     derived further = items.length < total;
 
@@ -101,12 +103,8 @@ export default component NftsPage()
     <Page label={ locale.t('nfts.title') } onRefresh={ () => first.refetch() }>
         <PageHeader
             title={ locale.t('nfts.title') }
-            { ...(account.isWallet() ? { lead: locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) } : {}) }
+            lead={ locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) }
         />
-
-        <Show when={ guest }>
-            { () => <EmptyState icon="wallet" title={ locale.t('nfts.guest') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
-        </Show>
 
         <Show when={ offline }>
             { () => <EmptyState icon="image" title={ locale.t('nfts.off') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
@@ -124,7 +122,7 @@ export default component NftsPage()
         </Show>
 
         <Show when={ refused }>
-            { () => <ErrorState title={ locale.t('nfts.failed') } onRetry={ () => first.refetch() } /> }
+            { () => <ErrorState title={ locale.t('nfts.failed') } lead={ unreached ? locale.t('nfts.unreached', { chain: NURA_CHAIN.name }) : undefined } onRetry={ () => first.refetch() } /> }
         </Show>
 
         <Show when={ bare }>

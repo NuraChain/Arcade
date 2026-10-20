@@ -71,7 +71,7 @@ export default component DevicesPage()
                         <Button
                             variant="primary"
                             size="sm"
-                            leading="key"
+                            leading="wallet"
                             loading={ devices.busy() }
                             onClick={ () => void devices.enrol(suggestion) }
                         >

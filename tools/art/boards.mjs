@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CELL, MARGIN, NEST, NEST_RADIUS, NEST_SPREAD, NEST_WELLS, RIM } from '../../frontend/src/game/layout.ts';
+import { CELL, FRAME_ROUND, MARGIN, NEST, NEST_RADIUS, NEST_SPREAD, NEST_WELLS, RIM } from '../../frontend/src/game/layout.ts';
 import { ENTRY, HOME_CELLS, RING, RING_CELLS, RING_STEPS, SAFE, ringIndex } from '../../backend/src/domains/match/ludo/board.ts';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'board');
@@ -10,6 +10,7 @@ const S = 1024;
 const G = MARGIN * S;
 const C = CELL * S;
 const EDGE = RIM * S;
+const FRAME_RADIUS = Math.round(FRAME_ROUND * S);
 
 const round = (value) => Math.round(value * 100) / 100;
 
@@ -75,18 +76,8 @@ function frame()
 {
     const inner = round(S - EDGE * 2);
 
-    const grain = [
-        [0.18, 0.012], [0.46, 0.018], [0.74, 0.011],
-        [0.3, 0.988], [0.62, 0.982], [0.86, 0.989]
-    ].map(([u, v]) => `<path d="M${ round(u * S - 26) } ${ round(v * S) }h52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>`)
-        .concat([[0.012, 0.3], [0.018, 0.64], [0.988, 0.38], [0.982, 0.72]]
-            .map(([u, v]) => `<path d="M${ round(u * S) } ${ round(v * S - 26) }v52" stroke="#B8662A" stroke-width="4" stroke-linecap="round" opacity="0.7"/>`))
-        .join('\n');
-
-    return `<rect x="5" y="9" width="${ S - 10 }" height="${ S - 12 }" rx="58" fill="#A85A22" stroke="${ INK }" stroke-width="6"/>
-<rect x="5" y="5" width="${ S - 10 }" height="${ S - 14 }" rx="58" fill="#D9843F" stroke="${ INK }" stroke-width="6"/>
-<rect x="18" y="14" width="${ S - 36 }" height="16" rx="8" fill="#F2AC6A" opacity="0.9"/>
-${ grain }
+    return `<rect x="3" y="7" width="${ S - 6 }" height="${ S - 10 }" rx="${ FRAME_RADIUS - 3 }" fill="#A85A22" stroke="${ INK }" stroke-width="6"/>
+<rect x="3" y="3" width="${ S - 6 }" height="${ S - 12 }" rx="${ FRAME_RADIUS - 3 }" fill="#D9843F" stroke="${ INK }" stroke-width="6"/>
 <rect x="${ round(EDGE - 2) }" y="${ round(EDGE + 2) }" width="${ inner + 4 }" height="${ inner }" rx="24" fill="#8C4A1B"/>
 <rect x="${ round(EDGE) }" y="${ round(EDGE) }" width="${ inner }" height="${ inner }" rx="22" fill="${ PAPER }" stroke="${ INK }" stroke-width="5"/>`;
 }
@@ -270,77 +261,49 @@ function pawnShadow()
 `;
 }
 
-const PIP_GRID = {
-    1: [[0, 0]],
-    2: [[-1, -1], [1, 1]],
-    3: [[-1, -1], [0, 0], [1, 1]],
-    4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
-    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
-    6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]
-};
-
-function dice()
-{
-    const size = 180;
-    const faces = [1, 2, 3, 4, 5, 6].map((value, index) =>
-    {
-        const x = index * 256 + (256 - size) / 2;
-        const y = (256 - size) / 2 - 6;
-        const cx = x + size / 2;
-        const cy = y + size / 2;
-        const pips = PIP_GRID[value]
-            .map(([u, v]) => `<circle cx="${ round(cx + u * size * 0.27) }" cy="${ round(cy + v * size * 0.27) }" r="${ round(size * 0.085) }" fill="${ INK }"/>`)
-            .join('');
-
-        return `<g>
-    <rect x="${ x }" y="${ y + 12 }" width="${ size }" height="${ size }" rx="40" fill="#E6D6B4" stroke="${ INK }" stroke-width="8"/>
-    <rect x="${ x }" y="${ y }" width="${ size }" height="${ size }" rx="40" fill="#FFFFFF" stroke="${ INK }" stroke-width="8"/>
-    <rect x="${ x + 16 }" y="${ y + 14 }" width="${ size - 32 }" height="30" rx="15" fill="#FFF4DC"/>
-    ${ pips }
-    <ellipse cx="${ x + 40 }" cy="${ y + 30 }" rx="12" ry="7" fill="#FFFFFF" transform="rotate(-30 ${ x + 40 } ${ y + 30 })"/>
-</g>`;
-    }).join('\n');
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 256" width="2048" height="256">
-${ faces }
-</svg>
-`;
-}
-
 function flourish()
 {
     return 'M0 0C38 0 64 10 84 30C66 22 48 20 30 24C44 34 50 48 48 64C40 50 28 42 12 40C22 58 22 76 12 92C8 70 4 46 0 0Z'
         + 'M22 8C44 10 60 18 70 30M8 22C10 44 18 60 30 70';
 }
 
-function hokmOrnaments(width, height)
-{
-    const rim = Math.round(Math.min(width, height) * 0.045);
-    const lip = Math.round(rim * 0.35);
-    const fx = rim + lip;
-    const fw = width - fx * 2;
-    const fh = height - fx * 2;
-    const inset = Math.round(Math.min(fw, fh) * 0.045);
-    const cx = width / 2;
-    const cy = height / 2;
-    const medal = Math.round(Math.min(fw, fh) * 0.2);
-    const corners = [
-        [fx + inset, fx + inset, 0],
-        [width - fx - inset, fx + inset, 90],
-        [width - fx - inset, height - fx - inset, 180],
-        [fx + inset, height - fx - inset, 270]
-    ];
-    const petals = Array.from({ length: 8 }, (_, index) =>
-        `<ellipse cx="0" cy="${ -medal * 0.52 }" rx="${ round(medal * 0.13) }" ry="${ round(medal * 0.36) }" transform="rotate(${ index * 45 })"/>`).join('');
+const HOKM_FRAME = 1000;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }">
+function hokmFelt()
+{
+    const rim = Math.round(HOKM_FRAME * 0.045);
+    const edge = rim + Math.round(rim * 0.35);
+    const felt = HOKM_FRAME - edge * 2;
+
+    return { rim, felt, at: edge + Math.round(felt * 0.045), medal: Math.round(felt * 0.2) };
+}
+
+function hokmFrame()
+{
+    const { rim, felt, at } = hokmFelt();
+    const far = HOKM_FRAME - at;
+    const corners = [[at, at, 0], [far, at, 90], [far, far, 180], [at, far, 270]];
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ HOKM_FRAME } ${ HOKM_FRAME }" width="${ HOKM_FRAME }" height="${ HOKM_FRAME }">
 <defs>
 <path id="flourish" d="${ flourish() }"/>
 </defs>
-<rect x="${ fx + inset }" y="${ fx + inset }" width="${ fw - inset * 2 }" height="${ fh - inset * 2 }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.34" stroke-width="2.5"/>
-<rect x="${ fx + inset + 8 }" y="${ fx + inset + 8 }" width="${ fw - inset * 2 - 16 }" height="${ fh - inset * 2 - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5"/>
-${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(Math.min(fw, fh) / 700) })" fill="#D9B45A" fill-opacity="0.3" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2"/>`).join('\n') }
-<g transform="translate(${ cx } ${ cy })">
+<rect x="${ at }" y="${ at }" width="${ far - at }" height="${ far - at }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.34" stroke-width="2.5"/>
+<rect x="${ at + 8 }" y="${ at + 8 }" width="${ far - at - 16 }" height="${ far - at - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5"/>
+${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(felt / 700) })" fill="#D9B45A" fill-opacity="0.3" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2"/>`).join('\n') }
+</svg>
+`;
+}
+
+function hokmMedallion()
+{
+    const { medal } = hokmFelt();
+    const side = medal * 2 + 8;
+    const petals = Array.from({ length: 8 }, (_, index) =>
+        `<ellipse cx="0" cy="${ round(-medal * 0.52) }" rx="${ round(medal * 0.13) }" ry="${ round(medal * 0.36) }" transform="rotate(${ index * 45 })"/>`).join('');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ side } ${ side }" width="${ side }" height="${ side }">
+<g transform="translate(${ side / 2 } ${ side / 2 })">
     <circle r="${ medal }" fill="#0B4227" fill-opacity="0.22" stroke="#D9B45A" stroke-opacity="0.3" stroke-width="3"/>
     <circle r="${ round(medal * 0.9) }" fill="none" stroke="#D9B45A" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="3 7"/>
     <g fill="#D9B45A" fill-opacity="0.06" stroke="#D9B45A" stroke-opacity="0.13" stroke-width="1.5">${ petals }</g>
@@ -354,10 +317,10 @@ if (RING_CELLS.length !== RING)
     throw new Error(`the ring has ${ RING_CELLS.length } cells`);
 }
 
-writeFileSync(join(OUT, 'hokm-ornaments-wide.svg'), hokmOrnaments(1600, 1000));
-console.log('board hokm-ornaments-wide.svg');
-writeFileSync(join(OUT, 'hokm-ornaments-tall.svg'), hokmOrnaments(1000, 1200));
-console.log('board hokm-ornaments-tall.svg');
+writeFileSync(join(OUT, 'hokm-frame.svg'), hokmFrame());
+console.log('board hokm-frame.svg');
+writeFileSync(join(OUT, 'hokm-medallion.svg'), hokmMedallion());
+console.log('board hokm-medallion.svg');
 
 writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
 console.log('board ludo-board.svg');
@@ -370,6 +333,3 @@ for (const colour of COLOURS)
 
 writeFileSync(join(OUT, 'pawn-shadow.svg'), pawnShadow());
 console.log('board pawn-shadow.svg');
-
-writeFileSync(join(OUT, 'ludo-dice.svg'), dice());
-console.log('board ludo-dice.svg');

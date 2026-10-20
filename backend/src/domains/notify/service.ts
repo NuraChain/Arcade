@@ -35,7 +35,7 @@ export const PAGE = 30;
  * stops a producer from putting a sentence in it, which is how a "structured" notification ends up
  * carrying prose that cannot follow a language switch.
  */
-const REF_FIELDS = new Set(['conversationId', 'tableId', 'groupId', 'requestId', 'personId']);
+const REF_FIELDS = new Set(['conversationId', 'tableId', 'groupId', 'requestId', 'personId', 'game']);
 
 /**
  * The shape a uuid has, checked before one is compared against a uuid COLUMN.
@@ -125,7 +125,9 @@ export function createNotifyService(db: DataSource, social: SocialService)
 
         async retract(userId: string, kind: NotificationKind, dedupeKey: string)
         {
-            await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
+            const gone = await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
+
+            return (gone.affected ?? 0) > 0;
         },
 
         /**
@@ -264,6 +266,18 @@ export function createNotifyService(db: DataSource, social: SocialService)
         async unsubscribe(me: string, endpoint: string)
         {
             await db.getRepository(PushSubscription).delete({ userId: me, endpoint });
+        },
+
+        /**
+         * Every browser of an account, let go at once.
+         *
+         * For the moment no session of that account is left: a push wakes a worker that reads the
+         * list over a session, and with none it could only say that something happened to
+         * somebody who is no longer signed in there.
+         */
+        async forgetReach(me: string)
+        {
+            await db.getRepository(PushSubscription).delete({ userId: me });
         },
 
         /** Every live subscription for an account. What the push sender walks. */

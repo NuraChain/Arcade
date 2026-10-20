@@ -75,7 +75,7 @@ export function quickOf(rules: QuickRules, ask: QuickAsk): Quick
         return { ok: false };
     }
 
-    const seats = seatsByDefault({ seats: seated });
+    const seats = Math.min(...seated);
     const target = targets[0] ?? 0;
 
     return {

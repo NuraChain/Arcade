@@ -1,6 +1,8 @@
 import type { MountNode } from 'azerothjs';
 
 import type { MatchView, TableSummary } from '../../api.ts';
+import { chunk } from '../../lib/chunks.ts';
+import type { EventBatch } from '../../stores/match.store.ts';
 
 export interface Rematch
 {
@@ -26,20 +28,22 @@ export function rematchOf(table: TableSummary): Rematch
 export interface BoardProps
 {
     match: MatchView;
+    events: EventBatch;
     starting?: boolean;
     onAgain?: () => void;
     rematch?: Rematch;
     speech?: Record<string, string>;
     turnMs?: number;
+    onPresenting?: (busy: boolean) => void;
 }
 
 export type BoardComponent = (props: BoardProps) => MountNode;
 
 export const BOARDS: Readonly<Record<string, () => Promise<{ default: BoardComponent }>>> = {
-    ludo: () => import('./match-board.component.azeroth'),
-    hokm: () => import('./hokm-board.component.azeroth'),
-    backgammon: () => import('./backgammon-board.component.azeroth'),
-    poker: () => import('./poker-board.component.azeroth')
+    ludo: chunk(() => import('./match-board.component.azeroth')),
+    hokm: chunk(() => import('./hokm-board.component.azeroth')),
+    backgammon: chunk(() => import('./backgammon-board.component.azeroth')),
+    poker: chunk(() => import('./poker-board.component.azeroth'))
 };
 
 export const drawable = (game: string) => Object.hasOwn(BOARDS, game);

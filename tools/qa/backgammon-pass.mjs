@@ -1,5 +1,6 @@
 import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 import { tableBody } from './tables.mjs';
+import { signInWallet } from './wallets.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -64,17 +65,11 @@ const session = () =>
     return { get: (path) => call('GET', path), post: (path, body) => call('POST', path, body), handle: null };
 };
 
-const guest = async (name) =>
+const player = async (name) =>
 {
     const who = session();
-    const answer = await who.post('/auth/guest', { name });
 
-    if (answer.status !== 200)
-    {
-        throw new Error(`guest sign-in for ${ name } failed: ${ answer.status } ${ answer.text.slice(0, 200) }`);
-    }
-
-    who.handle = answer.body.account.handle;
+    who.handle = (await signInWallet(who.post, name)).handle;
 
     return who;
 };
@@ -110,8 +105,8 @@ const play = async (target, cube) =>
     console.log(`[match to ${ target }, cube ${ cube ? 'on' : 'off' }]`);
 
     const players = [
-        await guest(`Nard ${ target }a${ Math.floor(random() * 10000) }`),
-        await guest(`Nard ${ target }b${ Math.floor(random() * 10000) }`)
+        await player(`Nard ${ target }a${ Math.floor(random() * 10000) }`),
+        await player(`Nard ${ target }b${ Math.floor(random() * 10000) }`)
     ];
 
     const made = await players[0].post('/tables/', tableBody({
@@ -146,7 +141,7 @@ const play = async (target, cube) =>
     }
 
     const matchId = started.body.id;
-    const stranger = await guest(`Nosy${ Math.floor(random() * 10000) }`);
+    const stranger = await player(`Nosy${ Math.floor(random() * 10000) }`);
     const peek = await stranger.get(`/matches/${ matchId }`);
 
     ok('somebody not playing is answered as if it does not exist', peek.status === 404, `${ peek.status }`);
@@ -158,10 +153,41 @@ const play = async (target, cube) =>
         bySeat.set((await player.get(`/matches/${ matchId }`)).body.mine, player);
     }
 
-    const opening = (await players[0].get(`/matches/${ matchId }`)).body;
+    const fresh = (await players[0].get(`/matches/${ matchId }`)).body;
 
-    ok('the match opens mid-turn, with the opening dice already thrown', opening.view.phase === 'move' && opening.view.dice.length === 2
-        && opening.view.dice[0] !== opening.view.dice[1], `${ opening.view.phase } ${ opening.view.dice.join('-') }`);
+    ok('the match opens with nothing thrown for anybody: each player throws their own die', fresh.view.phase === 'opening' && fresh.view.dice.length === 0
+        && (fresh.view.opening ?? []).length === 0, `${ fresh.view.phase } ${ fresh.view.dice.join('-') } ${ JSON.stringify(fresh.view.opening) }`);
+
+    const second = bySeat.get(1);
+    const first = await second.post(`/matches/${ matchId }/play`, { key: `first-${ matchId }`, play: { kind: 'backgammon', verb: 'roll' } });
+
+    ok('either player may throw first', first.status === 200 && first.body?.applied === 'now', `${ first.status }`);
+
+    const again = await second.post(`/matches/${ matchId }/play`, { key: `again-${ matchId }`, play: { kind: 'backgammon', verb: 'roll' } });
+
+    ok('a player who has thrown is refused a second throw', again.status === 409 && again.body?.error?.code === 'already-rolled', `${ again.status } ${ again.body?.error?.code }`);
+
+    let opening = (await players[0].get(`/matches/${ matchId }`)).body;
+    let ties = 0;
+
+    for (let throws = 0; opening.view.phase === 'opening' && throws < 40; throws += 1)
+    {
+        const thrower = bySeat.get(opening.view.turn);
+        const thrown = await thrower.post(`/matches/${ matchId }/play`, { key: `open-${ throws }-${ matchId }`, rev: opening.rev, play: { kind: 'backgammon', verb: 'roll' } });
+        const after = (await players[0].get(`/matches/${ matchId }`)).body;
+
+        ties += after.view.phase === 'opening' && (after.view.opening ?? []).length === 0 ? 1 : 0;
+        opening = after;
+
+        if (thrown.status !== 200)
+        {
+            break;
+        }
+    }
+
+    ok('the game starts once the two dice differ, the higher die\'s player playing both', opening.view.phase === 'move' && opening.view.dice.length === 2
+        && opening.view.dice[0] !== opening.view.dice[1] && opening.view.turn === (opening.view.dice[0] > opening.view.dice[1] ? 0 : 1),
+    `${ opening.view.phase } ${ opening.view.dice.join('-') } turn ${ opening.view.turn }, ${ ties } ties`);
 
     const idle = bySeat.get(1 - opening.view.turn);
     const early = await idle.post(`/matches/${ matchId }/play`, { key: `early-${ matchId }`, play: { kind: 'backgammon', verb: 'roll' } });
@@ -211,7 +237,11 @@ const play = async (target, cube) =>
         const actor = bySeat.get(seat);
         let wanted;
 
-        if (view.phase === 'roll')
+        if (view.phase === 'opening')
+        {
+            wanted = { kind: 'backgammon', verb: 'roll' };
+        }
+        else if (view.phase === 'roll')
         {
             wanted = view.doubling && random() < 0.15 ? { kind: 'backgammon', verb: 'double' } : { kind: 'backgammon', verb: 'roll' };
         }

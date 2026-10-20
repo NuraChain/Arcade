@@ -1,0 +1,131 @@
+import { client } from '../../api.ts';
+import { currentSubscription, keepReach, leaveReach, pushSupported } from '../../lib/push.ts';
+import { allowNotices, noticesAllowed, noticesBlocked, noticesSupported } from '../../lib/system-notice.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+
+type Standing = 'unsupported' | 'denied' | 'off' | 'on';
+
+export default component DeviceNotices()
+{
+    const locale = useLocale();
+    const toasts = useToasts();
+    const settings = useSettings();
+
+    state standing: Standing = 'unsupported';
+    state key = '';
+    state closed = false;
+    state busy = false;
+
+    const settle = async () =>
+    {
+        if (!noticesSupported())
+        {
+            standing = 'unsupported';
+            return;
+        }
+
+        if (noticesBlocked())
+        {
+            standing = 'denied';
+            return;
+        }
+
+        standing = settings.settings().notify && noticesAllowed() ? 'on' : 'off';
+
+        const published = await client.notifications.pushKey().catch(() => ({ key: undefined }));
+
+        key = published.key ?? '';
+        closed = key !== '' && pushSupported() && await currentSubscription() !== null;
+    };
+
+    mount
+    {
+        void settle();
+    }
+
+    const turnOn = async () =>
+    {
+        busy = true;
+        try
+        {
+            if (!await allowNotices())
+            {
+                standing = noticesBlocked() ? 'denied' : 'off';
+                return;
+            }
+
+            settings.update({ notify: true });
+            standing = 'on';
+            closed = await keepReach(true);
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            busy = false;
+        }
+    };
+
+    const turnOff = async () =>
+    {
+        busy = true;
+        try
+        {
+            settings.update({ notify: false });
+            standing = 'off';
+            await leaveReach();
+            closed = false;
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            busy = false;
+        }
+    };
+
+    <Show when={ standing !== 'unsupported' }>
+        { () =>
+            <Panel stack="sm">
+                <div>
+                    <h3 class="text-ui-base font-semibold text-text">{ locale.t('notify.device.title') }</h3>
+                    <p class="mt-1 text-ui-sm text-muted">{ locale.t('notify.device.lead') }</p>
+                </div>
+
+                <Show when={ standing === 'denied' }>
+                    { () => <p class="text-ui-sm text-danger">{ locale.t('notify.device.denied') }</p> }
+                </Show>
+
+                <Show when={ standing === 'off' }>
+                    { () =>
+                        <Button variant="primary" size="sm" leading="bell" loading={ busy } class="self-start" onClick={ () => void turnOn() }>
+                            { locale.t('notify.device.enable') }
+                        </Button>
+                    }
+                </Show>
+
+                <Show when={ standing === 'on' }>
+                    { () =>
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                            <span class="flex items-center gap-1.5 text-ui-sm font-semibold text-live">
+                                { locale.t('notify.device.on') }
+                            </span>
+                            <span class="text-ui-sm text-muted">{ locale.t(closed ? 'notify.device.closed' : 'notify.device.open') }</span>
+                            <Button variant="ghost" size="sm" loading={ busy } onClick={ () => void turnOff() }>
+                                { locale.t('notify.device.disable') }
+                            </Button>
+                        </div>
+                    }
+                </Show>
+            </Panel>
+        }
+    </Show>
+}

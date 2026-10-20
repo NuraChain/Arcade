@@ -1,5 +1,6 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
+import { FRAME_FLOORS } from '../../../backend/src/realtime/frames.ts';
 import type { PresenceEntry, ServerFrame } from '../api.ts';
 import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -9,17 +10,21 @@ export type VoiceFrame = Extract<ServerFrame, { t: 'voice' }>;
 
 export type SignalFrame = Extract<ServerFrame, { t: 'signal' }>;
 
+export type SoundFrame = Extract<ServerFrame, { t: 'sound' }>;
+
 export type NudgeScope = Extract<ServerFrame, { t: 'nudge' }>['scope'];
 
 export type GameFrame = Extract<ServerFrame, { t: 'game' }>;
 
 export type ReplyFrame = Extract<ServerFrame, { t: 'ack' | 'refused' }>;
 
+export type PulseFrame = Extract<ServerFrame, { t: 'pulse' }>;
+
 const SCOPES: readonly NudgeScope[] = ['chat', 'social', 'game', 'table', 'me'];
 
 export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'down';
 
-/** Deltas inside this window become one refetch. */
+/** At most one refetch per window: a doorbell after a quiet window is heard at once, and the ones inside the window after it become one more refetch at its end. */
 export const NUDGE_WINDOW_MS = 250;
 
 /** One rung per consecutive failure, the last one repeating forever. */
@@ -54,7 +59,13 @@ export const PROBE_MS = 10_000;
 
 export const PROBE_GRACE_MS = 4000;
 
+export const CHECK_FLOOR_MS = 2000;
+
+export const FLOOR_MARGIN_MS = 500;
+
 const CLOCK_SAMPLES = 8;
+
+export const SOUND_BACKLOG = 8192;
 
 /**
  * Close codes this client must not retry.
@@ -95,6 +106,8 @@ export interface RealtimeApi
 
     onNudge(listener: (scope: NudgeScope, id: string | undefined) => void): () => void;
 
+    ring(): void;
+
     /**
      * Somebody is typing, right now, in one conversation.
      *
@@ -108,9 +121,13 @@ export interface RealtimeApi
 
     onSignal(listener: (frame: SignalFrame) => void): () => void;
 
+    onSound(listener: (frame: SoundFrame) => void): () => void;
+
     onGame(listener: (frame: GameFrame) => void): () => void;
 
     onReply(listener: (frame: ReplyFrame) => void): () => void;
+
+    onPulse(listener: (frame: PulseFrame) => void): () => void;
 
     play(match: string, key: string, rev: number | undefined, play: unknown): boolean;
 
@@ -118,11 +135,21 @@ export interface RealtimeApi
 
     toLocal(serverAt: number): number;
 
-    voice(table: string, on: boolean, muted: boolean): void;
+    voice(table: string, on: boolean, muted: boolean, opus: boolean): void;
 
     hold(): () => void;
 
+    /**
+     * Asks the socket for an answer now, and opens a new one if none comes within the grace.
+     *
+     * For the moments a socket is most likely to have died without a word: the tab coming back,
+     * the network coming back, and a move whose answer is late.
+     */
+    check(): void;
+
     signal(table: string, to: string, join: string, kind: SignalFrame['kind'], data: string): void;
+
+    sound(table: string, to: string[], codec: SoundFrame['codec'], at: number, data: string): boolean;
 
     /**
      * Every status change, in order.
@@ -171,18 +198,23 @@ export const useRealtime = createStore((): RealtimeApi =>
     const typists = new Set<(who: string, conversationId: string) => void>();
     const voices = new Set<(frame: VoiceFrame) => void>();
     const signals = new Set<(frame: SignalFrame) => void>();
+    const sounds = new Set<(frame: SoundFrame) => void>();
     const games = new Set<(frame: GameFrame) => void>();
     const replies = new Set<(frame: ReplyFrame) => void>();
+    const pulses = new Set<(frame: PulseFrame) => void>();
     const samples: { rtt: number; offset: number }[] = [];
     const [rtt, setRtt] = createSignal<number | null>(null);
     let offset = 0;
     let pingedAt = 0;
+    let lastPing = Number.NEGATIVE_INFINITY;
+    const floored = new Map<string, { at: number; next: Parameters<RealtimeSource['send']>[0] | null; timer: (() => void) | null }>();
     let probe: (() => void) | null = null;
     const pending = new Map<string, { scope: NudgeScope; id: string | undefined }>();
 
     let close: (() => void) | null = null;
     let retry: (() => void) | null = null;
     let coalesce: (() => void) | null = null;
+    let flushedAt = Number.NEGATIVE_INFINITY;
     let attempt = 0;
     let connectedAt = 0;
     let suppressUntil = 0;
@@ -190,6 +222,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     /** Cancels the pending "the tab has been hidden long enough" timer, if one is armed. */
     let cancelSleep: (() => void) | null = null;
     let holds = 0;
+    let era = 0;
     let arm: (() => void) | null = null;
     let wanted = false;
     let watching: (() => void) | null = null;
@@ -212,6 +245,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const flush = () =>
     {
         coalesce = null;
+        flushedAt = runtime().clock.now();
         const batch = [...pending.values()];
         pending.clear();
         for (const { scope, id } of batch)
@@ -228,12 +262,72 @@ export const useRealtime = createStore((): RealtimeApi =>
         pending.set(`${ scope }:${ id ?? '' }`, { scope, id });
         if (coalesce === null)
         {
-            coalesce = runtime().clock.after(NUDGE_WINDOW_MS, flush);
+            coalesce = runtime().clock.after(Math.min(NUDGE_WINDOW_MS, Math.max(0, flushedAt + NUDGE_WINDOW_MS - runtime().clock.now())), flush);
+        }
+    };
+
+    const ring = () =>
+    {
+        for (const scope of SCOPES)
+        {
+            nudge(scope, undefined);
         }
     };
 
     const sent = (frame: Parameters<RealtimeSource['send']>[0]) =>
         status() === 'connected' && active.send(frame);
+
+    const paced = (frame: Parameters<RealtimeSource['send']>[0]) =>
+    {
+        const floor = (FRAME_FLOORS[frame.t] ?? 0) + FLOOR_MARGIN_MS;
+        const kept = floored.get(frame.t) ?? { at: Number.NEGATIVE_INFINITY, next: null, timer: null };
+        const wait = kept.at + floor - runtime().clock.now();
+
+        floored.set(frame.t, kept);
+
+        if (kept.timer === null && wait <= 0)
+        {
+            const went = active.send(frame);
+
+            if (went)
+            {
+                kept.at = runtime().clock.now();
+            }
+
+            return went;
+        }
+
+        kept.next = frame;
+
+        if (kept.timer === null)
+        {
+            kept.timer = runtime().clock.after(Math.max(0, wait), () =>
+            {
+                kept.timer = null;
+
+                const next = kept.next;
+
+                kept.next = null;
+
+                if (next !== null && active.send(next))
+                {
+                    kept.at = runtime().clock.now();
+                }
+            });
+        }
+
+        return true;
+    };
+
+    const unpace = () =>
+    {
+        for (const kept of floored.values())
+        {
+            kept.timer?.();
+        }
+
+        floored.clear();
+    };
 
     const cancelProbe = () =>
     {
@@ -244,6 +338,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const ping = () =>
     {
         pingedAt = runtime().clock.now();
+        lastPing = pingedAt;
 
         if (!sent({ t: 'ping' }))
         {
@@ -261,6 +356,18 @@ export const useRealtime = createStore((): RealtimeApi =>
         announce('down');
         attempt = 0;
         open();
+    };
+
+    const check = () =>
+    {
+        if (status() !== 'connected' || runtime().clock.now() - lastPing < CHECK_FLOOR_MS)
+        {
+            return;
+        }
+
+        cancelProbe();
+        probe = runtime().clock.after(PROBE_GRACE_MS, recycle);
+        ping();
     };
 
     const armProbe = () =>
@@ -323,6 +430,15 @@ export const useRealtime = createStore((): RealtimeApi =>
         if (frame.t === 'pong')
         {
             sample(frame.at);
+            return;
+        }
+
+        if (frame.t === 'pulse')
+        {
+            for (const listener of pulses)
+            {
+                listener(frame);
+            }
             return;
         }
 
@@ -389,6 +505,15 @@ export const useRealtime = createStore((): RealtimeApi =>
             return;
         }
 
+        if (frame.t === 'sound')
+        {
+            for (const listener of sounds)
+            {
+                listener(frame);
+            }
+            return;
+        }
+
         if (frame.t === 'typing')
         {
             for (const typist of typists)
@@ -449,10 +574,7 @@ export const useRealtime = createStore((): RealtimeApi =>
                     armProbe();
                 }
 
-                for (const scope of SCOPES)
-                {
-                    nudge(scope, undefined);
-                }
+                ring();
             },
 
             onFrame: receive,
@@ -462,14 +584,16 @@ export const useRealtime = createStore((): RealtimeApi =>
                 cancelProbe();
                 close = null;
                 setPresence(null);
-                announce('down');
 
                 if (TERMINAL.has(code))
                 {
                     wanted = false;
                     setStalled(true);
+                    announce('down');
                     return;
                 }
+
+                announce('down');
 
                 // A socket that stood up for a while and then dropped starts its backoff from the
                 // beginning: the last failure says nothing about this one.
@@ -506,8 +630,13 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         const resume = () =>
         {
-            if (!wanted || close !== null || (document.visibilityState === 'hidden' && holds === 0))
+            if (!wanted || (document.visibilityState === 'hidden' && holds === 0))
             {
+                return;
+            }
+            if (close !== null)
+            {
+                check();
                 return;
             }
             if (runtime().clock.now() < suppressUntil)
@@ -546,7 +675,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             if (document.visibilityState === 'hidden')
             {
-                active.send({ t: 'presence', state: 'away' });
+                paced({ t: 'presence', state: 'away' });
                 cancelSleep = runtime().clock.after(IDLE_MS, () =>
                 {
                     cancelSleep = null;
@@ -555,7 +684,7 @@ export const useRealtime = createStore((): RealtimeApi =>
                 return;
             }
 
-            active.send({ t: 'presence', state: 'online' });
+            paced({ t: 'presence', state: 'online' });
             resume();
         };
 
@@ -584,6 +713,9 @@ export const useRealtime = createStore((): RealtimeApi =>
         coalesce?.();
         coalesce = null;
         pending.clear();
+        flushedAt = Number.NEGATIVE_INFINITY;
+        lastPing = Number.NEGATIVE_INFINITY;
+        unpace();
         close?.();
         close = null;
         watching?.();
@@ -604,6 +736,8 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => listeners.delete(listener);
         },
 
+        ring,
+
         onVoice(listener)
         {
             voices.add(listener);
@@ -614,6 +748,12 @@ export const useRealtime = createStore((): RealtimeApi =>
         {
             signals.add(listener);
             return () => signals.delete(listener);
+        },
+
+        onSound(listener)
+        {
+            sounds.add(listener);
+            return () => sounds.delete(listener);
         },
 
         onGame(listener)
@@ -628,16 +768,24 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => replies.delete(listener);
         },
 
+        onPulse(listener)
+        {
+            pulses.add(listener);
+            return () => pulses.delete(listener);
+        },
+
         play: (match, key, rev, play) => sent(rev === undefined ? { t: 'play', match, key, play } : { t: 'play', match, key, rev, play }),
 
         rtt,
 
         toLocal: (serverAt) => serverAt - offset,
 
-        voice: (table, on, muted) => active.send({ t: 'voice', table, on, muted }),
+        voice: (table, on, muted, opus) => active.send({ t: 'voice', table, on, muted, opus }),
 
         hold()
         {
+            const born = era;
+
             holds += 1;
             let held = true;
 
@@ -649,7 +797,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             return () =>
             {
-                if (!held)
+                if (!held || born !== era)
                 {
                     return;
                 }
@@ -669,7 +817,14 @@ export const useRealtime = createStore((): RealtimeApi =>
             };
         },
 
+        check,
+
         signal: (table, to, join, kind, data) => active.send({ t: 'signal', table, to, join, kind, data }),
+
+        sound(table, to, codec, at, data)
+        {
+            return status() === 'connected' && active.send({ t: 'sound', table, to, codec, at, data }, SOUND_BACKLOG);
+        },
 
         onTyping(listener)
         {
@@ -683,9 +838,9 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => watchers.delete(listener);
         },
 
-        sync: () => active.send({ t: 'sync' }),
-        setState: (state) => active.send({ t: 'presence', state }),
-        startTyping: (conversationId) => active.send({ t: 'typing', id: conversationId }),
+        sync: () => paced({ t: 'sync' }),
+        setState: (state) => paced({ t: 'presence', state }),
+        startTyping: (conversationId) => paced({ t: 'typing', id: conversationId }),
 
         simulateDrop(ms)
         {
@@ -723,14 +878,17 @@ export const useRealtime = createStore((): RealtimeApi =>
             typists.clear();
             voices.clear();
             signals.clear();
+            sounds.clear();
             games.clear();
             replies.clear();
+            pulses.clear();
             samples.length = 0;
             offset = 0;
             pingedAt = 0;
             setRtt(null);
             setStalled(false);
             holds = 0;
+            era += 1;
             attempt = 0;
             suppressUntil = 0;
             connectedAt = 0;

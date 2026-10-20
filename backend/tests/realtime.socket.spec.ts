@@ -46,7 +46,6 @@ const silent = {
 const PRINCIPAL: Principal = {
     userId: '11111111-1111-4111-8111-111111111111',
     handle: 'alex',
-    kind: 'guest',
     isMinor: false,
     sessionId: '22222222-2222-4222-8222-222222222222'
 };
@@ -58,14 +57,15 @@ let identify: (request: Request) => Promise<Principal | null>;
 
 const config = {
     env: 'test',
-    origin: 'http://localhost:3100',
-    wsHandshakeMax: 1000,
-    wsMaxConnections: 100,
-    // Generous on purpose. The per-account cap is exercised in `realtime-hub.spec.ts` against a
-    // fake, where it is one assertion; here it would only mean an earlier test's socket silently
-    // turning a later one's `hello` into a 4429.
-    wsAccountMax: 100
+    origin: 'http://localhost:3100'
 } as unknown as ServerConfig;
+
+const limits = { handshakes: 1000, sockets: 100 };
+
+// Generous on purpose. The per-account cap is exercised in `realtime-hub.spec.ts` against a
+// fake, where it is one assertion; here it would only mean an earlier test's socket silently
+// turning a later one's `hello` into a 4429.
+const ACCOUNT_SOCKETS = 100;
 
 describe.skipIf(!active)('realtime, over a real socket', () =>
 {
@@ -75,7 +75,7 @@ beforeAll(async () =>
 
     const base = createHub({
         now: () => Date.now(),
-        accountMax: config.wsAccountMax,
+        accountMax: ACCOUNT_SOCKETS,
         edgesFor: async () => ({
             party: { id: 'alex', isMinor: false, allowStrangerMessages: true, showOnline: true },
             handle: 'alex',
@@ -87,8 +87,9 @@ beforeAll(async () =>
         aliveSessions: async (ids) => new Set(ids),
         touchSeen: () => undefined,
         report: () => undefined,
-        voiceAllowed: async () => false,
-        mayTalk: async () => false
+        voiceCall: async () => null,
+        mayTalk: async () => false,
+        pulse: async () => ({ games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' })
     });
 
     const hub = {
@@ -102,6 +103,11 @@ beforeAll(async () =>
         {
             noted.push('resync');
             base.resync(connection);
+        },
+        sound(...given: Parameters<typeof base.sound>)
+        {
+            noted.push(`sound ${ given[1] } ${ given[2].join('+') } ${ given[3] } ${ given[4] } ${ given[5] }`);
+            base.sound(...given);
         }
     };
 
@@ -140,7 +146,7 @@ beforeAll(async () =>
     await new Promise<void>((resolve) => server.listen(0, resolve));
     port = (server.address() as { port: number }).port;
 
-    detach = attachRealtime(server, { ports, hub, config, log: silent });
+    detach = attachRealtime(server, { ports, hub, config, log: silent, limits });
 });
 
 afterAll(async () =>
@@ -337,6 +343,18 @@ describe('a bound socket', () =>
         expect((await talker.closed).code).toBe(4400);
     });
 
+    it('is told how busy the games are without asking', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        expect(await talker.status).toBe(101);
+        await settle(600);
+
+        expect(talker.frames.filter((frame) => frame.t === 'pulse')).toMatchObject([
+            { games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' }
+        ]);
+        talker.end();
+    });
+
     it('answers a ping with the server clock', async () =>
     {
         const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
@@ -376,6 +394,29 @@ describe('a bound socket', () =>
         expect(refusals).toEqual([['k1', 403, 'not-your-turn'], ['k2', 422, 'validation-failed']]);
         expect(noted).not.toContain('played k2');
         talker.end();
+    });
+
+    it('hands sound to the hub as it came, and hangs up on a socket that sends more than any call makes', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2', 'j3'], codec: 'opus', at: 0, data: 'AQID' });
+        await settle(100);
+
+        expect(noted).toContain('sound t-1 j2+j3 opus 0 AQID');
+
+        for (let at = 1; at < 250; at += 1)
+        {
+            talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2'], codec: 'law', at, data: 'AQID' });
+        }
+
+        await settle(200);
+        expect(noted.filter((line) => line.startsWith('sound t-1'))).toHaveLength(250);
+
+        talker.send({ v: 1, t: 'sound', table: 't-1', to: ['j2'], codec: 'law', at: 250, data: 'AQID' });
+
+        expect((await talker.closed).code).toBe(4429);
     });
 
     it('does not bind a socket whose session turns out to be dead', async () =>

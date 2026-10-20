@@ -1,0 +1,253 @@
+import Button from '../ui/button.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
+import Select from '../ui/select.component.azeroth';
+import Slider from '../ui/slider.component.azeroth';
+import Toggle from '../ui/switch.component.azeroth';
+import VoiceMeter, { METER_FLOOR } from './voice-meter.component.azeroth';
+import { RESERVED_KEYS, keyName } from '../../lib/talk-key.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings, type VoiceNoise } from '../../stores/settings.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
+
+export default component VoiceInputSettings()
+{
+    const locale = useLocale();
+    const settings = useSettings();
+    const voice = useVoice();
+
+    derived current = settings.settings();
+
+    derived mics = voice.inputs().map((one, index) => ({ value: one.id, label: one.label === '' ? locale.t('voice.deviceUnnamed', { n: locale.n(index + 1) }) : one.label }));
+
+    derived unnamed = voice.inputs().length === 0 || voice.inputs().some((one) => one.label === '');
+
+    derived pushing = current.voicePushToTalk;
+
+    derived auto = current.voiceAuto;
+
+    derived inCall = voice.table() !== null;
+
+    derived testing = voice.testing();
+
+    derived fault = voice.testFault();
+
+    derived faulted = fault !== null;
+
+    derived faultSays = fault === null ? '' : locale.t(`voice.testFault.${ fault }`);
+
+    derived fallen = current.voiceNoise === 'strong' && voice.suppression() === 'standard';
+
+    derived noiseHint = locale.t(`voice.noiseHint.${ current.voiceNoise }`);
+
+    const tune = (patch: Parameters<typeof settings.update>[0]) =>
+    {
+        settings.update(patch);
+        voice.tune();
+    };
+
+    const reprocess = (patch: Parameters<typeof settings.update>[0]) =>
+    {
+        settings.update(patch);
+        void voice.reprocess();
+    };
+
+    state binding = false;
+
+    let unbind: (() => void) | null = null;
+
+    const bindKey = () =>
+    {
+        if (binding)
+        {
+            unbind?.();
+            return;
+        }
+
+        binding = true;
+
+        const heard = (event: KeyboardEvent) =>
+        {
+            if (event.code === 'Tab')
+            {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.code !== 'Escape' && !RESERVED_KEYS.has(event.code) && event.code !== '')
+            {
+                settings.update({ voiceTalkKey: event.code });
+            }
+
+            if (event.code === 'Escape' || !RESERVED_KEYS.has(event.code))
+            {
+                unbind?.();
+            }
+        };
+
+        window.addEventListener('keydown', heard, true);
+
+        unbind = () =>
+        {
+            window.removeEventListener('keydown', heard, true);
+            unbind = null;
+            binding = false;
+        };
+    };
+
+    mount
+    {
+        return () =>
+        {
+            unbind?.();
+            voice.stopTest();
+        };
+    }
+
+    <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-4">
+            <h3 class="label text-ui-sm text-text">{ locale.t('voice.section.input') }</h3>
+            <Select
+                label={ locale.t('voice.mic') }
+                value={ current.voiceMic }
+                options={ [{ value: '', label: locale.t('voice.deviceDefault') }, ...mics] }
+                class="max-w-md"
+                onChange={ (value) => void voice.useMic(value) }
+            />
+            <Show when={ unnamed }>
+                <p class="text-ui-xs text-muted">{ locale.t('voice.devicesHint') }</p>
+            </Show>
+            <Slider
+                value={ current.voiceInput }
+                min={ 0 }
+                max={ 2 }
+                step={ 0.05 }
+                ticks={ [0, 1, 2] }
+                label={ locale.t('voice.inputVolume') }
+                hint={ locale.t('voice.inputVolumeHint') }
+                valueText={ locale.n(current.voiceInput, { style: 'percent' }) }
+                class="max-w-md"
+                onChange={ (value) => tune({ voiceInput: value }) }
+            />
+            <div class="flex max-w-md flex-col gap-2">
+                <span class="text-ui-sm font-semibold text-text">{ locale.t('voice.level') }</span>
+                <VoiceMeter reading={ voice.reading() } label={ locale.t('voice.level') } idle={ locale.t('voice.levelIdle') } />
+                <Show
+                    when={ inCall }
+                    fallback={
+                        <div class="flex flex-col items-start gap-1.5">
+                            <Button variant={ testing ? 'primary' : 'outline' } size="sm" leading="voice" onClick={ () => (testing ? voice.stopTest() : void voice.startTest()) }>
+                                { locale.t(testing ? 'voice.testStop' : 'voice.test') }
+                            </Button>
+                            <p class="text-ui-xs text-faint">{ locale.t('voice.testHint') }</p>
+                            <Show when={ faulted }>
+                                <p class="text-ui-xs text-danger" role="alert">{ faultSays }</p>
+                            </Show>
+                        </div>
+                    }
+                >
+                    <p class="text-ui-xs text-faint">{ locale.t('voice.testInCall') }</p>
+                </Show>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-4 border-t border-line pt-4">
+            <h3 class="label text-ui-sm text-text">{ locale.t('voice.section.mode') }</h3>
+            <Segmented
+                items={ [{ id: 'voice', label: locale.t('voice.mode.voice') }, { id: 'push', label: locale.t('voice.pushToTalk') }] }
+                value={ pushing ? 'push' : 'voice' }
+                label={ locale.t('voice.section.mode') }
+                block={ true }
+                class="max-w-md"
+                onChange={ (id) => tune({ voicePushToTalk: id === 'push' }) }
+            />
+            <Show
+                when={ pushing }
+                fallback={
+                    <div class="flex flex-col gap-3">
+                        <Toggle
+                            checked={ auto }
+                            label={ locale.t('voice.auto') }
+                            description={ locale.t('voice.autoHint') }
+                            onChange={ (checked) => tune({ voiceAuto: checked }) }
+                        />
+                        <Show when={ !auto }>
+                            <Slider
+                                value={ current.voiceThreshold }
+                                min={ METER_FLOOR }
+                                max={ 0 }
+                                step={ 1 }
+                                label={ locale.t('voice.sensitivity') }
+                                hint={ locale.t('voice.sensitivityHint') }
+                                unit={ locale.t('voice.unit.db') }
+                                class="max-w-md"
+                                onChange={ (value) => tune({ voiceThreshold: value }) }
+                            />
+                        </Show>
+                    </div>
+                }
+            >
+                <div class="flex flex-col gap-3">
+                    <p class="text-ui-sm text-muted">{ locale.t('voice.pushToTalkHint', { key: keyName(current.voiceTalkKey) }) }</p>
+                    <div class="flex flex-wrap items-center gap-3 coarse:hidden">
+                        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span class="text-ui-sm font-semibold text-text">{ locale.t('voice.talkKey') }</span>
+                            <span class="text-ui-xs text-muted">{ locale.t('voice.talkKeyHint') }</span>
+                        </span>
+                        <kbd class="tally flex h-9 min-w-9 items-center justify-center rounded-control border border-line-strong bg-sunk px-2.5 font-sans text-ui-sm font-semibold text-text">{ keyName(current.voiceTalkKey) }</kbd>
+                        <Button variant={ binding ? 'primary' : 'outline' } size="sm" onClick={ () => bindKey() }>
+                            { locale.t(binding ? 'voice.talkKeyListening' : 'voice.talkKeyChange') }
+                        </Button>
+                    </div>
+                    <Slider
+                        value={ current.voiceRelease }
+                        min={ 0 }
+                        max={ 1000 }
+                        step={ 20 }
+                        label={ locale.t('voice.release') }
+                        hint={ locale.t('voice.releaseHint') }
+                        unit={ locale.t('voice.unit.ms') }
+                        class="max-w-md"
+                        onChange={ (value) => tune({ voiceRelease: value }) }
+                    />
+                </div>
+            </Show>
+        </div>
+
+        <div class="flex flex-col gap-4 border-t border-line pt-4">
+            <h3 class="label text-ui-sm text-text">{ locale.t('voice.section.processing') }</h3>
+            <div class="flex flex-col gap-2">
+                <span class="text-ui-md font-semibold text-text">{ locale.t('voice.noise') }</span>
+                <Segmented
+                    items={ [
+                        { id: 'off', label: locale.t('voice.noise.off') },
+                        { id: 'standard', label: locale.t('voice.noise.standard') },
+                        { id: 'strong', label: locale.t('voice.noise.strong') }
+                    ] }
+                    value={ current.voiceNoise }
+                    label={ locale.t('voice.noise') }
+                    block={ true }
+                    class="max-w-md"
+                    onChange={ (id) => reprocess({ voiceNoise: id as VoiceNoise }) }
+                />
+                <p class="text-ui-xs text-muted">{ noiseHint }</p>
+                <Show when={ fallen }>
+                    <p class="text-ui-xs text-gold">{ locale.t('voice.noiseFallback') }</p>
+                </Show>
+            </div>
+            <Toggle
+                checked={ current.voiceEcho }
+                label={ locale.t('voice.echo') }
+                description={ locale.t('voice.echoHint') }
+                onChange={ (checked) => reprocess({ voiceEcho: checked }) }
+            />
+            <Toggle
+                checked={ current.voiceAgc }
+                label={ locale.t('voice.agc') }
+                description={ locale.t('voice.agcHint') }
+                onChange={ (checked) => reprocess({ voiceAgc: checked }) }
+            />
+        </div>
+    </div>
+}

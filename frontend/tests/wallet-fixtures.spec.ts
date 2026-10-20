@@ -12,7 +12,7 @@ import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
  *
  * `seed-wallets.ts` writes an attestation into every development database and the whole point of it
  * is that the BROWSER accepts it - otherwise the sealed half of the product has no reachable happy
- * path and `sealabilityOf` answers `no-wallet` everywhere, which is exactly the state this repo was
+ * path and `sealabilityOf` answered `no-wallet` everywhere, which is exactly the state this repo was
  * in before these fixtures existed.
  *
  * So this runs the seed's own `deviceText` and the browser's own `verifyPeerDevice` over the

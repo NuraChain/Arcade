@@ -59,7 +59,7 @@ export interface EnrolInput
     label: string;
     userAgent: string;
 
-    /** Both, or neither. A wallet account must send them; a guest has nothing to sign with. */
+    /** Sent by the standalone enrol route; the sign-in path proves the device with its own proof. */
     nonce?: string | undefined;
     signature?: string | undefined;
 }
@@ -81,7 +81,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
 {
     const domain = new URL(config.origin).host;
 
-    /** The account's most recently used wallet, or null for a guest or a demo persona. */
+    /** The account's most recently used wallet. */
     const walletOf = async (userId: string) =>
     {
         const row = await db.getRepository(Wallet).findOne({
@@ -270,38 +270,22 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
             }
 
             const address = await walletOf(userId);
+            if (address === null)
+            {
+                throw new BadRequestError('This account has no wallet to sign with.');
+            }
 
             if (existing !== null)
             {
                 // Already ours and still live: re-enrolling is how a browser says "still here"
-                // after a sign-in, and it must not ask for another signature to do it.
-                //
-                // It IS how a device gains a proof it never had. A device enrolled while the
-                // account had no wallet is `attested: 'server'` and cannot be sealed to, and
-                // connecting a wallet afterwards is an ordinary thing to do; sending a signature
-                // now upgrades it
-                // in place rather than forcing a revoke-and-re-enrol that would burn working keys
-                // for bookkeeping. A device that ALREADY has a proof is never re-attested here, so
-                // this cannot be used to move one address's claim onto another's device.
-                const upgrade = existing.attested === 'server' && address !== null && (input.signature !== undefined || signedIn !== undefined)
-                    ? await prove(address)
-                    : null;
-
+                // after a sign-in, and it must not ask for another signature to do it. Its proof
+                // was written when it was enrolled and is never rewritten here, so this cannot be
+                // used to move one address's claim onto another's device.
                 const touched = await db.query(
-                    `update devices set
-                         last_seen_at = now(),
-                         user_agent = $3,
-                         attested = coalesce($4::varchar, attested),
-                         attested_address = coalesce($5::citext, attested_address),
-                         attested_message = coalesce($6::text, attested_message),
-                         attested_signature = coalesce($7::text, attested_signature)
+                    `update devices set last_seen_at = now(), user_agent = $3
                       where id = $1 and user_id = $2
                      returning ${ COLUMNS }`,
-                    [
-                        input.id, userId, input.userAgent.slice(0, 256),
-                        upgrade?.attested ?? null,
-                        upgrade?.address ?? null, upgrade?.message ?? null, upgrade?.signature ?? null
-                    ]
+                    [input.id, userId, input.userAgent.slice(0, 256)]
                 );
                 // The SESSION is not rebound here, and that is the whole point of this branch being
                 // narrow. Everything above is satisfied by PUBLIC data - the id is a hash of two
@@ -315,10 +299,9 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 return firstRow<DeviceRow>(touched)!;
             }
 
-            // A wallet account signs for its devices. Letting it skip that would make every device
-            // on a wallet account server-attested by simply not sending a signature, which is a
-            // downgrade nobody would see.
-            const proof = address === null ? null : await prove(address);
+            // Every account signs for its devices. Letting one skip that would leave a device
+            // attested by nothing, which is a downgrade nobody would see.
+            const proof = await prove(address);
 
             return db.transaction(async (tx) =>
             {
@@ -331,12 +314,12 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                         label: input.label.slice(0, 64),
                         exchangeKey: input.exchangeKey,
                         signingKey: input.signingKey,
-                        attested: proof?.attested ?? 'server',
+                        attested: proof.attested,
                         userAgent: input.userAgent.slice(0, 256),
                         lastSeenAt: () => 'now()',
-                        attestedAddress: proof?.address ?? null,
-                        attestedMessage: proof?.message ?? null,
-                        attestedSignature: proof?.signature ?? null
+                        attestedAddress: proof.address,
+                        attestedMessage: proof.message,
+                        attestedSignature: proof.signature
                     })
                     .returning(COLUMNS)
                     .execute();

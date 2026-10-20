@@ -17,7 +17,6 @@ export const landing = {
     'landing.cta.start': 'Start playing',
     'landing.cta.back': 'Back to your tables',
     'landing.cta.games': 'See the games',
-    'landing.cta.guest': 'Play as a guest',
 
     'landing.games.title': 'Four games, all live',
     'landing.games.lead': 'Take turns at your own pace, or play in real time at the table. Poker is real time only.',
@@ -49,7 +48,7 @@ export const landing = {
     'landing.together.tables.title': 'A game from any chat',
     'landing.together.tables.body': 'Open a table right from a conversation. Only the people in it can sit down.',
     'landing.together.voice.title': 'Voice at the table',
-    'landing.together.voice.body': 'Talk while you play. The sound goes directly between players and is encrypted by the browser.',
+    'landing.together.voice.body': 'Talk while you play. The sound goes straight between players whenever it can, and is encrypted on its way.',
 
     'landing.compete.title': 'Every result counts',
     'landing.compete.lead': 'Climb the leaderboards, move your rating and collect medals as you go.',
@@ -63,7 +62,7 @@ export const landing = {
     'landing.compete.levels.body': 'Playing earns XP and your level shows it. It is a trophy; nothing is locked behind it.',
 
     'landing.finale.title': 'Pull up a chair',
-    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet, or play as a guest; chatting needs a wallet. Play in English or Persian.',
+    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet. Play in English or Persian.',
 
     'footer.rights': 'All rights reserved.',
     'locale.label': 'Language',
@@ -74,5 +73,7 @@ export const landing = {
     'notFound.cta': 'Back to the home page',
     'error.title': 'The lights went out.',
     'error.lead': 'Something failed on our side. The page can try again from here.',
-    'error.cta': 'Try again'
+    'error.cta': 'Try again',
+    'held.title': 'The server is not answering.',
+    'held.lead': 'This page keeps asking, and opens by itself as soon as it gets an answer.'
 };

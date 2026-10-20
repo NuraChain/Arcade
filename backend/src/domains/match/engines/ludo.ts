@@ -1,5 +1,5 @@
 import { FINISHED, cellAt } from '../ludo/board.ts';
-import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
+import { apply, controlled, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
 import { placementsOf, trailingOf } from '../ludo/standings.ts';
 import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
 import { sideOf } from '../sides.ts';
@@ -154,6 +154,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
         const board: MatchBoard = {
             kind: 'ludo',
             moves: seat === null ? [] : legalFor(state, seat),
+            controls: state.players[controlled(state)].seat,
             seats: state.players.map((player) => ({
                 seat: player.seat,
                 colour: player.colour,
@@ -164,7 +165,8 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
                     return cell === null ? { piece, at } : { piece, at, cell };
                 }),
                 home: player.pieces.filter((at) => at === FINISHED).length,
-                out: player.out
+                out: player.out,
+                side: player.side
             }))
         };
 

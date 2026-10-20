@@ -59,6 +59,7 @@ const ERRORS: Record<WalletFailure, MessageKey> = {
     'pending': 'wallet.error.pending',
     'chain': 'wallet.error.chain',
     'unavailable': 'wallet.error.unavailable',
+    'busy': 'wallet.error.busy',
     'unknown': 'wallet.error.unknown'
 };
 
@@ -329,12 +330,6 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                             }
                         </Show>
                     </div>
-
-                    <footer class="border-t border-line p-4">
-                        <Button href="/sign-in" variant="secondary" size="md" block leading="people">
-                            { locale.t('wallet.otherWays') }
-                        </Button>
-                    </footer>
                 </div>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import { manualClock } from '../src/lib/clock.ts';
@@ -7,10 +7,13 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import NotificationsPage from '../src/pages/app/notifications.page.azeroth';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
-import { server } from './fake-api.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
+import { ApiError, client, server } from './fake-api.ts';
+import { lostDuring } from './rejections.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -38,7 +41,6 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useSocial().reset();
@@ -147,6 +149,27 @@ describe('the notifications page', () =>
         expect(before.includes(after[0])).toBe(false);
     });
 
+    it('keeps Mark all read and the picture of each person when the list is read again and says the same', async () =>
+    {
+        usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+        arrive();
+        await useNotifications().refresh();
+
+        const container = await opened();
+        const markAll = chipOf(container, useLocale().t('notifications.markAll'));
+        const pictures = () => [...container.querySelectorAll('ul li [role="img"]')];
+        const drawn = pictures();
+
+        expect(markAll, 'there was nothing unread to mark').not.toBeNull();
+        expect(drawn.length, 'no row drew the picture of the person it is about').toBeGreaterThan(0);
+
+        await useNotifications().refresh();
+        await settle();
+
+        expect(chipOf(container, useLocale().t('notifications.markAll')), 'Mark all read was drawn again for an answer that changed nothing').toBe(markAll);
+        expect(pictures(), 'a picture was drawn again for an answer that changed nothing').toEqual(drawn);
+    });
+
     it('says there is nothing of a kind under a filter with nothing in it, and keeps the filter to go back by', async () =>
     {
         server.notify({ kind: 'message', actor: 'sara.k', ref: { conversationId: 'c-1' }, dedupeKey: 'chat:c-1' });
@@ -166,6 +189,69 @@ describe('the notifications page', () =>
         expect(container.textContent).not.toContain(locale.t('notifications.emptyKind'));
     });
 
+    describe('the kind chosen', () =>
+    {
+        const openedAt = async (path: string) =>
+        {
+            const routes: Route[] = [{ path: '/app/notifications', component: (): HTMLElement => NotificationsPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(path), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return { container, router };
+        };
+
+        it('is written into the address with replace, and All takes it out', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            const { container, router } = await openedAt('/app/notifications');
+            const locale = useLocale();
+
+            chipOf(container, locale.t('notifications.kind.messages'))!.click();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(1), { timeout: 4000 });
+            expect(router.location().fullPath).toBe('/app/notifications?kind=messages');
+            expect(router.location().navigationKind).toBe('replace');
+            expect(server.calls).toContain('notifications.list:messages');
+
+            chipOf(container, locale.t('notifications.kind.all'))!.click();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+            expect(router.location().fullPath).toBe('/app/notifications');
+        });
+
+        it('is read from the address, so a reload and Back open on it', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+            server.calls.length = 0;
+
+            const { container } = await openedAt('/app/notifications?kind=messages');
+            const locale = useLocale();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(1), { timeout: 4000 });
+            expect(chipOf(container, locale.t('notifications.kind.messages'))!.getAttribute('aria-pressed')).toBe('true');
+            expect(server.calls).toContain('notifications.list:messages');
+        });
+
+        it('is no kind at all for a word the page does not have', async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            const { container } = await openedAt('/app/notifications?kind=toString');
+            const locale = useLocale();
+
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+            expect(useNotifications().notice()).toBeNull();
+            expect(chipOf(container, locale.t('notifications.kind.all'))!.getAttribute('aria-pressed')).toBe('true');
+        });
+    });
+
     it('says there is nothing new to somebody with no notifications, with no filter to choose from', async () =>
     {
         const container = await opened();
@@ -173,5 +259,198 @@ describe('the notifications page', () =>
 
         expect(container.textContent).toContain(locale.t('notifications.empty'));
         expect(chipOf(container, locale.t('notifications.kind.messages'))).toBeNull();
+    });
+
+    describe('when something on it is pressed', () =>
+    {
+        const routes = client.notifications as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+        const said = () => useToasts().items().map((toast) => [toast.kind, toast.text]);
+
+        const crossOf = (row: HTMLElement) => row.querySelector<HTMLElement>(`button[aria-label="${ useLocale().t('notifications.dismiss') }"]`)!;
+
+        const markAll = (container: HTMLElement) => chipOf(container, useLocale().t('notifications.markAll'));
+
+        const same = (now: HTMLElement[], then: HTMLElement[]) => now.length === then.length && now.every((row, index) => row === then[index]);
+
+        const held = async (verb: string, refuse: boolean, run: (answer: () => void, asked: () => number) => Promise<void>) =>
+        {
+            const real = routes[verb];
+            const waiting: (() => void)[] = [];
+            let asked = 0;
+
+            routes[verb] = async (input) =>
+            {
+                asked += 1;
+
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+
+                if (refuse)
+                {
+                    throw new ApiError(500, 'internal', 'Something went wrong.', undefined);
+                }
+
+                return await real(input);
+            };
+
+            try
+            {
+                await run(() => waiting.shift()?.(), () => asked);
+            }
+            finally
+            {
+                routes[verb] = real;
+            }
+        };
+
+        const drawn = async () =>
+        {
+            arrive();
+            await useNotifications().refresh();
+
+            return await opened();
+        };
+
+        beforeEach(() =>
+        {
+            useToasts().reset();
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        });
+
+        afterEach(() =>
+        {
+            vi.restoreAllMocks();
+            useToasts().reset();
+        });
+
+        it('draws every row read and takes Mark all read away in the turn it is pressed', async () =>
+        {
+            const container = await drawn();
+            const rows = rowsOf(container);
+
+            expect(rows.map(unreadIn)).toEqual([true, true, true]);
+
+            await held('readAll', false, async (answer, asked) =>
+            {
+                fire(markAll(container)!, 'click');
+                await settle();
+
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+                expect(markAll(container)).toBeNull();
+                expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+                expect(server.notifications.some((one) => !one.read)).toBe(true);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+                await vi.waitFor(() => expect(server.notifications.some((one) => !one.read)).toBe(false), { timeout: 4000 });
+                await settle();
+
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+                expect(said()).toEqual([]);
+            });
+        });
+
+        it('puts the rows and the button back, with a sentence, when reading them all is refused', async () =>
+        {
+            const container = await drawn();
+            const rows = rowsOf(container);
+
+            await held('readAll', true, async (answer, asked) =>
+            {
+                fire(markAll(container)!, 'click');
+                await settle();
+
+                expect(rowsOf(container).map(unreadIn)).toEqual([false, false, false]);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(rowsOf(container).map(unreadIn)).toEqual([true, true, true]), { timeout: 4000 });
+                expect(same(rowsOf(container), rows)).toBe(true);
+                expect(markAll(container)).not.toBeNull();
+                expect(said()).toEqual([['warning', 'That did not go through. Try again.']]);
+            });
+        });
+
+        it('takes a row away in the turn its cross is pressed, and the rows that stay are the rows they were', async () =>
+        {
+            const container = await drawn();
+            const [first, second, third] = rowsOf(container);
+
+            await held('dismiss', false, async (answer, asked) =>
+            {
+                fire(crossOf(second), 'click');
+                await settle();
+
+                expect(same(rowsOf(container), [first, third])).toBe(true);
+                expect(server.notifications).toHaveLength(3);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+                await vi.waitFor(() => expect(server.notifications).toHaveLength(2), { timeout: 4000 });
+                await settle();
+
+                expect(same(rowsOf(container), [first, third])).toBe(true);
+                expect(said()).toEqual([]);
+            });
+        });
+
+        it('puts a row back where it was, with a sentence, when taking it away is refused', async () =>
+        {
+            const container = await drawn();
+            const [first, second, third] = rowsOf(container);
+            const sentence = second.textContent;
+
+            await held('dismiss', true, async (answer, asked) =>
+            {
+                fire(crossOf(second), 'click');
+                await settle();
+
+                expect(rowsOf(container)).toHaveLength(2);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+
+                const back = rowsOf(container);
+
+                expect(back[0]).toBe(first);
+                expect(back[1].textContent).toBe(sentence);
+                expect(back[2]).toBe(third);
+                expect(said()).toEqual([['warning', 'That did not go through. Try again.']]);
+            });
+        });
+
+        it('reads a notification in the turn it is opened, and says nothing when the server will not have it', async () =>
+        {
+            server.notify({ kind: 'turn', dedupeKey: 'turn:nowhere' });
+            await useNotifications().refresh();
+
+            const container = await opened();
+            const [row] = rowsOf(container);
+
+            const lost = await lostDuring(() => held('read', true, async (answer, asked) =>
+            {
+                fire(row.querySelector('button')!, 'click');
+                await settle();
+
+                expect(unreadIn(row)).toBe(false);
+
+                await vi.waitFor(() => expect(asked()).toBe(1), { timeout: 4000 });
+                answer();
+
+                await vi.waitFor(() => expect(unreadIn(rowsOf(container)[0])).toBe(true), { timeout: 4000 });
+            }));
+
+            expect(rowsOf(container)[0]).toBe(row);
+            expect(said()).toEqual([]);
+            expect(lost).toEqual([]);
+        });
     });
 });

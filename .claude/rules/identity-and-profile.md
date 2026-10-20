@@ -57,6 +57,59 @@ cases in `chain-profile.spec.ts`, `nfts.spec.ts` and `identity.spec.ts` must fin
 so a regression to 8 fails them. Failing fast does not change what failing means: the profile still
 throws, and the page still has to render that failure.
 
+**A chain that could not be reached is answered as that, on purpose.** Those throws used to reach
+the browser as `500 internal`, and the log wrote each one down as a fault of this server, at error
+level, with a stack (`request threw`), twice for one visit to a profile. The page showed its
+failure either way (`ChainFaceFailed` has a retry), but a slow node at somebody else's address is
+not a fault here, and it read as one everywhere it was written: on 2026-10-13 the Ludo play pass
+failed its "nothing was logged" line twice running, with `/api/chain/people/dana.w` given up on at
+4021 ms and `/api/chain/nfts` at 8026 ms. `unreached(error)` in `rpc.ts` tells a read that could
+not be MADE from everything else: viem's `TimeoutError`, `HttpRequestError` and `RpcRequestError`
+when the contract did not refuse (the same line sign-in draws for `unreachable-chain`); a `fetch`
+that timed out, was aborted or never left; and `Unanswered`, which is what the explorer's bad
+status and its "no result" are thrown as now. It is a list of what the network does, not "anything
+that is not a refusal": a `TypeError` of ours inside a read stays a 500, or a real fault would be
+answered as weather. `reached` turns the first kind into `503 chain-unreachable` with a sentence a
+person can read and the cause kept for the log, and the three registry reads in `profile.ts` and
+the explorer read in `nfts.ts` go through it, which is where fake chains can test it without a
+database. `watchErrors` writes a failure this server CHOSE (an `HttpError` of 500 or more) as a
+warning, `request could not be served`, and keeps `request threw` for the ones it did not. The
+request line needed the same: the framework's `logRequests` writes every 5xx as an error through
+whatever logger it is handed, and says an application may hand it an adapter, so `requestLog` in
+`app.ts` writes a 503 as a warning and `main.ts` starts the server with it. Every 503 here is
+chosen: this one, and the health check when the database does not answer. Seen on the built
+server with the node and the explorer pointed at a port nothing answers on: the three reads
+answer 503 with the sentence, each leaves two `warn` lines and no `error` line, and `/app/me`
+shows its failure with the way to ask again. `chain-rpc.spec.ts`, `chain-profile.spec.ts`,
+`nfts.spec.ts` and `app.spec.ts` hold it, the last one down to the line of `main.ts` that wires
+the log.
+
+**Every chain read and every explorer read is made on a connection of its own** (`ONE_USE`, a
+`connection: close` header, in `boundedClient` and on the explorer's `fetch`). Node keeps a
+connection it has used and asks the next question on it, and the front end of `rpc.nurachain.net`
+and `explorer.nurachain.net` does not answer a second question on a connection: measured on
+2026-10-12, four calls a second and a half apart went 0.5 s, 22 s and a reset, 0.5 s, 23 s and a
+reset, while the same four on fresh connections took half a second each, and two unrelated hosts
+answered a reused connection in a fifth of a second. So every SECOND chain read gave up at four
+seconds, `/api/chain/people/:handle`, `/api/chain/profile` and `/api/chain/nfts` answered 500 on
+every second view of a profile, half the cells of the `person` and `me` routes of the QA matrix
+had a dirty console, and the contract-wallet check of a sign-in could wait four seconds and then
+fail. A connection for each read costs a handshake, which against that host is the half second
+the first call already paid. `tiredHost` in `tests/fake-chain.ts` is a server that answers the
+first request on a connection and sits on any later one; `chain-rpc.spec.ts` (*a chain that sits
+on a connection it has answered once*) and `nfts.spec.ts` (*what a wallet holds, asked of an
+explorer that sits on a connection it has answered once*) ask it twice. Without the header the
+first gives up at four seconds and the second at eight.
+
+What that did not cure, measured on the built server the same day: of 363 chain reads after the
+fix, 6 still gave up at four seconds. They came in bursts of half a minute in which the reads
+beside them took one to three and a half seconds against a median of 530 ms, while every other
+request the server answered in those windows kept its usual few milliseconds. So the chain was
+slow, not the server, and the read after each failure was quick again. One retry inside the same
+eight seconds would have answered all six, at the price of a dead chain being given up on at
+eight seconds where it is four now, which is the opposite of what *fail fast* above decided. It
+is the owner's to weigh, and until then a slow chain is still a 500 on those three routes.
+
 **A fake chain never listens where `fetch` will not go.** Those specs stand a local server up on a
 port the system picks, and viem reaches it with `fetch`, which refuses eighty-two ports outright
 before it opens a socket (the Fetch Standard's port blocking: 6000, 6665 to 6669, 10080 and the rest;
@@ -185,6 +238,10 @@ ERC-1155 balance is what came in minus what went out - because the chain itself 
 address owns without an indexer. The name and the picture are `tokenURI`/`uri` read through
 `NURA_RPC_URL`, then the metadata JSON. With the explorer unset the answer is `configured: false`, the
 stat is not drawn and the page says the server reads no NFTs - never "this wallet is empty".
+A chain the server could not reach (503 `chain-unreachable`) is said as that, "NuraChain could not
+be reached just now", and not as the plain failure's "check your connection", which sent a reader
+whose connection was fine looking for a fault of theirs. The clean production run saw it with the
+chain away; `nfts.spec.ts` holds both sentences.
 
 **A token the chain could not name is asked about again next time.** The metadata cache keeps an
 answer for an hour. That is right when the contract answered (a revert, or nothing at all, is
@@ -237,6 +294,48 @@ lands on `/sign-in` instead of on a page of empty states. The enforcement is `re
 `backend/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
 after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
 the store through a **dynamic import** — see Performance for why that import must stay dynamic.
+
+**A who-am-I that could not be asked is not a signed-out answer.** The store used to take ANY failure
+of that first request for "nobody": a dropped connection, a 502 while the server restarted, a 429,
+and `requireSession` then sent a signed-in person to `/sign-in`, where they stayed. (The same
+catch already said a failed request is not a signed-out answer, and left the landing page's note
+alone for that reason; the guard read the answer it had made up anyway.) Only an ANSWER signs
+somebody out: a 200 with no account, or a refusal the server itself wrote, any status under 500
+but 429. Anything else is asked again, after one second, then two, four and eight, and every eight
+after that (`ASK_AGAIN_MS`, `ASK_AGAIN_MAX_MS`), on the runtime's clock so a spec can drive it.
+`ready()` does not resolve until there is an answer, so both guards HOLD the navigation instead of
+deciding it. A guard cannot draw anything and a guard that throws is a 403 in this router, which
+draws "No table here"; so the store says it is held up through `lib/held-up.ts`, one signal that
+imports nothing but the framework, and the page `<Routes>` falls back to while a navigation is
+pending (`not-found.page` with `holding`) draws "The server is not answering" with a spinner
+where it drew nothing. It says so from the SECOND failure on: one dropped request is asked again
+a second later and is not worth a sentence, so the page holds as it always did for that second.
+It needs no button: the page is already asking, and it opens by itself.
+`session.refresh()` went with this; nothing had ever called it.
+
+**A session that ends while a page is open sends the person to sign in.** The guards run only when
+a page is opened, so a session signed out in another tab, ended everywhere from another device or
+run out left the open page where it was: every request answered 401, and Friends said "No friends
+yet". Three things now ask the server whether anybody is still signed in here (`confirm` in the
+session store): a 401 on any request (`onUnauthorized` in `api.ts`, from the one fetch every call
+goes through), the socket closed as terminal (4401 is "Session ended"; the realtime store now says
+it has stalled BEFORE it announces the drop, so a listener reads both), and a `me` nudge whose
+read comes back empty. Only the server's answer ends it, never a 401 alone, because a 401 is also
+a signature that did not match. Ended, the store forgets the account and the keys, and the shell
+(`watchSignedOut` in `components/app/sign-out.ts`) LOADS `/sign-in?next=` the page it was on, so
+signing in comes back to it.
+
+**So does the wallet leaving.** The wallet store tells the shell when the account its wallet
+offered here has gone (`onLeft`): the wallet switched to another account, or the site was
+disconnected from it (`accountsChanged` with nothing, and `wallet_getPermissions` naming no
+account permission). If that account is the session's, the shell signs out, on the server too,
+and loads sign-in the same way. A wallet that only LOCKS also says it has no accounts but keeps
+the site's permission, and keeps the session: a lock is not leaving, and MetaMask locks on its
+own. A wallet that cannot say which of the two it is (no `wallet_getPermissions`) keeps it too,
+and so does a change in a wallet whose account was never the session's, so a second extension
+cannot sign anybody out. Seen on the production build with an injected wallet: a lock keeps the
+page, a switch and a disconnect each end the session on the server and land on sign-in with the
+page to come back to, and a sign-out in another tab moves the open page within seconds.
 
 **The landing page's way in is a wallet chooser, and it is a dynamic import.**
 `stores/connect.store.ts` is one boolean shared by the site header and the two landing CTAs;
@@ -356,6 +455,15 @@ that only matches an unconsumed, unexpired row and takes the stored message from
 clause. Two requests replaying one signature race in the database and exactly one wins. Verifying
 first would leave a window where both passed.
 
+**An address has about ten sign-ins a minute, and is told when it has spent them.** The challenge
+stores a row and the first signature of an address makes an account, both before anybody is signed
+in, so the two routes share a budget of their own beside the api's (a twentieth of `API_RATE_MAX`,
+30 requests a minute at 600: `backend/CLAUDE.md`, *Signing in has a budget of its own*). A connect
+makes two requests, three when it has to make fresh keys. A 429 at either step is `busy` in the
+wallet store, "Too many sign-ins from this network. Try again in a minute." on the sign-in page and
+in the chooser, where it used to be `unavailable` and said the server could not be reached.
+`wallet.spec.ts` and `connect.spec.ts` hold both steps, both places and the Persian sentence.
+
 **A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
 `candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.
 
@@ -365,11 +473,16 @@ achievements and a favourite game from the mock dataset, joined on the handle fo
 only. The four mock-backed stores read `account.user()?.id`, not the raw account id, because that
 join is what keeps a demo tour's friends and chats attached to it.
 
-Chain details come from `VITE_NURA_*` env vars (see `.env.example`); with none set the app signs
-in on whatever network the wallet is already on and skips the switch. The sign-in text names no
+Chain details are NuraChain's public facts, constants in `data/chain.ts`. `chainIsConfigured` asks
+for a hex chain id, and the id there is decimal (`1020`), so the app signs in on whatever network
+the wallet is already on and requests no switch; that is how it behaved with the old `VITE_NURA_*`
+variables set as `.env.example` had them. The sign-in text names no
 chain; `NURA_CHAIN_ID` is what a wallet row records and what a contract wallet is checked on.
 
 `lib/wallet.ts` discovers providers through **EIP-6963** and falls back to `window.ethereum`.
 It does not believe `isMetaMask` — any injector can set that flag — so with no announcement it
-takes the first injected provider, and `walletName(null)` says "Browser wallet" rather than naming
-a wallet that is not installed.
+takes the first injected provider, and `walletName` answers `null` rather than naming a wallet that
+is not installed or did not say what it is. The page names that one in the reader's language
+(`wallet.unnamed`, "Browser wallet", "کیف پول مرورگر"): it was an English literal in the library,
+so a Persian reader's account card said "ورود با Browser wallet". A wallet that names itself keeps
+its product name in both languages.

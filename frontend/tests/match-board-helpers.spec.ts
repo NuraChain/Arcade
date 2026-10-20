@@ -3,12 +3,11 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchBoard from '../src/components/games/match-board.component.azeroth';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard, type EventBatch } from '../src/stores/match.store.ts';
-import { usePeople } from '../src/stores/people.store.ts';
+import { NO_EVENTS, useBoard, type EventBatch } from '../src/stores/match.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { ludoOf } from '../src/data/match.ts';
@@ -61,6 +60,23 @@ const settle = async () =>
     await new Promise((resolve) => setTimeout(resolve, 20));
 };
 
+const elapse = async (ms: number) =>
+{
+    const clock = runtime().clock as ManualClock;
+
+    for (let left = ms; left > 0; left -= 10)
+    {
+        clock.advance(Math.min(10, left));
+
+        for (let turn = 0; turn < 12; turn += 1)
+        {
+            await Promise.resolve();
+        }
+    }
+
+    await settle();
+};
+
 const matches = client.matches as unknown as Record<string, unknown>;
 
 const show = async (match: MatchView): Promise<HTMLElement> =>
@@ -68,11 +84,8 @@ const show = async (match: MatchView): Promise<HTMLElement> =>
     matches.view = async () => match;
     useBoard().open(match.id);
     await settle();
-    return renderTest(() => MatchBoard({ match }) as HTMLElement).container;
+    return renderTest(() => MatchBoard({ match, events: NO_EVENTS }) as HTMLElement).container;
 };
-
-const moveWords = (container: HTMLElement): string[] =>
-    [...container.querySelectorAll('ul[aria-label] button')].map((button) => button.textContent?.trim() ?? '');
 
 beforeEach(() =>
 {
@@ -94,33 +107,6 @@ afterEach(() =>
 
 describe('the ludo helpers, and the switch for each', () =>
 {
-    it('says a move sends a named token home, and says only the move once told not to', async () =>
-    {
-        const locale = useLocale();
-        const container = await show(ludo(CAPTURE));
-        const name = usePeople().byHandle('sara.k')?.displayName ?? 'sara.k';
-
-        expect(moveWords(container)).toEqual([locale.plural('helpers.ludo.move.capture', 1, { token: '1', name })]);
-
-        useSettings().update({ hintOutcome: false });
-        await settle();
-
-        expect(moveWords(container)).toEqual([locale.t('match.move.step', { token: '1', die: '2' })]);
-    });
-
-    it('says a token coming out sends home whoever stands on the start square, and only that it comes out once told not to', async () =>
-    {
-        const locale = useLocale();
-        const container = await show(ludo(position([-1, -1, -1, -1], [26, 10, -1, -1], 6)));
-
-        expect(moveWords(container)).toEqual([locale.plural('helpers.ludo.move.enterCapture', 1, { token: '1' })]);
-
-        useSettings().update({ hintOutcome: false });
-        await settle();
-
-        expect(moveWords(container)).toEqual([locale.t('match.move.enter', { token: '1' })]);
-    });
-
     it('coaches the rule that matters, and goes quiet once told to', async () =>
     {
         const container = await show(ludo(SIX));
@@ -134,10 +120,22 @@ describe('the ludo helpers, and the switch for each', () =>
         expect(note()).toBeNull();
     });
 
-    it('lights the tokens that can move, and turning that off keeps every way to move', async () =>
+    it('lights the tokens that can move, and turning that off still lets a tap on the token move it', async () =>
     {
-        const locale = useLocale();
-        const container = await show(ludo(CAPTURE));
+        const animate = Element.prototype.animate;
+
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, ...args: Parameters<Element['animate']>)
+        {
+            const running = animate.apply(this, args);
+
+            running.finished.catch(() => undefined);
+
+            return running;
+        });
+
+        const match = ludo(CAPTURE);
+        const container = await show(match);
+        const move = vi.spyOn(useBoard(), 'move').mockResolvedValue('now');
         const lit = () => container.querySelectorAll('.lp[data-movable]').length;
 
         for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
@@ -147,25 +145,39 @@ describe('the ludo helpers, and the switch for each', () =>
 
         expect(container.querySelectorAll('.lp')).toHaveLength(8);
         expect(lit()).toBe(1);
-        expect(container.textContent).toContain(locale.t('match.hint.move'));
+        expect(container.querySelectorAll('.lg'), 'the square the lit token would reach is not marked').toHaveLength(1);
+        expect(container.querySelector('.lg')!.hasAttribute('data-takes'), 'a landing that sends somebody home is marked like any other').toBe(true);
 
         useSettings().update({ hintMoves: false });
         await settle();
 
         expect(lit()).toBe(0);
-        expect(moveWords(container)).toHaveLength(1);
-        expect(container.textContent).toContain(locale.t('helpers.ludo.hint.move'));
+        expect(container.querySelectorAll('.lg, .lg-step'), 'the marks stayed on the board with the lights off').toHaveLength(0);
+
+        const host = container.querySelector('.board-canvas') as HTMLElement;
+        const token = seatsFor(ludoOf(match)!, match.mine).find((one) => one.key === '0-0')!;
+        const spot = centreOf(token.col, token.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 1000 * 0.3, bubbles: true }));
+        await settle();
+
+        expect(move, 'a token with its light off could not be moved').toHaveBeenCalledWith(0);
     });
 
     it('moves the tip with the position, and explains a third six from the batch that ended the turn', async () =>
     {
         const locale = useLocale();
-        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+        const [batch, setBatch] = createSignal<EventBatch>({ ...NO_EVENTS, seq: 0, events: [] });
         const [current, setCurrent] = createSignal(ludo(SIX));
         const props = {
             get match()
             {
                 return current();
+            },
+            get events()
+            {
+                return batch();
             }
         };
 
@@ -178,7 +190,6 @@ describe('the ludo helpers, and the switch for each', () =>
             running.finished.catch(() => undefined);
             return running;
         });
-        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
         matches.view = async () => current();
         useBoard().open(current().id);
         await settle();
@@ -186,6 +197,12 @@ describe('the ludo helpers, and the switch for each', () =>
         const container = renderTest(() => MatchBoard(props) as HTMLElement).container;
         const note = () => container.querySelector('[role="note"]')?.textContent ?? null;
 
+        for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
+        {
+            await settle();
+        }
+
+        expect(container.querySelectorAll('.lp')).toHaveLength(8);
         expect(note()).toContain(locale.t('helpers.ludo.tip.six'));
 
         setCurrent(ludo(position([5, -1, -1, -1], [34, -1, -1, -1], 3)));
@@ -194,12 +211,16 @@ describe('the ludo helpers, and the switch for each', () =>
         expect(note()).toContain(locale.t('helpers.ludo.tip.star'));
 
         setCurrent({ ...ludo(position([10, -1, -1, -1], [3, -1, -1, -1], 6)), rev: 2, turn: 1, view: ludoEngine.view({ ...position([10, -1, -1, -1], [3, -1, -1, -1], 6), die: null, turn: 1 }, 0) as MatchView['view'] });
-        setBatch({ seq: 1, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 1, id: 'match-1', live: true, events: [{ rev: 2, seat: 0, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 0, die: 6 }, { e: 'pass', seat: 0, why: 'three-sixes' }] } }] });
         await settle();
+
+        expect(note(), 'the tip explained a third six while its die was in the air').toBeNull();
+
+        await elapse(3200);
 
         expect(note()).toContain(locale.t('helpers.ludo.tip.threeSixes'));
 
-        setBatch({ seq: 2, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
+        setBatch({ ...NO_EVENTS, seq: 2, id: 'match-1', live: true, events: [{ rev: 3, seat: 1, at: '', log: { kind: 'ludo', moves: [{ e: 'roll', seat: 1, die: 3 }] } }] });
         await settle();
 
         expect(note()).toBeNull();
@@ -242,6 +263,6 @@ describe('the ludo helpers, and the switch for each', () =>
         const container = await show(ludo(SIX, true));
 
         expect(container.querySelector('[role="note"]')).toBeNull();
-        expect(moveWords(container)).toEqual([]);
+        expect(container.querySelectorAll('.table-stage button:not(.table-plate-press)')).toHaveLength(0);
     });
 });

@@ -48,7 +48,6 @@ beforeEach(() =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useSocial().reset();
@@ -184,6 +183,77 @@ describe('the chat doorbell', () =>
         stop();
     });
 
+    it('does not ask for that thread, nor for who can read it, when everything is rung at once', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+        const heard: (string | undefined)[] = [];
+        const deaf = chat.onThread((id) => heard.push(id));
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        server.conversations = server.conversations.filter((row) => row.id !== 'c-reza');
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(server.calls).toContain('chat.list'));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls, 'a conversation the reader is no longer in was asked for').not.toContain('chat.messages');
+        expect(heard, 'the room was asked about, though the reader is out of it').toEqual([]);
+
+        deaf();
+        stop();
+    });
+
+    it('reads the open thread again, and tells whoever listens, when everything is rung and the reader is still in it', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+        const heard: (string | undefined)[] = [];
+        const deaf = chat.onThread((id) => heard.push(id));
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+        expect(server.calls).toContain('chat.list');
+        expect(heard).toEqual([undefined]);
+
+        deaf();
+        stop();
+    });
+
+    it('reads the open thread again on such a ring when the list has not reached it', async () =>
+    {
+        server.listPage = 1;
+
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+
+        const beyond = server.conversations.map((row) => row.id).find((id) => !chat.conversations().some((one) => one.id === id));
+
+        expect(beyond, 'the fixtures hold more conversations than one page lists').toBeDefined();
+
+        chat.openThread(beyond!);
+        await chat.refresh();
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+
+        stop();
+    });
+
     it('re-reads only the list when some other conversation changes', async () =>
     {
         const chat = useChat();
@@ -279,6 +349,79 @@ describe('typing', () =>
         stop();
     });
 
+    it('takes somebody out of the indicator the moment a message of theirs is the newest in the room, and not before', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+        await settle();
+
+        const row = server.conversations.find((one) => one.id === 'c-sara')!;
+        const theirs = server.messages.find((one) => one.conversationId === 'c-sara' && one.kind === 'text' && one.from === 'sara.k' && one.id !== row.last?.id)!;
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        socket.deliver({ v: 1, t: 'typing', n: 2, who: 'reza.t', id: 'c-sara' });
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara').sort(), 'a read that brought nothing new ended somebody\'s typing').toEqual(['reza.t', 'sara.k']);
+
+        row.last = { ...theirs };
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara'), 'the message has come and they are still typing it').toEqual(['reza.t']);
+
+        socket.deliver({ v: 1, t: 'typing', n: 3, who: 'sara.k', id: 'c-sara' });
+
+        expect(chat.typing('c-sara').sort(), 'typing again after a message is typing again').toEqual(['reza.t', 'sara.k']);
+
+        stop();
+    });
+
+    it('keeps somebody typing whose old line is read in after their notice came', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        await chat.refresh();
+        await settle();
+
+        expect(chat.lastOf('c-sara')?.from, 'the room\'s newest line is one of hers').toBe('sara.k');
+        expect(chat.typing('c-sara'), 'a line she wrote before she began typing ended it').toEqual(['sara.k']);
+
+        stop();
+    });
+
+    it('takes somebody out of the indicator for the first line of a room that had none', async () =>
+    {
+        const row = server.conversations.find((one) => one.id === 'c-sara')!;
+        const theirs = server.messages.find((one) => one.conversationId === 'c-sara' && one.kind === 'text' && one.from === 'sara.k')!;
+
+        server.messages = server.messages.filter((one) => one.conversationId !== 'c-sara');
+        delete row.last;
+
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+        await settle();
+
+        expect(chat.lastOf('c-sara'), 'the room is read and holds nothing').toBeUndefined();
+
+        socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-sara' });
+        server.messages.push(theirs);
+        row.last = theirs;
+        await chat.refresh();
+        await settle();
+
+        expect(chat.typing('c-sara'), 'her first line has come and she is still said to be typing it').toEqual([]);
+
+        stop();
+    });
+
     it('says it is typing at a rate the gateway will not hang up on', () =>
     {
         const chat = useChat();
@@ -337,6 +480,26 @@ describe('a long chat list', () =>
 
         chat.moreConversations();
         await vi.waitFor(() => expect(chat.conversations().length).toBe(Math.min(4, everything)));
+    });
+});
+
+describe('a chat store whose reader has signed out', () =>
+{
+    it('asks the server for nothing once nobody is signed in, the open thread included', async () =>
+    {
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+        await settle();
+        server.calls = [];
+
+        useSession().reset();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls.filter((call) => call.startsWith('chat.')), 'the chat was read again for nobody, with a session the server had ended').toEqual([]);
     });
 });
 

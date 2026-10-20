@@ -27,6 +27,21 @@ export function databaseName()
         return process.env.PGDATABASE;
     }
 
+    const name = databaseUrl()?.pathname.replace(/^\//, '') ?? '';
+
+    return name === '' ? 'nura_games' : name;
+}
+
+/**
+ * The server's own `DATABASE_URL`, or null when the root `.env` cannot be read or names none.
+ *
+ * An unreadable or malformed .env is not a reason to fail before the pass has started: the documented
+ * name is the right guess and psql will say so plainly if it is wrong. The account, the host, the port
+ * and the password come from here too. A password written into this file is a password published with
+ * the repository, and one that matches nobody's database but the machine it was written on.
+ */
+function databaseUrl()
+{
     try
     {
         const line = readFileSync(ENV_FILE, 'utf8')
@@ -34,31 +49,28 @@ export function databaseName()
             .map((text) => text.trim())
             .find((text) => text.startsWith('DATABASE_URL='));
 
-        if (line !== undefined)
-        {
-            const url = new URL(line.slice('DATABASE_URL='.length).replace(/^['"]|['"]$/g, ''));
-            const name = url.pathname.replace(/^\//, '');
-            if (name !== '')
-            {
-                return name;
-            }
-        }
+        return line === undefined ? null : new URL(line.slice('DATABASE_URL='.length).replace(/^['"]|['"]$/g, ''));
     }
     catch
     {
-        // An unreadable or malformed .env is not a reason to fail before the pass has started; the
-        // documented name is the right guess and psql will say so plainly if it is wrong.
+        return null;
     }
-
-    return 'nura_games';
 }
 
 /** Runs one statement (or several, separated by `;`) and returns stdout, trimmed. */
 export function sql(text)
 {
+    const url = databaseUrl();
+    const password = process.env.PGPASSWORD ?? (url === null || url.password === '' ? undefined : decodeURIComponent(url.password));
+
     return execFileSync(
         'psql',
-        ['-U', 'postgres', '-h', '127.0.0.1', '-d', databaseName(), '-qtA', '-c', text],
-        { env: { ...process.env, PGPASSWORD: process.env.PGPASSWORD ?? 'root' }, encoding: 'utf8' }
+        [
+            '-U', url === null || url.username === '' ? 'postgres' : decodeURIComponent(url.username),
+            '-h', url === null || url.hostname === '' ? '127.0.0.1' : url.hostname,
+            '-p', url === null || url.port === '' ? '5432' : url.port,
+            '-d', databaseName(), '-qtA', '-c', text
+        ],
+        { env: password === undefined ? process.env : { ...process.env, PGPASSWORD: password }, encoding: 'utf8' }
     ).trim();
 }

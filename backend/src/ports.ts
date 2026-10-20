@@ -39,7 +39,8 @@ import type {
     TableSummary,
     MatchPlay,
     MatchView,
-    NftPage
+    NftPage,
+    PartyState
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
@@ -111,8 +112,6 @@ export interface IdentityPort
         device?: { id: string; exchangeKey: string; signingKey: string; label: string } | undefined;
     }): Promise<Established>;
 
-    signInAsGuest(input: { name: string; userAgent: string }): Promise<Established>;
-
     signOut(sessionId: string): Promise<void>;
     signOutEverywhere(userId: string): Promise<number>;
     claimHandle(userId: string, handle: string): Promise<string>;
@@ -139,6 +138,7 @@ export interface SocialPort
     graph(me: string): Promise<SocialGraph>;
 
     directory(me: string, limit: number): Promise<PersonSummary[]>;
+    search(me: string, asked: string, limit: number): Promise<PersonSummary[]>;
     names(handles: readonly string[]): Promise<PersonSummary[]>;
     suggestions(me: string, limit: number): Promise<{ person: PersonSummary; mutual: number }[]>;
 
@@ -252,8 +252,18 @@ export interface TablePort
     leave(me: string, tableId: string, forfeit: boolean): Promise<void>;
     setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
     invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
+    remove(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;
     setVoice(me: string, tableId: string, voice: VoiceScope): Promise<TableSummary>;
+}
+
+export interface PartyPort
+{
+    state(me: string): Promise<PartyState>;
+    invite(me: string, handle: string, game: string): Promise<PartyState>;
+    accept(me: string, partyId: string): Promise<PartyState>;
+    decline(me: string, partyId: string): Promise<void>;
+    leave(me: string, partyId: string): Promise<void>;
 }
 
 /**
@@ -290,7 +300,7 @@ export interface DevicePort
 {
     list(me: string, sessionId: string): Promise<DeviceList>;
 
-    /** The bytes a wallet signs to authorise one device. Refused for an account with no wallet. */
+    /** The bytes a wallet signs to authorise one device. */
     challenge(me: string, deviceId: string): Promise<DeviceChallenge>;
 
     enrol(me: string, sessionId: string, input: {
@@ -490,7 +500,7 @@ export interface MatchPort
     /** `after` is the last rank already shown, so a page continues the numbering rather than restarting. */
     leaderboard(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>;
 
-    watch(me: string, matchId: string): Promise<MatchWatch | null>;
+    watch(me: string, matchId: string, rev: number | null): Promise<MatchWatch | null>;
 
     /** Public tables with a game running on them, for somebody looking for one to watch. */
     watchable(me: string, game: string | null): Promise<WatchableTables>;
@@ -529,6 +539,7 @@ export interface Ports
     social: SocialPort;
     group: GroupPort;
     table: TablePort;
+    party: PartyPort;
     match: MatchPort;
     notify: NotifyPort;
     device: DevicePort;

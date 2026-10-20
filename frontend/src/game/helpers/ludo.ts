@@ -2,29 +2,26 @@ import { FINISHED, RING_STEPS, YARD, capturesAt, cellAt, obstacle, ringIndex, ty
 import type { LudoBoard, LudoSeat } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
 
-export type LudoOutcome =
-    | { kind: 'enter'; count?: number }
-    | { kind: 'capture'; victim: number; count: number }
-    | { kind: 'safe' }
-    | { kind: 'home' }
-    | { kind: 'step' };
-
 export interface LudoHappened
 {
     e: string;
     seat?: number;
+    owner?: number;
     die?: number;
     why?: string;
 }
 
 const squareOf = (seat: LudoSeat, progress: number) => ringIndex(seat.colour as LudoColour, progress);
 
-const standingOn = (board: LudoBoard, mover: number, square: number): number[] =>
+const onSquare = (seat: LudoSeat, square: number) =>
+    seat.tokens.filter((token) => token.at >= 0 && token.at < RING_STEPS && squareOf(seat, token.at) === square).length;
+
+const standingOn = (board: LudoBoard, side: number, square: number) =>
     board.seats
-        .filter((other) => other.seat !== mover)
-        .flatMap((other) => other.tokens
-            .filter((token) => token.at >= 0 && token.at < RING_STEPS && squareOf(other, token.at) === square)
-            .map(() => other.seat));
+        .filter((other) => other.side !== side)
+        .flatMap((other) => Array.from({ length: onSquare(other, square) }, () => other.seat));
+
+const landsAt = (at: number, die: number) => (at === YARD ? 0 : at + die);
 
 const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
 {
@@ -35,17 +32,31 @@ const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
         return null;
     }
 
-    return token.at === YARD ? 0 : token.at + die;
+    return landsAt(token.at, die);
 };
 
-export function pieceFor(board: LudoBoard, seat: number, piece: number)
+const movedBy = (board: LudoBoard) => board.seats.find((one) => one.seat === board.controls);
+
+const homeOf = (seat: LudoSeat) => seat.tokens.every((token) => token.at === FINISHED);
+
+export function handOf(board: LudoBoard, seat: number)
+{
+    const own = board.seats.find((one) => one.seat === seat);
+    const partner = own === undefined ? undefined : board.seats.find((one) => one.seat !== seat && one.side === own.side);
+
+    return own !== undefined && partner !== undefined && homeOf(own) ? partner : own;
+}
+
+const paired = (board: LudoBoard) => new Set(board.seats.map((one) => one.side)).size < board.seats.length;
+
+export function pieceFor(board: LudoBoard, piece: number)
 {
     if (board.moves.includes(piece))
     {
         return piece;
     }
 
-    const tokens = board.seats.find((one) => one.seat === seat)?.tokens ?? [];
+    const tokens = movedBy(board)?.tokens ?? [];
 
     if (tokens.find((token) => token.piece === piece)?.at !== YARD)
     {
@@ -55,9 +66,9 @@ export function pieceFor(board: LudoBoard, seat: number, piece: number)
     return tokens.find((token) => token.at === YARD && board.moves.includes(token.piece))?.piece ?? null;
 }
 
-export function movedTo(board: LudoBoard, seat: number, piece: number): LudoBoard | null
+export function movedTo(board: LudoBoard, piece: number): LudoBoard | null
 {
-    const mover = board.seats.find((one) => one.seat === seat);
+    const mover = movedBy(board);
     const to = mover === undefined || board.die === undefined || !board.moves.includes(piece) ? null : landing(mover, piece, board.die);
 
     if (mover === undefined || to === null || to > FINISHED)
@@ -69,7 +80,7 @@ export function movedTo(board: LudoBoard, seat: number, piece: number): LudoBoar
     const next: LudoBoard = {
         ...board,
         moves: [],
-        seats: board.seats.map((one) => one.seat !== seat ? one : {
+        seats: board.seats.map((one) => one.seat !== mover.seat ? one : {
             ...one,
             home: one.home + (to === FINISHED ? 1 : 0),
             tokens: one.tokens.map((token) => token.piece !== piece ? token : {
@@ -85,43 +96,30 @@ export function movedTo(board: LudoBoard, seat: number, piece: number): LudoBoar
     return next;
 }
 
-export function outcomeOf(board: LudoBoard, seat: number, piece: number): LudoOutcome | null
+export function goalsOf(board: LudoBoard)
 {
-    const mover = board.seats.find((one) => one.seat === seat);
-    const to = mover === undefined || board.die === undefined ? null : landing(mover, piece, board.die);
+    const mover = movedBy(board);
+    const die = board.die;
 
-    if (mover === undefined || to === null || !board.moves.includes(piece))
+    if (mover === undefined || die === undefined)
     {
-        return null;
+        return [];
     }
 
-    if (mover.tokens.find((one) => one.piece === piece)?.at === YARD)
+    return board.moves.flatMap((piece) =>
     {
-        const victims = standingOn(board, seat, squareOf(mover, 0));
+        const from = mover.tokens.find((one) => one.piece === piece)?.at;
 
-        return victims.length === 0 ? { kind: 'enter' } : { kind: 'enter', count: victims.length };
-    }
+        if (from === undefined)
+        {
+            return [];
+        }
 
-    if (to === FINISHED)
-    {
-        return { kind: 'home' };
-    }
+        const to = landsAt(from, die);
+        const takes = capturesAt(mover.colour as LudoColour, to) ? standingOn(board, mover.side, squareOf(mover, to)).length : 0;
 
-    if (to >= RING_STEPS)
-    {
-        return { kind: 'step' };
-    }
-
-    const square = squareOf(mover, to);
-
-    if (!capturesAt(mover.colour as LudoColour, to))
-    {
-        return { kind: 'safe' };
-    }
-
-    const victims = standingOn(board, seat, square);
-
-    return victims.length === 0 ? { kind: 'step' } : { kind: 'capture', victim: victims[0], count: victims.length };
+        return [{ piece, from, to, takes }];
+    });
 }
 
 const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
@@ -134,14 +132,24 @@ const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
             return false;
         }
 
-        return !capturesAt(me.colour as LudoColour, to) && standingOn(board, me.seat, squareOf(me, to)).length > 0;
+        return !capturesAt(me.colour as LudoColour, to) && standingOn(board, me.side, squareOf(me, to)).length > 0;
+    });
+
+const joinsPartner = (board: LudoBoard, me: LudoSeat, die: number) =>
+    board.moves.some((piece) =>
+    {
+        const to = landing(me, piece, die);
+
+        return to !== null
+            && to < RING_STEPS
+            && board.seats.some((other) => other.seat !== me.seat && other.side === me.side && onSquare(other, squareOf(me, to)) > 0);
     });
 
 const walkersOf = (board: LudoBoard): Walker[] =>
     board.seats.map((one) => ({
         colour: one.colour as LudoColour,
         pieces: [...one.tokens].sort((a, b) => a.piece - b.piece).map((token) => token.at),
-        side: one.seat
+        side: one.side
     }));
 
 const stoppedBy = (board: LudoBoard, me: LudoSeat, die: number): Tip | null =>
@@ -162,14 +170,17 @@ const stoppedBy = (board: LudoBoard, me: LudoSeat, die: number): Tip | null =>
 
     if (reasons.some((reason) => reason === 'block' || reason === 'full'))
     {
-        return { key: 'helpers.ludo.tip.blocked' };
+        return { key: paired(board) ? 'helpers.ludo.tip.blockedTeams' : 'helpers.ludo.tip.blocked' };
     }
 
     return reasons.includes('start') ? { key: 'helpers.ludo.tip.start' } : null;
 };
 
-const ends = (me: LudoSeat, piece: number, die: number) =>
-    landing(me, piece, die) === FINISHED && me.tokens.every((token) => token.piece === piece || token.at === FINISHED);
+const ends = (board: LudoBoard, me: LudoSeat, piece: number, die: number) =>
+    landing(me, piece, die) === FINISHED
+    && board.seats
+        .filter((one) => one.side === me.side)
+        .every((one) => one.tokens.every((token) => (one.seat === me.seat && token.piece === piece) || token.at === FINISHED));
 
 export function coachOf(board: LudoBoard, mine: number | undefined, turn: number | undefined, recent: readonly LudoHappened[]): Tip | null
 {
@@ -185,7 +196,12 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
         return { key: 'helpers.ludo.tip.threeSixes' };
     }
 
-    const me = board.seats.find((one) => one.seat === mine);
+    const me = turn === mine ? movedBy(board) : handOf(board, mine);
+
+    if (me !== undefined && me.seat !== mine && !homeOf(me) && recent.some((one) => one.e === 'home' && one.seat === mine && one.owner === mine))
+    {
+        return { key: 'helpers.ludo.tip.helping' };
+    }
 
     if (turn !== mine && lastTurn?.e === 'pass' && lastTurn.why === 'no-move' && lastTurn.seat === mine && me !== undefined)
     {
@@ -219,6 +235,11 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
         return { key: 'helpers.ludo.tip.star' };
     }
 
+    if (joinsPartner(board, me, board.die))
+    {
+        return { key: 'helpers.ludo.tip.partner' };
+    }
+
     const stopped = stoppedBy(board, me, board.die);
 
     if (stopped !== null)
@@ -231,5 +252,5 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
         return { key: 'helpers.ludo.tip.exact' };
     }
 
-    return board.die === 6 && !board.moves.some((piece) => ends(me, piece, 6)) ? { key: 'helpers.ludo.tip.six' } : null;
+    return board.die === 6 && !board.moves.some((piece) => ends(board, me, piece, 6)) ? { key: 'helpers.ludo.tip.six' } : null;
 }

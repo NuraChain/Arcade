@@ -1,0 +1,122 @@
+import CardFace from './card-face.component.azeroth';
+import type { PlateTone } from './plate-tag.ts';
+import TablePlate from './table-plate.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component PokerSeat(props: {
+    who: string;
+    name: string;
+    turn: boolean;
+    own: boolean;
+    remainingMs?: number;
+    turnMs?: number;
+    dim: boolean;
+    tag?: string;
+    tone?: PlateTone;
+    bubble?: string;
+    below: boolean;
+    anchor: 'start' | 'end' | 'centre';
+    button: boolean;
+    stack: string;
+    holds: boolean;
+    cards: number;
+    shown: readonly number[];
+    shownSays: string;
+    named: string;
+    won: boolean;
+    bet: string;
+    discs: number;
+    landing: boolean;
+})
+{
+    const locale = useLocale();
+
+    derived dealing = props.button;
+
+    derived timed = props.turn;
+
+    derived tabled = props.shown.length > 0;
+
+    derived leading = props.shown[0] ?? 0;
+
+    derived trailing = props.shown[1] ?? 0;
+
+    derived holding = props.holds && !tabled;
+
+    derived first = props.cards < 1;
+
+    derived second = props.cards < 2;
+
+    derived bet = props.bet;
+
+    derived discs = props.discs;
+
+    derived landing = props.landing;
+
+    derived betting = bet !== '';
+
+    derived named = props.named;
+
+    derived naming = named !== '' && !betting && !second;
+
+    derived won = props.won;
+
+    <>
+        <TablePlate
+            who={ props.who }
+            name={ props.name }
+            turn={ props.turn }
+            remainingMs={ props.remainingMs }
+            turnMs={ props.turnMs }
+            dim={ props.dim }
+            tag={ props.tag }
+            tone={ props.tone }
+            bubble={ props.bubble }
+            below={ props.below }
+            anchor={ props.anchor }
+            facts={
+                <span class="contents">
+                    <span class="tally font-bold text-gold">{ props.stack }</span>
+                    <Show when={ dealing }>
+                        { () => <span class="sr-only">{ locale.t('poker.dealer') }</span> }
+                    </Show>
+                </span>
+            }
+            trail={
+                <span class="contents">
+                    <Show when={ timed }>
+                        { () => <TurnClock remainingMs={ props.remainingMs } over={ false } yours={ props.own } brief class={ props.own ? 'poker-clock' : 'sr-only' } /> }
+                    </Show>
+                </span>
+            }
+        />
+        <Show when={ holding }>
+            { () =>
+                <span class="poker-backs" aria-hidden="true">
+                    <span class="card-back" data-coming={ first ? 'true' : undefined }></span>
+                    <span class="card-back" data-coming={ second ? 'true' : undefined }></span>
+                </span>
+            }
+        </Show>
+        <Show when={ tabled }>
+            { () =>
+                <span class="poker-backs poker-shown" role="img" aria-label={ props.shownSays }>
+                    <span class="poker-face" data-coming={ first ? 'true' : undefined }><CardFace card={ leading } /></span>
+                    <span class="poker-face" data-coming={ second ? 'true' : undefined }><CardFace card={ trailing } /></span>
+                </span>
+            }
+        </Show>
+        <Show when={ naming }>
+            { () => <span class="poker-named" data-won={ won ? 'true' : undefined }>{ named }</span> }
+        </Show>
+        <Show when={ betting }>
+            { () =>
+                <span class="poker-bet" data-landing={ landing ? 'true' : undefined }>
+                    <span class="chip-stack" data-chips={ discs } aria-hidden="true"></span>
+                    <span class="tally">{ bet }</span>
+                </span>
+            }
+        </Show>
+    </>
+}

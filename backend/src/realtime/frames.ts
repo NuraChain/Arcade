@@ -1,4 +1,4 @@
-import type { MatchEvent, MatchView } from '../schemas.ts';
+import type { MatchEvent, MatchView, Pulse } from '../schemas.ts';
 
 export type PresenceState = 'online' | 'away';
 
@@ -11,17 +11,30 @@ export interface PresenceEntry
 
 export type SignalKind = 'offer' | 'answer' | 'ice';
 
+export type Codec = 'opus' | 'law';
+
 export interface VoicePeer
 {
     who: string;
     muted: boolean;
     talk: boolean;
     join: string;
+    opus: boolean;
 }
 
 export type NudgeScope = 'chat' | 'social' | 'game' | 'table' | 'me';
 
 export const SIGNAL_DATA_MAX = 12_288;
+
+export const SOUND_DATA_MAX = 2048;
+
+export const SOUND_TO_MOST = 8;
+
+export const FRAME_FLOORS: Readonly<Record<string, number>> = { sync: 5000, presence: 2000, typing: 3000 };
+
+export const BUDGET_WINDOW_MS = 10_000;
+
+export const FRAME_BUDGETS: Readonly<Record<string, number>> = { voice: 30, signal: 120, sound: 250, play: 40, ping: 10 };
 
 const FRAME_MAX = 4096;
 
@@ -34,9 +47,11 @@ export type ServerFrame =
     | { v: 1; t: 'typing'; n: number; who: string; id: string }
     | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; mine: string; peers: VoicePeer[] }
     | { v: 1; t: 'signal'; n: number; table: string; from: string; join: string; kind: SignalKind; data: string }
+    | { v: 1; t: 'sound'; n: number; table: string; join: string; codec: Codec; at: number; data: string }
     | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
     | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
     | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; code: string; message: string }
+    | { v: 1; t: 'pulse'; n: number; games: Pulse['games']; watching: string }
     | { v: 1; t: 'pong'; n: number; at: number };
 
 export type Applied = 'now' | 'already' | 'stale';
@@ -45,8 +60,9 @@ export type ClientFrame =
     | { t: 'sync' }
     | { t: 'presence'; state: PresenceState }
     | { t: 'typing'; id: string }
-    | { t: 'voice'; table: string; on: boolean; muted: boolean }
+    | { t: 'voice'; table: string; on: boolean; muted: boolean; opus: boolean }
     | { t: 'signal'; table: string; to: string; join: string; kind: SignalKind; data: string }
+    | { t: 'sound'; table: string; to: string[]; codec: Codec; at: number; data: string }
     | { t: 'play'; match: string; key: string; rev?: number; play: unknown }
     | { t: 'ping' };
 
@@ -96,6 +112,9 @@ export const voice = (n: number, table: string, joined: boolean, mine: string, p
 export const signal = (n: number, table: string, from: string, join: string, kind: SignalKind, data: string): ServerFrame =>
     ({ v: 1, t: 'signal', n, table, from, join, kind, data });
 
+export const sound = (n: number, table: string, join: string, codec: Codec, at: number, data: string): ServerFrame =>
+    ({ v: 1, t: 'sound', n, table, join, codec, at, data });
+
 export const game = (n: number, at: number, match: MatchView, events: MatchEvent[]): ServerFrame =>
     ({ v: 1, t: 'game', n, at, match, events });
 
@@ -105,9 +124,16 @@ export const ack = (n: number, key: string, match: MatchView, applied: Applied, 
 export const refused = (n: number, key: string, match: string, why: { status: number; code: string; message: string }): ServerFrame =>
     ({ v: 1, t: 'refused', n, key, match, status: why.status, code: why.code, message: why.message });
 
+export const pulse = (n: number, told: Pulse): ServerFrame =>
+    ({ v: 1, t: 'pulse', n, games: told.games, watching: told.watching });
+
 export const pong = (n: number, at: number): ServerFrame => ({ v: 1, t: 'pong', n, at });
 
 const KINDS = new Set(['offer', 'answer', 'ice']);
+
+const CODECS = new Set(['opus', 'law']);
+
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const idOf = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 64;
 
@@ -130,8 +156,9 @@ const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(
     sync: new Set(['v', 't']),
     presence: new Set(['v', 't', 'state']),
     typing: new Set(['v', 't', 'id']),
-    voice: new Set(['v', 't', 'table', 'on', 'muted']),
+    voice: new Set(['v', 't', 'table', 'on', 'muted', 'opus']),
     signal: new Set(['v', 't', 'table', 'to', 'join', 'kind', 'data']),
+    sound: new Set(['v', 't', 'table', 'to', 'codec', 'at', 'data']),
     play: new Set(['v', 't', 'match', 'key', 'rev', 'play']),
     ping: new Set(['v', 't'])
 });
@@ -218,8 +245,17 @@ export function parseClientFrame(text: string): ClientFrame | null
 
     if (frame.t === 'voice')
     {
-        return idOf(frame.table) && typeof frame.on === 'boolean' && typeof frame.muted === 'boolean'
-            ? { t: 'voice', table: frame.table, on: frame.on, muted: frame.muted }
+        return idOf(frame.table) && typeof frame.on === 'boolean' && typeof frame.muted === 'boolean' && typeof frame.opus === 'boolean'
+            ? { t: 'voice', table: frame.table, on: frame.on, muted: frame.muted, opus: frame.opus }
+            : null;
+    }
+
+    if (frame.t === 'sound')
+    {
+        return idOf(frame.table) && Array.isArray(frame.to) && frame.to.length > 0 && frame.to.length <= SOUND_TO_MOST && frame.to.every(idOf)
+            && typeof frame.codec === 'string' && CODECS.has(frame.codec) && revOf(frame.at)
+            && typeof frame.data === 'string' && frame.data.length <= SOUND_DATA_MAX && BASE64.test(frame.data)
+            ? { t: 'sound', table: frame.table, to: frame.to as string[], codec: frame.codec as Codec, at: frame.at as number, data: frame.data }
             : null;
     }
 

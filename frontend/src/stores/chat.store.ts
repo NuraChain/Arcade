@@ -27,6 +27,7 @@ interface Typist
 {
     who: string;
     until: number;
+    after: string | null;
 }
 
 let active: ChatSource = createApiSource();
@@ -123,7 +124,7 @@ export const useChat = createStore((): ChatApi =>
      */
     const ingest = (loaded: Conversation[]) =>
     {
-        people.want(loaded.flatMap((conversation) => conversation.participants));
+        void people.want(loaded.flatMap((conversation) => conversation.participants));
         if (loaded.some((conversation) => conversation.groupId !== null))
         {
             groups.want();
@@ -139,8 +140,10 @@ export const useChat = createStore((): ChatApi =>
 
     const [pages, setPages] = createSignal(1);
 
+    const signedIn = createMemo(() => account.user() !== null);
+
     const list = createResource(
-        () => ({ scope: scope(), pages: pages() }),
+        () => (signedIn() ? { scope: scope(), pages: pages() } : null),
         async (current, signal) =>
         {
             const answer = await active.conversations(current.scope, signal, current.pages);
@@ -151,7 +154,7 @@ export const useChat = createStore((): ChatApi =>
     );
 
     const thread = createResource(
-        () => (openId() === '' ? null : { id: openId(), scope: scope(), depth: depth() }),
+        () => (openId() === '' || !signedIn() ? null : { id: openId(), scope: scope(), depth: depth() }),
         async (current, signal) => ({ ...await active.thread(current.id, current.scope, signal, current.depth), id: current.id }),
         { name: 'chat.thread' }
     );
@@ -195,11 +198,13 @@ export const useChat = createStore((): ChatApi =>
 
     const threaders = new Set<(id: string | undefined) => void>();
 
+    const listed = (id: string) => (list.data()?.rows ?? []).some((row) => row.conversation.id === id);
+
     const nudgedOpen = (id: string) => queue(async () =>
     {
         await list.refetch();
 
-        if (untrack(openId) === id && (list.data()?.rows ?? []).some((row) => row.conversation.id === id))
+        if (untrack(openId) === id && listed(id))
         {
             for (const listener of threaders)
             {
@@ -208,6 +213,26 @@ export const useChat = createStore((): ChatApi =>
 
             await thread.refetch();
         }
+    });
+
+    const nudgedAll = () => queue(async () =>
+    {
+        const open = untrack(openId);
+        const held = open !== '' && listed(open);
+
+        await list.refetch();
+
+        if (held && !listed(open))
+        {
+            return;
+        }
+
+        for (const listener of threaders)
+        {
+            listener(undefined);
+        }
+
+        await thread.refetch();
     });
 
     const rows = (): ConversationRow[] => list.data()?.rows ?? [];
@@ -313,9 +338,13 @@ export const useChat = createStore((): ChatApi =>
         const current = untrack(typists);
         const kept = (current[conversationId] ?? []).filter((entry) => entry.who !== who && entry.until > now);
 
-        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS }] });
+        const after = untrack(() => (rowOf(conversationId) === undefined ? null : (lastOf(conversationId)?.id ?? '')));
+
+        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS, after }] });
         sweepSoon();
     };
+
+    const answered = (entry: Typist, last: Message | undefined) => entry.after !== null && last !== undefined && last.from === entry.who && last.id !== entry.after;
 
     const announced = new Map<string, number>();
 
@@ -382,7 +411,9 @@ export const useChat = createStore((): ChatApi =>
         typing(id)
         {
             const now = runtime().clock.now();
-            return (typists()[id] ?? []).filter((entry) => entry.until > now).map((entry) => entry.who);
+            const last = lastOf(id);
+
+            return (typists()[id] ?? []).filter((entry) => entry.until > now && !answered(entry, last)).map((entry) => entry.who);
         },
 
         draft: (id) => drafts()[id] ?? '',
@@ -483,18 +514,16 @@ export const useChat = createStore((): ChatApi =>
         /**
          * Moves my watermark, on the SERVER.
          *
-         * Debounced against the clock because the chat page calls it from an effect, and a write
-         * per render would be a write per keystroke somewhere else in the room.
+         * Every caller asks once for something the reader has just had in front of them (the
+         * thread opening, a line arriving in it, the table's chat opening, the menu), so nothing
+         * is held back: a mark dropped for coming within a second of the last one left a line read
+         * on screen counted as unread for as long as the thread stayed open.
          */
         async markRead(id)
         {
-            const current = untrack(seen);
             const now = runtime().clock.now();
-            if (current[id] !== undefined && now - current[id] < 1000)
-            {
-                return;
-            }
-            setSeen({ ...current, [id]: now });
+
+            setSeen((current) => ({ ...current, [id]: now }));
             await client.chat.read({ params: { id } }).catch(() => undefined);
             await revalidateList();
         },
@@ -567,15 +596,7 @@ export const useChat = createStore((): ChatApi =>
                 {
                     return;
                 }
-                if (id === undefined)
-                {
-                    for (const listener of threaders)
-                    {
-                        listener(undefined);
-                    }
-                }
-
-                void (id === undefined ? revalidate() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
+                void (id === undefined ? nudgedAll() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
             });
 
             const offTyping = live.onTyping(noteTyping);

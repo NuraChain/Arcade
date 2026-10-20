@@ -16,7 +16,7 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
 
     derived status = wallet.status();
 
-    derived name = wallet.name();
+    derived name = wallet.name() ?? locale.t('wallet.unnamed');
 
     derived busy = status === 'connecting' || status === 'signing';
 
@@ -47,6 +47,10 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
         if (failure === 'unavailable')
         {
             return 'wallet.error.unavailable';
+        }
+        if (failure === 'busy')
+        {
+            return 'wallet.error.busy';
         }
         return failure === 'no-wallet' ? 'wallet.error.noWallet' : 'wallet.error.unknown';
     })();

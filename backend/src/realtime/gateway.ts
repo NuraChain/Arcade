@@ -10,7 +10,7 @@ import type { Ports } from '../ports.ts';
 import { admit, toWebRequest } from './admit.ts';
 import { createHandshakeLimit } from './handshake-limit.ts';
 import { matchPlayInput } from '../schemas.ts';
-import { ack, parseClientFrame, pong, refused, SIGNAL_DATA_MAX, type ClientFrame } from './frames.ts';
+import { ack, BUDGET_WINDOW_MS, FRAME_BUDGETS, FRAME_FLOORS, parseClientFrame, pong, refused, SIGNAL_DATA_MAX, type ClientFrame } from './frames.ts';
 import type { Connection, Hub } from './hub.ts';
 
 export interface GatewayDeps
@@ -19,6 +19,7 @@ export interface GatewayDeps
     hub: Hub;
     config: ServerConfig;
     log: Logger;
+    limits: { handshakes: number; sockets: number };
 }
 
 /** How long a socket may stay unidentified before it is closed. */
@@ -29,12 +30,6 @@ const PRE_AUTH_FRAMES = 4;
 
 /** How often lingering presence expires and dead sessions are swept out. */
 const SWEEP_MS = 30_000;
-
-const THROTTLES: Record<string, number> = { sync: 5000, presence: 2000, typing: 3000 };
-
-const BUDGET_WINDOW_MS = 10_000;
-
-const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, ping: 10 };
 
 const HEARTBEAT_MS = 15_000;
 
@@ -123,7 +118,7 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
  */
 export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 {
-    const limit = createHandshakeLimit({ max: deps.config.wsHandshakeMax });
+    const limit = createHandshakeLimit({ max: deps.limits.handshakes });
 
     const sweep = setInterval(() =>
     {
@@ -133,7 +128,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
     const detach = attachWebSockets(server, {
         path: '/ws',
-        maxConnections: deps.config.wsMaxConnections,
+        maxConnections: deps.limits.sockets,
 
         // Client frames are three small objects. Sixteen megabytes of untrusted input per socket
         // is the wrong ceiling for an endpoint that never receives a payload.
@@ -184,7 +179,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
             {
                 const recent = (spent[kind] ?? []).filter((when) => at - when < BUDGET_WINDOW_MS);
 
-                if (recent.length >= (BUDGETS[kind] ?? 0))
+                if (recent.length >= (FRAME_BUDGETS[kind] ?? 0))
                 {
                     refusing = true;
                     socket.close(4429, `Too many ${ kind } frames`);
@@ -226,14 +221,20 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
                 const at = Date.now();
 
-                if (frame.t in BUDGETS && !spend(frame.t, at))
+                if (frame.t in FRAME_BUDGETS && !spend(frame.t, at))
                 {
                     return;
                 }
 
                 if (frame.t === 'voice')
                 {
-                    deps.hub.voice(connection, frame.table, frame.on, frame.muted);
+                    deps.hub.voice(connection, frame.table, frame.on, frame.muted, frame.opus);
+                    return;
+                }
+
+                if (frame.t === 'sound')
+                {
+                    deps.hub.sound(connection, frame.table, frame.to, frame.codec, frame.at, frame.data);
                     return;
                 }
 
@@ -255,7 +256,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                     return;
                 }
 
-                const floor = THROTTLES[frame.t] ?? 1000;
+                const floor = FRAME_FLOORS[frame.t] ?? 1000;
                 if (at - (lastSeen[frame.t] ?? 0) < floor)
                 {
                     if (at - faultsSince > FAULT_WINDOW_MS)

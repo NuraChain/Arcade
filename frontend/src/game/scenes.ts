@@ -46,9 +46,6 @@ const SCENES: Record<string, () => Promise<Scene>> = {
     }
 };
 
-/** Every game with a scene, for the build gate that checks each one landed in its own lazy chunk. */
-export const SCENE_GAMES: readonly string[] = Object.keys(SCENES);
-
 export function sceneFor(game: string): (() => Promise<Scene>) | null
 {
     return SCENES[game] ?? null;

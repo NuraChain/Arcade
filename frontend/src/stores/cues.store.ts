@@ -1,16 +1,20 @@
 import { createEffect, createRoot, createStore, untrack } from 'azerothjs';
 
 import type { NotificationKind } from '../api.ts';
+import type { Notice } from '../../../backend/src/domains/notify/notices.ts';
 import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
+import { CUE_KEYS, REQUEST_TAG, chatTag, keepWords, rowTag, wordsOf } from '../lib/notice-words.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
+import { keepReach } from '../lib/push.ts';
+import { clearSystem, onWent, tellSystem } from '../lib/system-notice.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useChat } from './chat.store.ts';
 import { useLobby } from './lobby.store.ts';
 import { useLocale } from './locale.store.ts';
 import { useNotifications } from './notifications.store.ts';
 import { usePeople } from './people.store.ts';
-import { useRealtime } from './realtime.store.ts';
+import { useRealtime, type GameFrame } from './realtime.store.ts';
 import { useSettings } from './settings.store.ts';
 import { useSocial } from './social.store.ts';
 import { useToasts } from './toasts.store.ts';
@@ -32,6 +36,8 @@ export interface CuesApi
 }
 
 const SAID_ELSEWHERE: ReadonlySet<NotificationKind> = new Set(['friend-request', 'message']);
+
+const LEADS_NOWHERE: ReadonlySet<NotificationKind> = new Set(['table-removed']);
 
 /**
  * What arrival looks like when nobody is looking at the page it changes.
@@ -57,15 +63,19 @@ export const useCues = createStore((): CuesApi =>
     let chatSeeded = false;
     let chatSeenBusy = false;
 
-    let requestCount = 0;
+    const asked = new Set<string>();
     let requestSeeded = false;
     let requestSeenBusy = false;
 
-    let noticeCount = 0;
+    let noticedAt = 0;
     let noticeSeeded = false;
     let noticeSeenBusy = false;
 
     const begun = new Set<string>();
+
+    const standing = new Map<string, string>();
+
+    const turns = new Map<string, boolean>();
 
     const run = (): (() => void) =>
     {
@@ -80,7 +90,23 @@ export const useCues = createStore((): CuesApi =>
         const settings = useSettings();
         const catalogue = useCatalogue();
 
-        const nameOf = (handle: string) => people.byHandle(handle)?.displayName ?? handle;
+        let running = true;
+
+        const hushed = (notice: Notice, from?: string, thread?: string) => untrack(() =>
+            social.isMuted('notice', notice)
+            || (from !== undefined && social.isMuted('person', from))
+            || (thread !== undefined && social.isMuted('conversation', thread)));
+
+        const named = (handle: string, say: (who: string) => void) =>
+        {
+            void people.want([handle]).then(() =>
+            {
+                if (running)
+                {
+                    say(untrack(() => people.byHandle(handle)?.displayName ?? handle));
+                }
+            });
+        };
 
         /**
          * The chime, imported on first use. The sound engine must not sit in the shell chunk.
@@ -104,17 +130,33 @@ export const useCues = createStore((): CuesApi =>
                 .catch(() => undefined);
         };
 
-        const announceChat = (id: string, from: string) =>
+        const system = (title: string, tag: string, target: string, pushed: boolean) =>
         {
+            const to = untrack(() => (settings.settings().notify ? { lang: locale.locale(), dir: locale.dir() } : null));
+
+            if (to !== null)
+            {
+                void tellSystem({ title, tag, target, pushed, ...to }).catch(() => undefined);
+            }
+        };
+
+        const gameSays = (key: 'notify.turn' | 'quickMatch.started', game: string) =>
+            locale.t(key, { game: locale.t(catalogue.byId(game as GameId).nameKey) });
+
+        const announceChat = (id: string, from: string) => named(from, (who) =>
+        {
+            const text = locale.t(CUE_KEYS.message, { who });
+
             toasts.show({
                 kind: 'live',
                 icon: 'chats',
-                text: locale.t('cue.chatBody', { who: nameOf(from) }),
+                text,
                 action: { label: locale.t('cue.open'), run: () => go.current?.(`/app/chats/${ id }`) },
                 dedupe: `cue.chat.${ id }`
             });
+            system(text, chatTag(id), `/app/chats/${ id }`, true);
             chime();
-        };
+        });
 
         const trackChat = () => createEffect(() =>
         {
@@ -156,7 +198,7 @@ export const useCues = createStore((): CuesApi =>
                 const at = last?.at ?? 0;
                 const arrived = at > (lastAt.get(conversation.id) ?? newest);
 
-                if (arrived && last?.kind === 'text' && last.from !== me && conversation.id !== open && liveNow)
+                if (arrived && last?.kind === 'text' && last.from !== me && conversation.id !== open && liveNow && !hushed('messages', last.from, conversation.id))
                 {
                     announceChat(conversation.id, last.from);
                 }
@@ -179,35 +221,41 @@ export const useCues = createStore((): CuesApi =>
                 return;
             }
 
-            if (!requestSeeded)
+            if (!requestSeeded && !requestSeenBusy)
             {
-                if (!requestSeenBusy)
-                {
-                    return;
-                }
-
-                requestCount = requests.length;
-                requestSeeded = true;
                 return;
             }
 
-            if (requests.length > requestCount && live.status() === 'connected')
+            const arrived = requests.find((request) => !asked.has(request.id));
+
+            for (const request of requests)
             {
-                toasts.show({
-                    kind: 'live',
-                    icon: 'friend-add',
-                    text: locale.t('cue.requestBody', { who: nameOf(requests[requests.length - 1].from) }),
-                    action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends') },
-                    dedupe: 'cue.request'
-                });
-                chime();
+                asked.add(request.id);
             }
-            requestCount = requests.length;
+
+            if (requestSeeded && arrived !== undefined && live.status() === 'connected' && !hushed('requests', arrived.from))
+            {
+                named(arrived.from, (who) =>
+                {
+                    const text = locale.t(CUE_KEYS['friend-request'], { who });
+
+                    toasts.show({
+                        kind: 'live',
+                        icon: 'friend-add',
+                        text,
+                        action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
+                        dedupe: 'cue.request'
+                    });
+                    system(text, REQUEST_TAG, '/app/friends?tab=requests', true);
+                    chime();
+                });
+            }
+            requestSeeded = true;
         }, { name: 'cues.requests' });
 
         const trackNotices = () => createEffect(() =>
         {
-            const unread = notifications.unread();
+            const rows = notifications.latest();
             const busy = notifications.loading();
 
             if (busy)
@@ -216,35 +264,30 @@ export const useCues = createStore((): CuesApi =>
                 return;
             }
 
-            if (!noticeSeeded)
+            if (!noticeSeeded && !noticeSeenBusy)
             {
-                if (!noticeSeenBusy)
-                {
-                    return;
-                }
-
-                noticeCount = unread;
-                noticeSeeded = true;
                 return;
             }
 
-            if (unread > noticeCount && live.status() === 'connected')
-            {
-                const item = notifications.items().find((row) => !row.read);
+            const fresh = rows.filter((row) => !row.read && Date.parse(row.at) > noticedAt);
+            const shown = untrack(() => lobby.openId());
+            const item = fresh.find((row) => !SAID_ELSEWHERE.has(row.kind) && !(row.kind === 'turn' && row.ref.tableId === shown));
 
-                if (item !== undefined && !SAID_ELSEWHERE.has(item.kind))
+            noticedAt = Math.max(noticedAt, ...(noticeSeeded ? fresh : rows).map((row) => Date.parse(row.at)));
+
+            if (noticeSeeded && item !== undefined && live.status() === 'connected')
+            {
+                named(item.actor ?? '', (who) =>
                 {
-                    toasts.show({
-                        kind: 'live',
-                        icon: NOTIFICATION_ICON[item.kind],
-                        text: sayOf(item, nameOf(item.actor ?? ''), locale),
-                        action: { label: locale.t('cue.view'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') },
-                        dedupe: 'cue.notice'
-                    });
+                    const told = { kind: 'live' as const, icon: NOTIFICATION_ICON[item.kind], text: sayOf(item, who, locale) };
+                    const action = { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') };
+
+                    toasts.show(LEADS_NOWHERE.has(item.kind) ? { ...told, dedupe: 'cue.told' } : { ...told, action, dedupe: 'cue.notice' });
+                    system(told.text, rowTag(item), targetOf(item) ?? '/app/notifications', true);
                     chime();
-                }
+                });
             }
-            noticeCount = unread;
+            noticeSeeded = true;
         }, { name: 'cues.notices' });
 
         let untitle: (() => void) | null = null;
@@ -263,6 +306,11 @@ export const useCues = createStore((): CuesApi =>
 
             const write = (total: number) =>
             {
+                if (document.title !== written)
+                {
+                    page = document.title;
+                }
+
                 const own = page === '' ? locale.t('app.title') : page;
 
                 written = total > 0 ? `${ locale.n(total) } · ${ own }` : own;
@@ -277,7 +325,6 @@ export const useCues = createStore((): CuesApi =>
             {
                 if (document.title !== written)
                 {
-                    page = document.title;
                     write(untrack(count));
                 }
             });
@@ -292,38 +339,138 @@ export const useCues = createStore((): CuesApi =>
             };
         };
 
-        const offGame = live.onGame((frame) =>
+        const letGo = (tableId: string) =>
         {
-            const match = frame.match;
+            const id = standing.get(tableId);
 
-            if (match.finishedAt !== undefined || match.mine === undefined || begun.has(match.id))
+            if (id !== undefined)
+            {
+                standing.delete(tableId);
+                toasts.dismiss(id);
+            }
+        };
+
+        const yourTurn = (match: GameFrame['match'], opening: boolean) =>
+        {
+            const table = lobby.listed().find((one) => one.id === match.tableId);
+            const mine = match.finishedAt === undefined && match.mine !== undefined && match.turn === match.mine;
+            const was = turns.get(match.id) ?? (table?.matchId === match.id && table.yourTurn === true);
+
+            if (match.finishedAt !== undefined)
+            {
+                turns.delete(match.id);
+                letGo(match.tableId);
+
+                return;
+            }
+
+            turns.set(match.id, mine);
+
+            if (!mine || was || opening || hushed('turns'))
             {
                 return;
+            }
+
+            const text = gameSays('notify.turn', match.game);
+            const target = `/app/play/${ match.tableId }`;
+
+            system(text, `turn:${ match.tableId }`, target, false);
+
+            if (lobby.openId() !== match.tableId && table?.mode !== 'turns')
+            {
+                toasts.show({ kind: 'live', icon: 'dice', text, action: { label: locale.t('quickMatch.go'), run: () => go.current?.(target) }, dedupe: `cue.turn.${ match.tableId }` });
+                chime();
+            }
+        };
+
+        const started = (match: GameFrame['match']) =>
+        {
+            if (match.finishedAt !== undefined || match.mine === undefined || begun.has(match.id))
+            {
+                return false;
             }
 
             const table = lobby.seated().find((one) => one.id === match.tableId);
 
             if (table === undefined || table.matchId !== undefined)
             {
-                return;
+                return false;
             }
 
             begun.add(match.id);
 
-            if (lobby.openId() === table.id || lobby.finding().includes(table.game as GameId))
+            if (hushed('turns'))
             {
-                return;
+                return true;
             }
 
-            toasts.show({
+            const text = gameSays('quickMatch.started', table.game);
+            const target = `/app/play/${ table.id }`;
+
+            system(text, `table:${ table.id }`, target, false);
+
+            if (lobby.openId() === table.id || lobby.finding().includes(table.game as GameId))
+            {
+                return true;
+            }
+
+            standing.set(table.id, toasts.show({
                 kind: 'live',
                 icon: 'play',
-                text: locale.t('quickMatch.started', { game: locale.t(catalogue.byId(table.game as GameId).nameKey) }),
-                action: { label: locale.t('quickMatch.go'), run: () => go.current?.(`/app/play/${ table.id }`) },
-                dedupe: `cue.started.${ table.id }`
-            });
+                text,
+                action: { label: locale.t('quickMatch.go'), run: () => go.current?.(target) },
+                dedupe: `cue.started.${ table.id }`,
+                duration: Infinity
+            }));
             chime();
+
+            return true;
+        };
+
+        const offGame = live.onGame((frame) =>
+        {
+            yourTurn(frame.match, started(frame.match));
         });
+
+        const offWent = onWent((to) => go.current?.(to));
+
+        void keepReach(untrack(() => settings.settings().notify)).catch(() => undefined);
+
+        const back = () =>
+        {
+            if (document.visibilityState === 'visible')
+            {
+                void clearSystem().catch(() => undefined);
+            }
+        };
+
+        if (typeof document !== 'undefined')
+        {
+            document.addEventListener('visibilitychange', back);
+            back();
+        }
+
+        const trackStarted = () => createEffect(() =>
+        {
+            const open = lobby.openId();
+            const seated = lobby.seated();
+
+            for (const tableId of [...standing.keys()])
+            {
+                if (tableId === open || !seated.some((one) => one.id === tableId))
+                {
+                    letGo(tableId);
+                }
+            }
+        }, { name: 'cues.started' });
+
+        const trackWords = () => createEffect(() =>
+        {
+            if (settings.settings().notify)
+            {
+                void keepWords(wordsOf(locale.locale())).catch(() => undefined);
+            }
+        }, { name: 'cues.words' });
 
         const end = createRoot((dispose) =>
         {
@@ -331,16 +478,25 @@ export const useCues = createStore((): CuesApi =>
             trackRequests();
             trackNotices();
             trackTitle();
+            trackWords();
+            trackStarted();
 
             return dispose;
         });
 
         return () =>
         {
+            running = false;
             end();
             offGame();
+            offWent();
             sound?.dispose();
             untitle?.();
+
+            if (typeof document !== 'undefined')
+            {
+                document.removeEventListener('visibilitychange', back);
+            }
         };
     };
 
@@ -372,13 +528,15 @@ export const useCues = createStore((): CuesApi =>
             newest = 0;
             chatSeeded = false;
             chatSeenBusy = false;
-            requestCount = 0;
+            asked.clear();
             requestSeeded = false;
             requestSeenBusy = false;
-            noticeCount = 0;
+            noticedAt = 0;
             noticeSeeded = false;
             noticeSeenBusy = false;
             begun.clear();
+            standing.clear();
+            turns.clear();
         },
 
         navigateTo(navigate)

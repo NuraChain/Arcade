@@ -6,7 +6,7 @@ import { HAPTIC_GAP_MS, haptic, hapticsAllowed, resetHaptics, setHaptics } from 
 import { attachHold } from '../src/lib/hold.ts';
 import { createLongPress } from '../src/lib/press.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { detents, nearestIndex, projected, settleIndex, stepAlong } from '../src/lib/snap.ts';
+import { nearestIndex, projected, settleIndex, stepAlong } from '../src/lib/snap.ts';
 import { createDrag } from '../src/lib/swipe.ts';
 
 let clock: ManualClock;
@@ -48,11 +48,6 @@ describe('snap maths', () =>
         expect(settleIndex(60, 0, points)).toBe(0);
         expect(settleIndex(60, 1.6, points)).toBe(1);
         expect(settleIndex(220, 1.6, points)).toBe(2);
-    });
-
-    it('turns fractions of a panel into pixel offsets measured from the top', () =>
-    {
-        expect(detents(400, [1, 0.5, 0])).toEqual([0, 200, 400]);
     });
 
     it('steps a rail by a page and stops at both ends', () =>
@@ -311,6 +306,53 @@ describe('page gestures', () =>
         touch(page, 'touchmove', 180, 300);
         touch(page, 'touchend', 180, 300);
         expect(back).toHaveBeenCalledTimes(2);
+        release();
+    });
+
+    it('leaves a touch alone when it starts on something that takes drags of its own', () =>
+    {
+        const page = document.createElement('div');
+        const board = document.createElement('div');
+        const piece = document.createElement('span');
+
+        Object.defineProperty(page, 'clientWidth', { value: 400, configurable: true });
+        board.append(piece);
+        page.append(board);
+        document.body.append(page);
+
+        const back = vi.fn();
+        const refresh = vi.fn();
+        const slides: number[] = [];
+        const pulls: number[] = [];
+        const release = attachGestures(page, {
+            rtl: () => false,
+            back,
+            refresh,
+            onSlide: (distance) => slides.push(distance),
+            onPull: (distance) => pulls.push(distance)
+        });
+
+        board.setAttribute('data-drags', 'true');
+        touch(piece, 'touchstart', 8, 300);
+        touch(piece, 'touchmove', 220, 300);
+        touch(piece, 'touchend', 220, 300);
+
+        expect(back, 'carrying a piece away from the edge of the screen left the page').not.toHaveBeenCalled();
+        expect(slides.some((distance) => distance > 0), 'the page slid under a piece that was being carried').toBe(false);
+
+        touch(piece, 'touchstart', 100, 100);
+        touch(piece, 'touchmove', 100, 300);
+        touch(piece, 'touchend', 100, 300);
+
+        expect(refresh, 'carrying a piece down the board refreshed the page').not.toHaveBeenCalled();
+        expect(pulls.some((distance) => distance > 0)).toBe(false);
+
+        board.removeAttribute('data-drags');
+        touch(piece, 'touchstart', 8, 300);
+        touch(piece, 'touchmove', 220, 300);
+        touch(piece, 'touchend', 220, 300);
+
+        expect(back).toHaveBeenCalledTimes(1);
         release();
     });
 });

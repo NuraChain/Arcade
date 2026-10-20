@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
@@ -15,13 +15,19 @@ import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
-import { isNotice, NOTICE_OF } from './domains/notify/notices.ts';
+import { isNotice, NOTICE_OF, type Notice } from './domains/notify/notices.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
-import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
+import { WATCH_DELAY_MS, WATCH_TAIL } from './domains/match/turns.ts';
+import { createWatchService } from './domains/match/watch.ts';
+import { createParties, type PartyWhy } from './domains/party/parties.ts';
+import { partyRefused } from './domains/party/refusal.ts';
+import { createRegistry } from './domains/party/registry.ts';
 import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
+import { strikes } from './domains/table/sweep.ts';
+import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -45,6 +51,7 @@ import type {
     PersonSummary,
     MatchPlay,
     MatchView,
+    Pulse,
     TableSummary
 } from './schemas.ts';
 import { matchView } from './schemas.ts';
@@ -67,12 +74,13 @@ export interface WriteListener
     chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
-    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
+    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party'): void;
     gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
     gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
+    seen(userId: string): void;
 }
 
 export interface PresenceReader
@@ -93,12 +101,26 @@ export interface TurnSweep
     stuck: { matchId: string; game: string; reason: string }[];
 }
 
+export interface TableSweep
+{
+    stoodUp: number;
+    closed: number;
+    failed: { tableId: string; reason: string }[];
+}
+
+export type Note = (event: string, fields: Record<string, unknown>) => void;
+
 export interface Services extends Ports
 {
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
+        sweepTables(): Promise<TableSweep>;
+        waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
+        otherServers(): Promise<number>;
         tidy(): Promise<Record<string, number>>;
     };
+
+    pulse(): Promise<Pulse>;
 }
 
 const TURN_TTL_SECONDS = 3600;
@@ -107,7 +129,9 @@ const PUSH_AT_ONCE = 64;
 
 const WATCHABLE_MAX = 48;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader): Services
+const WAITING_SEATS = 500;
+
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note): Services
 {
     const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
 
@@ -122,6 +146,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const group = createGroupService(db, social);
     const achieve = createAchieveService(db);
     const table = createTableService(db, social);
+    const catalogue = createCatalogueService(db);
     const notify = createNotifyService(db, social);
 
     /**
@@ -189,8 +214,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const retract = async (userId: string, kind: Notification['kind'], dedupeKey: string) =>
     {
-        await notify.retract(userId, kind, dedupeKey);
-        live?.selfChanged(userId, 'notifications');
+        if (await notify.retract(userId, kind, dedupeKey))
+        {
+            live?.selfChanged(userId, 'notifications');
+        }
     };
 
     const asNotification = (row: NotificationRow) =>
@@ -219,17 +246,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const encodeCursor = (at: Date, id: string) =>
         Buffer.from(`${ at.toISOString() }|${ id }`, 'utf8').toString('base64url');
 
-    const decodeCursor = (cursor: string | undefined): { at: Date; id: string } | null =>
-    {
-        if (cursor === undefined || cursor === '')
-        {
-            return null;
-        }
-        const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-        const when = new Date(at ?? '');
-        return id === undefined || Number.isNaN(when.getTime()) ? null : { at: when, id };
-    };
-
     const LIST_CURSOR = /^([0-9T:.\-Z]*)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
     const listCursorOf = (row: { last_at: Date | null; id: string }) =>
@@ -247,6 +263,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         const at = found[1] === '' ? null : new Date(found[1]);
 
         return at !== null && Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
+    };
+
+    const decodeCursor = (cursor: string | undefined) =>
+    {
+        const found = listAfter(cursor);
+
+        return found === null || found.at === null ? null : { at: found.at, id: found.id };
     };
 
     const asMessage = (row: MessageRow) =>
@@ -589,9 +612,25 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.matchId = row.match_id;
         }
+        if (row.last_match_id !== null)
+        {
+            summary.lastMatchId = row.last_match_id;
+        }
         if (row.room_id !== null)
         {
             summary.roomId = row.room_id;
+        }
+        if (row.removed)
+        {
+            summary.removed = true;
+        }
+        if (row.quick)
+        {
+            summary.quick = true;
+        }
+        if (row.kept_out.length > 0)
+        {
+            summary.keptOut = row.kept_out;
         }
         return summary;
     };
@@ -718,13 +757,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             return;
         }
 
-        live.gamePushed(found.load.players.map((row) => ({
+        const playing = found.load.match.finishedAt === null
+            ? found.load.players.filter((row) => row.result === null)
+            : found.load.players;
+
+        live.gamePushed(playing.map((row) => ({
             userId: row.user_id,
             match: shipped(asMatch({ ...found.load, mine: row.seat })),
             events: logged(found.events(row.seat))
         })));
 
-        live.gameWatched(found.load.match.tableId, matchId, WATCH_DELAY_MS + 1000, found.load.players.map((row) => row.user_id));
+        live.gameWatched(found.load.match.tableId, matchId, WATCH_DELAY_MS + 1000, playing.map((row) => row.user_id));
     };
 
     /**
@@ -746,6 +789,71 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             process.stderr.write(`${ what } failed: ${ error instanceof Error ? error.message : String(error) }\n`);
         });
+
+    const party = createParties({
+        registry: createRegistry({
+            now: () => Date.now(),
+
+            after(ms, run)
+            {
+                const timer = setTimeout(run, ms);
+
+                timer.unref();
+
+                return () => clearTimeout(timer);
+            },
+
+            ring: (userIds) => void courtesy('party ring', async () =>
+            {
+                for (const userId of userIds)
+                {
+                    live?.selfChanged(userId, 'party');
+                }
+            }),
+
+            id: randomUUID
+        }),
+
+        person: async (handle) => (await social.personByHandle(handle))?.id ?? null,
+
+        handles: (userIds) => social.handlesOf(userIds),
+
+        async reaches(a, b)
+        {
+            try
+            {
+                const [there, back] = await Promise.all([social.mayMessage(a, b), social.mayMessage(b, a)]);
+
+                return there === null && back === null;
+            }
+            catch (error)
+            {
+                if (error instanceof NotFoundError)
+                {
+                    return false;
+                }
+
+                throw error;
+            }
+        },
+
+        muted: (userId, by, game) => social.hasMuted(userId, [
+            { kind: 'person', id: by },
+            { kind: 'notice', id: 'invites' satisfies Notice },
+            { kind: 'game', id: game }
+        ]),
+
+        teamGame: async (game) => (await catalogue.games()).games.some((row) =>
+            row.id === game && row.status === 'available' && row.rules.seats.includes(4) && teamsOf(row.rules.partners, 4, true))
+    });
+
+    const teamed = (answer: { ok: true } | { ok: false; why: PartyWhy }) =>
+    {
+        if (!answer.ok)
+        {
+            throw partyRefused(answer.why);
+        }
+    };
 
     const startPushed = async (me: string, tableId: string) =>
     {
@@ -792,11 +900,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      */
     const nudgeTurn = async (load: MatchLoad, actor: string | null) =>
     {
-        if (load.match.finishedAt !== null)
-        {
-            return;
-        }
-
         const room = await table.roomOf(load.match.tableId);
 
         if (room === null || room.mode !== 'turns')
@@ -804,8 +907,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             return;
         }
 
-        const seat = match.turnOf(load.match.game, load.state);
+        const key = `turn:${ load.match.id }`;
+        const seat = load.match.finishedAt === null ? match.turnOf(load.match.game, load.state) : null;
         const next = load.players.find((one) => one.seat === seat);
+
+        for (const one of load.players)
+        {
+            if (one.user_id !== next?.user_id)
+            {
+                await retract(one.user_id, 'turn', key);
+            }
+        }
 
         if (next === undefined || next.user_id === actor)
         {
@@ -816,8 +928,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             userId: next.user_id,
             kind: 'turn',
             actorId: null,
-            ref: { tableId: load.match.tableId },
-            dedupeKey: `turn:${ load.match.id }`
+            ref: { tableId: load.match.tableId, game: load.match.game },
+            dedupeKey: key
         });
     };
 
@@ -835,12 +947,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         if (answer.applied === 'now')
         {
             await courtesy('game push', () => pushMatch(matchId, answer.before));
+            await courtesy('turn notice', () => nudgeTurn(answer.load, me));
 
-            if (answer.load.match.finishedAt === null)
-            {
-                await courtesy('turn notice', () => nudgeTurn(answer.load, me));
-            }
-            else
+            if (answer.load.match.finishedAt !== null)
             {
                 await courtesy('result line', () => declareResult(matchId));
                 live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
@@ -849,7 +958,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
         const since = want.rev === undefined ? null : await match.since(me, matchId, want.rev);
 
-        return { match: asMatch(answer.load), applied: answer.applied, events: since === null ? [] : logged(since.events) };
+        return { match: asMatch(await match.shownTo(answer.load)), applied: answer.applied, events: since === null ? [] : logged(since.events) };
     };
 
     const TIDY: Record<string, string> = {
@@ -860,6 +969,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                        or revoked_at < now() - interval '30 days'`,
         pushes: `delete from push_subscriptions where failed_at is not null`
     };
+
+    const otherServers = async () =>
+        (await db.query<{ others: number }[]>(
+            `select count(distinct application_name)::int as others
+               from pg_stat_activity
+              where datname = current_database()
+                and application_name like 'nura-games %'
+                and application_name <> current_setting('application_name')`
+        ))[0].others;
 
     const tidy = async () =>
     {
@@ -904,11 +1022,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 continue;
             }
 
-            if (load.match.finishedAt === null)
-            {
-                await courtesy('turn notice', () => nudgeTurn(load, null));
-            }
-            else
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+
+            if (load.match.finishedAt !== null)
             {
                 await courtesy('result line', () => declareResult(expired.matchId));
                 live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
@@ -916,6 +1032,49 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
 
         return { played, stuck };
+    };
+
+    let struck: ReadonlySet<string> = new Set<string>();
+
+    const sweepTables = async (): Promise<TableSweep> =>
+    {
+        const waiting = await table.waitingSeats(WAITING_SEATS);
+        const around = here(waiting.map((seat) => seat.userId));
+        const { vacate, next } = strikes(struck, waiting.filter((seat) => !around.has(seat.userId)));
+        const failed: TableSweep['failed'] = [];
+        let stoodUp = 0;
+        let closed = 0;
+
+        struck = next;
+
+        for (const seat of vacate)
+        {
+            const gone = await table.vacate(seat.tableId, seat.userId, here).catch((error: unknown) =>
+            {
+                failed.push({ tableId: seat.tableId, reason: error instanceof Error ? error.message : String(error) });
+
+                return null;
+            });
+
+            if (gone === null)
+            {
+                continue;
+            }
+
+            stoodUp += 1;
+            closed += gone.closed ? 1 : 0;
+
+            await courtesy('table ring', async () =>
+            {
+                if (gone.conversationId !== null)
+                {
+                    live?.chatChanged(gone.conversationId, seat.userId);
+                }
+                live?.tableChanged(seat.tableId, [...await table.peopleAt(seat.tableId), seat.userId]);
+            });
+        }
+
+        return { stoodUp, closed, failed };
     };
 
     const peers = createPeerDevices(db);
@@ -1012,7 +1171,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 member = {
                     accountId: row.account_id,
                     handle: row.handle,
-                    kind: row.kind,
                     ...(row.wallet_address === null ? {} : { address: row.wallet_address }),
                     devices: []
                 };
@@ -1085,7 +1243,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         bio: string;
         avatar: string | null;
         hue: number;
-        kind: 'wallet' | 'guest';
         is_minor: boolean;
         address: string | null;
         created_at: Date;
@@ -1096,7 +1253,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         bio: row.bio,
         ...(row.avatar === null ? {} : { avatar: row.avatar }),
         hue: row.hue,
-        kind: row.kind,
         isMinor: row.is_minor,
         joinedAt: row.created_at.toISOString(),
         address: row.address ?? undefined,
@@ -1134,13 +1290,20 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, tidy },
+        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), otherServers, tidy },
+
+        async pulse()
+        {
+            const [counts, watching] = await Promise.all([catalogue.live(), table.watchingMark()]);
+
+            return { games: counts.games, watching };
+        },
 
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: config.env })
         },
 
-        catalogue: createCatalogueService(db),
+        catalogue,
 
         identity: {
             secureCookies,
@@ -1148,7 +1311,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async principal(request)
             {
                 const token = readSessionToken(request, secureCookies);
-                return token === null ? null : identity.principalFor(token);
+                const who = token === null ? null : await identity.principalFor(token);
+
+                if (who !== null)
+                {
+                    live?.seen(who.userId);
+                }
+
+                return who;
             },
 
             async me(userId)
@@ -1192,13 +1362,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { token: result.token, account: present(row!) };
             },
 
-            async signInAsGuest(input)
-            {
-                const result = await identity.signInAsGuest(input);
-                const row = await identity.profileFor(result.principal.userId);
-                return { token: result.token, account: present(row!) };
-            },
-
             async signOut(sessionId)
             {
                 await identity.signOut(sessionId);
@@ -1209,6 +1372,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const ended = await identity.signOutEverywhere(userId);
 
+                await courtesy('letting go of push subscriptions', () => notify.forgetReach(userId));
                 live?.sessionsRevoked(ended);
                 return ended.length;
             },
@@ -1405,6 +1569,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return people.map((row) => seenBy(viewer, row, friends.has(row.id) ? 'friend' : 'none'));
             },
 
+            async search(me, asked, limit)
+            {
+                const viewer = await social.person(me);
+                if (viewer === null)
+                {
+                    return [];
+                }
+                const people = await social.search(me, asked, limit);
+                const friends = new Set((await social.friends(me)).map((row) => row.id));
+                return people.map((row) => seenBy(viewer, row, friends.has(row.id) ? 'friend' : 'none'));
+            },
+
             async suggestions(me, limit)
             {
                 const viewer = await social.person(me);
@@ -1485,6 +1661,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const asker = await social.requesterOf(me, requestId);
                 await social.answerRequest(me, requestId, outcome);
+                await courtesy('party revalidate', () => party.revalidate(me));
 
                 // Only an acceptance is worth telling somebody about. A decline that announced
                 // itself would be a product that makes saying no cost something.
@@ -1529,6 +1706,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.removeFriend(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me, other);
             },
 
@@ -1536,6 +1714,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.block(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 await retract(other, 'friend-request', `friend:${ me }`);
                 await retract(me, 'friend-request', `friend:${ other }`);
                 live?.edgesChanged(me, other);
@@ -1546,6 +1725,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.unblock(me, other);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me, other);
                 await ringShared(me, other);
             },
@@ -1671,6 +1851,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async setPrivacy(me, wanted)
             {
                 const row = await social.setPrivacy(me, wanted);
+                await courtesy('party revalidate', () => party.revalidate(me));
                 live?.edgesChanged(me);
                 return {
                     allowStrangerMessages: row.allow_stranger_messages,
@@ -1844,8 +2025,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         table: {
             async quick(me, input)
             {
-                const found = await table.quick(me, input, here);
+                const began = performance.now();
+                const found = await table.quick(me, input, here, (tx) => match.playingAt(tx, me)).catch((error: unknown) =>
+                {
+                    note?.('quick play refused', { game: input.game, who: me, code: (error as { code?: string }).code ?? 'error' });
+
+                    throw error;
+                });
                 let after = await mustTable(me, found.id);
+                const outcome = found.seated ? (after.is_host ? 'opened' : 'joined') : after.match_id === null ? 'already waiting' : 'already playing';
 
                 if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
                 {
@@ -1861,6 +2049,33 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 if (found.seated)
                 {
                     await ringTable(after);
+                }
+
+                note?.('quick play', {
+                    game: after.game,
+                    who: me,
+                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams },
+                    outcome,
+                    table: after.id,
+                    match: after.match_id,
+                    taken: after.taken,
+                    seats: after.seats,
+                    away: found.passed?.away ?? 0,
+                    missed: found.passed?.missed ?? 0,
+                    letGo: found.left?.length ?? 0,
+                    ms: Math.round(performance.now() - began)
+                });
+
+                for (const gone of found.left ?? [])
+                {
+                    await courtesy('table ring', async () =>
+                    {
+                        if (gone.conversationId !== null)
+                        {
+                            live?.chatChanged(gone.conversationId, me);
+                        }
+                        live?.tableChanged(gone.tableId, [...await table.peopleAt(gone.tableId), me]);
+                    });
                 }
 
                 return asTable(after);
@@ -1970,11 +2185,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                     const load = await match.peek(walked.matchId);
 
-                    if (load !== null && load.match.finishedAt === null)
+                    if (load !== null)
                     {
                         await courtesy('turn notice', () => nudgeTurn(load, me));
                     }
-                    else if (load !== null)
+
+                    if (load !== null && load.match.finishedAt !== null)
                     {
                         await courtesy('result line', () => declareResult(walked.matchId));
                     }
@@ -2041,6 +2257,31 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return asTable(after);
             },
 
+            async remove(me, tableId, handle)
+            {
+                const gone = await table.remove(me, tableId, handle);
+                const after = await mustTable(me, tableId);
+
+                await courtesy('table ring', async () =>
+                {
+                    if (gone.conversationId !== null)
+                    {
+                        live?.chatChanged(gone.conversationId, gone.userId);
+                    }
+                    live?.tableChanged(after.id, [...await table.peopleAt(after.id), gone.userId]);
+                });
+
+                await courtesy('removal notice', () => tell({
+                    userId: gone.userId,
+                    kind: 'table-removed',
+                    actorId: me,
+                    ref: { tableId: after.id, game: after.game },
+                    dedupeKey: `removed:${ after.id }`
+                }));
+
+                return asTable(after);
+            },
+
             async close(me, tableId)
             {
                 const before = await mustTable(me, tableId);
@@ -2064,6 +2305,34 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             }
         },
 
+        party: {
+            state: (me) => party.state(me),
+
+            async invite(me, handle, game)
+            {
+                teamed(await party.invite(me, handle, game));
+
+                return party.state(me);
+            },
+
+            async accept(me, partyId)
+            {
+                teamed(await party.accept(me, partyId));
+
+                return party.state(me);
+            },
+
+            async decline(me, partyId)
+            {
+                teamed(party.decline(me, partyId));
+            },
+
+            async leave(me, partyId)
+            {
+                teamed(party.leave(me, partyId));
+            }
+        },
+
         match: {
             view: async (me, matchId) =>
             {
@@ -2084,7 +2353,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { match: asMatch(found.load), events: logged(found.events) };
             },
 
-            start: async (me, tableId) => asMatch(await startPushed(me, tableId)),
+            start: async (me, tableId) =>
+            {
+                const load = await startPushed(me, tableId);
+
+                await courtesy('turn notice', () => nudgeTurn(load, me));
+
+                return asMatch(await match.shownTo(load));
+            },
 
             play: async (me, matchId, input) =>
                 await played(me, matchId, { play: input.play, key: input.key, rev: input.rev }),
@@ -2098,7 +2374,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             leaderboard: (game, window, after) => achieve.leaderboardOf(game, window, after),
 
-            async watch(me, matchId)
+            async watch(me, matchId, rev)
             {
                 const found = await watch.delayed(matchId);
 
@@ -2121,7 +2397,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
+                const shown = found.load.match.rev;
+                const from = rev === null || !Number.isFinite(rev) ? shown : Math.min(Math.max(Math.trunc(rev), 0), shown);
+                const events = shown - from > WATCH_TAIL ? [] : await match.told(found.load, from);
+
+                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live, events: logged(events) };
             },
 
             async watchable(me, game)

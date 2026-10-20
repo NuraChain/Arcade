@@ -7,6 +7,7 @@ export interface PaintOptions
     mine: boolean;
     reserve?: string;
     dir?: 'ltr' | 'rtl';
+    open?: (handle: string) => void;
 }
 
 const JUMBO_MAX = 3;
@@ -98,6 +99,22 @@ function inlineNodes(nodes: readonly Inline[], options: PaintOptions): Node[]
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer nofollow ugc';
                 link.dir = 'ltr';
+                return link;
+            }
+            case 'mention':
+            {
+                const link = element('a', options.mine ? 'font-semibold underline underline-offset-2' : 'font-semibold text-accent underline-offset-2 hover:underline', [document.createTextNode(node.v)]);
+                const handle = node.handle;
+                link.href = `/app/people/${ encodeURIComponent(handle) }`;
+                link.dir = 'ltr';
+                link.addEventListener('click', (event) =>
+                {
+                    if (options.open !== undefined && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey)
+                    {
+                        event.preventDefault();
+                        options.open(handle);
+                    }
+                });
                 return link;
             }
             case 'b':

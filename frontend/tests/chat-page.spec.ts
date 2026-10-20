@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import ChatPage from '../src/pages/app/chat.page.azeroth';
@@ -11,6 +11,7 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
@@ -18,6 +19,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
+import { PEOPLE_FIXTURES } from './fixtures.ts';
 
 type Rendered = HTMLElement;
 
@@ -53,7 +55,7 @@ beforeEach(() =>
     server.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, isMinor: false });
     useRealtime().reset();
     socket.reset();
     useRealtime().start();
@@ -73,6 +75,80 @@ afterEach(() =>
     useChat().reset();
     useRealtime().reset();
     cleanup();
+});
+
+describe('a line that arrives in the thread on screen', () =>
+{
+    const hold = () =>
+    {
+        const row = server.conversations.find((one) => one.last !== undefined && one.last.kind === 'text' && one.last.from !== 'alex')!;
+        const line = server.messages.find((one) => one.id === row.last!.id)!;
+
+        server.messages = server.messages.filter((one) => one.id !== line.id);
+        row.last = server.messages.filter((one) => one.conversationId === row.id).at(-1);
+        row.unread = 0;
+
+        return { row, line };
+    };
+
+    const arrives = async ({ row, line }: ReturnType<typeof hold>) =>
+    {
+        server.messages.push(line);
+        row.last = line;
+        row.unread = 1;
+        await useChat().refresh();
+        await settle();
+    };
+
+    const reads = () => server.calls.filter((one) => one === 'chat.read').length;
+
+    const looking = (shown: boolean) =>
+    {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') });
+        document.dispatchEvent(new Event('visibilitychange'));
+    };
+
+    afterEach(() =>
+    {
+        Reflect.deleteProperty(document, 'visibilityState');
+    });
+
+    it('is read when it lands in the thread the reader has open, and the thread is read once on opening', async () =>
+    {
+        const held = hold();
+        const container = opened(held.row.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelectorAll('[data-message]').length).toBeGreaterThan(0), { timeout: 4000 });
+        await settle();
+
+        expect(reads(), 'opening the thread reads it, once').toBe(1);
+
+        await arrives(held);
+
+        await vi.waitFor(() => expect(container.querySelector(`[data-message="${ held.line.id }"]`)).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(reads(), 'the line on screen was left unread').toBe(2), { timeout: 4000 });
+        await vi.waitFor(() => expect(useChat().unread(held.row.id)).toBe(0), { timeout: 4000 });
+    });
+
+    it('waits until a page nobody is looking at is seen again', async () =>
+    {
+        const held = hold();
+        const container = opened(held.row.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelectorAll('[data-message]').length).toBeGreaterThan(0), { timeout: 4000 });
+        await settle();
+
+        looking(false);
+        await arrives(held);
+        await vi.waitFor(() => expect(container.querySelector(`[data-message="${ held.line.id }"]`)).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        expect(reads(), 'a hidden page read the line nobody saw').toBe(1);
+
+        looking(true);
+
+        await vi.waitFor(() => expect(reads(), 'seen again, the line stayed unread').toBe(2), { timeout: 4000 });
+    });
 });
 
 describe('a thread that is read again', () =>
@@ -101,6 +177,46 @@ describe('a thread that is read again', () =>
 
         expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
         expect(lost(container, drawn), 'drawn again for the answer it already had').toEqual([]);
+    });
+
+    it('names the button over a thread with one other person after that person', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const other = PEOPLE_FIXTURES.find((one) => one.handle === thread.members.find((handle) => handle !== 'alex'))!;
+        const container = opened(thread.id, 'sidebar');
+        const about = () => [...container.querySelectorAll('header button')].find((one) => one.getAttribute('aria-label') === useLocale().t('actions.about', { name: other.displayName }));
+
+        await vi.waitFor(() => expect(about(), `the header offers what can be done about ${ other.displayName } by name`).toBeDefined(), { timeout: 4000 });
+
+        expect([...container.querySelectorAll('header button')].filter((one) => one.getAttribute('aria-label') === useLocale().t('actions.title')), 'the header has a button named just "More"').toEqual([]);
+    });
+
+    it('opens what can be done with the other person of a thread at a press on their picture', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const other = thread.members.find((handle) => handle !== 'alex')!;
+        const container = opened(thread.id, 'sidebar');
+        const picture = () => container.querySelector<HTMLButtonElement>('header button[aria-haspopup="dialog"]');
+
+        useOverlay().reset();
+
+        await vi.waitFor(() => expect(picture()?.querySelector('[role="img"]') ?? null).not.toBeNull(), { timeout: 4000 });
+
+        expect(container.querySelector('header a[href^="/app/people/"]'), 'the picture is still a link to their page').toBeNull();
+
+        fire(picture()!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({ personId: other });
+        useOverlay().reset();
+
+        fire([...container.querySelectorAll<HTMLButtonElement>('header button')].find((one) => one.getAttribute('aria-label')?.startsWith('More about'))!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props, 'the More beside the picture opens something else').toMatchObject({ personId: other });
+        useOverlay().reset();
     });
 
     it('keeps the picture and the words of a thread nobody has written in', async () =>

@@ -1,19 +1,13 @@
 import 'reflect-metadata';
+import './env-file.ts';
+
+import { randomUUID } from 'node:crypto';
 
 import { DataSource } from 'typeorm';
 
+import { POOL_MAX } from './env.ts';
 import { entities } from './entities/index.ts';
 import { oneAtATime } from './lib/one-at-a-time.ts';
-
-// The TypeORM CLI never goes through main.ts, so it loads the environment itself.
-try
-{
-    process.loadEnvFile(new URL('../.env', import.meta.url));
-}
-catch (error)
-{
-    throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.', { cause: error });
-}
 
 /**
  * The single DataSource export. `CommandUtils.loadDataSource` errors on zero or two, and the
@@ -30,11 +24,12 @@ export const dataSource = new DataSource({
     url: process.env.DATABASE_URL,
     uuidExtension: 'pgcrypto',
     entities,
+    applicationName: `nura-games ${ randomUUID().slice(0, 8) }`,
 
     synchronize: false,
 
     extra: {
-        max: Math.max(1, Number.parseInt(process.env.DATABASE_POOL_MAX ?? '', 10)),
+        max: Math.max(1, Number.parseInt(process.env.DATABASE_POOL_MAX ?? '', 10) || POOL_MAX),
         connectionTimeoutMillis: 5000,
         idleTimeoutMillis: 30_000,
         statement_timeout: 30_000

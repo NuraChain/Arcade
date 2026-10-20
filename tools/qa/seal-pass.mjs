@@ -144,13 +144,13 @@ for (const size of SIZES)
         // ---------------------------------------------------------- sign in
         await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
 
-        await page.getByRole('button', { name: /^(Connect|اتصال)/ }).first().click();
+        await page.getByRole('button', { name: /^(Connect|وصل)/ }).first().click();
         await page.waitForURL(/\/app/, { timeout: 30_000 });
 
         // ---------------------------------------------------------- enrol
         await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
 
-        const enrol = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+        const enrol = page.getByRole('button', { name: /^(Connect wallet|وصل کردن کیف پول)$/ }).first();
 
         if (await enrol.count() > 0)
         {
@@ -205,7 +205,7 @@ for (const size of SIZES)
 
             await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
 
-            const again = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+            const again = page.getByRole('button', { name: /^(Connect wallet|وصل کردن کیف پول)$/ }).first();
 
 
 
@@ -222,7 +222,7 @@ for (const size of SIZES)
             if (await field.count() > 0)
             {
                 await field.fill(phrase);
-                await page.getByRole('button', { name: /Confirm with the phrase|تأیید با عبارت/ }).first().click();
+                await page.getByRole('button', { name: /Restore with the phrase|برگردوندن با عبارت/ }).first().click();
                 await page.waitForTimeout(8000);
                 await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
                 await page.waitForTimeout(800);
@@ -230,7 +230,7 @@ for (const size of SIZES)
 
             const panel = await page.locator('main').innerText();
 
-            recovered = /This browser is set up|این مرورگر آماده است/.test(panel)
+            recovered = /This browser is set up|این مرورگر آماده‌ست/.test(panel)
                 ? 'confirmed'
                 : 'STILL WAITING';
         }

@@ -54,7 +54,6 @@ import {
     groupEditInput,
     groupList,
     groupSummary,
-    guestSignIn,
     account,
     avatarInput,
     avatarResult,
@@ -65,6 +64,7 @@ import {
     muteInput,
     notificationPage,
     namesQuery,
+    peopleQuery,
     personList,
     pinInput,
     personRef,
@@ -102,9 +102,11 @@ import {
     matchActionInput,
     matchPlayInput,
     historyQuery,
-    sinceQuery
+    sinceQuery,
+    partyInput,
+    partyState
 } from './schemas.ts';
-import { NAMES_MAX } from './domains/social/names.ts';
+import { NAMES_MAX, PEOPLE_FOUND_MAX } from './domains/social/names.ts';
 
 /**
  * The whole API, declared once.
@@ -220,23 +222,6 @@ export function buildApi(ports: Ports)
                         providerRdns: context.input.providerRdns,
                         userAgent: context.request.headers.get('user-agent') ?? '',
                         device: context.input.device
-                    });
-
-                    return reply(200, { account: established.account }, {
-                        'set-cookie': sessionCookie(established.token, ports.identity.secureCookies)
-                    });
-                }
-            ),
-
-            /** The guest path: a typed name and no proof. The actual onboarding for most people. */
-            guest: routes.post(
-                '/guest',
-                { input: guestSignIn, output: sessionState },
-                async (context) =>
-                {
-                    const established = await ports.identity.signInAsGuest({
-                        name: context.input.name,
-                        userAgent: context.request.headers.get('user-agent') ?? ''
                     });
 
                     return reply(200, { account: established.account }, {
@@ -362,6 +347,10 @@ export function buildApi(ports: Ports)
 
             people: routes.get('/people', { output: personList }, async (context) => ({
                 people: await ports.social.directory(context.principal.userId, 60)
+            })),
+
+            search: routes.get('/search', { output: personList, query: peopleQuery }, async (context) => ({
+                people: await ports.social.search(context.principal.userId, context.query.q, PEOPLE_FOUND_MAX)
             })),
 
             /**
@@ -640,6 +629,9 @@ export function buildApi(ports: Ports)
             invite: routes.post('/:id/invite', { input: personRef, output: tableSummary },
                 (context) => ports.table.invite(context.principal.userId, context.params.id, context.input.id)),
 
+            remove: routes.post('/:id/remove', { input: personRef, output: tableSummary },
+                (context) => ports.table.remove(context.principal.userId, context.params.id, context.input.id)),
+
             close: routes.post('/:id/close', { output: ack }, async (context) =>
             {
                 await ports.table.close(context.principal.userId, context.params.id);
@@ -660,6 +652,28 @@ export function buildApi(ports: Ports)
              */
             start: routes.post('/:id/start', { output: matchView },
                 (context) => ports.match.start(context.principal.userId, context.params.id))
+        })),
+
+        parties: feature('/parties', [session], (routes) => ({
+            state: routes.get('/', { output: partyState }, (context) => ports.party.state(context.principal.userId)),
+
+            invite: routes.post('/', { input: partyInput, output: partyState },
+                (context) => ports.party.invite(context.principal.userId, context.input.id, context.input.game)),
+
+            accept: routes.post('/:id/accept', { output: partyState },
+                (context) => ports.party.accept(context.principal.userId, context.params.id)),
+
+            decline: routes.post('/:id/decline', { output: ack }, async (context) =>
+            {
+                await ports.party.decline(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            leave: routes.post('/:id/leave', { output: ack }, async (context) =>
+            {
+                await ports.party.leave(context.principal.userId, context.params.id);
+                return { ok: true };
+            })
         })),
 
         /**
@@ -706,9 +720,10 @@ export function buildApi(ports: Ports)
                 return found;
             }),
 
-            watch: routes.get('/:id/watch', { output: matchWatch }, async (context) =>
+            watch: routes.get('/:id/watch', { query: sinceQuery, output: matchWatch }, async (context) =>
             {
-                const found = await ports.match.watch(context.principal.userId, context.params.id);
+                const asked = context.query.rev ?? '';
+                const found = await ports.match.watch(context.principal.userId, context.params.id, /^\d{1,15}$/.test(asked) ? Number(asked) : null);
 
                 if (found === null)
                 {
@@ -757,9 +772,9 @@ export function buildApi(ports: Ports)
             /**
              * The key a browser subscribes with.
              *
-             * Absent when this deployment has no push configured, and the client then never asks
-             * for permission - a prompt for something that cannot be delivered is worse than no
-             * prompt at all.
+             * Absent when this deployment has no push configured, and the client then subscribes
+             * to nothing: what this device is told comes from a page that is open, and the
+             * settings panel says so.
              */
             pushKey: routes.get('/push', { output: pushKey }, () =>
             {
@@ -798,13 +813,7 @@ export function buildApi(ports: Ports)
             list: routes.get('/', { output: deviceList },
                 (context) => ports.device.list(context.principal.userId, context.principal.sessionId)),
 
-            /**
-             * The bytes a wallet signs to authorise a device.
-             *
-             * Refused for an account with no wallet - a guest's device is attested by this server
-             * and the badge says so. Asking a guest to sign something they cannot sign would be a
-             * dead end with a spinner on it.
-             */
+            /** The bytes a wallet signs to authorise a device. */
             challenge: routes.post('/challenge', { input: deviceRef, output: challenge },
                 (context) => ports.device.challenge(context.principal.userId, context.input.id)),
 

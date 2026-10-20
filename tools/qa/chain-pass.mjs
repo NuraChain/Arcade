@@ -2,7 +2,7 @@ import { createPublicClient, http, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
-import { BASE, clearTables, guestSeat, launch, recorder, seat } from './seats.mjs';
+import { BASE, clearTables, walletSeat, launch, recorder, seat } from './seats.mjs';
 import { tableBody } from './tables.mjs';
 
 const RPC = process.env.QA_RPC ?? 'http://127.0.0.1:8645';
@@ -64,16 +64,16 @@ await dana.context.addInitScript(() =>
 
 const finishOne = async () =>
 {
-    const guest = await guestSeat(browser, `Chain ${ Math.floor(Math.random() * 100000) }`);
+    const opponent = await walletSeat(browser, `Chain ${ Math.floor(Math.random() * 100000) }`);
     const made = await dana.api('POST', '/tables/', tableBody({
         game: 'ludo', seats: 2, mode: 'turns', privacy: 'public'
     }));
-    await guest.api('POST', `/tables/${ made.body.id }/seat`);
+    await opponent.api('POST', `/tables/${ made.body.id }/seat`);
     await dana.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
-    await guest.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
+    await opponent.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
     const started = await dana.api('POST', `/tables/${ made.body.id }/start`);
     await dana.api('POST', `/matches/${ started.body.id }/resign`, { key: `resign-${ started.body.id }` });
-    await guest.context.close();
+    await opponent.context.close();
     await clearTables(dana);
 };
 

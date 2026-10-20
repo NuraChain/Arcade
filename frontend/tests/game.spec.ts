@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BLOCK, CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
+import { BLOCK, CELL, GOAL_REACH, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, aimNear, centreOf, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
-import { createLudoBoard } from '../src/game/board/ludo-board.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
 import { unpack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../backend/src/domains/match/ludo/board.ts';
@@ -320,9 +319,10 @@ describe('the sound layer', () =>
         expect(unpack(new TextEncoder().encode('RIFF0000').buffer).size).toBe(0);
     });
 
-    const tap = (name = 'pointerup') =>
+    const tap = async (name = 'pointerup') =>
     {
         window.dispatchEvent(new Event(name));
+        await new Promise((resolve) => setTimeout(resolve, 0));
     };
 
     const flush = async () =>
@@ -345,18 +345,18 @@ describe('the sound layer', () =>
         vi.unstubAllGlobals();
     });
 
-    it('opens nothing before a real tap, and a touch starting is not one', () =>
+    it('opens nothing before a real tap, and a touch starting is not one', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
 
         sound.play('turn');
-        tap('pointerdown');
+        await tap('pointerdown');
 
         expect(fake.made()).toBe(0);
         expect(fake.oscillators()).toBe(0);
 
-        tap('pointerup');
+        await tap('pointerup');
 
         expect(fake.made()).toBe(1);
         expect(fake.last()?.resumed).toBe(1);
@@ -364,18 +364,66 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('plays the cue of the tap that unlocked it, while the resume is still on its way', () =>
+    it('opens its context only once the tap\'s own handlers have run, and plays the cue they asked for while the resume is on its way', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
+        const made: number[] = [];
+        const handler = () =>
+        {
+            made.push(fake.made());
+            sound.play('turn');
+        };
 
-        tap('keydown');
-        sound.play('turn');
+        window.addEventListener('keydown', handler);
+        await tap('keydown');
+        window.removeEventListener('keydown', handler);
 
-        expect(fake.last()?.state).toBe('suspended');
-        expect(fake.oscillators()).toBeGreaterThan(0);
+        expect(made, 'the tap waited for a context to be made before its own handler could answer it').toEqual([0]);
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.resumed).toBe(1);
+        expect(fake.oscillators(), 'the cue the tap asked for was lost').toBeGreaterThan(0);
 
         sound.dispose();
+    });
+
+    it('opens its context at a quiet moment on a page that has already been used, and never on a page nobody has touched', async () =>
+    {
+        const fake = stub('running');
+        const activation = { hasBeenActive: false };
+        const idle: (() => void)[] = [];
+
+        vi.stubGlobal('navigator', { ...navigator, userActivation: activation });
+        vi.stubGlobal('requestIdleCallback', (callback: () => void) => idle.push(callback));
+
+        const untouched = createSound(true);
+
+        idle.splice(0).forEach((run) => run());
+
+        expect(fake.made(), 'a context was opened on a page nobody had touched').toBe(0);
+
+        untouched.dispose();
+        activation.hasBeenActive = true;
+
+        const used = createSound(true);
+
+        expect(fake.made(), 'the context was made while the board was still being drawn').toBe(0);
+
+        idle.splice(0).forEach((run) => run());
+
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.state).toBe('running');
+
+        await tap('pointerup');
+
+        expect(fake.made(), 'a tap made a second context').toBe(1);
+        expect(fake.last()?.resumed, 'a running context was asked to resume').toBe(0);
+
+        used.play('turn');
+
+        expect(fake.oscillators()).toBeGreaterThan(0);
+
+        used.dispose();
     });
 
     it('stays quiet while suspended with no resume pending, and asks for a tap again', async () =>
@@ -383,7 +431,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         expect(fake.last()?.state).toBe('running');
@@ -397,7 +445,7 @@ describe('the sound layer', () =>
 
         expect(fake.oscillators()).toBe(before);
 
-        tap('touchend');
+        await tap('touchend');
 
         expect(context.resumed).toBe(2);
 
@@ -410,7 +458,7 @@ describe('the sound layer', () =>
         const ludo = createSound(true);
         const hokm = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         ludo.dispose();
@@ -429,7 +477,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         sound.play('die-land');
@@ -452,7 +500,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
         await flush();
 
@@ -474,7 +522,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
@@ -497,7 +545,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
         await flush();
 
         sound.play('tick');
@@ -510,14 +558,14 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('asks for the ambient audio session, which follows the silent switch and mixes with music', () =>
+    it('asks for the ambient audio session, which follows the silent switch and mixes with music', async () =>
     {
         const session = { type: 'auto' };
         vi.stubGlobal('navigator', { ...navigator, audioSession: session });
         stub();
         const sound = createSound(true);
 
-        tap();
+        await tap();
 
         expect(session.type).toBe('ambient');
 
@@ -529,7 +577,7 @@ describe('the sound layer', () =>
         const fake = stub();
         const sound = createSound(false);
 
-        tap();
+        await tap();
         await flush();
         sound.play('win');
 
@@ -542,7 +590,7 @@ describe('the sound layer', () =>
 
         const bare = createSound(true);
 
-        tap();
+        await tap();
 
         expect(() => bare.play('token-capture')).not.toThrow();
 
@@ -565,15 +613,16 @@ describe('the two halves of a chair', () =>
     const match = (seats: LudoSeat[], players: number[]) => ({
         id: 'm', tableId: 't', game: 'ludo', rev: 3, seats: players.length, turn: 0,
         players: players.map((seat) => ({ seat, who: `p${ seat }`, timeouts: 0 })),
-        view: { kind: 'ludo', die: 6, moves: [1], seats },
+        view: { kind: 'ludo', die: 6, moves: [1], controls: 0, seats },
         startedAt: '2026-09-18T00:00:00.000Z'
     }) as MatchView;
 
-    const seat = (index: number, colour: string): LudoSeat => ({
+    const seat = (index: number, colour: string, side = index): LudoSeat => ({
         seat: index,
         colour,
         home: 0,
         out: false,
+        side,
         tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 }))
     });
 
@@ -622,12 +671,31 @@ describe('the two halves of a chair', () =>
             ...seat(0, 'red'),
             tokens: [{ piece: 0, at: -1 }, { piece: 1, at: 10, cell: { col: 6, row: 2 } }, { piece: 2, at: -1 }, { piece: 3, at: -1 }]
         };
-        const lit = (moves: number[]) => seatsFor({ kind: 'ludo', die: 6, moves, seats: [red] }, 0)
+        const lit = (moves: number[]) => seatsFor({ kind: 'ludo', die: 6, moves, controls: 0, seats: [red] }, 0)
             .filter((token) => token.playable)
             .map((token) => token.key);
 
         expect(lit([0, 1])).toEqual(['0-0', '0-1', '0-2', '0-3']);
         expect(lit([1])).toEqual(['0-1']);
+    });
+
+    it('lights the tokens the seat on turn is moving, which are its partner\'s once its own four are home', () =>
+    {
+        const home: LudoSeat = { ...seat(0, 'red', 0), home: 4, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: FINISHED })) };
+        const seats = [home, seat(1, 'green', 1), seat(2, 'yellow', 0), seat(3, 'blue', 1)];
+        const lit = (controls: number, mine?: number) => seatsFor({ kind: 'ludo', die: 6, moves: [0], controls, seats }, mine)
+            .filter((token) => token.playable)
+            .map((token) => token.key);
+
+        expect(lit(2, 0)).toEqual(['2-0', '2-1', '2-2', '2-3']);
+        expect(lit(2)).toEqual([]);
+    });
+
+    it('says which side every token plays for, so two of one side on a square can be told from two opponents', () =>
+    {
+        const seats = [seat(0, 'red', 0), seat(1, 'green', 1), seat(2, 'yellow', 0), seat(3, 'blue', 1)];
+
+        expect(seatsFor({ kind: 'ludo', moves: [], controls: 0, seats }).map((token) => token.side)).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1]);
     });
 });
 
@@ -778,8 +846,8 @@ describe('pointing at a token on a phone', () =>
     {
         const spot = centreOf(6, 13, size);
 
-        expect(pickNear(tokens, spot.x + cell * 0.9, spot.y, size)).toBe('a');
-        expect(pickNear(tokens, spot.x, spot.y - cell * 0.6, size)).toBe('a');
+        expect(aimNear(tokens, [], spot.x + cell * 0.9, spot.y, size)).toBe('a');
+        expect(aimNear(tokens, [], spot.x, spot.y - cell * 0.6, size)).toBe('a');
     });
 
     it('chooses the nearer of two movable tokens and never one that cannot move', () =>
@@ -788,16 +856,53 @@ describe('pointing at a token on a phone', () =>
         const right = centreOf(8, 13, size);
         const frozen = centreOf(7, 12, size);
 
-        expect(pickNear(tokens, right.x - cell * 0.2, right.y, size)).toBe('b');
-        expect(pickNear(tokens, left.x + cell * 0.2, left.y, size)).toBe('a');
-        expect(pickNear(tokens.slice(2), frozen.x, frozen.y, size)).toBeNull();
+        expect(aimNear(tokens, [], right.x - cell * 0.2, right.y, size)).toBe('b');
+        expect(aimNear(tokens, [], left.x + cell * 0.2, left.y, size)).toBe('a');
+        expect(aimNear(tokens.slice(2), [], frozen.x, frozen.y, size)).toBeNull();
     });
 
     it('ignores a tap far from anything that can move', () =>
     {
         const spot = centreOf(0, 0, size);
 
-        expect(pickNear(tokens, spot.x, spot.y, size)).toBeNull();
+        expect(aimNear(tokens, [], spot.x, spot.y, size)).toBeNull();
+    });
+
+    it('takes a tap on a marked square as the token the mark belongs to', () =>
+    {
+        const goals = [{ key: 'a', col: 6, row: 9 }, { key: 'b', col: 8, row: 10 }];
+        const marked = centreOf(6, 9, size);
+
+        expect(aimNear(tokens, goals, marked.x, marked.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, marked.x + cell * GOAL_REACH * 0.9, marked.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, marked.x + cell * (GOAL_REACH + 0.1), marked.y - cell * 2, size)).toBeNull();
+    });
+
+    it('takes the nearer of two marks that are both within reach', () =>
+    {
+        const goals = [{ key: 'a', col: 6, row: 9 }, { key: 'b', col: 7, row: 9 }];
+        const left = centreOf(6, 9, size);
+
+        expect(aimNear(tokens, goals, left.x + cell * 0.45, left.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, left.x + cell * 0.55, left.y, size)).toBe('b');
+    });
+
+    it('takes a tap on a token as that token, whatever is marked on its square', () =>
+    {
+        const goals = [{ key: 'b', col: 6, row: 13 }];
+        const spot = centreOf(6, 13, size);
+
+        expect(aimNear(tokens, goals, spot.x, spot.y, size)).toBe('a');
+        expect(aimNear(tokens, goals, spot.x, spot.y - cell * 0.3, size)).toBe('a');
+    });
+
+    it('takes a tap on a mark beside a token as the mark, where the token alone would have had it', () =>
+    {
+        const goals = [{ key: 'a', col: 7, row: 13 }];
+        const marked = centreOf(7, 13, size);
+
+        expect(aimNear(tokens, [], marked.x + cell * 0.2, marked.y, size)).toBe('b');
+        expect(aimNear(tokens, goals, marked.x + cell * 0.2, marked.y, size)).toBe('a');
     });
 });
 
@@ -907,63 +1012,5 @@ describe('a finished pawn stands in its own triangle', () =>
                 expect(Math.abs(spot.dy) + 0.205 * spot.scale).toBeLessThanOrEqual(0.4635);
             }
         }
-    });
-});
-
-describe('a roll that passes the turn is still seen', () =>
-{
-    const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-    const empty = { tokens: [], die: null, turn: null, yours: false, winner: null };
-
-    it('shows the spent die when the view has none but the log says it was rolled and passed', async () =>
-    {
-        const host = document.createElement('div');
-        document.body.append(host);
-        const handle = await createLudoBoard({ host, plate: '', view: empty, reducedMotion: true, sound: false });
-
-        handle.show({ ...empty, turn: 'red', beats: [{ rev: 4, e: 'roll', colour: 'yellow', die: 3 }, { rev: 4, e: 'pass', colour: 'yellow', why: 'no-move' }] });
-        await tick(10);
-
-        expect(host.querySelector('.lb')!.hasAttribute('data-rolled')).toBe(true);
-        expect(host.querySelector('.lb-die')!.getAttribute('data-spent')).toBe('no-move');
-        expect((host.querySelector('.lb-die') as HTMLElement).style.getPropertyValue('--face')).toBe('2');
-
-        handle.dispose();
-        host.remove();
-    });
-
-    it('stacks two tokens of one colour on a ring square, and keeps two colours side by side', async () =>
-    {
-        const host = document.createElement('div');
-        document.body.append(host);
-        const token = (key: string, colour: string, col: number) => ({ key, colour, at: 10, col, row: 6, playable: false });
-        const view = { ...empty, tokens: [token('0-0', 'red', 4), token('0-1', 'red', 4), token('1-0', 'red', 8), token('2-0', 'green', 8)] };
-        const handle = await createLudoBoard({ host, plate: '', view, reducedMotion: true, sound: false });
-
-        await tick(10);
-
-        const stacked = [...host.querySelectorAll('.lp')].filter((piece) => piece.hasAttribute('data-stacked'));
-
-        expect(stacked).toHaveLength(1);
-
-        handle.dispose();
-        host.remove();
-    });
-
-    it('does not replay a batch it has already shown', async () =>
-    {
-        const host = document.createElement('div');
-        document.body.append(host);
-        const beats = [{ rev: 4, e: 'roll', colour: 'yellow', die: 3 }, { rev: 4, e: 'pass', colour: 'yellow', why: 'no-move' }];
-        const handle = await createLudoBoard({ host, plate: '', view: { ...empty, beats }, reducedMotion: true, sound: false });
-
-        handle.show({ ...empty, turn: 'red', beats });
-        await tick(10);
-
-        expect(host.querySelector('.lb')!.hasAttribute('data-rolled')).toBe(false);
-
-        handle.dispose();
-        host.remove();
     });
 });

@@ -1,6 +1,7 @@
 import { Outlet, untrack, useHead, useMatch, useNavigate, useRoute, type MountNode } from 'azerothjs';
 
 import { startCues, type CuesHand } from '../../stores/cues-loader.ts';
+import { startParty } from '../../stores/party-loader.ts';
 
 import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
@@ -9,7 +10,6 @@ import { parentOf, routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
-import { useConnection } from '../../stores/connection.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
@@ -26,8 +26,8 @@ import { useSocial } from '../../stores/social.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
-import ConnectionBanner from './connection-banner.component.azeroth';
-import KeysBanner from './keys-banner.component.azeroth';
+import { watchSignedOut } from './sign-out.ts';
+import { loadStrips, type StripsHand } from './strips-loader.ts';
 import NavRail from './nav-rail.component.azeroth';
 import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
@@ -53,9 +53,11 @@ export default component AppShell(props: { children?: MountNode })
 
     const cues: CuesHand = { current: null };
 
-    useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
+    const strips: StripsHand = { draw: null };
 
-    let seen = untrack(() => route().key);
+    state stripped = false;
+
+    useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
 
     let seenPath = untrack(() => route().pathname);
 
@@ -67,11 +69,10 @@ export default component AppShell(props: { children?: MountNode })
     effect
     {
         const location = route();
-        if (location.key === seen)
+        if (!shell.arrive(location))
         {
             return;
         }
-        seen = location.key;
         if (location.pathname !== seenPath)
         {
             seenPath = location.pathname;
@@ -80,14 +81,6 @@ export default component AppShell(props: { children?: MountNode })
                 useEmojiPop().close();
                 overlay.closeAll();
             });
-        }
-        if (location.navigationKind === 'push')
-        {
-            shell.notePush();
-        }
-        else if (location.navigationKind === 'pop')
-        {
-            shell.notePop();
         }
     }
 
@@ -98,7 +91,6 @@ export default component AppShell(props: { children?: MountNode })
             useToasts().start(),
             useRealtime().start(),
             useVoice().start(),
-            useConnection().start(),
             useCatalogue().start(),
             useSocial().start(),
             useGroups().start(),
@@ -110,12 +102,15 @@ export default component AppShell(props: { children?: MountNode })
             useNotifications().start(),
             useDevices().start(),
             useSession().start(),
-            useWallet().start()
+            useWallet().start(),
+            watchSignedOut()
         ];
 
         void useDevices().look();
 
         startCues(cues, navigate, stops);
+        loadStrips(strips, () => stripped = true, stops);
+        startParty(stops);
 
         return () =>
         {
@@ -168,8 +163,7 @@ export default component AppShell(props: { children?: MountNode })
 
             <div class={ () => [ 'relative flex h-dvh min-h-0 min-w-0 flex-col', !bare && !showTopBar ? 'safe-t' : '' ].filter(Boolean).join(' ') }>
                 <Show when={ showTopBar }>{ () => <TopBar /> }</Show>
-                <Show when={ !immersive }>{ () => <ConnectionBanner /> }</Show>
-                <Show when={ !immersive }>{ () => <KeysBanner /> }</Show>
+                <Show when={ stripped && !immersive }>{ () => strips.draw?.() }</Show>
                 <div class="flex min-h-0 flex-1">
                     <main id="app-main" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                         <Outlet children={ props.children } />

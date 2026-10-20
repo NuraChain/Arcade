@@ -23,6 +23,7 @@ const rowsOf = (seats: readonly number[]) => seats.map((seat) => ({
     who: `p${ seat }`,
     timeouts: 0,
     result: null,
+    exit: null,
     rating_before: null,
     rating_after: null
 }));
@@ -158,5 +159,22 @@ describe('the envelope of a match still being played', () =>
 
         expect(players.map((player) => Object.keys(player).includes('timeouts'))).toEqual([false, true]);
         expect(players.map((player) => matchPlayer.parse(player).timeouts)).toEqual([undefined, 2]);
+    });
+
+    it('says how a seat went for a seat that has gone, and nothing of the kind for one that has not', () =>
+    {
+        const rows = rowsOf([0, 1, 2]).map((row) => (row.seat === 2 ? { ...row, result: 'abandoned' as const, exit: 'timeout' as const } : row));
+        const players = envelopeOf(null, {}, rows, false, { seats: 3, variant: 'standard' });
+
+        expect(players.map((player) => Object.keys(player).includes('exit'))).toEqual([false, false, true]);
+        expect(matchPlayer.parse(players[2])).toMatchObject({ seat: 2, result: 'abandoned', exit: 'timeout' });
+    });
+
+    it('does not say how a seat went to somebody who is not shown that it has', () =>
+    {
+        const rows = rowsOf([0, 1]).map((row) => (row.seat === 1 ? { ...row, exit: 'resign' as const } : row));
+        const players = envelopeOf(null, {}, rows, false, { seats: 2, variant: 'standard' });
+
+        expect(players.some((player) => Object.keys(player).includes('exit'))).toBe(false);
     });
 });

@@ -1,7 +1,7 @@
 import type { Hop } from './board.ts';
 import type { Crawford, GameKind } from './scoring.ts';
 
-export type Phase = 'roll' | 'move' | 'double';
+export type Phase = 'opening' | 'roll' | 'move' | 'double';
 
 export interface BackgammonState
 {
@@ -17,6 +17,7 @@ export interface BackgammonState
     turn: number;
     phase: Phase;
     dice: number[];
+    thrown: number[];
     cube: number;
     owner: number | null;
     turns: number;
@@ -32,6 +33,8 @@ export type BackgammonAction =
     | { kind: 'forfeit'; seat: number; reason: string };
 
 export type BackgammonEvent =
+    | { e: 'throw'; seat: number; die: number }
+    | { e: 'tie'; dice: number[] }
     | { e: 'opening'; seat: number; dice: number[] }
     | { e: 'roll'; seat: number; dice: number[] }
     | { e: 'move'; seat: number; from: number; to: number; die: number; hit: boolean }

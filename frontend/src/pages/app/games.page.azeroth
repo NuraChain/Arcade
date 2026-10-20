@@ -1,40 +1,37 @@
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
-import type { GameCategory, GameId } from '../../data/games.ts';
+import type { GameCategory } from '../../data/games.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { openTable } from '../../lib/open-table.ts';
+
+const CATEGORIES: readonly GameCategory[] = ['cards', 'board'];
 
 export default component GamesPage()
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
-    const lobby = useLobby();
-    const { navigate } = useNavigate();
+    const address = useAddress();
 
     useHead({ title: () => locale.t('app.nav.games') });
 
-    state filter = 'all' as 'all' | GameCategory;
+    derived filter = CATEGORIES.find((one) => one === address.text('category')) ?? 'all';
 
     derived games = catalogue.games.filter((game) => filter === 'all' || game.category === filter);
 
     derived totals = catalogue.totals();
 
-    const quickPlay = (game: GameId) =>
-    {
-        openTable(lobby.quick(game), navigate);
-    };
+    derived building = !catalogue.loading() && catalogue.games.some((game) => !catalogue.playable(game.id));
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>
         <PageHeader
             title={ locale.t('app.nav.games') }
-            lead={ locale.t('games.lead') }
+            lead={ building ? `${ locale.t('games.lead') } ${ locale.t('games.leadSoon') }` : locale.t('games.lead') }
             actions={
                 <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-sm text-muted">
                     <span class="flex items-center gap-2">
@@ -53,7 +50,7 @@ export default component GamesPage()
             label={ locale.t('games.filter.all') }
             class="mb-5"
             value={ filter }
-            onChange={ (id) => filter = id as 'all' | GameCategory }
+            onChange={ (id) => address.write({ category: id === 'all' ? '' : id }) }
             items={ [
                 { id: 'all', label: locale.t('games.filter.all'), count: catalogue.games.length },
                 { id: 'cards', label: locale.t('games.category.cards'), icon: 'cards', count: catalogue.games.filter((game) => game.category === 'cards').length },
@@ -61,6 +58,6 @@ export default component GamesPage()
             ] }
         />
 
-        <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
+        <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } />
     </Page>
 }

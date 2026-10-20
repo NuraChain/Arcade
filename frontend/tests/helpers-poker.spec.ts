@@ -5,7 +5,7 @@ import { pokerEngine } from '../../backend/src/domains/match/engines/poker.ts';
 import { toCall } from '../../backend/src/domains/match/poker/betting.ts';
 import { evaluate } from '../../backend/src/domains/match/poker/evaluator.ts';
 import type { PokerAction, PokerState } from '../../backend/src/domains/match/poker/state.ts';
-import { coachOf, namedHand, outcomeOf, predicted } from '../src/game/helpers/poker.ts';
+import { coachOf, handOf, namedHand, pressed, priceOf } from '../src/game/helpers/poker.ts';
 import type { PokerBoard } from '../src/data/match.ts';
 
 const SUIT_OF: Record<string, Suit> = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
@@ -80,35 +80,60 @@ describe('namedHand', () =>
     });
 });
 
-describe('outcomeOf', () =>
+describe('priceOf', () =>
 {
     it.each([
         ['a spectator', table({ turn: 0, toCall: 20, hole: [] }), undefined],
-        ['a folded seat', table({ turn: 1 }, [{ folded: true }]), 0],
-        ['a seat that is out', table({ turn: 1, hole: [] }, [{ out: true, stack: 0 }]), 0],
-        ['a finished match', table({ winner: 0 }), 0]
-    ])('says nothing to %s', (_, view, mine) =>
+        ['a folded seat', table({ turn: 0, toCall: 20 }, [{ folded: true }]), 0],
+        ['a seat that is out', table({ turn: 0, toCall: 20, hole: [] }, [{ out: true, stack: 0 }]), 0],
+        ['a finished match', table({ winner: 0, turn: 0, toCall: 20 }), 0],
+        ['somebody else\'s turn', table({ turn: 2, toCall: 20 }), 0],
+        ['a turn with nothing to call', table({ turn: 0, toCall: 0 }), 0]
+    ])('prices nothing for %s', (_, view, mine) =>
     {
-        expect(outcomeOf(view, mine)).toBeNull();
+        expect(priceOf(view, mine)).toBeNull();
     });
 
-    it('names the hand and prices the call against the pot on the reader\'s turn', () =>
+    it('prices the call against the pot on the reader\'s turn', () =>
     {
         const view = table({ street: 'flop', board: cards('AD 7C 2S'), turn: 0, toCall: 40, pot: 110, minRaiseTo: 80, maxRaiseTo: 1400 });
 
-        expect(outcomeOf(view, 0)).toMatchObject({ hand: { category: 'pair' }, call: { chips: 40, pot: 110 } });
+        expect(priceOf(view, 0)).toEqual({ chips: 40, pot: 110 });
+    });
+});
+
+describe('handOf', () =>
+{
+    it('names what the cards in hand make with the cards on the table, whoever is to act', () =>
+    {
+        expect(handOf(table({ street: 'flop', board: cards('AD 7C 2S'), turn: 0, toCall: 40 }))?.category).toBe('pair');
+        expect(handOf(table({ street: 'turn', board: cards('QS JS 10S 3D'), turn: 2 }))?.category).toBe('straight');
+        expect(handOf({ hole: cards('AS KD'), board: [], winner: null })?.category).toBe('high-card');
     });
 
-    it('prices nothing when there is nothing to call', () =>
+    it.each([
+        ['somebody who holds no cards', { hole: [], board: cards('AD 7C 2S') }],
+        ['a game that is won, as the table reads it', table({ winner: 0 })],
+        ['a game that is won, as the felt shows it', { hole: cards('AS KD'), board: cards('AD 7C 2S 9H 3C'), winner: 2 }]
+    ])('names nothing for %s', (_, seen) =>
     {
-        expect(outcomeOf(table({ turn: 0, toCall: 0 }), 0)).toMatchObject({ hand: { category: 'high-card' }, call: null });
+        expect(handOf(seen)).toBeNull();
     });
+});
 
-    it('still names the hand while somebody else acts', () =>
+describe('pressed', () =>
+{
+    const view = table({ turn: 0, toCall: 40, minRaiseTo: 80, maxRaiseTo: 1420 }, [{ stack: 1400, bet: 20 }]);
+
+    it.each([
+        ['fold', undefined, 0],
+        ['check', undefined, 0],
+        ['call', undefined, 40],
+        ['raise', 260, 260],
+        ['allin', undefined, 1420]
+    ] as const)('a %s is the move the table will be told of', (verb, chosen, amount) =>
     {
-        const view = table({ street: 'turn', board: cards('QS JS 10S 3D'), turn: 2 });
-
-        expect(outcomeOf(view, 0)).toMatchObject({ hand: { category: 'straight' }, call: null });
+        expect(pressed(view, 0, verb, chosen)).toEqual({ e: verb, seat: 0, amount });
     });
 });
 
@@ -152,7 +177,8 @@ function falsehoods(state: PokerState, seat: number, draws: { die: (sides: numbe
 {
     const view = boardOf(state, seat);
     const tip = coachOf(view, seat);
-    const outcome = outcomeOf(view, seat);
+    const hand = handOf(view);
+    const price = priceOf(view, seat);
     const legal = pokerEngine.legal(state, seat).map((move) => move.kind);
     const holding = !state.out[seat] && !state.folded[seat];
     const acting = pokerEngine.turnOf(state) === seat;
@@ -164,7 +190,7 @@ function falsehoods(state: PokerState, seat: number, draws: { die: (sides: numbe
 
     if (!holding || state.winner !== null)
     {
-        if (tip !== null || outcome !== null)
+        if (tip !== null || hand !== null || price !== null)
         {
             wrong('spoke to a seat with no cards in play');
         }
@@ -176,17 +202,17 @@ function falsehoods(state: PokerState, seat: number, draws: { die: (sides: numbe
         ? (rankOf(state.holes[seat][0]) === rankOf(state.holes[seat][1]) ? 'pair' : 'high-card')
         : evaluate([...state.holes[seat], ...state.board]).category;
 
-    if (outcome?.hand?.category !== expected)
+    if (hand?.category !== expected)
     {
-        wrong(`named ${ outcome?.hand?.category } for ${ expected }`);
+        wrong(`named ${ hand?.category } for ${ expected }`);
     }
 
     const owe = acting ? toCall(state, seat) : 0;
     const priced = owe > 0 ? { chips: owe, pot: state.put.reduce((sum, chips) => sum + chips, 0) } : null;
 
-    if (JSON.stringify(outcome?.call ?? null) !== JSON.stringify(priced))
+    if (JSON.stringify(price) !== JSON.stringify(priced))
     {
-        wrong(`priced the call at ${ JSON.stringify(outcome?.call) } against ${ JSON.stringify(priced) }`);
+        wrong(`priced the call at ${ JSON.stringify(price) } against ${ JSON.stringify(priced) }`);
     }
 
     const accepts = (action: PokerAction) => pokerEngine.apply(state, action, draws).ok;
@@ -265,7 +291,7 @@ describe('every word against the server\'s own table', () =>
                 }
             }
 
-            if (coachOf(boardOf(state, null), undefined) !== null || outcomeOf(boardOf(state, null), undefined) !== null)
+            if (coachOf(boardOf(state, null), undefined) !== null || priceOf(boardOf(state, null), undefined) !== null || handOf(boardOf(state, null)) !== null)
             {
                 faults.push('spoke to a spectator');
             }
@@ -286,19 +312,14 @@ describe('every word against the server\'s own table', () =>
                 break;
             }
 
-            const after = boardOf(applied.state, turn);
+            const guess = pressed(before, turn, chosen.kind as never, 'amount' in chosen ? chosen.amount : 0);
+            const [truth] = pokerEngine.log(applied.events, null).moves as { e: string; seat?: number; amount?: number }[];
 
-            if (after.hand === before.hand && after.street === before.street)
+            guessed += 1;
+
+            if (guess.e !== truth.e || guess.seat !== truth.seat || guess.amount !== truth.amount)
             {
-                const guess = predicted(before, turn, chosen.kind as never, 'amount' in chosen ? chosen.amount : 0).seats.find((row) => row.seat === turn);
-                const truth = after.seats.find((row) => row.seat === turn);
-
-                guessed += 1;
-
-                if (JSON.stringify(guess) !== JSON.stringify(truth))
-                {
-                    faults.push(`guessed ${ JSON.stringify(guess) } for a ${ chosen.kind }, the engine made ${ JSON.stringify(truth) }`);
-                }
+                faults.push(`guessed ${ JSON.stringify(guess) } for a ${ chosen.kind }, the engine told of ${ JSON.stringify(truth) }`);
             }
 
             state = applied.state;

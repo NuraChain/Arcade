@@ -1,6 +1,5 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createStore } from 'azerothjs';
 
-import { useAccount } from './account.store.ts';
 import { useDevice } from './device.store.ts';
 import { useDevices } from './devices.store.ts';
 import { useLocale } from './locale.store.ts';
@@ -8,40 +7,24 @@ import { useSeal } from './seal.store.ts';
 import { useToasts } from './toasts.store.ts';
 import { useWallet } from './wallet.store.ts';
 
-/**
- * What this browser is missing, when it is something a person can act on.
- *
- * `absent` is no keys at all: nothing sealed can be read or sent here.
- */
-export type KeyGap = 'absent';
-
 export interface EnrolmentApi
 {
-    gap: Getter<KeyGap | null>;
-    asking: Getter<boolean>;
-    dismiss(): void;
     give(): Promise<void>;
-    reset(): void;
 }
 
 /**
- * Giving this browser device keys, from wherever somebody notices it has none.
+ * Adding this browser to the account with the wallet, for a session that has no keys here.
  *
- * The routine below lived in `chat.page` and was the right thing in the wrong place. It is a
- * sequence of DECISIONS - a locked wallet says something different from a refused signature - and
- * the moment a second surface offers the same button, a second copy of those decisions is a second chance to
- * say the wrong one. The seal notice offers it at the composer, where somebody is stuck; the
- * banner offers it anywhere, because a person who has not opened a chat yet has no way to learn
- * that this browser cannot read one.
+ * Connecting the wallet adds the browser in the same signature, so this is only reached by a
+ * session that began somewhere else: a cookie this browser kept while its keys were cleared. It
+ * is offered where that is in the way, above a composer.
  *
  * `give` NEVER rejects. `devices.enrol` swallows everything into `failure()`, so a caller that
- * awaited and carried on would make a refused wallet signature silent - the button spins, stops,
- * and nothing changes or is said. Every outcome is read back and spoken here, once, so no caller
- * has to remember to.
+ * awaited and carried on would make a refused wallet signature silent. Every outcome is read
+ * back and spoken here, once, so no caller has to remember to.
  */
 export const useEnrolment = createStore((): EnrolmentApi =>
 {
-    const account = useAccount();
     const device = useDevice();
     const devices = useDevices();
     const locale = useLocale();
@@ -49,44 +32,7 @@ export const useEnrolment = createStore((): EnrolmentApi =>
     const toasts = useToasts();
     const wallet = useWallet();
 
-    const [dismissed, setDismissed] = createSignal(false);
-
-    /**
-     * Held for this browsing session and not written down.
-     *
-     * A key gap is not a preference: it is the state in which nothing sealed can be read or sent,
-     * and a flag in `localStorage` would silence it on a browser that still cannot send - for
-     * good, on the one machine where the answer matters. Dismissing clears the strip now and the
-     * next load asks again, which is the smallest promise that is still true.
-     */
-    const gap = (): KeyGap | null =>
-    {
-        // A guest has no wallet to sign an attestation with, so their devices are attested by the
-        // server and no peer can verify one. Offering a key here would unblock this browser and
-        // leave them blocked on the other half, which is a button that lies about what it fixes.
-        if (!account.isWallet() || !devices.known())
-        {
-            return null;
-        }
-
-        const readiness = devices.readiness();
-
-        // `unsupported` is deliberately absent. There is nothing behind the button on a browser
-        // with no secure storage - a private window, or an insecure origin - and a strip that
-        // cannot be acted on is furniture that never goes away.
-        return readiness === 'absent' ? readiness : null;
-    };
-
     return {
-        gap,
-
-        asking: () => gap() !== null && !dismissed(),
-
-        dismiss()
-        {
-            setDismissed(true);
-        },
-
         async give()
         {
             if (devices.busy())
@@ -94,38 +40,31 @@ export const useEnrolment = createStore((): EnrolmentApi =>
                 return;
             }
 
-            // A locked extension has no address to sign with, and `sign` answers null rather than
-            // throwing - which `publish` turns into "the wallet did not sign", blaming a refusal
-            // that never happened. Say the true thing instead.
             if (wallet.address() === null && await wallet.reach() === null)
             {
                 toasts.show({ kind: 'warning', text: locale.t('wallet.error.noWallet'), dedupe: 'devices.enrol' });
                 return;
             }
 
-            await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
-
-            const failure = devices.failure();
-            if (failure !== null)
+            const added = async () =>
             {
-                toasts.show({
-                    kind: 'error',
-                    text: locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable'),
-                    dedupe: 'devices.enrol'
-                });
-                return;
-            }
+                await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
 
-            // Any open room has to be asked again: whether it can be sealed to now depends on a
-            // device that did not exist a moment ago.
-            await seal.refresh();
+                const failure = devices.failure();
 
-            toasts.show({ kind: 'success', text: locale.t('devices.enrolled'), dedupe: 'devices.enrol' });
-        },
+                if (failure !== null)
+                {
+                    throw failure;
+                }
 
-        reset()
-        {
-            setDismissed(false);
+                await seal.refresh();
+            };
+
+            await toasts.promise(added(), {
+                pending: locale.t('devices.adding'),
+                done: () => locale.t('devices.enrolled'),
+                failed: (failure) => locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable')
+            }).catch(() => undefined);
         }
     };
 });

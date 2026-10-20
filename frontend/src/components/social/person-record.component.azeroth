@@ -11,6 +11,7 @@ import Panel from '../ui/panel.component.azeroth';
 import LevelBar from './level-bar.component.azeroth';
 import SectionHeading from '../ui/section-heading.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
+import { useAddress } from '../../lib/page-param.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -26,6 +27,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
     const people = usePeople();
     const catalogue = useCatalogue();
     const overlay = useOverlay();
+    const address = useAddress();
 
     mount
     {
@@ -49,7 +51,13 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     derived summary = held?.achievements ?? null;
 
-    state picked = 'all';
+    derived choices = (summary?.scopes ?? []).map((one) => ({
+        id: one.game ?? 'all',
+        label: one.game === undefined ? locale.t('achievements.everywhere') : locale.t(catalogue.byId(one.game as GameId).nameKey),
+        count: one.earned
+    }));
+
+    derived picked = choices.find((one) => one.id === address.text('scope'))?.id ?? 'all';
 
     derived scope = props.game ?? picked;
 
@@ -62,12 +70,6 @@ export default component PersonRecord(props: { handle: string; history?: boolean
     derived total = scopes.reduce((sum, one) => sum + one.total, 0);
 
     derived recent = props.game === undefined ? (summary?.recent ?? []).slice(0, 6) : [];
-
-    derived choices = (summary?.scopes ?? []).map((one) => ({
-        id: one.game ?? 'all',
-        label: one.game === undefined ? locale.t('achievements.everywhere') : locale.t(catalogue.byId(one.game as GameId).nameKey),
-        count: one.earned
-    }));
 
     const openLadder = (family: AchievementFamily) =>
     {
@@ -164,7 +166,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                             }
                         </Show>
                         <Show when={ props.game === undefined }>
-                            { () => <FilterBar items={ choices } value={ picked } label={ locale.t('achievements.scopes') } onChange={ (id) => picked = id } /> }
+                            { () => <FilterBar items={ choices } value={ picked } label={ locale.t('achievements.scopes') } onChange={ (id) => address.write({ scope: id === 'all' ? '' : id }) } /> }
                         </Show>
                         <ul class="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3 @6xl:grid-cols-4">
                             <For each={ families } key={ (one) => `${ one.game ?? 'all' }-${ one.id }` } let={ one }>

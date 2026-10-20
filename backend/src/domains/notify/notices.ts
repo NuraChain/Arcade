@@ -7,6 +7,7 @@ export const NOTICE_OF: Readonly<Record<string, Notice>> = {
     'friend-accepted': 'requests',
     'group-added': 'groups',
     'table-invite': 'invites',
+    'table-removed': 'invites',
     'message': 'messages',
     'turn': 'turns'
 };

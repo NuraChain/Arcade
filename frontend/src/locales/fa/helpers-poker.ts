@@ -2,8 +2,9 @@ import type { Dictionary } from '../en/index.ts';
 import type { helpersPoker as reference } from '../en/helpers-poker.ts';
 
 export const helpersPoker: Pick<Dictionary, keyof typeof reference> = {
-    'helpers.poker.best': 'بهترین دستت تا اینجا: {hand}.',
-    'helpers.poker.board': 'با کارت‌های وسط بازی می‌کنی: {hand}.',
+    'helpers.poker.best': 'بهترین دستت تا این‌جا: {hand}.',
+    'helpers.poker.board': 'داری با کارت‌های وسط بازی می‌کنی: {hand}.',
+    'helpers.poker.board.brief': 'کارت‌های وسط: {hand}',
     'helpers.poker.hand.high-card': 'بالاترین کارت {top}',
     'helpers.poker.hand.pair': 'جفت {tops}',
     'helpers.poker.hand.two-pair': 'دو جفت، {tops} و {seconds}',
@@ -39,9 +40,9 @@ export const helpersPoker: Pick<Dictionary, keyof typeof reference> = {
     'helpers.poker.rank.many.10': 'بی‌بی',
     'helpers.poker.rank.many.11': 'شاه',
     'helpers.poker.rank.many.12': 'آس',
-    'helpers.poker.cost': 'کال کردن {chips} خرج دارد و پات {pot} است.',
-    'helpers.poker.free': 'چیزی برای کال کردن نیست، پس چک کردن برایت هزینه‌ای ندارد.',
-    'helpers.poker.facing': 'برای ماندن در دست {chips} لازم است: کال کن، رِیز کن یا فولد کن.',
-    'helpers.poker.facing.noRaise': 'برای ماندن در دست {chips} لازم است: کال کن یا فولد کن. اینجا رِیز کردن برایت باز نیست.',
-    'helpers.poker.allIn': 'آل‌این هستی. چیزی برای بِت زدن نمانده، پس بقیه را کارت‌ها تعیین می‌کنند.'
+    'helpers.poker.cost': 'کال کردن {chips} برات خرج داره و توی پات {pot} هست.',
+    'helpers.poker.free': 'چیزی واسه کال کردن نیست، پس چک کردن برات هیچ خرجی نداره.',
+    'helpers.poker.facing': 'واسه موندن توی دست {chips} لازمه: کال کن، رِیز کن یا فولد کن.',
+    'helpers.poker.facing.noRaise': 'واسه موندن توی دست {chips} لازمه: کال کن یا فولد کن. این‌جا نمی‌تونی رِیز کنی.',
+    'helpers.poker.allIn': 'آل‌این هستی. دیگه چیزی واسه بِت زدن نمونده، پس بقیه‌ش رو کارت‌ها تعیین می‌کنن.'
 };

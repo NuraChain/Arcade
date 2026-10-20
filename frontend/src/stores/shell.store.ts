@@ -16,11 +16,18 @@ export function leave(go: Leaving, depth: number, parent: string | undefined)
     go.replace(parent ?? '/app');
 }
 
+export interface Arrival
+{
+    key: string;
+    fullPath: string;
+    navigationKind: 'push' | 'replace' | 'pop';
+    delta: number;
+}
+
 export interface ShellApi
 {
     depth: Getter<number>;
-    notePush(): void;
-    notePop(): void;
+    arrive(location: Arrival): boolean;
     resetDepth(): void;
     title: Getter<string | null>;
     claimTitle(read: () => string): () => void;
@@ -31,11 +38,31 @@ export const useShell = createStore((): ShellApi =>
 {
     const [depth, setDepth] = createSignal(0);
     const [claims, setClaims] = createSignal<Array<() => string>>([]);
+    let seen = '';
 
     return {
         depth,
-        notePush: () => setDepth((current) => current + 1),
-        notePop: () => setDepth((current) => Math.max(0, current - 1)),
+        arrive(location)
+        {
+            const entry = `${ location.key } ${ location.fullPath }`;
+            const begun = seen !== '';
+
+            if (entry === seen)
+            {
+                return false;
+            }
+
+            seen = entry;
+
+            if (begun && location.navigationKind !== 'replace')
+            {
+                const step = location.navigationKind === 'push' ? 1 : (location.delta === 0 ? -1 : location.delta);
+
+                setDepth((current) => Math.max(0, current + step));
+            }
+
+            return begun;
+        },
         resetDepth: () => setDepth(0),
         title: () =>
         {
@@ -49,6 +76,7 @@ export const useShell = createStore((): ShellApi =>
         },
         reset: () =>
         {
+            seen = '';
             setDepth(0);
             setClaims([]);
         }

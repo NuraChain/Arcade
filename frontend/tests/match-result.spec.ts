@@ -3,9 +3,10 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchResult from '../src/components/games/match-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import { rematchOf, type Rematch } from '../src/components/games/boards.ts';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import type { MatchView, TableSummary } from '../src/api.ts';
@@ -450,5 +451,348 @@ describe('a seat the match never judged', () =>
         const winner = renderTest(() => MatchResult({ match: partly, mine: 0 }) as Rendered).container;
 
         expect(winner.textContent).not.toContain('did not count for you');
+    });
+});
+
+describe('how a seat that left the game is said to have gone', () =>
+{
+    const ended = (exit?: 'resign' | 'left' | 'timeout') => ({
+        ...finished,
+        outcome: 'won',
+        players: [
+            { seat: 0, who: 'alex', timeouts: 0, result: 'won' },
+            { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned', ...(exit === undefined ? {} : { exit }) }
+        ]
+    }) as MatchView;
+
+    const theirs = (container: HTMLElement) =>
+        [...container.querySelectorAll('li')].find((one) => one.textContent?.includes('omid.k'))?.textContent ?? '';
+
+    beforeEach(() =>
+    {
+        cleanup();
+        useLocale().setLocale('en');
+    });
+
+    afterEach(() => cleanup());
+
+    it.each([
+        ['resign', 'Gave up'],
+        ['timeout', 'Timeout'],
+        ['left', 'Left']
+    ] as const)('says %s in the result as %s', (exit, words) =>
+    {
+        const container = renderTest(() => MatchResult({ match: ended(exit), mine: 0 }) as Rendered).container;
+
+        expect(theirs(container)).toContain(words);
+    });
+
+    it('says Left for a seat that came without the way it went', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: ended(), mine: 0 }) as Rendered).container;
+
+        expect(theirs(container)).toContain('Left');
+        expect(theirs(container)).not.toContain('Gave up');
+    });
+
+    it('says it in Persian, in the words the plates use', () =>
+    {
+        useLocale().setLocale('fa');
+
+        expect(theirs(renderTest(() => MatchResult({ match: ended('resign'), mine: 0 }) as Rendered).container)).toContain('تسلیم شد');
+        cleanup();
+        expect(theirs(renderTest(() => MatchResult({ match: ended('timeout'), mine: 0 }) as Rendered).container)).toContain('وقت تمام');
+        cleanup();
+        expect(theirs(renderTest(() => MatchResult({ match: ended('left'), mine: 0 }) as Rendered).container)).toContain('ترک کرد');
+        cleanup();
+        expect(theirs(renderTest(() => MatchResult({ match: ended(), mine: 0 }) as Rendered).container)).toContain('ترک کرد');
+
+        useLocale().setLocale('en');
+    });
+
+    it('never says a seat that won gave up, whatever else its row carries', () =>
+    {
+        const match = {
+            ...finished,
+            outcome: 'won',
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0, result: 'won', exit: 'resign' },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost', exit: 'timeout' }
+            ]
+        } as MatchView;
+        const rows = [...renderTest(() => MatchResult({ match, mine: 0 }) as Rendered).container.querySelectorAll('li')].map((one) => one.textContent ?? '');
+
+        expect(rows.some((row) => row.includes('Won'))).toBe(true);
+        expect(rows.some((row) => row.includes('Lost'))).toBe(true);
+        expect(rows.join(' ')).not.toContain('Gave up');
+        expect(rows.join(' ')).not.toContain('Timeout');
+    });
+});
+
+describe('the result, laid over a board', () =>
+{
+    it('stands on a card of its own, with the way back to the board outside it', () =>
+    {
+        const container = renderTest(() => TableResult({ match: finished, shown: true, mine: 0 }) as Rendered).container;
+        const card = container.querySelector('.table-result .table-result-card');
+
+        expect(card).not.toBeNull();
+        expect(card!.textContent).toContain('You won.');
+        expect(card!.querySelectorAll('li')).toHaveLength(2);
+        expect(button(container, 'See the board')!.closest('.table-result-card')).toBeNull();
+    });
+
+    it('gives the board back when asked, and the result back after it', () =>
+    {
+        const container = renderTest(() => TableResult({ match: finished, shown: true, mine: 0 }) as Rendered).container;
+
+        fire(button(container, 'See the board')!, 'click');
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(container.querySelector('.table-result-card')).toBeNull();
+        expect(buttons(container)).toEqual(['Show the result']);
+
+        fire(button(container, 'Show the result')!, 'click');
+
+        expect(container.querySelector('.table-result .table-result-card')!.textContent).toContain('You won.');
+        expect(container.querySelector('.table-result-tab')).toBeNull();
+    });
+});
+
+describe('how long a table may keep a result waiting', () =>
+{
+    it('is longer than the longest ending a table plays at its own pace, and is still a bound', () =>
+    {
+        const SIX_ALL_IN_BEFORE_THE_FLOP = 9400;
+
+        expect(RESULT_WAIT).toBeGreaterThanOrEqual(SIX_ALL_IN_BEFORE_THE_FLOP + 2000);
+        expect(RESULT_WAIT).toBeLessThanOrEqual(15_000);
+    });
+});
+
+describe('the result, leaving the table it stood over', () =>
+{
+    interface Sight
+    {
+        match: MatchView;
+        shown: boolean;
+        mine?: number;
+        busy?: boolean;
+        rematch?: Rematch;
+    }
+
+    const { finishedAt: _finishedAt, outcome: _outcome, winner: _winner, ...begun } = finished;
+    const next = { ...begun, id: 'match-next', rev: 1, players: finished.players.map(({ result: _result, ...one }) => one) } as MatchView;
+    const over: Sight = { match: finished, shown: true, mine: 0, busy: true, rematch: { ready: true, waiting: [], empty: 0 } };
+    const again: Sight = { match: next, shown: false, mine: 1 };
+
+    const seated = (first: Sight, hooks: { onStand?: (stands: boolean) => void; onAgain?: () => void } = {}) =>
+    {
+        const [now, set] = createSignal(first);
+        const { container, unmount } = renderTest(() => TableResult({
+            get match()
+            {
+                return now().match;
+            },
+            get shown()
+            {
+                return now().shown;
+            },
+            get mine()
+            {
+                return now().mine;
+            },
+            get busy()
+            {
+                return now().busy;
+            },
+            get rematch()
+            {
+                return now().rematch;
+            },
+            onStand: hooks.onStand,
+            onAgain: hooks.onAgain
+        }) as Rendered);
+
+        return { container, set, unmount };
+    };
+
+    const elapse = (ms: number) => (runtime().clock as ManualClock).advance(ms);
+
+    const card = (container: HTMLElement) => container.querySelector<HTMLElement>('.table-result');
+
+    const tab = (container: HTMLElement) => container.querySelector<HTMLElement>('.table-result-tab');
+
+    it('is not on the table at all while a game is being played at it', () =>
+    {
+        const { container } = seated({ ...again, mine: 0 });
+
+        expect([card(container), tab(container)]).toEqual([null, null]);
+
+        elapse(RESULT_OUT);
+
+        expect([card(container), tab(container)]).toEqual([null, null]);
+    });
+
+    it('goes over the time it took to come when another game takes the table, and cannot be pressed on its way', () =>
+    {
+        const onAgain = vi.fn();
+        const { container, set } = seated(over, { onAgain });
+        const stood = card(container);
+
+        expect([stood?.hasAttribute('data-leaving'), stood?.hasAttribute('inert')]).toEqual([false, false]);
+
+        set(again);
+
+        expect(card(container), 'the card was built again to be taken away').toBe(stood);
+        expect([stood?.getAttribute('data-leaving'), stood?.hasAttribute('inert')], 'a card on its way out could still be pressed, or was not marked as leaving').toEqual(['true', true]);
+
+        elapse(RESULT_OUT - 1);
+
+        expect(card(container), 'the card was taken away before it had faded').toBe(stood);
+
+        elapse(1);
+
+        expect([card(container), tab(container)]).toEqual([null, null]);
+        expect(onAgain).not.toHaveBeenCalled();
+    });
+
+    it('goes telling of the game it was about, as it stood when that game was the one on the table', () =>
+    {
+        const { container, set } = seated(over, { onAgain: vi.fn() });
+        const start = () => [...container.querySelectorAll('button')].find((one) => one.textContent?.includes('Start the game'));
+
+        expect(start()?.getAttribute('aria-busy')).toBe('true');
+
+        set(again);
+
+        expect(container.querySelector('.table-result-card')?.textContent, 'the card told of the game that had only just begun, or from the chair of the next game').toContain('You won.');
+        expect(container.querySelectorAll('.table-result-card li'), 'the rows of the game it was about were taken off it').toHaveLength(2);
+        expect(start()?.getAttribute('aria-busy'), 'the press that began the next game was shown as not made').toBe('true');
+
+        set({ ...again, match: { ...next, rev: 2 }, busy: false, rematch: { ready: false, waiting: ['omid.k'], empty: 0 } });
+
+        expect(container.querySelector('.table-result-card')?.textContent).toContain('You won.');
+        expect(start()?.getAttribute('aria-busy')).toBe('true');
+        expect(button(container, 'Play again'), 'a card on its way out offered the next game again').toBeUndefined();
+    });
+
+    it('is taken away at once when the game it tells of is still the one on the table', () =>
+    {
+        const stands: boolean[] = [];
+        const { container, set } = seated(over, { onStand: (now) => stands.push(now) });
+
+        set({ ...over, shown: false });
+
+        expect([card(container), tab(container)], 'a table still showing how its game ended had the result fading over it').toEqual([null, null]);
+        expect(stands).toEqual([true, false]);
+
+        set(over);
+
+        expect(card(container)?.hasAttribute('data-leaving')).toBe(false);
+        expect(stands).toEqual([true, false, true]);
+    });
+
+    it('stands again at once, whole, when the next game is over before it has gone', () =>
+    {
+        const { container, set } = seated(over);
+        const ended = { ...finished, id: 'match-next', players: [{ seat: 0, who: 'alex', timeouts: 0, result: 'lost' }, { seat: 1, who: 'omid.k', timeouts: 0, result: 'won' }], winner: 1 } as MatchView;
+
+        set(again);
+        elapse(RESULT_OUT - 40);
+        set({ match: ended, shown: true, mine: 0 });
+
+        expect([card(container)?.hasAttribute('data-leaving'), card(container)?.hasAttribute('inert')]).toEqual([false, false]);
+        expect(container.querySelector('.table-result-card')?.textContent).toContain('omid.k won.');
+
+        elapse(RESULT_OUT);
+
+        expect(card(container), 'the count that was taking the old card away took the new one').not.toBeNull();
+    });
+
+    it('goes as the tab it was folded to, and is a whole card the next time there is a result', () =>
+    {
+        const { container, set } = seated(over);
+
+        fire(button(container, 'See the board')!, 'click');
+        set(again);
+
+        expect([card(container), tab(container)?.getAttribute('data-leaving'), tab(container)?.hasAttribute('inert')]).toEqual([null, 'true', true]);
+
+        elapse(RESULT_OUT);
+
+        expect([card(container), tab(container)]).toEqual([null, null]);
+
+        set({ ...again, match: { ...next, finishedAt: new Date(950_000).toISOString(), outcome: 'won', winner: 0 } as MatchView, shown: true, mine: 0 });
+
+        expect(tab(container), 'the next result came folded away because the last one had been').toBeNull();
+        expect(card(container)).not.toBeNull();
+    });
+
+    it('never tells of a game that is not over, whatever it is asked to show', () =>
+    {
+        const { container } = seated({ ...again, shown: true });
+
+        expect([card(container), tab(container)]).toEqual([null, null]);
+    });
+
+    it('goes when the next game is on the table, even while the board still asks for the last result to be shown', () =>
+    {
+        const stands: boolean[] = [];
+        const { container, set } = seated(over, { onStand: (now) => stands.push(now) });
+        const stood = card(container);
+
+        set({ ...again, shown: true });
+
+        expect([card(container), stood?.getAttribute('data-leaving')], 'the card was kept standing over a game that had only just begun').toEqual([stood, 'true']);
+        expect(container.querySelector('.table-result-card')?.textContent, 'the card told of the game that had only just begun').toContain('You won.');
+
+        set(again);
+        elapse(RESULT_OUT - 1);
+
+        expect(card(container), 'a board that asked late took the card away at once').toBe(stood);
+
+        elapse(1);
+
+        expect(card(container)).toBeNull();
+        expect(stands).toEqual([true, false]);
+    });
+
+    it('tells the board when it stands over the table, and only when it has gone that it no longer does', () =>
+    {
+        const stands: boolean[] = [];
+        const { set } = seated(over, { onStand: (now) => stands.push(now) });
+
+        expect(stands).toEqual([true]);
+
+        set(again);
+
+        expect(stands, 'the board was told the table was clear while the card was still fading over it').toEqual([true]);
+
+        elapse(RESULT_OUT);
+
+        expect(stands).toEqual([true, false]);
+    });
+
+    it('tells a board that seats it during a game that nothing stands there', () =>
+    {
+        const stands: boolean[] = [];
+
+        seated(again, { onStand: (now) => stands.push(now) });
+
+        expect(stands).toEqual([false]);
+    });
+
+    it('leaves nothing counting when the table itself is taken away under it', () =>
+    {
+        const { set, unmount } = seated(over);
+
+        set(again);
+
+        expect((runtime().clock as ManualClock).pending()).toBe(1);
+
+        unmount();
+
+        expect((runtime().clock as ManualClock).pending()).toBe(0);
     });
 });

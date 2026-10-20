@@ -7,13 +7,13 @@ import AchievementLadderSheet from '../src/components/social/achievement-ladder-
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
-import { useAccount } from '../src/stores/account.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
 import type { AchievementFamily, MatchHistoryEntry } from '../src/api.ts';
-import { client, server } from './fake-api.ts';
+import { client, establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -41,7 +41,7 @@ const family = (id: string, game: string | undefined, extra: Partial<Achievement
     ...extra
 });
 
-const WON_LUDO = family('won', 'ludo', { have: 12, earned: 11, next: { step: 12, need: 15, tier: 'bronze', blurb: { en: 'Win 15 games of Ludo.', fa: '۱۵ بازی منچ را ببر.' } } });
+const WON_LUDO = family('won', 'ludo', { have: 12, earned: 11, next: { step: 12, need: 15, tier: 'bronze', blurb: { en: 'Win 15 games of Ludo.', fa: '۱۵ بازی منچ رو ببر.' } } });
 
 const show = async (game?: string) =>
 {
@@ -63,7 +63,7 @@ beforeEach(async () =>
     useCatalogue().reset();
     useRecord().reset();
     useOverlay().reset();
-    await useAccount().signIn('Alex');
+    useSession().establish(establishAccount());
     server.achievements = {
         scopes: [
             { earned: 40, total: 1000 },
@@ -79,7 +79,7 @@ beforeEach(async () =>
             family('won', 'hokm', { have: 0, earned: 0, tier: undefined })
         ],
         recent: [
-            { id: 'ludo-won-11', name: { en: 'Winner 11', fa: 'برنده ۱۱' }, blurb: { en: 'Win 11 games of Ludo.', fa: '۱۱ بازی منچ را ببر.' }, icon: 'trophy', tier: 'bronze', game: 'ludo', earnedAt: '2026-09-02T00:00:00.000Z' }
+            { id: 'ludo-won-11', name: { en: 'Winner 11', fa: 'برنده ۱۱' }, blurb: { en: 'Win 11 games of Ludo.', fa: '۱۱ بازی منچ رو ببر.' }, icon: 'trophy', tier: 'bronze', game: 'ludo', earnedAt: '2026-09-02T00:00:00.000Z' }
         ]
     };
 });
@@ -116,6 +116,58 @@ describe('achievements on a record', () =>
 
         expect(container.textContent).toContain('Win 15 games of Ludo.');
         expect(container.textContent).not.toContain('Family played');
+    });
+
+    describe('the scope chosen', () =>
+    {
+        const shownAt = async (path: string) =>
+        {
+            const Stub = (): HTMLElement => document.createElement('div');
+            const routes: Route[] = [{ path: '/app/me', component: Stub }];
+            const router = createRouter({ routes, history: createMemoryHistory(path), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => PersonRecord({ handle: 'alex', show: ['achievements'] }) }) as Rendered);
+
+            await settle();
+            return { container, router };
+        };
+
+        const chip = (container: HTMLElement, name: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((one) => one.textContent?.includes(name))!;
+
+        it('is written into the address with replace, beside the tab, and Everywhere takes it out', async () =>
+        {
+            const { container, router } = await shownAt('/app/me?tab=achievements');
+
+            chip(container, 'Ludo').click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/me?tab=achievements&scope=ludo');
+            expect(router.location().navigationKind).toBe('replace');
+            expect(container.textContent).toContain('Win 15 games of Ludo.');
+
+            chip(container, useLocale().t('achievements.everywhere')).click();
+            await settle();
+
+            expect(router.location().fullPath).toBe('/app/me?tab=achievements');
+            expect(container.textContent).toContain('Family played');
+        });
+
+        it('is read from the address, so a reload and Back open on it', async () =>
+        {
+            const { container } = await shownAt('/app/me?scope=ludo');
+
+            expect(chip(container, 'Ludo').getAttribute('aria-pressed')).toBe('true');
+            expect(container.textContent).toContain('Win 15 games of Ludo.');
+            expect(container.textContent).not.toContain('Family played');
+        });
+
+        it('is everywhere for a scope the record does not hold', async () =>
+        {
+            const { container } = await shownAt('/app/me?scope=chess');
+
+            expect(chip(container, useLocale().t('achievements.everywhere')).getAttribute('aria-pressed')).toBe('true');
+            expect(container.textContent).toContain('Family played');
+        });
     });
 
     it('shows the next rung and how far along it is, and says so when a ladder is climbed', async () =>
@@ -283,8 +335,8 @@ describe('a ladder', () =>
         server.ladders['ludo-won'] = {
             family: WON_LUDO,
             rungs: [
-                { step: 1, need: 1, tier: 'bronze', name: { en: 'Winner 1', fa: 'برنده ۱' }, blurb: { en: 'Win 1 game of Ludo.', fa: '۱ بازی منچ را ببر.' }, earnedAt: '2026-09-01T00:00:00.000Z' },
-                { step: 2, need: 2, tier: 'bronze', name: { en: 'Winner 2', fa: 'برنده ۲' }, blurb: { en: 'Win 2 games of Ludo.', fa: '۲ بازی منچ را ببر.' } }
+                { step: 1, need: 1, tier: 'bronze', name: { en: 'Winner 1', fa: 'برنده ۱' }, blurb: { en: 'Win 1 game of Ludo.', fa: '۱ بازی منچ رو ببر.' }, earnedAt: '2026-09-01T00:00:00.000Z' },
+                { step: 2, need: 2, tier: 'bronze', name: { en: 'Winner 2', fa: 'برنده ۲' }, blurb: { en: 'Win 2 games of Ludo.', fa: '۲ بازی منچ رو ببر.' } }
             ]
         };
 

@@ -17,7 +17,7 @@ const TICK_FROM = 5;
 
 const HIGH_FROM = 2;
 
-export default component TurnClock(props: { remainingMs?: number; over: boolean; yours?: boolean; class?: string })
+export default component TurnClock(props: { remainingMs?: number; over: boolean; yours?: boolean; class?: string; brief?: boolean })
 {
     const locale = useLocale();
     const settings = useSettings();
@@ -167,7 +167,31 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
         return locale.t('match.deadline.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
     })();
 
-    <Show when={ says !== null }>
+    derived running = says !== null;
+
+    derived brief = props.brief === true;
+
+    derived short = ((): string =>
+    {
+        if (secondsLeft === null)
+        {
+            return '';
+        }
+
+        if (secondsLeft < 90)
+        {
+            return locale.t('match.deadline.brief', { seconds: locale.n(secondsLeft) });
+        }
+
+        if (secondsLeft < 90 * MINUTE)
+        {
+            return locale.t('match.deadline.brief.minutes', { minutes: locale.n(Math.round(secondsLeft / MINUTE)) });
+        }
+
+        return locale.t('match.deadline.brief.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
+    })();
+
+    <Show when={ running }>
         { () =>
             <span
                 class={ () => [
@@ -177,7 +201,14 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
                 ].filter(Boolean).join(' ') }
             >
                 <Icon name="timer" size={ 13 } />
-                <span>{ says }</span>
+                <Show when={ brief } fallback={ <span>{ says }</span> }>
+                    { () =>
+                        <span class="contents">
+                            <span aria-hidden="true">{ short }</span>
+                            <span class="sr-only">{ says }</span>
+                        </span>
+                    }
+                </Show>
             </span>
         }
     </Show>

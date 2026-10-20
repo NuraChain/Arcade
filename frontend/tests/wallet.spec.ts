@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { NURA_CHAIN, chainIsConfigured } from '../src/data/chain.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetKeyStore, setKeyStore, type DeviceKeys, type KeyStore } from '../src/lib/device-keys.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
-    addressHue,
     announcedWallets,
     detect,
     discoverWallets,
@@ -19,7 +19,7 @@ import {
 import { personFor, useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useWallet } from '../src/stores/wallet.store.ts';
-import { fixtureAccount, guestAccount, server, walletAccount } from './fake-api.ts';
+import { fixtureAccount, server, walletAccount } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -29,6 +29,7 @@ let clock: ManualClock;
 
 interface FakeOptions
 {
+    permissions?: unknown[] | 'refused';
     accounts?: string[];
     chainId?: string;
     rejectAccounts?: boolean;
@@ -72,6 +73,15 @@ function fakeProvider(options: FakeOptions = {}): Eip1193Provider & { calls: str
                 signed.push(String((params as unknown[] | undefined)?.[0] ?? ''));
                 return '0xsignature';
             }
+            if (method === 'wallet_getPermissions')
+            {
+                if (options.permissions === 'refused')
+                {
+                    throw { code: -32601, message: 'The method does not exist.' };
+                }
+
+                return options.permissions ?? null;
+            }
             if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain')
             {
                 return null;
@@ -108,6 +118,112 @@ afterEach(() =>
     delete (window as unknown as { ethereum?: unknown }).ethereum;
 });
 
+describe('a wallet whose account goes while the page is open', () =>
+{
+    const OTHER = '0x2B5AD5c4795c026514f8317c7a215E218DcCD6cF';
+
+    const live = async (options: FakeOptions = {}) =>
+    {
+        const provider = fakeProvider(options);
+        const heard: ((...args: unknown[]) => void)[] = [];
+        const gone: string[] = [];
+
+        provider.on = (event: string, listener: (...args: unknown[]) => void) =>
+        {
+            if (event === 'accountsChanged')
+            {
+                heard.push(listener);
+            }
+        };
+        (window as unknown as { ethereum?: unknown }).ethereum = provider;
+        useWallet().reset();
+
+        const stop = useWallet().start();
+        const off = useWallet().onLeft((address) => gone.push(address));
+
+        await flush();
+
+        return {
+            gone,
+            say: async (accounts: string[]) =>
+            {
+                for (const listener of heard)
+                {
+                    listener(accounts);
+                }
+
+                await flush();
+            },
+            stop: () =>
+            {
+                off();
+                stop();
+            }
+        };
+    };
+
+    const flush = async () =>
+    {
+        for (let step = 0; step < 8; step += 1)
+        {
+            await Promise.resolve();
+        }
+    };
+
+    it('says which account left when the wallet offers another one instead', async () =>
+    {
+        const wallet = await live();
+
+        await wallet.say([OTHER]);
+
+        expect(wallet.gone).toEqual([ADDRESS]);
+        expect(useWallet().address()).toBe(OTHER);
+        wallet.stop();
+    });
+
+    it('says which account left when this site was disconnected from the wallet', async () =>
+    {
+        const wallet = await live({ permissions: [] });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([ADDRESS]);
+        wallet.stop();
+    });
+
+    it('says nothing when the wallet is only locked, because the site is still connected to it', async () =>
+    {
+        const wallet = await live({ permissions: [{ parentCapability: 'eth_accounts' }] });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([]);
+        expect(useWallet().address()).toBeNull();
+        wallet.stop();
+    });
+
+    it('says nothing when the wallet cannot say whether it is locked or disconnected', async () =>
+    {
+        const wallet = await live({ permissions: 'refused' });
+
+        await wallet.say([]);
+
+        expect(wallet.gone).toEqual([]);
+        wallet.stop();
+    });
+
+    it('says nothing about an account it had not offered, or one offered again in another case', async () =>
+    {
+        const wallet = await live({ accounts: [] });
+
+        await wallet.say([OTHER]);
+        await wallet.say([OTHER.toLowerCase()]);
+
+        expect(wallet.gone).toEqual([]);
+        wallet.stop();
+    });
+});
+
 describe('addresses', () =>
 {
     it('recognises an address and refuses anything else', () =>
@@ -124,14 +240,6 @@ describe('addresses', () =>
         expect(short.endsWith('976F')).toBe(true);
         expect(short.length).toBeLessThan(ADDRESS.length);
         expect(shortAddress('not-an-address')).toBe('not-an-address');
-    });
-
-    it('gives every address a stable hue', () =>
-    {
-        expect(addressHue(ADDRESS)).toBe(addressHue(ADDRESS));
-        expect(addressHue(ADDRESS)).toBeGreaterThanOrEqual(0);
-        expect(addressHue(ADDRESS)).toBeLessThan(360);
-        expect(addressHue('0x0000000000000000000000000000000000000001')).not.toBe(addressHue(ADDRESS));
     });
 });
 
@@ -172,8 +280,8 @@ describe('provider detection', () =>
         expect(walletName(fakeProvider())).toBe('MetaMask');
         expect(walletName({ ...fakeProvider(), isNuraWallet: true })).toBe('Nura Wallet');
         expect(walletName({ ...fakeProvider({ isMetaMask: false }), isRabby: true })).toBe('Rabby');
-        expect(walletName(fakeProvider({ isMetaMask: false }))).toBe('Browser wallet');
-        expect(walletName(null)).toBe('Browser wallet');
+        expect(walletName(fakeProvider({ isMetaMask: false })), 'an unnamed wallet was named, in one language').toBeNull();
+        expect(walletName(null)).toBeNull();
     });
 
     it('reads the standard provider error codes', () =>
@@ -269,6 +377,25 @@ describe('wallet store', () =>
         expect(wallet.failure()).toBe('unavailable');
     });
 
+    it('says a sign-in the server is refusing for now is too many, at either step', async () =>
+    {
+        const wallet = useWallet();
+        wallet.adopt(fakeProvider());
+
+        server.refuse = 'challenge-busy';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.status()).toBe('error');
+        expect(wallet.failure()).toBe('busy');
+
+        server.refuse = 'wallet-busy';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.failure()).toBe('busy');
+
+        server.refuse = null;
+        expect(await wallet.connect()).not.toBeNull();
+        expect(wallet.failure()).toBeNull();
+    });
+
     it('forgets the account on disconnect', async () =>
     {
         const wallet = useWallet();
@@ -343,6 +470,115 @@ describe('wallet store', () =>
     });
 });
 
+describe('connecting a wallet adds this browser', () =>
+{
+    const memoryKeys = () =>
+    {
+        const store: KeyStore & { minted: number; held: DeviceKeys | null } = {
+            minted: 0,
+            held: null,
+            available: () => true,
+            async load()
+            {
+                return store.held;
+            },
+            async secrets()
+            {
+                return null;
+            },
+            async mint()
+            {
+                store.minted += 1;
+                store.held = { id: `device-${ store.minted }`, exchangeKey: `exchange-${ store.minted }`, signingKey: `signing-${ store.minted }` };
+
+                return store.held;
+            },
+            async forget()
+            {
+                store.held = null;
+            }
+        };
+
+        return store;
+    };
+
+    let keys: ReturnType<typeof memoryKeys>;
+
+    beforeEach(() =>
+    {
+        keys = memoryKeys();
+        setKeyStore(keys);
+    });
+
+    afterEach(() =>
+    {
+        resetKeyStore();
+    });
+
+    const signs = (provider: ReturnType<typeof fakeProvider>) => provider.calls.filter((method) => method === 'personal_sign').length;
+
+    it('makes keys for a browser that has none, and names them in the one message the wallet signs', async () =>
+    {
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted).toBe(1);
+        expect(signs(provider)).toBe(1);
+        expect(provider.signed[0]).toContain(`Browser key: ${ keys.held?.id }`);
+        expect(server.received?.device?.id).toBe(keys.held?.id);
+    });
+
+    it('keeps keys this account already has here, and asks for no device in what the wallet signs', async () =>
+    {
+        const held = await keys.mint();
+
+        server.addDevice({ id: held.id, exchangeKey: held.exchangeKey, signingKey: held.signingKey });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted, 'keys this account holds were thrown away').toBe(1);
+        expect(signs(provider)).toBe(1);
+        expect(provider.signed[0]).not.toContain('Browser key:');
+        expect(server.calls.filter((call) => call === 'auth.challenge')).toHaveLength(1);
+    });
+
+    it('makes new keys before the wallet signs when the ones here are not this account’s, so one signature still adds the browser', async () =>
+    {
+        const stale = await keys.mint();
+
+        server.addDevice({ id: stale.id, exchangeKey: stale.exchangeKey, signingKey: stale.signingKey, revoked: true });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        await useWallet().connect();
+
+        expect(keys.minted, 'the keys the server would refuse were kept').toBe(2);
+        expect(keys.held?.id).not.toBe(stale.id);
+        expect(signs(provider), 'the browser was added with a second signature').toBe(1);
+        expect(provider.signed[0]).toContain(`Browser key: ${ keys.held?.id }`);
+        expect(provider.signed[0]).not.toContain(stale.id);
+        expect(server.received?.device?.id).toBe(keys.held?.id);
+    });
+
+    it('makes nothing for a browser that cannot hold keys, and still signs in', async () =>
+    {
+        setKeyStore({ ...memoryKeys(), available: () => false });
+
+        const provider = fakeProvider();
+        useWallet().adopt(provider);
+
+        expect(await useWallet().connect()).toEqual(walletAccount(ADDRESS));
+        expect(provider.signed[0]).not.toContain('Browser key:');
+        expect(server.received?.device).toBeUndefined();
+    });
+});
+
 describe('wallet identity', () =>
 {
     it('builds a person from the account the server issued', () =>
@@ -366,17 +602,13 @@ describe('wallet identity', () =>
         const person = account.adoptWallet(established!);
 
         expect(session.signedIn()).toBe(true);
-        expect(account.isWallet()).toBe(true);
         expect(account.address()).toBe(ADDRESS.toLowerCase());
         expect(person?.handle).toBe('71c765');
         expect(account.user()?.handle).toBe('71c765');
     });
 
-    it('never mistakes a guest for a wallet', () =>
+    it('resolves nothing for a browser that is signed out', () =>
     {
-        const person = personFor(guestAccount('Darya'));
-        expect(person?.handle).toBe('darya');
-        expect(person?.displayName).toBe('Darya');
         expect(personFor(null)).toBeNull();
     });
 

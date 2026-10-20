@@ -116,8 +116,107 @@ and can be told to refuse; specs that assert on those calls import `server` from
 derives handles with the REAL `handleFromName`, imported from the server, so the two cannot drift.
 
 Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
-are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
+are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/avatars`; in
 production one process answers everything, so there is no CORS between halves in either mode.
+
+## A write from a page on another site
+
+**It is refused before anything reads it.** Three things already stood in front of a forged
+write: the session cookie is `SameSite=Lax`, so a page on another SITE cannot send it with a post;
+the JSON reader refuses any body that is not `application/json`, so a form cannot fake one; and a
+browser will not send JSON across origins without asking first, which nothing here answers. What
+was left was a write with no body (sitting down, starting, leaving, closing, accepting) sent from
+a page on the same SITE but another origin - a sibling subdomain - where `Lax` does send the
+cookie. `sameSiteWrites` in `http/origin.ts`, the second thing `buildApp` puts on the app,
+refuses any method but `GET`, `HEAD` and `OPTIONS` when `Sec-Fetch-Site` names another site
+or the `Origin` is not ours, 403 `cross-site`. Ours is `PUBLIC_ORIGIN` or the host the request
+was sent to (`isOurs`, the union the realtime handshake already used, which now asks the same
+function). A caller with no `Origin` and no `Sec-Fetch-Site` is no browser and carries no cookie
+a page could have lent it, so it passes; the passes post that way. A blanked `Origin: null`
+passes only beside `Sec-Fetch-Site: same-origin`, which is what a same-origin form sends under
+`Referrer-Policy: no-referrer`. The framework's own `csrfProtect` adds a double-submit token on
+top, which every api pass would have had to learn to carry for no defence the origin does not
+already give. `origin.spec.ts` holds the rule and `app.spec.ts` the route: a forged close
+never reaches the table.
+
+**Production answers are pinned to https** (`headersFor` in `http/headers.ts`): HSTS for half a
+year, not forced onto sibling subdomains, sent only on an answer the proxy says went out over
+https (`trustProxy` in production, as the rate limiter has). `headers.spec.ts` holds it.
+
+**A gate in front of the router decides on the path the router routes.** The router decodes each
+segment of a path before it matches it, so `/%61pi/healthz` reaches `/api/healthz` (the
+framework's `context.path` says as much), while `forPaths` asked `new URL().pathname`, which keeps
+the raw spelling. The per-address ceiling therefore let any encoded spelling of any route through
+unmetered: with a ceiling of two, `/%61pi/thing` answered 200 four times. `routedPath` in
+`http/rate-limit.ts` decodes each segment as the router does and drops the empty ones, and
+`forPaths` decides on that, so every spelling of a path shares one budget. Anything else put above
+the router that picks requests by their path has to ask the same function. The socket server
+matches `/ws` exactly and upgrades no other spelling, the cross-site rule above looks at every
+write whatever its path, and the framework's file server keeps a decoded path inside its root.
+`rate-limit.spec.ts` (*a path the router reads another way*) holds it, and the framework register
+has the reproduction (entry 42: a wrapper is handed no way to read the path the router will match).
+
+**Signing in has a budget of its own.** The two routes a caller who is not signed in can write
+with are `/auth/challenge`, which stores a challenge row, and `/auth/wallet`, which makes an
+account the first time an address signs. Under the api's ceiling alone one address could store
+600 challenges a minute (they are swept a day after they expire) and make 300 accounts.
+`signInRateLimit` gives the two together a twentieth of `API_RATE_MAX`, never under ten: 30 a
+minute at 600, which is ten sign-ins, and a thousand under the passes' 20000, which mint wallets
+by the dozen. It is derived and not a variable of its own so that raising the ceiling for a load
+run raises it too. The browser says a 429 at either step in its own words (`busy`: "Too many
+sign-ins from this network"), where it used to say the server could not be reached.
+`rate-limit.spec.ts` (*the sign-in budget*) holds the share, the two routes, a refusal however the
+path is spelled, and the line of `main.ts` that puts it on the server.
+
+**There is no Content-Security-Policy for scripts, on purpose.** Signing in is a wallet, and
+wallets put their provider into the page: an extension's content script, Nura Wallet's in-app
+browser. A script policy would stand between the page and the only way in, on wallets nobody here
+can test, while the page itself writes no user content as HTML (links in messages are http and
+https only, `lib/markdown.ts`). The images this server fetches for a page carry their own
+`default-src 'none'`.
+
+## A request that is not well formed
+
+**It is answered, never thrown.** Postgres refuses four things a caller can put in a request, and
+each of them used to come back as a 500 any signed-in caller could produce: text with a NUL in it
+(22021), a uuid that is not one (22P02), a timestamp that is not one, and a number too large for
+its column (22003). `tools/qa/garbage-pass.mjs` sends every route such things, and on the day it
+was written half of them answered one that way: forty-nine of its ninety-eight checks.
+
+- **Text on the wire is declared through one function.** `schemas.ts` imports the library's
+  `string` as `text` and calls it once, in a `string` of its own that adds a pattern no NUL passes.
+  So every field of every body and query refuses one as `validation-failed`, a 422, before a port
+  is asked, and nobody declaring a new field has to remember to. `well-formed.spec.ts` reads the
+  file and fails on a second call of the library's own. The pattern is built with
+  `String.fromCharCode`, as every control character in this server is, so the source holds none.
+- **An address is not a schema's.** A name in a path goes to whatever looks it up, a slug and a
+  handle as text. `http/well-formed.ts` is the first thing `buildApp` puts on the app: any URL
+  carrying `%00` is `bad-request`, a 400, before the session is read. A percent sign somebody typed
+  arrives as `%25` and is let through.
+- **An id that reaches a uuid column is asked for its shape first, and a no is the answer a missing
+  thing gets.** Every read did this (`membership()`, `one()`, `read()`); `answerRequest` was a
+  WRITE whose port-level read checked and whose own UPDATE did not, so a handle sent where a
+  request's id belongs was a 500. It answers in the bytes of a request that is not there.
+- **A cursor that does not parse is no cursor**: the first page, as the leaderboard's always was.
+  `decodeCursor` took the id half on trust, so base64url of a date and anything at all reached
+  Postgres as a uuid; it reads through `listAfter`'s shape now. The match history took both halves
+  on trust and sent them as text; `historyAfter` parses them and hands Postgres a `Date`. A day the
+  calendar does not have is whatever JavaScript makes of it, which is a day.
+- **`since` clamps the revision it is asked from** to what the game has reached. A number past the
+  column's range reads as nothing new and one before the beginning as the whole game. The watch
+  read clamps the same way, through the same reader (`match.told`), and reads a revision that is
+  absent or is no whole number as no revision at all: the board, and no events
+  (`.claude/rules/games.md`, *A watcher is told what happened*).
+
+`well-formed.spec.ts` holds the first two with no Postgres: every route in the manifest that takes
+a name from its address, refused with nobody asked. `well-formed.db.spec.ts` holds the other three
+through the ports. The pass holds all of it over the real server, and takes its routes from the
+server's own manifest, so a route added later is sent the same things; one that takes a body has
+to be given garbage there or named as spared, or the pass fails saying which.
+
+One thing it does not hold: the realtime gateway reads its own frames by hand. A `play` goes
+through `matchPlayInput`, so its text is this text; a table or a match is named by an id every
+reader of it checks; nothing else a frame carries is stored.
 
 ## The schema, and reference data
 
@@ -157,10 +256,11 @@ same rule bit `push_subscriptions`: the entity never declared `unique: true` on 
 synchronized schema had no constraint for `on conflict (endpoint)` to find and every push
 subscription was a 500.
 
-**Reference data** is content the product cannot run without: the games, their rules, the
-achievement definitions, and the three demo personas. `backend/src/db/seed-reference.ts` upserts it on every boot, so a changed
+**Reference data** is content the product cannot run without: the games, their rules and the
+achievement definitions. `backend/src/db/seed-reference.ts` upserts it on every boot, so a changed
 blurb ships without a schema change. It is not development fixtures — those are a separate file that
-refuses to run outside development.
+refuses to run outside development. Nothing else is written into a production database by the
+server itself: every person, table, message and score is made by the people using it.
 
 A seed that upserts into a table real people also write to needs a guard, and the demo personas
 were that case: their `on conflict (handle)` ended in `where users.kind = 'demo'`, because without
@@ -169,6 +269,15 @@ sign into. That was not hypothetical — it happened in development the first ti
 against an account that had claimed `sara.k` minutes earlier. The personas are gone and so is the
 guard, but the shape of the mistake is worth keeping: a seed that writes into a table people also
 write to needs to say which rows are ITS rows.
+
+**Two servers that start against one database seed it at once, and the seed waits its turn.**
+`on conflict (id)` cannot arbitrate an insert that meets the other server's same row first on
+another unique column (`games.slug`), so on an empty database the second boot died on a unique
+violation, found by starting two production servers together on a new database. The seed's
+first statement is `pg_advisory_xact_lock(hashtext('nura:seed'))` (raw, because no repository can
+say it), so a second seed waits for the first to commit and then finds every row there.
+`seed-race.db.spec.ts` seeds an empty database from two connections at once, eight rounds, and
+holds the lock itself to see a seed wait for it; before the lock the first failed in round six.
 
 One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
 conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
@@ -182,11 +291,9 @@ geometry and the landing route is `render: 'static'`: it must paint with no Java
 server. The two merge by id, the server wins where both hold a field, and
 `backend/tests/reference-parity.spec.ts` fails if they ever drift.
 
-**The live counts on the home page are SIMULATED, and deliberately not zero.** No table has ever
-been opened — tables arrive with the play domain — so `BASE` and `seededStats` in
-`catalogue.store.ts` drift on a seeded RNG. Both are deleted outright the moment the server
-answers with real counts. Zeroing them instead would be a different lie: "0 people at the tables"
-reads as a broken product rather than an unbuilt feature.
+**The live counts are counted**, by `catalogue.live()`, and what each number means is in
+`.claude/rules/games.md` (*The live counts are counted*). This paragraph said they were simulated
+for a long time after they stopped being.
 
 **A store that reads the server must be read reactively.** `catalogue.rules()` used to be a
 synchronous array and is now backed by a resource, so `const rules = catalogue.rules(id)` captures
@@ -268,12 +375,45 @@ friendship rows inside the same transaction, so afterwards there is nothing left
 about; getting back to friends means asking again. Worth knowing before writing a test that
 blocks the same person twice and wonders why the second one measures nothing.
 
+**A friendship is ended by either of the two, and that is not a block.** `POST
+/social/friends/remove` deletes both rows and rings both people; nothing is written to anybody's
+notifications. For a long time the store had `remove`, the server had the route, and no control
+called either, so the only way to stop being somebody's friend was to block them: a verb with a
+test and no caller, the shape *Something declared needs a caller* is about. The person's menu
+(`PersonActions`) offers "Remove {name} from friends" to a friend and to nobody else, behind a
+question that says what it does: the two leave each other's list, nobody is sent a message about
+it, and either can ask again. `person-actions.spec.ts` holds it, and is the first spec to mount
+that menu at all.
+
 **Three of the reads are LAZY, and pages ask for them.** `graph` and `privacy` are fetched on
 boot because the shell reads both on every route. The directory, the suggestions and my reports
 are not - that would be three more requests on every navigation for three lists that two pages
 between them ever show - so a page calls `social.want('people' | 'suggestions' | 'reports')` in
 its `mount`. The responsive matrix is what found this: nine API calls per page over six hundred
 pages took the rate limiter out, and the limiter was right.
+
+**Somebody past the directory is found by asking, and only a person is ever asked for.** The
+directory answers sixty accounts in handle order and the search page ranked those, so on any
+deployment with more, most people could not be found by name. `GET /social/search?q=` looks at
+handles and display names: `search()` in the social service, a query builder with the directory's
+own exclusions (the searcher, a block in either direction, a suspended account). `%` and `_` are
+read as letters; the Arabic letterforms somebody types are read as the Persian ones that were
+stored, and the other way round, through one `translate`; an exact handle comes first, then handles
+that begin with what was asked, then names; fewer than two letters answer nobody; at most
+`PEOPLE_FOUND_MAX` come back. `social/names.ts` holds the folding with no imports, so the specs'
+server folds the same way. **The browser asks only when the reader is plainly looking for a
+person** - the People filter, or a query that begins with @ - because the same box searches the
+messages this browser has opened, and what somebody types there must not reach the server
+(*Search says what it covers* in `chat-and-keys.md`). It is a scan. At a size where that shows,
+the answer is a trigram index on the two folded expressions, built by hand in `syncSchema` beside
+the others.
+
+**The reader's friends are ranked by the box whatever is searched.** What the box ranks without
+asking was the directory (sixty accounts in handle order) and whoever the server had found before,
+so a friend's name typed into "everything" found nobody wherever the directory's sixty were other
+people: on the QA database, "Sara Kamali" answered "Nothing" to Sara's friend. The friends list is
+in the browser already (the graph), so `search.store` ranks it too, and nothing typed is sent.
+`people-search.spec.ts` (*the reader's own friends*) holds it.
 
 ## Groups
 
@@ -444,8 +584,8 @@ carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `backend/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
 extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
-decorator can express. `main.ts` runs it when `DATABASE_SYNC=true` - true in development, false in
-production - and `npm run schema:sync --workspace backend` is the same code as a deliberate act. A sync cannot apply a NOT NULL column or a new CHECK to rows
+decorator can express. `main.ts` runs it at every start in development and never in production,
+where `npm run schema:sync --workspace backend` is the same code as a deliberate act. A sync cannot apply a NOT NULL column or a new CHECK to rows
 that predate it - a VPS database from before `tables.chat` failed exactly that way - so boot names
 the rebuild (`drop schema public cascade; create schema public`) instead of dumping the stack,
 because nothing here migrates rows.

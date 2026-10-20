@@ -1,129 +1,158 @@
 import { untrack } from 'azerothjs';
 
-import Rail from '../ui/rail.component.azeroth';
-import TableResult from './table-result.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
-import DieFace from './die-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
-import { plateTag } from './plate-tag.ts';
+import { missesOf, plateTag, withMisses } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
-import Icon from '../../icons/icon.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
-import { backgammonBeats, tableCues } from './table-cues.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { diceOf, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
-import type { Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
-import { coachOf, hits, outcomeOf } from '../../game/helpers/backgammon.ts';
+import { BAR, OFF, type Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
+import { coachOf, hits, outcomeOf, reachOf } from '../../game/helpers/backgammon.ts';
+import { createBackgammonTable, HOP_MS, type BackgammonTable, type Facts, type Invite } from '../../game/board/backgammon-table.ts';
+import { feltOf, seedOf, type Felt, type Told } from '../../game/backgammon-felt.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { clamp } from '../../game/stage/curves.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import { createPresenter, type Presenter, type Sight } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
 import {
     BAR_LEFT,
     BAR_WIDTH,
     BOTTOM,
+    CUBE,
+    DICE_X,
     FIELD_LEFT,
     FIELD_RIGHT,
     FRAME,
     HEIGHT,
     MIDDLE,
-    POINT_HEIGHT,
-    POINT_WIDTH,
     RADIUS,
-    STACK_SHOWN,
     TOP,
     TRAY,
     TRAY_LEFT,
     WIDTH,
-    columnOf,
+    cubeY,
+    patchOf,
     pointAt,
-    stackAt,
-    type Row
+    SPIKES,
+    type Patch
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
 
 type Tone = 'light' | 'dark';
 
-interface Piece
+const PEGS_MOST = 9;
+
+interface Stop
 {
     key: string;
+    says: string;
+    place: string;
+}
+
+const NO_STOPS: Stop[] = [];
+
+const WALKS: Record<string, number | undefined> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+const placed = (patch: Patch) =>
+    `left: ${ (patch.x / WIDTH * 100).toFixed(3) }%; top: ${ (patch.y / HEIGHT * 100).toFixed(3) }%; width: ${ (patch.w / WIDTH * 100).toFixed(3) }%; height: ${ (patch.h / HEIGHT * 100).toFixed(3) }%`;
+
+const DICE_PLACE = `left: ${ (DICE_X / WIDTH * 100).toFixed(3) }%; top: 50%`;
+
+interface Staged
+{
+    at: string;
+    hops: readonly Hop[];
+}
+
+interface Picked
+{
+    at: string;
+    spot: number;
+}
+
+interface Rolled
+{
+    seed: number;
+    faces: string;
+    landed: boolean;
+}
+
+interface Drag
+{
+    id: number;
+    spot: number;
     x: number;
     y: number;
-    tone: Tone;
-    label: string;
-    lit: boolean;
+    carried: boolean;
 }
 
-interface Slab
-{
-    key: string;
-    y: number;
-    tone: Tone;
-}
+const NONE: readonly Hop[] = [];
 
-interface Spike
-{
-    point: number;
-    path: string;
-    shade: 'a' | 'b';
-}
+const NOWHERE: ReadonlyMap<number, Hop[]> = new Map();
 
-interface Mark
-{
-    key: string;
-    x: number;
-    y: number;
-}
+const FINGER = RADIUS * 2.2;
+
+const SLOP = 10;
+
+const HURRY_MS = 8000;
+
+const MOUSE_SLOP = 4;
 
 const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
 
-const SPIKES: readonly Spike[] = POINTS.map((point) =>
-{
-    const column = columnOf(point);
-    const base = column.row === 'top' ? TOP : BOTTOM;
-    const tip = column.row === 'top' ? TOP + POINT_HEIGHT : BOTTOM - POINT_HEIGHT;
+const covered = (moves: readonly Told[], mine: readonly Hop[]) =>
+    (mine.every((hop, index) => moves[index]?.e === 'move' && moves[index].from === hop.from && moves[index].to === hop.to) ? mine.length : null);
 
-    return {
-        point,
-        path: `${ column.x },${ base } ${ column.x + POINT_WIDTH },${ base } ${ column.x + POINT_WIDTH / 2 },${ tip }`,
-        shade: point % 2 === 0 ? 'a' : 'b'
-    };
-});
-
-const SLAB = (BOTTOM - TOP - 40) / 30;
-
-const GAP = 10;
-
-const centreOf = (point: number) => columnOf(point).x + POINT_WIDTH / 2;
-
-export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+export default component BackgammonBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
-    state staged: Hop[] = [];
+    state staged: Staged = { at: '', hops: NONE };
 
-    state picked: number | null = null;
+    state picked: Picked | null = null;
+
+    state doubling = '';
+
+    state carrying = false;
+
+    state rigged = false;
+
+    state rolled: Rolled = { seed: -1, faces: '', landed: true };
+
+    state says = '';
+
+    state passed = '';
+
+    state facts: Facts | null = null;
+
+    state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
+
+    state rover = '';
 
     derived game = props.match;
 
-    let stagedFor = untrack(() => `${ props.match.id }:${ props.match.rev }`);
+    derived at = `${ game.id }:${ game.rev }`;
 
-    effect
-    {
-        const at = `${ game.id }:${ game.rev }`;
+    derived hops = staged.at === at ? staged.hops : NONE;
 
-        if (at !== stagedFor)
-        {
-            stagedFor = at;
-            staged = [];
-            picked = null;
-        }
-    }
+    derived chosen = picked !== null && picked.at === at ? picked.spot : null;
 
     derived view = backgammonOf(game);
 
@@ -155,154 +184,92 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
+    derived throwing = view !== null && !over && mine !== undefined && view.phase === 'opening' && !(view.opening ?? []).some((one) => one.seat === mine);
+
+    derived onTurn = view === null || over
+        ? -1
+        : (facts === null ? view.turn : (facts.turn === null ? -1 : (facts.turn === 'near' ? viewer : 1 - viewer)));
+
     const settings = useSettings();
 
     derived hints = settings.settings().hintMoves;
 
-    derived told = settings.settings().hintOutcome;
+    let root: HTMLElement | null = null;
 
-    const cues = tableCues({
-        enabled: untrack(() => settings.settings().sound),
-        seq: untrack(() => board.events().seq),
-        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
-        beats: (events) => backgammonBeats(events.flatMap((one) => (one.log.kind === 'backgammon' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
-    });
+    let layer: HTMLElement | null = null;
+    let men: BackgammonTable | null = null;
+    let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
+    let sound: SoundHandle | null = null;
+    let drag: Drag | null = null;
+    let cursor: HTMLElement | null = null;
+    let byKey = false;
 
-    effect
-    {
-        const batch = board.events();
-
-        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
-    }
+    const chime = turnChime(() => sound);
 
     effect
     {
-        const yours = myTurn;
+        const yours = myTurn || throwing;
 
-        untrack(() => cues.turn(yours && props.match.mine !== undefined));
+        untrack(() => chime(yours && props.match.mine !== undefined));
     }
 
-    effect
-    {
-        const on = settings.settings().sound;
+    derived wanted = view !== null && !over && view.dice.length > 0 ? seedOf(game.id, game.rev) : -1;
 
-        untrack(() => cues.setEnabled(on));
-    }
+    derived faced = view === null ? '' : view.dice.slice(0, 2).join();
 
-    mount
-    {
-        return () => cues.dispose();
-    }
+    derived hurried = game.remainingMs !== undefined && game.remainingMs < HURRY_MS;
 
-    derived plan = myTurn && view!.phase === 'move' && view!.dice.length === 2
-        ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, staged)
+    derived opening = !rigged && props.events.opens !== undefined && props.events.id === game.id;
+
+    derived landed = !opening && (!rigged || wanted === -1 || hurried || (rolled.landed && (rolled.seed === wanted || (!presenting && rolled.faces === faced))));
+
+    derived plan = landed && myTurn && view!.phase === 'move' && view!.dice.length === 2
+        ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops)
         : null;
 
     derived near = plan?.at.me ?? rowOf(viewer);
 
     derived far = plan?.at.them ?? rowOf(1 - viewer);
 
-    derived sources = new Set(picked === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
+    derived sources = new Set(chosen === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
 
-    derived targets = picked === null || !hints ? [] : (plan?.next ?? []).filter((hop) => hop.from === picked).map((hop) => hop.to);
+    derived reach = plan === null || chosen === null
+        ? NOWHERE
+        : reachOf({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, hops, chosen);
 
-    const stack = (key: string, count: number, x: number, row: Row, base: number | undefined, tone: Tone, lit: boolean): Piece[] =>
-        Array.from({ length: Math.min(count, STACK_SHOWN) }, (_, index) => ({
-            key: `${ key }-${ index }`,
-            x,
-            y: stackAt(row, index, base),
-            tone,
-            label: index === STACK_SHOWN - 1 && count > STACK_SHOWN ? String(count) : '',
-            lit: lit && index === Math.min(count, STACK_SHOWN) - 1
-        }));
+    derived targets = hints ? [...reach.keys()] : [];
 
-    derived pieces = ((): Piece[] =>
-    {
-        if (view === null)
-        {
-            return [];
-        }
+    derived lights = new Set<number>(chosen === null ? [...sources] : [...sources, chosen]);
 
-        const mineTone = toneOf(viewer);
-        const theirTone = toneOf(1 - viewer);
-        const out: Piece[] = [];
-
-        for (const point of POINTS)
-        {
-            const column = columnOf(point);
-            const own = near[point] ?? 0;
-            const theirs = far[25 - point] ?? 0;
-
-            if (own > 0)
-            {
-                out.push(...stack(`n${ point }`, own, centreOf(point), column.row, undefined, mineTone, sources.has(point) || picked === point));
-            }
-
-            if (theirs > 0)
-            {
-                out.push(...stack(`f${ point }`, theirs, centreOf(point), column.row, undefined, theirTone, false));
-            }
-        }
-
-        const barX = BAR_LEFT + BAR_WIDTH / 2;
-
-        out.push(...stack('nbar', near[25] ?? 0, barX, 'top', MIDDLE + GAP, mineTone, sources.has(25) || picked === 25));
-        out.push(...stack('fbar', far[25] ?? 0, barX, 'bottom', MIDDLE - GAP, theirTone, false));
-
-        return out;
-    })();
-
-    derived slabs = (() =>
-    {
-        const out: Slab[] = [];
-
-        for (let index = 0; index < (near[0] ?? 0); index += 1)
-        {
-            out.push({ key: `n${ index }`, y: BOTTOM - 12 - (index + 1) * SLAB, tone: toneOf(viewer) });
-        }
-
-        for (let index = 0; index < (far[0] ?? 0); index += 1)
-        {
-            out.push({ key: `f${ index }`, y: TOP + 12 + index * SLAB, tone: toneOf(1 - viewer) });
-        }
-
-        return out;
-    })();
-
-    derived marks = targets.filter((to) => to !== 0).map((to): Mark =>
-    {
-        const column = columnOf(to);
-        const own = near[to] ?? 0;
-
-        return { key: `m${ to }`, x: centreOf(to), y: stackAt(column.row, Math.min(own, STACK_SHOWN - 1)) };
-    });
+    derived aimed = new Set(targets.filter((to) => to !== 0));
 
     derived trayLit = targets.includes(0);
 
-    derived dice = view === null ? [] : diceOf(view.dice);
+    derived dice = view === null || view.dice.length < 2 ? [] : diceOf(view.dice);
 
     derived spent = (() =>
     {
         const left = [...dice];
         const used = dice.map(() => false);
 
-        for (const hop of staged)
+        for (const hop of hops)
         {
             const distance = hop.from - hop.to;
-            let at = left.indexOf(distance);
+            let found = left.indexOf(distance);
 
-            if (at < 0 && hop.to === 0)
+            if (found < 0 && hop.to === 0)
             {
                 const bigger = left.filter((face) => face > distance).sort((a, b) => a - b)[0];
 
-                at = bigger === undefined ? -1 : left.indexOf(bigger);
+                found = bigger === undefined ? -1 : left.indexOf(bigger);
             }
 
-            if (at >= 0)
+            if (found >= 0)
             {
-                const face = left[at];
+                const face = left[found];
 
-                left.splice(at, 1);
+                left.splice(found, 1);
 
                 const slot = dice.findIndex((one, index) => one === face && !used[index]);
 
@@ -316,46 +283,17 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return used;
     })();
 
-    derived faces = dice.map((face, index) => ({ face, index, spent: spent[index] === true }));
+    derived diceSaid = view === null || over || view.dice.length === 0 || !landed
+        ? ''
+        : locale.t('backgammon.dice', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
 
-    derived cubeY = (() =>
-    {
-        if (view === null || view.owner === undefined)
-        {
-            return MIDDLE;
-        }
-
-        return view.owner === viewer ? BOTTOM - 44 : TOP + 44;
-    })();
-
-    const spotSays = (spot: number) =>
-    {
-        if (spot === 25)
-        {
-            return locale.t('backgammon.bar');
-        }
-
-        return spot === 0 ? locale.t('backgammon.off') : locale.n(spot);
-    };
-
-    const outcomeAt = (hop: Hop) => (told && plan !== null ? outcomeOf(plan.at, hop) : null);
-
-    const hopSays = (hop: Hop) =>
-    {
-        const said = outcomeAt(hop);
-
-        return locale.t(said === null ? 'backgammon.hop' : `helpers.backgammon.hop.${ said }`, { from: spotSays(hop.from), to: spotSays(hop.to) });
-    };
-
-    derived tip = myTurn
-        ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged, doubling: view!.doubling, cube: view!.cube })
+    derived tip = myTurn && landed
+        ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged: hops, doubling: view!.doubling, cube: view!.cube })
         : null;
 
-    derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
-
-    derived says = ((): string =>
+    derived saying = ((): string =>
     {
-        if (view === null)
+        if (view === null || over)
         {
             return '';
         }
@@ -374,6 +312,16 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                 : locale.t('backgammon.doubled.them', { name: nameOf(view.turn), cube: offered });
         }
 
+        if (view.phase === 'opening')
+        {
+            if (mine === undefined)
+            {
+                return locale.t('backgammon.opening.watch');
+            }
+
+            return throwing ? locale.t('backgammon.opening.throw') : locale.t('backgammon.opening.wait', { name: nameOf(1 - mine) });
+        }
+
         if (!myTurn)
         {
             return locale.t('match.turn.theirs', { name: nameOf(view.turn) });
@@ -384,7 +332,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             return locale.t('backgammon.turn.roll');
         }
 
-        if (plan?.done === true && staged.length > 0)
+        if (plan?.done === true && hops.length > 0)
         {
             return locale.t('backgammon.turn.confirm');
         }
@@ -414,127 +362,936 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return `${ nameOf(seat) }: ${ locale.list(parts) }`;
     };
 
-    const add = (hop: Hop) =>
+    derived ready = view !== null;
+
+    derived result = over && !presenting;
+
+    derived barOpen = view !== null && !result;
+
+    derived rolling = (myTurn && view!.phase === 'roll') || throwing;
+
+    derived mayDouble = rolling && view!.doubling;
+
+    derived answering = myTurn && view!.phase === 'double';
+
+    derived staging = plan !== null;
+
+    derived whole = plan?.done === true && hops.length > 0;
+
+    derived cubed = view?.cubed === true;
+
+    derived crawford = view?.crawford === true;
+
+    derived diceTold = diceSaid !== '';
+
+    derived asked = mayDouble && doubling === at;
+
+    derived raised = view === null ? 0 : view.cube * 2;
+
+    derived last = hops.length === 0 ? null : hops[hops.length - 1];
+
+    derived onward = (plan?.next ?? []).some((hop) => hop.from === last?.to);
+
+    derived taken = staging && last !== null && !onward ? last.to : null;
+
+    derived home = chosen !== null && last !== null && chosen === last.to ? last.from : null;
+
+    derived invite = ((): Invite =>
     {
-        staged = [...staged, hop];
+        if (throwing)
+        {
+            return 'throw';
+        }
+
+        if (rolling)
+        {
+            return 'roll';
+        }
+
+        return whole ? 'done' : null;
+    })();
+
+    const sayAt = (spot: number) =>
+    {
+        const point = locale.n(spot);
+
+        if (chosen === null)
+        {
+            if (spot === taken)
+            {
+                return locale.t('backgammon.stop.undo', { point });
+            }
+
+            const ways = (plan?.next ?? []).filter((hop) => hop.from === spot);
+            const only = spot !== last?.to && new Set(ways.map((hop) => hop.to)).size === 1 ? ways[0] : null;
+
+            if (only === null)
+            {
+                return spot === BAR
+                    ? locale.plural('backgammon.stop.lift.bar', near[BAR] ?? 0)
+                    : locale.plural('backgammon.stop.lift', near[spot] ?? 0, { point });
+            }
+
+            const struck = plan !== null && hits(outcomeOf(plan.at, only));
+            const to = locale.n(only.to);
+
+            if (spot === BAR)
+            {
+                return locale.plural(struck ? 'backgammon.stop.enter.hit' : 'backgammon.stop.enter', near[BAR] ?? 0, { to });
+            }
+
+            if (only.to === OFF)
+            {
+                return locale.plural('backgammon.stop.move.off', near[spot] ?? 0, { point });
+            }
+
+            return locale.plural(struck ? 'backgammon.stop.move.hit' : 'backgammon.stop.move', near[spot] ?? 0, { point, to });
+        }
+
+        if (spot === chosen)
+        {
+            return spot === BAR ? locale.t('backgammon.stop.back.bar') : locale.t('backgammon.stop.back', { point });
+        }
+
+        if (spot === home)
+        {
+            return locale.t('backgammon.stop.undo', { point });
+        }
+
+        if (spot === OFF)
+        {
+            return locale.t('backgammon.stop.off');
+        }
+
+        return locale.t(plan !== null && hits(outcomeOf(plan.at, { from: chosen, to: spot })) ? 'backgammon.stop.hit' : 'backgammon.stop.put', { point });
+    };
+
+    derived cubePlace = placed({
+        x: BAR_LEFT + BAR_WIDTH / 2 - CUBE / 2,
+        y: cubeY(view?.owner === undefined ? null : 'near') - CUBE / 2,
+        w: CUBE,
+        h: CUBE
+    });
+
+    derived stops = ((): Stop[] =>
+    {
+        if (rolling)
+        {
+            return [
+                { key: 'dice', says: locale.t('backgammon.stop.roll'), place: DICE_PLACE },
+                ...(mayDouble ? [{ key: 'cube', says: locale.t('backgammon.stop.double', { cube: locale.n(raised) }), place: cubePlace }] : [])
+            ];
+        }
+
+        if (plan === null)
+        {
+            return NO_STOPS;
+        }
+
+        const spots = chosen === null
+            ? [...plan.next.map((hop) => hop.from), ...(taken === null ? [] : [taken])]
+            : [...reach.keys(), chosen, ...(home === null ? [] : [home])];
+
+        return [
+            ...[...new Set(spots)].sort((one, two) => two - one).map((spot) => ({ key: `at-${ spot }`, says: sayAt(spot), place: placed(patchOf(spot)) })),
+            ...(whole ? [{ key: 'dice', says: locale.t('backgammon.stop.play'), place: DICE_PLACE }] : [])
+        ];
+    })();
+
+    derived roving = stops.some((stop) => stop.key === rover) ? rover : (stops[0]?.key ?? '');
+
+    derived resting = onward ? `at-${ last?.to }` : (stops.find((stop) => stop.key !== `at-${ taken }`)?.key ?? '');
+
+    derived bound = chosen === null
+        ? resting
+        : (stops.find((stop) => stop.key !== `at-${ chosen }` && stop.key !== `at-${ home }`)?.key ?? '');
+
+    const sightNow = (): Sight<Felt> | null =>
+    {
+        if (view === null)
+        {
+            return null;
+        }
+
+        return {
+            id: game.id,
+            rev: game.rev,
+            seat: mine ?? null,
+            view: { ...feltOf(view, viewer, over, seedOf(game.id, game.rev)), near, far, spent }
+        };
+    };
+
+    const caughtUp = () =>
+    {
+        if (presenter?.presenting() !== true)
+        {
+            missed = missesOf(untrack(() => game.players));
+        }
+    };
+
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            caughtUp();
+        });
+    }
+
+    effect
+    {
+        const next = saying;
+        const told = landed;
+
+        if (told)
+        {
+            says = next;
+            passed = '';
+        }
+    }
+
+    effect
+    {
+        const spots = lights;
+
+        untrack(() => men?.lit(spots));
+    }
+
+    effect
+    {
+        const spots = aimed;
+        const back = home;
+
+        untrack(() => men?.aim(spots, back));
+    }
+
+    effect
+    {
+        const what = invite;
+
+        untrack(() => men?.invite(what));
+    }
+
+    effect
+    {
+        const live = mayDouble;
+
+        untrack(() => men?.cubed(live));
+    }
+
+    effect
+    {
+        const spot = chosen;
+
+        untrack(() => men?.hold(spot));
+    }
+
+    effect
+    {
+        const spot = taken;
+
+        untrack(() => men?.undoes(spot));
+    }
+
+    effect
+    {
+        void locale.locale();
+
+        untrack(() => men?.relabel());
+    }
+
+    effect
+    {
+        const used = spent;
+        const seed = seedOf(game.id, game.rev);
+
+        untrack(() => men?.spend(used, seed));
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => sound?.setEnabled(on));
+    }
+
+    mount
+    {
+        let unwatch: () => void = () => undefined;
+
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        if (layer !== null)
+        {
+            const clock = runtime().clock;
+            const report = (error: unknown) => console.error(error);
+            const rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
+
+            men = createBackgammonTable({
+                host: layer,
+                stage: rig,
+                sound: () => sound,
+                feel: (kind) =>
+                {
+                    if (mine !== undefined)
+                    {
+                        haptic(kind);
+                    }
+                },
+                say: (value) => locale.n(value),
+                onDice: () => pressDice(),
+                onCube: () => pressCube(),
+                onRoll: (seed, faces, landed) =>
+                {
+                    rolled = { seed, faces: faces.join(), landed };
+                },
+                noMove: () => locale.t('backgammon.pass'),
+                reads: () => locale.dir(),
+                banner: (side, how, points) => calls(side, how, points),
+                onGame: (side, how, points) =>
+                {
+                    passed = calls(side, how, points).map((line) => `${ line }.`).join(' ');
+                },
+                onFacts: (now) =>
+                {
+                    facts = now;
+                },
+                onPass: (side, faces) =>
+                {
+                    const dice = locale.list(faces.map((face) => locale.n(face)));
+
+                    passed = side === 'near' && mine !== undefined
+                        ? locale.t('backgammon.passed.you', { dice })
+                        : locale.t('backgammon.passed.them', { name: nameOf(side === 'near' ? viewer : 1 - viewer), dice });
+                }
+            });
+            presenter = createPresenter<Felt, Told>({ stage: rig, clock, table: men, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (over ? RESULT_WAIT : null) });
+            presenter.frame(root);
+            unwatch = presenter.watch((busy) =>
+            {
+                presenting = busy;
+                props.onPresenting?.(busy);
+
+                if (!busy)
+                {
+                    passed = '';
+                    caughtUp();
+                }
+            });
+
+            untrack(() =>
+            {
+                presenter!.see(props.events);
+                men!.lit(lights);
+                men!.aim(aimed, home);
+                men!.invite(invite);
+                men!.cubed(mayDouble);
+                men!.hold(chosen);
+                men!.undoes(taken);
+            });
+            rigged = true;
+        }
+
+        return () =>
+        {
+            unwatch();
+            props.onPresenting?.(false);
+            presenter?.dispose();
+            men?.dispose();
+            presenter = null;
+            men = null;
+            sound?.dispose();
+            sound = null;
+        };
+    }
+
+    const mend = async (ctx: Ctx) =>
+    {
+        const sight = untrack(sightNow);
+
+        if (men !== null && sight !== null)
+        {
+            await men.settle(sight, ctx);
+        }
+    };
+
+    const guess = (next: readonly Hop[]) =>
+    {
+        const rev = game.rev;
+
+        presenter?.predict(next.length === 0 ? null : { rev, covers: (moves) => covered(moves, next) });
+    };
+
+    const add = (hop: Hop, onward = false, first = true) =>
+    {
+        const hit = plan === null ? false : hits(outcomeOf(plan.at, hop));
+        const next = [...hops, hop];
+
+        staged = { at, hops: next };
         picked = null;
         haptic('tick');
+        guess(next);
+
+        if (first)
+        {
+            men?.hold(hop.from);
+        }
+
+        presenter?.act(async (ctx) =>
+        {
+            if (men !== null && !(await men.hop({ side: 'near', from: hop.from, to: hop.to, hit }, onward)))
+            {
+                await mend(ctx);
+            }
+        }, HOP_MS);
     };
 
     const undo = () =>
     {
-        staged = staged.slice(0, -1);
+        const last = hops[hops.length - 1];
+
+        if (last === undefined)
+        {
+            return;
+        }
+
+        const next = hops.slice(0, -1);
+        const earlier = view === null ? null : stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view.dice, next);
+        const hit = earlier === null ? false : hits(outcomeOf(earlier.at, last));
+
+        staged = { at, hops: next };
         picked = null;
+        guess(next);
+        men?.hold(last.to);
+        presenter?.act(async (ctx) =>
+        {
+            if (men !== null && !(await men.unhop({ side: 'near', from: last.from, to: last.to, hit })))
+            {
+                await mend(ctx);
+            }
+        }, HOP_MS);
     };
 
-    const tap = (event: PointerEvent) =>
+    const boardAt = (event: PointerEvent) =>
+    {
+        const box = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
+
+        return { x: (event.clientX - box.left) / box.width * WIDTH, y: (event.clientY - box.top) / box.height * HEIGHT };
+    };
+
+    const handAt = (event: PointerEvent) =>
+    {
+        const at = boardAt(event);
+
+        return event.pointerType === 'touch' ? { x: at.x, y: at.y - FINGER } : at;
+    };
+
+    const spotOf = (at: { x: number; y: number }) =>
+    {
+        const found = pointAt(at.x, at.y);
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        return found === 'bar' ? 25 : (found === 'tray' ? 0 : found);
+    };
+
+    const onTable = (at: { x: number; y: number }) =>
+        at.x >= -RADIUS && at.x <= WIDTH + RADIUS && at.y >= -RADIUS && at.y <= HEIGHT + RADIUS;
+
+    const dropAt = (event: PointerEvent) =>
+    {
+        const hand = handAt(event);
+
+        if (!onTable(hand) && !onTable(boardAt(event)))
+        {
+            return null;
+        }
+
+        return spotOf({ x: clamp(hand.x, RADIUS, WIDTH - RADIUS), y: clamp(hand.y, RADIUS, HEIGHT - RADIUS) });
+    };
+
+    const go = (spot: number) =>
+    {
+        const way = reach.get(spot);
+
+        if (way !== undefined)
+        {
+            way.forEach((hop, nth) => add(hop, nth < way.length - 1, nth === 0));
+
+            return true;
+        }
+
+        if (spot === home)
+        {
+            undo();
+
+            return true;
+        }
+
+        return false;
+    };
+
+    const choose = (spot: number | null) =>
     {
         const held = plan;
 
         if (held === null || board.busy())
         {
-            return;
+            return null;
         }
 
-        const box = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
-        const found = pointAt((event.clientX - box.left) / box.width * WIDTH, (event.clientY - box.top) / box.height * HEIGHT);
-
-        if (found === null)
+        if (spot === null)
         {
             picked = null;
-            return;
+
+            return null;
         }
 
-        const spot = found === 'bar' ? 25 : (found === 'tray' ? 0 : found);
-
-        if (picked !== null)
+        if (chosen !== null)
         {
-            const hop = held.next.find((one) => one.from === picked && one.to === spot);
+            const from = chosen;
 
-            if (hop !== undefined)
+            if (go(spot))
             {
-                add(hop);
-                return;
+                return from;
             }
         }
 
         const leaving = held.next.filter((one) => one.from === spot);
 
+        if (spot === last?.to)
+        {
+            if (leaving.length === 0)
+            {
+                undo();
+
+                return spot;
+            }
+
+            picked = chosen === spot ? null : { at, spot };
+
+            return null;
+        }
+
         if (leaving.length === 0)
         {
             picked = null;
-            return;
+
+            return null;
         }
 
         if (new Set(leaving.map((one) => one.to)).size === 1)
         {
             add(leaving[0]);
+
+            return spot;
+        }
+
+        picked = { at, spot };
+
+        return null;
+    };
+
+    const putBack = (refused: boolean) =>
+    {
+        if (refused)
+        {
+            sound?.play('deny', { gain: 0.5 });
+            haptic('deny');
+        }
+
+        picked = null;
+        men?.release();
+    };
+
+    const lose = () =>
+    {
+        if (drag?.carried === true)
+        {
+            putBack(false);
+        }
+
+        drag = null;
+        carrying = false;
+    };
+
+    const press = (event: PointerEvent) =>
+    {
+        const spot = spotOf(boardAt(event));
+
+        byKey = false;
+
+        if (event.button > 0 || (drag !== null && !event.isPrimary))
+        {
             return;
         }
 
-        picked = spot;
+        lose();
+
+        if (spot === null || plan === null || board.busy())
+        {
+            return;
+        }
+
+        if (spot === last?.to || plan.next.some((hop) => hop.from === spot))
+        {
+            men?.hold(spot);
+            drag = { id: event.pointerId, spot, x: event.clientX, y: event.clientY, carried: false };
+            (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
+        }
     };
 
-    const play = async (verb: 'roll' | 'double' | 'take' | 'drop') =>
+    const carry = (event: PointerEvent) =>
+    {
+        if (drag === null || drag.id !== event.pointerId)
+        {
+            return;
+        }
+
+        if (!drag.carried)
+        {
+            const slop = event.pointerType === 'mouse' ? MOUSE_SLOP : SLOP;
+
+            if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < slop || men?.grab(drag.spot) !== true)
+            {
+                return;
+            }
+
+            drag.carried = true;
+            carrying = true;
+            picked = { at, spot: drag.spot };
+            haptic('tick');
+        }
+
+        const hand = handAt(event);
+
+        men?.drag(hand.x, hand.y);
+    };
+
+    const tap = (event: PointerEvent) =>
+    {
+        const held = drag;
+
+        if (event.button > 0 || (held !== null && held.id !== event.pointerId))
+        {
+            return;
+        }
+
+        drag = null;
+        carrying = false;
+
+        if (held === null || !held.carried)
+        {
+            if (choose(spotOf(boardAt(event))) === null)
+            {
+                men?.hold(chosen);
+            }
+
+            return;
+        }
+
+        const spot = dropAt(event);
+        const elsewhere = spot !== null && spot !== held.spot;
+
+        if (chosen !== held.spot || board.busy() || !elsewhere || !go(spot))
+        {
+            putBack(elsewhere);
+        }
+
+        men?.hold(chosen);
+    };
+
+    const quit = (event: PointerEvent) =>
+    {
+        if (drag !== null && drag.id === event.pointerId)
+        {
+            lose();
+        }
+
+        if (drag === null)
+        {
+            men?.hold(chosen);
+        }
+    };
+
+    const roll = async () =>
     {
         haptic('select');
+        sound?.play('die-shake', { gain: 0.8 });
+        men?.rattle(true);
+        await board.play({ kind: 'backgammon', verb: 'roll' });
+        men?.rattle(false);
+    };
+
+    const answer = async (verb: 'double' | 'take' | 'drop') =>
+    {
+        haptic('select');
+        doubling = '';
         await board.play({ kind: 'backgammon', verb });
+    };
+
+    const keep = () =>
+    {
+        doubling = '';
     };
 
     const submit = async () =>
     {
-        if (plan?.done !== true || staged.length === 0)
+        if (!whole)
         {
             return;
         }
 
         haptic('select');
-        await board.play({ kind: 'backgammon', verb: 'move', hops: [...staged] });
+        await board.play({ kind: 'backgammon', verb: 'move', hops: [...hops] });
     };
 
-    derived plates = [1 - viewer, viewer].map((seat) => ({
-        seat,
-        tone: toneOf(seat),
-        row: view?.seats.find((one) => one.seat === seat)
-    }));
+    const pressDice = () =>
+    {
+        if (board.busy())
+        {
+            return;
+        }
 
-    <div data-rev={ props.match.rev } class="table-stage bg-stage">
+        if (rolling)
+        {
+            void roll();
+        }
+        else
+        {
+            void submit();
+        }
+    };
+
+    const pressCube = () =>
+    {
+        if (mayDouble && !board.busy())
+        {
+            haptic('tick');
+            doubling = at;
+        }
+    };
+
+    const use = (key: string) =>
+    {
+        if (key === 'dice')
+        {
+            pressDice();
+        }
+        else if (key === 'cube')
+        {
+            pressCube();
+        }
+        else
+        {
+            const spot = Number(key.slice(3));
+
+            if (choose(spot === chosen ? null : spot) === null)
+            {
+                men?.hold(chosen);
+            }
+        }
+    };
+
+    const stopAt = (key: string) => cursor?.querySelector<HTMLElement>(`[data-stop="${ key }"]`) ?? null;
+
+    const stopOf = (target: EventTarget | null) => (target instanceof HTMLElement ? target.closest<HTMLElement>('.bg-stop')?.dataset.stop ?? null : null);
+
+    const refocus = (must: boolean) =>
+    {
+        const held = document.activeElement;
+        const question = cursor?.parentElement?.querySelector<HTMLElement>('.bg-ask') ?? null;
+
+        if (question !== null)
+        {
+            if (held === document.body || cursor?.contains(held) === true)
+            {
+                question.focus({ preventScroll: true });
+            }
+        }
+        else if (must || held === document.body)
+        {
+            stopAt(untrack(() => bound))?.focus({ preventScroll: true });
+        }
+    };
+
+    const keyed = (act: () => void) =>
+    {
+        const before = untrack(() => stops);
+
+        byKey = true;
+        act();
+
+        if (untrack(() => stops) !== before)
+        {
+            queueMicrotask(() => refocus(true));
+        }
+    };
+
+    const onKey = (event: KeyboardEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key === null)
+        {
+            return;
+        }
+
+        if (event.repeat && (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape'))
+        {
+            event.preventDefault();
+
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ')
+        {
+            event.preventDefault();
+            keyed(() => use(key));
+
+            return;
+        }
+
+        if (event.key === 'Escape' && chosen !== null)
+        {
+            event.preventDefault();
+            keyed(() =>
+            {
+                choose(null);
+                men?.hold(null);
+            });
+
+            return;
+        }
+
+        const keys = stops.map((stop) => stop.key);
+        const step = WALKS[event.key];
+        const ends = event.key === 'Home' ? keys[0] : (event.key === 'End' ? keys[keys.length - 1] : undefined);
+        const next = ends ?? (step === undefined ? undefined : keys[(keys.indexOf(key) + step + keys.length) % keys.length]);
+
+        if (next !== undefined)
+        {
+            event.preventDefault();
+            stopAt(next)?.focus({ preventScroll: true });
+        }
+    };
+
+    const onFocus = (event: FocusEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null)
+        {
+            rover = key;
+        }
+    };
+
+    const onClick = (event: MouseEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null && event.detail === 0)
+        {
+            keyed(() => use(key));
+        }
+    };
+
+    const onAskKey = (event: KeyboardEvent) =>
+    {
+        byKey = true;
+
+        if (event.key === 'Escape' && asked)
+        {
+            event.preventDefault();
+            keep();
+        }
+    };
+
+    const onAskPointer = () =>
+    {
+        byKey = false;
+    };
+
+    effect
+    {
+        void stops;
+        void asked;
+        void answering;
+
+        untrack(() =>
+        {
+            if (byKey)
+            {
+                queueMicrotask(() => refocus(false));
+            }
+        });
+    }
+
+    const tagOf = (seat: number) =>
+    {
+        const seated = game.players.find((one) => one.seat === seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
+
+        if (player === undefined || !over || result)
+        {
+            return plateTag(locale, player, over);
+        }
+
+        const { result: _unshown, ...playing } = player;
+
+        return plateTag(locale, playing, over);
+    };
+
+    const calls = (side: 'near' | 'far', how: string, points: number) => [
+        side === 'near' && mine !== undefined
+            ? locale.t('backgammon.game.you')
+            : locale.t('backgammon.game.them', { name: nameOf(side === 'near' ? viewer : 1 - viewer) }),
+        locale.plural(`backgammon.game.${ how }` as never, points)
+    ];
+
+    const pegsOf = (score: number) =>
+        Array.from({ length: view === null || view.target > PEGS_MOST ? 0 : view.target }, (_, at) => ({ at, won: at < score }));
+
+    derived plates = [1 - viewer, viewer].map((seat) =>
+    {
+        const row = view?.seats.find((one) => one.seat === seat);
+        const side = seat === viewer ? 'near' : 'far';
+
+        return {
+            seat,
+            tone: toneOf(seat),
+            score: facts?.score[side] ?? row?.score ?? 0,
+            pips: facts?.pips[side] ?? row?.pips ?? 0,
+            pegs: pegsOf(facts?.score[side] ?? row?.score ?? 0)
+        };
+    });
+
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } data-staged={ hops.length } class="table-stage bg-stage" ref={ (element) => root = element }>
         <div class="table-grid bg-grid">
-            <Show when={ view !== null }>
+            <Show when={ ready }>
                 { () =>
                     <span class="contents">
-                        <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
-                            <div class={ () => (plate.seat === viewer ? 'table-hand bg-plate bg-plate-out' : 'table-top bg-plate bg-plate-out') }>
-                                <TablePlate
-                                    who={ whoAt(plate.seat) }
-                                    name={ nameOf(plate.seat) }
-                                    turn={ !over && view!.turn === plate.seat }
-                                    remainingMs={ game.remainingMs }
-                                    turnMs={ props.turnMs }
-                                    tag={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.text }
-                                    tone={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.tone }
-                                    bubble={ props.speech?.[whoAt(plate.seat)] }
-                                    below={ plate.seat !== viewer }
-                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
-                                    marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
-                                    facts={
-                                        <span class="contents">
-                                            <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
-                                            <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
-                                        </span>
-                                    }
-                                />
-                            </div>
-                        </For>
-
                         <div class="table-fit">
                             <div class="table-surface bg-board">
                                 <div class="relative h-full [direction:ltr]">
                                     <svg
                                         viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
-                                        class={ () => [ 'block h-full w-full select-none touch-manipulation rounded-panel', plan !== null ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
+                                        class={ () => [ 'block h-full w-full select-none rounded-panel', carrying ? 'cursor-grabbing' : (staging ? 'cursor-pointer' : ''), staging ? 'touch-none' : 'touch-manipulation' ].filter(Boolean).join(' ') }
                                         aria-hidden="true"
+                                        data-drags={ staging ? 'true' : undefined }
+                                        onPointerDown={ press }
+                                        onPointerMove={ carry }
                                         onPointerUp={ tap }
+                                        onPointerCancel={ quit }
+                                        onPointerLeave={ quit }
                                     >
                                         <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
                                         <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />
@@ -557,105 +1314,59 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                             </g>
                                         </For>
 
-                                        <For each={ slabs } key={ (slab) => slab.key } let={ slab }>
-                                            <g>
-                                                <rect
-                                                    x={ TRAY_LEFT + 9 }
-                                                    y={ slab.y }
-                                                    width={ TRAY - 18 }
-                                                    height={ SLAB - 2 }
-                                                    rx="3"
-                                                    fill={ slab.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                                    stroke={ slab.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                                    stroke-width="2"
-                                                />
-                                            </g>
-                                        </For>
-
-                                        <For each={ pieces } key={ (piece) => piece.key } let={ piece }>
-                                            <g>
-                                                <circle
-                                                    cx={ piece.x }
-                                                    cy={ piece.y }
-                                                    r={ RADIUS - 1 }
-                                                    fill={ piece.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                                    stroke={ piece.lit ? 'var(--accent)' : (piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)') }
-                                                    stroke-width={ piece.lit ? 7 : 3 }
-                                                />
-                                                <circle
-                                                    cx={ piece.x }
-                                                    cy={ piece.y }
-                                                    r={ RADIUS * 0.6 }
-                                                    fill="none"
-                                                    stroke={ piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                                    stroke-width="2"
-                                                    opacity="0.6"
-                                                />
-                                                <Show when={ piece.label !== '' }>
-                                                    { () =>
-                                                        <text
-                                                            x={ piece.x }
-                                                            y={ piece.y + 9 }
-                                                            text-anchor="middle"
-                                                            font-size="26"
-                                                            font-weight="700"
-                                                            fill={ piece.tone === 'light' ? 'var(--nard-dark)' : 'var(--nard-light)' }
-                                                        >{ piece.label }</text>
-                                                    }
-                                                </Show>
-                                            </g>
-                                        </For>
-
-                                        <For each={ marks } key={ (mark) => mark.key } let={ mark }>
-                                            <g>
-                                                <circle cx={ mark.x } cy={ mark.y } r={ RADIUS - 4 } fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent)" stroke-width="4" stroke-dasharray="10 7" />
-                                            </g>
-                                        </For>
-
-                                        <Show when={ view!.cubed }>
-                                            { () =>
-                                                <g>
-                                                    <rect
-                                                        x={ BAR_LEFT + BAR_WIDTH / 2 - 24 }
-                                                        y={ cubeY - 24 }
-                                                        width="48"
-                                                        height="48"
-                                                        rx="8"
-                                                        fill="var(--nard-light)"
-                                                        stroke="var(--nard-dark)"
-                                                        stroke-width="3"
-                                                    />
-                                                    <text
-                                                        x={ BAR_LEFT + BAR_WIDTH / 2 }
-                                                        y={ cubeY + 9 }
-                                                        text-anchor="middle"
-                                                        font-size="26"
-                                                        font-weight="800"
-                                                        fill="var(--nard-dark)"
-                                                    >{ String(view!.cube === 1 ? 64 : view!.cube) }</text>
-                                                </g>
-                                            }
-                                        </Show>
-
                                         <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
                                     </svg>
 
-                                    <Show when={ faces.length > 0 && !over }>
+                                    <div class="bg-layer" aria-hidden="true" ref={ (element) => layer = element }></div>
+
+                                    <Show when={ mine !== undefined }>
                                         { () =>
-                                            <div
-                                                class="pointer-events-none absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
-                                                style={ `left: ${ ((BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3) / WIDTH * 100).toFixed(3) }%` }
-                                                role="img"
-                                                aria-label={ locale.t('backgammon.dice', { dice: locale.list(view!.dice.map((face) => locale.n(face))) }) }
-                                            >
-                                                <For each={ faces } key={ (die) => die.index } let={ die }>
-                                                    <span class={ () => [ 'flex transition-opacity duration-200', die.spent ? 'opacity-35' : '' ].filter(Boolean).join(' ') } aria-hidden="true">
-                                                        <DieFace value={ die.face } size="sm" label="" />
-                                                    </span>
+                                            <div class="bg-cursor" role="group" aria-label={ locale.t('backgammon.board') } ref={ (element) => cursor = element } onKeyDown={ onKey } onFocusIn={ onFocus } onClick={ onClick }>
+                                                <For each={ stops } key={ (stop) => stop.key } let={ stop }>
+                                                    <span class="bg-stop" role="button" tabindex={ stop.key === roving ? 0 : -1 } aria-label={ stop.says } data-stop={ stop.key } style={ stop.place }></span>
                                                 </For>
                                             </div>
                                         }
                                     </Show>
+
+                                    <Show when={ diceTold }>
+                                        { () =>
+                                            <span class="sr-only" role="img" aria-label={ diceSaid }></span>
+                                        }
+                                    </Show>
+
+                                    <Show when={ asked }>
+                                        { () =>
+                                            <div class="bg-ask" dir={ locale.dir() } role="group" aria-labelledby="bg-ask-title" tabindex="-1" onKeyDown={ onAskKey } onPointerDown={ onAskPointer }>
+                                                <p class="bg-ask-title" id="bg-ask-title">{ locale.t('backgammon.double.ask', { cube: locale.n(raised) }) }</p>
+                                                <div class="flex flex-wrap justify-center gap-2">
+                                                    <Button variant="primary" size="md" loading={ board.busy() } onClick={ () => void answer('double') }>
+                                                        { locale.t('backgammon.double', { cube: locale.n(raised) }) }
+                                                    </Button>
+                                                    <Button variant="secondary" size="md" disabled={ board.busy() } onClick={ keep }>
+                                                        { locale.t('backgammon.double.keep') }
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </Show>
+
+                                    <Show when={ answering }>
+                                        { () =>
+                                            <div class="bg-ask" dir={ locale.dir() } role="group" aria-labelledby="bg-ask-title" tabindex="-1" onKeyDown={ onAskKey } onPointerDown={ onAskPointer }>
+                                                <p class="bg-ask-title" id="bg-ask-title">{ locale.t('backgammon.doubled.watch', { name: nameOf(1 - viewer), cube: locale.n(raised) }) }</p>
+                                                <div class="flex flex-wrap justify-center gap-2">
+                                                    <Button variant="primary" size="md" loading={ board.busy() } onClick={ () => void answer('take') }>
+                                                        { locale.t('backgammon.take', { cube: locale.n(raised) }) }
+                                                    </Button>
+                                                    <Button variant="destructive" size="md" disabled={ board.busy() } onClick={ () => void answer('drop') }>
+                                                        { locale.t('backgammon.drop') }
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </Show>
+
                                 </div>
 
                                 <div class="sr-only">
@@ -665,26 +1376,41 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                             </div>
 
                             <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
-                                <div class="bg-plate bg-plate-in" data-me={ plate.seat === viewer ? 'true' : undefined }>
+                                <div class="bg-rail" data-me={ plate.seat === viewer ? 'true' : undefined }>
                                     <TablePlate
                                         who={ whoAt(plate.seat) }
                                         name={ nameOf(plate.seat) }
-                                        turn={ !over && view!.turn === plate.seat }
+                                        turn={ plate.seat === onTurn }
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
-                                        tag={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.text }
-                                        tone={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.tone }
+                                        tag={ tagOf(plate.seat)?.text }
+                                        tone={ tagOf(plate.seat)?.tone }
                                         bubble={ props.speech?.[whoAt(plate.seat)] }
                                         below={ plate.seat !== viewer }
-                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
+                                        anchor={ plate.seat === viewer ? 'end' : 'start' }
                                         marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
                                         facts={
                                             <span class="contents">
-                                                <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
-                                                <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
+                                                <span class="bg-score" aria-hidden="true">
+                                                    <For each={ plate.pegs } key={ (peg) => peg.at } let={ peg }>
+                                                        <i data-won={ peg.won ? 'true' : undefined }></i>
+                                                    </For>
+                                                </span>
+                                                <span class={ () => (plate.pegs.length > 0 ? 'sr-only' : 'bg-score-says') }>{ locale.t('backgammon.score', { score: locale.n(plate.score), target: locale.n(view!.target) }) }</span>
+                                                <Show when={ plate.seat === onTurn }>
+                                                    { () => <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ plate.seat === mine } brief class="bg-clock" /> }
+                                                </Show>
                                             </span>
                                         }
                                     />
+                                    <span class="bg-pips" aria-hidden="true">
+                                        <b>{ locale.n(plate.pips) }</b>
+                                        <small>{ locale.plural('backgammon.pips.word', plate.pips) }</small>
+                                    </span>
+                                    <span class="sr-only">{ locale.plural('backgammon.pips', plate.pips) }</span>
+                                    <Show when={ plate.seat === viewer }>
+                                        { () => <CoachLine tip={ tip } lamp /> }
+                                    </Show>
                                 </div>
                             </For>
                         </div>
@@ -692,129 +1418,31 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                 }
             </Show>
 
-            <Show when={ view !== null && !over }>
+            <Show when={ barOpen }>
                 { () =>
                     <section class="table-bar bg-bar">
-                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                            <p class="min-w-0 flex-[1_1_8rem] text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
-                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
-                        </div>
+                        <p class="sr-only" aria-live="polite">{ passed === '' ? says : passed }</p>
 
-                        <p class="bg-info flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-ui-2xs text-muted">
-                            <span>{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(view!.round) }) }</span>
-                            <Show when={ view!.cubed }>
+                        <p class="sr-only">
+                            <span class="block">{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(facts?.round ?? view!.round) }) }</span>
+                            <Show when={ cubed }>
                                 { () =>
-                                    <span class="flex items-center gap-1">
-                                        <Icon name="dice" size={ 12 } />
+                                    <span class="block">
                                         { view!.owner === undefined
                                             ? locale.t('backgammon.cube.centre', { cube: locale.n(view!.cube) })
                                             : locale.t('backgammon.cube.owner', { cube: locale.n(view!.cube), name: nameOf(view!.owner) }) }
                                     </span>
                                 }
                             </Show>
-                            <Show when={ view!.crawford }>
-                                { () => <span class="font-semibold text-gold">{ locale.t('backgammon.crawford') }</span> }
+                            <Show when={ crawford }>
+                                { () => <span class="block">{ locale.t('backgammon.crawford') }</span> }
                             </Show>
                         </p>
-
-                        <CoachLine tip={ tip } />
-
-                        <Show when={ myTurn && view!.phase === 'roll' }>
-                            { () =>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="glow-cta flex rounded-control">
-                                        <Button variant="primary" size="lg" leading="dice" loading={ board.busy() } onClick={ () => void play('roll') }>
-                                            { locale.t('backgammon.roll') }
-                                        </Button>
-                                    </span>
-                                    <Show when={ view!.doubling }>
-                                        { () =>
-                                            <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void play('double') }>
-                                                { locale.t('backgammon.double', { cube: locale.n(view!.cube * 2) }) }
-                                            </Button>
-                                        }
-                                    </Show>
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ myTurn && view!.phase === 'double' }>
-                            { () =>
-                                <div class="flex flex-wrap gap-2">
-                                    <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void play('take') }>
-                                        { locale.t('backgammon.take', { cube: locale.n(view!.cube * 2) }) }
-                                    </Button>
-                                    <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void play('drop') }>
-                                        { locale.t('backgammon.drop') }
-                                    </Button>
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ plan !== null }>
-                            { () =>
-                                <div class="flex min-w-0 flex-col gap-2">
-                                    <div class="flex min-w-0 gap-2">
-                                        <IconButton icon="undo" label={ locale.t('backgammon.undo') } variant="secondary" disabled={ staged.length === 0 || board.busy() } onClick={ undo } />
-                                        <span class={ () => [ 'flex min-w-0 flex-1 rounded-control', plan?.done === true && staged.length > 0 ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
-                                            <Button
-                                                variant="primary"
-                                                size="md"
-                                                block
-                                                leading="selected"
-                                                disabled={ plan?.done !== true || staged.length === 0 }
-                                                loading={ board.busy() }
-                                                onClick={ () => void submit() }
-                                            >
-                                                { locale.t('backgammon.play') }
-                                            </Button>
-                                        </span>
-                                    </div>
-
-                                    <Show when={ options.length > 0 }>
-                                        { () =>
-                                            <div class="flex min-w-0 flex-col gap-1">
-                                                <p class="bg-info text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
-                                                <Rail class="-mx-1" inner="px-1 py-0.5">
-                                                <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('backgammon.moves') }>
-                                                    <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
-                                                        <li class="flex shrink-0">
-                                                            <button
-                                                                type="button"
-                                                                class={ () => [
-                                                                    'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
-                                                                    picked === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
-                                                                ].join(' ') }
-                                                                disabled={ board.busy() }
-                                                                aria-label={ hopSays(hop) }
-                                                                onClick={ () => add(hop) }
-                                                            >
-                                                                { spotSays(hop.from) }
-                                                                <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
-                                                                { spotSays(hop.to) }
-                                                                <Show when={ hits(outcomeAt(hop)) }>
-                                                                    { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
-                                                                </Show>
-                                                            </button>
-                                                        </li>
-                                                    </For>
-                                                </ul>
-                                                </Rail>
-                                            </div>
-                                        }
-                                    </Show>
-                                </div>
-                            }
-                        </Show>
                     </section>
                 }
             </Show>
         </div>
 
-        <Show when={ over }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
     </div>
 }

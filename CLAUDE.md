@@ -32,19 +32,25 @@ because two files truncating the same tables deadlock. Every claim about the DAT
 ## Running it
 
 **Development is two processes.** vite on `127.0.0.1:3100` owns the browser and proxies `/api`,
-`/ws`, `/_image` and `/avatars` to the api on `127.0.0.1:3200`, which answers no pages. Open
+`/ws` and `/avatars` to the api on `127.0.0.1:3200`, which answers no pages. Open
 `http://localhost:3100`.
 
 **Production is one process.** `npm run build` then `npm start`: the api in `.dist-backend/`, the client
-in `.dist-frontend/`, the SSR bundle in `.dist-server/`. `SERVE_PAGES=true` makes this process
-serve the client (false in development, where vite owns the browser). There is no `npm run preview` - the
+in `.dist-frontend/`, the SSR bundle in `.dist-server/`. Production serves the client from this
+process, and development never does, because vite owns the browser. There is no `npm run preview` - the
 server's `mountPages` IS the preview. The backend COMPILES (`typeorm` in `dependencies` flips it to
 emitting, and Node cannot run decorators), so always build before `npm start`.
 
-**Production `.env`** needs `NODE_ENV=production`, `SERVE_PAGES=true`, `DATABASE_SYNC=false`, a real
-`SESSION_SECRET`, and `PUBLIC_ORIGIN` set to
-the origin the browser uses - it is the site in every sign-in text, the WebSocket origin check and the
-cookie's site at once.
+**The mode is the command's, never the file's.** `azeroth dev` (`npm run dev`) declares
+development, vitest declares test, and anything else is production: `npm start` and the systemd
+unit. `env-file.ts` takes the root `.env` in for every name but `NODE_ENV`, so a `.env` copied from
+a laptop cannot put a server into development, where the wallet fixtures, whose keys are public,
+are seeded. Production serves the pages and never syncs the schema; development is the other way
+round. **A production `.env` needs three things**: `DATABASE_URL`, a real `SESSION_SECRET`, and
+`PUBLIC_ORIGIN` set to the origin the browser uses - it is the site in every sign-in text, the
+WebSocket origin check, the check every write is held to and the cookie's site at once. In
+production `loadServerConfig` refuses a secret under 32 characters and an origin with a path, an
+ending slash or plain http anywhere but this machine (`unsafeForProduction` in `env.ts`).
 
 **nginx sits in front and owns TLS and every cross-origin rule.** The api listens on `127.0.0.1`
 only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Policy` or
@@ -56,16 +62,25 @@ only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Po
 
 **On a VPS it runs under systemd** via `scripts/service-*.sh`, with `WorkingDirectory` = `backend/`;
 `main.ts` reads the root `.env` whatever the working directory. The install script refuses a missing
-build, SSR bundle, `PUBLIC_ORIGIN` or `SESSION_SECRET`.
+build, SSR bundle, `.env`, `PUBLIC_ORIGIN` or `SESSION_SECRET` (it only warned, so a service could be
+installed that crash-looped or signed nothing). The steps from a
+clean clone to a running service are in `README.md`, where whoever runs the server will look.
+The unit runs as whoever owns the clone and the installer refuses a clone root owns (it ran as root,
+so any fault in the process was a fault with the whole machine), with `NoNewPrivileges`, `PrivateTmp`
+and `ProtectSystem=strict`. That last one holds because the server writes nothing to disk: its logs
+are files systemd opens, and the kit's page and image caches are in memory. A `FilePageCache` or
+anything else that writes would need a `ReadWritePaths=` in the unit. Checked under WSL's systemd: the
+unit passes `systemd-analyze verify`, and a transient service with the same settings reads `.env`,
+writes only its own `/tmp`, and its log files are written.
 
 **The database** is Postgres and the ENTITIES are its only description: no migrations, `syncSchema()`
-whenever `DATABASE_SYNC=true` (development), never TypeORM's own `synchronize: true`. A schema change is: drop the
+at every start in development, never TypeORM's own `synchronize: true`. A schema change is: drop the
 database, boot, let `syncSchema` build it. Details, the hand-built indexes and the tests that hold the
 schema are in `backend/CLAUDE.md`.
 
 **The QA matrix** signs in for real as the `dana.w` wallet fixture, so it needs the api and a seeded
 database. For a trustworthy run use the built server on its own port with the limiter raised:
-`PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start`
+`PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 API_RATE_MAX=20000 npm start`
 and `QA_BASE=http://localhost:5300`. Details in `tools/qa/CLAUDE.md`.
 
 ## The framework defect register
@@ -79,17 +94,24 @@ the third so nobody re-investigates it.
 
 **This repository is PUBLIC**, history included. Nothing private goes in the tree, ever.
 
-- Real values live in the ONE root `.env` (gitignored at every depth). The api loads it; vite reads it
-  through `envDir: '..'` and exposes only `VITE_*`. `process.env.VITE_USER_NODE_ENV ??= ''` in the
-  vite config stops the api's `NODE_ENV=development` turning a build into a development bundle.
-- **No variable has a default in code.** Every name in `.env.example` must be present in `.env`: the
-  api (`loadServerConfig`) and vite (`requireEnv` in its config) refuse to start without the file or
-  without any one name, listing every missing one. An EMPTY value is a deliberate off switch for an
-  optional feature (push, TURN, the chain, the explorer, the admin); a value the product needs
-  (`SESSION_SECRET`, `PUBLIC_ORIGIN`, the ports and limits) refuses empty too.
-- `.env.example` is committed: every variable the code reads, with a placeholder and a sentence. Only
-  public values are real there (the Nurachain id, rpc and contract addresses). A personal value - an
-  admin wallet included - goes in `.env` only.
+- Real values live in the ONE root `.env` (gitignored at every depth). The api loads it; vite reads
+  `PUBLIC_ORIGIN` from it for the link preview and exposes nothing to the bundle.
+  `process.env.VITE_USER_NODE_ENV ??= ''` in the vite config stops a `NODE_ENV` written in that file
+  turning a build into a development bundle.
+- **The `.env` holds only what the operator alone can know** (the owner, 2026-10-14: "we have a lot
+  of useless things on env that can handle automaticly"). Three names are needed: `DATABASE_URL`,
+  `SESSION_SECRET` and, in production, `PUBLIC_ORIGIN`; `loadServerConfig` refuses to start without
+  any of them and names every one missing. The optional features (push, STUN and TURN, the chain,
+  the admin) are off while their names are left out or empty. Everything else has a value in the
+  code: what differs between development and production follows from the mode, the paths of the
+  build follow from where the server lives, the socket limits are constants (`realtime/limits.ts`),
+  and `PORT` (3200), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
+  write to change. NuraChain's public facts for the browser are constants in `data/chain.ts`. A
+  secret never has a value in code. Do not add a name for something the code can work out.
+- `.env.example` is committed: every variable the server reads, with a placeholder and a sentence,
+  the three needed first and the numbers with a value in code written as comments. Only public
+  values are real there (the Nurachain id, rpc and contract addresses). A personal value - an admin
+  wallet included - goes in `.env` only.
 - No absolute path naming a machine. `~` is fine; `/c/Users/<somebody>` is a person's name.
 - The `0x…` keys in tests and `seed-wallets.ts` are hardhat's published accounts; nothing else here is
   key material (`recovery.ts`'s look-alike is the P-256 curve order).
@@ -123,7 +145,7 @@ Allman braces, 4-space indent, single quotes, no trailing comma, LF. `npm run ch
 
 ## The framework is a dependency
 
-`azerothjs` and the thirteen `@azerothjs/*` packages are pinned EXACTLY at `2.1.0` in all three
+`azerothjs` and the twelve `@azerothjs/*` packages are pinned EXACTLY at `2.1.0` in all three
 manifests; a framework fix arrives by bumping the pin, deliberately. `npm ls azerothjs` must show ONE
 node - two runtimes are two signal graphs and effects silently stop firing (`resolve.dedupe` in the
 vite config is for the same reason). TypeScript stays `^6.0.3`: 7 ships no JS compiler API for the
@@ -153,7 +175,7 @@ which binds the account uuid because a signature must name something a rename ca
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa`, then the
 hand-run passes in `tools/qa/` against the built server: `regression`, `ludo`, `hokm`, `play`,
-`hokm-play`, `voice`, `backgammon`, `poker`, `backgammon-play`, `poker-play`, `realtime`, `chat`,
+`hokm-play`, `voice`, `backgammon`, `poker`, `backgammon-play`, `poker-play`, `realtime`, `notify`, `chat`,
 `keep`, `tour` (development server, disposable database), `latency`, and `chain` (local chain). Then a browser pass:
 every route at 390, 1280 and 1440 in both languages against `design.jpg`, a clean console, and the
 WebGL disposal check (no "Too many active WebGL contexts" after repeated create and dispose).

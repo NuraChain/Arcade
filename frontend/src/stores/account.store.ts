@@ -6,11 +6,6 @@ import type { Person } from '../data/person.ts';
 import { shortAddress } from '../lib/wallet.ts';
 import { useSession } from './session.store.ts';
 
-export function slugify(handle: string)
-{
-    return handle.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-}
-
 /**
  * The account, as the same `Person` shape every other screen renders.
  *
@@ -46,10 +41,7 @@ export function personFor(account: Account | null): Person | null
 export interface AccountApi
 {
     user: Getter<Person | null>;
-    isWallet: Getter<boolean>;
     address: Getter<string | null>;
-
-    signIn(name: string): Promise<Person | null>;
 
     /**
      * Writes the display name and the bio, and adopts what the server answers with.
@@ -78,7 +70,6 @@ export const useAccount = createStore((): AccountApi =>
 
     return {
         user: () => personFor(session.account()),
-        isWallet: () => session.account()?.kind === 'wallet',
         address: () => session.account()?.address ?? null,
 
         adoptWallet(account)
@@ -105,17 +96,6 @@ export const useAccount = createStore((): AccountApi =>
             {
                 session.establish({ ...current, handle: claimed.handle });
             }
-        },
-
-        async signIn(name)
-        {
-            const established = await client.auth.guest({ input: { name } });
-            if (established.account === undefined)
-            {
-                return null;
-            }
-            session.establish(established.account);
-            return personFor(established.account);
         }
     };
 });

@@ -1,19 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cleanup, renderTest } from '@azerothjs/testing';
+import { createMemoryHistory, createRouter } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { requireAdmin, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
-import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
+import { heldUp } from '../src/lib/held-up.ts';
+import NotFoundPage from '../src/pages/not-found.page.azeroth';
+import { useLocale } from '../src/stores/locale.store.ts';
+import { LIFELINE_MS, RESTORED_MS, UNREACHED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
-import { useRealtime } from '../src/stores/realtime.store.ts';
-import { useSession } from '../src/stores/session.store.ts';
+import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
+import { ASK_AGAIN_MAX_MS, ASK_AGAIN_MS, useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
-import { server } from './fake-api.ts';
+import { answeredUnauthorized, ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -124,32 +129,47 @@ describe('device posture', () =>
     });
 });
 
+const DARYA = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, isMinor: false };
+
+const auth = client.auth as unknown as Record<string, () => Promise<unknown>>;
+
+const whoAmI = auth.me;
+
+const flush = async () =>
+{
+    for (let turn = 0; turn < 12; turn += 1)
+    {
+        await Promise.resolve();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+};
+
+const unreachable = () =>
+{
+    const line = { asks: 0, answer: (): Promise<unknown> => Promise.reject(new TypeError('Failed to fetch')) };
+
+    auth.me = async () =>
+    {
+        line.asks += 1;
+
+        return await line.answer();
+    };
+
+    return line;
+};
+
 describe('session', () =>
 {
-    it('asks the server for the account and adopts the one it issues', async () =>
+    it('adopts the account the server issued and reports it as the person', () =>
     {
         const session = useSession();
         const account = useAccount();
-        const person = await account.signIn('Darya');
-        expect(server.calls).toContain('auth.guest');
+
+        session.establish(DARYA);
+
         expect(session.signedIn()).toBe(true);
-        expect(person?.handle).toBe('darya');
         expect(account.user()?.handle).toBe('darya');
-    });
-
-    it('claims a fresh handle rather than taking one that is spoken for', async () =>
-    {
-        const person = await useAccount().signIn('alex');
-        expect(person?.id).not.toBe('alex');
-        expect(person?.displayName).toBe('alex');
-    });
-
-    it('keeps a name nobody in the dataset has ever answered to', async () =>
-    {
-        const account = useAccount();
-        const person = await account.signIn('Darya');
-        expect(person?.handle).toBe('darya');
-        expect(person?.displayName).toBe('Darya');
         expect(account.user()?.displayName).toBe('Darya');
     });
 
@@ -157,17 +177,114 @@ describe('session', () =>
     {
         const session = useSession();
         const account = useAccount();
-        await account.signIn('Darya');
+        session.establish(DARYA);
         await session.signOut();
         expect(server.calls).toContain('auth.sign-out');
         expect(server.account).toBeNull();
         expect(account.user()).toBeNull();
     });
 
+    it('forgets how loud the reader made anybody in a call, when the session ends', async () =>
+    {
+        const session = useSession();
+        session.establish(DARYA);
+        useSettings().update({ voiceLevels: { 'sara.k': 0.4, mina: 0 } });
+
+        await session.signOut();
+
+        expect(useSettings().settings().voiceLevels, 'the next person at this browser would read who the last one turned down').toEqual({});
+    });
+
+    describe('that ends somewhere else while this tab still shows it', () =>
+    {
+        let stops: (() => void)[] = [];
+        let ended = vi.fn<() => void>();
+
+        beforeEach(() =>
+        {
+            ended = vi.fn<() => void>();
+            stops = [useRealtime().start(), useSession().start(), useSession().onEnded(ended)];
+            socket.accept();
+            useSession().establish(DARYA);
+            server.account = DARYA;
+        });
+
+        afterEach(() =>
+        {
+            for (const stop of stops.reverse())
+            {
+                stop();
+            }
+        });
+
+        it('is ended here once the server says nobody is signed in, after a request was refused', async () =>
+        {
+            server.account = null;
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+            expect(useAccount().user()).toBeNull();
+        });
+
+        it('is kept when the server still knows the person, because a refusal is also a signature that did not match', async () =>
+        {
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).not.toHaveBeenCalled();
+            expect(useSession().signedIn()).toBe(true);
+        });
+
+        it('asks once however many requests are refused together', async () =>
+        {
+            server.account = null;
+            server.calls.length = 0;
+            answeredUnauthorized();
+            answeredUnauthorized();
+            answeredUnauthorized();
+            await flush();
+
+            expect(server.calls.filter((call) => call === 'auth.me')).toHaveLength(1);
+            expect(ended).toHaveBeenCalledTimes(1);
+        });
+
+        it('is ended when the socket is closed because the session is over', async () =>
+        {
+            server.account = null;
+            socket.drop(4401);
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+        });
+
+        it('is ended when the account is read again on a nudge and is gone', async () =>
+        {
+            server.account = null;
+            socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'me', at: 0 });
+            clock.advance(NUDGE_WINDOW_MS);
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+            expect(useSession().signedIn()).toBe(false);
+        });
+
+        it('is ended when somebody else has signed in at this browser since', async () =>
+        {
+            server.account = { ...DARYA, id: 'u-mina', handle: 'mina', displayName: 'Mina' };
+            answeredUnauthorized();
+            await flush();
+
+            expect(ended).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('ends every session at once and reports how many it closed', async () =>
     {
         const session = useSession();
-        await useAccount().signIn('Darya');
+        session.establish(DARYA);
         expect(await session.signOutEverywhere()).toBe(3);
         expect(session.signedIn()).toBe(false);
     });
@@ -175,11 +292,173 @@ describe('session', () =>
     it('takes the answer from the server when nothing has been established', async () =>
     {
         const session = useSession();
-        server.account = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, kind: 'guest', isMinor: false };
+        server.account = DARYA;
         await session.ready();
         expect(server.calls).toContain('auth.me');
         expect(session.signedIn()).toBe(true);
         expect(useAccount().user()?.id).toBe('darya');
+    });
+
+    describe('when the server cannot be asked who is signed in', () =>
+    {
+        afterEach(() =>
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        });
+
+        it('asks again, more slowly each time, and takes the answer when it comes', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+            let done = false;
+
+            server.account = DARYA;
+            void session.ready().then(() => done = true);
+            await flush();
+
+            expect(line.asks).toBe(1);
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(false);
+            expect(session.signedIn()).toBe(false);
+
+            clock.advance(ASK_AGAIN_MS - 1);
+            await flush();
+
+            expect(line.asks).toBe(1);
+
+            clock.advance(1);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(heldUp()).toBe(true);
+
+            clock.advance(ASK_AGAIN_MS * 2 - 1);
+            await flush();
+
+            expect(line.asks).toBe(2);
+
+            line.answer = whoAmI;
+            clock.advance(1);
+            await flush();
+
+            expect(line.asks).toBe(3);
+            expect(done).toBe(true);
+            expect(heldUp()).toBe(false);
+            expect(session.signedIn()).toBe(true);
+        });
+
+        it('never leaves more than eight seconds between two asks', async () =>
+        {
+            const line = unreachable();
+
+            void useSession().ready();
+            await flush();
+
+            for (const wait of [ASK_AGAIN_MS, ASK_AGAIN_MS * 2, ASK_AGAIN_MS * 4, ASK_AGAIN_MAX_MS, ASK_AGAIN_MAX_MS, ASK_AGAIN_MAX_MS])
+            {
+                const before = line.asks;
+
+                clock.advance(wait - 1);
+                await flush();
+
+                expect(line.asks).toBe(before);
+
+                clock.advance(1);
+                await flush();
+
+                expect(line.asks).toBe(before + 1);
+            }
+
+            expect(ASK_AGAIN_MAX_MS).toBe(8000);
+        });
+
+        it('asks again when the server says it is down, and when it says to slow down', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+            let done = false;
+
+            line.answer = () => Promise.reject(new ApiError(503, 'unavailable', 'Try again shortly.', undefined));
+            void session.ready().then(() => done = true);
+            await flush();
+
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(false);
+
+            line.answer = () => Promise.reject(new ApiError(429, 'rate-limited', 'Slow down.', undefined));
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(done).toBe(false);
+            expect(heldUp()).toBe(true);
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(done).toBe(true);
+            expect(heldUp()).toBe(false);
+        });
+
+        it('takes a refusal for the answer it is: nobody is signed in', async () =>
+        {
+            const session = useSession();
+            const line = unreachable();
+
+            line.answer = () => Promise.reject(new ApiError(401, 'unauthorized', 'Sign in first.', undefined));
+            await session.ready();
+
+            expect(line.asks).toBe(1);
+            expect(session.signedIn()).toBe(false);
+            expect(heldUp()).toBe(false);
+
+            clock.advance(ASK_AGAIN_MAX_MS * 4);
+            await flush();
+
+            expect(line.asks).toBe(1);
+        });
+
+        it('says so on the page that is holding for it once a second ask has failed too, in the reader\'s language, and draws nothing while a page simply holds', async () =>
+        {
+            const { container } = renderTest(() => NotFoundPage({ holding: true }) as HTMLElement);
+
+            expect(container.textContent).toBe('');
+
+            unreachable();
+            void useSession().ready();
+            await flush();
+
+            expect(container.textContent).toBe('');
+
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(container.querySelector('[role="status"]')?.textContent).toContain(useLocale().t('held.title'));
+            expect(container.textContent).toContain(useLocale().t('held.lead'));
+            expect(container.textContent).not.toContain(useLocale().t('notFound.title'));
+
+            const nowhere = renderTest(() => NotFoundPage({}) as HTMLElement).container;
+
+            expect(nowhere.textContent).toContain(useLocale().t('notFound.title'));
+            expect(nowhere.textContent).not.toContain(useLocale().t('held.title'));
+            expect(nowhere.querySelector('[role="status"]')).toBeNull();
+
+            useLocale().setLocale('fa');
+
+            expect(container.textContent).toContain(useLocale().t('held.title'));
+            expect(useLocale().t('held.title')).not.toBe('The server is not answering.');
+
+            useLocale().setLocale('en');
+            auth.me = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(container.textContent).toBe('');
+
+            cleanup();
+        });
     });
 });
 
@@ -208,19 +487,76 @@ describe('guards', () =>
 
     it('lets a signed-in person through, and bounces them off the sign-in page', async () =>
     {
-        await useAccount().signIn('Alex');
+        useSession().establish(DARYA);
         expect(await requireSession(context('/app'))).toBe(true);
         expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
+    });
+
+    it('holds somebody at the door while the server cannot be asked, and sends nobody to sign-in for that', async () =>
+    {
+        const line = unreachable();
+        let verdict: unknown = 'held';
+
+        try
+        {
+            server.account = DARYA;
+            void requireSession(context('/app/friends')).then((answer) => verdict = answer);
+            await flush();
+
+            expect(verdict).toBe('held');
+
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(line.asks).toBe(2);
+            expect(verdict).toBe('held');
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS * 2);
+            await flush();
+
+            expect(verdict).toBe(true);
+        }
+        finally
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        }
+    });
+
+    it('holds the sign-in page the same way, and opens it for a stranger once the server says so', async () =>
+    {
+        const line = unreachable();
+        let verdict: unknown = 'held';
+
+        try
+        {
+            void requireAnonymous(context('/sign-in')).then((answer) => verdict = answer);
+            await flush();
+
+            expect(verdict).toBe('held');
+
+            line.answer = whoAmI;
+            clock.advance(ASK_AGAIN_MS);
+            await flush();
+
+            expect(verdict).toBe(true);
+        }
+        finally
+        {
+            auth.me = whoAmI;
+            useSession().reset();
+        }
     });
 
     it('opens /admin only for the account the server calls the admin', async () =>
     {
         expect(await requireAdmin()).toBe(false);
 
-        await useAccount().signIn('Alex');
+        useSession().establish(DARYA);
         expect(await requireAdmin()).toBe(false);
 
-        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, kind: 'wallet' as const, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
+        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
         useSession().establish(admin);
         expect(await requireAdmin()).toBe(true);
     });
@@ -267,12 +603,87 @@ describe('people nobody has described yet', () =>
         people.reset();
         server.calls = [];
 
-        people.want(['sara.k', 'reza.t', 'mina', 'sara.k']);
-        people.want(['sara.k']);
+        void people.want(['sara.k', 'reza.t', 'mina', 'sara.k']);
+        void people.want(['sara.k']);
         await vi.waitFor(() => expect(people.byHandle('mina')?.displayName).toBe('Mina Sadeghi'));
 
         expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
         expect(server.calls).not.toContain('social.person');
+    });
+
+    it('are known by the time the asking settles, to whoever asked while it was out as well', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        const first = people.want(['mina', 'reza.t']);
+        const second = people.want(['mina']);
+
+        expect(people.byHandle('mina'), 'somebody was known before anybody answered').toBeNull();
+
+        await second;
+        expect(people.byHandle('mina')?.displayName, 'the second asking settled before the answer it waits on').toBe('Mina Sadeghi');
+
+        await first;
+        expect(people.byHandle('reza.t')?.displayName).toBe('Reza Tehrani');
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+    });
+
+    it('cost nothing to ask about once another payload has described them, and an empty handle asks nobody', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        people.remember((await client.social.names({ query: { handles: 'mina' } })).people);
+        server.calls = [];
+
+        await people.want(['mina', '']);
+        await people.want(['']);
+
+        expect(people.byHandle('mina')?.displayName).toBe('Mina Sadeghi');
+        expect(server.calls).toEqual([]);
+    });
+
+    it('are asked about again after a request that was refused, and the asking settles all the same', async () =>
+    {
+        const people = usePeople();
+        const names = client.social.names;
+        people.reset();
+        server.calls = [];
+
+        client.social.names = async () =>
+        {
+            throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
+        };
+
+        try
+        {
+            await people.want(['mina']);
+        }
+        finally
+        {
+            client.social.names = names;
+        }
+
+        expect(people.byHandle('mina')).toBeNull();
+
+        await people.want(['mina']);
+
+        expect(people.byHandle('mina')?.displayName, 'one refusal left a person a handle for good').toBe('Mina Sadeghi');
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+    });
+
+    it('are asked about once when nobody will describe them, however often they come up', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        await people.want(['nobody.at.all']);
+        await people.want(['nobody.at.all']);
+
+        expect(people.byHandle('nobody.at.all')).toBeNull();
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
     });
 });
 
@@ -412,7 +823,7 @@ describe('overlay stack', () =>
 
 describe('connection', () =>
 {
-    it('says nothing at all until a socket has actually stood up', () =>
+    it('says nothing while a first connection is still being made', () =>
     {
         const connection = useConnection();
         const stop = connection.start();
@@ -421,11 +832,86 @@ describe('connection', () =>
         live.start();
         expect(connection.state()).toBe('online');
 
-        // Never connected, so there is nothing to have been interrupted. The app is exactly what
-        // it was before the socket existed - a working pull-model app - and it stays quiet.
         socket.drop();
         expect(connection.state()).toBe('online');
 
+        clock.advance(UNREACHED_MS - 1000);
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('says the live connection has not come when a socket never stood up, and goes quiet when one does', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+
+        live.start();
+        socket.drop();
+        clock.advance(UNREACHED_MS);
+
+        expect(connection.state(), 'a socket that never connected was passed over in silence').toBe('unreached');
+
+        clock.advance(20_000);
+        expect(connection.state()).toBe('unreached');
+
+        socket.accept();
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('reads everything again on a slow beat while there is no socket, and stops when there is one', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+        const rung: string[] = [];
+        const deaf = live.onNudge((scope, id) => rung.push(id === undefined ? scope : `${ scope }:${ id }`));
+
+        live.start();
+        socket.drop();
+
+        clock.advance(LIFELINE_MS + 500);
+        expect([...rung].sort(), 'nothing was read again though no socket could ring').toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        rung.length = 0;
+        clock.advance(LIFELINE_MS);
+        expect([...rung].sort()).toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        socket.accept();
+        clock.advance(500);
+        rung.length = 0;
+
+        clock.advance(LIFELINE_MS * 3);
+        expect(rung, 'a page with a socket went on asking by itself').toEqual([]);
+
+        socket.drop();
+        clock.advance(LIFELINE_MS + 500);
+        expect([...rung].sort(), 'a socket that dropped left the page with nothing to read by').toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        deaf();
+        stop();
+    });
+
+    it('does not ask a network that is not there', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+        const rung: string[] = [];
+        const deaf = live.onNudge((scope) => rung.push(scope));
+
+        live.start();
+        socket.drop();
+        window.dispatchEvent(new Event('offline'));
+
+        clock.advance(LIFELINE_MS * 2);
+        expect(rung).toEqual([]);
+
+        window.dispatchEvent(new Event('online'));
+        deaf();
         stop();
     });
 
@@ -506,16 +992,135 @@ describe('connection', () =>
     });
 });
 
-
 describe('shell', () =>
 {
-    it('tracks push depth and lets the latest title claim win', () =>
+    const blank = (): HTMLElement => document.createElement('div');
+
+    const hops = async () =>
+    {
+        for (let turn = 0; turn < 8; turn += 1)
+        {
+            await Promise.resolve();
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    it('counts the pages opened in this visit and the ones gone back from, and never the page the visit began on', () =>
     {
         const shell = useShell();
-        shell.notePush();
-        shell.notePush();
-        shell.notePop();
+        const at = (key: string, fullPath: string, navigationKind: 'push' | 'replace' | 'pop') => shell.arrive({ key, fullPath, navigationKind, delta: navigationKind === 'pop' ? -1 : 0 });
+
+        shell.reset();
+
+        expect(at('az1', '/app', 'push'), 'the page the visit began on was counted').toBe(false);
+        expect(shell.depth()).toBe(0);
+        expect(at('az0', '/app/before', 'pop')).toBe(true);
+        expect(shell.depth(), 'going back past where the visit began counted below nothing').toBe(0);
+
+        expect([at('az2', '/app/games', 'push'), at('az2', '/app/games', 'push'), at('az3', '/app/games/ludo', 'push'), at('az2', '/app/games', 'pop')]).toEqual([true, false, true, true]);
         expect(shell.depth()).toBe(1);
+        expect(at('az4', '/app/friends', 'replace')).toBe(true);
+        expect(shell.depth(), 'a page put in the place of another was counted').toBe(1);
+        expect([at('az5', '/app/friends', 'push'), at('az6', '/app/friends', 'push')], 'two entries of one address were taken for one').toEqual([true, true]);
+        expect(shell.depth()).toBe(3);
+
+        shell.reset();
+
+        expect(shell.depth()).toBe(0);
+        expect(at('az9', '/app/me', 'push'), 'a visit that began again was counted from where the last one stood').toBe(false);
+        expect(shell.depth()).toBe(0);
+    });
+
+    it('counts a jump of several pages back as that many, and a page gone forward to as one more', () =>
+    {
+        const shell = useShell();
+        const at = (key: string, fullPath: string, navigationKind: 'push' | 'pop', delta: number) => shell.arrive({ key, fullPath, navigationKind, delta });
+
+        shell.reset();
+        at('az1', '/app', 'push', 0);
+        at('az2', '/app/games', 'push', 0);
+        at('az3', '/app/games/ludo', 'push', 0);
+        at('az4', '/app/play/t1', 'push', 0);
+
+        expect(shell.depth()).toBe(3);
+
+        at('az1', '/app', 'pop', -3);
+
+        expect(shell.depth(), 'a jump back to where the visit began left a page behind it, and Back would leave the site').toBe(0);
+
+        at('az2', '/app/games', 'pop', 1);
+
+        expect(shell.depth(), 'a page gone forward to was counted as a page gone back from').toBe(1);
+
+        at('az4', '/app/play/t1', 'pop', 2);
+
+        expect(shell.depth()).toBe(3);
+
+        at('az3', '/app/games/ludo', 'pop', 0);
+
+        expect(shell.depth(), 'a pop the router could not measure is no longer a step back').toBe(2);
+    });
+
+    it('counts the browser\'s own Back and Forward the way the router measured them', async () =>
+    {
+        const routes = [{ path: '/a', component: blank }, { path: '/b', component: blank }, { path: '/c', component: blank }];
+        const history = createMemoryHistory('/a');
+        const router = createRouter({ routes, history, scroll: false });
+        const shell = useShell();
+
+        shell.reset();
+        shell.arrive(router.location());
+
+        for (const path of ['/b', '/c'])
+        {
+            router.navigate(path);
+            await hops();
+            shell.arrive(router.location());
+        }
+
+        history.back();
+        await hops();
+        shell.arrive(router.location());
+
+        expect([router.location().pathname, shell.depth()]).toEqual(['/b', 1]);
+
+        history.forward();
+        await hops();
+        shell.arrive(router.location());
+
+        expect([router.location().pathname, router.location().delta, shell.depth()], 'Forward was counted as Back').toEqual(['/c', 1, 2]);
+    });
+
+    it('counts the first page opened after a reload, which the router stamps with the key of the page that was reloaded', async () =>
+    {
+        const routes = [{ path: '/table', component: blank }, { path: '/person', component: blank }];
+        const probe = createRouter({ routes, history: createMemoryHistory('/table'), scroll: false });
+
+        probe.navigate('/person');
+        await hops();
+
+        const next = `az${ Number(probe.location().key.slice(2)) + 1 }`;
+        const reloaded = createMemoryHistory('/table');
+
+        reloaded.replace('/table', { __az: { key: next, index: 0 }, state: undefined });
+
+        const router = createRouter({ routes, history: reloaded, scroll: false });
+        const shell = useShell();
+
+        shell.reset();
+        shell.arrive(router.location());
+        router.navigate('/person');
+        await hops();
+
+        expect([router.location().key, router.location().pathname], 'the router no longer gives two entries one key: this proves nothing now, and the register entry can close').toEqual([next, '/person']);
+        expect(shell.arrive(router.location()), 'the page was taken for the one that was reloaded').toBe(true);
+        expect(shell.depth()).toBe(1);
+    });
+
+    it('lets the latest title claim win', () =>
+    {
+        const shell = useShell();
         const release = shell.claimTitle(() => 'Sara');
         expect(shell.title()).toBe('Sara');
         release();

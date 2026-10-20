@@ -14,9 +14,11 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { ARRIVAL_MS, useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import type { MatchView, TableSummary } from '../src/api.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -79,7 +81,6 @@ beforeEach(async () =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'guest',
         isMinor: false
     });
     useSettings().reset();
@@ -128,8 +129,9 @@ describe('what a table config may say', () =>
         expect(isValidTable({ ...defaultTable('hokm'), teams: false }, hokm)).toBe(false);
         expect(isValidTable({ ...defaultTable('hokm'), seats: 2 }, hokm)).toBe(false);
         expect(isValidTable({ ...defaultTable('hokm'), seats: 2, teams: false }, hokm)).toBe(true);
-        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, ludo)).toBe(false);
-        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, { ...ludo, partners: 'optional' })).toBe(true);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, ludo)).toBe(true);
+        expect(isValidTable({ ...defaultTable('ludo'), seats: 3, teams: true }, ludo)).toBe(false);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, { ...ludo, partners: 'none' })).toBe(false);
     });
 });
 
@@ -265,6 +267,51 @@ describe('the create form', () =>
         expect(server.tables.map((table) => table.voice)).toEqual(['off', 'table']);
     });
 
+    it('offers a call for each side only where the table being made has two, and sends what is shown', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+        const switchOf = (container: HTMLElement, words: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((one) => one.textContent?.includes(words)) ?? null;
+        const chipOf = (container: HTMLElement, label: string) =>
+            [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim().startsWith(label))!;
+        const sides = useLocale().t('create.voiceTeam');
+
+        const form = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(switchOf(form, 'Voice chat')!, 'click');
+        await settle();
+
+        expect(switchOf(form, sides), 'a call for each side at a table of one').toBeNull();
+
+        fire(chipOf(form, '2 v 2'), 'click');
+        await settle();
+
+        expect(switchOf(form, sides), 'no call for each side at a table of two sides').not.toBeNull();
+
+        fire(switchOf(form, sides)!, 'click');
+        await settle();
+        fire(form.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        cleanup();
+
+        const changed = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(switchOf(changed, 'Voice chat')!, 'click');
+        fire(chipOf(changed, '2 v 2'), 'click');
+        await settle();
+        fire(switchOf(changed, sides)!, 'click');
+        fire(chipOf(changed, '4 players'), 'click');
+        await settle();
+
+        expect(switchOf(changed, sides), 'a call for each side was left on a table of one').toBeNull();
+
+        fire(changed.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        expect(server.tables.map((table) => [table.teams, table.voice])).toEqual([[true, 'team'], [false, 'table']]);
+    });
+
     it('still says it, as a plain no, for a game that leaves the choice to whoever opens the table', async () =>
     {
         const ludo = GAMES.find((game) => game.id === 'ludo')!;
@@ -376,6 +423,101 @@ describe('a game that is played in pairs', () =>
         expect(useCatalogue().rules('ludo').partners).toBe('optional');
         expect(chips('ludo')).not.toContain('Partners at four');
     });
+
+    const publish = async (partners: 'none' | 'optional') =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: ludo.nameKey,
+            blurbKey: ludo.blurbKey,
+            categoryKey: ludo.categoryKey,
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false }
+        }];
+        useCatalogue().reset();
+        await settle();
+    };
+
+    const cards = async (slug: string) =>
+    {
+        const router = createRouter({
+            routes: [{ path: '/app/games/:slug', component: () => GamePage() as HTMLElement }],
+            history: createMemoryHistory(`/app/games/${ slug }`),
+            scroll: false
+        });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+        const listed = () => [...container.querySelectorAll('[aria-labelledby="game-about"] ol > li')];
+
+        await vi.waitFor(() => expect(listed().length).toBeGreaterThan(0), { timeout: 4000 });
+
+        const read = listed().map((card) => [...card.children].map((part) => part.textContent?.trim()));
+
+        cleanup();
+
+        return read;
+    };
+
+    it('says a game that leaves two against two to whoever opens the table can be played that way at four, in both languages, and never that it is played in pairs', () =>
+    {
+        const locale = useLocale();
+
+        expect(chips('ludo')).toContain('2 v 2 at four');
+        expect(chips('ludo')).not.toContain('Partners at four');
+
+        for (const id of ['hokm', 'poker', 'backgammon'] as const)
+        {
+            expect(chips(id), id).not.toContain('2 v 2 at four');
+        }
+
+        locale.setLocale('fa');
+
+        const persian = locale.t('games.partners.optional');
+
+        expect(persian).not.toBe('2 v 2 at four');
+        expect(chips('ludo')).toContain(persian);
+        expect(chips('ludo')).not.toContain(locale.t('games.partners.required'));
+        expect(chips('hokm')).not.toContain(persian);
+    });
+
+    it('takes that from the rules the server published, not from the ones this browser was built with', async () =>
+    {
+        await publish('none');
+
+        expect(useCatalogue().rules('ludo').partners).toBe('none');
+        expect(chips('ludo')).not.toContain('2 v 2 at four');
+
+        await publish('optional');
+
+        expect(chips('ludo')).toContain('2 v 2 at four');
+    });
+
+    it('writes a fourth card about two against two on the page of the game that can be played that way, and three on every other', async () =>
+    {
+        const locale = useLocale();
+        const ludo = [1, 2, 3, 4] as const;
+
+        expect(await cards('ludo')).toEqual(ludo.map((card) => [String(card), locale.t(`game.rules.ludo.${ card }`)]));
+
+        for (const slug of ['hokm', 'poker', 'backgammon'])
+        {
+            expect(await cards(slug), slug).toHaveLength(3);
+        }
+
+        const english = locale.t('game.rules.ludo.4');
+
+        locale.setLocale('fa');
+
+        const persian = await cards('ludo');
+
+        expect(persian).toEqual(ludo.map((card) => [locale.n(card), locale.t(`game.rules.ludo.${ card }`)]));
+        expect(persian[3][1]).not.toBe(english);
+    });
 });
 
 describe('a button that finds a seat', () =>
@@ -437,28 +579,26 @@ describe('a button that finds a seat', () =>
         });
     });
 
-    it('spins on the card of the game being searched for, and on no other card', async () =>
+    it('leaves a card alone while a search for its game is out: a card only leads to the game', async () =>
     {
         const lobby = useLobby();
-        const container = shown(() => GameGrid({ games: [game('hokm'), game('ludo')], label: 'Games', onQuickPlay: (id) => void lobby.quick(id) }));
+        const container = shown(() => GameGrid({ games: [game('hokm'), game('ludo')], label: 'Games' }));
 
         await settle();
 
-        const [hokm, ludo] = named(container, useLocale().t('games.play'));
-
         await parked(async (answers) =>
         {
-            fire(ludo, 'click');
+            void lobby.quick('ludo');
             await settle();
 
-            expect([busy(hokm), busy(ludo)]).toEqual([false, true]);
-            expect(said(container)).toEqual([useLocale().t('quickMatch.busy')]);
+            expect(lobby.finding()).toEqual(['ludo']);
+            expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(0);
+            expect(said(container)).toEqual([]);
+            expect([...container.querySelectorAll('a')].filter((one) => one.textContent?.trim() === useLocale().t('games.play')).map((one) => one.getAttribute('href'))).toEqual(['/app/games/hokm', '/app/games/ludo']);
 
             answers[0]();
             lobby.open(await lobby.quick('ludo'));
             await settle();
-
-            expect([busy(hokm), busy(ludo)]).toEqual([false, false]);
         });
     });
 
@@ -484,7 +624,7 @@ describe('a button that finds a seat', () =>
         });
     });
 
-    it('spins in both places the game page offers it, the bar a phone keeps at the foot included, and then goes to the table', async () =>
+    const gamePage = async () =>
     {
         const router = createRouter({
             routes: [{ path: '/app/games/:slug', component: () => GamePage() as HTMLElement }, { path: '/app/play/:id', component: stub }],
@@ -495,23 +635,52 @@ describe('a button that finds a seat', () =>
 
         await vi.waitFor(() => expect(named(container, useLocale().t('app.nav.quickPlay'))).toHaveLength(2), { timeout: 4000 });
 
-        const buttons = named(container, useLocale().t('app.nav.quickPlay'));
+        return named(container, useLocale().t('app.nav.quickPlay'));
+    };
+
+    it('asks what to look for from both places the game page offers it, the bar a phone keeps at the foot included, and looks for nothing by itself', async () =>
+    {
+        useOverlay().reset();
+
+        const buttons = await gamePage();
+
+        server.calls = [];
+
+        for (const button of buttons)
+        {
+            fire(button, 'click');
+            fire(button, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            expect(useOverlay().items(), 'two presses opened two sheets').toHaveLength(1);
+            expect(useOverlay().top()!.props.game).toBe('ludo');
+            expect(useOverlay().top()!.label).toBe(useLocale().t('quickMatch.title'));
+
+            useOverlay().reset();
+        }
+
+        expect(written(), 'pressing Quick play looked for a table before anybody said what to look for').toEqual([]);
+    });
+
+    it('spins in both of them while a search for that game is out', async () =>
+    {
+        const lobby = useLobby();
+        const buttons = await gamePage();
 
         await parked(async (answers) =>
         {
-            fire(buttons[1], 'click');
-            fire(buttons[0], 'click');
+            void lobby.quick('ludo', { seats: 2 });
             await settle();
 
             expect(buttons.map(busy)).toEqual([true, true]);
-            expect(answers).toHaveLength(1);
 
             answers[0]();
+            lobby.open(await lobby.quick('ludo'));
+            await settle();
 
-            await vi.waitFor(() => expect(router.location().pathname).toBe(`/app/play/${ server.tables[0]?.id }`), { timeout: 4000 });
+            expect(buttons.map(busy)).toEqual([false, false]);
         });
-
-        expect(server.calls.filter((call) => call === 'tables.quick')).toHaveLength(1);
     });
 });
 
@@ -599,15 +768,18 @@ describe('the lobby store', () =>
         await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 2 }, []);
         await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 4, teams: false }, []);
         await lobby.host('ludo', { ...catalogue.defaults('ludo'), teams: true }, []);
+        await lobby.host('ludo', { ...catalogue.defaults('ludo'), seats: 3, teams: true }, []);
+        await lobby.host('poker', { ...catalogue.defaults('poker'), teams: true }, []);
 
         expect(server.asked).toEqual([
             { game: 'hokm', seats: 4, teams: true },
             { game: 'hokm', seats: 2, teams: false },
             { game: 'hokm', seats: 4, teams: true },
-            { game: 'ludo', seats: 4, teams: false }
+            { game: 'ludo', seats: 4, teams: true },
+            { game: 'ludo', seats: 3, teams: false },
+            { game: 'poker', seats: 6, teams: false }
         ]);
     });
-
 
     it('remembers where this account is sitting, across a reload', async () =>
     {
@@ -646,6 +818,27 @@ describe('the lobby store', () =>
 
         expect(server.sought).toEqual([{ game: 'ludo', voice: 'off' }, { game: 'backgammon', voice: 'table' }]);
         expect(server.tables.map((table) => [table.game, table.voice, table.mode])).toEqual([['ludo', 'off', 'live'], ['backgammon', 'table', 'live']]);
+    });
+
+    it('says what the reader is looking for, and nothing about a choice that was left open', async () =>
+    {
+        const lobby = useLobby();
+
+        await lobby.quick('backgammon', { target: 3, cube: false });
+        await lobby.quick('hokm', { seats: 4, teams: true, mode: 'turns' });
+        await lobby.quick('poker', { blinds: 'mid' });
+        await lobby.quick('ludo', {});
+
+        expect(server.sought).toEqual([
+            { game: 'backgammon', target: 3, cube: false, voice: 'off' },
+            { game: 'hokm', seats: 4, teams: true, mode: 'turns', voice: 'off' },
+            { game: 'poker', blinds: 'mid', voice: 'off' },
+            { game: 'ludo', voice: 'off' }
+        ]);
+        expect(server.tables.map((table) => [table.game, table.seats, table.mode])).toEqual([['backgammon', 2, 'live'], ['hokm', 4, 'turns'], ['poker', 2, 'live'], ['ludo', 2, 'live']]);
+        expect(server.tables[0]).toMatchObject({ target: 3, cube: false });
+        expect(server.tables[1]).toMatchObject({ teams: true });
+        expect(server.tables[2]).toMatchObject({ blinds: 'mid' });
     });
 
     it('is seated ready, and is handed a game the server started when it took the last chair', async () =>
@@ -801,6 +994,28 @@ describe('the lobby store', () =>
                 expect(await second).toBe(await first);
                 expect(server.tables).toHaveLength(1);
                 expect(server.calls.filter((call) => call === 'tables.quick')).toHaveLength(1);
+            });
+        });
+
+        it('is one search for a game whatever the second press asks for, so nobody is seated twice by a slip', async () =>
+        {
+            const lobby = useLobby();
+
+            await parked(async (answers) =>
+            {
+                const first = lobby.quick('ludo', { seats: 2 });
+                const second = lobby.quick('ludo', { seats: 4 });
+
+                await settle();
+
+                expect(second).toBe(first);
+                expect(answers).toHaveLength(1);
+
+                answers[0]();
+                await first;
+
+                expect(server.sought).toEqual([{ game: 'ludo', seats: 2, voice: 'off' }]);
+                expect(server.tables).toHaveLength(1);
             });
         });
 
@@ -984,6 +1199,146 @@ describe('the lobby store', () =>
         expect(lobby.failed() ?? null).toBeNull();
     });
 
+    describe('a host taking somebody out of a chair', () =>
+    {
+        const hosting = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            lobby.open(id);
+            await settle();
+            server.calls = [];
+
+            return { lobby, id, held };
+        };
+
+        it('is one request naming them, after which the table is read again and their chair is empty', async () =>
+        {
+            const { lobby, id } = await hosting();
+
+            expect(lobby.table()!.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k', undefined, undefined]);
+
+            await lobby.remove(id, 'sara.k');
+            await settle();
+
+            expect(written()).toEqual(['tables.remove']);
+            expect(server.calls).toContain('tables.view');
+            expect(lobby.table()!.chairs.map((chair) => chair.who)).toEqual(['alex', undefined, undefined, undefined]);
+            expect(lobby.table()!.taken).toBe(1);
+            expect(server.keptOut[id]).toEqual(['sara.k']);
+        });
+
+        it('hands a refusal on to whoever asked, and leaves the chair as it was', async () =>
+        {
+            const { lobby, id, held } = await hosting();
+
+            held.matchId = 'live-1';
+
+            await expect(lobby.remove(id, 'sara.k')).rejects.toMatchObject({ status: 409, code: 'playing' });
+            await expect(lobby.remove(id, 'nobody-sitting-here')).rejects.toMatchObject({ status: 409, code: 'playing' });
+
+            delete held.matchId;
+
+            await expect(lobby.remove(id, 'nobody-sitting-here')).rejects.toMatchObject({ status: 404, code: 'not-found' });
+            expect(held.chairs[1].who).toBe('sara.k');
+            expect(server.keptOut[id]).toBeUndefined();
+        });
+    });
+
+    describe('somebody a host took out of a chair', () =>
+    {
+        const guestAt = async (privacy: 'public' | 'friends' | 'room' | 'invite') =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy }, []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.host = 'sara.k';
+            held.chairs[0].who = 'sara.k';
+            held.chairs[1].who = 'alex';
+            await lobby.refresh();
+            lobby.open(id);
+            await settle();
+
+            expect(lobby.table()?.mine).toBe(1);
+
+            delete held.chairs[1].who;
+            server.keptOut[id] = ['alex'];
+            server.calls = [];
+
+            return { lobby, id, held };
+        };
+
+        it.each(['public', 'friends', 'room'] as const)('reads a %s table again when it is rung, and is told there that the host took them out', async (privacy) =>
+        {
+            const { lobby, id } = await guestAt(privacy);
+
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).toContain('tables.view');
+            expect(lobby.table()?.id).toBe(id);
+            expect(lobby.table()?.removed).toBe(true);
+            expect(lobby.table()?.mine).toBeUndefined();
+            expect(lobby.seated()).toEqual([]);
+        });
+
+        it('asks nothing more about a table by invitation, which they can no longer see', async () =>
+        {
+            const { lobby } = await guestAt('invite');
+
+            await lobby.refresh();
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).not.toContain('tables.view');
+            expect(lobby.table()).toBeNull();
+            expect(lobby.failed() ?? null).toBeNull();
+        });
+
+        it('asks about it again once the page is opened again, as an invitation leads them to do', async () =>
+        {
+            const { lobby, id, held } = await guestAt('invite');
+
+            await lobby.refresh();
+            await settle();
+
+            expect(lobby.table()).toBeNull();
+
+            server.keptOut[id] = [];
+            held.chairs[1].invited = 'alex';
+            lobby.open(id);
+
+            await vi.waitFor(() => expect(lobby.table()?.id).toBe(id));
+
+            expect(lobby.table()?.removed).toBeUndefined();
+            expect(lobby.table()?.chairs[1].invited).toBe('alex');
+        });
+
+        it('still asks nothing more about a table for their friends that its own host lost the chair at', async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy: 'friends' }, []);
+            const held = server.tables.find((table) => table.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            lobby.open(id);
+            await settle();
+
+            delete held.chairs[0].who;
+            server.calls = [];
+
+            await lobby.refresh();
+            await settle();
+
+            expect(server.calls).not.toContain('tables.view');
+            expect(lobby.table()).toBeNull();
+        });
+    });
+
     it('re-reads itself when the table doorbell rings', async () =>
     {
         const lobby = useLobby();
@@ -1032,5 +1387,546 @@ describe('the lobby store', () =>
 
         expect(server.calls).toContain('tables.mine');
         stop();
+    });
+});
+
+describe('whose turn it is at the reader\'s tables, told by the game itself', () =>
+{
+    let frames = 40;
+
+    const playing = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, mode: 'live', privacy: 'public' }, []);
+
+        server.tables.find((table) => table.id === id)!.matchId = `match-${ id }`;
+        await lobby.refresh();
+        await settle();
+
+        return id;
+    };
+
+    const tell = async (tableId: string, turn: number, rev: number) =>
+    {
+        frames += 1;
+
+        const match: MatchView = {
+            id: `match-${ tableId }`,
+            tableId,
+            game: 'ludo',
+            rev,
+            seats: 2,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0 },
+                { seat: 1, who: 'sara.k', timeouts: 0 }
+            ] as MatchView['players'],
+            turn,
+            mine: 0,
+            startedAt: new Date(clock.now()).toISOString(),
+            view: { kind: 'ludo', moves: [], controls: turn, seats: [] } as unknown as MatchView['view']
+        };
+
+        socket.deliver({ v: 1, t: 'game', n: frames, at: clock.now(), match, events: [] });
+        await settle();
+    };
+
+    const started = () =>
+    {
+        const lobby = useLobby();
+        const stop = lobby.start();
+
+        useRealtime().start();
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+
+        return { lobby, stop };
+    };
+
+    it('is told by the game frame, without reading every table the reader sits at again', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+
+        server.calls = [];
+        await tell(tableId, 0, 5);
+
+        expect(lobby.waiting().map((table) => table.id), 'the turn that came round was not counted').toEqual([tableId]);
+        expect(lobby.seated().find((table) => table.id === tableId)?.yourTurn, 'the list of tables does not say whose turn it is').toBe(true);
+        expect(server.calls, 'a turn coming round read every table the reader sits at').not.toContain('tables.mine');
+
+        await tell(tableId, 1, 6);
+
+        expect(lobby.waiting()).toEqual([]);
+        expect(server.calls).not.toContain('tables.mine');
+        stop();
+    });
+
+    it('gives way to a read of the tables asked for after it', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+
+        await tell(tableId, 0, 5);
+        expect(lobby.waiting().map((table) => table.id)).toEqual([tableId]);
+
+        server.tables.find((table) => table.id === tableId)!.yourTurn = false;
+        await lobby.refresh();
+        await settle();
+
+        expect(lobby.waiting(), 'what the game told outlived a newer read of the tables').toEqual([]);
+        stop();
+    });
+
+    it('is kept over a read that was already on its way when the game told it', async () =>
+    {
+        const { lobby, stop } = started();
+        const tableId = await playing();
+        const routes = client.tables as unknown as Record<string, (input?: unknown) => Promise<unknown>>;
+        const real = routes.mine;
+        let release: () => void = () => undefined;
+
+        routes.mine = async (input) =>
+        {
+            const answer = await real(input);
+
+            await new Promise<void>((resolve) =>
+            {
+                release = resolve;
+            });
+
+            return answer;
+        };
+
+        try
+        {
+            const reading = lobby.refresh();
+
+            await settle();
+            await tell(tableId, 0, 5);
+            release();
+            await reading;
+            await settle();
+        }
+        finally
+        {
+            routes.mine = real;
+        }
+
+        expect(lobby.waiting().map((table) => table.id), 'a read that left before the turn came round took the turn back').toEqual([tableId]);
+        stop();
+    });
+
+    it('still reads the tables for a game it has not heard of, and for one that has ended', async () =>
+    {
+        const { stop } = started();
+        const tableId = await playing();
+
+        server.calls = [];
+        await tell('somewhere-else', 0, 3);
+
+        expect(server.calls).toContain('tables.mine');
+
+        server.calls = [];
+        socket.deliver({ v: 1, t: 'game', n: 99, at: clock.now(), match: { ...((): MatchView => ({ id: `match-${ tableId }`, tableId, game: 'ludo', rev: 9, seats: 2, players: [] as unknown as MatchView['players'], turn: 0, mine: 0, startedAt: new Date(clock.now()).toISOString(), finishedAt: new Date(clock.now()).toISOString(), view: { kind: 'ludo', moves: [], controls: 0, seats: [] } as unknown as MatchView['view'] }))() }, events: [] });
+        await settle();
+
+        expect(server.calls).toContain('tables.mine');
+        stop();
+    });
+});
+
+describe('what the reader did at a table, shown before the server has said so', () =>
+{
+    const routes = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+
+    const holding = async (verb: string, run: (out: { asked: unknown[]; answer: () => void }) => Promise<void>) =>
+    {
+        const real = routes[verb];
+        const asked: unknown[] = [];
+        const waiting: (() => void)[] = [];
+        let owed = 0;
+
+        const answer = () =>
+        {
+            const next = waiting.shift();
+
+            if (next === undefined)
+            {
+                owed += 1;
+            }
+            else
+            {
+                next();
+            }
+        };
+
+        routes[verb] = async (input) =>
+        {
+            asked.push(input);
+
+            if (owed > 0)
+            {
+                owed -= 1;
+            }
+            else
+            {
+                await new Promise<void>((resolve) =>
+                {
+                    waiting.push(resolve);
+                });
+            }
+
+            return await real(input);
+        };
+
+        try
+        {
+            await run({ asked, answer });
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const answering = async (verb: string, answer: (input: unknown) => Promise<unknown>, run: () => Promise<void>) =>
+    {
+        const real = routes[verb];
+
+        routes[verb] = answer;
+
+        try
+        {
+            await run();
+        }
+        finally
+        {
+            routes[verb] = real;
+        }
+    };
+
+    const view = routes.view;
+
+    const seated = async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, privacy: 'public' }, []);
+        const row = server.tables.find((table) => table.id === id)!;
+
+        row.chairs[1].who = 'sara.k';
+        lobby.open(id);
+        await lobby.refresh();
+        await settle();
+
+        return { lobby, id, row };
+    };
+
+    const mine = (lobby: ReturnType<typeof useLobby>) => lobby.table()!.chairs[0].ready;
+
+    it('says ready in the same turn as the press, while the request is still out', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            expect(mine(lobby)).toBe(true);
+            expect(lobby.table()!.chairs[1].ready).toBe(false);
+
+            await settle();
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }]);
+            expect(row.chairs[0].ready).toBe(false);
+            expect(mine(lobby)).toBe(true);
+
+            answer();
+            await said;
+
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('goes on saying it through a read of the table that lands while the request is out', async () =>
+    {
+        const { lobby, id } = await seated();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            await lobby.refresh();
+            await settle();
+            expect(mine(lobby)).toBe(true);
+
+            answer();
+            await said;
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('goes back to what the server holds, and hands the refusal on, when the server says no', async () =>
+    {
+        const { lobby, id } = await seated();
+        const refusal = new ApiError(409, 'table-closed', 'That table has closed.', undefined);
+
+        await answering('ready', async () =>
+        {
+            throw refusal;
+        }, async () =>
+        {
+            const said = lobby.ready(id, true);
+
+            expect(mine(lobby)).toBe(true);
+            await expect(said).rejects.toBe(refusal);
+            expect(mine(lobby)).toBe(false);
+        });
+    });
+
+    it('sends two presses one after the other, in the order they were made, and ends on the last', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const on = lobby.ready(id, true);
+            const off = lobby.ready(id, false);
+
+            await settle();
+            expect(mine(lobby)).toBe(false);
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }]);
+
+            answer();
+            await on;
+            await settle();
+            expect(asked).toEqual([{ params: { id }, input: { ready: true } }, { params: { id }, input: { ready: false } }]);
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(false);
+
+            answer();
+            await off;
+            expect(row.chairs[0].ready).toBe(false);
+            expect(mine(lobby)).toBe(false);
+        });
+    });
+
+    it('sends the second press though the first was refused', async () =>
+    {
+        const { lobby, id, row } = await seated();
+        let turn = 0;
+        const real = routes.ready;
+
+        await answering('ready', async (input) =>
+        {
+            turn += 1;
+
+            if (turn === 1)
+            {
+                throw new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+            }
+
+            return await real(input);
+        }, async () =>
+        {
+            const first = lobby.ready(id, true);
+            const second = lobby.ready(id, true);
+
+            await expect(first).rejects.toThrow('No answer.');
+            await second;
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('touches the chair of the table that was pressed and no other', async () =>
+    {
+        const { lobby, id } = await seated();
+        const other = await lobby.host('hokm', defaultTable('hokm'), []);
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.ready(other, true);
+
+            expect(lobby.table()!.id).toBe(id);
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([false, false]);
+
+            answer();
+            await said;
+        });
+    });
+
+    it('is the table itself while nothing is out, so nothing is drawn again for it', async () =>
+    {
+        const { lobby, id } = await seated();
+        const before = lobby.table();
+
+        expect(lobby.table()).toBe(before);
+
+        await lobby.ready(id, true);
+        await settle();
+
+        const after = lobby.table();
+
+        expect(lobby.table()).toBe(after);
+        expect(after!.chairs[0].ready).toBe(true);
+    });
+
+    it('plays again by saying ready at once', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id);
+
+            expect(mine(lobby)).toBe(true);
+            await settle();
+            expect(row.chairs[0].ready).toBe(false);
+
+            answer();
+            await said;
+            expect(row.chairs[0].ready).toBe(true);
+            expect(mine(lobby)).toBe(true);
+        });
+    });
+
+    it('says who is waited for when the table it holds is still the one from before the game ended', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'the-game-that-ended';
+        row.yourTurn = true;
+        row.chairs[0].ready = true;
+        row.chairs[1].ready = true;
+
+        await answering('view', async (input) =>
+        {
+            const read = await view(input) as TableSummary;
+
+            return read.matchId === undefined ? read : { ...read, status: 'playing' };
+        }, async () =>
+        {
+            await lobby.refresh();
+            await settle();
+            expect(lobby.table()).toMatchObject({ matchId: 'the-game-that-ended', status: 'playing', yourTurn: true });
+
+            await holding('ready', async ({ answer }) =>
+            {
+                const said = lobby.again(id, 'the-game-that-ended');
+                const shown = lobby.table()!;
+
+                expect(shown.matchId).toBeUndefined();
+                expect(shown.yourTurn).toBeUndefined();
+                expect(shown.status).toBe('ready');
+                expect(shown.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+                expect(shown.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k']);
+
+                delete row.matchId;
+                delete row.yourTurn;
+                row.chairs[0].ready = false;
+                row.chairs[1].ready = false;
+                answer();
+                await said;
+
+                expect(lobby.table()!.matchId).toBeUndefined();
+                expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+            });
+        });
+    });
+
+    it('says a chair is free where somebody left the table the game ended at', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'the-game-that-ended';
+        row.chairs[0].ready = true;
+        delete row.chairs[1].who;
+        await lobby.refresh();
+        await settle();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id, 'the-game-that-ended');
+
+            expect(lobby.table()).toMatchObject({ status: 'open', taken: 1 });
+            expect(lobby.table()!.matchId).toBeUndefined();
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, false]);
+
+            delete row.matchId;
+            answer();
+            await said;
+        });
+    });
+
+    it('takes a table that names another game as it stands, and only says the reader is ready', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        row.matchId = 'a-game-still-on';
+        row.chairs[1].ready = true;
+        await lobby.refresh();
+        await settle();
+
+        await holding('ready', async ({ answer }) =>
+        {
+            const said = lobby.again(id, 'the-game-that-ended');
+
+            expect(lobby.table()).toMatchObject({ matchId: 'a-game-still-on' });
+            expect(lobby.table()!.chairs.map((chair) => chair.ready)).toEqual([true, true]);
+
+            answer();
+            await said.catch(() => undefined);
+        });
+    });
+
+    it('keeps what was pressed when the request went through and the table could not be read again, until it can', async () =>
+    {
+        const { lobby, id, row } = await seated();
+
+        await answering('view', async () =>
+        {
+            throw new ApiError(502, 'bad-gateway', 'No answer.', undefined);
+        }, async () =>
+        {
+            await lobby.ready(id, true);
+            expect(mine(lobby)).toBe(true);
+
+            await lobby.refresh();
+            await settle();
+        });
+
+        expect(row.chairs[0].ready).toBe(true);
+        expect(mine(lobby)).toBe(true);
+
+        row.chairs[0].ready = false;
+        await lobby.refresh();
+        await settle();
+        expect(mine(lobby)).toBe(false);
+    });
+
+    it('forgets what was pressed when the store is reset', async () =>
+    {
+        const { lobby, id } = await seated();
+
+        await holding('ready', async ({ asked, answer }) =>
+        {
+            const said = lobby.ready(id, true);
+
+            await settle();
+            lobby.reset();
+            lobby.open(id);
+            await vi.waitFor(() => expect(lobby.table()?.id).toBe(id));
+            expect(mine(lobby)).toBe(false);
+
+            const after = lobby.ready(id, true);
+
+            await settle();
+            expect(asked).toHaveLength(2);
+
+            answer();
+            answer();
+            await said.catch(() => undefined);
+            await after;
+        });
     });
 });

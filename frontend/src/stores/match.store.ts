@@ -1,4 +1,4 @@
-import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+import { batch, createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { ApiError, client, type MatchPlay, type MatchView } from '../api.ts';
 
@@ -7,9 +7,18 @@ export type MatchEvent = Awaited<ReturnType<typeof client.matches.since>>['event
 export interface EventBatch
 {
     seq: number;
+    id: string;
     events: readonly MatchEvent[];
+    live: boolean;
+    jump: boolean;
+    opens?: () => boolean;
 }
+
+export const NO_EVENTS: EventBatch = { seq: 0, id: '', events: [], live: false, jump: false };
+
+export const OPENING_MS = 10_000;
 import { ludoOf } from '../data/match.ts';
+import { runOf } from '../game/stage/feed.ts';
 import { useAccount } from './account.store.ts';
 import { refusalOf } from '../lib/refusal.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -43,8 +52,7 @@ export type Outcome = 'now' | 'already' | 'stale' | 'failed';
 export interface BoardApi
 {
     match: Getter<MatchView | null>;
-    loading: Getter<boolean>;
-    failed: Getter<unknown>;
+    lost: Getter<boolean>;
 
     open(matchId: string): void;
     close(): void;
@@ -102,9 +110,11 @@ const mintKey = () =>
         : `${ runtime().clock.now().toString(36) }-${ keys.toString(36) }`;
 };
 
-export const ACK_MS = 3000;
+export const ACK_MS = 1500;
 
 export const POLL_MS = 3000;
+
+export const MEND_MS = 3000;
 
 interface Answer
 {
@@ -122,7 +132,17 @@ export const useBoard = createStore((): BoardApi =>
     const [openId, setOpenId] = createSignal('');
     const [busy, setBusy] = createSignal(false);
     const [latest, setLatest] = createSignal<MatchView | null>(null);
-    const [events, setEvents] = createSignal<EventBatch>({ seq: 0, events: [] });
+    const [events, setEvents] = createSignal<EventBatch>(NO_EVENTS);
+
+    const [lost, setLost] = createSignal(false);
+
+    const answered = (id: string, failed: boolean) =>
+    {
+        if (untrack(openId) === id)
+        {
+            setLost(failed);
+        }
+    };
 
     const viewing = createResource(
         () => (openId() === '' ? null : { id: openId(), who: who() }),
@@ -130,11 +150,19 @@ export const useBoard = createStore((): BoardApi =>
         {
             try
             {
-                return await client.matches.view({ params: { id: current.id } });
+                const match = await client.matches.view({ params: { id: current.id } });
+
+                answered(current.id, false);
+
+                return match;
             }
             catch (error)
             {
-                if (error instanceof ApiError && error.status === 404)
+                const missing = error instanceof ApiError && error.status === 404;
+
+                answered(current.id, !missing);
+
+                if (missing)
                 {
                     return null;
                 }
@@ -165,42 +193,204 @@ export const useBoard = createStore((): BoardApi =>
         const fetched = viewing.data() ?? null;
         const held = latest();
 
-        if (held === null || held.id !== openId())
+        if (held === null || fetched === null)
         {
-            return fetched;
+            return held !== null && held.id === openId() ? held : fetched;
         }
 
-        return fetched !== null && fetched.id === held.id && fetched.rev >= held.rev ? fetched : held;
+        if (fetched.id === held.id)
+        {
+            return fetched.rev >= held.rev ? fetched : held;
+        }
+
+        return held.id === openId() ? held : fetched;
     };
 
     let heardFor = '';
     let heardRev = -1;
 
-    const waiting = new Map<string, (reply: ReplyFrame) => void>();
+    const early = new Map<string, { match: MatchView; events: readonly MatchEvent[]; at: number }>();
+    const opened = new Set<string>();
 
-    const heard = (match: MatchView, batch: readonly MatchEvent[]) =>
+    const opening = (id: string, at: number) => () =>
     {
-        const held = untrack(board);
-        const base = held !== null && held.id === match.id ? held.rev : -1;
-
-        if (heardFor !== match.id)
+        if (opened.has(id) || runtime().clock.now() - at > OPENING_MS)
         {
-            heardFor = match.id;
-            heardRev = -1;
+            return false;
         }
 
-        const floor = Math.max(base, heardRev);
-        const fresh = batch.filter((event) => event.rev > floor);
+        opened.add(id);
 
-        setLatest((current) => current !== null && current.id === match.id && current.rev >= match.rev ? current : match);
+        return true;
+    };
 
-        if (fresh.length === 0 || (floor >= 0 && fresh[0].rev > floor + 1))
+    const starts = (match: MatchView, told: readonly MatchEvent[]) => match.rev === 1 && told.length === 1 && told[0].rev === 1;
+
+    const keep = (match: MatchView, told: readonly MatchEvent[]) =>
+    {
+        const now = runtime().clock.now();
+
+        for (const [id, held] of early)
+        {
+            if (now - held.at > OPENING_MS)
+            {
+                early.delete(id);
+            }
+        }
+
+        early.set(match.id, { match, events: told, at: now });
+    };
+
+    const waiting = new Map<string, (reply: ReplyFrame) => void>();
+
+    let unmended: MatchView | null = null;
+    let mending = false;
+
+    const floorOf = (id: string) =>
+    {
+        const held = untrack(board);
+
+        return Math.max(held !== null && held.id === id ? held.rev : -1, heardFor === id ? heardRev : -1);
+    };
+
+    const newer = (match: MatchView) => (current: MatchView | null) =>
+        (current !== null && current.id === match.id && current.rev >= match.rev ? current : match);
+
+    const jumped = (match: MatchView) =>
+    {
+        if (match.id !== untrack(openId))
         {
             return;
         }
 
-        heardRev = fresh[fresh.length - 1].rev;
-        setEvents((current) => ({ seq: current.seq + 1, events: fresh }));
+        const floor = floorOf(match.id);
+
+        if (match.rev <= floor)
+        {
+            return;
+        }
+
+        heardFor = match.id;
+        heardRev = match.rev;
+
+        batch(() =>
+        {
+            setLatest(newer(match));
+            setEvents((current) => ({ seq: current.seq + 1, id: match.id, events: [], live: false, jump: true }));
+        });
+    };
+
+    const pending = () => unmended;
+
+    const inTime = <T>(asked: Promise<T>) => new Promise<T | null>((resolve) =>
+    {
+        const stop = runtime().clock.after(MEND_MS, () => resolve(null));
+
+        asked.then(
+            (answer) =>
+            {
+                stop();
+                resolve(answer);
+            },
+            () =>
+            {
+                stop();
+                resolve(null);
+            }
+        );
+    });
+
+    const heard = (match: MatchView, told: readonly MatchEvent[], live: boolean, mended = false, at = runtime().clock.now()) =>
+    {
+        if (match.id !== untrack(openId))
+        {
+            return;
+        }
+
+        const floor = floorOf(match.id);
+        const { fresh, gap } = runOf(told, floor, match.rev);
+        const first = live && floor < 1 && heardFor !== match.id && starts(match, told);
+
+        if (gap)
+        {
+            if (mended)
+            {
+                jumped(match);
+            }
+            else
+            {
+                mend(match);
+            }
+
+            return;
+        }
+
+        if (fresh.length > 0)
+        {
+            heardFor = match.id;
+            heardRev = fresh[fresh.length - 1].rev;
+        }
+
+        batch(() =>
+        {
+            setLatest(newer(match));
+
+            if (fresh.length > 0)
+            {
+                setEvents((current) => ({ seq: current.seq + 1, id: match.id, events: fresh, live, jump: false, ...(first ? { opens: opening(match.id, at) } : {}) }));
+            }
+        });
+    };
+
+    const mend = (seen: MatchView) =>
+    {
+        if (unmended === null || unmended.id !== seen.id || unmended.rev < seen.rev)
+        {
+            unmended = seen;
+        }
+
+        if (mending)
+        {
+            return;
+        }
+
+        mending = true;
+
+        void (async () =>
+        {
+            while (unmended !== null)
+            {
+                const lost: MatchView = unmended;
+
+                unmended = null;
+
+                if (lost.id !== untrack(openId))
+                {
+                    continue;
+                }
+
+                const delta = await inTime(client.matches.since({ params: { id: lost.id }, query: { rev: String(Math.max(floorOf(lost.id), 0)) } }));
+
+                if (delta !== null)
+                {
+                    heard(delta.match, delta.events, false, true);
+
+                    continue;
+                }
+
+                const next = pending();
+                const last = next !== null && next.id === lost.id && next.rev > lost.rev ? next : lost;
+
+                if (last === next)
+                {
+                    unmended = null;
+                }
+
+                jumped(last);
+            }
+
+            mending = false;
+        })();
     };
 
     const overSocket = (id: string, key: string, rev: number, play: MatchPlay): Promise<Answer | null> =>
@@ -215,6 +405,7 @@ export const useBoard = createStore((): BoardApi =>
             const late = runtime().clock.after(ACK_MS, () =>
             {
                 waiting.delete(key);
+                useRealtime().check();
                 resolve(null);
             });
 
@@ -237,7 +428,7 @@ export const useBoard = createStore((): BoardApi =>
     {
         const current = untrack(board);
 
-        if (current === null)
+        if (current === null || current.id !== untrack(openId))
         {
             await revalidate();
             return;
@@ -247,7 +438,7 @@ export const useBoard = createStore((): BoardApi =>
         {
             const delta = await client.matches.since({ params: { id: current.id }, query: { rev: String(current.rev) } });
 
-            heard(delta.match, delta.events);
+            heard(delta.match, delta.events, false);
         }
         catch
         {
@@ -276,7 +467,11 @@ export const useBoard = createStore((): BoardApi =>
                     ? await client.matches.resign({ params: { id }, input: { key } })
                     : await client.matches.play({ params: { id }, input: { key, rev: current.rev, play } }));
 
-            heard(answer.match, answer.events);
+            const told = play === null && answer.events.length === 0 && answer.match.rev > current.rev
+                ? await inTime(client.matches.since({ params: { id }, query: { rev: String(current.rev) } }))
+                : null;
+
+            heard(told?.match ?? answer.match, told?.events ?? answer.events, true);
 
             return answer.applied;
         }
@@ -302,18 +497,28 @@ export const useBoard = createStore((): BoardApi =>
 
     return {
         match: board,
-        loading: () => viewing.loading(),
-        failed: () => viewing.error(),
+        lost,
 
         openId,
 
         open(matchId)
         {
+            setLost(false);
             setOpenId(matchId);
+
+            const held = early.get(matchId);
+
+            early.delete(matchId);
+
+            if (held !== undefined && runtime().clock.now() - held.at <= OPENING_MS)
+            {
+                heard(held.match, held.events, true, false, held.at);
+            }
         },
 
         close()
         {
+            setLost(false);
             setOpenId('');
         },
 
@@ -355,7 +560,12 @@ export const useBoard = createStore((): BoardApi =>
 
         resign: async () => await act(null),
 
-        refresh: revalidate,
+        refresh()
+        {
+            setLost(false);
+
+            return revalidate();
+        },
 
         /**
          * The doorbell for this board.
@@ -380,7 +590,14 @@ export const useBoard = createStore((): BoardApi =>
             {
                 if (frame.match.id === untrack(openId))
                 {
-                    heard(frame.match, frame.events);
+                    heard(frame.match, frame.events, true);
+
+                    return;
+                }
+
+                if (starts(frame.match, frame.events))
+                {
+                    keep(frame.match, frame.events);
                 }
             });
 
@@ -420,13 +637,17 @@ export const useBoard = createStore((): BoardApi =>
         reset()
         {
             setOpenId('');
+            setLost(false);
             setBusy(false);
             setLatest(null);
-            setEvents({ seq: 0, events: [] });
+            setEvents(NO_EVENTS);
             inFlight = Promise.resolve();
             heardFor = '';
             heardRev = -1;
+            unmended = null;
             waiting.clear();
+            early.clear();
+            opened.clear();
         }
     };
 });

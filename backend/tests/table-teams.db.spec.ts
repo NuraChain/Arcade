@@ -25,8 +25,7 @@ const makeUser = async () =>
     const made = await db.getRepository(User).save({
         handle: `t${ seq }x${ Math.floor(Math.random() * 100000) }`,
         displayName: `Pair ${ seq }`,
-        hue: seq % 360,
-        kind: 'guest'
+        hue: seq % 360
     });
 
     return made.id;
@@ -115,7 +114,9 @@ describe.skipIf(!active)('a table that is two against two, against a real databa
         expect(await made('hokm', 4, true)).toBe(true);
         expect(await made('hokm', 3, true), 'three players have no partners').toBe(false);
         expect(await made('hokm', 2, true)).toBe(false);
-        expect(await made('ludo', 4, true), 'ludo has no team game yet').toBe(false);
+        expect(await made('ludo', 4, true), 'ludo at four is two against two when its opener asks').toBe(true);
+        expect(await made('ludo', 4, false), 'and every seat for itself when nobody asked').toBe(false);
+        expect(await made('ludo', 3, true)).toBe(false);
         expect(await made('poker', 6, true)).toBe(false);
         expect(await made('backgammon', 2, true)).toBe(false);
     });
@@ -133,9 +134,11 @@ describe.skipIf(!active)('a table that is two against two, against a real databa
     {
         const host = await makeUser();
         const team = await tables.create(host, wanted('hokm', 4, false));
-        const solo = await tables.create(host, wanted('ludo', 4, true));
+        const pairs = await tables.create(host, wanted('ludo', 4, true));
+        const solo = await tables.create(host, wanted('ludo', 4, false));
 
         expect((await tables.byId(host, team.id))!.teams).toBe(true);
+        expect((await tables.byId(host, pairs.id))!.teams).toBe(true);
         expect((await tables.byId(host, solo.id))!.teams).toBe(false);
     });
 
@@ -145,12 +148,13 @@ describe.skipIf(!active)('a table that is two against two, against a real databa
         const guests = [await makeUser(), await makeUser(), await makeUser()];
         const [first, second, third] = await handlesOf(guests);
 
-        const heldAt = async (game: string, invitees: string[]) =>
-            (await tables.create(host, wanted(game, 4, false, invitees))).chairs.map((chair) => chair.invited);
+        const heldAt = async (game: string, invitees: string[], asked = false) =>
+            (await tables.create(host, wanted(game, 4, asked, invitees))).chairs.map((chair) => chair.invited);
 
         expect(await heldAt('hokm', guests)).toEqual([null, second, first, third]);
         expect(await heldAt('hokm', guests.slice(0, 1))).toEqual([null, null, first, null]);
         expect(await heldAt('hokm', guests.slice(0, 2))).toEqual([null, second, first, null]);
+        expect(await heldAt('ludo', guests, true), 'ludo opened two against two').toEqual([null, second, first, third]);
         expect(await heldAt('ludo', guests), 'with no sides the chairs go in order').toEqual([null, first, second, third]);
     });
 

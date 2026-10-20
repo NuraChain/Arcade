@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { HttpError, ValidationError, errorResponse } from '@azerothjs/http';
+import { HttpError, NotFoundError, ValidationError, errorResponse } from '@azerothjs/http';
 
 import { REFUSALS } from '../src/domains/match/refusals.ts';
 import { TABLE_REFUSALS, isTableRefusal, type TableRefusal } from '../src/domains/table/refusals.ts';
@@ -106,6 +106,32 @@ describe('a quick search that cannot be run', () =>
     it('has no word for finding nothing to join, or for a table it could not have', () =>
     {
         expect(WORDS.filter((word) => word.startsWith('quick-'))).toEqual(['quick-game', 'quick-options']);
+    });
+});
+
+describe('somebody the host took out of a table', () =>
+{
+    it('is told so when they reach for a chair there, as a table that stood in the way', () =>
+    {
+        expect(TABLE_REFUSALS['kept-out']).toBe(409);
+        expect(tableRefusal('kept-out', 'The host took you out of that table.')).toMatchObject({ status: 409, code: 'kept-out', expose: true });
+    });
+
+    it('is the one word the removal adds: whoever may not ask for it is answered as for a table that is not there', async () =>
+    {
+        const source = sourceOf('domains/table/service.ts');
+        const removal = source.slice(source.indexOf('async remove('), source.indexOf('async close('));
+
+        const missing = removal.match(/new NotFoundError\('[^']*'\)/g) ?? [];
+
+        expect(source).toContain(`throw new NotFoundError('No table there.')`);
+        expect(removal).not.toContain('ForbiddenError');
+        expect(missing.length).toBeGreaterThan(0);
+        expect([...new Set(missing)]).toEqual([`new NotFoundError('No table there.')`]);
+        expect(await sent(new NotFoundError('No table there.'))).toEqual({
+            status: 404,
+            body: JSON.stringify({ error: { code: 'not-found', message: 'No table there.' } })
+        });
     });
 });
 

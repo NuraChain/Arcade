@@ -9,8 +9,9 @@ import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
-import type { Format } from '../src/domains/match/sides.ts';
-import { matchLog, matchPlayer, matchView } from '../src/schemas.ts';
+import { FINISHED, TOKENS_PER_PLAYER } from '../src/domains/match/ludo/board.ts';
+import { partnerOf, sideOf, type Format } from '../src/domains/match/sides.ts';
+import { matchBoard, matchLog, matchPlayer, matchView } from '../src/schemas.ts';
 import { seeded } from './poker-table.ts';
 
 /**
@@ -119,6 +120,19 @@ describe('the projector', () =>
         expect(source).toContain('load.mine < 0 ? null : load.mine');
     });
 
+    it('tells somebody watching through the reader that is bounded by the board they are shown, after asking whether they may watch', () =>
+    {
+        const from = source.indexOf('async watch(me, matchId, rev)');
+        const port = source.slice(from, source.indexOf('async watchable(me, game)'));
+
+        expect(from).toBeGreaterThan(-1);
+        expect(port, 'the watch read took the feed, which is bounded by nothing').not.toContain('.feed(');
+        expect(port, 'the watch read named the live game\'s own events').not.toContain('.since(');
+        expect(port).toContain('match.told(found.load, from)');
+        expect(port.indexOf('table.watchableTable('), 'the events were read before the reader was asked about').toBeLessThan(port.indexOf('match.told('));
+        expect(port.indexOf('table.watchableTable(')).toBeGreaterThan(-1);
+    });
+
     it('puts no seat on turn where the engine named nobody', () =>
     {
         expect(source).toContain('...(turn === null ? {} : { turn })');
@@ -159,14 +173,14 @@ describe('the shared envelope', () =>
         const parsed = matchView.parse({
             id: 'm', tableId: 't', game: 'ludo', rev: 4, seats: 2, turn: 0,
             players: [{ seat: 0, who: 'dana.w', timeouts: 0 }],
-            view: { kind: 'ludo', die: 6, moves: [0], seats: [] },
+            view: { kind: 'ludo', die: 6, moves: [0], controls: 0, seats: [] },
             die: 6,
             moves: [0],
             tokens: [{ piece: 0, at: 3 }],
             startedAt: '2026-09-18T00:00:00.000Z'
         });
 
-        expect(parsed.view).toEqual({ kind: 'ludo', die: 6, moves: [0], seats: [] });
+        expect(parsed.view).toEqual({ kind: 'ludo', die: 6, moves: [0], controls: 0, seats: [] });
         expect(Object.keys(parsed)).not.toContain('die');
         expect(Object.keys(parsed)).not.toContain('moves');
         expect(Object.keys(parsed)).not.toContain('tokens');
@@ -177,7 +191,7 @@ describe('the shared envelope', () =>
         const game = {
             id: 'm', tableId: 't', game: 'ludo', rev: 9, seats: 2,
             players: [{ seat: 0, who: 'dana.w', timeouts: 0 }, { seat: 1, who: 'mina', timeouts: 0 }],
-            view: { kind: 'ludo', moves: [], seats: [] },
+            view: { kind: 'ludo', moves: [], controls: 1, seats: [] },
             startedAt: '2026-10-07T00:00:00.000Z'
         };
 
@@ -241,7 +255,7 @@ describe('the opening', () =>
         }
     });
 
-    it('carries the opening of every game that has one: the deal, the blinds, the Hakem and the roll', () =>
+    it('carries the opening of every game that deals one, and none for a game whose players throw their own', () =>
     {
         const kinds = (engine: Engine, format: Format) => engine
             .create(Array.from({ length: format.seats }, (_, seat) => seat), { die: seeded(9) }, { target: 0, cube: true, blinds: 'low', variant: format.variant })
@@ -250,7 +264,7 @@ describe('the opening', () =>
         expect(kinds(ludoEngine, { seats: 4, variant: 'standard' })).toEqual([]);
         expect(kinds(ludoEngine, { seats: 4, variant: 'teams' })).toEqual([]);
         expect(kinds(hokmEngine, { seats: 4, variant: 'teams' })).toEqual(['deal']);
-        expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })[0]).toBe('opening');
+        expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })).toEqual([]);
         expect(kinds(pokerEngine, { seats: 6, variant: 'standard' })).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
     });
 });
@@ -313,4 +327,72 @@ describe('ludo two against two, through the seam', () =>
 
         expect(helped).toBeGreaterThan(0);
     }, 30_000);
+
+    it('tells every reader the side of each seat and whose tokens the seat on turn moves: its own until its four are home, its partner\'s after', () =>
+    {
+        const FREE: Format = { seats: 4, variant: 'standard' };
+        let handed = 0;
+
+        for (const format of [PAIRED, FREE])
+        {
+            for (let game = 0; game < 4; game += 1)
+            {
+                const die = seeded(game + 61);
+                const draws = { die };
+                let state = ludoEngine.create([0, 1, 2, 3], draws, { target: 0, cube: false, blinds: 'low', variant: format.variant }).state;
+
+                while (ludoEngine.finish(state) === null)
+                {
+                    const turn = ludoEngine.turnOf(state)!;
+
+                    for (const reader of [0, 1, 2, 3, null])
+                    {
+                        const board = matchBoard.parse(ludoEngine.view(state, reader));
+
+                        if (board.kind !== 'ludo')
+                        {
+                            throw new Error(board.kind);
+                        }
+
+                        const done = board.seats.find((row) => row.seat === turn)!.home === TOKENS_PER_PLAYER;
+                        const moved = done ? partnerOf(turn, format) : turn;
+
+                        expect(board.seats.map((row) => row.side), `${ format.variant } for ${ reader }`).toEqual(board.seats.map((row) => sideOf(row.seat, format)));
+                        expect(board.controls, `${ format.variant } for ${ reader }, seat ${ turn } on turn`).toBe(moved);
+
+                        const theirs = board.seats.find((row) => row.seat === board.controls)!.tokens;
+
+                        expect(reader === turn || board.moves.length === 0).toBe(true);
+                        expect(board.moves.every((piece) => theirs.some((token) => token.piece === piece && token.at < FINISHED))).toBe(true);
+
+                        handed += done && reader === turn ? 1 : 0;
+                    }
+
+                    const legal = ludoEngine.legal(state, turn);
+                    const applied = ludoEngine.apply(state, legal[Math.floor(die.next() * legal.length)], draws);
+
+                    if (!applied.ok)
+                    {
+                        throw new Error(applied.reason);
+                    }
+
+                    state = applied.state;
+                }
+            }
+        }
+
+        expect(handed).toBeGreaterThan(0);
+    }, 30_000);
+
+    it('cannot put a ludo board on the wire that leaves out a seat\'s side or whose tokens are to move', () =>
+    {
+        const seat = { seat: 0, colour: 'red', tokens: [], home: 0, out: false };
+        const board = { kind: 'ludo', moves: [], seats: [{ ...seat, side: 0 }] };
+
+        expect(matchBoard.safeParse({ ...board, controls: 0 }).ok).toBe(true);
+        expect(matchBoard.safeParse(board).ok).toBe(false);
+        expect(matchBoard.safeParse({ ...board, controls: 0, seats: [seat] }).ok).toBe(false);
+        expect(matchBoard.safeParse({ ...board, controls: 4 }).ok).toBe(false);
+        expect(matchBoard.safeParse({ ...board, controls: 0, seats: [{ ...seat, side: 4 }] }).ok).toBe(false);
+    });
 });

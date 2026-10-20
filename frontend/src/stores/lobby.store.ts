@@ -3,11 +3,14 @@ import { createStore, createResource, createSignal, untrack, type Getter } from 
 import { ApiError, client, type TableSummary } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
+import type { QuickAsk } from '../lib/quick-asks.ts';
+import { createGuesses } from '../lib/guess.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useRealtime } from './realtime.store.ts';
 import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
+import { scopeFor } from '../../../backend/src/domains/table/voices.ts';
 
 export interface LobbyApi
 {
@@ -18,6 +21,8 @@ export interface LobbyApi
 
     /** Where this account is sitting right now. Survives a reload and a second device. */
     seated: Getter<TableSummary[]>;
+
+    listed: Getter<TableSummary[]>;
 
     waiting: Getter<TableSummary[]>;
 
@@ -37,7 +42,7 @@ export interface LobbyApi
      * Answers with the table's id either way, so the caller navigates to the same place whether
      * somebody was already waiting or nobody was.
      */
-    quick(game: GameId): Promise<string>;
+    quick(game: GameId, ask?: QuickAsk): Promise<string>;
 
     finding: Getter<readonly GameId[]>;
 
@@ -47,13 +52,14 @@ export interface LobbyApi
     leave(tableId: string, forfeit: boolean): Promise<void>;
     ready(tableId: string, ready: boolean): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
+    remove(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
     setVoice(tableId: string, voice: TableConfig['voice']): Promise<void>;
 
     /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
     begin(tableId: string): Promise<void>;
 
-    again(tableId: string): Promise<void>;
+    again(tableId: string, over?: string): Promise<void>;
 
     refresh(): Promise<void>;
     start(): () => void;
@@ -96,7 +102,72 @@ export const useLobby = createStore((): LobbyApi =>
         setFinding((current) => current.filter((one) => one !== game));
     };
 
-    const seated = createResource(who, () => client.tables.mine(), { name: 'tables.mine' });
+    let unhold: (() => void) | null = null;
+    let asked = 0;
+
+    const wired = (table: TableSummary) => table.mode === 'live'
+        && table.status !== 'closed'
+        && (table.matchId !== undefined || table.chairs.some((chair) => chair.seat === table.mine && chair.ready));
+
+    const rehold = (tables: readonly TableSummary[]) =>
+    {
+        const next = tables.some(wired) ? useRealtime().hold() : null;
+
+        unhold?.();
+        unhold = next;
+    };
+
+    const turnsSeen = new Map<string, { yours: boolean; read: number }>();
+    const [turnsTold, setTurnsTold] = createSignal(0);
+
+    const seated = createResource(who, async () =>
+    {
+        const turn = asked += 1;
+        const answer = await client.tables.mine();
+
+        if (turn === asked)
+        {
+            rehold(answer.tables);
+        }
+
+        for (const [id, seen] of turnsSeen)
+        {
+            if (seen.read < turn)
+            {
+                turnsSeen.delete(id);
+            }
+        }
+
+        return answer;
+    }, { name: 'tables.mine' });
+
+    let shown: { from: TableSummary[] | undefined; told: number; tables: TableSummary[] } = { from: undefined, told: -1, tables: [] };
+
+    const tablesNow = () =>
+    {
+        const told = turnsTold();
+        const from = seated.data()?.tables;
+
+        if (shown.from === from && shown.told === told)
+        {
+            return shown.tables;
+        }
+
+        const tables = from === undefined
+            ? []
+            : (turnsSeen.size === 0
+                ? from
+                : from.map((table) =>
+                {
+                    const seen = table.matchId === undefined ? undefined : turnsSeen.get(table.matchId);
+
+                    return seen === undefined || (table.yourTurn === true) === seen.yours ? table : { ...table, yourTurn: seen.yours };
+                }));
+
+        shown = { from, told, tables };
+
+        return tables;
+    };
 
     const left = new Set<string>();
 
@@ -129,32 +200,91 @@ export const useLobby = createStore((): LobbyApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
+    const guessed = createGuesses<TableSummary>();
+
+    let sending: Promise<unknown> = Promise.resolve();
+
+    const inTurn = <R>(send: () => Promise<R>) =>
+    {
+        const sent = sending.catch(() => undefined).then(send);
+
+        sending = sent;
+
+        return sent;
+    };
+
+    const atMine = (tableId: string, change: (chair: TableSummary['chairs'][number]) => TableSummary['chairs'][number]) =>
+        (table: TableSummary): TableSummary => (table.id !== tableId || table.mine === undefined
+            ? table
+            : { ...table, chairs: table.chairs.map((chair) => (chair.seat === table.mine ? change(chair) : chair)) });
+
+    const afterGame = (tableId: string, over: string | undefined) => (table: TableSummary): TableSummary =>
+    {
+        if (over === undefined || table.matchId !== over)
+        {
+            return atMine(tableId, (chair) => ({ ...chair, ready: true }))(table);
+        }
+
+        const { matchId: _over, yourTurn: _turn, ...settled } = table;
+
+        return {
+            ...settled,
+            status: table.taken >= table.seats ? 'ready' : 'open',
+            chairs: table.chairs.map((chair) => ({ ...chair, ready: chair.seat === table.mine }))
+        };
+    };
+
+    const goesWithTheChair = (table: TableSummary) =>
+        table.privacy === 'invite' || (table.privacy === 'friends' && table.host === untrack(who));
+
+    const reread = async () =>
+    {
+        const open = untrack(openId);
+        const held = untrack(viewing.data) ?? null;
+
+        if (open !== '' && held !== null && held.id === open && held.mine !== undefined && goesWithTheChair(held))
+        {
+            await seated.refetch();
+
+            if (!(untrack(seated.data)?.tables ?? []).some((table) => table.id === open))
+            {
+                left.add(open);
+            }
+
+            await viewing.refetch();
+            return;
+        }
+
+        await Promise.all([
+            seated.refetch(),
+            open === '' ? Promise.resolve() : viewing.refetch()
+        ]);
+    };
+
     const revalidate = () =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
-            const open = untrack(openId);
-            const held = untrack(viewing.data) ?? null;
+            await reread();
 
-            if (open !== '' && held !== null && held.id === open && held.mine !== undefined && held.privacy !== 'public')
+            if (untrack(viewing.error) === null)
             {
-                await seated.refetch();
-
-                if (!(untrack(seated.data)?.tables ?? []).some((table) => table.id === open))
-                {
-                    left.add(open);
-                }
-
-                await viewing.refetch();
-                return;
+                guessed.landed();
             }
-
-            await Promise.all([
-                seated.refetch(),
-                open === '' ? Promise.resolve() : viewing.refetch()
-            ]);
         });
         return inFlight;
+    };
+
+    const truth = async () =>
+    {
+        await revalidate();
+
+        const unread = untrack(viewing.error);
+
+        if (unread !== null)
+        {
+            throw unread;
+        }
     };
 
     interface TableInput
@@ -180,6 +310,8 @@ export const useLobby = createStore((): LobbyApi =>
          * undefined is one an over-eager serialiser turns into null - which is the same request
          * with a different meaning, because that field decides the privacy.
          */
+        const teams = teamsOf(catalogue.rules(game).partners, config.seats, config.teams);
+
         return {
             game,
             seats: config.seats,
@@ -189,8 +321,8 @@ export const useLobby = createStore((): LobbyApi =>
             cube: config.cube,
             blinds: config.blinds,
             chat: config.chat,
-            voice: config.voice,
-            teams: teamsOf(catalogue.rules(game).partners, config.seats, config.teams),
+            voice: scopeFor(config.voice, teams),
+            teams,
             invitees: [...invitees],
             ...(config.roomId === undefined ? {} : { roomId: config.roomId })
         };
@@ -207,19 +339,32 @@ export const useLobby = createStore((): LobbyApi =>
     };
 
     return {
-        table: () => viewing.data() ?? null,
+        table: () =>
+        {
+            const held = viewing.data() ?? null;
+
+            return held === null ? null : guessed.over(held);
+        },
         loading: () => viewing.loading(),
         failed: () => viewing.error(),
 
-        seated: () => seated.data()?.tables ?? [],
+        seated: tablesNow,
 
-        waiting: () => (seated.data()?.tables ?? []).filter((table) => table.yourTurn === true),
+        listed: () => seated.data()?.tables ?? [],
+
+        waiting: () => tablesNow().filter((table) => table.yourTurn === true),
 
         open(tableId)
         {
-            left.delete(tableId);
+            const back = left.delete(tableId) && untrack(openId) === tableId;
+
             setOpenId(tableId);
             arriving.get(tableId)?.();
+
+            if (back)
+            {
+                void revalidate().catch(() => undefined);
+            }
         },
         close: () => setOpenId(''),
         openId,
@@ -233,7 +378,7 @@ export const useLobby = createStore((): LobbyApi =>
             return made.id;
         },
 
-        quick(game)
+        quick(game, ask = {})
         {
             const out = searches.get(game);
 
@@ -242,7 +387,7 @@ export const useLobby = createStore((): LobbyApi =>
                 return out;
             }
 
-            const search = client.tables.quick({ input: { game, voice: catalogue.defaults(game).voice } })
+            const search = client.tables.quick({ input: { game, ...ask, voice: catalogue.defaults(game).voice } })
                 .then(async (table) =>
                 {
                     await revalidate();
@@ -291,13 +436,22 @@ export const useLobby = createStore((): LobbyApi =>
 
         async ready(tableId, ready)
         {
-            await client.tables.ready({ params: { id: tableId }, input: { ready } });
-            await revalidate();
+            await guessed.during(
+                atMine(tableId, (chair) => ({ ...chair, ready })),
+                () => inTurn(() => client.tables.ready({ params: { id: tableId }, input: { ready } })),
+                truth
+            );
         },
 
         async invite(tableId, handle)
         {
             await client.tables.invite({ params: { id: tableId }, input: { id: handle } });
+            await revalidate();
+        },
+
+        async remove(tableId, handle)
+        {
+            await client.tables.remove({ params: { id: tableId }, input: { id: handle } });
             await revalidate();
         },
 
@@ -323,10 +477,9 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
-        async again(tableId)
+        async again(tableId, over)
         {
-            await settle(tableId);
-            await revalidate();
+            await guessed.during(afterGame(tableId, over), () => inTurn(() => settle(tableId)), truth);
         },
 
         refresh: revalidate,
@@ -353,9 +506,17 @@ export const useLobby = createStore((): LobbyApi =>
                 const known = untrack(seated.data)?.tables.find((table) => table.matchId === frame.match.id);
                 const mine = frame.match.finishedAt === undefined && frame.match.mine !== undefined && frame.match.mine === frame.match.turn;
 
-                if (known === undefined || frame.match.finishedAt !== undefined || (known.yourTurn === true) !== mine)
+                if (known === undefined || frame.match.finishedAt !== undefined)
                 {
                     void seated.refetch();
+
+                    return;
+                }
+
+                if ((turnsSeen.get(frame.match.id)?.yours ?? known.yourTurn === true) !== mine)
+                {
+                    turnsSeen.set(frame.match.id, { yours: mine, read: asked });
+                    setTurnsTold((count) => count + 1);
                 }
             });
 
@@ -371,8 +532,14 @@ export const useLobby = createStore((): LobbyApi =>
         reset()
         {
             left.clear();
+            turnsSeen.clear();
+            setTurnsTold((count) => count + 1);
+            asked += 1;
+            rehold([]);
             setOpenId('');
             inFlight = Promise.resolve();
+            sending = Promise.resolve();
+            guessed.clear();
 
             for (const arrived of [...arriving.values()])
             {

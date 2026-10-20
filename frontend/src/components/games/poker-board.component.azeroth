@@ -1,46 +1,103 @@
-import { untrack } from 'azerothjs';
+import { batch, untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import TableResult from './table-result.component.azeroth';
-import TurnClock from './turn-clock.component.azeroth';
-import TablePlate from './table-plate.component.azeroth';
-import { plateTag, type PlateTag } from './plate-tag.ts';
+import PokerSeat from './poker-seat.component.azeroth';
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
+import { missesOf, plateTag, withMisses, type PlateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
 import { seatBets, type Box } from '../../game/chip-spot.ts';
+import { aroundStadium, type Spot } from '../../game/poker-seats.ts';
 import { pokerOf } from '../../data/match.ts';
-import { coachOf, outcomeOf, predicted, type PokerVerb } from '../../game/helpers/poker.ts';
-import { useBoard } from '../../stores/match.store.ts';
+import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/helpers/poker.ts';
+import { EASE, centreOf, rectIn, type Rect } from '../../game/motion.ts';
+import { BETWEEN_CAP, BOARD_GAP, BOARD_OUT, CARD_FLY, CARD_GAP, CARD_RISE, CHIP_FLY, COLLECT, DEAL_LEAD, DISC_GAP, GATHER, GATHER_GAP, KNOCK, MUCK, MUCK_GAP, POT_FLY, POT_GAP, POT_SPAN, PUCK, RACK, TURN, WIN_AFTER, collectGap, dealGap, heldBefore, slides, spanOf, tabling } from '../../game/poker-beats.ts';
+import { EMPTY, HISTORY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, sharesOf, staged, step, swept, through, turned, turning, unturned, winnersOf, type Air, type Felt, type Paid, type Tabled, type Told } from '../../game/poker-felt.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { cardAt, cardNode, stackNode, turnNode } from '../../game/stage/cards.ts';
+import { discsFor, pour } from '../../game/stage/chips.ts';
+import { launch, turn, type Launch } from '../../game/stage/flight.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import type { Act } from '../../game/stage/feed.ts';
+import { createPresenter, type Presenter, type Sight, type Table } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
-import { pokerBeats, tableCues } from './table-cues.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { Rematch } from './boards.ts';
 
-const RADIUS_X = 41;
-
-const RADIUS_Y = 40;
-
 const BOARD_SLOTS = [0, 1, 2, 3, 4];
+
+const POCKETS = [0, 1];
+
+const HOLE = 2;
+
+const DECK = 0.7;
 
 const CHIP_GAP = 4;
 
-const SHORT_FELT_REM = 16;
+const ROUND = 1;
 
-export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
+const PUCK_IN = 0.15;
+
+const RACK_OUT = 1.5;
+
+const NO_CARDS: readonly number[] = [];
+
+const UNSEATED = {
+    row: { seat: -1, stack: 0, bet: 0, folded: false, allIn: false, out: true },
+    x: 50,
+    y: 50,
+    ux: 0,
+    uy: 0,
+    lies: 'flat' as Spot['lies'],
+    live: false,
+    tag: null as PlateTag | null
+};
+
+interface Shown
+{
+    card: number;
+    box: Rect;
+    tilt?: number;
+}
+
+interface Lying
+{
+    faces: readonly Shown[];
+    held: readonly Shown[];
+    piles: readonly Rect[];
+}
+
+export default component PokerBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
     state amount = 0;
 
     state raising = false;
+
+    state shown: Felt | null = null;
+
+    state arriving: readonly number[] = STILL.cards;
+
+    state lifted = false;
+
+    state presenting = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
 
     derived game = props.match;
 
@@ -48,9 +105,13 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived over = game.finishedAt !== undefined;
 
+    derived result = over && !presenting;
+
     derived mine = game.mine;
 
     derived viewer = mine ?? 0;
+
+    derived felt = shown ?? (view === null ? EMPTY : feltOf(view, mine ?? null));
 
     derived count = view?.seats.length ?? game.seats;
 
@@ -73,68 +134,115 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
+    derived between = view !== null && !over && mine !== undefined
+        && (felt.hand !== view.hand || (arriving[mine] ?? 0) > 0 || felt.board.length < view.board.length);
+
+    derived waiting = between && !lifted;
+
+    derived acting = myTurn && !waiting;
+
     const settings = useSettings();
 
-    const cues = tableCues({
-        enabled: untrack(() => settings.settings().sound),
-        seq: untrack(() => board.events().seq),
-        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
-        beats: (events) => pokerBeats(events.flatMap((one) => (one.log.kind === 'poker' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
-    });
+    let sound: SoundHandle | null = null;
+
+    const chime = turnChime(() => sound);
 
     effect
     {
-        const batch = board.events();
+        const yours = acting;
 
-        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
+        untrack(() => chime(yours && props.match.mine !== undefined));
     }
 
+    let uncap: () => void = () => undefined;
+    let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
+
+    const hurry = () =>
+    {
+        if (untrack(() => acting && between))
+        {
+            presenter?.act(() => undefined);
+        }
+    };
+
+    const asked = () =>
+    {
+        lifted = true;
+        hurry();
+    };
+
     effect
     {
-        const yours = myTurn;
+        const behind = between;
 
-        untrack(() => cues.turn(yours && props.match.mine !== undefined));
+        untrack(() =>
+        {
+            uncap();
+            lifted = false;
+            uncap = behind ? runtime().clock.after(BETWEEN_CAP, asked) : () => undefined;
+        });
     }
 
     effect
     {
         const on = settings.settings().sound;
 
-        untrack(() => cues.setEnabled(on));
+        untrack(() => sound?.setEnabled(on));
     }
 
     let root: HTMLElement | null = null;
+    let layer: HTMLElement | null = null;
+    let held: Felt = EMPTY;
+    let air: Air = STILL;
+    let sent: { id: string; rev: number; move: Told } | null = null;
 
-    state short = false;
+    state coming: readonly number[] = STILL.bets;
+
+    state ratio = ROUND;
 
     let laying = 0;
+
+    const feltNode = () => root?.querySelector<HTMLElement>('.poker-table') ?? null;
+
+    const shape = () =>
+    {
+        const box = feltNode()?.getBoundingClientRect();
+        const lying = box !== undefined && box.width > 0 && box.height > 0 ? Math.round((box.width / box.height) * 100) / 100 : null;
+
+        if (lying === null || lying === untrack(() => ratio))
+        {
+            return false;
+        }
+
+        ratio = lying;
+
+        return true;
+    };
 
     const seatChips = () =>
     {
         laying = 0;
 
-        const felt = root?.querySelector<HTMLElement>('.poker-table') ?? null;
+        const cloth = feltNode();
 
-        if (felt === null)
+        if (cloth === null)
         {
             return;
         }
 
-        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        const shallow = felt.getBoundingClientRect().height < SHORT_FELT_REM * rem;
-
-        if (shallow !== short)
+        if (shape())
         {
-            short = shallow;
             reseat();
             return;
         }
 
-        const solid = (element: Element): Box[] =>
+        const table = cloth.getBoundingClientRect();
+        const solid = (element: Element | null): Box[] =>
         {
-            const box = element.getBoundingClientRect();
+            const box = element?.getBoundingClientRect();
 
-            return box.width > 0 && box.height > 0 ? [box] : [];
+            return box !== undefined && box.width > 0 && box.height > 0 ? [box] : [];
         };
         const reach = (element: Element): Box[] =>
         {
@@ -143,18 +251,74 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
             return solid(element).map((box) => ({ left: box.left - out(halo.left), top: box.top - out(halo.top), right: box.right + out(halo.right), bottom: box.bottom + out(halo.bottom) }));
         };
-        const chips = [...felt.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet')];
+        const joined = (boxes: readonly Box[]): Box => ({
+            left: Math.min(...boxes.map((box) => box.left)),
+            top: Math.min(...boxes.map((box) => box.top)),
+            right: Math.max(...boxes.map((box) => box.right)),
+            bottom: Math.max(...boxes.map((box) => box.bottom))
+        });
+        const atSeat = (seat: Element) => untrack(() => plateAt(Number(seat.getAttribute('data-seat'))));
+        const puck = cloth.querySelector<HTMLElement>('.poker-puck');
+        const dealer = puck === null ? null : cloth.querySelector(`.poker-seat[data-seat="${ puck.dataset.seat ?? '' }"]`);
+        const [plate] = solid(dealer);
+
+        if (puck !== null && dealer !== null && plate !== undefined)
+        {
+            const [face] = [...solid(dealer.querySelector('.table-plate-avatar')), plate];
+            const size = puck.offsetWidth;
+            const within = (wanted: number, from: number, to: number) => Math.min(Math.max(wanted, from), to - size);
+            const inset = (face.bottom - face.top) * PUCK_IN;
+            const across = within(face.right - inset - size / 2, plate.left, plate.right);
+            const down = within((atSeat(dealer).y < 50 ? face.bottom - inset : face.top + inset) - size / 2, plate.top, plate.bottom);
+
+            puck.style.translate = `${ (across - table.left).toFixed(1) }px ${ (down - table.top).toFixed(1) }px`;
+            puck.dataset.placed = 'true';
+        }
+
+        const middle = [...cloth.querySelectorAll('.poker-centre > *, .poker-last > summary')].flatMap(reach);
+        const touches = (one: Box, two: Box) => one.left < two.right - ROUND && two.left < one.right - ROUND && one.top < two.bottom - ROUND && two.top < one.bottom - ROUND;
+
+        for (const hand of cloth.querySelectorAll<HTMLElement>('.poker-seat > .poker-shown'))
+        {
+            delete hand.dataset.tight;
+
+            const [box] = solid(hand);
+            const others = [...cloth.querySelectorAll('.table-plate, .poker-backs')].filter((one) => hand.parentElement?.contains(one) !== true).flatMap(solid);
+            const beyond = box !== undefined && (box.left < table.left || box.top < table.top || box.right > table.right || box.bottom > table.bottom);
+
+            if (box !== undefined && (beyond || [...others, ...middle].some((one) => touches(box, one))))
+            {
+                hand.dataset.tight = 'true';
+            }
+        }
+
+        const chips = [...cloth.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet, .poker-seat > .poker-named')];
         const spots = seatBets(
-            chips.map((chip) => ({ plate: chip.parentElement!.getBoundingClientRect(), width: chip.offsetWidth, height: chip.offsetHeight })),
-            felt.getBoundingClientRect(),
-            [...felt.querySelectorAll('.table-plate')].flatMap(solid),
-            [...felt.querySelectorAll('.poker-centre > *, .poker-chips .poker-chip')].flatMap(reach),
+            chips.map((chip) =>
+            {
+                const seat = chip.parentElement!;
+                const { ux, uy } = atSeat(seat);
+                const cards = solid(seat.querySelector('.poker-backs'));
+
+                return {
+                    plate: joined([seat.getBoundingClientRect(), ...cards]),
+                    width: chip.offsetWidth,
+                    height: chip.offsetHeight,
+                    toward: { x: ux, y: uy },
+                    lead: cards[0]
+                };
+            }),
+            table,
+            [...cloth.querySelectorAll('.table-plate, .poker-backs')].flatMap(solid),
+            middle,
             CHIP_GAP
         );
 
         chips.forEach((chip, index) =>
         {
             const spot = spots[index];
+
+            chip.dataset.placed = 'true';
 
             if (spot === null)
             {
@@ -180,13 +344,857 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         }
     };
 
+    const resized = () =>
+    {
+        shape();
+        reseat();
+    };
+
+    const sending = () => (sent !== null && sent.id === game.id && sent.rev === game.rev ? sent : null);
+
+    const sightNow = (): Sight<Felt> | null =>
+    {
+        if (view === null)
+        {
+            return null;
+        }
+
+        const now = feltOf(view, mine ?? null);
+        const ahead = sending();
+
+        return { id: game.id, rev: game.rev, seat: mine ?? null, view: ahead === null ? now : step(now, ahead.move) };
+    };
+
+    const show = () => batch(() =>
+    {
+        shown = drawnOf(held, air);
+        coming = air.bets;
+        arriving = air.cards;
+    });
+
+    const level = (sight: Sight<Felt>) => sameAs(held, sight.view) && held.turn === sight.view.turn;
+
+    const reset = (sight: Sight<Felt>) =>
+    {
+        layer?.replaceChildren();
+        air = STILL;
+        held = sameAs(held, sight.view) ? (level(sight) ? held : { ...held, turn: sight.view.turn }) : sight.view;
+        show();
+    };
+
+    const find = (selector: string) => root?.querySelector<HTMLElement>(selector) ?? null;
+
+    const boxOf = (element: Element | null) =>
+    {
+        const box = layer === null || element === null ? null : rectIn(layer, element);
+
+        return box !== null && box.width > 0 && box.height > 0 ? box : null;
+    };
+
+    const plateOf = (seat: number) => find(`.poker-seat[data-seat="${ seat }"] .table-plate`);
+
+    const spotOf = (seat: number) => boxOf(find(`.poker-seat[data-seat="${ seat }"] > .poker-bet > .chip-stack`));
+
+    const potSpot = () => boxOf(find('.poker-pot > .chip-stack'));
+
+    const cardWide = () => boxOf(find('.poker-backs > .card-back'))?.width ?? (boxOf(find('.poker-slot'))?.width ?? 0) / 2;
+
+    const puckSpot = () =>
+    {
+        const puck = find('.poker-puck');
+        const cloth = boxOf(feltNode());
+        const [x = NaN, y = NaN] = (puck?.style.translate ?? '').split(' ').map(parseFloat);
+
+        return puck === null || cloth === null || puck.dataset.placed !== 'true' || !Number.isFinite(x) || !Number.isFinite(y)
+            ? null
+            : { x: cloth.x + x, y: cloth.y + y, width: puck.offsetWidth, height: puck.offsetHeight };
+    };
+
+    const deckSpot = () =>
+    {
+        const around = puckSpot() ?? boxOf(plateOf(held.button)) ?? boxOf(feltNode());
+        const wide = cardWide();
+
+        return around === null || wide <= 0 ? null : cardAt(around, wide * DECK);
+    };
+
+    const leave = (over: HTMLElement, clone: HTMLElement, from: Rect, to: Rect, shape: Launch, ctx: Ctx) =>
+    {
+        const flown = launch(ctx.stage, over, clone, from, to, shape).done;
+
+        ctx.stage.animate(clone, [{ opacity: 0 }, { opacity: 1 }], { duration: CARD_RISE, quiet: 'skip' });
+
+        return flown;
+    };
+
+    const pocketOf = (nth: number) => find(`.poker-pocket:nth-child(${ nth + 1 })`);
+
+    const placeOf = (seat: number, nth: number) =>
+    {
+        const back = find(`.poker-seat[data-seat="${ seat }"] > .poker-backs > .card-back:nth-child(${ nth + 1 })`);
+        const lying = seat === mine ? boxOf(pocketOf(nth)) : boxOf(back);
+        const plate = boxOf(plateOf(seat));
+        const wide = cardWide();
+
+        if (lying !== null)
+        {
+            return { to: lying, tilt: back === null ? 0 : parseFloat(getComputedStyle(back).rotate) || 0, rests: true };
+        }
+
+        return plate === null || wide <= 0 ? null : { to: cardAt(plate, wide), tilt: 0, rests: false };
+    };
+
+    const facesOf = (selector: string, cards: readonly number[]) => cards.flatMap((card, at) =>
+    {
+        const box = boxOf(find(`${ selector }:nth-child(${ at + 1 })`));
+
+        return box === null ? [] : [{ card, box }];
+    });
+
+    const pileOf = (seat: number) =>
+    {
+        const plate = boxOf(plateOf(seat));
+        const wide = cardWide();
+
+        return boxOf(find(`.poker-seat[data-seat="${ seat }"] > .poker-backs`)) ?? (plate === null || wide <= 0 ? null : cardAt(plate, wide));
+    };
+
+    const pilesOf = (seats: readonly number[]) => seats.flatMap((seat) =>
+    {
+        const box = pileOf(seat);
+
+        return box === null ? [] : [box];
+    });
+
+    const shownOf = (seat: number, cards: readonly number[]) => cards.flatMap((card, at) =>
+    {
+        const face = find(`.poker-seat[data-seat="${ seat }"] > .poker-shown > .poker-face:nth-child(${ at + 1 })`);
+        const box = boxOf(face);
+
+        return face === null || box === null ? [] : [{ card, box, tilt: parseFloat(getComputedStyle(face).rotate) || 0 }];
+    });
+
+    const openOf = (lain: Felt) => lain.tabled
+        .filter((one) => one.seat !== mine)
+        .map((one) => ({ seat: one.seat, faces: shownOf(one.seat, one.cards) }))
+        .filter((one) => one.faces.length > 0);
+
+    const cardsOf = (seat: number): Lying =>
+    {
+        const lain = drawnOf(held, air);
+
+        if (seat === mine)
+        {
+            return { faces: [], held: facesOf('.poker-pocket', lain.hole), piles: [] };
+        }
+
+        const open = openOf(lain).find((one) => one.seat === seat);
+
+        return open === undefined ? { faces: [], held: [], piles: pilesOf([seat]) } : { faces: open.faces, held: [], piles: [] };
+    };
+
+    const lyingNow = (): Lying =>
+    {
+        const lain = drawnOf(held, air);
+        const open = openOf(lain);
+
+        return {
+            faces: [...facesOf('.poker-slot', lain.board), ...facesOf('.poker-pocket', lain.hole), ...open.flatMap((one) => one.faces)],
+            held: [],
+            piles: pilesOf(held.chairs.map((chair) => chair.seat).filter((seat) => seat !== mine && inHand(held, seat) && !open.some((one) => one.seat === seat)))
+        };
+    };
+
+    const discAt = (place: Rect, like: Rect): Rect =>
+    {
+        const middle = centreOf(place);
+
+        return { x: middle.x - like.width / 2, y: middle.y - like.height / 2, width: like.width, height: like.height };
+    };
+
+    const stackAt = (felt: Felt, seat: number) => felt.chairs.find((chair) => chair.seat === seat)?.stack ?? 0;
+
+    const lift = (seat: number, toBet: number, toStack: number) =>
+    {
+        air = flying(air, held.chairs.length, seat, toBet, toStack);
+        show();
+    };
+
+    const pause = async (ms: number, ctx: Ctx) =>
+    {
+        await ctx.stage.wait(ms);
+
+        return ctx.live();
+    };
+
+    const chipsIn = async (seat: number, next: Felt, heavy: boolean, ctx: Ctx) =>
+    {
+        const chips = stackAt(held, seat) - stackAt(next, seat);
+        const from = boxOf(plateOf(seat));
+
+        held = next;
+        lift(seat, chips, 0);
+        seatChips();
+
+        const to = spotOf(seat);
+
+        if (layer !== null && from !== null && to !== null && chips > 0)
+        {
+            await pour(ctx.stage, layer, from, to, { discs: discsFor(chips, held.blinds.big), duration: CHIP_FLY, gap: DISC_GAP, easing: EASE.fly }).done;
+        }
+
+        if (ctx.live())
+        {
+            lift(seat, 0 - chips, 0);
+            sound?.play(heavy ? 'chips-stack' : 'chip-lay');
+        }
+    };
+
+    const chipsBack = async (seat: number, next: Felt, ctx: Ctx) =>
+    {
+        const chips = stackAt(next, seat) - stackAt(held, seat);
+        const from = spotOf(seat) ?? potSpot();
+        const plate = boxOf(plateOf(seat));
+
+        held = next;
+        lift(seat, 0, chips);
+
+        if (layer !== null && from !== null && plate !== null && chips > 0)
+        {
+            await pour(ctx.stage, layer, from, discAt(plate, from), { discs: discsFor(chips, held.blinds.big), duration: CHIP_FLY, gap: DISC_GAP, easing: EASE.fly }).done;
+        }
+
+        if (ctx.live())
+        {
+            lift(seat, 0, 0 - chips);
+        }
+    };
+
+    const gather = async (ctx: Ctx) =>
+    {
+        const to = potSpot();
+        const piles = held.chairs.filter((chair) => chair.bet > 0).map((chair) => ({ from: spotOf(chair.seat), discs: discsFor(chair.bet, held.blinds.big) }));
+        const over = layer;
+
+        if (piles.length === 0)
+        {
+            return;
+        }
+
+        held = swept(held);
+        show();
+
+        if (over !== null && to !== null)
+        {
+            await Promise.all(piles.flatMap((pile, at) => (pile.from === null
+                ? []
+                : [pour(ctx.stage, over, pile.from, to, { discs: pile.discs, duration: GATHER, gap: DISC_GAP, easing: EASE.gather, delay: at * GATHER_GAP }).done])));
+        }
+    };
+
+    const knock = async (seat: number, ctx: Ctx) =>
+    {
+        const plate = plateOf(seat);
+
+        sound?.play('tick');
+
+        if (plate !== null)
+        {
+            await ctx.stage.animate(plate, [{ translate: '0 0' }, { translate: '0 0.2rem', offset: 0.35 }, { translate: '0 0' }], { duration: KNOCK, quiet: 'skip' }).done;
+        }
+    };
+
+    const sweep = async (lying: Lying, length: number, gap: number, ctx: Ctx) =>
+    {
+        const deck = deckSpot();
+        const over = layer;
+        const wide = cardWide();
+
+        if (over === null || deck === null)
+        {
+            return;
+        }
+
+        const away = (clone: HTMLElement, from: Rect, nth: number, tilt = 0) => launch(ctx.stage, over, clone, from, cardAt(deck, from.width), {
+            duration: length,
+            delay: nth * gap,
+            easing: EASE.fly,
+            fromRotate: tilt,
+            toScale: deck.width / from.width,
+            toOpacity: 0,
+            fadeFrom: 0.6,
+            quiet: 'skip'
+        }).done;
+
+        await Promise.all([
+            ...lying.faces.map((one, at) => away(cardNode(one.card, one.box.width), one.box, at, one.tilt)),
+            ...lying.held.map((one, at) => turn(ctx.stage, over, turnNode(one.card, one.box.width), one.box, one.box, { duration: TURN, easing: EASE.snap, down: true }).done
+                .then(() => away(cardNode(null, one.box.width), one.box, at))),
+            ...lying.piles.map((box, at) => away(stackNode(HOLE, wide), cardAt(box, wide), lying.faces.length + at))
+        ]);
+    };
+
+    const newHand = async (next: Felt, ctx: Ctx) =>
+    {
+        const lying = lyingNow();
+        const puck = find('.poker-puck');
+        const was = puck?.style.translate ?? '';
+
+        sound?.play('card-shuffle', { gain: 0.6 });
+        held = next;
+        air = dealing(air, held);
+        show();
+        seatChips();
+
+        const now = puck?.style.translate ?? '';
+
+        if (puck !== null && was !== '' && now !== '' && was !== now)
+        {
+            ctx.stage.animate(puck, [{ translate: was }, { translate: now }], { duration: PUCK, easing: EASE.fly });
+        }
+
+        await sweep(lying, COLLECT, collectGap(lying.faces.length + lying.held.length + lying.piles.length), ctx);
+    };
+
+    const dealTo = (seat: number, nth: number, ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const place = placeOf(seat, nth);
+        const over = layer;
+        const card = seat === mine ? held.hole[nth] : undefined;
+        const arrive = () =>
+        {
+            air = landed(air, seat);
+            show();
+        };
+
+        if (over === null || from === null || place === null)
+        {
+            arrive();
+
+            return Promise.resolve();
+        }
+
+        const rests = place.rests && (seat !== mine || card !== undefined);
+        const flown = leave(over, cardNode(null, place.to.width), from, place.to, {
+            duration: CARD_FLY,
+            easing: EASE.fly,
+            toRotate: place.tilt,
+            toOpacity: rests ? 1 : 0,
+            fadeFrom: rests ? undefined : 0.8,
+            quiet: 'skip',
+            landed: card === undefined ? arrive : undefined
+        }, ctx);
+
+        return card === undefined
+            ? flown
+            : flown.then(() => turn(ctx.stage, over, turnNode(card, place.to.width), place.to, place.to, { duration: TURN, easing: EASE.snap, landed: arrive }).done);
+    };
+
+    const dealOut = async (ctx: Ctx) =>
+    {
+        const order = dealOrder(held);
+        const gap = dealGap(order.length);
+        const landings: Promise<void>[] = [];
+
+        if (!await pause(DEAL_LEAD, ctx))
+        {
+            return;
+        }
+
+        for (const [at, seat] of order.entries())
+        {
+            if (slides(at, order.length))
+            {
+                sound?.play('card-slide', { gain: 0.7, rate: 0.97 + (at % 3) * 0.04 });
+            }
+
+            landings.push(dealTo(seat, at < order.length / HOLE ? 0 : 1, ctx));
+
+            if (at < order.length - 1 && !await pause(gap, ctx))
+            {
+                return;
+            }
+        }
+
+        await Promise.all(landings);
+    };
+
+    const layOut = (card: number, slot: number, rest: number, ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const to = boxOf(find(`.poker-slot:nth-child(${ slot + 1 })`));
+        const over = layer;
+        const faced = () =>
+        {
+            air = unturned(air, -1);
+            show();
+            sound?.play('card-place');
+        };
+
+        sound?.play('card-slide', { gain: 0.7 });
+
+        if (over === null || from === null || to === null)
+        {
+            faced();
+
+            return Promise.resolve();
+        }
+
+        return leave(over, cardNode(null, to.width), from, to, { duration: CARD_FLY, easing: EASE.fly, quiet: 'skip' }, ctx)
+            .then(() => turn(ctx.stage, over, turnNode(card, to.width), to, to, { duration: TURN, delay: rest, easing: EASE.snap, landed: faced }).done);
+    };
+
+    const street = async (cards: readonly number[], next: Felt, ctx: Ctx) =>
+    {
+        const first = held.board.length;
+        const turns: Promise<void>[] = [];
+
+        held = next;
+        air = unturned(air, cards.length);
+        show();
+
+        for (const [at, card] of cards.entries())
+        {
+            turns.push(layOut(card, first + at, (cards.length - 1 - at) * BOARD_OUT + at * BOARD_GAP, ctx));
+
+            if (at < cards.length - 1 && !await pause(BOARD_OUT, ctx))
+            {
+                return;
+            }
+        }
+
+        await Promise.all(turns);
+    };
+
+    const cardsBack = async (cards: readonly number[], ctx: Ctx) =>
+    {
+        const from = deckSpot();
+        const over = layer;
+
+        if (over === null || from === null)
+        {
+            return;
+        }
+
+        await Promise.all(cards.flatMap((card, at) =>
+        {
+            const to = boxOf(pocketOf(at));
+
+            return to === null ? [] : [turn(ctx.stage, over, turnNode(card, to.width), from, to, { duration: CARD_FLY, delay: at * MUCK_GAP, easing: EASE.fly, flip: EASE.flip }).done];
+        }));
+    };
+
+    const tableHand = async (seat: number, cards: readonly number[], next: Felt, ctx: Ctx) =>
+    {
+        const over = layer;
+        const backs = seat === mine ? [] : cards.map((_, nth) => placeOf(seat, nth));
+
+        held = next;
+        sound?.play('card-fan', { gain: 0.6 });
+
+        if (over === null || backs.length === 0 || backs.some((back) => back === null || !back.rests))
+        {
+            show();
+            seatChips();
+            await pause(CARD_GAP, ctx);
+
+            return;
+        }
+
+        air = turning(air, held, seat);
+        show();
+        seatChips();
+
+        await Promise.all(shownOf(seat, cards).map((face, nth) =>
+        {
+            const back = backs[nth];
+            const up = () =>
+            {
+                air = landed(air, seat);
+                show();
+            };
+
+            return back === null
+                ? Promise.resolve()
+                : turn(ctx.stage, over, turnNode(face.card, face.box.width), back.to, face.box, {
+                    duration: TURN,
+                    delay: nth * CARD_GAP,
+                    easing: EASE.snap,
+                    fromRotate: back.tilt,
+                    toRotate: face.tilt,
+                    landed: up
+                }).done;
+        }));
+
+        if (ctx.live())
+        {
+            air = turned(air, seat);
+            show();
+            seatChips();
+        }
+    };
+
+    const payOut = async (move: Told, next: Felt, ctx: Ctx) =>
+    {
+        const shares = [...sharesOf(held, move)].filter(([, chips]) => chips > 0);
+        const from = potSpot();
+        const over = layer;
+        const seats = held.chairs.length;
+        const big = held.blinds.big;
+        const won = mine !== undefined && shares.some(([seat]) => seat === mine);
+        const rest = pause(POT_SPAN, ctx);
+
+        held = next;
+        air = shares.reduce((now, [seat, chips]) => flying(now, seats, seat, 0, chips), air);
+        show();
+
+        if (won)
+        {
+            sound?.play('hand-won');
+        }
+
+        if (over !== null && from !== null)
+        {
+            await Promise.all(shares.flatMap(([seat, chips]) =>
+            {
+                const plate = boxOf(plateOf(seat));
+
+                return plate === null ? [] : [pour(ctx.stage, over, from, discAt(plate, from), { discs: discsFor(chips, big), duration: POT_FLY, gap: POT_GAP, easing: EASE.fly }).done];
+            }));
+        }
+
+        if (ctx.live())
+        {
+            air = shares.reduce((now, [seat, chips]) => flying(now, seats, seat, 0, 0 - chips), air);
+            show();
+            sound?.play('chips-stack');
+
+            if (won)
+            {
+                haptic('hand');
+            }
+        }
+
+        await rest;
+    };
+
+    const rackOff = async (seat: number, ctx: Ctx) =>
+    {
+        const chips = stackAt(held, seat);
+        const plate = boxOf(plateOf(seat));
+        const cloth = boxOf(feltNode());
+        const like = potSpot();
+        const over = layer;
+
+        if (over === null || plate === null || cloth === null || like === null || chips <= 0)
+        {
+            return;
+        }
+
+        const from = centreOf(plate);
+        const middle = centreOf(cloth);
+        const far = Math.hypot(from.x - middle.x, from.y - middle.y) || 1;
+        const reach = plate.height * RACK_OUT;
+        const rail = { x: from.x + ((from.x - middle.x) / far) * reach, y: from.y + ((from.y - middle.y) / far) * reach, width: 0, height: 0 };
+
+        await pour(ctx.stage, over, plate, discAt(rail, like), { discs: discsFor(chips, held.blinds.big), duration: RACK, gap: DISC_GAP, easing: EASE.fly, gone: true }).done;
+    };
+
+    const scene = async (move: Told, next: Felt, ctx: Ctx, trail?: Promise<void>[]) =>
+    {
+        const seat = move.seat ?? -1;
+        const mineToo = seat === mine;
+
+        if (move.e === 'blind' || move.e === 'call' || move.e === 'raise' || move.e === 'allin')
+        {
+            await chipsIn(seat, next, move.e === 'allin', ctx);
+
+            return;
+        }
+
+        if (move.e === 'refund')
+        {
+            await chipsBack(seat, next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'board' || move.e === 'show' || move.e === 'pot')
+        {
+            await gather(ctx);
+
+            if (!ctx.live())
+            {
+                return;
+            }
+        }
+
+        if (move.e === 'deal')
+        {
+            await newHand(next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'board')
+        {
+            await street(move.cards ?? [], next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'show')
+        {
+            await tableHand(seat, move.cards ?? [], next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'pot')
+        {
+            await payOut(move, next, ctx);
+
+            return;
+        }
+
+        if (move.e === 'forfeit')
+        {
+            await rackOff(seat, ctx);
+
+            if (!ctx.live())
+            {
+                return;
+            }
+        }
+
+        const leaving = inHand(held, seat) && !inHand(next, seat) ? cardsOf(seat) : null;
+
+        held = next;
+        show();
+
+        if (leaving !== null)
+        {
+            const away = sweep(leaving, MUCK, MUCK_GAP, ctx);
+
+            sound?.play('card-gather', { gain: 0.6 });
+
+            if (trail !== undefined)
+            {
+                trail.push(away);
+            }
+            else
+            {
+                await away;
+
+                if (!ctx.live())
+                {
+                    return;
+                }
+            }
+        }
+
+        if (move.e === 'check')
+        {
+            await knock(seat, ctx);
+        }
+        else if (move.e === 'bust' && mineToo)
+        {
+            sound?.play('pass');
+            haptic('hit');
+        }
+        else if (move.e === 'finish' && mineToo)
+        {
+            if (await pause(WIN_AFTER, ctx))
+            {
+                sound?.play('win');
+                haptic('win');
+            }
+        }
+    };
+
+    const playedOf = (acts: readonly Act<Told>[]) => staged(acts.flatMap((act) => act.moves));
+
+    const play = async (acts: readonly Act<Told>[], sight: Sight<Felt>, ctx: Ctx) =>
+    {
+        const moves = playedOf(acts);
+
+        await Promise.resolve();
+
+        const tables = ctx.live() ? through(held, moves, sight.view) : [];
+        const from = latest(moves);
+        const trail: Promise<void>[] = [];
+        let out: Promise<void> | null = null;
+        let shown = false;
+
+        if (from > 0 && tables.length > 0)
+        {
+            layer?.replaceChildren();
+            air = STILL;
+            held = tables[from - 1];
+            show();
+        }
+
+        for (let at = from; at < tables.length; at += 1)
+        {
+            const move = moves[at];
+
+            const hold = heldBefore(shown, move);
+
+            if (move.e !== 'blind' && out !== null)
+            {
+                await out;
+                out = null;
+            }
+
+            if (hold !== null && ctx.live())
+            {
+                await ctx.linger(untrack(() => myTurn) ? hold.least : hold.ms, hold.least);
+            }
+
+            if (ctx.live())
+            {
+                await scene(move, tables[at], ctx, trail);
+            }
+
+            if (!ctx.live())
+            {
+                return;
+            }
+
+            shown = tabling(shown, move);
+
+            if (move.e === 'deal')
+            {
+                out = dealOut(ctx);
+            }
+        }
+
+        if (out !== null)
+        {
+            await out;
+        }
+
+        if (trail.length > 0)
+        {
+            await Promise.all(trail);
+        }
+    };
+
+    const takeBack = async (ctx: Ctx) =>
+    {
+        const sight = sightNow();
+        const seat = sight?.seat ?? -1;
+
+        if (sight === null)
+        {
+            return;
+        }
+
+        if (stackAt(sight.view, seat) > stackAt(held, seat))
+        {
+            sound?.play('deny');
+            await chipsBack(seat, sight.view, ctx);
+        }
+        else if (sight.view.hole.length > held.hole.length)
+        {
+            sound?.play('deny');
+            await cardsBack(sight.view.hole, ctx);
+        }
+
+        if (ctx.live())
+        {
+            reset(sight);
+        }
+    };
+
+    const mend = () =>
+    {
+        const sight = sightNow();
+
+        if (presenter?.presenting() !== true)
+        {
+            missed = missesOf(game.players);
+        }
+
+        if (presenter !== null && !presenter.presenting() && sight !== null)
+        {
+            reset(sight);
+        }
+    };
+
+    const staging: Table<Felt, Told> = {
+        kind: 'poker',
+        history: HISTORY,
+        before: (sight) => ({ ...sight, view: before(sight.view) }),
+        reset,
+        same: level,
+        settle: reset,
+        play,
+        estimate: (acts) =>
+        {
+            const moves = playedOf(acts);
+
+            return spanOf(moves.slice(latest(moves)), untrack(() => count));
+        }
+    };
+
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            mend();
+            hurry();
+        });
+    }
+
     mount
     {
-        const watcher = typeof ResizeObserver === 'undefined' || root === null ? null : new ResizeObserver(reseat);
+        const watcher = typeof ResizeObserver === 'undefined' || root === null ? null : new ResizeObserver(resized);
+        const cloth = feltNode();
+        const clock = runtime().clock;
+        const report = (error: unknown) => console.error(error);
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        const made = createPresenter<Felt, Told>({
+            stage: createStage({ clock, quiet: () => device.reducedMotion(), report }),
+            clock,
+            table: staging,
+            sight: () => untrack(sightNow),
+            report,
+            lead: () => (resultStands ? RESULT_OUT : 0),
+            due: () => (over ? RESULT_WAIT : null)
+        });
+        const unwatch = made.watch((busy) =>
+        {
+            presenting = busy;
+            props.onPresenting?.(busy);
+
+            if (!busy)
+            {
+                untrack(mend);
+            }
+        });
+
+        presenter = made;
+        made.frame(root);
+        untrack(() => made.see(props.events));
+        shape();
 
         if (watcher !== null && root !== null)
         {
             watcher.observe(root);
+        }
+
+        if (watcher !== null && cloth !== null)
+        {
+            watcher.observe(cloth);
         }
 
         void document.fonts?.ready.then(reseat);
@@ -200,13 +1208,19 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                 cancelAnimationFrame(laying);
             }
 
-            cues.dispose();
+            unwatch();
+            uncap();
+            props.onPresenting?.(false);
+            made.dispose();
+            presenter = null;
+            sound?.dispose();
+            sound = null;
         };
     }
 
     derived toCall = view?.toCall ?? 0;
 
-    derived canRaise = myTurn && view!.minRaiseTo !== undefined && view!.maxRaiseTo !== undefined;
+    derived canRaise = acting && view?.minRaiseTo !== undefined && view?.maxRaiseTo !== undefined;
 
     derived low = view?.minRaiseTo ?? 0;
 
@@ -216,45 +1230,50 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived myRow = view?.seats.find((row) => row.seat === viewer);
 
-    derived tip = view === null || over ? null : coachOf(view, mine);
+    derived myChair = felt.chairs.find((chair) => chair.seat === viewer);
 
-    derived outcome = view === null || over || !settings.settings().hintOutcome ? null : outcomeOf(view, mine);
+    derived tip = view === null || over || waiting ? null : coachOf(view, mine);
 
-    derived handSays = ((): string =>
+    derived captioned = settings.settings().hintOutcome;
+
+    derived holding = captioned && mine !== undefined ? handOf(felt) : null;
+
+    derived price = view === null || over || waiting || !captioned ? null : priceOf(view, mine);
+
+    derived handNamed = ((): string =>
     {
-        const hand = outcome?.hand;
+        const hand = holding;
 
-        if (hand == null)
+        if (hand === null)
         {
             return '';
         }
 
-        const named = locale.t(`helpers.poker.hand.${ hand.category }` as never, {
+        return locale.t(`helpers.poker.hand.${ hand.category }` as never, {
             top: locale.t(`helpers.poker.rank.one.${ hand.top }` as never),
             tops: locale.t(`helpers.poker.rank.many.${ hand.top }` as never),
             seconds: hand.second === null ? '' : locale.t(`helpers.poker.rank.many.${ hand.second }` as never)
         });
-
-        return locale.t(hand.board ? 'helpers.poker.board' : 'helpers.poker.best', { hand: named });
     })();
 
-    derived costSays = (() =>
-    {
-        const call = outcome?.call;
+    derived onBoard = holding?.board === true;
 
-        return call == null ? '' : locale.t('helpers.poker.cost', { chips: chips(call.chips), pot: chips(call.pot) });
-    })();
+    derived handSays = handNamed === '' ? '' : locale.t(onBoard ? 'helpers.poker.board' : 'helpers.poker.best', { hand: handNamed });
+
+    derived handBrief = onBoard ? locale.t('helpers.poker.board.brief', { hand: handNamed }) : handNamed;
+
+    derived costSays = price === null ? '' : locale.t('helpers.poker.cost', { chips: chips(price.chips), pot: chips(price.pot) });
+
+    derived answered = `${ game.id } ${ game.rev }`;
 
     effect
     {
         const floor = low;
-        const rev = game.rev;
 
-        if (rev >= 0)
-        {
-            amount = floor;
-            raising = false;
-        }
+        void answered;
+
+        amount = floor;
+        raising = false;
     }
 
     derived chosen = Math.min(high, Math.max(low, amount));
@@ -266,34 +1285,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return Math.min(high, Math.max(low, target));
     };
 
-    state ahead: { rev: number; view: NonNullable<typeof view> } | null = null;
+    derived turnSeat = felt.turn;
 
-    derived drawn = ahead !== null && ahead.rev === game.rev ? ahead.view : view;
-
-    derived plates = drawn === null ? [] : drawn.seats.map((row) =>
-    {
-        const place = (row.seat - viewer + count) % count;
-        const angle = Math.PI / 2 + (place / count) * Math.PI * 2;
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-
-        return {
-            row,
-            place,
-            x: 50 + cos * RADIUS_X,
-            y: 50 + sin * RADIUS_Y,
-            live: !row.folded && !row.out
-        };
-    });
-
-    effect
-    {
-        void plates;
-
-        untrack(reseat);
-    }
-
-    derived turnSeat = view?.turn;
+    derived button = felt.button;
 
     derived stateOf = (row: { seat: number; out: boolean; folded: boolean; allIn: boolean }): PlateTag | null =>
     {
@@ -312,12 +1306,103 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return { text: locale.t('poker.folded'), tone: 'neutral' };
         }
 
-        return plateTag(locale, game.players.find((one) => one.seat === row.seat), over);
+        const seated = game.players.find((one) => one.seat === row.seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
+
+        if (player === undefined || !over || result)
+        {
+            return plateTag(locale, player, over);
+        }
+
+        const { result: _unshown, ...plain } = player;
+
+        return plateTag(locale, plain, over);
     };
+
+    derived ring = aroundStadium(count, ratio);
+
+    derived plates = new Map(felt.chairs.map((row): [number, typeof UNSEATED] =>
+    {
+        const spot = ring[(row.seat - viewer + count) % count] ?? UNSEATED;
+
+        return [row.seat, {
+            row,
+            x: spot.x,
+            y: spot.y,
+            ux: spot.ux,
+            uy: spot.uy,
+            lies: spot.lies,
+            live: !row.folded && !row.out,
+            tag: stateOf(row)
+        }];
+    }));
+
+    derived chairs = [...plates.keys()];
+
+    const plateAt = (seat: number) => plates.get(seat) ?? UNSEATED;
+
+    derived betOn = (seat: number) =>
+    {
+        const lying = plateAt(seat).row.bet;
+
+        return lying > 0 ? lying : (coming[seat] ?? 0);
+    };
+
+    const placed = (seat: number) =>
+    {
+        const { x, y, ux, uy } = plateAt(seat);
+
+        return `--x: ${ x.toFixed(2) }; --y: ${ y.toFixed(2) }; --ux: ${ ux.toFixed(3) }; --uy: ${ uy.toFixed(3) }`;
+    };
+
+    effect
+    {
+        void plates;
+
+        untrack(reseat);
+    }
+
+    derived seated = view !== null;
+
+    derived playing = !over;
+
+    derived blindsSay = view === null ? '' : `${ chips(felt.blinds.small) }/${ chips(felt.blinds.big) }`;
+
+    derived streetSays = locale.t(`poker.street.${ felt.street }` as never);
+
+    derived blindsTold = view === null
+        ? ''
+        : `${ locale.t('poker.blinds') }, ${ streetSays }, ${ locale.plural('poker.next', felt.blinds.next) }, ${ locale.t('poker.hand', { n: locale.n(felt.hand) }) }, ${ locale.t('poker.level', { level: locale.n(felt.blinds.level) }) }`;
+
+    derived slots = BOARD_SLOTS.map((slot) => ({ slot, cards: felt.board.slice(slot, slot + 1) }));
+
+    derived potSays = locale.t('poker.pot', { chips: chips(felt.pot) });
+
+    derived potDiscs = discsFor(felt.pot, felt.blinds.big);
+
+    derived layers = felt.pots;
+
+    derived sided = layers.length > 1;
+
+    derived potsSay = locale.list(layers.map((pot, index) => locale.t(index === 0 ? 'poker.main' : 'poker.side', { chips: chips(pot.amount) })));
+
+    derived lastKnown = felt.last !== null;
+
+    derived lastShown = felt.last === null ? [] : felt.last.shown.map((row) => ({ ...row, cards: [...row.cards] }));
+
+    derived lastTabled = lastShown.length > 0;
+
+    derived inHole = between && lifted && myTurn ? (view?.hole ?? []) : felt.hole;
+
+    derived pockets = POCKETS.map((slot) => ({ slot, cards: inHole.slice(slot, slot + 1) }));
+
+    derived handed = view !== null && !result && mine !== undefined && myChair !== undefined && !myChair.out;
+
+    derived opening = highest === 0;
 
     derived raiseSays = chosen >= high
         ? locale.t('poker.allin', { chips: chips(high) })
-        : (highest === 0 ? locale.t('poker.betTo', { chips: chips(chosen) }) : locale.t('poker.raiseTo', { chips: chips(chosen) }));
+        : (opening ? locale.t('poker.betTo', { chips: chips(chosen) }) : locale.t('poker.raiseTo', { chips: chips(chosen) }));
 
     const rankSays = (card: number) =>
     {
@@ -331,6 +1416,19 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     const cardsSay = (cards: readonly number[]) => locale.list(cards.map(cardSays));
 
+    derived tabledAt = (seat: number) => (inHand(felt, seat) ? felt.tabled.find((one) => one.seat === seat) : undefined);
+
+    derived openAt = (seat: number) => (seat === mine ? NO_CARDS : (tabledAt(seat)?.cards ?? NO_CARDS));
+
+    derived namedAt = (seat: number) =>
+    {
+        const hand = tabledAt(seat);
+
+        return hand === undefined ? '' : locale.t(`poker.category.${ hand.category }` as never);
+    };
+
+    derived winners = winnersOf(felt);
+
     derived says = ((): string =>
     {
         if (view === null)
@@ -338,9 +1436,14 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return '';
         }
 
-        if (mine !== undefined && myRow?.out === true)
+        if (mine !== undefined && myChair?.out === true)
         {
             return locale.t('poker.turn.out');
+        }
+
+        if (waiting)
+        {
+            return '';
         }
 
         if (myTurn)
@@ -351,48 +1454,102 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return view.turn === undefined ? '' : locale.t('match.turn.theirs', { name: nameOf(view.turn) });
     })();
 
-    derived lastSays = ((): string[] =>
+    derived wonLines = (pots: readonly Paid[], hands: readonly Tabled[]) => pots.map((pot) =>
     {
-        const last = view?.last;
+        const names = locale.list(pot.winners.map(nameOf));
+        const hand = hands.find((row) => pot.winners.includes(row.seat));
 
-        if (last === undefined)
+        return hand === undefined
+            ? locale.t('poker.last.won', { name: names, chips: chips(pot.amount) })
+            : locale.t('poker.last.with', { name: names, chips: chips(pot.amount), category: locale.t(`poker.category.${ hand.category }` as never) });
+    });
+
+    derived lastSays = felt.last === null ? [] : wonLines(felt.last.pots, felt.last.shown);
+
+    derived paidSays = wonLines(felt.paid, felt.tabled).join(' ');
+
+    const unsend = (id: string, rev: number) =>
+    {
+        if (sent === null || sent.id !== id || sent.rev !== rev)
         {
-            return [];
+            return;
         }
 
-        return last.pots.map((pot) =>
-        {
-            const names = locale.list(pot.winners.map(nameOf));
-            const shown = last.shown.find((row) => pot.winners.includes(row.seat));
-
-            return shown === undefined
-                ? locale.t('poker.last.won', { name: names, chips: chips(pot.amount) })
-                : locale.t('poker.last.with', { name: names, chips: chips(pot.amount), category: locale.t(`poker.category.${ shown.category }` as never) });
-        });
-    })();
+        sent = null;
+        presenter?.predict(null);
+        presenter?.act((ctx) => takeBack(ctx));
+    };
 
     const send = async (verb: PokerVerb, amount?: number) =>
     {
         const current = untrack(() => view);
         const seat = untrack(() => mine);
+        const id = untrack(() => game.id);
+        const rev = untrack(() => game.rev);
 
-        if (current !== null && seat !== undefined && !untrack(board.busy))
+        if (current !== null && seat !== undefined && presenter !== null && !untrack(board.busy))
         {
-            ahead = { rev: untrack(() => game.rev), view: predicted(current, seat, verb, amount) };
+            const move = pressed(current, seat, verb, amount);
+
+            sent = { id, rev, move };
+            presenter.predict({ rev, covers: (moves) => (moves[0]?.e === move.e && moves[0].seat === seat && moves[0].amount === move.amount ? 1 : null) });
+            presenter.act((ctx) => scene(move, step(held, move), ctx), spanOf([move], untrack(() => count)));
         }
 
         const outcome = await board.play(verb === 'raise' ? { kind: 'poker', verb, amount: amount ?? 0 } : { kind: 'poker', verb });
 
         if (outcome === 'stale' || outcome === 'failed')
         {
-            ahead = null;
+            unsend(id, rev);
         }
     };
 
     const act = async (verb: 'fold' | 'check' | 'call' | 'allin') =>
     {
         haptic('select');
+        raising = false;
         await send(verb);
+    };
+
+    derived owing = toCall > 0;
+
+    derived priced = acting && costSays !== '';
+
+    derived choosing = raising && canRaise;
+
+    derived ranged = low < high;
+
+    derived raisable = canRaise && ranged;
+
+    derived shoving = canRaise && !ranged;
+
+    derived named = handSays !== '';
+
+    derived callSays = toCall >= (myRow?.stack ?? 0)
+        ? locale.t('poker.callAllIn', { chips: chips(myRow?.stack ?? 0) })
+        : locale.t('poker.call', { chips: chips(toCall) });
+
+    const letGo = (event: PointerEvent) =>
+    {
+        const on = event.target instanceof Element ? event.target : null;
+        const last = root?.querySelector<HTMLDetailsElement>('.poker-last') ?? null;
+
+        if (last !== null && last.open && on?.closest('.poker-last') == null)
+        {
+            last.open = false;
+        }
+    };
+
+    mount
+    {
+        document.addEventListener('pointerdown', letGo, true);
+
+        return () => document.removeEventListener('pointerdown', letGo, true);
+    }
+
+    const openRaise = () =>
+    {
+        raising = !raising;
     };
 
     const raise = async () =>
@@ -403,162 +1560,131 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         await (chosen >= high ? send('allin') : send('raise', chosen));
     };
 
-    <div data-rev={ props.match.rev } data-felt={ short ? 'short' : undefined } class="table-stage poker-stage" ref={ (element) => root = element }>
-        <div class="table-grid">
-            <Show when={ view !== null }>
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage poker-stage" ref={ (element) => root = element }>
+        <div class="table-grid poker-grid">
+            <Show when={ seated }>
                 { () =>
                     <div class="table-fit">
-                        <div class="table-surface poker-table" role="group" aria-label={ locale.t('poker.table') }>
-                            <div class="poker-chips">
-                                <span class="poker-chip">
-                                    <Icon name="coins" size={ 12 } class="shrink-0 text-gold" />
-                                    <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
-                                    <span class="text-white/60">·</span>
-                                    <span class="min-w-0 truncate">{ locale.t(`poker.street.${ view!.street }` as never) }</span>
-                                    <span class="sr-only">
-                                        { locale.t('poker.blinds') }, { locale.plural('poker.next', view!.blinds.next) }, { locale.t('poker.hand', { n: locale.n(view!.hand) }) }, { locale.t('poker.level', { level: locale.n(view!.blinds.level) }) }
-                                    </span>
-                                </span>
-
-                                <details class="poker-last">
-                                    <summary class="poker-chip">
-                                        <Icon name="history" size={ 12 } class="shrink-0 text-gold" />
-                                        <span class="min-w-0 truncate">{ locale.t('poker.last') }</span>
-                                    </summary>
-                                    <div class="poker-last-panel" dir={ locale.dir() }>
-                                        <Show
-                                            when={ view!.last !== undefined }
-                                            fallback={ <p class="text-ui-xs text-muted">{ locale.t('poker.last.none') }</p> }
-                                        >
-                                            { () =>
-                                                <div class="flex flex-col gap-2">
-                                                    <For each={ lastSays } key={ (line, index) => `${ index }-${ line }` } let={ line }>
-                                                        <p class="text-ui-xs font-semibold text-text">{ line }</p>
-                                                    </For>
-                                                    <Show when={ (view!.last?.shown.length ?? 0) > 0 }>
-                                                        { () =>
-                                                            <ul class="flex flex-col gap-1.5 [--card-w:1.9rem]">
-                                                                <For each={ view!.last!.shown } key={ (row) => row.seat } let={ row }>
-                                                                    <li class="flex min-w-0 items-center gap-2">
-                                                                        <span class="flex gap-0.5" role="img" aria-label={ cardsSay(row.cards) }>
-                                                                            <For each={ row.cards } key={ (card) => card } let={ card }>
-                                                                                <span class="flex">
-                                                                                    <CardFace card={ card } />
-                                                                                </span>
-                                                                            </For>
-                                                                        </span>
-                                                                        <span class="min-w-0 truncate text-ui-2xs text-muted" dir="auto">{ nameOf(row.seat) }</span>
-                                                                        <span class="ms-auto shrink-0 text-ui-2xs font-semibold text-text">{ locale.t(`poker.category.${ row.category }` as never) }</span>
-                                                                    </li>
-                                                                </For>
-                                                            </ul>
-                                                        }
-                                                    </Show>
-                                                </div>
-                                            }
-                                        </Show>
-                                    </div>
-                                </details>
-                            </div>
-
+                        <div class="table-surface poker-table" role="group" aria-label={ locale.t('poker.table') } data-seats={ count }>
                             <div class="poker-centre">
-                                <ul class="flex items-center gap-1" aria-label={ locale.t('poker.board') }>
-                                    <For each={ BOARD_SLOTS } key={ (slot) => slot } let={ slot }>
-                                        <li class="flex">
-                                            <Show
-                                                when={ view!.board[slot] !== undefined }
-                                                fallback={ <span class="block aspect-[204/288] w-[var(--card-w)] rounded-[calc(var(--card-w)*0.08)] border border-dashed border-white/25" aria-hidden="true"></span> }
-                                            >
-                                                { () =>
-                                                    <span class="flex" role="img" aria-label={ cardSays(view!.board[slot]) }>
-                                                        <CardFace card={ view!.board[slot] } />
-                                                    </span>
-                                                }
-                                            </Show>
+                                <ul class="poker-board" aria-label={ locale.t('poker.board') }>
+                                    <For each={ slots } key={ (one) => one.slot } let={ one }>
+                                        <li class="poker-slot">
+                                            <For each={ one.cards } key={ (card) => card } let={ card }>
+                                                <span class="flex" role="img" aria-label={ cardSays(card) }>
+                                                    <CardFace card={ card } />
+                                                </span>
+                                            </For>
                                         </li>
                                     </For>
                                 </ul>
-                                <p class="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1 text-ui-xs font-semibold text-white">
-                                    <Icon name="coins" size={ 13 } class="text-gold" />
-                                    <span>{ locale.t('poker.pot', { chips: chips(view!.pot) }) }</span>
-                                </p>
-                                <Show when={ view!.pots.length > 1 }>
-                                    { () =>
-                                        <p class="text-ui-2xs text-white/70">
-                                            { locale.list(view!.pots.map((pot, index) => locale.t(index === 0 ? 'poker.main' : 'poker.side', { chips: chips(pot.amount) }))) }
-                                        </p>
-                                    }
+                                <div class="poker-tally">
+                                    <details class="poker-last" dir={ locale.dir() }>
+                                        <summary>
+                                            <Icon name="history" size={ 13 } />
+                                            <span class="sr-only">{ locale.t('poker.last') }</span>
+                                        </summary>
+                                        <div class="poker-last-panel">
+                                            <Show
+                                                when={ lastKnown }
+                                                fallback={ <p class="text-ui-xs text-muted">{ locale.t('poker.last.none') }</p> }
+                                            >
+                                                { () =>
+                                                    <div class="flex flex-col gap-2">
+                                                        <For each={ lastSays } key={ (line, index) => `${ index }-${ line }` } let={ line }>
+                                                            <p class="text-ui-xs font-semibold text-text">{ line }</p>
+                                                        </For>
+                                                        <Show when={ lastTabled }>
+                                                            { () =>
+                                                                <ul class="flex flex-col gap-1.5 [--card-w:1.9rem]">
+                                                                    <For each={ lastShown } key={ (row) => row.seat } let={ row }>
+                                                                        <li class="flex min-w-0 items-center gap-2">
+                                                                            <span class="flex gap-0.5" role="img" aria-label={ cardsSay(row.cards) }>
+                                                                                <For each={ row.cards } key={ (card) => card } let={ card }>
+                                                                                    <span class="flex">
+                                                                                        <CardFace card={ card } />
+                                                                                    </span>
+                                                                                </For>
+                                                                            </span>
+                                                                            <span class="min-w-0 truncate text-ui-2xs text-muted" dir="auto">{ nameOf(row.seat) }</span>
+                                                                            <span class="ms-auto shrink-0 text-ui-2xs font-semibold text-text">{ locale.t(`poker.category.${ row.category }` as never) }</span>
+                                                                        </li>
+                                                                    </For>
+                                                                </ul>
+                                                            }
+                                                        </Show>
+                                                    </div>
+                                                }
+                                            </Show>
+                                        </div>
+                                    </details>
+                                    <p class="poker-pot">
+                                        <span class="chip-stack" data-chips={ potDiscs } aria-hidden="true"></span>
+                                        <span>{ potSays }</span>
+                                    </p>
+                                    <p class="poker-blinds">
+                                        <span class="tally" aria-hidden="true">{ blindsSay }</span>
+                                        <span class="sr-only">{ blindsTold }</span>
+                                    </p>
+                                </div>
+                                <Show when={ sided }>
+                                    { () => <p class="poker-pots">{ potsSay }</p> }
                                 </Show>
                             </div>
 
-                            <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
-                                <div class="poker-seat" data-seat={ plate.row.seat } style={ `--x: ${ plate.x.toFixed(2) }; --y: ${ plate.y.toFixed(2) }` }>
-                                    <TablePlate
-                                        who={ whoAt(plate.row.seat) }
-                                        name={ nameOf(plate.row.seat) }
-                                        turn={ !over && turnSeat === plate.row.seat }
+                            <For each={ chairs } key={ (seat) => seat } let={ seat }>
+                                <div class="poker-seat" data-seat={ seat } data-lies={ plateAt(seat).lies } style={ placed(seat) }>
+                                    <PokerSeat
+                                        who={ whoAt(seat) }
+                                        name={ nameOf(seat) }
+                                        turn={ !over && turnSeat === seat }
+                                        own={ seat === mine }
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
-                                        dim={ !plate.live }
-                                        tag={ stateOf(plate.row)?.text }
-                                        tone={ stateOf(plate.row)?.tone }
-                                        bubble={ props.speech?.[whoAt(plate.row.seat)] }
-                                        below={ plate.y < 50 }
-                                        anchor={ plate.x > 60 ? 'end' : (plate.x < 40 ? 'start' : 'centre') }
-                                        marker={ view!.button === plate.row.seat ? <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> : undefined }
-                                        facts={ <span class="tally font-bold text-gold">{ chips(plate.row.stack) }</span> }
+                                        dim={ !plateAt(seat).live }
+                                        tag={ plateAt(seat).tag?.text }
+                                        tone={ plateAt(seat).tag?.tone }
+                                        bubble={ props.speech?.[whoAt(seat)] }
+                                        below={ plateAt(seat).y < 50 }
+                                        anchor={ plateAt(seat).x > 60 ? 'end' : (plateAt(seat).x < 40 ? 'start' : 'centre') }
+                                        button={ button === seat }
+                                        stack={ chips(plateAt(seat).row.stack) }
+                                        holds={ inHand(felt, seat) && seat !== mine }
+                                        cards={ HOLE - (arriving[seat] ?? 0) }
+                                        shown={ openAt(seat) }
+                                        shownSays={ cardsSay(openAt(seat)) }
+                                        named={ namedAt(seat) }
+                                        won={ winners.includes(seat) }
+                                        bet={ betOn(seat) > 0 ? chips(betOn(seat)) : '' }
+                                        discs={ discsFor(betOn(seat), felt.blinds.big) }
+                                        landing={ plateAt(seat).row.bet === 0 }
                                     />
-                                    <Show when={ plate.live && plate.row.seat !== mine }>
-                                        { () =>
-                                            <span class="poker-backs" aria-hidden="true">
-                                                <span class="card-back -rotate-6"></span>
-                                                <span class="card-back -ms-1.5 rotate-6"></span>
-                                            </span>
-                                        }
-                                    </Show>
-                                    <Show when={ plate.row.bet > 0 }>
-                                        { () =>
-                                            <span class="poker-bet">
-                                                <span class="h-2.5 w-2.5 rounded-full border-2 border-dashed border-white bg-madder" aria-hidden="true"></span>
-                                                <span class="tally">{ chips(plate.row.bet) }</span>
-                                            </span>
-                                        }
-                                    </Show>
                                 </div>
                             </For>
+
+                            <span class="poker-puck" data-seat={ button } aria-hidden="true">D</span>
                         </div>
+
+                        <Show when={ playing }>
+                            { () => <p class="sr-only" aria-live="polite">{ says }</p> }
+                        </Show>
+                        <Show when={ playing }>
+                            { () => <p class="sr-only" aria-live="polite">{ paidSays }</p> }
+                        </Show>
+                        <Show when={ priced }>
+                            { () => <p class="poker-cost sr-only">{ costSays }</p> }
+                        </Show>
                     </div>
                 }
             </Show>
 
-            <Show when={ view !== null && !over && view!.hole.length === 2 }>
+            <Show when={ handed }>
                 { () =>
                     <div class="table-hand poker-hand">
-                        <ul class="flex gap-1.5" aria-label={ locale.t('poker.hole') }>
-                            <For each={ view!.hole } key={ (card) => card } let={ card }>
-                                <li class="flex" role="img" aria-label={ cardSays(card) }>
-                                    <CardFace card={ card } />
-                                </li>
-                            </For>
-                        </ul>
-                        <p class="poker-hand-text flex min-w-0 flex-col text-ui-xs text-muted">
-                            <span class="label text-ui-2xs text-faint">{ locale.t('poker.hole') }</span>
-                            <span class="line-clamp-2">{ cardsSay(view!.hole) }</span>
-                            <Show when={ handSays !== '' }>
-                                { () => <span class="line-clamp-2 font-semibold text-text">{ handSays }</span> }
-                            </Show>
-                        </p>
-                    </div>
-                }
-            </Show>
-
-            <Show when={ view !== null && !over }>
-                { () =>
-                    <section class="table-bar poker-bar">
-                        <Show when={ raising && canRaise }>
+                        <Show when={ choosing }>
                             { () =>
                                 <div class="poker-raise">
-                                    <Show when={ low < high }>
+                                    <Show when={ ranged }>
                                         { () =>
                                             <div class="flex flex-col gap-2">
                                                 <Slider
@@ -585,80 +1711,87 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                             }
                         </Show>
 
-                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                            <p class="min-w-0 flex-[1_1_8rem] text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
-                            <span class="poker-bar-facts poker-chip" aria-hidden="true">
-                                <Icon name="coins" size={ 12 } class="shrink-0 text-gold" />
-                                <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
-                                <span class="text-white/60">·</span>
-                                <span>{ locale.t(`poker.street.${ view!.street }` as never) }</span>
-                            </span>
-                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
+                        <div class="poker-own">
+                            <Show when={ named }>
+                                { () => <p class="sr-only">{ handSays }</p> }
+                            </Show>
+                            <Show when={ captioned }>
+                                { () => <p class="poker-hand-name" aria-hidden="true">{ handBrief }</p> }
+                            </Show>
+
+                            <ul class="poker-hole" aria-label={ locale.t('poker.hole') }>
+                                <For each={ pockets } key={ (one) => one.slot } let={ one }>
+                                    <li class="poker-pocket">
+                                        <For each={ one.cards } key={ (card) => card } let={ card }>
+                                            <span class="flex" role="img" aria-label={ cardSays(card) }>
+                                                <CardFace card={ card } />
+                                            </span>
+                                        </For>
+                                    </li>
+                                </For>
+                            </ul>
                         </div>
 
-                        <CoachLine tip={ tip } />
+                        <div class="poker-side">
+                            <Show when={ acting }>
+                                { () =>
+                                    <div class="poker-acts">
+                                        <Show when={ owing }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('fold') }>
+                                                    <span class="poker-muck" aria-hidden="true">
+                                                        <span class="card-back"></span>
+                                                        <span class="card-back"></span>
+                                                    </span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.fold') }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show
+                                            when={ owing }
+                                            fallback={
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('check') }>
+                                                    <span class="poker-disc" data-act="check" aria-hidden="true"><Icon name="hand" size={ 18 } /></span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.check') }</span>
+                                                </button>
+                                            }
+                                        >
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void act('call') }>
+                                                    <span class="poker-disc" data-act="call" aria-hidden="true"></span>
+                                                    <span class="poker-thing-says">{ callSays }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show when={ raisable }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" aria-pressed={ raising } disabled={ board.busy() } onClick={ openRaise }>
+                                                    <span class="poker-disc" data-act="raise" aria-hidden="true"><Icon name="add" size={ 18 } /></span>
+                                                    <span class="poker-thing-says">{ opening ? locale.t('poker.bet') : locale.t('poker.raise') }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                        <Show when={ shoving }>
+                                            { () =>
+                                                <button type="button" class="poker-thing" disabled={ board.busy() } onClick={ () => void raise() }>
+                                                    <span class="poker-disc" data-act="allin" aria-hidden="true"></span>
+                                                    <span class="poker-thing-says">{ locale.t('poker.allin', { chips: chips(high) }) }</span>
+                                                </button>
+                                            }
+                                        </Show>
+                                    </div>
+                                }
+                            </Show>
 
-                        <Show when={ mine !== undefined && myRow?.out !== true }>
-                            { () =>
-                                <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1.5">
-                                    <Show when={ myTurn }>
-                                        { () =>
-                                            <div class="flex min-w-0 flex-col gap-1.5">
-                                                <Show when={ costSays !== '' }>
-                                                    { () => <p class="poker-cost text-ui-xs text-muted">{ costSays }</p> }
-                                                </Show>
-                                                <div class="grid auto-cols-fr grid-flow-col gap-2">
-                                                    <Show when={ toCall > 0 }>
-                                                        { () =>
-                                                            <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void act('fold') }>
-                                                                { locale.t('poker.fold') }
-                                                            </Button>
-                                                        }
-                                                    </Show>
-                                                    <Show
-                                                        when={ toCall > 0 }
-                                                        fallback={
-                                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('check') }>
-                                                                { locale.t('poker.check') }
-                                                            </Button>
-                                                        }
-                                                    >
-                                                        { () =>
-                                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('call') }>
-                                                                { toCall >= (myRow?.stack ?? 0) ? locale.t('poker.callAllIn', { chips: chips(myRow?.stack ?? 0) }) : locale.t('poker.call', { chips: chips(toCall) }) }
-                                                            </Button>
-                                                        }
-                                                    </Show>
-                                                    <Show when={ canRaise && low < high }>
-                                                        { () =>
-                                                            <Button variant="secondary" size="lg" pressed={ raising } disabled={ board.busy() } onClick={ () => raising = !raising }>
-                                                                { highest === 0 ? locale.t('poker.bet') : locale.t('poker.raise') }
-                                                            </Button>
-                                                        }
-                                                    </Show>
-                                                    <Show when={ canRaise && low >= high }>
-                                                        { () =>
-                                                            <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void raise() }>
-                                                                { locale.t('poker.allin', { chips: chips(high) }) }
-                                                            </Button>
-                                                        }
-                                                    </Show>
-                                                </div>
-                                            </div>
-                                        }
-                                    </Show>
-                                </div>
-                            }
-                        </Show>
-                    </section>
+                            <CoachLine tip={ tip } lamp />
+                        </div>
+                    </div>
                 }
             </Show>
         </div>
 
-        <Show when={ over }>
-            { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
-            }
-        </Show>
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
+
+        <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>
 }

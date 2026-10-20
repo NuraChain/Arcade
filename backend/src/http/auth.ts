@@ -1,8 +1,6 @@
 import { expireCookie, parseCookies, serializeCookie, UnauthorizedError } from '@azerothjs/http';
 import { guard } from '@azerothjs/http/api';
 
-import type { AccountKind } from '../entities/user.entity.ts';
-
 /**
  * The cookie's name carries a contract the BROWSER enforces: `__Host-` is only accepted when the
  * cookie is Secure, Path=/ and has no Domain, which makes it impossible for a subdomain - or
@@ -56,7 +54,6 @@ export interface Principal
 {
     userId: string;
     handle: string;
-    kind: AccountKind;
     isMinor: boolean;
     sessionId: string;
 }

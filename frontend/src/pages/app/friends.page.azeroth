@@ -1,11 +1,10 @@
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead, useNavigate, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
 import GroupForm from '../../components/social/group-form.component.azeroth';
-import PersonActions from '../../components/social/person-actions.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -17,21 +16,23 @@ import Tabs from '../../components/ui/tabs.component.azeroth';
 import type { Person } from '../../data/person.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { openTable } from '../../lib/open-table.ts';
+import { playWith } from '../../lib/play-with.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
-import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
+import { usePageParams } from '../../lib/page-param.ts';
+import { namesOf, narrowed, SEARCH_FROM } from '../../services/search.service.ts';
+import { addFriend } from '../../lib/add-friend.ts';
 
 const LIST_PAGE = 12;
 const SUGGEST_PAGE = 8;
+
+const TABS = ['all', 'online', 'requests', 'suggestions', 'groups'];
 
 export default component FriendsPage()
 {
@@ -41,18 +42,28 @@ export default component FriendsPage()
     const groups = useGroups();
     const device = useDevice();
     const chat = useChat();
-    const lobby = useLobby();
-    const catalogue = useCatalogue();
     const overlay = useOverlay();
     const people = usePeople();
-    const { navigate } = useNavigate();
+    const { navigate, replace } = useNavigate();
+    const address = useQuery();
 
     useHead({ title: () => locale.t('app.nav.friends') });
 
-    state tab = 'all';
-    state listPage = 1;
+    const pages = usePageParams(['page']);
+
+    derived listPage = pages.page('page');
     state query = '';
-    state suggestPage = 1;
+    derived suggestPage = pages.page('page');
+
+    derived tab = TABS.find((one) => one === address().tab) ?? 'all';
+
+    const show = (id: string) => replace(id === 'all' ? '/app/friends' : `/app/friends?tab=${ id }`);
+
+    effect
+    {
+        void tab;
+        query = '';
+    }
 
     derived roomy = device.posture() !== 'phone';
 
@@ -90,7 +101,7 @@ export default component FriendsPage()
 
     derived pool = tab === 'online' ? online : friends;
 
-    derived found = narrowed(pool, query, (person) => [person.displayName, person.handle]);
+    derived found = narrowed(pool, query, namesOf);
 
     derived listed = visible(found, LIST_PAGE, listPage, paging);
 
@@ -106,27 +117,23 @@ export default component FriendsPage()
 
     derived asked = incoming.length > 0 || outgoing.length > 0;
 
+    derived received = incoming.length > 0;
+
+    derived pending = outgoing.length > 0;
+
     derived suggested = allSuggestions.length > 0;
 
     derived grouped = groups.mine().length > 0;
 
     derived discoverable = groups.elsewhere().length > 0;
 
-    const playWith = (person: Person) =>
-    {
-        const game = catalogue.featured();
-        openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
-    };
+    const play = (person: Person) => playWith(person.id, true);
 
     const message = (person: Person) =>
     {
         void chat.openDirect(person.id).then((id) => navigate(`/app/chats/${ id }`));
     };
 
-    const more = (person: Person) =>
-    {
-        overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
-    };
 
     const makeGroup = () =>
     {
@@ -150,7 +157,12 @@ export default component FriendsPage()
         <PageHeader
             title={ locale.t('app.nav.friends') }
             lead={ locale.t('friends.lead') }
-            actions={ <Button variant="outline" size="sm" leading="discover" to="/app/discover">{ locale.t('friends.discover') }</Button> }
+            actions={
+                <>
+                    <Button variant="primary" size="sm" leading="friend-add" onClick={ addFriend }>{ locale.t('person.add') }</Button>
+                    <Button variant="outline" size="sm" leading="discover" to="/app/discover">{ locale.t('friends.discover') }</Button>
+                </>
+            }
         />
 
         <Tabs
@@ -158,13 +170,7 @@ export default component FriendsPage()
             value={ tab }
             label={ locale.t('app.nav.friends') }
             class="mb-4"
-            onChange={ (id) =>
-            {
-                tab = id;
-                listPage = 1;
-                query = '';
-                suggestPage = 1;
-            } }
+            onChange={ show }
         />
 
         <Show when={ searchable }>
@@ -174,7 +180,7 @@ export default component FriendsPage()
                     onInput={ (value) =>
                     {
                         query = value;
-                        listPage = 1;
+                        pages.turn('page', 1);
                     } }
                     placeholder={ locale.t('create.search') }
                     label={ locale.t('create.search') }
@@ -197,7 +203,7 @@ export default component FriendsPage()
                             title={ locale.t(tab === 'online' ? 'friends.empty.online' : 'friends.empty.all') }
                             lead={ locale.t(tab === 'online' ? 'friends.empty.onlineLead' : 'friends.empty.allLead') }
                             action={ locale.t('friends.tab.suggestions') }
-                            onAction={ () => tab = 'suggestions' }
+                            onAction={ () => show('suggestions') }
                             class="py-10"
                         />
                     }
@@ -208,23 +214,14 @@ export default component FriendsPage()
                                 <li>
                                     <FriendRow
                                         person={ person }
-                                        onHold={ () => more(person) }
                                         actions={
                                             <>
-                                                <Show
-                                                    when={ roomy }
-                                                    fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => playWith(person) } /> }
-                                                >
-                                                    { () =>
-                                                        <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => playWith(person) }>
-                                                            { locale.t('person.play') }
-                                                        </Button>
-                                                    }
-                                                </Show>
+                                                <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => play(person) }>
+                                                    { locale.t('person.play') }
+                                                </Button>
                                                 <Show when={ roomy }>
                                                     { () => <IconButton icon="chats" label={ locale.t('person.message') } variant="ghost" size="sm" onClick={ () => message(person) } /> }
                                                 </Show>
-                                                <IconButton icon="more" label={ locale.t('actions.title') } variant="ghost" size="sm" onClick={ () => more(person) } />
                                             </>
                                         }
                                     />
@@ -244,7 +241,7 @@ export default component FriendsPage()
                     page={ listPage }
                     mode={ paging }
                     label={ locale.t('friends.tab.all') }
-                    onPage={ (page) => listPage = page }
+                    onPage={ (page) => pages.turn('page', page) }
                 />
             }
         </Show>
@@ -257,7 +254,7 @@ export default component FriendsPage()
                 >
                     { () =>
                         <div class="flex flex-col gap-6">
-                            <Show when={ incoming.length > 0 }>
+                            <Show when={ received }>
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.incoming') }>
                                     <For each={ incoming } key={ (request) => request.id } let={ request }>
                                         <li>
@@ -267,10 +264,10 @@ export default component FriendsPage()
                                                     subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
                                                     actions={
                                                         <>
-                                                            <Button variant="primary" size="sm" class="whitespace-nowrap" loading={ social.working(request.id) } onClick={ () => void attempt(social.accept(request.id)) }>
+                                                            <Button variant="primary" size="sm" class="whitespace-nowrap" onClick={ () => void attempt(social.accept(request.id)) }>
                                                                 { locale.t('person.accept') }
                                                             </Button>
-                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" disabled={ social.working(request.id) } onClick={ () => void attempt(social.decline(request.id)) }>
+                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void attempt(social.decline(request.id)) }>
                                                                 { locale.t('person.decline') }
                                                             </Button>
                                                         </>
@@ -282,7 +279,7 @@ export default component FriendsPage()
                                 </ul>
                             </Show>
 
-                            <Show when={ outgoing.length > 0 }>
+                            <Show when={ pending }>
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.outgoing') }>
                                     <For each={ outgoing } key={ (request) => request.id } let={ request }>
                                         <li>
@@ -291,7 +288,7 @@ export default component FriendsPage()
                                                     person={ sent }
                                                     subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
                                                     actions={
-                                                        <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(request.to) } onClick={ () => void attempt(social.withdraw(request.to)) }>
+                                                        <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void attempt(social.withdraw(request.to)) }>
                                                             { locale.t('person.withdraw') }
                                                         </Button>
                                                     }
@@ -394,7 +391,7 @@ export default component FriendsPage()
                     page={ suggestPage }
                     mode={ paging }
                     label={ locale.t('friends.tab.suggestions') }
-                    onPage={ (page) => suggestPage = page }
+                    onPage={ (page) => pages.turn('page', page) }
                 />
             }
         </Show>

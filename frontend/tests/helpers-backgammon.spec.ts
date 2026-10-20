@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { coachOf, hits, outcomeOf, type Moment, type Outcome } from '../src/game/helpers/backgammon.ts';
+import { coachOf, hits, outcomeOf, reachOf, type Moment, type Outcome } from '../src/game/helpers/backgammon.ts';
 import { START, type Hop, type Side } from '../../backend/src/domains/match/backgammon/board.ts';
 import type * as moves from '../../backend/src/domains/match/backgammon/moves.ts';
 import { forcedDie, stage } from '../../backend/src/domains/match/backgammon/moves.ts';
@@ -72,6 +72,67 @@ describe('what a backgammon hop does', () =>
 
         expect(outcomeOf(position, { from: 13, to: 8 })).toBe('hit');
         expect(outcomeOf(after!.at, { from: 13, to: 8 })).toBeNull();
+    });
+});
+
+describe('how far one checker can be carried in a turn', () =>
+{
+    const reach = (position: Side, dice: number[], from: number, staged: Hop[] = []) =>
+        Object.fromEntries([...reachOf(position, dice, staged, from)].map(([to, hops]) => [to, hops.map((hop) => `${ hop.from }/${ hop.to }`).join(' ')]));
+
+    it('goes one die, the other die, or both when both ways there leave the same board', () =>
+    {
+        expect(reach(opening(), [6, 1], 13)).toEqual({ 7: '13/7', 6: '13/7 7/6' });
+
+        for (const dice of [[3, 2], [2, 3]])
+        {
+            const found = reach(opening(), dice, 13);
+
+            expect(Object.keys(found).sort()).toEqual(['10', '11', '8']);
+            expect(found[10]).toBe('13/10');
+            expect(found[11]).toBe('13/11');
+            expect(['13/10 10/8', '13/11 11/8']).toContain(found[8]);
+        }
+    });
+
+    it('stops where the other side holds the point, so nothing behind it is offered', () =>
+    {
+        expect(reach(opening(), [6, 1], 24)).toEqual({ 18: '24/18', 23: '24/23' });
+    });
+
+    it('does not guess when one way there hits a checker and the other does not', () =>
+    {
+        const forked = side({ 13: 1, 1: 14 }, { 17: 1, 6: 14 });
+
+        expect(stage(forked, [5, 3], [{ from: 13, to: 8 }, { from: 8, to: 5 }])?.done).toBe(true);
+        expect(stage(forked, [5, 3], [{ from: 13, to: 10 }, { from: 10, to: 5 }])?.done).toBe(true);
+        expect(reach(forked, [5, 3], 13)).toEqual({ 8: '13/8', 10: '13/10' });
+    });
+
+    it('goes as many times the die of a double as the board lets it', () =>
+    {
+        expect(reach(side({ 20: 1, 6: 14 }, { 6: 15 }), [4, 4], 20)).toEqual({
+            16: '20/16',
+            12: '20/16 16/12',
+            8: '20/16 16/12 12/8',
+            4: '20/16 16/12 12/8 8/4'
+        });
+    });
+
+    it('bears off with one die when one is enough, whichever die was rolled first', () =>
+    {
+        const last = side({ 3: 1, 1: 14 }, { 6: 15 });
+
+        expect(stage(last, [5, 2], [{ from: 3, to: 1 }, { from: 1, to: 0 }])?.done).toBe(true);
+        expect(reach(last, [5, 2], 3)).toEqual({ 0: '3/0', 1: '3/1' });
+        expect(reach(last, [2, 5], 3)).toEqual({ 0: '3/0', 1: '3/1' });
+    });
+
+    it('goes on from the hops already staged, and nowhere from a point with nothing to move', () =>
+    {
+        expect(reach(opening(), [6, 1], 7, [{ from: 13, to: 7 }])).toEqual({ 6: '7/6' });
+        expect(reach(opening(), [6, 1], 2)).toEqual({});
+        expect(reach(opening(), [6, 1], 13, [{ from: 13, to: 7 }, { from: 8, to: 7 }])).toEqual({});
     });
 });
 
