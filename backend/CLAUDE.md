@@ -44,6 +44,10 @@ are not obvious, each of which costs an afternoon to rediscover:
   tsconfig and would share one `.tsbuildinfo`.
 - **`backend/vitest.config.ts`, never `vite.config.ts`.** A vite config in a directory that declares
   no vite drops it to `kind: 'none'` and every `azeroth` command exits 2.
+- **Its `cacheDir` is `../node_modules/.vite-backend`, not the frontend's `.vite`.** Vitest names its
+  cache folder by a hash of the project NAME and both workspaces are unnamed, so one `cacheDir` would
+  have the two halves reading and writing the same `results.json`. Without a `cacheDir` at all the
+  cache creates a `backend/node_modules/` that holds nothing else.
 - **Two compilers transform this workspace, and both are configured.** `tsc` builds it from
   `tsconfig.json`; **vitest transforms it with oxc**, which does NOT read that tsconfig for files
   under `tests/`, so `backend/vitest.config.ts` states the decorator transform itself

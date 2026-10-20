@@ -14,6 +14,8 @@ import { defineConfig } from 'vitest/config';
 // `emitDecoratorMetadata` is what makes `design:type` exist, and TypeORM reads it to infer a
 // column type. tests/decorator-metadata.spec.ts pins all of this so it cannot regress quietly.
 export default defineConfig({
+    cacheDir: '../node_modules/.vite-backend',
+
     oxc:
     {
         decorator:
