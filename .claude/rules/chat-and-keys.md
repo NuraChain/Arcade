@@ -1458,7 +1458,9 @@ every store after it.
 
 Five scopes, and each is one question somebody can be asked: `chat` (this conversation moved),
 `social` (your graph moved), `game` (this board moved), `table` (this table moved) and `me` (a thing
-of your own moved - `notifications`, `devices`, `profile` or `party`, carried as the id).
+of your own moved - `notifications`, `devices`, `profile`, `party` or `vault`, carried as the id).
+`vault` is rung for each player of a game played for NURA when its stakes are locked and when they
+are paid out (`.claude/rules/stakes.md`).
 
 **A team-up rings `me` with `party`, and that is all it does.** An invitation, a yes, a not now, a
 leave and an ending each ring the `me` scope of the people it is about (`selfChanged(userId,

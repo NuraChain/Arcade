@@ -127,6 +127,11 @@ logs a fault once for as long as it is the same one.
   again. `settle` reveals every seat's secret in seat order. A payment the chain reverted is sent
   again thirty seconds later (`RETRY_AFTER_S`), and so is one the vault refused.
 - **The next game** locks on the pass that writes the last one paid, if everybody has signed again.
+- **Who is told.** Every step rings the table. A step that moves money (the stakes locked, a game
+  paid, refunded or found reclaimed on the chain) also rings each of that game's players on their
+  `me` scope with `vault`, so a page that shows their balance reads it again. A lock the vault
+  refused moved no money and rings the table alone. `stake.db.spec.ts` (*tells each player their
+  vault moved*) holds who is rung and when.
 
 ## A player's paid games, and taking back stakes nobody paid out
 

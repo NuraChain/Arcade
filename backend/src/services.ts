@@ -77,7 +77,7 @@ export interface WriteListener
     chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
-    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party'): void;
+    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party' | 'vault'): void;
     gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
     gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
@@ -974,9 +974,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             await courtesy('turn notice', () => nudgeTurn(load, null));
         },
 
-        changed: (tableId) => courtesy('table ring', async () =>
+        changed: (tableId, players) => courtesy('table ring', async () =>
         {
             live?.tableChanged(tableId, await table.peopleAt(tableId));
+
+            for (const player of players)
+            {
+                live?.selfChanged(player, 'vault');
+            }
         })
     });
 

@@ -7,7 +7,7 @@ import { getAddress, toHex, type Address, type Hex } from 'viem';
 import { HttpError, errorResponse } from '@azerothjs/http';
 
 import type { Vault, VaultTerms } from '../src/chain/vault.ts';
-import { PaidAccount, User, entities } from '../src/entities/index.ts';
+import { PaidAccount, Table, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { STAKE_LADDER, WEI_PER_NURA } from '../src/domains/stake/policy.ts';
@@ -154,6 +154,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
     beforeEach(async () =>
     {
+        await db.getRepository(Table).createQueryBuilder().delete().execute();
         await db.getRepository(User).createQueryBuilder().delete().execute();
     });
 

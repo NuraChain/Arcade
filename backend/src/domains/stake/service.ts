@@ -59,7 +59,7 @@ export interface StakeHooks
 {
     begin(escrowId: string): Promise<string | null>;
     began(matchId: string): Promise<void>;
-    changed(tableId: string): Promise<void>;
+    changed(tableId: string, players: readonly string[]): Promise<void>;
 }
 
 export interface StakeSweep
@@ -305,6 +305,8 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
         order: { seat: 'ASC' }
     });
 
+    const playersOf = async (escrowId: string) => (await seatsOf(escrowId)).map((seat) => seat.userId);
+
     let running: Promise<StakeSweep> | null = null;
     let again = false;
 
@@ -459,7 +461,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             })));
         });
 
-        await hooks.changed(row.table_id);
+        await hooks.changed(row.table_id, []);
 
         return 'failed' as const;
     };
@@ -473,7 +475,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             await hooks.began(matchId);
         }
 
-        await hooks.changed(row.table_id);
+        await hooks.changed(row.table_id, await playersOf(row.id));
 
         return matchId === null ? 'closed' as const : 'begun' as const;
     };
@@ -484,7 +486,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             { id: row.id, state: row.state },
             { state, error: null, ...(state === 'settled' ? {} : { winners: null }), updatedAt: () => 'now()' }
         );
-        await hooks.changed(row.table_id);
+        await hooks.changed(row.table_id, await playersOf(row.id));
 
         return 'closed' as const;
     };
@@ -684,7 +686,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
 
                 if (done.dropped.length > 0)
                 {
-                    await hooks.changed(id);
+                    await hooks.changed(id, []);
                 }
             }
             catch (error)

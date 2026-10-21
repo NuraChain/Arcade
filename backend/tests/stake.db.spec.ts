@@ -191,6 +191,7 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
     {
         if (db?.isInitialized)
         {
+            await db.getRepository(Table).createQueryBuilder().delete().execute();
             await db.destroy();
         }
     });
@@ -799,6 +800,59 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
 
             expect(fake.settled).toHaveLength(2);
             expect(await escrowOf(tableId)).toMatchObject({ state: 'settled', error: null });
+        });
+
+        it('tells each player their vault moved when the stakes are locked and when they are paid, and nobody when a lock is refused', async () =>
+        {
+            const rung: string[] = [];
+
+            const ringing: WriteListener = {
+                ...listener,
+                selfChanged: (userId, what) =>
+                {
+                    if (what === 'vault')
+                    {
+                        rung.push(userId);
+                    }
+                }
+            };
+
+            ports = buildPorts(db, CONFIG, ringing, undefined, undefined, fake.vault);
+
+            const { host, guest, tableId } = await seated();
+            const both = [host.id, guest.id].sort();
+
+            fake.state.refuse = { error: 'StakeUnfunded', player: getAddress(guest.address) };
+            await ready(guest, tableId);
+            await ready(host, tableId);
+            await sweep();
+
+            expect((await escrowOf(tableId))?.state).toBe('failed');
+            expect(rung).toEqual([]);
+
+            fake.state.refuse = null;
+            fake.state.mine = 'pending';
+            await ready(guest, tableId);
+            await sweep();
+
+            const escrow = (await escrowOf(tableId)) as Escrow;
+
+            expect(rung).toEqual([]);
+
+            fake.receipts.set(escrow.openTx as Hex, 'success');
+            fake.games.set(vaultIdOf(escrow.id), 'open');
+            fake.state.mine = 'success';
+            await sweep();
+
+            expect([...rung].sort()).toEqual(both);
+
+            rung.length = 0;
+            await ports.match.resign(host.id, (await escrowOf(tableId))?.matchId as string, { key: 'give-up' });
+            await sweep();
+            await sweep();
+
+            expect((await escrowOf(tableId))?.state).toBe('settled');
+            expect([...rung].sort()).toEqual(both);
         });
 
         it('locks the next game once the last one is paid, when both have signed again', async () =>
