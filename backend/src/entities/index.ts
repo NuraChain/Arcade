@@ -4,6 +4,8 @@ import { Block } from './block.entity.ts';
 import { ConversationEpoch } from './conversation-epoch.entity.ts';
 import { ConversationMember } from './conversation-member.entity.ts';
 import { Device } from './device.entity.ts';
+import { EscrowSeat } from './escrow-seat.entity.ts';
+import { Escrow } from './escrow.entity.ts';
 import { EpochArchive } from './epoch-archive.entity.ts';
 import { EpochKey } from './epoch-key.entity.ts';
 import { Conversation } from './conversation.entity.ts';
@@ -24,22 +26,25 @@ import { TableSeat } from './table-seat.entity.ts';
 import { Table } from './table.entity.ts';
 import { Mute } from './mute.entity.ts';
 import { Notification } from './notification.entity.ts';
+import { PaidAccount } from './paid-account.entity.ts';
 import { PushSubscription } from './push-subscription.entity.ts';
 import { RecoveryNonce } from './recovery-nonce.entity.ts';
 import { RecoveryVault } from './recovery-vault.entity.ts';
 import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
+import { StakeConsent } from './stake-consent.entity.ts';
+import { TableStake } from './table-stake.entity.ts';
 import { User } from './user.entity.ts';
 import { UserAchievement } from './user-achievement.entity.ts';
 import { Wallet } from './wallet.entity.ts';
 
 export {
-    Achievement, Avatar, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey,
+    Achievement, Avatar, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey, Escrow, EscrowSeat,
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
-    Notification, PlayerStats, PushSubscription,
-    QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableRemoval, TableSeat, User, UserAchievement,
+    Notification, PaidAccount, PlayerStats, PushSubscription,
+    QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, StakeConsent, Table, TableRemoval, TableSeat, TableStake, User, UserAchievement,
     Wallet
 };
 
@@ -62,5 +67,6 @@ export const entities: Function[] = [
     Group, GroupMember,
     Table, TableSeat, TableRemoval, QuickTable,
     Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
-    Notification, PushSubscription
+    Notification, PushSubscription,
+    PaidAccount, TableStake, StakeConsent, Escrow, EscrowSeat
 ];
