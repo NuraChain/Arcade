@@ -21,6 +21,7 @@ export const signatureOf = (owner: string, stake: Pick<Stake, 'nonce'>): Hex =>
 export function fakeVault(configured = true)
 {
     const games = new Map<Hex, GameStatus>();
+    const openedAt = new Map<Hex, bigint>();
     const receipts = new Map<Hex, Mined>();
     const free = new Map<string, bigint>();
     const opened: OpenCall[] = [];
@@ -53,6 +54,11 @@ export function fakeVault(configured = true)
             games.set(id, after);
         }
 
+        if (what === 'open')
+        {
+            openedAt.set(id, BigInt(Math.floor(Date.now() / 1000)));
+        }
+
         return { ok: true as const, hash };
     };
 
@@ -74,11 +80,11 @@ export function fakeVault(configured = true)
         async game(id)
         {
             reach();
-            return { status: games.get(id) ?? 'none', feeBps: 0, openedAt: 0n, amount: 0n, players: [] };
+            return { status: games.get(id) ?? 'none', feeBps: 0, openedAt: openedAt.get(id) ?? 0n, amount: 0n, players: [] };
         },
         depositCall: async (amount) => ({ to: FAKE_VAULT, data: '0xd0e30db0', value: amount, chainId: 31337, gasPrice: null }),
         withdrawCall: async () => ({ to: FAKE_VAULT, data: '0x2e1a7d4d', value: 0n, chainId: 31337, gasPrice: null }),
-        reclaimCall: async () => ({ to: FAKE_VAULT, data: '0x', value: 0n, chainId: 31337, gasPrice: null }),
+        reclaimCall: async (id) => ({ to: FAKE_VAULT, data: `0xreclaim${ id.slice(2) }` as Hex, value: 0n, chainId: 31337, gasPrice: null }),
         async open(id, game, amount, feeBps, seats)
         {
             reach();
@@ -115,6 +121,7 @@ export function fakeVault(configured = true)
         vault,
         state,
         games,
+        openedAt,
         receipts,
         free,
         opened,

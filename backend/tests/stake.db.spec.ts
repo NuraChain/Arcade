@@ -841,6 +841,95 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
         });
     });
 
+    describe('a player\'s paid games', () =>
+    {
+        it('lists the reader\'s paid games newest first, with what each won, and leaves out a lock that failed', async () =>
+        {
+            const first = await playing();
+
+            await ports.match.resign(first.host.id, first.matchId, { key: 'give-up' });
+            await sweep();
+
+            fake.state.refuse = { error: 'EnforcedPause', player: null };
+            await ready(first.guest, first.tableId);
+            await ready(first.host, first.tableId);
+            await sweep();
+            fake.state.refuse = null;
+
+            const won = await ports.vault.games(first.guest.id, null);
+            const lost = await ports.vault.games(first.host.id, null);
+
+            expect(won.games).toEqual([{
+                id: first.escrowId,
+                game: 'ludo',
+                amount: TEN,
+                feeBps: 500,
+                seats: 2,
+                seat: 1,
+                state: 'settled',
+                won: true,
+                share: (19n * WEI_PER_NURA).toString(),
+                openTx: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+                closeTx: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+                at: expect.any(String)
+            }]);
+            expect(won).not.toHaveProperty('cursor');
+            expect(lost.games).toMatchObject([{ id: first.escrowId, seat: 0, won: false }]);
+            expect(lost.games[0]).not.toHaveProperty('share');
+            expect((await ports.vault.games((await makeUser(2)).id, null)).games).toEqual([]);
+        });
+
+        it('pages by when each game was locked', async () =>
+        {
+            const { guest, tableId, escrowId } = await playing();
+            const at = Date.now();
+
+            for (let index = 0; index < 21; index += 1)
+            {
+                const made = await db.getRepository(Escrow).insert({ tableId, game: 'ludo', amount: TEN, feeBps: 500, state: 'refunded', createdAt: new Date(at - (index + 1) * 60_000) });
+                await db.getRepository(EscrowSeat).insert({
+                    escrowId: made.identifiers[0].id as string,
+                    seat: 1,
+                    userId: guest.id,
+                    address: guest.address,
+                    nonce: `0x${ (index + 1).toString(16).padStart(64, '0') }`,
+                    commitment: `0x${ 'c'.repeat(64) }`,
+                    secret: `0x${ 'd'.repeat(64) }`,
+                    deadline: new Date(at),
+                    signature: '0x00'
+                });
+            }
+
+            const page = await ports.vault.games(guest.id, null);
+            const next = await ports.vault.games(guest.id, page.cursor ?? null);
+
+            expect(page.games).toHaveLength(20);
+            expect(page.games[0].id).toBe(escrowId);
+            expect(next.games).toHaveLength(2);
+            expect(next).not.toHaveProperty('cursor');
+            expect(new Set([...page.games, ...next.games].map((one) => one.id)).size).toBe(22);
+            expect((await ports.vault.games(guest.id, 'not a cursor')).games[0].id).toBe(escrowId);
+        });
+
+        it('hands a player the call that takes their stakes back once the vault\'s wait has passed, and nobody else', async () =>
+        {
+            const { host, guest, escrowId } = await playing();
+            const id = vaultIdOf(escrowId);
+
+            expect(await word(ports.vault.reclaim(guest.id, escrowId))).toBe('409 paid-early');
+
+            fake.openedAt.set(id, BigInt(Math.floor(Date.now() / 1000) - 259_201));
+
+            expect(await ports.vault.reclaim(guest.id, escrowId)).toMatchObject({ from: getAddress(guest.address), data: `0xreclaim${ id.slice(2) }`, value: '0x0' });
+            expect(await word(ports.vault.reclaim((await makeUser(2)).id, escrowId))).toBe('404 not-found');
+            expect(await word(ports.vault.reclaim(host.id, 'nope'))).toBe('404 not-found');
+
+            fake.games.set(id, 'settled');
+
+            expect(await word(ports.vault.reclaim(host.id, escrowId))).toBe('409 paid-done');
+        });
+    });
+
     describe('quick play at a stake', () =>
     {
         const FIVE = (5n * WEI_PER_NURA).toString();

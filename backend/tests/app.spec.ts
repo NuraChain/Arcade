@@ -773,6 +773,23 @@ describe('the vault', () =>
         balances: { address: VAULT, free: '1', locked: '0', wallet: '2' }
     };
     const call = { from: VAULT, to: VAULT, data: '0xd0e30db0', value: '0x5', chainId: 31337 };
+    const played = {
+        games: [{
+            id: '00000000-0000-4000-8000-000000000001',
+            game: 'ludo',
+            amount: '10000000000000000000',
+            feeBps: 500,
+            seats: 2,
+            seat: 1,
+            state: 'settled',
+            won: true,
+            share: '19000000000000000000',
+            openTx: `0x${ 'a'.repeat(64) }`,
+            closeTx: `0x${ 'b'.repeat(64) }`,
+            at: '2026-10-21T00:00:00.000Z'
+        }],
+        cursor: '2026-10-21T00:00:00.000Z|00000000-0000-4000-8000-000000000001'
+    };
 
     const vaultAs = (told: unknown[][], who: unknown = { userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' }, state: unknown = open) => buildApp({
         db: fakeDb({ initialized: true }),
@@ -780,11 +797,11 @@ describe('the vault', () =>
         log: silent,
         ports: {
             identity: { principal: () => Promise.resolve(who) },
-            vault: Object.fromEntries(['state', 'accept', 'rest', 'deposit', 'withdraw'].map((verb) => [verb, (...said: unknown[]) =>
+            vault: Object.fromEntries(['state', 'accept', 'rest', 'deposit', 'withdraw', 'games', 'reclaim'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
-                return Promise.resolve(verb === 'deposit' || verb === 'withdraw' ? call : state);
+                return Promise.resolve(verb === 'games' ? played : verb === 'deposit' || verb === 'withdraw' || verb === 'reclaim' ? call : state);
             }]))
         } as unknown as Ports
     });
@@ -796,7 +813,7 @@ describe('the vault', () =>
             body: JSON.stringify(body)
         }));
 
-    it('is five routes, and every one of them is for somebody signed in', async () =>
+    it('is seven routes, and every one of them is for somebody signed in', async () =>
     {
         const told: unknown[][] = [];
         const app = vaultAs(told, null);
@@ -805,6 +822,8 @@ describe('the vault', () =>
         expect(Object.entries(manifest.vault).map(([name, route]) => `${ name } ${ route.method } ${ route.path }`).sort()).toEqual([
             'accept POST /vault/terms',
             'deposit POST /vault/deposit',
+            'games GET /vault/games',
+            'reclaim POST /vault/reclaim',
             'rest POST /vault/break',
             'state GET /vault',
             'withdraw POST /vault/withdraw'
@@ -815,6 +834,8 @@ describe('the vault', () =>
         expect((await post(app, '/vault/break', { days: 7 })).status).toBe(401);
         expect((await post(app, '/vault/deposit', { amount: '5' })).status).toBe(401);
         expect((await post(app, '/vault/withdraw', { amount: '5' })).status).toBe(401);
+        expect((await app.handle(new Request('http://local/api/vault/games'))).status).toBe(401);
+        expect((await post(app, '/vault/reclaim', { id: 'x' })).status).toBe(401);
         expect(told).toEqual([]);
     });
 
@@ -838,6 +859,26 @@ describe('the vault', () =>
             ['rest', 'somebody', 30],
             ['deposit', 'somebody', '5'],
             ['withdraw', 'somebody', '7']
+        ]);
+    });
+
+    it('reads the reader their paid games from where the last page ended, and hands them a reclaim to send', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        const first = await app.handle(new Request('http://local/api/vault/games'));
+        expect(first.status).toBe(200);
+        expect(await first.json()).toEqual(played);
+
+        await app.handle(new Request(`http://local/api/vault/games?cursor=${ encodeURIComponent(played.cursor) }`));
+        expect(await (await post(app, '/vault/reclaim', { id: played.games[0].id })).json()).toEqual(call);
+        expect((await post(app, '/vault/reclaim', { id: 'x'.repeat(37) })).status).toBe(422);
+
+        expect(told).toEqual([
+            ['games', 'somebody', null],
+            ['games', 'somebody', played.cursor],
+            ['reclaim', 'somebody', played.games[0].id]
         ]);
     });
 
@@ -881,6 +922,7 @@ describe('the vault', () =>
 
         expect(bodies).toContain(`'/vault/deposit': (bad) => [`);
         expect(bodies).toContain(`'/vault/withdraw': (bad) => [`);
+        expect(bodies).toContain(`'/vault/reclaim': (bad) => [`);
         expect(spared).toContain(`'/vault/terms'`);
         expect(spared).toContain(`'/vault/break'`);
     });

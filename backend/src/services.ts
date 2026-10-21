@@ -1454,7 +1454,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             accept: (me) => stakes.accept(me),
             rest: (me, days) => stakes.rest(me, days),
             deposit: (me, amount) => stakes.deposit(me, amount),
-            withdraw: (me, amount) => stakes.withdraw(me, amount)
+            withdraw: (me, amount) => stakes.withdraw(me, amount),
+            games: (me, cursor) => stakes.games(me, cursor),
+            reclaim: (me, escrowId) => stakes.reclaim(me, escrowId)
         },
 
         voice: {

@@ -15,6 +15,9 @@ import {
     answerInput,
     voiceSwitch,
     vaultAmountInput,
+    vaultGames,
+    vaultGamesQuery,
+    reclaimInput,
     stakeTerms,
     quickStakeInput,
     vaultBreakInput,
@@ -357,7 +360,13 @@ export function buildApi(ports: Ports)
                 (context) => ports.vault.deposit(context.principal.userId, context.input.amount)),
 
             withdraw: routes.post('/withdraw', { input: vaultAmountInput, output: walletCall },
-                (context) => ports.vault.withdraw(context.principal.userId, context.input.amount))
+                (context) => ports.vault.withdraw(context.principal.userId, context.input.amount)),
+
+            games: routes.get('/games', { query: vaultGamesQuery, output: vaultGames },
+                (context) => ports.vault.games(context.principal.userId, context.query.cursor ?? null)),
+
+            reclaim: routes.post('/reclaim', { input: reclaimInput, output: walletCall },
+                (context) => ports.vault.reclaim(context.principal.userId, context.input.id))
         })),
 
         voice: feature('/voice', [session], (routes) => ({

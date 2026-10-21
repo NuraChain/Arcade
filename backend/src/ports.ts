@@ -12,6 +12,7 @@ import type {
     Challenge,
     ChainCall,
     StakeTerms,
+    VaultGames,
     VaultState,
     WalletCall,
     ChainFace,
@@ -545,6 +546,10 @@ export interface VaultPort
     deposit(me: string, amount: string): Promise<WalletCall>;
 
     withdraw(me: string, amount: string): Promise<WalletCall>;
+
+    games(me: string, cursor: string | null): Promise<VaultGames>;
+
+    reclaim(me: string, escrowId: string): Promise<WalletCall>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

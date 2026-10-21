@@ -14,7 +14,7 @@ import { Table } from '../../entities/table.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { VaultState } from '../../schemas.ts';
 import { lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
-import { CONSENT_MS, eligibilityOf, onLadder, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
+import { CONSENT_MS, eligibilityOf, onLadder, potOf, seatsOfMask, shareOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
 
 interface StandingRow
 {
@@ -101,6 +101,33 @@ const short = () => tableRefusal('paid-funds', 'There is not that much NURA free
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SIGNATURE = /^0x(?:[0-9a-fA-F]{2})+$/;
+
+const GAMES_PAGE = 20;
+
+const GAMES_CURSOR = /^([0-9T:.\-Z]+)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+interface PlayedRow
+{
+    id: string;
+    game: string;
+    amount: string;
+    fee_bps: number;
+    state: EscrowState;
+    winners: number | null;
+    open_tx: string | null;
+    close_tx: string | null;
+    created_at: Date;
+    seat: number;
+    seats: number;
+}
+
+const gamesAfter = (cursor: string | null) =>
+{
+    const found = cursor === null ? null : GAMES_CURSOR.exec(cursor);
+    const at = found === null ? null : new Date(found[1]);
+
+    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
+};
 
 const wireCall = (from: Address, call: VaultCall) => ({
     from,
@@ -837,6 +864,100 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             }
 
             return wireCall(getAddress(address), await vault.withdrawCall(wei));
+        },
+
+        async games(me: string, cursor: string | null)
+        {
+            if (!vault.configured)
+            {
+                throw notOpen();
+            }
+
+            const after = gamesAfter(cursor);
+            const query = db.getRepository(Escrow).createQueryBuilder('e')
+                .innerJoin(EscrowSeat, 'mine', 'mine.escrow_id = e.id and mine.user_id = :me', { me })
+                .select('e.id', 'id')
+                .addSelect('e.game', 'game')
+                .addSelect('e.amount::text', 'amount')
+                .addSelect('e.fee_bps', 'fee_bps')
+                .addSelect('e.state', 'state')
+                .addSelect('e.winners', 'winners')
+                .addSelect('e.open_tx', 'open_tx')
+                .addSelect('e.close_tx', 'close_tx')
+                .addSelect('e.created_at', 'created_at')
+                .addSelect('mine.seat', 'seat')
+                .addSelect('(select count(*)::int from escrow_seats s where s.escrow_id = e.id)', 'seats')
+                .where(`e.state <> 'failed'`);
+
+            if (after !== null)
+            {
+                query.andWhere('(e.created_at, e.id) < (:at, :id)', { at: after.at, id: after.id });
+            }
+
+            const rows = await query
+                .orderBy('e.created_at', 'DESC')
+                .addOrderBy('e.id', 'DESC')
+                .limit(GAMES_PAGE + 1)
+                .getRawMany<PlayedRow>();
+            const page = rows.slice(0, GAMES_PAGE);
+            const last = page.at(-1);
+
+            return {
+                games: page.map((row) =>
+                {
+                    const won = row.winners !== null && seatsOfMask(row.winners).includes(row.seat);
+
+                    return {
+                        id: row.id,
+                        game: row.game,
+                        amount: row.amount,
+                        feeBps: row.fee_bps,
+                        seats: row.seats,
+                        seat: row.seat,
+                        state: row.state,
+                        ...(row.winners === null ? {} : { won }),
+                        ...(won && row.state === 'settled'
+                            ? { share: shareOf(potOf(BigInt(row.amount), row.seats), row.fee_bps, seatsOfMask(row.winners as number).length).toString() }
+                            : {}),
+                        ...(row.open_tx === null ? {} : { openTx: row.open_tx }),
+                        ...(row.close_tx === null ? {} : { closeTx: row.close_tx }),
+                        at: row.created_at.toISOString()
+                    };
+                }),
+                ...(rows.length > GAMES_PAGE && last !== undefined ? { cursor: `${ last.created_at.toISOString() }|${ last.id }` } : {})
+            };
+        },
+
+        async reclaim(me: string, escrowId: string)
+        {
+            if (!vault.configured)
+            {
+                throw notOpen();
+            }
+
+            const mine = UUID.test(escrowId)
+                ? await db.getRepository(EscrowSeat).findOne({ select: { address: true }, where: { escrowId, userId: me } })
+                : null;
+
+            if (mine === null)
+            {
+                throw new NotFoundError('No game there.');
+            }
+
+            const id = vaultIdOf(escrowId);
+            const [there, terms] = await Promise.all([vault.game(id), vault.terms()]);
+
+            if (there.status !== 'open')
+            {
+                throw tableRefusal('paid-done', 'The stakes of that game are not locked any more.');
+            }
+
+            if (Number(there.openedAt + terms.reclaimAfter) * 1000 > Date.now())
+            {
+                throw tableRefusal('paid-early', 'The stakes of that game can be taken back once the vault\'s wait has passed.');
+            }
+
+            return wireCall(getAddress(mine.address), await vault.reclaimCall(id));
         },
 
         async mayOpen(me: string, stake: string | undefined, mode: string)

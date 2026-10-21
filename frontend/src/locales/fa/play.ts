@@ -160,6 +160,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.paid-consent': 'دوباره مبلغ این بازی رو امضا کن.',
     'tables.refused.paid-funds': 'این‌قدر NURA آزاد توی صندوقت نداری.',
     'tables.refused.paid-locking': 'داریم مبلغ‌ها رو روی بلاکچین قفل می‌کنیم. یه لحظه صبر کن.',
+    'tables.refused.paid-early': 'مبلغ‌های اون بازی رو فقط بعد از تموم شدن مهلت صندوق می‌شه پس گرفت.',
+    'tables.refused.paid-done': 'مبلغ‌های اون بازی دیگه قفل نیستن.',
     'quickMatch.busy': 'داریم برات یه صندلی پیدا می‌کنیم',
     'quickMatch.started': 'بازی {game} شروع شد',
     'quickMatch.stillPlaying': 'بازی {game} هنوز تموم نشده',

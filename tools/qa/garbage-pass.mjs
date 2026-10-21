@@ -50,7 +50,8 @@ const QUERIES = {
     '/notifications': ['cursor', 'notice'],
     '/chat': ['cursor'],
     '/chat/:id/epoch': ['epoch', 'device'],
-    '/chat/:id/messages': ['cursor', 'limit']
+    '/chat/:id/messages': ['cursor', 'limit'],
+    '/vault/games': ['cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });
@@ -96,7 +97,8 @@ const BODIES = {
     '/chat/:id/messages': (bad) => [message(bad), { ...message(bad), kind: 'reaction', target: bad }],
     '/tables/:id/ready': (bad) => [{ ready: true, signature: bad.slice(0, 4096) }, { ready: false, signature: bad.slice(0, 4096) }],
     '/vault/deposit': (bad) => [{ amount: bad.slice(0, 40) }],
-    '/vault/withdraw': (bad) => [{ amount: bad.slice(0, 40) }]
+    '/vault/withdraw': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/vault/reclaim': (bad) => [{ id: bad.slice(0, 36) }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);

@@ -166,6 +166,8 @@ export const play = {
     'tables.refused.paid-consent': 'Sign your stake for this game again.',
     'tables.refused.paid-funds': 'There is not that much NURA free in your vault balance.',
     'tables.refused.paid-locking': 'The stakes are being locked on NuraChain. Wait a moment.',
+    'tables.refused.paid-early': 'The stakes of that game can be taken back once the vault’s wait has passed.',
+    'tables.refused.paid-done': 'The stakes of that game are not locked any more.',
 
     'quickMatch.busy': 'Finding you a seat',
     'quickMatch.started': 'Your {game} game has started',

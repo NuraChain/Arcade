@@ -440,6 +440,31 @@ export type WalletCall = Infer<typeof walletCall>;
 
 export const vaultAmountInput = object({ amount: string({ max: 40 }) });
 
+export const vaultGame = object({
+    id: string(),
+    game: string(),
+    amount: string(),
+    feeBps: number(),
+    seats: number(),
+    seat: number(),
+    state: enumOf(ESCROW_STATES),
+    won: boolean().optional(),
+    share: string().optional(),
+    openTx: string().optional(),
+    closeTx: string().optional(),
+    at: string()
+});
+
+export type VaultGame = Infer<typeof vaultGame>;
+
+export const vaultGames = object({ games: array(vaultGame), cursor: string().optional() });
+
+export type VaultGames = Infer<typeof vaultGames>;
+
+export const vaultGamesQuery = object({ cursor: string({ max: 80 }).optional() });
+
+export const reclaimInput = object({ id: string({ max: 36 }) });
+
 export const vaultBreakInput = object({ days: union(BREAK_DAYS.map((days) => literal(days))) });
 
 export const vaultTermsInput = object({ adult: literal(true) });

@@ -128,6 +128,22 @@ logs a fault once for as long as it is the same one.
   again thirty seconds later (`RETRY_AFTER_S`), and so is one the vault refused.
 - **The next game** locks on the pass that writes the last one paid, if everybody has signed again.
 
+## A player's paid games, and taking back stakes nobody paid out
+
+**`GET /vault/games` is the reader's own paid games**, newest first, twenty a page by keyset over
+when each was locked (a cursor that does not parse is the first page): the game, the stake, how
+many sat, the reader's seat, the state, whether they won, what the winner was paid, and the two
+transactions for an explorer link. A lock that failed is left out, because no money moved. It is
+nobody else's to read, like the match history.
+
+**A game the server never paid can be reclaimed by any of its players** once the vault's wait has
+passed (three days at deploy), which is the contract's promise that a stake is never stuck behind
+this server. `POST /vault/reclaim` asks the chain, not the database, whether the game is still
+locked there and since when, and hands the reader's wallet the call: `paid-done` when the stakes
+are not locked any more and `paid-early` when the wait has not passed, and a game the reader did not
+play is answered as one that is not there. The worker then finds the game reclaimed on the chain
+when it next looks at it.
+
 ## How it is held
 
 `stake-policy.spec.ts` holds the rules with no Postgres; `chain-vault.spec.ts` the vault's module
@@ -137,5 +153,4 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: a player's history and reclaiming a game the server never paid,
-the browser, provably fair dice and cards, and the admin's view of the vault.
+Not here yet: the browser, provably fair dice and cards, and the admin's view of the vault.
