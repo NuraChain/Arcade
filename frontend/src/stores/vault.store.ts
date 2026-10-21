@@ -63,7 +63,7 @@ export interface VaultApi
     reset(): void;
 }
 
-const refusedBy = (error: unknown): MessageKey =>
+const refusedBy = (error: unknown) =>
     error instanceof ApiError && error.code === 'chain-unreachable' ? 'vault.unreached' : whyRefused(error, 'vault.unavailable');
 
 export const useVault = createStore((): VaultApi =>

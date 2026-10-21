@@ -72,7 +72,7 @@ const tableOf = (extra: Partial<TableSummary> = {}): TableSummary => ({
     ...extra
 });
 
-const finished = (winner: number): MatchView => ({
+const finished = (winner: number) => ({
     id: 'm-paid',
     tableId: 'table-paid',
     game: 'ludo',
@@ -180,7 +180,10 @@ describe('a table played for NURA, wherever it is listed', () =>
     it('keeps the mark through a read of the row that changed nothing', async () =>
     {
         const [held, hold] = createSignal(tableOf());
-        const container = routed(() => TableRow({ get table() { return held(); } }) as unknown as HTMLElement);
+        const container = routed(() => TableRow({ get table()
+        {
+            return held();
+        } }) as unknown as HTMLElement);
         const mark = container.querySelector('[data-stake]');
 
         hold(tableOf());
@@ -455,7 +458,13 @@ describe('the result of a game played for NURA', () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'settled', winners: [0], closeTx: CLOSE_TX }, 1020));
         const [match, rematch] = createSignal(finished(0));
-        const container = renderTest(() => MatchResult({ get match() { return match(); }, mine: 0, get stake() { return stake(); } }) as HTMLElement).container;
+        const container = renderTest(() => MatchResult({ get match()
+        {
+            return match();
+        }, mine: 0, get stake()
+        {
+            return stake();
+        } }) as HTMLElement).container;
 
         await settle();
         restake(stakeOf({ state: 'locking' }, 1020));
@@ -470,7 +479,7 @@ describe('the result of a game played for NURA', () =>
         expect(money(container)).toBeNull();
     });
 
-    const walkedOut = (gone: number): MatchView => ({
+    const walkedOut = (gone: number) => ({
         ...finished(0),
         outcome: 'abandoned',
         players: [0, 1].map((seat) => ({ seat, who: seat === 0 ? 'alex' : 'sara.k', ...(seat === gone ? { result: 'abandoned', exit: 'resign' } : { result: 'void' }) }))
@@ -499,7 +508,10 @@ describe('the result of a game played for NURA', () =>
     it('says only that the game is over until the table says what its stakes came to', async () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'open' }));
-        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake() { return stake(); } }) as HTMLElement).container;
+        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
+        {
+            return stake();
+        } }) as HTMLElement).container;
 
         expect(headline(container)).toBe('That game is over.');
         expect(container.textContent).not.toContain('Ended too early to count.');
@@ -515,7 +527,10 @@ describe('the result of a game played for NURA', () =>
     it('goes on naming whoever was paid while the next game\'s stakes are locked', async () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'settled', winners: [0] }));
-        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake() { return stake(); } }) as HTMLElement).container;
+        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
+        {
+            return stake();
+        } }) as HTMLElement).container;
 
         await settle();
         restake(stakeOf({ state: 'locking' }));
