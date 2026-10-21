@@ -116,8 +116,8 @@ the third so nobody re-investigates it.
 - The `0x…` keys in tests and `seed-wallets.ts` are hardhat's published accounts; nothing else here is
   key material (`recovery.ts`'s look-alike is the P-256 curve order).
 
-**No comments in code.** Names and structure carry the meaning; these notes and the tests hold the
-reasoning.
+**Comment only when the code cannot say it** (the rule is in `AGENTS.md`). Names and structure
+carry the meaning; never a comment that restates the code or narrates a change.
 
 **No type the compiler already has.** A function does not state a return type the compiler infers
 identically; `nura/prefer-inferred-return-type` (`tools/eslint/return-types.ts`) fails the check and
