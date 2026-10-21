@@ -1,5 +1,5 @@
 /**
- * What the browser is told when nobody is looking at Nura Games, in a real browser.
+ * What the browser is told when nobody is looking at Baziche, in a real browser.
  *
  *   npm run build && API_RATE_MAX=20000 PORT=5300 \
  *     PUBLIC_ORIGIN=http://localhost:5300 npm start
@@ -246,7 +246,7 @@ try
 
     await panel.getByRole('button', { name: 'Turn on for this device' }).click();
     check('turning it on says it is on', await waitFor(async () => (await panel.innerText()).includes('On for this device')));
-    check('and that the page has to stay open, with no keys to push with', (await panel.innerText()).includes('While Nura Games is open in a tab.'));
+    check('and that the page has to stay open, with no keys to push with', (await panel.innerText()).includes('While Baziche is open in a tab.'));
     check('the words the worker will speak with are kept, in the reader\'s language', await waitFor(async () => (await kept(page, '/notice-words.json'))?.lang === 'en'));
 
     check('a device that is switched on asks once at each start, to keep its reach', await asked(page, `${ BASE }/app`) === 1);
@@ -376,7 +376,7 @@ try
 
     const again = await notices(page);
 
-    check('a push with nothing new behind it is met quietly, and says nothing twice', said(again, 'nura-games')?.silent === true && again.filter((one) => one.tag === `table-invite:${ pushed }`).length === 1, JSON.stringify(again));
+    check('a push with nothing new behind it is met quietly, and says nothing twice', said(again, 'baziche')?.silent === true && again.filter((one) => one.tag === `table-invite:${ pushed }`).length === 1, JSON.stringify(again));
 
     await open(page, `${ BASE }/app`);
     check('opening the app takes down what the worker had said', await waitFor(async () => (await notices(page)).length === 0));

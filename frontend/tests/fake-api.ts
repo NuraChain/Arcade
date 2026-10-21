@@ -1296,7 +1296,7 @@ export const client =
             server.calls.push('devices.challenge');
             return {
                 nonce: 'n-' + input.id,
-                message: `Let this browser read and send your messages on Nura Games (nura.games).\n\nBrowser key: ${ input.id }\nNonce: n-${ input.id }`,
+                message: `Let this browser read and send your messages on Baziche (nura.games).\n\nBrowser key: ${ input.id }\nNonce: n-${ input.id }`,
                 expiresAt: new Date(1_700_000_300_000).toISOString()
             };
         },
@@ -2191,8 +2191,8 @@ export const client =
                 nonce,
                 ...(input.device === undefined ? {} : { device: input.device }),
                 message: input.device === undefined || live
-                    ? `Sign in to Nura Games (nura.games).\n\nNonce: ${ nonce }`
-                    : `Sign in to Nura Games (nura.games) and let this browser read and send your messages.\n\nBrowser key: ${ input.device }\nNonce: ${ nonce }`
+                    ? `Sign in to Baziche (nura.games).\n\nNonce: ${ nonce }`
+                    : `Sign in to Baziche (nura.games) and let this browser read and send your messages.\n\nBrowser key: ${ input.device }\nNonce: ${ nonce }`
             };
             return { ...server.issued, expiresAt: '2026-01-01T00:00:00.000Z' };
         },

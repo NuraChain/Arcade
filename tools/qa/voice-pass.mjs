@@ -90,9 +90,9 @@ async function seat(handle)
     {
         try
         {
-            const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+            const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
 
-            localStorage.setItem('nura-games.settings', JSON.stringify({ voiceAutoJoin: false, voiceStartMuted: true, ...stored }));
+            localStorage.setItem('baziche.settings', JSON.stringify({ voiceAutoJoin: false, voiceStartMuted: true, ...stored }));
         }
         catch
         {
@@ -301,7 +301,7 @@ const inputVolume = async (page, keys) =>
     return value;
 };
 
-const levelOf = (page, who) => page.evaluate((handle) => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels?.[handle] ?? 1, who);
+const levelOf = (page, who) => page.evaluate((handle) => JSON.parse(localStorage.getItem('baziche.settings') ?? '{}').voiceLevels?.[handle] ?? 1, who);
 
 const linked = (page) => page.evaluate(async () =>
 {
@@ -521,7 +521,7 @@ const loudened = await measured(dana.page);
 
 record('turned up to one and a half from the sheet, she is heard about one and a half times as loud as she sends', loudened !== null && loudened.raw > 0.001 && loudened.rawPeak < 0.75 && loudened.ratio > 1.35 && loudened.ratio < 1.65, JSON.stringify(loudened));
 
-const kept = await dana.page.evaluate(() => JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}').voiceLevels ?? null);
+const kept = await dana.page.evaluate(() => JSON.parse(localStorage.getItem('baziche.settings') ?? '{}').voiceLevels ?? null);
 
 record('this browser remembers how loud she is', kept !== null && Math.abs((kept.mina ?? 0) - 1.5) < 0.001, JSON.stringify(kept));
 
@@ -571,8 +571,8 @@ record('leaving takes the other player\'s audio away', gone);
 
 await mina.page.evaluate(() =>
 {
-    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
-    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voicePushToTalk: true }));
+    const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
+    localStorage.setItem('baziche.settings', JSON.stringify({ ...stored, voicePushToTalk: true }));
 });
 await mina.page.reload();
 await mina.page.waitForLoadState('networkidle');
@@ -588,8 +588,8 @@ await mina.page.keyboard.up('v');
 record('letting go of the key goes quiet again', await until(async () => !(await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), 10_000));
 await mina.page.evaluate(() =>
 {
-    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
-    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voicePushToTalk: false }));
+    const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
+    localStorage.setItem('baziche.settings', JSON.stringify({ ...stored, voicePushToTalk: false }));
 });
 
 await dana.page.getByRole('button', { name: 'Turn voice off for this table' }).first().click();
@@ -607,8 +607,8 @@ await dana.page.getByRole('button', { name: 'Join voice' }).first().click();
 await until(async () => (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) > 0);
 await mina.page.evaluate(() =>
 {
-    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
-    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: true }));
+    const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
+    localStorage.setItem('baziche.settings', JSON.stringify({ ...stored, voiceAutoJoin: true }));
 });
 await mina.page.reload();
 await mina.page.waitForLoadState('networkidle');
@@ -627,8 +627,8 @@ record('the speaker wears the ring on their own page too', await until(async () 
 await mina.page.screenshot({ path: 'tools/qa/out/voice-speaking.png' });
 await mina.page.evaluate(() =>
 {
-    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
-    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: false }));
+    const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
+    localStorage.setItem('baziche.settings', JSON.stringify({ ...stored, voiceAutoJoin: false }));
 });
 
 for (const one of [dana, mina])

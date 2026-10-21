@@ -576,7 +576,7 @@ describe('settings', () =>
     {
         const settings = useSettings();
         settings.update({ sound: false });
-        expect(JSON.parse(memory.get('nura-games.settings') ?? '{}').sound).toBe(false);
+        expect(JSON.parse(memory.get('baziche.settings') ?? '{}').sound).toBe(false);
     });
 
     it('keeps nothing that belongs to the account', () =>

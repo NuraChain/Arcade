@@ -1,5 +1,5 @@
 export const app = {
-    'app.title': 'Nura Games',
+    'app.title': 'Baziche',
 
     'app.nav.home': 'Home',
     'app.nav.games': 'Games',
@@ -8,7 +8,7 @@ export const app = {
     'app.nav.chats': 'Chats',
     'admin.title': 'Admin',
     'admin.lead': 'Signed in with the admin wallet.',
-    'admin.back': 'Back to Nura Games',
+    'admin.back': 'Back to Baziche',
     'app.nav.profile': 'Profile',
     'app.nav.leaderboard': 'Leaderboard',
     'app.nav.discover': 'Discover',

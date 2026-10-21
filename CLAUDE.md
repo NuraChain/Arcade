@@ -1,4 +1,4 @@
-# Nura Games — working notes for Claude Code
+# Baziche — working notes for Claude Code
 
 A social gaming platform: a cinematic 3D landing page at `/` and the signed-in product at `/app/*`
 (matchmaking, tables, friends, chat, groups, search, notifications, profile, settings). Two npm

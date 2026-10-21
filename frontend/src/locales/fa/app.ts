@@ -2,7 +2,7 @@ import type { Dictionary } from '../en/index.ts';
 import type { app as reference } from '../en/app.ts';
 
 export const app: Pick<Dictionary, keyof typeof reference> = {
-    'app.title': 'بازی‌های نورا',
+    'app.title': 'بازیچه',
 
     'app.nav.home': 'خانه',
     'app.nav.games': 'بازی‌ها',
@@ -11,7 +11,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'app.nav.chats': 'چت‌ها',
     'admin.title': 'مدیریت',
     'admin.lead': 'با کیف پول مدیر وارد شدی.',
-    'admin.back': 'برگرد به بازی‌های نورا',
+    'admin.back': 'برگرد به بازیچه',
     'app.nav.profile': 'پروفایل',
     'app.nav.leaderboard': 'برترین‌ها',
     'app.nav.discover': 'اکسپلور',

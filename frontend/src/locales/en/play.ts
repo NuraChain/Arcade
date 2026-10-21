@@ -483,7 +483,7 @@ export const play = {
     'match.deadline.brief.minutes': '{minutes} min',
     'match.deadline.brief.hours': '{hours}h',
     'match.cannotDraw': 'This game needs a newer page',
-    'match.cannotDrawLead': 'The table is playing a game this copy of Nura cannot draw yet. Reloading fetches the version that can.',
+    'match.cannotDrawLead': 'The table is playing a game this copy of Baziche cannot draw yet. Reloading fetches the version that can.',
     'match.cannotDrawAction': 'Reload',
     'voice.title': 'Voice',
     'voice.join': 'Join voice',

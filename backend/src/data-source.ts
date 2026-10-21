@@ -24,7 +24,7 @@ export const dataSource = new DataSource({
     url: process.env.DATABASE_URL,
     uuidExtension: 'pgcrypto',
     entities,
-    applicationName: `nura-games ${ randomUUID().slice(0, 8) }`,
+    applicationName: `baziche ${ randomUUID().slice(0, 8) }`,
 
     synchronize: false,
 

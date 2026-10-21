@@ -14,7 +14,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-SERVICE_NAME="nura-games"
+SERVICE_NAME="baziche"
 
 # The repo root, and the server half inside it. The server IS the service: it runs the api, the
 # realtime gateway and the background sweeps, and in production serves the built client itself, so
@@ -81,7 +81,7 @@ echo "> Installing systemd service (${SERVICE_FILE})..."
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Nura Games
+Description=Baziche
 After=network.target postgresql.service
 
 [Service]

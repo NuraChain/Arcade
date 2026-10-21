@@ -1,3 +1,3 @@
 #!/bin/bash
 
-systemctl start nura-games
+systemctl start baziche

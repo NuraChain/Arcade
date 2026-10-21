@@ -1,3 +1,3 @@
 #!/bin/bash
 
-systemctl status nura-games --no-pager
+systemctl status baziche --no-pager

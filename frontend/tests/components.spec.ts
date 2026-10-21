@@ -160,12 +160,12 @@ describe('BrandMark', () =>
         const locale = useLocale();
 
         const english = renderTest(() => BrandMark({}) as Rendered);
-        expect(english.container.textContent?.trim()).toBe('Nura Games');
+        expect(english.container.textContent?.trim()).toBe('Baziche');
         english.unmount();
 
         locale.setLocale('fa');
         const persian = renderTest(() => BrandMark({}) as Rendered);
-        expect(persian.container.textContent?.trim()).toBe('بازی‌های نورا');
+        expect(persian.container.textContent?.trim()).toBe('بازیچه');
     });
 
     it('leaves no stray space where a slot is empty', () =>

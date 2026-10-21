@@ -31,7 +31,7 @@ describe.skipIf(!active)('the other servers using the database', () =>
 
     beforeAll(async () =>
     {
-        mine = named('nura-games mine');
+        mine = named('baziche mine');
         await mine.initialize();
         await syncSchema(mine);
     }, 60_000);
@@ -47,10 +47,10 @@ describe.skipIf(!active)('the other servers using the database', () =>
     it('are counted by the name their connections carry, never this server itself, and each one once', async () =>
     {
         const ports = buildPorts(mine, config);
-        const other = named('nura-games other');
-        const third = named('nura-games third');
+        const other = named('baziche other');
+        const third = named('baziche third');
         const tool = named('psql');
-        const elsewhere = named('nura-games elsewhere', maintenance);
+        const elsewhere = named('baziche elsewhere', maintenance);
 
         expect(await ports.jobs.otherServers()).toBe(0);
 

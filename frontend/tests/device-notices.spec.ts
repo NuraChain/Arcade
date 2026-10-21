@@ -74,7 +74,7 @@ describe('the switch for notifications on this device', () =>
         expect(useSettings().settings().notify).toBe(true);
         expect(browser.registered).toEqual(['/push-worker.js']);
         expect(container.textContent).toContain('On for this device');
-        expect(container.textContent).toContain('While Nura Games is open in a tab.');
+        expect(container.textContent).toContain('While Baziche is open in a tab.');
         expect(server.calls, 'a server with no push keys was sent a subscription').not.toContain('notifications.subscribe');
         expect(button(container, 'Turn on for this device')).toBeUndefined();
     });
@@ -91,7 +91,7 @@ describe('the switch for notifications on this device', () =>
 
         expect(server.calls).toContain('notifications.subscribe');
         expect(browser.subscribed()).toBe(true);
-        expect(container.textContent).toContain('Also when Nura Games is closed.');
+        expect(container.textContent).toContain('Also when Baziche is closed.');
     });
 
     it('is on for the open page all the same when the browser will not subscribe, with no complaint', async () =>
@@ -107,7 +107,7 @@ describe('the switch for notifications on this device', () =>
 
         expect(useSettings().settings().notify).toBe(true);
         expect(container.textContent).toContain('On for this device');
-        expect(container.textContent).toContain('While Nura Games is open in a tab.');
+        expect(container.textContent).toContain('While Baziche is open in a tab.');
         expect(server.calls).not.toContain('notifications.subscribe');
         expect(useToasts().items()).toHaveLength(0);
     });
@@ -131,7 +131,7 @@ describe('the switch for notifications on this device', () =>
             await settle();
 
             expect(browser.subscribed(), 'the browser kept a subscription no server knows of').toBe(false);
-            expect(container.textContent).toContain('While Nura Games is open in a tab.');
+            expect(container.textContent).toContain('While Baziche is open in a tab.');
             expect(useSettings().settings().notify).toBe(true);
         }
         finally

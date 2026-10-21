@@ -115,7 +115,7 @@ describe('a push', () =>
 {
     const LISTED = '/api/notifications/';
 
-    const GENERAL = 'Something new in Nura Games';
+    const GENERAL = 'Something new in Baziche';
 
     const at = (minute: number) => new Date(Date.UTC(2026, 9, 12, 10, minute)).toISOString();
 
@@ -253,7 +253,7 @@ describe('a push', () =>
 
             expect(notice.title).toBe(wordsOf('fa').general);
             expect(notice.title).not.toBe(GENERAL);
-            expect(notice.options).toMatchObject({ tag: 'nura-games', renotify: true, silent: false, lang: 'fa', dir: 'rtl', data: { target: '/app/notifications' } });
+            expect(notice.options).toMatchObject({ tag: 'baziche', renotify: true, silent: false, lang: 'fa', dir: 'rtl', data: { target: '/app/notifications' } });
         }
     });
 
@@ -279,7 +279,7 @@ describe('a push', () =>
         const [last] = await broken.push();
 
         expect(last.title, 'a push ended with nothing shown').toBe(GENERAL);
-        expect(last.options).toMatchObject({ tag: 'nura-games', renotify: true, silent: false, lang: 'en', dir: 'ltr', data: { target: '/app/notifications' } });
+        expect(last.options).toMatchObject({ tag: 'baziche', renotify: true, silent: false, lang: 'en', dir: 'ltr', data: { target: '/app/notifications' } });
     });
 
     it('says something happened beside what it can say, when one of the rows is of a kind it has no words for', async () =>

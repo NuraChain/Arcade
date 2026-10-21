@@ -1,6 +1,6 @@
 import { runtime } from './runtime.ts';
 
-const KEY = 'nura-games.reloaded';
+const KEY = 'baziche.reloaded';
 
 const PROBE_MS = 5000;
 

@@ -29,7 +29,7 @@ export function databaseName()
 
     const name = databaseUrl()?.pathname.replace(/^\//, '') ?? '';
 
-    return name === '' ? 'nura_games' : name;
+    return name === '' ? 'baziche' : name;
 }
 
 /**
