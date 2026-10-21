@@ -30,8 +30,9 @@ import { strikes } from './domains/table/sweep.ts';
 import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
-import { createVault } from './chain/vault.ts';
-import { createStakeService } from './domains/stake/service.ts';
+import { createVault, type Vault } from './chain/vault.ts';
+import { seatsOfMask } from './domains/stake/policy.ts';
+import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
@@ -117,6 +118,7 @@ export interface Services extends Ports
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
         sweepTables(): Promise<TableSweep>;
+        sweepStakes(forMs: number): Promise<StakeSweep>;
         waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
         otherServers(): Promise<number>;
         tidy(): Promise<Record<string, number>>;
@@ -133,7 +135,7 @@ const WATCHABLE_MAX = 48;
 
 const WAITING_SEATS = 500;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note): Services
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note, vault?: Vault): Services
 {
     const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
 
@@ -634,6 +636,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.keptOut = row.kept_out;
         }
+        if (row.stake !== null)
+        {
+            summary.stake = row.stake;
+        }
+        if (row.money !== null)
+        {
+            summary.money = {
+                state: row.money.state,
+                feeBps: row.money.feeBps,
+                ...(row.money.openTx === null ? {} : { openTx: row.money.openTx }),
+                ...(row.money.closeTx === null ? {} : { closeTx: row.money.closeTx }),
+                ...(row.money.winners === null ? {} : { winners: seatsOfMask(row.money.winners) }),
+                ...(row.money.error === null ? {} : { failed: row.money.error }),
+                ...(row.money.blame === null ? {} : { blame: row.money.blame })
+            };
+        }
         return summary;
     };
 
@@ -935,6 +953,33 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         });
     };
 
+    const stakes = createStakeService(db, vault ?? createVault({
+        rpcUrl: config.rpcUrl,
+        chainId: config.chainId,
+        vault: config.vaultAddress,
+        refereeKey: config.refereeKey
+    }), {
+        begin: (escrowId) => match.begin(escrowId),
+
+        async began(matchId)
+        {
+            const load = await match.peek(matchId);
+
+            if (load === null)
+            {
+                return;
+            }
+
+            await courtesy('game push', () => pushMatch(matchId, load.match.rev - 1));
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+        },
+
+        changed: (tableId) => courtesy('table ring', async () =>
+        {
+            live?.tableChanged(tableId, await table.peopleAt(tableId));
+        })
+    });
+
     const logged = (events: { rev: number; seat: number; at: Date; log: MatchEventLog['log'] }[]): MatchEventLog[] =>
         events.map((entry) => ({ rev: entry.rev, seat: entry.seat, at: entry.at.toISOString(), log: entry.log }));
 
@@ -955,6 +1000,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 await courtesy('result line', () => declareResult(matchId));
                 live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
+                stakes.kick();
             }
         }
 
@@ -1030,6 +1076,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 await courtesy('result line', () => declareResult(expired.matchId));
                 live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
+                stakes.kick();
             }
         }
 
@@ -1231,12 +1278,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const nfts = createNftReader({ rpcUrl: config.rpcUrl, explorerApi: config.explorerApi });
 
-    const stakes = createStakeService(db, createVault({
-        rpcUrl: config.rpcUrl,
-        chainId: config.chainId,
-        vault: config.vaultAddress,
-        refereeKey: config.refereeKey
-    }));
 
     const identity = createIdentityService(db, {
         origin: config.origin,
@@ -1299,7 +1340,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), otherServers, tidy },
+        jobs: { sweepTurns, sweepTables, sweepStakes: (forMs) => stakes.sweep(forMs), waiting: () => table.waitingByGame(), otherServers, tidy },
 
         async pulse()
         {
@@ -2131,10 +2172,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async create(me, input)
             {
+                const stake = await stakes.mayOpen(me, input.stake, input.mode);
                 const guests = await Promise.all(input.invitees.map((handle) => social.personByHandle(handle)));
                 const known = guests.filter((person): person is NonNullable<typeof person> => person !== null);
 
-                const made = await table.create(me, { ...input, invitees: known.map((person) => person.id) });
+                const made = await table.create(me, { ...input, invitees: known.map((person) => person.id), stake });
                 live?.tableChanged(made.id, [me, ...known.map((person) => person.id)]);
 
                 for (const person of known)
@@ -2179,6 +2221,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async claim(me, tableId)
             {
+                const seen = await table.byId(me, tableId);
+
+                if (seen !== null && seen.stake !== null && seen.mine === null)
+                {
+                    await stakes.playerOf(me);
+                }
+
                 const seat = await table.claimSeat(me, tableId);
                 const after = await mustTable(me, tableId);
 
@@ -2210,6 +2259,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     if (load !== null && load.match.finishedAt !== null)
                     {
                         await courtesy('result line', () => declareResult(walked.matchId));
+                        stakes.kick();
                     }
                 }
 
@@ -2220,12 +2270,37 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 live?.tableChanged(before.id, people);
             },
 
-            async setReady(me, tableId, ready)
+            async setReady(me, tableId, ready, signature)
             {
-                await table.setReady(me, tableId, ready);
+                const seen = await mustTable(me, tableId);
+
+                if (seen.stake === null)
+                {
+                    await table.setReady(me, seen.id, ready);
+                }
+                else if (ready)
+                {
+                    await stakes.consent(me, seen.id, signature);
+                    await courtesy('stake lock', async () =>
+                    {
+                        await stakes.lockIfReady(seen.id);
+                    });
+                }
+                else
+                {
+                    await stakes.unready(me, seen.id);
+                }
+
                 const after = await mustTable(me, tableId);
                 await ringTable(after);
                 return asTable(after);
+            },
+
+            async stake(me, tableId)
+            {
+                const seen = await mustTable(me, tableId);
+
+                return await stakes.prepare(me, seen.id);
             },
 
             async invite(me, tableId, handle)

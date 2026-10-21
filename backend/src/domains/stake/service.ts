@@ -1,13 +1,20 @@
-import type { HttpError } from '@azerothjs/http';
-import type { DataSource } from 'typeorm';
-import { getAddress, toHex, type Address } from 'viem';
+import { NotFoundError, type HttpError } from '@azerothjs/http';
+import { IsNull, type DataSource, type EntityManager } from 'typeorm';
+import { getAddress, toHex, type Address, type Hex } from 'viem';
 
-import type { Vault, VaultCall } from '../../chain/vault.ts';
+import { commitOf, freshBytes, vaultIdOf, type Refusal, type Stake, type Vault, type VaultCall } from '../../chain/vault.ts';
+import { EscrowSeat } from '../../entities/escrow-seat.entity.ts';
+import { Escrow } from '../../entities/escrow.entity.ts';
+import { Match } from '../../entities/match.entity.ts';
 import { PaidAccount } from '../../entities/paid-account.entity.ts';
+import { StakeConsent } from '../../entities/stake-consent.entity.ts';
+import { TableSeat } from '../../entities/table-seat.entity.ts';
+import { TableStake } from '../../entities/table-stake.entity.ts';
+import { Table } from '../../entities/table.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { VaultState } from '../../schemas.ts';
-import { tableRefusal } from '../table/service.ts';
-import { eligibilityOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility } from './policy.ts';
+import { lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
+import { CONSENT_MS, eligibilityOf, onLadder, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
 
 interface StandingRow
 {
@@ -17,6 +24,60 @@ interface StandingRow
     resting: boolean;
     break_until: Date | null;
 }
+
+interface ConsentRow
+{
+    nonce: string;
+    user_id: string;
+    game: string;
+    amount: string;
+    fee_bps: number;
+    address: string;
+    commitment: string;
+    secret: string;
+    deadline: Date;
+    signature: string | null;
+    fresh: boolean;
+}
+
+interface EscrowRow
+{
+    id: string;
+    table_id: string;
+    game: string;
+    amount: string;
+    fee_bps: number;
+    state: EscrowState;
+    winners: number | null;
+    open_tx: string | null;
+    close_tx: string | null;
+    expired: boolean;
+    resting: boolean;
+}
+
+export interface StakeHooks
+{
+    begin(escrowId: string): Promise<string | null>;
+    began(matchId: string): Promise<void>;
+    changed(tableId: string): Promise<void>;
+}
+
+export interface StakeSweep
+{
+    begun: number;
+    sent: number;
+    closed: number;
+    failed: number;
+    faults: { escrow: string; error: string }[];
+}
+
+const LOCK_MARGIN_S = 120;
+
+const SWEEP_MAX = 32;
+
+const RETRY_AFTER_S = 30;
+
+const LIVE = `e.state in ('locking', 'open', 'settling', 'refunding')`;
 
 const REFUSED = {
     'paid-wallet': () => tableRefusal('paid-wallet', 'Playing for NURA needs a wallet account.'),
@@ -31,6 +92,16 @@ const notAmount = () => tableRefusal('paid-amount', 'That is not an amount of NU
 
 const halted = () => tableRefusal('paid-paused', 'The vault is not taking deposits or new games right now.');
 
+const notStake = () => tableRefusal('paid-stake', 'That is not a stake a table can be played for.');
+
+const unsigned = () => tableRefusal('paid-consent', 'Sign your stake for this game again.');
+
+const short = () => tableRefusal('paid-funds', 'There is not that much NURA free in your vault balance.');
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SIGNATURE = /^0x(?:[0-9a-fA-F]{2})+$/;
+
 const wireCall = (from: Address, call: VaultCall) => ({
     from,
     to: call.to,
@@ -40,9 +111,34 @@ const wireCall = (from: Address, call: VaultCall) => ({
     ...(call.gasPrice === null ? {} : { gasPrice: toHex(call.gasPrice) })
 });
 
+const consentQuery = (from: DataSource | EntityManager) => from.getRepository(StakeConsent)
+    .createQueryBuilder('c')
+    .select('c.nonce', 'nonce')
+    .addSelect('c.user_id', 'user_id')
+    .addSelect('c.game', 'game')
+    .addSelect('c.amount::text', 'amount')
+    .addSelect('c.fee_bps', 'fee_bps')
+    .addSelect('c.address', 'address')
+    .addSelect('c.commitment', 'commitment')
+    .addSelect('c.secret', 'secret')
+    .addSelect('c.deadline', 'deadline')
+    .addSelect('c.signature', 'signature')
+    .addSelect('c.deadline > now() + make_interval(secs => :margin)', 'fresh')
+    .setParameter('margin', LOCK_MARGIN_S);
+
+const stakeFrom = (row: { address: string; game: string; amount: string; fee_bps: number; commitment: string; nonce: string; deadline: Date }): Stake => ({
+    player: getAddress(row.address),
+    game: row.game,
+    amount: BigInt(row.amount),
+    feeBps: row.fee_bps,
+    commit: row.commitment as Hex,
+    nonce: row.nonce as Hex,
+    deadline: BigInt(Math.floor(row.deadline.getTime() / 1000))
+});
+
 export type StakeService = ReturnType<typeof createStakeService>;
 
-export function createStakeService(db: DataSource, vault: Vault)
+export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHooks)
 {
     const standingOf = async (me: string) =>
     {
@@ -67,6 +163,11 @@ export function createStakeService(db: DataSource, vault: Vault)
 
     const playerOf = async (me: string) =>
     {
+        if (!vault.configured)
+        {
+            throw notOpen();
+        }
+
         const standing = await standingOf(me);
 
         if (standing.address === null)
@@ -101,12 +202,463 @@ export function createStakeService(db: DataSource, vault: Vault)
         return wei;
     };
 
+    const seatsOf = async (escrowId: string) => await db.getRepository(EscrowSeat).find({
+        where: { escrowId },
+        order: { seat: 'ASC' }
+    });
+
+    let running: Promise<StakeSweep> | null = null;
+    let again = false;
+
+    const lockIfReady = async (tableId: string) =>
+    {
+        if (!vault.configured)
+        {
+            return { locked: null, dropped: [] as string[] };
+        }
+
+        const done = await db.transaction(async (tx) =>
+        {
+            await lockTable(tx, tableId);
+
+            const table = await tx.getRepository(Table).findOne({ select: { id: true, game: true, status: true, seats: true }, where: { id: tableId } });
+            const stake = await tx.getRepository(TableStake).findOne({ where: { tableId } });
+
+            if (table === null || stake === null || table.status === 'closed')
+            {
+                return { locked: null, dropped: [] as string[] };
+            }
+
+            const busy = await tx.getRepository(Escrow).createQueryBuilder('e')
+                .where('e.table_id = :tableId', { tableId })
+                .andWhere(LIVE)
+                .getExists();
+
+            if (busy || await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+            {
+                return { locked: null, dropped: [] as string[] };
+            }
+
+            const chairs = await tx.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
+
+            if (chairs.length !== table.seats || chairs.some((chair) => chair.userId === null || !chair.ready))
+            {
+                return { locked: null, dropped: [] as string[] };
+            }
+
+            const consents = await consentQuery(tx)
+                .where('c.table_id = :tableId', { tableId })
+                .andWhere('c.signature is not null')
+                .getRawMany<ConsentRow>();
+            const byUser = new Map(consents.map((consent) => [consent.user_id, consent]));
+            const fees = new Set(consents.map((consent) => consent.fee_bps));
+            const stale = chairs.filter((chair) =>
+            {
+                const consent = byUser.get(chair.userId as string);
+                return consent === undefined || !consent.fresh;
+            });
+            const dropped = fees.size > 1 ? chairs : stale;
+
+            if (dropped.length > 0)
+            {
+                for (const chair of dropped)
+                {
+                    await tx.getRepository(TableSeat).update({ tableId, userId: chair.userId as string }, { ready: false });
+                    await tx.getRepository(StakeConsent).delete({ tableId, userId: chair.userId as string });
+                }
+
+                return { locked: null, dropped: dropped.map((chair) => chair.userId as string) };
+            }
+
+            const opened = await tx.getRepository(Escrow).insert({
+                tableId,
+                game: table.game,
+                amount: stake.amount,
+                feeBps: [...fees][0],
+                state: 'locking'
+            });
+            const escrowId = opened.identifiers[0].id as string;
+
+            await tx.getRepository(EscrowSeat).insert(chairs.map((chair) =>
+            {
+                const consent = byUser.get(chair.userId as string) as ConsentRow;
+
+                return {
+                    escrowId,
+                    seat: chair.seat,
+                    userId: consent.user_id,
+                    address: consent.address,
+                    nonce: consent.nonce,
+                    commitment: consent.commitment,
+                    secret: consent.secret,
+                    deadline: consent.deadline,
+                    signature: consent.signature as string
+                };
+            }));
+
+            await tx.getRepository(StakeConsent).delete({ tableId });
+
+            return { locked: escrowId, dropped: [] as string[] };
+        });
+
+        if (done.locked !== null)
+        {
+            kick();
+        }
+
+        return done;
+    };
+
+    const fail = async (row: EscrowRow, refusal: Refusal) =>
+    {
+        const seats = await seatsOf(row.id);
+        const named = refusal.player === null ? undefined : seats.find((seat) => seat.address === refusal.player?.toLowerCase());
+
+        await db.transaction(async (tx) =>
+        {
+            await lockTable(tx, row.table_id);
+
+            const ended = await tx.getRepository(Escrow).update(
+                { id: row.id, state: 'locking' },
+                { state: 'failed', error: refusal.error.slice(0, 64), failedSeat: named?.seat ?? null, updatedAt: () => 'now()' }
+            );
+
+            if ((ended.affected ?? 0) === 0)
+            {
+                return;
+            }
+
+            for (const seat of named === undefined ? seats : [named])
+            {
+                await tx.getRepository(TableSeat).update({ tableId: row.table_id, userId: seat.userId }, { ready: false });
+            }
+
+            if (named === undefined)
+            {
+                return;
+            }
+
+            const kept = seats.filter((seat) => seat.seat !== named.seat);
+
+            if (kept.length === 0)
+            {
+                return;
+            }
+
+            await tx.getRepository(EscrowSeat).delete(kept.map((seat) => ({ escrowId: row.id, seat: seat.seat })));
+            await tx.getRepository(StakeConsent).insert(kept.map((seat) => ({
+                nonce: seat.nonce,
+                userId: seat.userId,
+                tableId: row.table_id,
+                game: row.game,
+                amount: row.amount,
+                feeBps: row.fee_bps,
+                address: seat.address,
+                commitment: seat.commitment,
+                secret: seat.secret,
+                deadline: seat.deadline,
+                signature: seat.signature
+            })));
+        });
+
+        await hooks.changed(row.table_id);
+
+        return 'failed' as const;
+    };
+
+    const begin = async (row: EscrowRow) =>
+    {
+        const matchId = await hooks.begin(row.id);
+
+        if (matchId !== null)
+        {
+            await hooks.began(matchId);
+        }
+
+        await hooks.changed(row.table_id);
+
+        return matchId === null ? 'closed' as const : 'begun' as const;
+    };
+
+    const finish = async (row: EscrowRow, state: 'settled' | 'refunded' | 'reclaimed') =>
+    {
+        await db.getRepository(Escrow).update(
+            { id: row.id, state: row.state },
+            { state, error: null, ...(state === 'settled' ? {} : { winners: null }), updatedAt: () => 'now()' }
+        );
+        await hooks.changed(row.table_id);
+
+        return 'closed' as const;
+    };
+
+    const mark = async (row: EscrowRow, error: string, sent: Partial<{ openTx: string | null; closeTx: string | null }> = {}) =>
+    {
+        await db.getRepository(Escrow).update({ id: row.id, state: row.state }, { error: error.slice(0, 64), ...sent, updatedAt: () => 'now()' });
+    };
+
+    const locking = async (row: EscrowRow) =>
+    {
+        const id = vaultIdOf(row.id);
+
+        if (row.open_tx === null)
+        {
+            const there = await vault.game(id);
+
+            if (there.status === 'open')
+            {
+                return await begin(row);
+            }
+
+            if (row.expired)
+            {
+                return await fail(row, { error: 'StakeExpired', player: null });
+            }
+
+            const seats = await seatsOf(row.id);
+            const sent = await vault.open(id, row.game, BigInt(row.amount), row.fee_bps, seats.map((seat) => ({
+                player: getAddress(seat.address),
+                commit: seat.commitment as Hex,
+                nonce: seat.nonce as Hex,
+                deadline: BigInt(Math.floor(seat.deadline.getTime() / 1000)),
+                signature: seat.signature as Hex
+            })));
+
+            if (!sent.ok)
+            {
+                return await fail(row, sent.refusal);
+            }
+
+            await db.getRepository(Escrow).update({ id: row.id, state: 'locking', openTx: IsNull() }, { openTx: sent.hash, updatedAt: () => 'now()' });
+
+            return 'sent' as const;
+        }
+
+        const mined = await vault.mined(row.open_tx as Hex);
+
+        if (mined === 'success')
+        {
+            return await begin(row);
+        }
+
+        if (mined === 'pending' && !row.expired)
+        {
+            return 'waiting' as const;
+        }
+
+        const there = await vault.game(id);
+
+        if (there.status === 'open')
+        {
+            return await begin(row);
+        }
+
+        return await fail(row, { error: mined === 'pending' ? 'StakeExpired' : 'reverted', player: null });
+    };
+
+    const paying = async (row: EscrowRow) =>
+    {
+        const id = vaultIdOf(row.id);
+
+        if (row.close_tx !== null)
+        {
+            const mined = await vault.mined(row.close_tx as Hex);
+
+            if (mined === 'pending')
+            {
+                return 'waiting' as const;
+            }
+
+            if (mined === 'success')
+            {
+                return await finish(row, row.state === 'settling' ? 'settled' : 'refunded');
+            }
+
+            await mark(row, 'reverted', { closeTx: null });
+
+            return 'waiting' as const;
+        }
+
+        if (row.resting)
+        {
+            return 'waiting' as const;
+        }
+
+        const there = await vault.game(id);
+
+        if (there.status === 'settled' || there.status === 'refunded' || there.status === 'reclaimed')
+        {
+            return await finish(row, there.status);
+        }
+
+        if (there.status !== 'open')
+        {
+            await mark(row, 'missing');
+            return 'waiting' as const;
+        }
+
+        const sent = row.state === 'settling'
+            ? await vault.settle(id, BigInt(row.winners ?? 0), (await seatsOf(row.id)).map((seat) => seat.secret as Hex))
+            : await vault.refund(id);
+
+        if (!sent.ok)
+        {
+            await mark(row, sent.refusal.error);
+            return 'waiting' as const;
+        }
+
+        await db.getRepository(Escrow).update({ id: row.id, state: row.state, closeTx: IsNull() }, { closeTx: sent.hash, error: null, updatedAt: () => 'now()' });
+
+        return 'sent' as const;
+    };
+
+    const sweepOnce = async (budgetMs: number) =>
+    {
+        const began = performance.now();
+        const tally: StakeSweep = { begun: 0, sent: 0, closed: 0, failed: 0, faults: [] };
+
+        const rows = await db.getRepository(Escrow).createQueryBuilder('e')
+            .select('e.id', 'id')
+            .addSelect('e.table_id', 'table_id')
+            .addSelect('e.game', 'game')
+            .addSelect('e.amount::text', 'amount')
+            .addSelect('e.fee_bps', 'fee_bps')
+            .addSelect('e.state', 'state')
+            .addSelect('e.winners', 'winners')
+            .addSelect('e.open_tx', 'open_tx')
+            .addSelect('e.close_tx', 'close_tx')
+            .addSelect(`coalesce((select min(s.deadline) + interval '1 minute' < now() from escrow_seats s where s.escrow_id = e.id), false)`, 'expired')
+            .addSelect('(e.error is not null and e.updated_at > now() - make_interval(secs => :retry))', 'resting')
+            .where(`e.state in ('locking', 'settling', 'refunding')`)
+            .setParameter('retry', RETRY_AFTER_S)
+            .orderBy('e.updated_at', 'ASC')
+            .limit(SWEEP_MAX)
+            .getRawMany<EscrowRow>();
+
+        for (const row of rows)
+        {
+            if (performance.now() - began > budgetMs)
+            {
+                break;
+            }
+
+            try
+            {
+                const step = row.state === 'locking' ? await locking(row) : await paying(row);
+
+                if (step === 'begun')
+                {
+                    tally.begun += 1;
+                }
+                else if (step === 'sent')
+                {
+                    tally.sent += 1;
+                }
+                else if (step === 'closed')
+                {
+                    tally.closed += 1;
+                }
+                else if (step === 'failed')
+                {
+                    tally.failed += 1;
+                }
+            }
+            catch (error)
+            {
+                tally.faults.push({ escrow: row.id, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        const idle = await db.getRepository(Table).createQueryBuilder('t')
+            .innerJoin(TableStake, 'k', 'k.table_id = t.id')
+            .select('t.id', 'id')
+            .where(`t.status <> 'closed'`)
+            .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+            .andWhere(`not exists (select 1 from escrows e where e.table_id = t.id and ${ LIVE })`)
+            .andWhere('(select count(*) from table_seats s where s.table_id = t.id and s.user_id is not null and s.ready) = t.seats')
+            .limit(SWEEP_MAX)
+            .getRawMany<{ id: string }>();
+
+        for (const { id } of idle)
+        {
+            try
+            {
+                const done = await lockIfReady(id);
+
+                if (done.dropped.length > 0)
+                {
+                    await hooks.changed(id);
+                }
+            }
+            catch (error)
+            {
+                tally.faults.push({ escrow: id, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        return tally;
+    };
+
+    const sweep = (budgetMs: number): Promise<StakeSweep> =>
+    {
+        if (!vault.configured)
+        {
+            return Promise.resolve({ begun: 0, sent: 0, closed: 0, failed: 0, faults: [] });
+        }
+
+        if (running !== null)
+        {
+            again = true;
+            return running;
+        }
+
+        running = (async () =>
+        {
+            try
+            {
+                let tally = await sweepOnce(budgetMs);
+
+                while (again)
+                {
+                    again = false;
+                    tally = await sweepOnce(budgetMs);
+                }
+
+                return tally;
+            }
+            finally
+            {
+                running = null;
+            }
+        })();
+
+        return running;
+    };
+
+    const kick = () =>
+    {
+        if (!vault.configured)
+        {
+            return;
+        }
+
+        void sweep(4000).catch((error: unknown) =>
+        {
+            process.stderr.write(`stake sweep failed: ${ error instanceof Error ? error.message : String(error) }\n`);
+        });
+    };
+
     return {
         configured: vault.configured,
 
         standingOf,
 
         playerOf,
+
+        lockIfReady,
+
+        sweep,
+
+        kick,
 
         async state(me: string): Promise<VaultState>
         {
@@ -214,6 +766,201 @@ export function createStakeService(db: DataSource, vault: Vault)
             }
 
             return wireCall(getAddress(address), await vault.withdrawCall(wei));
+        },
+
+        async mayOpen(me: string, stake: string | undefined, mode: string)
+        {
+            if (stake === undefined)
+            {
+                return null;
+            }
+
+            if (!vault.configured)
+            {
+                throw notOpen();
+            }
+
+            if (mode !== 'live')
+            {
+                throw tableRefusal('paid-pace', 'Only a live table can be played for NURA.');
+            }
+
+            await playerOf(me);
+
+            const terms = await vault.terms();
+
+            if (terms.paused)
+            {
+                throw halted();
+            }
+
+            if (!onLadder(stake, terms.maxStake))
+            {
+                throw notStake();
+            }
+
+            return stake;
+        },
+
+        async prepare(me: string, tableId: string)
+        {
+            const player = await playerOf(me);
+
+            if (!UUID.test(tableId))
+            {
+                throw new NotFoundError('No table there.');
+            }
+
+            const table = await db.getRepository(Table).createQueryBuilder('t')
+                .innerJoin(TableSeat, 's', 's.table_id = t.id and s.user_id = :me', { me })
+                .innerJoin(TableStake, 'k', 'k.table_id = t.id')
+                .select('t.game', 'game')
+                .addSelect('t.status', 'status')
+                .addSelect('k.amount::text', 'amount')
+                .where('t.id = :tableId', { tableId })
+                .getRawOne<{ game: string; status: string; amount: string }>();
+
+            if (table === undefined)
+            {
+                throw new NotFoundError('No table there.');
+            }
+
+            if (table.status === 'closed')
+            {
+                throw tableRefusal('table-closed', 'That table has closed.');
+            }
+
+            const terms = await vault.terms();
+
+            if (terms.paused)
+            {
+                throw halted();
+            }
+
+            if (BigInt(table.amount) > terms.maxStake)
+            {
+                throw notStake();
+            }
+
+            const secret = freshBytes();
+            const deadline = Math.floor((Date.now() + CONSENT_MS) / 1000);
+            const stake: Stake = {
+                player,
+                game: table.game,
+                amount: BigInt(table.amount),
+                feeBps: terms.fee,
+                commit: commitOf(secret),
+                nonce: freshBytes(),
+                deadline: BigInt(deadline)
+            };
+
+            await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                if (await lockingAt(tx, tableId))
+                {
+                    throw stillLocking();
+                }
+
+                if (await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'A game is being played at that table.');
+                }
+
+                await tx.getRepository(StakeConsent).delete({ tableId, userId: me });
+                await tx.getRepository(StakeConsent).insert({
+                    nonce: stake.nonce,
+                    userId: me,
+                    tableId,
+                    game: stake.game,
+                    amount: table.amount,
+                    feeBps: stake.feeBps,
+                    address: player.toLowerCase(),
+                    commitment: stake.commit,
+                    secret,
+                    deadline: new Date(deadline * 1000)
+                });
+                await tx.getRepository(TableSeat).update({ tableId, userId: me }, { ready: false });
+            });
+
+            return { typedData: vault.stakeTypedData(stake), deadline: new Date(deadline * 1000).toISOString() };
+        },
+
+        async consent(me: string, tableId: string, signature: string | undefined)
+        {
+            const player = await playerOf(me);
+
+            if (signature === undefined || !SIGNATURE.test(signature))
+            {
+                throw unsigned();
+            }
+
+            const held = await consentQuery(db)
+                .where('c.table_id = :tableId and c.user_id = :me', { tableId, me })
+                .getRawOne<ConsentRow>();
+
+            if (held === undefined || !held.fresh)
+            {
+                throw unsigned();
+            }
+
+            const stake = stakeFrom(held);
+
+            if (!await vault.signedBy(player, stake, signature as Hex))
+            {
+                throw unsigned();
+            }
+
+            const [terms, money] = await Promise.all([vault.terms(), vault.balances(player)]);
+
+            if (terms.paused)
+            {
+                throw halted();
+            }
+
+            if (terms.fee !== held.fee_bps)
+            {
+                throw unsigned();
+            }
+
+            if (stake.amount > terms.maxStake)
+            {
+                throw notStake();
+            }
+
+            if (money.free < stake.amount)
+            {
+                throw short();
+            }
+
+            await db.transaction(async (tx) =>
+            {
+                const signed = await tx.getRepository(StakeConsent).update({ nonce: held.nonce, userId: me, tableId }, { signature });
+
+                if ((signed.affected ?? 0) === 0)
+                {
+                    throw unsigned();
+                }
+
+                await tx.getRepository(TableSeat).update({ tableId, userId: me }, { ready: true });
+            });
+        },
+
+        async unready(me: string, tableId: string)
+        {
+            await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                if (await lockingAt(tx, tableId))
+                {
+                    throw stillLocking();
+                }
+
+                await tx.getRepository(StakeConsent).delete({ tableId, userId: me });
+                await tx.getRepository(TableSeat).update({ tableId, userId: me }, { ready: false });
+            });
         }
     };
 }

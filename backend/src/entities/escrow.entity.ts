@@ -2,7 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Match } from './match.entity.ts';
 import { Table } from './table.entity.ts';
 
-export type EscrowState = 'locking' | 'open' | 'settling' | 'settled' | 'refunding' | 'refunded' | 'reclaimed' | 'failed';
+import type { EscrowState } from '../domains/stake/policy.ts';
 
 @Check('escrows_state_known', `state in ('locking', 'open', 'settling', 'settled', 'refunding', 'refunded', 'reclaimed', 'failed')`)
 @Check('escrows_amount_positive', `amount > 0`)

@@ -11,7 +11,7 @@ import { PaidAccount, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { STAKE_LADDER, WEI_PER_NURA } from '../src/domains/stake/policy.ts';
-import { createStakeService } from '../src/domains/stake/service.ts';
+import { createStakeService, type StakeHooks } from '../src/domains/stake/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -24,6 +24,8 @@ const OMID = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 let db: DataSource;
+
+const idle: StakeHooks = { begin: async () => null, began: async () => undefined, changed: async () => undefined };
 let seq = 0;
 
 const unreachable = () => new HttpError(503, 'We could not reach the network. Try again in a moment.', { code: 'chain-unreachable', expose: true });
@@ -160,7 +162,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('says so, refuses every change as a thing that is not here, and asks the chain nothing', async () =>
         {
             const { vault, asked } = fakeVault({}, false);
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
 
             expect(stakes.configured).toBe(false);
@@ -179,7 +181,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('is never a guest, who has no wallet: no balances, and every step refused for that reason', async () =>
         {
             const { vault, asked } = fakeVault();
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const guest = await makeUser();
 
             const state = await stakes.state(guest);
@@ -195,7 +197,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('is never a minor, whatever they confirm, and nothing is written for them', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const minor = await makeUser([DANA], { isMinor: true, allowStrangerMessages: false });
 
             expect(await stakes.state(minor)).toMatchObject({ may: 'paid-minor' });
@@ -207,7 +209,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('is an adult with a wallet once they accept the terms, which is recorded once and kept', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const me = await makeUser([DANA]);
 
             expect(await stakes.state(me)).toMatchObject({ may: 'paid-terms' });
@@ -224,7 +226,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('stops for a break of the length asked, which a shorter one never cuts short', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
 
@@ -250,7 +252,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('stops deposits during a break, never a withdrawal', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
             await stakes.rest(me, 1);
@@ -261,7 +263,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('plays again once a break has run out, which the database\'s clock decides', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
             await stakes.rest(me, 1);
@@ -283,7 +285,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('carries the vault\'s terms, the ladder up to its ceiling, and the balances of the wallet the reader signed in with last', async () =>
         {
             const { vault, asked } = fakeVault();
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([OMID, DANA]);
 
             expect(await stakes.state(me)).toEqual({
@@ -309,7 +311,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('offers the whole ladder under a ceiling above it, and none of it under one below the first rung', async () =>
         {
             const { vault, set } = fakeVault({ maxStake: 1_000n * WEI_PER_NURA });
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
 
             expect(await stakes.state(me)).toMatchObject({ ladder: STAKE_LADDER });
@@ -322,7 +324,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('hands the wallet a deposit from the reader\'s own address, its value as a quantity', async () =>
         {
             const { vault, asked } = fakeVault();
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
 
@@ -334,7 +336,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('hands the wallet a withdrawal with the gas price it should pay, whoever has not accepted the terms', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const me = await makeUser([DANA]);
 
             expect(await stakes.withdraw(me, '3')).toEqual({
@@ -349,7 +351,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
 
         it('lets a minor take back what is theirs', async () =>
         {
-            const stakes = createStakeService(db, fakeVault().vault);
+            const stakes = createStakeService(db, fakeVault().vault, idle);
             const minor = await makeUser([DANA], { isMinor: true, allowStrangerMessages: false });
 
             expect(await stakes.withdraw(minor, '3')).toMatchObject({ from: getAddress(DANA) });
@@ -358,7 +360,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('refuses an amount that is not a whole number of wei above nothing, before it asks anybody', async () =>
         {
             const { vault, asked } = fakeVault();
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
             asked.length = 0;
@@ -375,7 +377,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('takes no deposit while the vault is paused, and still hands back a withdrawal', async () =>
         {
             const { vault, asked } = fakeVault({ paused: true });
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
             await stakes.accept(me);
 
@@ -388,7 +390,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
         it('says a chain it could not reach as that, never as an empty vault', async () =>
         {
             const { vault, drop } = fakeVault();
-            const stakes = createStakeService(db, vault);
+            const stakes = createStakeService(db, vault, idle);
             const me = await makeUser([DANA]);
             drop();
 

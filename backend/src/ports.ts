@@ -11,6 +11,7 @@ import type {
     Account,
     Challenge,
     ChainCall,
+    StakeTerms,
     VaultState,
     WalletCall,
     ChainFace,
@@ -242,6 +243,7 @@ export interface TablePort
         teams: boolean;
         invitees: string[];
         roomId?: string;
+        stake?: string;
     }): Promise<TableSummary>;
 
     /**
@@ -253,7 +255,9 @@ export interface TablePort
     claim(me: string, tableId: string): Promise<{ table: TableSummary; seat: number | null }>;
 
     leave(me: string, tableId: string, forfeit: boolean): Promise<void>;
-    setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
+    setReady(me: string, tableId: string, ready: boolean, signature?: string): Promise<TableSummary>;
+
+    stake(me: string, tableId: string): Promise<StakeTerms>;
     invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
     remove(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;

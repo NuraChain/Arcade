@@ -102,7 +102,7 @@ the third so nobody re-investigates it.
   of useless things on env that can handle automaticly"). Three names are needed: `DATABASE_URL`,
   `SESSION_SECRET` and, in production, `PUBLIC_ORIGIN`; `loadServerConfig` refuses to start without
   any of them and names every one missing. The optional features (push, STUN and TURN, the chain,
-  the admin) are off while their names are left out or empty. Everything else has a value in the
+  paid tables, the admin) are off while their names are left out or empty. Everything else has a value in the
   code: what differs between development and production follows from the mode, the paths of the
   build follow from where the server lives, the socket limits are constants (`realtime/limits.ts`),
   and `PORT` (3200), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
@@ -191,4 +191,6 @@ Loaded only when a session touches the matching code:
 - `.claude/rules/chat-and-keys.md` - chat, `nura-e2ee/v1`, devices, sealing, recovery, franking,
   notifications, realtime, and the first audit.
 - `.claude/rules/identity-and-profile.md` - signing in, the Nura Profile, NFTs, the admin.
+- `.claude/rules/stakes.md` - playing for NURA: the vault, who may play, the signed Ready, the lock
+  and the payout.
 - `tools/blender/CLAUDE.md` and `tools/qa/CLAUDE.md` - the 3D asset kit and the browser passes.

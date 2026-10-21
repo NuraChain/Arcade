@@ -161,6 +161,11 @@ export const play = {
     'tables.refused.paid-break': 'You asked for a break from playing for NURA, and it has not ended yet.',
     'tables.refused.paid-amount': 'That is not an amount of NURA.',
     'tables.refused.paid-paused': 'The vault is not taking deposits or new games right now.',
+    'tables.refused.paid-stake': 'That is not a stake a table can be played for.',
+    'tables.refused.paid-pace': 'Only a live table can be played for NURA.',
+    'tables.refused.paid-consent': 'Sign your stake for this game again.',
+    'tables.refused.paid-funds': 'There is not that much NURA free in your vault balance.',
+    'tables.refused.paid-locking': 'The stakes are being locked on NuraChain. Wait a moment.',
 
     'quickMatch.busy': 'Finding you a seat',
     'quickMatch.started': 'Your {game} game has started',

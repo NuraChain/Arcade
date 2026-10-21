@@ -10,6 +10,10 @@ export type BreakDays = typeof BREAK_DAYS[number];
 
 export const CONSENT_MS = 30 * 60 * 1000;
 
+export const ESCROW_STATES = ['locking', 'open', 'settling', 'settled', 'refunding', 'refunded', 'reclaimed', 'failed'] as const;
+
+export type EscrowState = typeof ESCROW_STATES[number];
+
 export const BPS = 10_000n;
 
 export const ELIGIBILITIES = ['yes', 'paid-wallet', 'paid-minor', 'paid-terms', 'paid-break'] as const;

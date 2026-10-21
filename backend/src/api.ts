@@ -15,6 +15,7 @@ import {
     answerInput,
     voiceSwitch,
     vaultAmountInput,
+    stakeTerms,
     vaultBreakInput,
     vaultState,
     vaultTermsInput,
@@ -638,7 +639,10 @@ export function buildApi(ports: Ports)
             }),
 
             ready: routes.post('/:id/ready', { input: readyInput, output: tableSummary },
-                (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready)),
+                (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready, context.input.signature)),
+
+            stake: routes.post('/:id/stake', { output: stakeTerms },
+                (context) => ports.table.stake(context.principal.userId, context.params.id)),
 
             /**
              * Tables with a game running on them, declared BEFORE `/:id` so the literal is not

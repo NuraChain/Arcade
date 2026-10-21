@@ -1,7 +1,7 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
-import { BREAK_DAYS, ELIGIBILITIES } from './domains/stake/policy.ts';
+import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
@@ -1106,6 +1106,18 @@ export const tableStatus = enumOf(['open', 'ready', 'playing', 'closed']);
 
 export type TableStatus = Infer<typeof tableStatus>;
 
+export const tableMoney = object({
+    state: enumOf(ESCROW_STATES),
+    feeBps: number(),
+    openTx: string().optional(),
+    closeTx: string().optional(),
+    winners: array(number()).optional(),
+    failed: string().optional(),
+    blame: string().optional()
+});
+
+export type TableMoney = Infer<typeof tableMoney>;
+
 /** One chair. `who` and `invited` are handles, because that is how the wire names a person. */
 export const tableSeat = object({
     seat: number(),
@@ -1169,6 +1181,10 @@ export const tableSummary = object({
 
     keptOut: array(string()).optional(),
 
+    stake: string().optional(),
+
+    money: tableMoney.optional(),
+
     createdAt: string()
 });
 
@@ -1199,7 +1215,9 @@ export const tableCreateInput = object({
      * join and nobody else can see - and it DECIDES the privacy rather than travelling beside it,
      * so `privacy` is ignored when this is here.
      */
-    roomId: string({ max: 64 }).optional()
+    roomId: string({ max: 64 }).optional(),
+
+    stake: string({ max: 40 }).optional()
 });
 
 export const tableQuickInput = object({
@@ -1213,7 +1231,11 @@ export const tableQuickInput = object({
     voice: voiceScope
 });
 
-export const readyInput = object({ ready: boolean() });
+export const readyInput = object({ ready: boolean(), signature: string({ max: 4096 }).optional() });
+
+export const stakeTerms = object({ typedData: string(), deadline: string() });
+
+export type StakeTerms = Infer<typeof stakeTerms>;
 
 export const leaveInput = object({ forfeit: boolean() });
 

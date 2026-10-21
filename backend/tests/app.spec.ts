@@ -294,6 +294,120 @@ describe('quick play', () =>
     });
 });
 
+describe('a table played for NURA', () =>
+{
+    const TABLE = '00000000-0000-4000-8000-00000000000a';
+    const shown = {
+        id: TABLE,
+        code: 'abc234',
+        game: 'ludo',
+        seats: 2,
+        mode: 'live',
+        privacy: 'public',
+        target: 0,
+        cube: false,
+        blinds: 'low',
+        chat: true,
+        voice: 'off',
+        teams: false,
+        status: 'playing',
+        chairs: [],
+        taken: 2,
+        stake: '10000000000000000000',
+        money: {
+            state: 'settled',
+            feeBps: 500,
+            openTx: `0x${ 'a'.repeat(64) }`,
+            closeTx: `0x${ 'b'.repeat(64) }`,
+            winners: [1],
+            failed: 'StakeUnfunded',
+            blame: 'omid.k'
+        },
+        createdAt: '2026-10-21T00:00:00.000Z'
+    };
+    const terms = { typedData: '{"primaryType":"Stake"}', deadline: '2026-10-21T00:30:00.000Z' };
+
+    const staking = (told: unknown[][]) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                view: (...said: unknown[]) =>
+                {
+                    told.push(['view', ...said]);
+                    return Promise.resolve(shown);
+                },
+                stake: (...said: unknown[]) =>
+                {
+                    told.push(['stake', ...said]);
+                    return Promise.resolve(terms);
+                },
+                setReady: (...said: unknown[]) =>
+                {
+                    told.push(['ready', ...said]);
+                    return Promise.resolve(shown);
+                }
+            }
+        } as unknown as Ports
+    });
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body?: unknown) =>
+        app.handle(new Request(`http://local/api${ path }`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) })
+        }));
+
+    it('says the stake and what became of the money wherever the table is read', async () =>
+    {
+        const response = await call(staking([]), `/api/tables/${ TABLE }`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(shown);
+    });
+
+    it('hands the reader the stake to sign for the table they ask about', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await post(staking(told), `/tables/${ TABLE }/stake`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(terms);
+        expect(told).toEqual([['stake', 'somebody', TABLE]]);
+    });
+
+    it('passes a ready\'s signature on as it came, and refuses one that is not a bounded text', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = staking(told);
+
+        expect((await post(app, `/tables/${ TABLE }/ready`, { ready: true, signature: '0xab' })).status).toBe(200);
+        expect((await post(app, `/tables/${ TABLE }/ready`, { ready: false })).status).toBe(200);
+
+        for (const body of [{ ready: true, signature: 5 }, { ready: true, signature: `0x${ 'a'.repeat(4095) }` }, { signature: '0xab' }])
+        {
+            expect((await post(app, `/tables/${ TABLE }/ready`, body)).status, JSON.stringify(body).slice(0, 40)).toBe(422);
+        }
+
+        expect(told).toEqual([['ready', 'somebody', TABLE, true, '0xab'], ['ready', 'somebody', TABLE, false, undefined]]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+
+        expect(bodies).toContain(`'/tables/:id/ready': (bad) => [`);
+        expect(spared).not.toContain(`'/tables/:id/ready'`);
+        expect(spared).toContain(`'/tables/:id/stake'`);
+    });
+});
+
 describe('a write from a page on another site', () =>
 {
     const told: unknown[][] = [];

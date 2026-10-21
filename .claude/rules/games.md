@@ -2541,7 +2541,8 @@ transaction, and a WHERE clause cannot see a chair somebody has not committed. T
 still what refuses a start somebody stops being ready under; the other two are belts, and a 23505 from
 `matches_one_live` is still read as "somebody else started it", which answers with their match. Any
 seated player may press it: the precondition is unanimous, so host-only would be ceremony that
-strands a table whose host closed the tab.
+strands a table whose host closed the tab. At a table played for NURA there is nothing to press: the last signed Ready locks the
+stakes on the chain, and the lock deals the game (`.claude/rules/stakes.md`).
 
 **Readiness is consent to the NEXT game, and a finish spends it.** The precondition is unanimous
 only because `commit` clears `table_seats.ready` for the table inside the transaction that finishes

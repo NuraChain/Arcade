@@ -93,6 +93,7 @@ const BODIES = {
     '/chat/direct': (bad) => [{ id: bad }],
     '/chat/:id/epoch': (bad) => [{ epoch: 0, mintedBy: bad.slice(0, 22), recipients: [bad], signature: bad, confirmation: bad, keys: [] }],
     '/chat/:id/messages': (bad) => [message(bad), { ...message(bad), kind: 'reaction', target: bad }],
+    '/tables/:id/ready': (bad) => [{ ready: true, signature: bad.slice(0, 4096) }, { ready: false, signature: bad.slice(0, 4096) }],
     '/vault/deposit': (bad) => [{ amount: bad.slice(0, 40) }],
     '/vault/withdraw': (bad) => [{ amount: bad.slice(0, 40) }]
 };
@@ -101,7 +102,7 @@ const WOULD_ACT = new Set(['/auth/handle']);
 
 const SPARED = new Set([
     '/auth/sign-out', '/auth/sign-out-everywhere', '/chain/profile/publish', '/social/privacy', '/groups/:slug/join', '/groups/:slug/leave',
-    '/tables/:id/seat', '/tables/:id/leave', '/tables/:id/ready', '/tables/:id/close', '/tables/:id/voice', '/tables/:id/start',
+    '/tables/:id/seat', '/tables/:id/leave', '/tables/:id/close', '/tables/:id/voice', '/tables/:id/start', '/tables/:id/stake',
     '/parties/:id/accept', '/parties/:id/decline', '/parties/:id/leave',
     '/notifications/:id/read', '/notifications/read-all', '/notifications/:id/dismiss', '/devices/:id/revoke', '/devices/recovery/off',
     '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin', '/vault/terms', '/vault/break'

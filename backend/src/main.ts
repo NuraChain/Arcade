@@ -349,6 +349,51 @@ const sweepTables = () =>
 tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
 tables.unref();
 
+const STAKE_SWEEP_MS = 2_000;
+
+const STAKE_SWEEP_BUDGET_MS = 4_000;
+
+let stakes: NodeJS.Timeout | null = null;
+
+const told = new Map<string, string>();
+
+const sweepStakes = () =>
+{
+    void ports.jobs.sweepStakes(STAKE_SWEEP_BUDGET_MS)
+        .then(({ begun, closed, failed, faults }) =>
+        {
+            if (begun + closed + failed > 0)
+            {
+                log.info('stakes moved', { begun, closed, failed });
+            }
+
+            const now = new Map(faults.map((one) => [one.escrow, one.error]));
+
+            for (const [escrow, error] of now)
+            {
+                if (told.get(escrow) !== error)
+                {
+                    log.warn('stake step failed', { escrow, error });
+                }
+            }
+
+            told.clear();
+            now.forEach((error, escrow) => told.set(escrow, error));
+        })
+        .catch((error: unknown) => log.error('stake sweep failed', { error }))
+        .finally(() =>
+        {
+            if (stakes !== null)
+            {
+                stakes = setTimeout(sweepStakes, STAKE_SWEEP_MS);
+                stakes.unref();
+            }
+        });
+};
+
+stakes = setTimeout(sweepStakes, STAKE_SWEEP_MS);
+stakes.unref();
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -374,6 +419,11 @@ handleShutdownSignals(served, {
         {
             clearTimeout(tables);
             tables = null;
+        }
+        if (stakes !== null)
+        {
+            clearTimeout(stakes);
+            stakes = null;
         }
 
         goingDown = true;
