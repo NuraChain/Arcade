@@ -3,6 +3,7 @@ import { Link } from 'azerothjs';
 import type { TableSummary } from '../../api.ts';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { nuraOf } from '../../lib/nura.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -27,6 +28,10 @@ export default component TableRow(props: { table: TableSummary })
 
     derived paired = props.table.teams;
 
+    derived paid = props.table.stake !== undefined;
+
+    derived stakeFigure = locale.n(nuraOf(props.table.stake ?? '0'), { maximumFractionDigits: 4 });
+
     <Link
         to={ `/app/play/${ props.table.id }` }
         class="group flex min-h-16 min-w-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5 transition-colors duration-150 hover:border-line-strong hover:bg-raised"
@@ -37,6 +42,9 @@ export default component TableRow(props: { table: TableSummary })
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="flex h-[1lh] min-w-0 flex-wrap content-start items-baseline gap-x-1.5 overflow-hidden text-ui-sm">
                 <span class="truncate font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                <Show when={ paid }>
+                    <span class="shrink-0 rounded-full bg-madder px-1.5 text-ui-2xs font-semibold text-bright-ink" data-stake><span class="sr-only">{ locale.t('create.stake') } </span><span class="tally">{ stakeFigure }</span> NURA</span>
+                </Show>
                 <Show when={ paired }>
                     <span class="shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-format="teams">{ locale.t('create.format.teams') }</span>
                 </Show>

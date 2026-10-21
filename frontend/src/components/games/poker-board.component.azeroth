@@ -33,7 +33,7 @@ import { turnChime } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { Rematch } from './boards.ts';
+import type { Rematch, Staked } from './boards.ts';
 
 const BOARD_SLOTS = [0, 1, 2, 3, 4];
 
@@ -78,7 +78,7 @@ interface Lying
     piles: readonly Rect[];
 }
 
-export default component PokerBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
+export default component PokerBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -1790,7 +1790,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             </Show>
         </div>
 
-        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
 
         <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>

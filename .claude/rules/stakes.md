@@ -207,6 +207,46 @@ is said and nobody is ready. Taking a ready back asks the wallet nothing. Play a
 for the next game, and at a paid table it never presses Start, because the server's lock starts the
 game. `stake-choice.spec.ts` holds all of it, and `play.spec.ts` the Play again.
 
+**Nobody is asked to sign a stake the vault cannot cover.** The walk on the built server found it: a
+player who had lost their last ten NURA pressed Play again, signed in the wallet, and was refused
+`paid-funds` by the server, with nothing on the card to say why. The table's page holds the vault's
+listening (`vaults.listen()`) for as long as the reader sits at a paid table, so the free balance it
+holds is the one the last game left. `stakedOf` is handed it and says `short`, the balance, when it
+is under the stake, never while money is moving on the chain (a lock, a payment or a refund in
+flight), because then the balance is about to change. The waiting room and the result card then say
+"You have 3 NURA free in your vault, less than the stake." with the way to the vault's page, to a
+seated reader who has not said ready, and Ready and Play again ask the wallet nothing and say
+`tables.refused.paid-funds`. `table-money.spec.ts` and `play.spec.ts` hold it.
+
+**A paid table says what it is played for, and what came of it.** Its row in every list and the
+play header wear the stake in `madder`, the colour that means a table is playing for something,
+with "Played for" said to a screen reader. The waiting room says what each player stakes and what
+the winner, or each of a winning pair, takes, at the fee the table's last lock was made at or else
+the vault's; while the stakes are being locked it says so, with the transaction on NuraChain; and
+when a lock was refused it says whose stake it was (the reader's own in the second person), or that
+everybody has to sign again, until the next lock or game. The result card says what the reader
+won, with "Paying it out…" until the payment has landed and then its transaction, what they lost,
+or that every stake goes back from a game nobody won. It learns that from the table's newest
+escrow while that escrow is a payment (`settling` to `reclaimed`), and keeps it for its own game
+(`kept`, by the match's id) while the next game's stakes are locked, so pressing Play again does
+not take the money line away; a card first drawn during that lock, or for another game, says
+nothing of it, because nothing on the server names which game an escrow paid. It says nothing to
+somebody watching. At a paid table the card offers no Start for the next game: once everybody has
+signed again it says the stakes are being locked. The boards hand the card what they are handed
+(`stake` beside `rematch`, `stakedOf` in `boards.ts`). `table-money.spec.ts` and `play.spec.ts`
+hold it.
+
+**The winner on the card is whoever the stakes were paid to.** A game whose last opponent gave up
+early is not rated for the one left (the judge's `void`, *What a game leaves behind* in
+`games.md`), and the card said "Ended too early to count." over "You won 19 NURA.". At a paid
+table the escrow's winners are the engine's, so once a payment names them the headline names them
+too ("You won.", "Sara Kamali won.") and the line under it says the rating and the streak did not
+move (`match.over.voidPaid`). The finished game reaches the page a moment before the table that
+says what its stakes came to, so while the table still says its stakes are `open` the card says
+only "That game is over." (`awaiting`): the walk saw "Ended too early to count." stand for twenty
+milliseconds before "You won.", and the headline is a live region, so a screen reader said both. A
+free table, a refund and a lock still read as they did.
+
 ## How it is held
 
 `stake-policy.spec.ts` holds the rules with no Postgres; `chain-vault.spec.ts` the vault's module
@@ -216,5 +256,4 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: a paid table's own view of its money, provably fair dice and cards, and the admin's
-view of the vault.
+Not here yet: provably fair dice and cards, and the admin's view of the vault.

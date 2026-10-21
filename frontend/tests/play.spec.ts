@@ -44,7 +44,7 @@ import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stor
 import { useWatch, type Watched } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { inPlay } from '../src/data/match.ts';
-import { ApiError, client, server } from './fake-api.ts';
+import { ApiError, client, nuraState, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -3060,6 +3060,72 @@ describe('PlayPage', () =>
             expect(held.chairs[0].ready).toBe(false);
             expect(useToasts().items().map((toast) => toast.text)).toContain('You declined it in your wallet, so nothing changed.');
             vi.restoreAllMocks();
+        });
+
+        it('asks the wallet nothing for the next game when the vault holds less than the stake, and says so on the card', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+            const sign = vi.spyOn(useVault(), 'signStake');
+
+            server.nura.state = { ...nuraState(), balances: { address: '0x71c7656ec7ab88b098defb751b7401b5f6d8976f', free: (4n * 10n ** 18n).toString(), locked: '0', wallet: '0' } } as typeof server.nura.state;
+            held.stake = (10n * 10n ** 18n).toString();
+            await useVault().refresh();
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-short] p')?.textContent).toBe('You have 4 NURA free in your vault, less than the stake.'), { timeout: 4000 });
+            expect(container.querySelector('[data-short] a')?.getAttribute('href')).toBe('/app/me/wallet');
+
+            server.calls = [];
+            fire(pressable(container, 'Play again')!, 'click');
+            await settle();
+
+            expect(sign).not.toHaveBeenCalled();
+            expect(server.calls).not.toContain('tables.ready');
+            expect(held.chairs[0].ready).toBe(false);
+            expect(useToasts().items().map((toast) => toast.text)).toContain('There is not that much NURA free in your vault balance.');
+            vi.restoreAllMocks();
+        });
+
+        it('reads the vault again when it moves while the reader sits at a table played for NURA, and not at a free one', async () =>
+        {
+            const { held } = await finishedAt(true);
+            const reads = () => server.calls.filter((call) => call === 'vault.state').length;
+            const moved = async () =>
+            {
+                socket.deliver({ v: 1, t: 'nudge', n: 2, at: 0, scope: 'me', id: 'vault' });
+                clock.advance(NUDGE_WINDOW_MS);
+                await settle();
+            };
+
+            await moved();
+
+            expect(reads(), 'a free table listened to the vault').toBe(0);
+
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+            server.calls = [];
+
+            await moved();
+
+            expect(reads()).toBe(1);
+        });
+
+        it('says what the reader won at a table played for NURA, on the card of the game it was won in', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+
+            held.stake = (10n * 10n ** 18n).toString();
+            held.money = { state: 'settling', feeBps: 500, winners: [0] };
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-money]')?.textContent).toContain('You won 19 NURA. Paying it out…'), { timeout: 4000 });
+
+            held.money = { state: 'settled', feeBps: 500, winners: [0], closeTx: `0x${ 'cd'.repeat(32) }` };
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-money]')?.textContent).toContain('You won 19 NURA.'), { timeout: 4000 });
+            expect(container.querySelector('[data-money]')?.textContent).not.toContain('Paying it out');
         });
 
         it('says ready when Play again is pressed, starts nothing while somebody has not, and says who', async () =>

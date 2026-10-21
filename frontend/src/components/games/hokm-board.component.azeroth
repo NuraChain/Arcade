@@ -31,7 +31,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { Rematch } from './boards.ts';
+import type { Rematch, Staked } from './boards.ts';
 
 type Side = 'bottom' | 'top' | 'left' | 'right' | 'top-left' | 'top-right';
 
@@ -139,7 +139,7 @@ const pledgedHand = (hand: readonly number[], pledge: Pledge | null) =>
         : hand.filter((card) => !pledge.cards.includes(card));
 };
 
-export default component HokmBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
+export default component HokmBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -2650,7 +2650,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
             </Show>
         </div>
 
-        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
 
         <div class="board-flight" aria-hidden="true" inert ref={ (element) => layer = element }></div>
     </div>

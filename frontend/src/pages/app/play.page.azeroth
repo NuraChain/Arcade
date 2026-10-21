@@ -35,7 +35,7 @@ import { chunk, reloadPage } from '../../lib/chunks.ts';
 import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { joinVoice } from '../../lib/join-voice.ts';
-import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
+import { BOARDS, drawable, rematchOf, stakedOf, type BoardComponent, type Rematch, type Staked } from '../../components/games/boards.ts';
 import { WATCH_DELAY_MS, turnMs } from '../../../../backend/src/domains/match/turns.ts';
 
 export default component PlayPage()
@@ -636,12 +636,29 @@ export default component PlayPage()
 
     derived rematch = table !== null && seated ? rematchOf(table) : undefined;
 
-    const boardProps = (match: MatchView): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
+    derived vaultHeld = vaults.state();
+
+    derived vaultOpen = vaultHeld !== null && vaultHeld.configured ? vaultHeld : null;
+
+    derived staked = table === null ? undefined : stakedOf(table, vaultOpen?.fee ?? 0, vaultOpen?.chainId ?? 0, vaultOpen?.balances?.free);
+
+    derived paidSeat = seated && table?.stake !== undefined;
+
+    effect
+    {
+        if (paidSeat)
+        {
+            onCleanup(vaults.listen());
+        }
+    }
+
+    const boardProps = (match: MatchView): { match: MatchView; events: EventBatch; starting: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech: Record<string, string>; turnMs: number } => ({
         match,
         events: board.events(),
         starting,
         onAgain: seated ? () => void again() : undefined,
         rematch,
+        stake: staked,
         speech,
         turnMs: turnMs(table?.mode ?? 'live')
     });
@@ -783,6 +800,12 @@ export default component PlayPage()
         if (table?.stake === undefined)
         {
             await lobby.again(tableId, board.match()?.id);
+            return;
+        }
+
+        if (staked?.short !== undefined)
+        {
+            toasts.show({ kind: 'warning', text: locale.t('tables.refused.paid-funds'), dedupe: 'paid-funds' });
             return;
         }
 

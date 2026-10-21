@@ -1,11 +1,13 @@
-import { createResource } from 'azerothjs';
+import { Link, createResource } from 'azerothjs';
 
 import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
+import { potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import type { TableSummary } from '../../api.ts';
 import { client } from '../../api.ts';
 import { BAR_LEFT, BAR_WIDTH, BOTTOM, FIELD_LEFT, FIELD_RIGHT, FRAME, HEIGHT, MIDDLE, SPIKES, TOP, TRAY, TRAY_LEFT, WIDTH } from '../../game/backgammon-layout.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
+import { explorerTx, nuraOf } from '../../lib/nura.ts';
 import { looking } from '../../lib/looking.ts';
 import { whyRefused } from '../../lib/open-table.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -16,6 +18,7 @@ import { useToasts } from '../../stores/toasts.store.ts';
 import { useVault } from '../../stores/vault.store.ts';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import { stakedOf } from './boards.ts';
 import { lobbySeats } from './lobby-seats.ts';
 import MatchResult from './match-result.component.azeroth';
 import SeatCard from './seat-card.component.azeroth';
@@ -114,6 +117,58 @@ export default component LobbyPanel(props: {
 
     derived room = !seated && empty > 0 ? locale.plural('play.lobby.emptySeats', empty) : '';
 
+    derived held = vaults.state();
+
+    derived vaultFee = held !== null && held.configured ? held.fee : 0;
+
+    derived chainId = held !== null && held.configured ? held.chainId : 0;
+
+    derived staked = stakedOf(props.table, vaultFee, chainId, held !== null && held.configured ? held.balances?.free : undefined);
+
+    derived paid = props.table.stake !== undefined;
+
+    derived short = seated && mine?.ready !== true && staked?.short !== undefined;
+
+    derived shortLine = locale.t('play.stake.short', { free: locale.n(nuraOf(staked?.short ?? '0'), { maximumFractionDigits: 4 }) });
+
+    derived stakeLine = (() =>
+    {
+        const wei = BigInt(props.table.stake ?? '0');
+        const share = shareOf(potOf(wei, props.table.seats), staked?.fee ?? vaultFee, props.table.teams ? 2 : 1);
+
+        return locale.t(props.table.teams ? 'play.stake.eachTeams' : 'play.stake.each', {
+            stake: locale.n(nuraOf(wei), { maximumFractionDigits: 4 }),
+            share: locale.n(nuraOf(share), { maximumFractionDigits: 4 })
+        });
+    })();
+
+    derived locking = props.table.money?.state === 'locking';
+
+    derived lockTx = props.table.money?.openTx ?? null;
+
+    derived lockLink = locking && lockTx !== null ? explorerTx(chainId, lockTx) : null;
+
+    derived lockFailed = props.table.money?.state === 'failed' && props.table.matchId === undefined;
+
+    derived failedLine = (() =>
+    {
+        const blame = props.table.money?.blame;
+
+        if (blame === undefined)
+        {
+            return locale.t('play.stake.failed.all');
+        }
+
+        if (blame === me)
+        {
+            return locale.t('play.stake.failed.you');
+        }
+
+        const person = people.byHandle(blame);
+
+        return locale.t('play.stake.failed.them', { name: person === null ? blame : person.displayName.split(' ')[0] });
+    })();
+
     const sideAt = (seat: number) => sideOf(seat, { seats: props.table.seats, variant: 'teams' });
 
     derived home = props.table.mine === undefined ? null : sideAt(props.table.mine);
@@ -198,6 +253,12 @@ export default component LobbyPanel(props: {
             return;
         }
 
+        if (staked?.short !== undefined)
+        {
+            toasts.show({ kind: 'warning', text: locale.t('tables.refused.paid-funds'), dedupe: 'paid-funds' });
+            return;
+        }
+
         signing = true;
 
         const signed = await vaults.signStake(props.table.id);
@@ -264,6 +325,29 @@ export default component LobbyPanel(props: {
             <Show when={ room !== '' }>
                 { () => <p class="text-ui-sm text-faint">{ room }</p> }
             </Show>
+            <Show when={ paid }>
+                <p class="flex items-center justify-center gap-1.5 text-ui-sm font-semibold text-madder" data-stake>
+                    <Icon name="coins" size={ 14 } class="shrink-0" />
+                    <span>{ stakeLine }</span>
+                </p>
+            </Show>
+            <Show when={ locking }>
+                <p class="flex flex-wrap items-center justify-center gap-x-2 text-ui-sm text-muted" role="status">
+                    <span>{ locale.t('play.stake.locking') }</span>
+                    <Show when={ lockLink } let={ href }>
+                        <a class="font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">{ locale.t('vault.tx') }</a>
+                    </Show>
+                </p>
+            </Show>
+            <Show when={ lockFailed }>
+                <p class="text-ui-sm text-danger" role="alert">{ failedLine }</p>
+            </Show>
+            <Show when={ short }>
+                <div class="flex flex-col items-center" data-short>
+                    <p class="text-ui-sm font-semibold text-gold">{ shortLine }</p>
+                    <Link to="/app/me/wallet" class="inline-flex min-h-11 items-center text-ui-sm font-semibold text-accent hover:underline">{ locale.t('vault.title') }</Link>
+                </div>
+            </Show>
         </div>
 
         <div class="lobby-acts">
@@ -315,7 +399,7 @@ export default component LobbyPanel(props: {
         <Show when={ lastGame } let={ game }>
             <div class="flex flex-col gap-2" data-last-game>
                 <p class="label text-ui-xs text-faint">{ locale.t('play.lobby.last') }</p>
-                <MatchResult match={ game } mine={ game.mine } />
+                <MatchResult match={ game } mine={ game.mine } stake={ staked } />
             </div>
         </Show>
     </section>

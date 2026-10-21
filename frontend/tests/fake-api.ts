@@ -26,6 +26,7 @@ import type {
     Privacy,
     Standing,
     StakeTerms,
+    TableMoney,
     VaultGames,
     VaultState,
     WalletCall
@@ -111,6 +112,7 @@ interface TableWire
     keptOut?: string[];
     quick?: boolean;
     stake?: string;
+    money?: TableMoney;
     createdAt: string;
 }
 
