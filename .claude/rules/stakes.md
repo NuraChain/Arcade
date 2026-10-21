@@ -87,6 +87,18 @@ table would deal: no game is ever dealt there but by the lock.
 a ready back, signing again and the switch to or from a team call are `paid-locking` (409), and the
 sweep that stands absent players up passes the table over. Each is asked under the table's lock.
 
+## Quick play at a stake
+
+**The stake is part of the search, and so is the signature.** `POST /tables/quick/stake` writes a
+consent with no table yet (a searcher's newest replaces any other) and answers the typed data; the
+search carries `stake` and `signature`, checked as a ready is (`signedSearch`: on the ladder, live,
+the reader's wallet, the fee, the balance). Only a table at exactly that stake is found: a free
+search never finds a paid table and a paid search never a free one, and a table it opens is a paid
+quick table. The consent is bound to the chair in the search's own transaction (`attach`), so a
+searcher who sits down has signed for that table, and a table the search fills is locked as the
+last ready locks one. A wait at a paid quick table is let go of like any other when its player
+looks for another game (*One live search at a time*, in `games.md`), never while it is locking.
+
 ## The worker
 
 **One pass at a time in a process**, every two seconds (`STAKE_SWEEP_MS` in `main.ts`) and at once
@@ -125,5 +137,5 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: quick play at a stake, a player's history and reclaiming a game the server never paid,
+Not here yet: a player's history and reclaiming a game the server never paid,
 the browser, provably fair dice and cards, and the admin's view of the vault.

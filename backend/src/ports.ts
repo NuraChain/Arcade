@@ -215,7 +215,9 @@ export interface GroupPort
  */
 export interface TablePort
 {
-    quick(me: string, input: QuickAsk & { game: string; voice: VoiceScope }): Promise<TableSummary>;
+    quick(me: string, input: QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string }): Promise<TableSummary>;
+
+    quickStake(me: string, game: string, stake: string): Promise<StakeTerms>;
 
     /** The tables this account is sitting at. */
     mine(me: string): Promise<TableSummary[]>;

@@ -346,6 +346,11 @@ describe('a table played for NURA', () =>
                     told.push(['stake', ...said]);
                     return Promise.resolve(terms);
                 },
+                quickStake: (...said: unknown[]) =>
+                {
+                    told.push(['quickStake', ...said]);
+                    return Promise.resolve(terms);
+                },
                 setReady: (...said: unknown[]) =>
                 {
                     told.push(['ready', ...said]);
@@ -380,6 +385,23 @@ describe('a table played for NURA', () =>
         expect(told).toEqual([['stake', 'somebody', TABLE]]);
     });
 
+    it('hands a searcher the stake to sign for what they look for, never reading the search as a table', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = staking(told);
+        const response = await post(app, '/tables/quick/stake', { game: 'ludo', stake: '5000000000000000000' });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(terms);
+
+        for (const body of [{}, { game: 'ludo' }, { stake: '5' }, { game: 'ludo', stake: 5 }, { game: 'ludo', stake: '9'.repeat(41) }])
+        {
+            expect((await post(app, '/tables/quick/stake', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        expect(told).toEqual([['quickStake', 'somebody', 'ludo', '5000000000000000000']]);
+    });
+
     it('passes a ready\'s signature on as it came, and refuses one that is not a bounded text', async () =>
     {
         const told: unknown[][] = [];
@@ -403,6 +425,7 @@ describe('a table played for NURA', () =>
         const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
 
         expect(bodies).toContain(`'/tables/:id/ready': (bad) => [`);
+        expect(bodies).toContain(`'/tables/quick/stake': (bad) => [`);
         expect(spared).not.toContain(`'/tables/:id/ready'`);
         expect(spared).toContain(`'/tables/:id/stake'`);
     });

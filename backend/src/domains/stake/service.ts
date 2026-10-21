@@ -202,6 +202,77 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
         return wei;
     };
 
+    const composed = (player: Address, game: string, amount: string, feeBps: number) =>
+    {
+        const secret = freshBytes();
+        const deadline = new Date(Math.floor((Date.now() + CONSENT_MS) / 1000) * 1000);
+        const stake: Stake = {
+            player,
+            game,
+            amount: BigInt(amount),
+            feeBps,
+            commit: commitOf(secret),
+            nonce: freshBytes(),
+            deadline: BigInt(deadline.getTime() / 1000)
+        };
+
+        return {
+            stake,
+            terms: { typedData: vault.stakeTypedData(stake), deadline: deadline.toISOString() },
+            row: (userId: string, tableId: string | null) => ({
+                nonce: stake.nonce,
+                userId,
+                tableId,
+                game,
+                amount,
+                feeBps,
+                address: player.toLowerCase(),
+                commitment: stake.commit,
+                secret,
+                deadline
+            })
+        };
+    };
+
+    const verified = async (player: Address, held: ConsentRow | undefined, signature: string | undefined) =>
+    {
+        if (held === undefined || !held.fresh || signature === undefined || !SIGNATURE.test(signature))
+        {
+            throw unsigned();
+        }
+
+        const stake = stakeFrom(held);
+
+        if (!await vault.signedBy(player, stake, signature as Hex))
+        {
+            throw unsigned();
+        }
+
+        const [terms, money] = await Promise.all([vault.terms(), vault.balances(player)]);
+
+        if (terms.paused)
+        {
+            throw halted();
+        }
+
+        if (terms.fee !== held.fee_bps)
+        {
+            throw unsigned();
+        }
+
+        if (stake.amount > terms.maxStake)
+        {
+            throw notStake();
+        }
+
+        if (money.free < stake.amount)
+        {
+            throw short();
+        }
+
+        return { nonce: held.nonce, signature };
+    };
+
     const seatsOf = async (escrowId: string) => await db.getRepository(EscrowSeat).find({
         where: { escrowId },
         order: { seat: 'ASC' }
@@ -842,17 +913,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 throw notStake();
             }
 
-            const secret = freshBytes();
-            const deadline = Math.floor((Date.now() + CONSENT_MS) / 1000);
-            const stake: Stake = {
-                player,
-                game: table.game,
-                amount: BigInt(table.amount),
-                feeBps: terms.fee,
-                commit: commitOf(secret),
-                nonce: freshBytes(),
-                deadline: BigInt(deadline)
-            };
+            const made = composed(player, table.game, table.amount, terms.fee);
 
             await db.transaction(async (tx) =>
             {
@@ -869,74 +930,89 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 }
 
                 await tx.getRepository(StakeConsent).delete({ tableId, userId: me });
-                await tx.getRepository(StakeConsent).insert({
-                    nonce: stake.nonce,
-                    userId: me,
-                    tableId,
-                    game: stake.game,
-                    amount: table.amount,
-                    feeBps: stake.feeBps,
-                    address: player.toLowerCase(),
-                    commitment: stake.commit,
-                    secret,
-                    deadline: new Date(deadline * 1000)
-                });
+                await tx.getRepository(StakeConsent).insert(made.row(me, tableId));
                 await tx.getRepository(TableSeat).update({ tableId, userId: me }, { ready: false });
             });
 
-            return { typedData: vault.stakeTypedData(stake), deadline: new Date(deadline * 1000).toISOString() };
+            return made.terms;
         },
 
-        async consent(me: string, tableId: string, signature: string | undefined)
+        async prepareSearch(me: string, game: string, amount: string)
         {
             const player = await playerOf(me);
-
-            if (signature === undefined || !SIGNATURE.test(signature))
-            {
-                throw unsigned();
-            }
-
-            const held = await consentQuery(db)
-                .where('c.table_id = :tableId and c.user_id = :me', { tableId, me })
-                .getRawOne<ConsentRow>();
-
-            if (held === undefined || !held.fresh)
-            {
-                throw unsigned();
-            }
-
-            const stake = stakeFrom(held);
-
-            if (!await vault.signedBy(player, stake, signature as Hex))
-            {
-                throw unsigned();
-            }
-
-            const [terms, money] = await Promise.all([vault.terms(), vault.balances(player)]);
+            const terms = await vault.terms();
 
             if (terms.paused)
             {
                 throw halted();
             }
 
-            if (terms.fee !== held.fee_bps)
-            {
-                throw unsigned();
-            }
-
-            if (stake.amount > terms.maxStake)
+            if (!onLadder(amount, terms.maxStake))
             {
                 throw notStake();
             }
 
-            if (money.free < stake.amount)
-            {
-                throw short();
-            }
+            const made = composed(player, game, amount, terms.fee);
 
             await db.transaction(async (tx) =>
             {
-                const signed = await tx.getRepository(StakeConsent).update({ nonce: held.nonce, userId: me, tableId }, { signature });
+                await tx.getRepository(StakeConsent).delete({ userId: me, tableId: IsNull() });
+                await tx.getRepository(StakeConsent).insert(made.row(me, null));
+            });
+
+            return made.terms;
+        },
+
+        async signedSearch(me: string, ask: { game: string; mode?: string; stake?: string; signature?: string })
+        {
+            if (ask.stake === undefined)
+            {
+                return null;
+            }
+
+            const player = await playerOf(me);
+
+            if ((ask.mode ?? 'live') !== 'live')
+            {
+                throw tableRefusal('paid-pace', 'Only a live table can be played for NURA.');
+            }
+
+            if (!onLadder(ask.stake, (await vault.terms()).maxStake))
+            {
+                throw notStake();
+            }
+
+            const held = await consentQuery(db)
+                .where('c.user_id = :me and c.table_id is null and c.game = :game and c.amount = cast(:amount as numeric)', { me, game: ask.game, amount: ask.stake })
+                .getRawOne<ConsentRow>();
+            const { nonce, signature } = await verified(player, held, ask.signature);
+
+            await db.getRepository(StakeConsent).update({ nonce, tableId: IsNull() }, { signature });
+
+            return nonce;
+        },
+
+        async attach(tx: EntityManager, nonce: string, tableId: string)
+        {
+            const bound = await tx.getRepository(StakeConsent).update({ nonce, tableId: IsNull() }, { tableId });
+
+            if ((bound.affected ?? 0) === 0)
+            {
+                throw unsigned();
+            }
+        },
+
+        async consent(me: string, tableId: string, signature: string | undefined)
+        {
+            const player = await playerOf(me);
+            const held = await consentQuery(db)
+                .where('c.table_id = :tableId and c.user_id = :me', { tableId, me })
+                .getRawOne<ConsentRow>();
+            const { nonce } = await verified(player, held, signature);
+
+            await db.transaction(async (tx) =>
+            {
+                const signed = await tx.getRepository(StakeConsent).update({ nonce, userId: me, tableId }, { signature });
 
                 if ((signed.affected ?? 0) === 0)
                 {

@@ -2084,19 +2084,33 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async quick(me, input)
             {
                 const began = performance.now();
-                const found = await table.quick(me, input, here, (tx) => match.playingAt(tx, me)).catch((error: unknown) =>
+                const refused = (error: unknown) =>
                 {
                     note?.('quick play refused', { game: input.game, who: me, code: (error as { code?: string }).code ?? 'error' });
 
                     throw error;
-                });
+                };
+                const nonce = await stakes.signedSearch(me, input).catch(refused);
+                const found = await table.quick(
+                    me,
+                    input,
+                    here,
+                    (tx) => match.playingAt(tx, me),
+                    nonce === null ? undefined : (tx, tableId) => stakes.attach(tx, nonce, tableId)
+                ).catch(refused);
                 let after = await mustTable(me, found.id);
                 const outcome = found.seated ? (after.is_host ? 'opened' : 'joined') : after.match_id === null ? 'already waiting' : 'already playing';
 
                 if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
                 {
-                    await courtesy('quick start', async () =>
+                    await courtesy(after.stake === null ? 'quick start' : 'stake lock', async () =>
                     {
+                        if (after.stake !== null)
+                        {
+                            await stakes.lockIfReady(found.id);
+                            return;
+                        }
+
                         const load = await startPushed(me, found.id);
 
                         await courtesy('turn notice', () => nudgeTurn(load, me));
@@ -2112,7 +2126,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 note?.('quick play', {
                     game: after.game,
                     who: me,
-                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams },
+                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams, stake: input.stake },
                     outcome,
                     table: after.id,
                     match: after.match_id,
@@ -2295,6 +2309,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 await ringTable(after);
                 return asTable(after);
             },
+
+            quickStake: (me, game, stake) => stakes.prepareSearch(me, game, stake),
 
             async stake(me, tableId)
             {

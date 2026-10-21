@@ -16,6 +16,7 @@ import {
     voiceSwitch,
     vaultAmountInput,
     stakeTerms,
+    quickStakeInput,
     vaultBreakInput,
     vaultState,
     vaultTermsInput,
@@ -595,6 +596,9 @@ export function buildApi(ports: Ports)
 
             quick: routes.post('/quick', { input: tableQuickInput, output: tableSummary },
                 (context) => ports.table.quick(context.principal.userId, context.input)),
+
+            quickStake: routes.post('/quick/stake', { input: quickStakeInput, output: stakeTerms },
+                (context) => ports.table.quickStake(context.principal.userId, context.input.game, context.input.stake)),
 
             /** Resolves the short code somebody pasted into a chat. */
             byCode: routes.get('/code/:code', { output: tableSummary }, async (context) =>

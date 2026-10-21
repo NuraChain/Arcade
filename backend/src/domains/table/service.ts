@@ -419,7 +419,7 @@ const OCCUPANTS = 'select s.user_id from table_seats s where s.table_id = t.id a
 
 const passedOver = (away: number, missed: number) => away + missed === 0 ? {} : { passed: { away, missed } };
 
-const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter) => tx.getRepository(Table)
+const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter, stake: string | null) => tx.getRepository(Table)
     .createQueryBuilder('t')
     .where(`t.game = :game and t.status = 'open' and t.mode = :mode`, { game, mode: filter.mode })
     .andWhere(
@@ -434,7 +434,13 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
     .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
     .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
     .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
-    .andWhere('not exists (select 1 from table_stakes k where k.table_id = t.id)')
+    .andWhere(
+        `(case when cast(:stake as numeric) is null
+               then not exists (select 1 from table_stakes k where k.table_id = t.id)
+               else exists (select 1 from table_stakes k where k.table_id = t.id and k.amount = cast(:stake as numeric))
+          end)`,
+        { stake }
+    )
     .andWhere('not exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :lead)')
     .andWhere(
         `not exists (select 1 from blocks b
@@ -517,6 +523,7 @@ const letGo = async (tx: EntityManager, lead: string) =>
             .createQueryBuilder('s')
             .where('s.table_id = :id and s.user_id = :lead and s.ready', { id, lead })
             .andWhere('not exists (select 1 from matches m where m.table_id = s.table_id and m.finished_at is null)')
+            .andWhere(`not exists (select 1 from escrows e where e.table_id = s.table_id and e.state = 'locking')`)
             .getExists();
 
         if (!still)
@@ -641,11 +648,13 @@ export function createTableService(db: DataSource, social: SocialService)
 
         async quick(
             lead: string,
-            ask: QuickAsk & { game: string; voice: VoiceScope },
+            ask: QuickAsk & { game: string; voice: VoiceScope; stake?: string },
             present: (userIds: readonly string[]) => ReadonlySet<string>,
-            playing: (tx: EntityManager) => Promise<string | null> = async () => null
+            playing: (tx: EntityManager) => Promise<string | null> = async () => null,
+            attach: (tx: EntityManager, tableId: string) => Promise<void> = async () => undefined
         )
         {
+            const stake = ask.stake ?? null;
             const rules = await rulesOf(ask.game);
 
             if (rules === null)
@@ -673,7 +682,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
 
-                const waiting = await compatible(tx, lead, ask.game, want.filter)
+                const waiting = await compatible(tx, lead, ask.game, want.filter, stake)
                     .innerJoin(TableSeat, 'mine', 'mine.table_id = t.id and mine.user_id = :lead and mine.ready')
                     .select('t.id', 'id')
                     .orderBy('mine.joined_at', 'DESC')
@@ -690,7 +699,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 const left = want.filter.mode === 'live' ? await letGo(tx, lead) : [];
                 const gone = left.length === 0 ? {} : { left };
 
-                const candidates = await compatible(tx, lead, ask.game, want.filter)
+                const candidates = await compatible(tx, lead, ask.game, want.filter, stake)
                     .select('t.id', 'id')
                     .addSelect('t.teams', 'teams')
                     .addSelect(`(select coalesce(array_agg(s.user_id::text), '{}') from table_seats s where s.table_id = t.id and s.user_id is not null)`, 'occupants')
@@ -726,6 +735,8 @@ export function createTableService(db: DataSource, social: SocialService)
                     }
                     else if (await sit(tx, candidate.id, candidate.teams, lead))
                     {
+                        await attach(tx, candidate.id);
+
                         return { id: candidate.id, seated: true, ...gone, ...passedOver(away, missed) };
                     }
                     else
@@ -744,6 +755,13 @@ export function createTableService(db: DataSource, social: SocialService)
                 }, [], true);
 
                 await tx.getRepository(QuickTable).insert({ tableId: opened });
+
+                if (stake !== null)
+                {
+                    await tx.getRepository(TableStake).insert({ tableId: opened, amount: stake });
+                }
+
+                await attach(tx, opened);
 
                 return { id: opened, seated: true, ...gone, ...passedOver(away, missed) };
             };

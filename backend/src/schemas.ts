@@ -1228,8 +1228,12 @@ export const tableQuickInput = object({
     blinds: tableBlinds.optional(),
     cube: boolean().optional(),
     teams: boolean().optional(),
-    voice: voiceScope
+    voice: voiceScope,
+    stake: string({ max: 40 }).optional(),
+    signature: string({ max: 4096 }).optional()
 });
+
+export const quickStakeInput = object({ game: string({ max: 32 }), stake: string({ max: 40 }) });
 
 export const readyInput = object({ ready: boolean(), signature: string({ max: 4096 }).optional() });
 

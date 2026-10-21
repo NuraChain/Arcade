@@ -840,4 +840,104 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(found).not.toHaveProperty('stake');
         });
     });
+
+    describe('quick play at a stake', () =>
+    {
+        const FIVE = (5n * WEI_PER_NURA).toString();
+
+        const search = async (person: Person, stake?: string) =>
+        {
+            if (stake === undefined)
+            {
+                return await ports.table.quick(person.id, { game: 'ludo', seats: 2, voice: 'off' });
+            }
+
+            const terms = await ports.table.quickStake(person.id, 'ludo', stake);
+
+            return await ports.table.quick(person.id, { game: 'ludo', seats: 2, voice: 'off', stake, signature: signFor(person, terms.typedData) });
+        };
+
+        it('hands a searcher the stake to sign for the game and stake they look for, and keeps one at a time', async () =>
+        {
+            const searcher = await makeUser(0);
+            const first = await ports.table.quickStake(searcher.id, 'ludo', TEN);
+            const second = await ports.table.quickStake(searcher.id, 'ludo', TEN);
+            const message = JSON.parse(second.typedData).message as Record<string, string | number>;
+
+            expect(message).toMatchObject({ player: getAddress(searcher.address), game: 'ludo', amount: TEN, feeBps: 500 });
+            expect(JSON.parse(first.typedData).message.nonce).not.toBe(message.nonce);
+            expect(await db.getRepository(StakeConsent).find({ where: { userId: searcher.id } })).toMatchObject([{ nonce: message.nonce, tableId: null, signature: null }]);
+        });
+
+        it('opens a table at that stake for the first searcher, seats the next one there, and locks both stakes', async () =>
+        {
+            const first = await makeUser(0);
+            const second = await makeUser(1);
+            fake.state.mine = 'pending';
+
+            const opened = await search(first, TEN);
+
+            expect(opened).toMatchObject({ stake: TEN, quick: true, taken: 1, mine: 0 });
+            expect(await db.getRepository(StakeConsent).findOneByOrFail({ userId: first.id })).toMatchObject({ tableId: opened.id });
+            expect((await db.getRepository(StakeConsent).findOneByOrFail({ userId: first.id })).signature).not.toBeNull();
+
+            const joined = await search(second, TEN);
+
+            expect(joined.id).toBe(opened.id);
+            expect(await escrowOf(opened.id)).toMatchObject({ state: 'locking', amount: TEN });
+        });
+
+        it('never seats a search at another stake, a free search at a paid table, or a paid search at a free one', async () =>
+        {
+            const free = await search(await makeUser(null));
+            const ten = await search(await makeUser(0), TEN);
+            const five = await search(await makeUser(1), FIVE);
+            const another = await search(await makeUser(2));
+
+            expect(new Set([free.id, ten.id, five.id]).size).toBe(3);
+            expect(five.stake).toBe(FIVE);
+            expect(another.id).toBe(free.id);
+            expect(free).not.toHaveProperty('stake');
+        });
+
+        it('refuses a search at a stake with no signature, somebody else\'s, a turn-based pace, a stake off the ladder or a guest, and seats nobody', async () =>
+        {
+            const searcher = await makeUser(0);
+            const other = await makeUser(1);
+            const terms = await ports.table.quickStake(searcher.id, 'ludo', TEN);
+            const ask = { game: 'ludo', seats: 2, voice: 'off' as const, stake: TEN };
+
+            expect(await word(ports.table.quick(searcher.id, ask))).toBe('422 paid-consent');
+            expect(await word(ports.table.quick(searcher.id, { ...ask, signature: signFor(other, terms.typedData) }))).toBe('422 paid-consent');
+            expect(await word(ports.table.quick(searcher.id, { ...ask, mode: 'turns', signature: signFor(searcher, terms.typedData) }))).toBe('422 paid-pace');
+            expect(await word(ports.table.quick(searcher.id, { ...ask, stake: '7', signature: signFor(searcher, terms.typedData) }))).toBe('422 paid-stake');
+            expect(await word(ports.table.quick(searcher.id, { ...ask, stake: FIVE, signature: signFor(searcher, terms.typedData) }))).toBe('422 paid-consent');
+            expect(await word(ports.table.quickStake(searcher.id, 'ludo', '7'))).toBe('422 paid-stake');
+            expect(await word(ports.table.quickStake((await makeUser(null)).id, 'ludo', TEN))).toBe('409 paid-wallet');
+            expect(await db.getRepository(Table).count()).toBe(0);
+        });
+
+        it('lets go of a searcher\'s wait at a paid table when they look for another game, and never of one that is locking', async () =>
+        {
+            const first = await makeUser(0);
+            const waiting = await search(first, TEN);
+
+            await ports.table.quick(first.id, { game: 'backgammon', voice: 'off' });
+
+            expect(await db.getRepository(TableSeat).existsBy({ tableId: waiting.id, userId: first.id })).toBe(false);
+            expect(await db.getRepository(StakeConsent).countBy({ tableId: waiting.id })).toBe(0);
+
+            const second = await makeUser(1);
+            const third = await makeUser(2);
+            fake.state.mine = 'pending';
+            const locking = await search(second, TEN);
+            await search(third, TEN);
+
+            expect(await escrowOf(locking.id)).toMatchObject({ state: 'locking' });
+
+            await ports.table.quick(second.id, { game: 'backgammon', voice: 'off' });
+
+            expect(await db.getRepository(TableSeat).existsBy({ tableId: locking.id, userId: second.id })).toBe(true);
+        });
+    });
 });
