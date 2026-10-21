@@ -6,6 +6,7 @@ import Segmented from '../ui/segmented.component.azeroth';
 import SheetHeader from '../ui/sheet-header.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import { formatsOf, type TableMode } from '../../data/tables.ts';
+import { nuraOf } from '../../lib/nura.ts';
 import { openTable } from '../../lib/open-table.ts';
 import { cubeAsked, fitted, recallAsk, rememberAsk } from '../../lib/quick-asks.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -13,6 +14,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
 
 const BLINDS = ['low', 'mid', 'high'] as const;
 
@@ -22,11 +24,13 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
     const lobby = useLobby();
     const locale = useLocale();
     const toasts = useToasts();
+    const vaults = useVault();
     const { navigate } = useNavigate();
 
     state game = props.game;
     state ask = recallAsk(props.game, catalogue.rules(props.game));
     state pending = false;
+    state stake = null as string | null;
 
     derived rules = catalogue.rules(game);
 
@@ -52,6 +56,18 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
 
     derived busy = pending || lobby.finding().includes(game);
 
+    derived held = vaults.state();
+
+    derived vault = held !== null && held.configured ? held : null;
+
+    derived paying = vault !== null && vault.may === 'yes' && mode === 'live';
+
+    derived ladder = vault?.ladder ?? [];
+
+    derived staking = paying && stake !== null && ladder.includes(stake) ? stake : null;
+
+    derived wagering = staking !== null;
+
     const choose = (next: Record<string, unknown>) =>
     {
         if (!busy)
@@ -69,7 +85,7 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
         }
     };
 
-    const find = () =>
+    const find = async () =>
     {
         if (busy)
         {
@@ -77,11 +93,22 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
         }
 
         const asked = game;
+        const wager = staking;
 
         pending = true;
         rememberAsk(asked, ask);
+
+        const signed = wager === null ? null : await vaults.signSearch(asked, wager);
+
+        if (signed !== null && 'said' in signed)
+        {
+            pending = false;
+            toasts.show({ kind: 'warning', text: locale.t(signed.said) });
+            return;
+        }
+
         openTable(
-            lobby.quick(asked, ask).then((id) =>
+            lobby.quick(asked, ask, wager === null || signed === null ? undefined : { stake: wager, signature: signed.signature }).then((id) =>
             {
                 const elsewhere = lobby.seated().find((table) => table.id === id && table.game !== asked);
                 const named = catalogue.games.find((entry) => entry.id === elsewhere?.game);
@@ -162,6 +189,29 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
                 </fieldset>
             </Show>
 
+            <Show when={ paying }>
+                <fieldset class="flex flex-col gap-2">
+                    <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.stake') }</legend>
+                    <ul class="flex flex-wrap gap-2">
+                        <li>
+                            <Chip selected={ !wagering } onClick={ () => stake = null }>
+                                <span>{ locale.t('create.stake.free') }</span>
+                            </Chip>
+                        </li>
+                        <For each={ ladder } key={ (amount) => amount } let={ amount }>
+                            <li>
+                                <Chip icon="coins" selected={ staking === amount } onClick={ () => stake = amount }>
+                                    <span><span class="tally">{ locale.n(nuraOf(amount)) }</span> NURA</span>
+                                </Chip>
+                            </li>
+                        </For>
+                    </ul>
+                    <Show when={ wagering }>
+                        <p class="text-ui-xs text-faint">{ locale.t('quickMatch.stakeHint') }</p>
+                    </Show>
+                </fieldset>
+            </Show>
+
             <Show when={ aimed }>
                 <fieldset class="flex flex-col gap-2">
                     <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.target') }</legend>
@@ -226,7 +276,7 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
             </Show>
         </div>
 
-        <Button variant="primary" size="lg" block leading="play" loading={ busy } onClick={ find }>
+        <Button variant="primary" size="lg" block leading="play" loading={ busy } onClick={ () => void find() }>
             { locale.t('quickMatch.find') }
         </Button>
         <span class="sr-only" role="status">{ pending ? locale.t('quickMatch.busy') : '' }</span>

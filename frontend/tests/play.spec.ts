@@ -39,6 +39,7 @@ import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import { useVault } from '../src/stores/vault.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { useWatch, type Watched } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
@@ -947,6 +948,22 @@ describe('PlayPage', () =>
 
             expect(server.calls).toContain('tables.start');
             expect(said()[0][1]).not.toBe(useLocale().t('state.errorLead'));
+        });
+
+        it('offers no Start at a table played for NURA once everybody is ready, because the lock starts its game', async () =>
+        {
+            const id = await useLobby().host('backgammon', { ...defaultTable('backgammon'), stake: (10n * 10n ** 18n).toString() }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[0].ready = true;
+            held.chairs[1].who = 'sara.k';
+            held.chairs[1].ready = true;
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(pressable(container, 'play.lobby.readyTag')).toBeDefined(), { timeout: 4000 });
+
+            expect(pressable(container, 'match.start')).toBeUndefined();
         });
 
         it('says a chair is empty when somebody stood up before the start arrived', async () =>
@@ -3005,6 +3022,44 @@ describe('PlayPage', () =>
         afterEach(() =>
         {
             delete (client.matches as unknown as Record<string, unknown>).view;
+        });
+
+        it('asks the wallet to sign the next game\'s stake at a table played for NURA, and says ready with the signature', async () =>
+        {
+            const signature = `0x${ 'cd'.repeat(65) }`;
+            const { container, held } = await finishedAt(true);
+            const sign = vi.spyOn(useVault(), 'signStake').mockResolvedValue({ signature });
+
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+
+            fire(pressable(container, 'Play again')!, 'click');
+
+            await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
+
+            expect(sign).toHaveBeenCalledWith(held.id);
+            expect(server.nura.signatures).toContain(signature);
+            expect(server.calls, 'a table played for NURA is started by its lock, never by a press').not.toContain('tables.start');
+            vi.restoreAllMocks();
+        });
+
+        it('says nothing ready for the next game when the wallet would not sign its stake, and says why', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+
+            vi.spyOn(useVault(), 'signStake').mockResolvedValue({ said: 'vault.rejected' });
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+
+            fire(pressable(container, 'Play again')!, 'click');
+            await settle();
+
+            expect(server.calls).not.toContain('tables.ready');
+            expect(held.chairs[0].ready).toBe(false);
+            expect(useToasts().items().map((toast) => toast.text)).toContain('You declined it in your wallet, so nothing changed.');
+            vi.restoreAllMocks();
         });
 
         it('says ready when Play again is pressed, starts nothing while somebody has not, and says who', async () =>

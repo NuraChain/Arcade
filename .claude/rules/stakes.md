@@ -190,6 +190,23 @@ vault's wait has passed, which the server asks the chain about again. It is reac
 under the profile's header and from Settings › Account, both only where the vault is open.
 `wallet-page.spec.ts` and `vault-store.spec.ts` hold it.
 
+**A stake is chosen where a table is opened or looked for.** The create form offers Free and the
+vault's ladder (only the stakes under its ceiling) at a live table and at no other, and says what
+the pot comes to, the fee that comes out of it and what the winner, or each of a winning pair,
+takes, by the server's own `potOf`, `cutOf` and `shareOf`. It says when the vault holds less than
+the stake, and to somebody who may not play it shows the stakes disabled, the sentence of their
+refusal and the way to the vault's page. At poker the chips' sentence says what the chips are at a
+table played for NURA. Quick play offers the same choice, to somebody who may play and for a live
+search; a stake asks the wallet to sign the search before it is sent (`signSearch`), and the search
+carries the stake and the signature. A refusal about money is said in its own sentence, where any
+other refusal of a table that would not open is "That table would not open".
+
+**Ready at a paid table is a signature first.** The lobby's Ready asks the wallet to sign this
+game's stake (`signStake`) and then says ready with the signature; a stake the wallet would not sign
+is said and nobody is ready. Taking a ready back asks the wallet nothing. Play again does the same
+for the next game, and at a paid table it never presses Start, because the server's lock starts the
+game. `stake-choice.spec.ts` holds all of it, and `play.spec.ts` the Play again.
+
 ## How it is held
 
 `stake-policy.spec.ts` holds the rules with no Postgres; `chain-vault.spec.ts` the vault's module
@@ -199,5 +216,5 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: choosing a stake when a table is opened or searched for, a paid table's own view of
-its money, provably fair dice and cards, and the admin's view of the vault.
+Not here yet: a paid table's own view of its money, provably fair dice and cards, and the admin's
+view of the vault.

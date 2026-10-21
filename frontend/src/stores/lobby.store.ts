@@ -12,6 +12,12 @@ import { useRealtime } from './realtime.store.ts';
 import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
 import { scopeFor } from '../../../backend/src/domains/table/voices.ts';
 
+export interface PaidSearch
+{
+    stake: string;
+    signature: string;
+}
+
 export interface LobbyApi
 {
     /** The table this page is showing, or null. */
@@ -42,7 +48,7 @@ export interface LobbyApi
      * Answers with the table's id either way, so the caller navigates to the same place whether
      * somebody was already waiting or nobody was.
      */
-    quick(game: GameId, ask?: QuickAsk): Promise<string>;
+    quick(game: GameId, ask?: QuickAsk, paid?: PaidSearch): Promise<string>;
 
     finding: Getter<readonly GameId[]>;
 
@@ -50,7 +56,7 @@ export interface LobbyApi
     claim(tableId: string): Promise<number | null>;
 
     leave(tableId: string, forfeit: boolean): Promise<void>;
-    ready(tableId: string, ready: boolean): Promise<void>;
+    ready(tableId: string, ready: boolean, signature?: string): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
     remove(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
@@ -59,7 +65,7 @@ export interface LobbyApi
     /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
     begin(tableId: string): Promise<void>;
 
-    again(tableId: string, over?: string): Promise<void>;
+    again(tableId: string, over?: string, signature?: string): Promise<void>;
 
     refresh(): Promise<void>;
     start(): () => void;
@@ -324,15 +330,16 @@ export const useLobby = createStore((): LobbyApi =>
             voice: scopeFor(config.voice, teams),
             teams,
             invitees: [...invitees],
-            ...(config.roomId === undefined ? {} : { roomId: config.roomId })
+            ...(config.roomId === undefined ? {} : { roomId: config.roomId }),
+            ...(config.stake === undefined ? {} : { stake: config.stake })
         };
     };
 
-    const settle = async (tableId: string) =>
+    const settle = async (tableId: string, signature?: string) =>
     {
-        const table = await client.tables.ready({ params: { id: tableId }, input: { ready: true } });
+        const table = await client.tables.ready({ params: { id: tableId }, input: { ready: true, ...(signature === undefined ? {} : { signature }) } });
 
-        if (table.chairs.every((chair) => chair.who !== undefined && chair.ready))
+        if (table.stake === undefined && table.chairs.every((chair) => chair.who !== undefined && chair.ready))
         {
             await client.tables.start({ params: { id: tableId } }).catch(() => undefined);
         }
@@ -378,7 +385,7 @@ export const useLobby = createStore((): LobbyApi =>
             return made.id;
         },
 
-        quick(game, ask = {})
+        quick(game, ask = {}, paid)
         {
             const out = searches.get(game);
 
@@ -387,7 +394,7 @@ export const useLobby = createStore((): LobbyApi =>
                 return out;
             }
 
-            const search = client.tables.quick({ input: { game, ...ask, voice: catalogue.defaults(game).voice } })
+            const search = client.tables.quick({ input: { game, ...ask, voice: catalogue.defaults(game).voice, ...paid } })
                 .then(async (table) =>
                 {
                     await revalidate();
@@ -434,11 +441,11 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
-        async ready(tableId, ready)
+        async ready(tableId, ready, signature)
         {
             await guessed.during(
                 atMine(tableId, (chair) => ({ ...chair, ready })),
-                () => inTurn(() => client.tables.ready({ params: { id: tableId }, input: { ready } })),
+                () => inTurn(() => client.tables.ready({ params: { id: tableId }, input: { ready, ...(signature === undefined ? {} : { signature }) } })),
                 truth
             );
         },
@@ -477,9 +484,9 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
-        async again(tableId, over)
+        async again(tableId, over, signature)
         {
-            await guessed.during(afterGame(tableId, over), () => inTurn(() => settle(tableId)), truth);
+            await guessed.during(afterGame(tableId, over), () => inTurn(() => settle(tableId, signature)), truth);
         },
 
         refresh: revalidate,

@@ -110,6 +110,7 @@ interface TableWire
     removed?: boolean;
     keptOut?: string[];
     quick?: boolean;
+    stake?: string;
     createdAt: string;
 }
 
@@ -233,6 +234,7 @@ interface OpeningWire
     voice: VoiceScope;
     teams: boolean;
     invitees: string[];
+    stake?: string;
 }
 
 function newTable(input: OpeningWire)
@@ -255,6 +257,7 @@ function newTable(input: OpeningWire)
         chat: input.chat,
         voice: input.voice,
         teams,
+        ...(input.stake === undefined ? {} : { stake: input.stake }),
         status: 'open',
         host: server.me,
         chairs: Array.from({ length: input.seats }, (_, seat) => ({
@@ -530,7 +533,7 @@ export const server =
     refusals: {} as Record<string, 'blocked' | 'strangers-off' | 'minor-safety'>,
 
     asked: [] as { game: string; seats: number; teams: boolean }[],
-    sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
+    sought: [] as (QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string })[],
 
     searched: [] as string[],
     directoryMax: Infinity,
@@ -1644,6 +1647,7 @@ export const client =
             voice: VoiceScope;
             teams: boolean;
             invitees: string[];
+            stake?: string;
         } })
         {
             server.calls.push('tables.create');
@@ -1657,7 +1661,7 @@ export const client =
             return restate(newTable(input));
         },
 
-        async quick({ input }: { input: QuickAsk & { game: string; voice: VoiceScope } })
+        async quick({ input }: { input: QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string } })
         {
             server.calls.push('tables.quick');
             server.sought.push({ ...input });
@@ -1684,7 +1688,8 @@ export const client =
                 && (table.privacy === 'public' || (table.privacy === 'friends' && table.host !== undefined && server.friends.includes(table.host)))
                 && table.game === input.game
                 && table.mode === filter.mode
-                && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
+                && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option])
+                && table.stake === input.stake;
             const mine = (chair: SeatWire) => chair.who === server.me;
             const free = (table: TableWire) => table.chairs.filter((chair) => chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
             const playing = filter.mode === 'live'
@@ -1708,7 +1713,7 @@ export const client =
                 .filter((table) => fits(table) && !table.chairs.some(mine) && free(table).length > 0)
                 .sort((a, b) => free(a).length - free(b).length)[0];
 
-            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] }), { quick: true });
+            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [], ...(input.stake === undefined ? {} : { stake: input.stake }) }), { quick: true });
             const seat = joined === undefined
                 ? 0
                 : chairFor(free(table).map((chair) => chair.seat), table.chairs.filter((chair) => chair.who !== undefined).map((chair) => chair.seat), table.teams);
@@ -1717,7 +1722,7 @@ export const client =
             chair.who = server.me;
             chair.ready = true;
 
-            if (table.chairs.every((one) => one.who !== undefined && one.ready))
+            if (table.stake === undefined && table.chairs.every((one) => one.who !== undefined && one.ready))
             {
                 table.matchId = `match-${ table.id }`;
             }
@@ -1810,6 +1815,12 @@ export const client =
             server.calls.push('tables.ready');
             server.nura.signatures.push(input.signature);
             const table = mustTable(params.id);
+
+            if (table.stake !== undefined && input.ready && input.signature === undefined)
+            {
+                throw tableRefusal('paid-consent', 'Sign your stake for this game again.');
+            }
+
             const mine = table.chairs.find((chair) => chair.who === server.me);
             if (mine !== undefined)
             {

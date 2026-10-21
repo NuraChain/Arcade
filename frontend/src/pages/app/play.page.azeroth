@@ -25,6 +25,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { TOAST_ACTION_DURATION, useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
@@ -50,6 +51,7 @@ export default component PlayPage()
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
+    const vaults = useVault();
     const params = useParams();
     const { navigate } = useNavigate();
     const chat = useChat();
@@ -367,7 +369,7 @@ export default component PlayPage()
 
     derived roomOpen = lobbyOpen || standing;
 
-    derived startable = !showing && ready && seated;
+    derived startable = !showing && ready && seated && table?.stake === undefined;
 
     derived watched = watchReady ? spectated : null;
 
@@ -776,7 +778,24 @@ export default component PlayPage()
 
     const begin = starter((tableId) => lobby.begin(tableId));
 
-    const again = starter((tableId) => lobby.again(tableId, board.match()?.id));
+    const again = starter(async (tableId) =>
+    {
+        if (table?.stake === undefined)
+        {
+            await lobby.again(tableId, board.match()?.id);
+            return;
+        }
+
+        const signed = await vaults.signStake(tableId);
+
+        if ('said' in signed)
+        {
+            toasts.show({ kind: 'warning', text: locale.t(signed.said) });
+            return;
+        }
+
+        await lobby.again(tableId, board.match()?.id, signed.signature);
+    });
 
     const copyLink = async () =>
     {

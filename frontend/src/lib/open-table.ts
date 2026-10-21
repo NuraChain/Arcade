@@ -70,7 +70,7 @@ export function openTable(made: Promise<string>, go: (to: string) => void, settl
 
             useToasts().show({
                 kind: 'warning',
-                text: useLocale().t(ABOUT_THE_ASK.includes(why) ? why : 'play.openFailed'),
+                text: useLocale().t(ABOUT_THE_ASK.includes(why) || why.startsWith('tables.refused.paid-') ? why : 'play.openFailed'),
                 dedupe: 'open-table'
             });
         })

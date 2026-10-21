@@ -12,6 +12,8 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import { lobbySeats } from './lobby-seats.ts';
@@ -46,6 +48,10 @@ export default component LobbyPanel(props: {
     const lobby = useLobby();
     const people = usePeople();
     const overlay = useOverlay();
+    const toasts = useToasts();
+    const vaults = useVault();
+
+    state signing = false;
 
     derived me = lobby.me();
 
@@ -177,9 +183,34 @@ export default component LobbyPanel(props: {
 
     derived lastGame = read !== null && read.id === ended ? read : null;
 
-    const sayReady = () =>
+    const sayReady = async () =>
     {
-        void attempt(lobby.ready(props.table.id, mine?.ready !== true), undefined, (error) => whyRefused(error, 'common.actionFailed'));
+        const ready = mine?.ready !== true;
+
+        if (!ready || props.table.stake === undefined)
+        {
+            void attempt(lobby.ready(props.table.id, ready), undefined, (error) => whyRefused(error, 'common.actionFailed'));
+            return;
+        }
+
+        if (signing)
+        {
+            return;
+        }
+
+        signing = true;
+
+        const signed = await vaults.signStake(props.table.id);
+
+        signing = false;
+
+        if ('said' in signed)
+        {
+            toasts.show({ kind: 'warning', text: locale.t(signed.said) });
+            return;
+        }
+
+        void attempt(lobby.ready(props.table.id, true, signed.signature), undefined, (error) => whyRefused(error, 'common.actionFailed'));
     };
 
     <section class="lobby flex flex-col gap-4" aria-label={ locale.t('play.title.lobby') }>
@@ -250,7 +281,8 @@ export default component LobbyPanel(props: {
                         size="lg"
                         block
                         leading={ mine?.ready === true ? 'check-circle' : 'zap' }
-                        onClick={ sayReady }
+                        loading={ signing }
+                        onClick={ () => void sayReady() }
                     >
                         { mine?.ready === true ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.ready') }
                     </Button>

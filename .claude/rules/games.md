@@ -261,8 +261,9 @@ its caller says - `play.table.playing` for a chair, `play.leave.started` for a l
 `play.close.refused` for a close, the caller's own fallback anywhere else. A framework code, a match
 word and a request that never arrived are the fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
 says the four sentences that are about what was asked - too many chairs, nobody to invite, a game
-that cannot be played, a table the game does not make - and "That table would not open" for every
-other word. Quick play used to reach it with the rest, from a table the browser tried and the reader
+that cannot be played, a table the game does not make - and every `paid-` word, because a table
+asked for at a stake is refused for its money and the reader has to learn which way (too little in
+the vault, the terms, a break), and "That table would not open" for every other word. Quick play used to reach it with the rest, from a table the browser tried and the reader
 never chose; the server picks the table now and never answers with one of those.
 `table-refusals.spec.ts` on each side holds it: on the server every word's status and code, no word
 shared with a refused play or with a code the framework answers on its own, no code spelled by hand in

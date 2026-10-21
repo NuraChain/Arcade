@@ -43,6 +43,8 @@ export interface TableConfig
      * public table in a private group.
      */
     roomId?: string;
+
+    stake?: string;
 }
 
 export interface TableRules
