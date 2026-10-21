@@ -1,4 +1,6 @@
-import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt } from 'node:crypto';
+
+import { keccak256 } from 'viem';
 
 /**
  * Server-side primitives. Small on purpose - everything here is either a one-liner over
@@ -24,11 +26,10 @@ export function mintToken()
  * likely, where modulo over a byte quietly favours the low ones. `Math.random` is out for the
  * reason above - it is seeded here on purpose.
  *
- * What this is NOT is provable fairness. The server draws, the server records, and a player cannot
- * check that it did not draw twice and keep the one it liked. That is exactly the claim
- * `game_rules.fairness` was deleted for, so nothing in the product says a roll is verifiable. The
- * honest sentence is that the server rolls the dice, and commit-reveal is a mechanism to build
- * before any copy changes.
+ * This is the die of a free table, and nothing there can be checked: the server draws, the server
+ * records, and a player cannot see that it did not draw twice and keep the one it liked. A table
+ * played for NURA draws from a seed its players can work out again afterwards
+ * (`domains/match/fair.ts`).
  */
 export function rollDie()
 {
@@ -39,6 +40,16 @@ export function rollDie()
 export function pickBelow(count: number)
 {
     return count <= 1 ? 0 : randomInt(0, count);
+}
+
+export function hmacSha256(key: Uint8Array, message: Uint8Array)
+{
+    return new Uint8Array(createHmac('sha256', key).update(message).digest());
+}
+
+export function keccak(data: Uint8Array)
+{
+    return keccak256(data, 'bytes');
 }
 
 /** A nonce: 128 bits, hex, unpredictable. Same reasoning as above. */

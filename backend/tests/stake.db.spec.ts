@@ -7,10 +7,17 @@ import { getAddress, keccak256, encodeAbiParameters, type Hex } from 'viem';
 import { errorResponse } from '@azerothjs/http';
 
 import { vaultIdOf } from '../src/chain/vault.ts';
-import { Escrow, EscrowSeat, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
+import { Escrow, EscrowSeat, Match, MatchAction, MatchPlayer, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
+import type { Engine, ForfeitReason } from '../src/domains/match/engine.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
+import { pokerEngine } from '../src/domains/match/engines/poker.ts';
+import { OPENING, drawOf, drawsOf, seedOf } from '../src/domains/match/fair.ts';
+import type { Variant } from '../src/domains/match/sides.ts';
 import { WEI_PER_NURA } from '../src/domains/stake/policy.ts';
+import { hmacSha256, keccak } from '../src/lib/crypto.ts';
+import type { MatchPlay } from '../src/schemas.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
 import { fakeVault, signatureOf } from './fake-vault.ts';
 
@@ -22,7 +29,9 @@ const WALLETS = [
     '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
     '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
     '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc',
-    '0x90f79bf6eb2c4f870365e785982e1f101e93b906'
+    '0x90f79bf6eb2c4f870365e785982e1f101e93b906',
+    '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65',
+    '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc'
 ];
 
 const TEN = (10n * WEI_PER_NURA).toString();
@@ -1081,6 +1090,212 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             await ports.table.quick(second.id, { game: 'backgammon', voice: 'off' });
 
             expect(await db.getRepository(TableSeat).existsBy({ tableId: locking.id, userId: second.id })).toBe(true);
+        });
+    });
+
+    describe('dice that can be checked', () =>
+    {
+        const replay = async (matchId: string, seed: Uint8Array) =>
+        {
+            const match = await db.getRepository(Match).findOneByOrFail({ id: matchId });
+            const [opening, ...rest] = await db.getRepository(MatchAction).find({ where: { matchId }, order: { rev: 'ASC' } });
+            const seats = (await db.getRepository(MatchPlayer).find({ where: { matchId }, order: { seat: 'ASC' } })).map((player) => player.seat);
+            const engine = (match.game === 'poker' ? pokerEngine : ludoEngine) as Engine;
+            const made = engine.create(seats, drawsOf(hmacSha256, seed, OPENING), { target: 0, cube: false, blinds: 'low', variant: match.variant as Variant });
+            const told = [{ rev: OPENING, said: opening.events, drawn: made.events as unknown[] }];
+            let state = made.state;
+
+            for (const action of rest)
+            {
+                const payload = action.payload as { verb?: string };
+                const dice = drawsOf(hmacSha256, seed, action.rev);
+                const asked = action.kind === 'forfeit'
+                    ? engine.forfeit(action.seat, payload.verb as ForfeitReason)
+                    : (payload.verb === 'auto' ? engine.autoplay(state, action.seat, dice) : engine.parse(action.payload as MatchPlay, action.seat));
+                const outcome = asked === null ? null : engine.apply(state, asked, dice);
+
+                if (outcome === null || !outcome.ok)
+                {
+                    told.push({ rev: action.rev, said: action.events, drawn: [] });
+                    break;
+                }
+
+                told.push({ rev: action.rev, said: action.events, drawn: outcome.events });
+                state = outcome.state;
+            }
+
+            return { opening: opening.rev, told, kinds: [opening, ...rest].map((action) => (action.payload as { verb?: string }).verb ?? action.kind) };
+        };
+
+        const turnOf = async (players: Person[], matchId: string) =>
+        {
+            for (const person of players)
+            {
+                const view = await ports.match.view(person.id, matchId);
+
+                if (view !== null && view.finishedAt === undefined && view.turn === view.mine)
+                {
+                    return { person, view };
+                }
+            }
+
+            return null;
+        };
+
+        it('draws every die of a paid game from the seed its players signed for, through every way a move is made', async () =>
+        {
+            const { host, guest, matchId, escrowId } = await playing();
+
+            for (let step = 0; step < 14; step += 1)
+            {
+                const on = await turnOf([host, guest], matchId);
+
+                if (on === null)
+                {
+                    break;
+                }
+
+                const board = on.view.view as { die?: number; moves: number[] };
+                const play: MatchPlay = board.die === undefined || board.moves.length === 0
+                    ? { kind: 'ludo', verb: 'roll' }
+                    : { kind: 'ludo', verb: 'move', piece: board.moves[0] };
+
+                await ports.match.play(on.person.id, matchId, { key: `step-${ step }`, play });
+            }
+
+            await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
+            await ports.jobs.sweepTurns(4000);
+            await ports.match.resign(host.id, matchId, { key: 'give-up' });
+
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId }, order: { seat: 'ASC' } });
+            const seed = seedOf(keccak, seats.map((seat) => seat.secret), seats.map((seat) => seat.signature));
+            const checked = await replay(matchId, seed);
+
+            expect(checked.opening).toBe(OPENING);
+            expect(checked.kinds).toContain('roll');
+            expect(checked.kinds).toContain('auto');
+            expect(checked.kinds.at(-1)).toBe('resign');
+            expect(checked.told.length).toBeGreaterThan(10);
+
+            for (const one of checked.told)
+            {
+                expect(one.drawn, `revision ${ one.rev }`).toEqual(one.said);
+            }
+
+            const other = seedOf(keccak, [`0x${ '00'.repeat(32) }`, seats[1].secret], seats.map((seat) => seat.signature));
+            const wrong = await replay(matchId, other);
+
+            expect(wrong.told.some((one) => JSON.stringify(one.drawn) !== JSON.stringify(one.said))).toBe(true);
+        });
+
+        it('draws a paid game\'s opening deal from its seed, and the next hand a walkout deals', async () =>
+        {
+            const people = [await makeUser(0), await makeUser(1), await makeUser(2), await makeUser(3), await makeUser(4), await makeUser(5)];
+            const table = await ports.table.create(people[0].id, { ...live(TEN), game: 'poker', seats: 6 });
+
+            for (const person of people.slice(1))
+            {
+                await ports.table.claim(person.id, table.id);
+            }
+
+            fake.state.mine = 'pending';
+
+            for (const person of people)
+            {
+                await ready(person, table.id);
+            }
+
+            await sweep();
+            const escrow = (await escrowOf(table.id)) as Escrow;
+            fake.receipts.set(escrow.openTx as Hex, 'success');
+            fake.games.set(vaultIdOf(escrow.id), 'open');
+            fake.state.mine = 'success';
+            await sweep();
+            const matchId = (await escrowOf(table.id))?.matchId as string;
+
+            for (let step = 0; step < 4; step += 1)
+            {
+                const on = await turnOf(people, matchId);
+
+                await ports.match.play(on!.person.id, matchId, { key: `fold-${ step }`, play: { kind: 'poker', verb: 'fold' } });
+            }
+
+            const left = await turnOf(people, matchId);
+
+            await ports.table.leave(left!.person.id, table.id, true);
+
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId: escrow.id }, order: { seat: 'ASC' } });
+            const checked = await replay(matchId, seedOf(keccak, seats.map((seat) => seat.secret), seats.map((seat) => seat.signature)));
+            const kinds = (events: unknown[]) => events.map((event) => (event as { e: string }).e);
+
+            expect(checked.kinds.at(-1)).toBe('left');
+            expect(kinds(checked.told[0].said)).toContain('hole');
+            expect(kinds(checked.told.at(-1)!.said)).toContain('deal');
+
+            for (const one of checked.told)
+            {
+                expect(one.drawn, `revision ${ one.rev }`).toEqual(one.said);
+            }
+        });
+
+        it('draws every step of a turn the sweep plays from the seed, a six that rolls again included', async () =>
+        {
+            const { host, guest, matchId, escrowId } = await playing();
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId }, order: { seat: 'ASC' } });
+            const seed = seedOf(keccak, seats.map((seat) => seat.secret), seats.map((seat) => seat.signature));
+            let primed = false;
+
+            for (let step = 0; step < 80 && !primed; step += 1)
+            {
+                const on = await turnOf([host, guest], matchId);
+                const board = on!.view.view as { die?: number; moves: number[] };
+
+                if (board.die === undefined && drawOf(hmacSha256, seed, on!.view.rev + 1, 0, 6) === 6)
+                {
+                    primed = true;
+                }
+                else
+                {
+                    const play: MatchPlay = board.die === undefined || board.moves.length === 0
+                        ? { kind: 'ludo', verb: 'roll' }
+                        : { kind: 'ludo', verb: 'move', piece: board.moves[0] };
+
+                    await ports.match.play(on!.person.id, matchId, { key: `prime-${ step }`, play });
+                }
+            }
+
+            expect(primed).toBe(true);
+
+            await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
+            await ports.jobs.sweepTurns(4000);
+
+            const checked = await replay(matchId, seed);
+
+            expect(checked.kinds.filter((kind) => kind === 'auto').length).toBeGreaterThanOrEqual(3);
+
+            for (const one of checked.told)
+            {
+                expect(one.drawn, `revision ${ one.rev }`).toEqual(one.said);
+            }
+        });
+
+        it('draws a walkout from the seed as well', async () =>
+        {
+            const { host, guest, tableId, matchId, escrowId } = await playing();
+            const on = await turnOf([host, guest], matchId);
+
+            await ports.match.play(on!.person.id, matchId, { key: 'first', play: { kind: 'ludo', verb: 'roll' } });
+            await ports.table.leave(guest.id, tableId, true);
+
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId }, order: { seat: 'ASC' } });
+            const checked = await replay(matchId, seedOf(keccak, seats.map((seat) => seat.secret), seats.map((seat) => seat.signature)));
+
+            expect(checked.kinds.at(-1)).toBe('left');
+
+            for (const one of checked.told)
+            {
+                expect(one.drawn, `revision ${ one.rev }`).toEqual(one.said);
+            }
         });
     });
 });

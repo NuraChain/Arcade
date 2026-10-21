@@ -133,6 +133,38 @@ logs a fault once for as long as it is the same one.
   refused moved no money and rings the table alone. `stake.db.spec.ts` (*tells each player their
   vault moved*) holds who is rung and when.
 
+## Dice and cards that can be checked
+
+**A paid game draws from a seed nobody could choose alone** (D10). Each consent carries a commit,
+keccak256 of a 32-byte secret the server made for that seat, and the player signs it inside the
+Stake, so the server is held to its secret before it has seen anybody's signature. The game's seed
+is keccak256 of every secret and then every signature, in seat order (`seedOf` in
+`domains/match/fair.ts`, which imports nothing, so the browser runs the same formula). Draw `k` of
+the action that makes revision `r` is HMAC-SHA256 of the seed over `r.k.j`, its first four bytes
+read as a big-endian number, `j` counting up only past a number that would favour the low faces
+(`drawOf`). The match service hands an engine `drawsOf(seed, r)` for the opening (`OPENING`, the
+revision every engine opens at), every play, every turn the sweep plays and a walkout; a free table
+keeps `randomInt`. The engines are untouched.
+
+**The seed is never stored.** It is worked out from the escrow's seats wherever a draw is made
+(`seedOfMatch`, one indexed read beside the match row), because a copy of it would be a second fact
+to keep right, and the secrets and signatures it comes from never change once the stakes are
+locked. `settle` reveals the secrets on the chain, and `open` carried the signatures, so once a game
+is paid its seed is public.
+
+What it does not cover, stated: the server learns the seed when the last player signs, so it could
+still decline to lock a game it did not like, and anybody would see the lock fail; it cannot change
+a die or a card of a game it locked. It deals the cards, so it knows every hidden card while the
+game is on, as any dealer does. And once a game is paid every card dealt in it can be worked out,
+the hands nobody showed included.
+
+`fair.spec.ts` holds the formula to a copy written apart from it, a draw that would favour the low
+faces drawn again, the seed to viem's keccak of the parts, and the opening revision of every engine
+at every format. `stake.db.spec.ts` (*dice that can be checked*) plays a paid Ludo game through
+rolls, moves, a turn the sweep played and a resignation, one through a walkout, and a six-seat paid
+poker game whose walkout deals the next hand, and replays every event of each from the seed; a
+seed with one secret changed does not replay.
+
 ## A player's paid games, and taking back stakes nobody paid out
 
 **`GET /vault/games` is the reader's own paid games**, newest first, twenty a page by keyset over
@@ -256,4 +288,4 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: provably fair dice and cards, and the admin's view of the vault.
+Not here yet: checking a finished game in the browser, and the admin's view of the vault.

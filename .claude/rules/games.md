@@ -2511,12 +2511,15 @@ finished hokm or backgammon board, which those boards read only while the match 
 the ports - every answer, the watch and the push to each seat - and `ludo-table.spec.ts` draws the
 board from a finished match the wire's own parser let through.
 
-**The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
-Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a
-player cannot check that the server did not draw twice and keep the one it liked, because the process
-that draws is the process that records. That is exactly the claim `game_rules.fairness` was deleted
-for, so `ludo-dice.spec.ts` also fails on the words *provable* and *verifiable* anywhere near this
-domain. Commit-reveal is a mechanism to build before any copy changes, not a sentence to add.
+**At a free table the die is `randomInt` from `node:crypto`, and the product says only that the
+server rolls it.** Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be
+claimed there is fairness: a player cannot check that the server did not draw twice and keep the one
+it liked, because the process that draws is the process that records. That is exactly the claim
+`game_rules.fairness` was deleted for, so `ludo-dice.spec.ts` also fails on the words *provable* and
+*verifiable* anywhere in the server's wire, routes and match service. A table played for NURA is
+the one place the mechanism exists: its dice and cards come from a seed its players signed for and
+can work out again once the game is paid (*Dice and cards that can be checked* in
+`.claude/rules/stakes.md`), and nothing about a free table changed with it.
 
 **Every action is one transaction that opens with `for update` on the match row.** Deliberately NOT
 the `skip locked` the seat claim uses, and the contrast is the whole point: skipping is right when a

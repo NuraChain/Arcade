@@ -11,11 +11,12 @@ import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
 import { maskOf } from '../stake/policy.ts';
 import { lockTable, stillLocking, tableRefusal } from '../table/service.ts';
-import { pickBelow } from '../../lib/crypto.ts';
+import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { createRecorder } from './record.ts';
 import { envelopeOf } from './envelope.ts';
+import { OPENING, drawsOf, seedOf } from './fair.ts';
 import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
@@ -194,6 +195,20 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
      * "there is no randomness inside an engine to subvert" structural rather than a review comment.
      */
     const draws: Draws = { die: (sides: number) => pickBelow(sides) + 1 };
+
+    const seeded = (seats: readonly { secret: string; signature: string }[]) =>
+        seats.length === 0 ? null : seedOf(keccak, seats.map((seat) => seat.secret), seats.map((seat) => seat.signature));
+
+    const seedOfMatch = async (runner: EntityManager | DataSource, matchId: string) => seeded(await runner.getRepository(EscrowSeat)
+        .createQueryBuilder('s')
+        .innerJoin(Escrow, 'e', 'e.id = s.escrow_id')
+        .select('s.secret', 'secret')
+        .addSelect('s.signature', 'signature')
+        .where('e.match_id = :matchId', { matchId })
+        .orderBy('s.seat', 'ASC')
+        .getRawMany<{ secret: string; signature: string }>());
+
+    const drawsAt = (seed: Uint8Array | null, rev: number): Draws => seed === null ? draws : drawsOf(hmacSha256, seed, rev);
 
     const deal = async (tx: EntityManager, table: Table, chairs: TableSeat[], dice: Draws) =>
     {
@@ -663,12 +678,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                 const table = await tx.getRepository(Table).findOne({ where: { id: held.tableId } });
                 const chairs = await tx.getRepository(TableSeat).find({ where: { tableId: held.tableId }, order: { seat: 'ASC' } });
-                const staked = await tx.getRepository(EscrowSeat).find({ select: { seat: true, userId: true }, where: { escrowId }, order: { seat: 'ASC' } });
+                const staked = await tx.getRepository(EscrowSeat).find({ select: { seat: true, userId: true, secret: true, signature: true }, where: { escrowId }, order: { seat: 'ASC' } });
                 const same = table !== null
                     && table.status !== 'closed'
                     && chairs.length === staked.length
                     && chairs.every((chair, index) => chair.seat === staked[index].seat && chair.userId === staked[index].userId && chair.ready);
-                const matchId = same ? await deal(tx, table, chairs, draws) : null;
+                const matchId = same ? await deal(tx, table, chairs, drawsAt(seeded(staked), OPENING)) : null;
 
                 await tx.getRepository(Escrow).update(
                     { id: escrowId },
@@ -757,7 +772,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     throw new ValidationError({ play: 'Not a play this game knows.' }, 'That is not a move in this game.');
                 }
 
-                const outcome = engine.apply(stateOf(match), action, draws);
+                const outcome = engine.apply(stateOf(match), action, drawsAt(await seedOfMatch(tx, match.id), match.rev + 1));
 
                 if (!outcome.ok)
                 {
@@ -842,7 +857,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 return null;
             }
 
-            const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), draws);
+            const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), drawsAt(await seedOfMatch(tx, match.id), match.rev + 1));
 
             if (!outcome.ok)
             {
@@ -998,16 +1013,20 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                     const forfeiting = nextMissForfeits(chair?.timeouts ?? 0);
 
+                    const seed = await seedOfMatch(tx, match.id);
+
+                    const dice = drawsAt(seed, match.rev + 1);
+
                     const action = forfeiting
                         ? engine.forfeit(seat, 'timeout')
-                        : engine.autoplay(state, seat, draws);
+                        : engine.autoplay(state, seat, dice);
 
                     if (action === null)
                     {
                         return await stuck('no-autoplay');
                     }
 
-                    const outcome = engine.apply(state, action, draws);
+                    const outcome = engine.apply(state, action, dice);
 
                     if (!outcome.ok)
                     {
@@ -1035,8 +1054,9 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                     for (let steps = 1; !forfeiting && steps < FOLD_MAX && turnGoesOn(current); steps += 1)
                     {
-                        const auto = engine.autoplay(current.state, seat, draws);
-                        const folded = auto === null ? null : engine.apply(current.state, auto, draws);
+                        const rolled = drawsAt(seed, current.rev + 1);
+                        const auto = engine.autoplay(current.state, seat, rolled);
+                        const folded = auto === null ? null : engine.apply(current.state, auto, rolled);
 
                         if (folded === null || !folded.ok)
                         {
