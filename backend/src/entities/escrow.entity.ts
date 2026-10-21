@@ -11,6 +11,7 @@ export type EscrowState = 'locking' | 'open' | 'settling' | 'settled' | 'refundi
 @Check('escrows_winners_positive', `winners is null or winners > 0`)
 @Check('escrows_open_tx_shape', `open_tx is null or open_tx ~ '^0x[0-9a-f]{64}$'`)
 @Check('escrows_close_tx_shape', `close_tx is null or close_tx ~ '^0x[0-9a-f]{64}$'`)
+@Check('escrows_failed_seat_range', `failed_seat is null or (state = 'failed' and failed_seat between 0 and 8)`)
 @Index('escrows_one_live', ['tableId'], { unique: true, where: `state in ('locking', 'open', 'settling', 'refunding')` })
 @Index('escrows_match', ['matchId'], { unique: true, where: 'match_id is not null' })
 @Index('escrows_pending', ['state', 'updatedAt'])
@@ -49,6 +50,9 @@ export class Escrow
 
     @Column({ type: 'varchar', length: 64, nullable: true })
     error!: string | null;
+
+    @Column({ name: 'failed_seat', type: 'smallint', nullable: true })
+    failedSeat!: number | null;
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
