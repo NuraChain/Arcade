@@ -30,6 +30,8 @@ import { strikes } from './domains/table/sweep.ts';
 import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
+import { createVault } from './chain/vault.ts';
+import { createStakeService } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
@@ -1229,6 +1231,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const nfts = createNftReader({ rpcUrl: config.rpcUrl, explorerApi: config.explorerApi });
 
+    const stakes = createStakeService(db, createVault({
+        rpcUrl: config.rpcUrl,
+        chainId: config.chainId,
+        vault: config.vaultAddress,
+        refereeKey: config.refereeKey
+    }));
+
     const identity = createIdentityService(db, {
         origin: config.origin,
         chainId: config.chainId,
@@ -1397,6 +1406,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             },
 
             avatar: (hash) => identity.avatar(hash)
+        },
+
+        vault: {
+            state: (me) => stakes.state(me),
+            accept: (me) => stakes.accept(me),
+            rest: (me, days) => stakes.rest(me, days),
+            deposit: (me, amount) => stakes.deposit(me, amount),
+            withdraw: (me, amount) => stakes.withdraw(me, amount)
         },
 
         voice: {

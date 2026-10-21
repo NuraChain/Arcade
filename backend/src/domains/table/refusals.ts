@@ -7,7 +7,14 @@ export const TABLE_REFUSALS = {
     'kept-out': 409,
     'no-invitee': 404,
     'quick-game': 422,
-    'quick-options': 422
+    'quick-options': 422,
+    'paid-off': 404,
+    'paid-wallet': 409,
+    'paid-minor': 409,
+    'paid-terms': 409,
+    'paid-break': 409,
+    'paid-amount': 422,
+    'paid-paused': 409
 } as const satisfies Record<string, 404 | 409 | 422>;
 
 export type TableRefusal = keyof typeof TABLE_REFUSALS;

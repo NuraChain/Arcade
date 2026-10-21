@@ -11,6 +11,8 @@ import type {
     Account,
     Challenge,
     ChainCall,
+    VaultState,
+    WalletCall,
     ChainFace,
     ChainProfile,
     GameList,
@@ -44,6 +46,7 @@ import type {
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
+import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
 
@@ -525,6 +528,19 @@ export interface ChainPort
     nftImage(userId: string, contract: string, tokenId: string): Promise<{ type: string; bytes: Uint8Array } | null>;
 }
 
+export interface VaultPort
+{
+    state(me: string): Promise<VaultState>;
+
+    accept(me: string): Promise<VaultState>;
+
+    rest(me: string, days: BreakDays): Promise<VaultState>;
+
+    deposit(me: string, amount: string): Promise<WalletCall>;
+
+    withdraw(me: string, amount: string): Promise<WalletCall>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface VoicePort
 {
@@ -545,5 +561,6 @@ export interface Ports
     device: DevicePort;
     chat: ChatPort;
     chain: ChainPort;
+    vault: VaultPort;
     voice: VoicePort;
 }

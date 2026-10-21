@@ -97,6 +97,9 @@ export function loadServerConfig()
             profileRegistry: optional('NURA_PROFILE_ADDRESS'),
             profileLens: optional('NURA_PROFILE_LENS_ADDRESS'),
 
+            vaultAddress: optional('NURA_VAULT_ADDRESS'),
+            refereeKey: optional('NURA_REFEREE_KEY', { secret: true }),
+
             /** The explorer's Etherscan-compatible api, where a wallet's NFT transfers are read. */
             explorerApi: optional('NURA_EXPLORER_API'),
 

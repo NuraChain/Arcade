@@ -14,6 +14,11 @@ import {
     ack,
     answerInput,
     voiceSwitch,
+    vaultAmountInput,
+    vaultBreakInput,
+    vaultState,
+    vaultTermsInput,
+    walletCall,
     chatMessage,
     archiveInput,
     archiveList,
@@ -335,6 +340,22 @@ export function buildApi(ports: Ports)
                     Math.max(0, Number.parseInt(context.query.offset ?? '0', 10) || 0),
                     Math.min(48, Math.max(0, Number.parseInt(context.query.limit ?? '24', 10) || 0))
                 ))
+        })),
+
+        vault: feature('/vault', [session], (routes) => ({
+            state: routes.get('/', { output: vaultState }, (context) => ports.vault.state(context.principal.userId)),
+
+            accept: routes.post('/terms', { input: vaultTermsInput, output: vaultState },
+                (context) => ports.vault.accept(context.principal.userId)),
+
+            rest: routes.post('/break', { input: vaultBreakInput, output: vaultState },
+                (context) => ports.vault.rest(context.principal.userId, context.input.days)),
+
+            deposit: routes.post('/deposit', { input: vaultAmountInput, output: walletCall },
+                (context) => ports.vault.deposit(context.principal.userId, context.input.amount)),
+
+            withdraw: routes.post('/withdraw', { input: vaultAmountInput, output: walletCall },
+                (context) => ports.vault.withdraw(context.principal.userId, context.input.amount))
         })),
 
         voice: feature('/voice', [session], (routes) => ({

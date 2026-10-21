@@ -1,6 +1,7 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
+import { BREAK_DAYS, ELIGIBILITIES } from './domains/stake/policy.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
@@ -399,6 +400,49 @@ export const chainCall = object({
 export type ChainCall = Infer<typeof chainCall>;
 
 export const chainPublish = object({ calls: array(chainCall) });
+
+const vaultBalances = object({
+    address: string(),
+    free: string(),
+    locked: string(),
+    wallet: string()
+});
+
+export const vaultState = union([
+    object({ configured: literal(false) }),
+    object({
+        configured: literal(true),
+        vault: string(),
+        chainId: number(),
+        fee: number(),
+        maxStake: string(),
+        reclaimAfter: number(),
+        paused: boolean(),
+        ladder: array(string()),
+        may: enumOf(ELIGIBILITIES),
+        breakUntil: string().optional(),
+        balances: vaultBalances.optional()
+    })
+]);
+
+export type VaultState = Infer<typeof vaultState>;
+
+export const walletCall = object({
+    from: string(),
+    to: string(),
+    data: string(),
+    value: string(),
+    chainId: number(),
+    gasPrice: string().optional()
+});
+
+export type WalletCall = Infer<typeof walletCall>;
+
+export const vaultAmountInput = object({ amount: string({ max: 40 }) });
+
+export const vaultBreakInput = object({ days: union(BREAK_DAYS.map((days) => literal(days))) });
+
+export const vaultTermsInput = object({ adult: literal(true) });
 
 export const nftItem = object({
     contract: string(),

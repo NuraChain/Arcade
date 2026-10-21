@@ -154,6 +154,13 @@ export const play = {
     'tables.refused.no-invitee': 'No one by that name can be invited.',
     'tables.refused.quick-game': 'That game cannot be played right now.',
     'tables.refused.quick-options': 'That is not a table this game makes.',
+    'tables.refused.paid-off': 'Playing for NURA is not open here.',
+    'tables.refused.paid-wallet': 'Playing for NURA needs an account you signed in to with a wallet.',
+    'tables.refused.paid-minor': 'Playing for NURA is for adults only.',
+    'tables.refused.paid-terms': 'Accept the terms of playing for NURA first.',
+    'tables.refused.paid-break': 'You asked for a break from playing for NURA, and it has not ended yet.',
+    'tables.refused.paid-amount': 'That is not an amount of NURA.',
+    'tables.refused.paid-paused': 'The vault is not taking deposits or new games right now.',
 
     'quickMatch.busy': 'Finding you a seat',
     'quickMatch.started': 'Your {game} game has started',

@@ -620,6 +620,135 @@ describe('teaming up', () =>
     });
 });
 
+describe('the vault', () =>
+{
+    const VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+    const open = {
+        configured: true,
+        vault: VAULT,
+        chainId: 31337,
+        fee: 500,
+        maxStake: '1000000000000000000000',
+        reclaimAfter: 259200,
+        paused: false,
+        ladder: ['1000000000000000000'],
+        may: 'yes',
+        balances: { address: VAULT, free: '1', locked: '0', wallet: '2' }
+    };
+    const call = { from: VAULT, to: VAULT, data: '0xd0e30db0', value: '0x5', chainId: 31337 };
+
+    const vaultAs = (told: unknown[][], who: unknown = { userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' }, state: unknown = open) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: { principal: () => Promise.resolve(who) },
+            vault: Object.fromEntries(['state', 'accept', 'rest', 'deposit', 'withdraw'].map((verb) => [verb, (...said: unknown[]) =>
+            {
+                told.push([verb, ...said]);
+
+                return Promise.resolve(verb === 'deposit' || verb === 'withdraw' ? call : state);
+            }]))
+        } as unknown as Ports
+    });
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body: unknown) =>
+        app.handle(new Request(`http://local/api${ path }`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        }));
+
+    it('is five routes, and every one of them is for somebody signed in', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told, null);
+        const manifest = await (await app.handle(new Request('http://local/api/_manifest'))).json() as Record<string, Record<string, { method: string; path: string }>>;
+
+        expect(Object.entries(manifest.vault).map(([name, route]) => `${ name } ${ route.method } ${ route.path }`).sort()).toEqual([
+            'accept POST /vault/terms',
+            'deposit POST /vault/deposit',
+            'rest POST /vault/break',
+            'state GET /vault',
+            'withdraw POST /vault/withdraw'
+        ]);
+
+        expect((await app.handle(new Request('http://local/api/vault'))).status).toBe(401);
+        expect((await post(app, '/vault/terms', { adult: true })).status).toBe(401);
+        expect((await post(app, '/vault/break', { days: 7 })).status).toBe(401);
+        expect((await post(app, '/vault/deposit', { amount: '5' })).status).toBe(401);
+        expect((await post(app, '/vault/withdraw', { amount: '5' })).status).toBe(401);
+        expect(told).toEqual([]);
+    });
+
+    it('tells the port who asked and what, and answers with what it said', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        const state = await app.handle(new Request('http://local/api/vault'));
+        expect(state.status).toBe(200);
+        expect(await state.json()).toEqual(open);
+
+        expect(await (await post(app, '/vault/terms', { adult: true })).json()).toEqual(open);
+        expect(await (await post(app, '/vault/break', { days: 30 })).json()).toEqual(open);
+        expect(await (await post(app, '/vault/deposit', { amount: '5' })).json()).toEqual(call);
+        expect(await (await post(app, '/vault/withdraw', { amount: '7' })).json()).toEqual(call);
+
+        expect(told).toEqual([
+            ['state', 'somebody'],
+            ['accept', 'somebody'],
+            ['rest', 'somebody', 30],
+            ['deposit', 'somebody', '5'],
+            ['withdraw', 'somebody', '7']
+        ]);
+    });
+
+    it('answers a server with no vault in its own shape', async () =>
+    {
+        const response = await vaultAs([], undefined, { configured: false }).handle(new Request('http://local/api/vault'));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ configured: false });
+    });
+
+    it('takes only a day, a week or a month of break, terms an adult confirmed, and an amount written as text, before the port hears of it', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        for (const days of [0, 2, 365, '7', 7.5, null])
+        {
+            expect((await post(app, '/vault/break', { days })).status, String(days)).toBe(422);
+        }
+
+        for (const body of [{}, { adult: false }, { adult: 'yes' }])
+        {
+            expect((await post(app, '/vault/terms', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        for (const body of [{}, { amount: 5 }, { amount: '9'.repeat(41) }, { amount: `1${ String.fromCharCode(0) }` }])
+        {
+            expect((await post(app, '/vault/deposit', body)).status, JSON.stringify(body)).toBe(422);
+            expect((await post(app, '/vault/withdraw', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        expect(told).toEqual([]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+
+        expect(bodies).toContain(`'/vault/deposit': (bad) => [`);
+        expect(bodies).toContain(`'/vault/withdraw': (bad) => [`);
+        expect(spared).toContain(`'/vault/terms'`);
+        expect(spared).toContain(`'/vault/break'`);
+    });
+});
+
 describe('watching a game', () =>
 {
     const shown = {
