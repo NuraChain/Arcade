@@ -59,7 +59,13 @@ export type {
     SocialGraph,
     TableSeat,
     TableStatus,
-    TableSummary
+    TableSummary,
+    TableMoney,
+    StakeTerms,
+    VaultGame,
+    VaultGames,
+    VaultState,
+    WalletCall
 } from '../../backend/src/schemas.ts';
 
 export type {

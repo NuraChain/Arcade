@@ -24,8 +24,13 @@ import type {
     NftItem,
     PersonSummary,
     Privacy,
-    Standing
+    Standing,
+    StakeTerms,
+    VaultGames,
+    VaultState,
+    WalletCall
 } from '../../backend/src/schemas.ts';
+import { STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -290,6 +295,45 @@ function mustDevice(id: string)
 
 const CHAIN_REGISTRY = '0x8CFbcEf737BE3C67A52A20Ae3DCC685ACF759460';
 
+export const NURA_VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+
+export const nuraState = (): VaultState => ({
+    configured: true,
+    vault: NURA_VAULT,
+    chainId: 31337,
+    fee: 500,
+    maxStake: '1000000000000000000000',
+    reclaimAfter: 259_200,
+    paused: false,
+    ladder: [...STAKE_LADDER],
+    may: 'yes',
+    balances: {
+        address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        free: '50000000000000000000',
+        locked: '0',
+        wallet: '20000000000000000000'
+    }
+});
+
+const nuraFresh = () => ({
+    state: nuraState() as VaultState,
+    call: { from: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', to: NURA_VAULT, data: '0xd0e30db0', value: '0x0', chainId: 31337 } as WalletCall,
+    terms: { typedData: '{"primaryType":"Stake","message":{"nonce":"0x01"}}', deadline: '2026-10-21T00:30:00.000Z' } as StakeTerms,
+    games: { games: [] } as VaultGames,
+    refuse: null as { status: number; code: string } | null,
+    signatures: [] as (string | undefined)[]
+});
+
+const nuraRefusal = () =>
+{
+    const refused = server.nura.refuse;
+
+    if (refused !== null)
+    {
+        throw new ApiError(refused.status, refused.code, refused.code, undefined);
+    }
+};
+
 export const server =
 {
     account: null as Account | null,
@@ -394,6 +438,7 @@ export const server =
      * Postgres. What it is for is letting a page mount the store without exploding.
      */
     vault: null as { salt: string; publicKey: string; wrapped: string; checkValue: string } | null,
+    nura: nuraFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -550,6 +595,7 @@ export const server =
         server.epochs = {};
         server.sealDevice = null;
         server.vault = null;
+        server.nura = nuraFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -766,6 +812,60 @@ export function walletAccount(address: string): Account
 
 export const client =
 {
+    vault:
+    {
+        async state()
+        {
+            server.calls.push('vault.state');
+            nuraRefusal();
+            return structuredClone(server.nura.state);
+        },
+        async accept()
+        {
+            server.calls.push('vault.accept');
+            nuraRefusal();
+            if (server.nura.state.configured)
+            {
+                server.nura.state = { ...server.nura.state, may: 'yes' };
+            }
+            return structuredClone(server.nura.state);
+        },
+        async rest({ input }: { input: { days: number } })
+        {
+            server.calls.push(`vault.rest ${ input.days }`);
+            nuraRefusal();
+            if (server.nura.state.configured)
+            {
+                server.nura.state = { ...server.nura.state, may: 'paid-break', breakUntil: '2026-10-28T00:00:00.000Z' };
+            }
+            return structuredClone(server.nura.state);
+        },
+        async deposit({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`vault.deposit ${ input.amount }`);
+            nuraRefusal();
+            return { ...server.nura.call, value: `0x${ BigInt(input.amount).toString(16) }` };
+        },
+        async withdraw({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`vault.withdraw ${ input.amount }`);
+            nuraRefusal();
+            return { ...server.nura.call, data: '0x2e1a7d4d' };
+        },
+        async games(input?: { query?: { cursor?: string } })
+        {
+            server.calls.push(`vault.games ${ input?.query?.cursor ?? '' }`);
+            nuraRefusal();
+            return structuredClone(server.nura.games);
+        },
+        async reclaim({ input }: { input: { id: string } })
+        {
+            server.calls.push(`vault.reclaim ${ input.id }`);
+            nuraRefusal();
+            return { ...server.nura.call, data: '0xreclaim' };
+        }
+    },
+
     chain:
     {
         async profile()
@@ -1691,9 +1791,24 @@ export const client =
             return { ok: true };
         },
 
-        async ready({ params, input }: { params: { id: string }; input: { ready: boolean } })
+        async stake({ params }: { params: { id: string } })
+        {
+            server.calls.push(`tables.stake ${ params.id }`);
+            nuraRefusal();
+            return { ...server.nura.terms };
+        },
+
+        async quickStake({ input }: { input: { game: string; stake: string } })
+        {
+            server.calls.push(`tables.quickStake ${ input.game } ${ input.stake }`);
+            nuraRefusal();
+            return { ...server.nura.terms };
+        },
+
+        async ready({ params, input }: { params: { id: string }; input: { ready: boolean; signature?: string } })
         {
             server.calls.push('tables.ready');
+            server.nura.signatures.push(input.signature);
             const table = mustTable(params.id);
             const mine = table.chairs.find((chair) => chair.who === server.me);
             if (mine !== undefined)

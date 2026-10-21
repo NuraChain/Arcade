@@ -12,6 +12,8 @@ import {
     readAccounts,
     readChainId,
     sendTransaction,
+    signTypedData,
+    chainHex,
     transactionReceipt,
     requestAccounts,
     switchChain,
@@ -51,7 +53,11 @@ export interface WalletApi
      * The wallet is the only thing that can sign one, and the person is the only thing that
      * can approve it - so a refusal is an ordinary answer here exactly as it is for sign().
      */
-    send(to: string, data: string): Promise<string | null>;
+    send(to: string, data: string, extra?: { value?: string; gasPrice?: string }): Promise<string | null>;
+
+    signTyped(typedData: string): Promise<string | null>;
+
+    toChain(chainId: number): Promise<boolean>;
 
     /** Whether a sent transaction landed. Null means the chain has not mined it yet. */
     settled(hash: string): Promise<boolean | null>;
@@ -241,7 +247,7 @@ export const useWallet = createStore((): WalletApi =>
          * answers rather than errors - `failure()` says which. Landing is a separate question:
          * a hash is a transaction that was accepted for inclusion and nothing more.
          */
-        async send(to, data)
+        async send(to, data, extra = {})
         {
             const wallet = provider();
             const account = address();
@@ -256,7 +262,7 @@ export const useWallet = createStore((): WalletApi =>
             try
             {
                 setFailure(null);
-                return await sendTransaction(wallet, account, to, data);
+                return await sendTransaction(wallet, account, to, data, extra);
             }
             catch (error)
             {
@@ -264,6 +270,64 @@ export const useWallet = createStore((): WalletApi =>
                 setFailure(failureOf(error));
                 return null;
             }
+        },
+
+        async signTyped(typedData)
+        {
+            const wallet = provider();
+            const account = address();
+
+            if (wallet === null || account === null)
+            {
+                why('signTyped', wallet === null ? 'no provider' : 'no connected address');
+                setFailure('no-wallet');
+                return null;
+            }
+
+            try
+            {
+                setFailure(null);
+                return await signTypedData(wallet, account, typedData);
+            }
+            catch (error)
+            {
+                why('signTyped', error);
+                setFailure(failureOf(error));
+                return null;
+            }
+        },
+
+        async toChain(id)
+        {
+            const wallet = provider();
+            const wanted = chainHex(id);
+
+            if (wallet === null)
+            {
+                setFailure('no-wallet');
+                return false;
+            }
+
+            const held = await readChainId(wallet).catch(() => '');
+
+            if (held.toLowerCase() === wanted)
+            {
+                setChainId(held);
+                return true;
+            }
+
+            const known = String(id) === NURA_CHAIN.chainId
+                ? { ...NURA_CHAIN, chainId: wanted }
+                : { ...NURA_CHAIN, chainId: wanted, name: `Chain ${ id }`, rpcUrls: [], explorerUrls: [] };
+
+            if (await switchChain(wallet, known))
+            {
+                setChainId(wanted);
+                return true;
+            }
+
+            setFailure('chain');
+            return false;
         },
 
         /** Whether a sent transaction has landed: true, false for a revert, null for not yet. */

@@ -149,6 +149,47 @@ are not locked any more and `paid-early` when the wait has not passed, and a gam
 play is answered as one that is not there. The worker then finds the game reclaimed on the chain
 when it next looks at it.
 
+## In the browser
+
+**`stores/vault.store.ts` is the one place the browser talks to the vault.** It reads `GET /vault`
+for whoever is signed in. A deposit, a withdrawal and a reclaim are composed by the server and handed
+to the wallet (`sendTransaction` in `lib/wallet.ts`, with the value and the gas price), after the
+wallet has been moved to the vault's chain (`toChain`) and only from the account the reader signed
+in with; then the receipt is asked for every second and a half, for up to a minute, and the vault
+is read again. Whatever did not go through comes back as a sentence of its own: declined in the
+wallet, refused by the vault, sent and not landed yet, another account, another chain, a locked
+wallet, NuraChain out of reach. A stake is never a transaction: it is `eth_signTypedData_v4` over
+the typed data the server answered (`signStake`, `signSearch`).
+
+**The store hears the vault move only while somebody looks at it.** A page that shows a balance
+holds `listen()` from its mount to its teardown; holds are counted, and a release from before a
+`reset()` lets go of nothing after it. While held, a `me` ring with `vault`, or every scope at once,
+reads the vault again and moves `moved`, which the list of paid games is keyed on, as is a pull to
+refresh. The first hold reads a vault that was already read once more, so the page never shows a
+balance from before a game played on another page, and it never asks again for a read still on its
+way.
+
+**`/app/me/wallet` is the page** (beside `me/nfts` and `me/devices`, where the plan said
+`/app/wallet`). What is in the vault, in play and in the wallet, in the reader's digits to four
+places, never rounded up (`nuraOf` in `lib/nura.ts`). What else it offers follows the server's `may`:
+
+- `yes`: put in and take out, and a break;
+- `paid-terms`: the terms, with the vault's own fee, a switch for being eighteen and allowed to
+  where they live, then Accept; NURA can only be taken out until then;
+- `paid-break`: until when, a longer break, and taking out;
+- `paid-minor`: taking out, and only when there is something to take;
+- `paid-wallet`: the sentence, and nothing else is read.
+
+While the vault is paused deposits are shut with a sentence and withdrawals stay open. An amount is
+typed as NURA (`parseNura`: Persian and Arabic digits and the Persian decimal mark read, a comma
+refused, so "1,000" is never one NURA); All of it fills the free balance to take out, or the wallet
+less a hundredth of a NURA left for gas to put in. A break is asked first, as a destructive question.
+The paid games: what each came to (the share paid for a win, the stake otherwise), a link to the
+explorer on NuraChain and nowhere else, and "Take the stakes back" on a game nobody paid once the
+vault's wait has passed, which the server asks the chain about again. It is reached from a card
+under the profile's header and from Settings › Account, both only where the vault is open.
+`wallet-page.spec.ts` and `vault-store.spec.ts` hold it.
+
 ## How it is held
 
 `stake-policy.spec.ts` holds the rules with no Postgres; `chain-vault.spec.ts` the vault's module
@@ -158,4 +199,5 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: the browser, provably fair dice and cards, and the admin's view of the vault.
+Not here yet: choosing a stake when a table is opened or searched for, a paid table's own view of
+its money, provably fair dice and cards, and the admin's view of the vault.

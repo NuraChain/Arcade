@@ -1,0 +1,235 @@
+import { useHead } from 'azerothjs';
+
+import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
+import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import Toggle from '../../components/ui/switch.component.azeroth';
+import VaultGames from '../../components/vault/vault-games.component.azeroth';
+import VaultMove, { type Deposits } from '../../components/vault/vault-move.component.azeroth';
+import { nuraOf } from '../../lib/nura.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
+
+interface Rest
+{
+    days: 1 | 7 | 30;
+    label: MessageKey;
+    ask: MessageKey;
+}
+
+const RESTS: Rest[] = [
+    { days: 1, label: 'vault.break.day', ask: 'vault.break.ask.1' },
+    { days: 7, label: 'vault.break.week', ask: 'vault.break.ask.7' },
+    { days: 30, label: 'vault.break.month', ask: 'vault.break.ask.30' }
+];
+
+export default component WalletPage()
+{
+    const locale = useLocale();
+    const vaults = useVault();
+    const account = useAccount();
+    const overlay = useOverlay();
+    const toasts = useToasts();
+
+    useHead({ title: () => locale.t('vault.title') });
+
+    state adult = false;
+
+    state accepting = false;
+
+    derived held = vaults.state();
+
+    derived vault = held !== null && held.configured ? held : null;
+
+    derived awaited = held === null && vaults.loading();
+
+    derived refused = held === null && !vaults.loading() && vaults.failed();
+
+    derived off = held !== null && !held.configured;
+
+    derived open = vault !== null;
+
+    derived may = vault?.may ?? null;
+
+    derived guest = may === 'paid-wallet';
+
+    derived minor = may === 'paid-minor';
+
+    derived unsworn = may === 'paid-terms';
+
+    derived resting = may === 'yes' || may === 'paid-break';
+
+    derived onBreak = may === 'paid-break' && vault?.breakUntil !== undefined;
+
+    derived balances = vault?.balances ?? null;
+
+    derived counted = balances !== null;
+
+    const figure = (wei: string | undefined) => locale.n(nuraOf(wei ?? '0'), { maximumFractionDigits: 4 });
+
+    derived free = figure(balances?.free);
+
+    derived inPlay = figure(balances?.locked);
+
+    derived inWallet = figure(balances?.wallet);
+
+    derived deposits = (may === 'yes' ? (vault?.paused === true ? 'paused' : 'open') : 'none') as Deposits;
+
+    derived moving = counted && (deposits !== 'none' || BigInt(balances?.free ?? '0') > 0n);
+
+    derived fee = locale.n((vault?.fee ?? 0) / 10_000, { style: 'percent', maximumFractionDigits: 2 });
+
+    derived until = vault?.breakUntil === undefined
+        ? ''
+        : locale.t('vault.break.until', { date: locale.date(Date.parse(vault.breakUntil), { dateStyle: 'medium', timeStyle: 'short' }) });
+
+    derived owner = account.user()?.id ?? '';
+
+    derived chainId = vault?.chainId ?? 0;
+
+    derived reclaimAfter = vault?.reclaimAfter ?? 0;
+
+    derived unreachedLead = vaults.unreached() ? locale.t('vault.unreached') : undefined;
+
+    mount
+    {
+        return vaults.listen();
+    }
+
+    const accept = async () =>
+    {
+        if (accepting)
+        {
+            return;
+        }
+
+        accepting = true;
+
+        const said = await vaults.accept();
+
+        accepting = false;
+
+        if (said !== null)
+        {
+            toasts.show({ kind: 'error', text: locale.t(said) });
+        }
+    };
+
+    const rest = async (one: Rest) =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t(one.ask),
+                lead: locale.t('vault.break.askLead'),
+                confirm: locale.t('vault.break.confirm'),
+                destructive: true
+            },
+            { label: locale.t(one.ask) }
+        ).closed;
+
+        if (yes !== true)
+        {
+            return;
+        }
+
+        const said = await vaults.rest(one.days);
+
+        toasts.show(said === null
+            ? { kind: 'success', text: locale.t('vault.break.taken') }
+            : { kind: 'error', text: locale.t(said) });
+    };
+
+    <Page width="narrow" label={ locale.t('vault.title') } onRefresh={ () => void vaults.refresh() }>
+        <PageHeader title={ locale.t('vault.title') } lead={ locale.t('vault.lead') } />
+
+        <Show when={ awaited }>
+            <div class="flex flex-col gap-4" aria-hidden="true">
+                <Skeleton lines={ 3 } class="rounded-panel border border-line bg-field p-4" />
+                <Skeleton lines={ 4 } class="rounded-panel border border-line bg-field p-4" />
+            </div>
+        </Show>
+
+        <Show when={ refused }>
+            <ErrorState title={ locale.t('vault.failed') } lead={ unreachedLead } onRetry={ () => void vaults.refresh() } />
+        </Show>
+
+        <Show when={ off }>
+            <EmptyState icon="coins" title={ locale.t('vault.off') } lead={ locale.t('vault.offLead') } />
+        </Show>
+
+        <Show when={ open }>
+            <div class="flex flex-col gap-6">
+                <Show when={ guest }>
+                    <EmptyState icon="wallet" title={ locale.t('tables.refused.paid-wallet') } />
+                </Show>
+
+                <Show when={ counted }>
+                    <dl class="divide-y divide-line rounded-panel border border-line bg-field" aria-label={ locale.t('vault.title') }>
+                        <div class="flex items-baseline justify-between gap-3 px-4 py-3">
+                            <dt class="text-ui-sm text-muted">{ locale.t('vault.free') }</dt>
+                            <dd class="text-ui-2xl font-bold text-text"><span class="tally">{ free }</span> NURA</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-3 px-4 py-3">
+                            <dt class="text-ui-sm text-muted">{ locale.t('vault.inPlay') }</dt>
+                            <dd class="text-ui-md font-semibold text-text"><span class="tally">{ inPlay }</span> NURA</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-3 px-4 py-3">
+                            <dt class="text-ui-sm text-muted">{ locale.t('vault.inWallet') }</dt>
+                            <dd class="text-ui-md font-semibold text-text"><span class="tally">{ inWallet }</span> NURA</dd>
+                        </div>
+                    </dl>
+                </Show>
+
+                <Show when={ minor }>
+                    <Panel tone="sunk" class="text-ui-sm text-muted">{ locale.t('tables.refused.paid-minor') }</Panel>
+                </Show>
+
+                <Show when={ unsworn }>
+                    <Panel section stack="md" labelledBy="vault-terms">
+                        <h2 id="vault-terms" class="text-ui-lg font-semibold text-text">{ locale.t('vault.terms.title') }</h2>
+                        <p class="text-ui-base text-muted">{ locale.t('vault.terms.lead', { fee }) }</p>
+                        <Toggle checked={ adult } label={ locale.t('vault.terms.adult') } onChange={ (on) => adult = on } />
+                        <Button variant="primary" class="self-start" disabled={ !adult } loading={ accepting } onClick={ () => void accept() }>
+                            { locale.t('vault.terms.accept') }
+                        </Button>
+                    </Panel>
+                </Show>
+
+                <Show when={ moving }>
+                    <VaultMove free={ balances?.free ?? '0' } wallet={ balances?.wallet ?? '0' } deposits={ deposits } />
+                </Show>
+
+                <Show when={ resting }>
+                    <Panel section stack="md" labelledBy="vault-break">
+                        <h2 id="vault-break" class="text-ui-lg font-semibold text-text">{ locale.t('vault.break.title') }</h2>
+                        <p class="text-ui-base text-muted">{ locale.t('vault.break.lead') }</p>
+                        <Show when={ onBreak }>
+                            <p class="text-ui-sm font-semibold text-text">{ until }</p>
+                        </Show>
+                        <ul class="flex flex-wrap gap-2">
+                            <For each={ RESTS } key={ (one) => one.days } let={ one }>
+                                <li>
+                                    <Button variant="outline" onClick={ () => void rest(one) }>{ locale.t(one.label) }</Button>
+                                </li>
+                            </For>
+                        </ul>
+                    </Panel>
+                </Show>
+
+                <Show when={ counted }>
+                    <VaultGames owner={ owner } chainId={ chainId } reclaimAfter={ reclaimAfter } />
+                </Show>
+            </div>
+        </Show>
+    </Page>
+}

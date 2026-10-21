@@ -1,0 +1,149 @@
+import { createResource } from 'azerothjs';
+
+import { client, type VaultGame } from '../../api.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
+import EmptyState from '../ui/empty-state.component.azeroth';
+import ErrorState from '../ui/error-state.component.azeroth';
+import LoadMore from '../ui/load-more.component.azeroth';
+import SectionHeading from '../ui/section-heading.component.azeroth';
+import Skeleton from '../ui/skeleton.component.azeroth';
+import VaultGameRow from './vault-game-row.component.azeroth';
+
+export default component VaultGames(props: { owner: string; chainId: number; reclaimAfter: number })
+{
+    const locale = useLocale();
+    const vaults = useVault();
+    const toasts = useToasts();
+
+    const first = createResource(
+        () => `${ props.owner } ${ vaults.moved() }`,
+        () => client.vault.games({ query: {} }),
+        { name: 'vault.games' }
+    );
+
+    state extra = [] as VaultGame[];
+
+    state further = null as string | null;
+
+    state paging = false;
+
+    state pageFailed = false;
+
+    state reclaiming = null as string | null;
+
+    effect
+    {
+        const page = first.data();
+
+        extra = [];
+        further = page?.cursor ?? null;
+        pageFailed = false;
+    }
+
+    derived games = [...(first.data()?.games ?? []), ...extra];
+
+    derived awaited = first.loading() && games.length === 0;
+
+    derived refused = !first.loading() && first.error() !== null && games.length === 0;
+
+    derived bare = !first.loading() && first.error() === null && games.length === 0;
+
+    derived listed = games.length > 0;
+
+    derived more = further !== null;
+
+    const older = async () =>
+    {
+        const from = further;
+
+        if (paging || from === null)
+        {
+            return;
+        }
+
+        paging = true;
+        pageFailed = false;
+
+        try
+        {
+            const page = await client.vault.games({ query: { cursor: from } });
+            const held = new Set(games.map((one) => one.id));
+
+            extra = [...extra, ...page.games.filter((one) => !held.has(one.id))];
+            further = page.cursor ?? null;
+        }
+        catch
+        {
+            pageFailed = true;
+        }
+        finally
+        {
+            paging = false;
+        }
+    };
+
+    const reclaim = async (id: string) =>
+    {
+        if (reclaiming !== null)
+        {
+            return;
+        }
+
+        reclaiming = id;
+
+        const said = await vaults.reclaim(id);
+
+        reclaiming = null;
+
+        if (said === null)
+        {
+            toasts.show({ kind: 'success', text: locale.t('vault.reclaimed') });
+            await first.refetch();
+            return;
+        }
+
+        toasts.show({ kind: 'error', text: locale.t(said) });
+    };
+
+    <section class="flex flex-col" aria-labelledby="vault-games">
+        <SectionHeading id="vault-games" title={ locale.t('vault.games') } />
+
+        <Show when={ awaited }>
+            <Skeleton lines={ 3 } avatar class="rounded-panel border border-line bg-field p-4" />
+        </Show>
+
+        <Show when={ refused }>
+            <ErrorState title={ locale.t('vault.games.failed') } onRetry={ () => void first.refetch() } />
+        </Show>
+
+        <Show when={ bare }>
+            <EmptyState icon="history" title={ locale.t('vault.games.empty') } class="py-8" />
+        </Show>
+
+        <Show when={ listed }>
+            <ul class="divide-y divide-line rounded-panel border border-line bg-field" aria-labelledby="vault-games">
+                <For each={ games } key={ (one) => one.id } let={ one }>
+                    <li>
+                        <VaultGameRow
+                            game={ one }
+                            chainId={ props.chainId }
+                            reclaimAfter={ props.reclaimAfter }
+                            busy={ reclaiming === one.id }
+                            onReclaim={ (id) => void reclaim(id) }
+                        />
+                    </li>
+                </For>
+            </ul>
+        </Show>
+
+        <Show when={ pageFailed }>
+            <p class="mt-2 text-center text-ui-xs text-danger" role="alert">{ locale.t('vault.games.failed') }</p>
+        </Show>
+
+        <Show when={ more }>
+            <LoadMore label={ locale.t('vault.games.more') } loading={ paging } onMore={ () => void older() } />
+        </Show>
+    </section>
+}

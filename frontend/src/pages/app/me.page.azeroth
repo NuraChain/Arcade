@@ -11,6 +11,7 @@ import { signOut } from '../../components/app/sign-out.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import { COPY_CHIP } from '../../components/ui/variants.ts';
+import VaultChip from '../../components/vault/vault-chip.component.azeroth';
 import { client } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -172,6 +173,8 @@ export default component MePage()
                     <Show when={ face.error() !== null }>
                         { () => <ChainFaceFailed onRetry={ retryChain } /> }
                     </Show>
+
+                    <VaultChip />
 
                     <div class="sticky top-[calc(var(--page-pad)*-1)] z-10 bleed bleed-pad -mb-2 bg-void/85 backdrop-blur-md backdrop-saturate-150">
                         <Tabs
