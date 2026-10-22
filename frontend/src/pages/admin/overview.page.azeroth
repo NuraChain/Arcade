@@ -1,15 +1,17 @@
 import { createResource, Link, untrack, useHead } from 'azerothjs';
 
 import { may } from '../../../../backend/src/domains/admin/roles.ts';
-import When from '../../components/admin/when.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
+import When from '../../components/admin/when.component.azeroth';
 import GameIcon from '../../components/games/game-icon.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { client } from '../../api.ts';
 import { GAMES } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
 import { nuraOf } from '../../lib/nura.ts';
 import { whileSeen } from '../../lib/while-seen.ts';
 import type { MessageKey } from '../../locales/en.ts';
@@ -25,7 +27,15 @@ const HOUR_S = 3_600;
 
 const MINUTE_S = 60;
 
-const LINK = 'self-start text-ui-sm font-semibold text-accent hover:underline';
+const LINK = 'text-ui-sm font-semibold text-accent hover:underline';
+
+const TILE = 'flex h-full flex-col gap-1.5 p-4';
+
+const STATUS: Record<'available' | 'disabled' | 'coming-soon', { word: MessageKey; tone: 'live' | 'gold' | 'neutral' }> = {
+    available: { word: 'admin.play.status.available', tone: 'live' },
+    disabled: { word: 'admin.play.status.disabled', tone: 'gold' },
+    'coming-soon': { word: 'admin.play.status.coming-soon', tone: 'neutral' }
+};
 
 export default component OverviewPage()
 {
@@ -70,23 +80,42 @@ export default component OverviewPage()
 
     const counted = (count: number, key: MessageKey) => ({ count: locale.n(count), label: locale.plural(key, count) });
 
-    derived accounts = counted(held?.people.total ?? 0, 'admin.overview.accounts');
+    derived accounts = locale.n(held?.people.total ?? 0);
 
-    derived facts = held === null
-        ? []
-        : [
-            { key: 'day', ...counted(held.people.day, 'admin.overview.day') },
-            { key: 'week', ...counted(held.people.week, 'admin.overview.week') },
-            { key: 'active', ...counted(held.people.active, 'admin.overview.active') }
-        ];
+    derived joined = counted(held?.people.day ?? 0, 'admin.overview.day');
+
+    derived week = counted(held?.people.week ?? 0, 'admin.overview.week');
+
+    derived seen = counted(held?.people.active ?? 0, 'admin.overview.active');
 
     derived suspended = counted(held?.people.suspended ?? 0, 'admin.overview.suspended');
 
     derived minors = counted(held?.people.minors ?? 0, 'admin.overview.minors');
 
-    derived online = counted(held?.online ?? 0, 'admin.overview.onlineCount');
+    derived online = locale.n(held?.online ?? 0);
 
-    derived reports = counted(held?.reports ?? 0, 'admin.overview.reportsWaiting');
+    derived reportCount = held?.reports ?? 0;
+
+    derived reports = locale.n(reportCount);
+
+    derived reportsWaiting = counted(reportCount, 'admin.overview.reportsWaiting');
+
+    derived reported = reportCount > 0;
+
+    derived playing = locale.n((held?.games ?? []).reduce((sum, one) => sum + one.matches, 0));
+
+    derived tablesWaiting = counted((held?.games ?? []).reduce((sum, one) => sum + one.tables, 0), 'admin.play.tables');
+
+    const tileSaid = (title: MessageKey, value: string, sub: { count: string; label: string }) =>
+        locale.t('admin.overview.tile.said', { title: locale.t(title), value, sub: `${ sub.count } ${ sub.label }` });
+
+    derived accountsTile = tileSaid('admin.overview.people', accounts, joined);
+
+    derived onlineTile = tileSaid('admin.section.live', online, seen);
+
+    derived reportsTile = `${ reportsWaiting.count } ${ reportsWaiting.label }`;
+
+    derived gamesTile = tileSaid('admin.overview.tile.games', playing, tablesWaiting);
 
     derived games = (held?.games ?? []).map((one) =>
     {
@@ -96,14 +125,18 @@ export default component OverviewPage()
             game: one.game,
             known,
             name: known === null ? one.game : locale.t(known.nameKey),
+            status: locale.t(STATUS[one.status].word),
+            tone: STATUS[one.status].tone,
             matches: counted(one.matches, 'admin.play.matches'),
             tables: counted(one.tables, 'admin.play.tables')
         };
     });
 
-    derived stuck = counted(held?.stuck ?? 0, 'admin.overview.stuck');
+    derived stuckCount = held?.stuck ?? 0;
 
-    derived jammed = (held?.stuck ?? 0) > 0;
+    derived stuck = counted(stuckCount, 'admin.overview.stuck');
+
+    derived jammed = stuckCount > 0 && playable;
 
     derived money = held?.money ?? null;
 
@@ -113,13 +146,19 @@ export default component OverviewPage()
 
     derived inPlay = locale.n(nuraOf(money?.inPlay ?? '0'), { maximumFractionDigits: 4 });
 
-    derived paidStuck = counted(money?.stuck ?? 0, 'admin.overview.paidStuck');
+    derived paidStuckCount = money?.stuck ?? 0;
 
-    derived owed = (money?.stuck ?? 0) > 0;
+    derived paidStuck = counted(paidStuckCount, 'admin.overview.paidStuck');
+
+    derived owed = paidStuckCount > 0;
+
+    derived needed = reported || jammed || owed;
 
     derived health = held?.health ?? null;
 
     derived watched = health !== null;
+
+    derived serverSpan = funded ? 'lg:col-span-2' : 'lg:col-span-3';
 
     const megabytes = (bytes: number) => locale.n(bytes / MB, { style: 'unit', unit: 'megabyte', unitDisplay: 'short', maximumFractionDigits: 0 });
 
@@ -151,6 +190,8 @@ export default component OverviewPage()
 
     derived loop = health === null ? '' : locale.t('admin.overview.loopValue', { busy: percent(health.loop.busy), stall: millis(health.loop.stall) });
 
+    derived loopShare = `${ Math.min(100, Math.round((health?.loop.busy ?? 0) * 100)) }%`;
+
     derived pool = health === null
         ? ''
         : locale.t('admin.overview.poolValue', {
@@ -159,21 +200,25 @@ export default component OverviewPage()
             waiting: locale.n(health.pool.waiting)
         });
 
+    derived poolShare = health === null || health.pool.total === 0 ? '0%' : `${ Math.round(((health.pool.total - health.pool.idle) / health.pool.total) * 100) }%`;
+
     derived sockets = locale.n(health?.sockets ?? 0);
 
     derived hour = health === null ? '' : locale.t('admin.overview.hourValue', { requests: locale.n(health.requests), failed: locale.n(health.failed) });
 
+    derived failing = (health?.failed ?? 0) > 0;
+
     derived failures = (health?.failures ?? []).map((one, at) => ({ key: `${ one.at } ${ at }`, at: one.at, said: `${ one.method } ${ one.path }`, status: locale.n(one.status, { useGrouping: false }) }));
 
-    derived failing = failures.length > 0;
+    derived listed = failures.length > 0;
 
     <div class="flex flex-col gap-6">
-        <AdminHead title={ locale.t('admin.section.overview') } lead={ locale.t('admin.overview.lead') } how={ locale.t('admin.overview.how') } />
-
-        <div class="flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="sm" leading="refresh" onClick={ () => void view.refetch() }>{ locale.t('admin.overview.read') }</Button>
-            <span class="text-ui-xs text-faint" data-read-at>{ readAt }</span>
-        </div>
+        <AdminHead
+            title={ locale.t('admin.section.overview') }
+            lead={ locale.t('admin.overview.lead') }
+            how={ locale.t('admin.overview.how') }
+            actions={ <Button variant="outline" size="sm" leading="refresh" onClick={ () => void view.refetch() }>{ locale.t('admin.overview.read') }</Button> }
+        />
 
         <Show when={ waiting }>
             { () => <Skeleton lines={ 6 } /> }
@@ -184,99 +229,189 @@ export default component OverviewPage()
         </Show>
 
         <Show when={ shown }>
-            <div class="grid gap-4 xl:grid-cols-2">
-                <Panel pad="md" stack="sm" labelledBy="overview-people">
-                    <h2 id="overview-people" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.people') }</h2>
-                    <p class="text-ui-sm text-muted" data-accounts><span class="tally text-ui-2xl font-bold text-text">{ accounts.count }</span> { accounts.label }</p>
-                    <ul class="flex flex-col gap-1 text-ui-sm text-muted" data-facts>
-                        <For each={ facts } key={ (one) => one.key } let={ fact }>
-                            <li data-fact={ fact.key }><span class="tally font-semibold text-text">{ fact.count }</span> { fact.label }</li>
-                        </For>
-                    </ul>
-                    <div class="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-                        <Link to="/admin/people?list=suspended" class={ LINK } data-suspended><span class="tally">{ suspended.count }</span> { suspended.label }</Link>
-                        <Link to="/admin/people?list=minors" class={ LINK } data-minors><span class="tally">{ minors.count }</span> { minors.label }</Link>
-                        <Link to="/admin/people" class={ LINK }>{ locale.t('admin.overview.openPeople') }</Link>
+            <div class="flex flex-col gap-6">
+                <section class="flex flex-col gap-2" aria-labelledby="overview-needs" data-needs>
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                        <h2 id="overview-needs" class="text-ui-sm font-semibold text-muted">{ locale.t('admin.overview.needs') }</h2>
+                        <span class="text-ui-xs text-faint" data-read-at>{ readAt }</span>
                     </div>
-                </Panel>
-
-                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                    <Panel pad="md" stack="sm" labelledBy="overview-online">
-                        <h2 id="overview-online" class="text-ui-md font-semibold text-text">{ locale.t('admin.section.live') }</h2>
-                        <p class="text-ui-sm text-muted" data-online><span class="tally text-ui-2xl font-bold text-text">{ online.count }</span> { online.label }</p>
-                        <Link to="/admin/live" class={ LINK }>{ locale.t('admin.overview.openLive') }</Link>
-                    </Panel>
-                    <Panel pad="md" stack="sm" labelledBy="overview-reports">
-                        <h2 id="overview-reports" class="text-ui-md font-semibold text-text">{ locale.t('admin.section.reports') }</h2>
-                        <p class="text-ui-sm text-muted" data-reports><span class="tally text-ui-2xl font-bold text-text">{ reports.count }</span> { reports.label }</p>
-                        <Link to="/admin/reports" class={ LINK }>{ locale.t('admin.overview.openReports') }</Link>
-                    </Panel>
-                </div>
-
-                <Panel pad="md" stack="sm" labelledBy="overview-games">
-                    <h2 id="overview-games" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.games') }</h2>
-                    <ul class="divide-y divide-line" data-games>
-                        <For each={ games } key={ (one) => one.game } let={ game }>
-                            <li class="flex items-center gap-3 py-2" data-game={ game.game }>
-                                <Show when={ game.known } let={ known } fallback={ <span class="h-8 w-8 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
-                                    <GameIcon game={ known.id } class="h-8 w-8 shrink-0" />
-                                </Show>
-                                <span class="min-w-0 flex-1 truncate text-ui-sm font-semibold text-text">{ game.name }</span>
-                                <span class="facts text-ui-xs text-muted">
-                                    <span data-matches><span class="tally">{ game.matches.count }</span> { game.matches.label }</span>
-                                    <span data-tables><span class="tally">{ game.tables.count }</span> { game.tables.label }</span>
-                                </span>
-                            </li>
-                        </For>
-                    </ul>
-                    <p class="text-ui-sm font-semibold text-danger" hidden={ !jammed } data-stuck><span class="tally">{ stuck.count }</span> { stuck.label }</p>
-                    <Show when={ playable }>
-                        <Link to="/admin/play" class={ LINK } data-open-play>{ locale.t('admin.overview.openPlay') }</Link>
-                    </Show>
-                </Panel>
-
-                <Show when={ funded }>
-                    <Panel pad="md" stack="sm" labelledBy="overview-money">
-                        <h2 id="overview-money" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.money') }</h2>
-                        <ul class="flex flex-col gap-1 text-ui-sm text-muted" data-money>
-                            <li data-paid-playing><span class="tally font-semibold text-text">{ paidPlaying.count }</span> { paidPlaying.label }</li>
-                            <li data-in-play><span class="tally font-semibold text-madder">{ inPlay }</span> { locale.t('admin.overview.inPlay') }</li>
-                            <li class={ () => (owed ? 'font-semibold text-danger' : '') } data-paid-stuck><span class="tally">{ paidStuck.count }</span> { paidStuck.label }</li>
+                    <Show when={ needed } fallback={ (
+                        <p class="flex items-center gap-3 rounded-panel border border-line bg-field px-4 py-3 text-ui-base text-muted" data-calm>
+                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-live/15 text-live" aria-hidden="true"><Icon name="check-circle" size={ 18 } /></span>
+                            <span>{ locale.t('admin.overview.calm') }</span>
+                        </p>
+                    ) }>
+                        <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field">
+                            <Show when={ reported }>
+                                <li>
+                                    <Link to="/admin/reports" class="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-raised" data-reports>
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold" aria-hidden="true"><Icon name="flag" size={ 18 } /></span>
+                                        <span class="min-w-0 flex-1 text-ui-base font-semibold text-text"><span class="tally">{ reportsWaiting.count }</span> { reportsWaiting.label }</span>
+                                        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                                    </Link>
+                                </li>
+                            </Show>
+                            <Show when={ jammed }>
+                                <li>
+                                    <Link to="/admin/play?view=stuck" class="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-raised" data-stuck>
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger" aria-hidden="true"><Icon name="alert" size={ 18 } /></span>
+                                        <span class="min-w-0 flex-1 text-ui-base font-semibold text-text"><span class="tally">{ stuck.count }</span> { stuck.label }</span>
+                                        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                                    </Link>
+                                </li>
+                            </Show>
+                            <Show when={ owed }>
+                                <li>
+                                    <Link to="/admin/money" class="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-raised" data-owed>
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger" aria-hidden="true"><Icon name="coins" size={ 18 } /></span>
+                                        <span class="min-w-0 flex-1 text-ui-base font-semibold text-text"><span class="tally">{ paidStuck.count }</span> { paidStuck.label }</span>
+                                        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                                    </Link>
+                                </li>
+                            </Show>
                         </ul>
-                        <Link to="/admin/money" class={ LINK }>{ locale.t('admin.overview.openMoney') }</Link>
-                    </Panel>
-                </Show>
+                    </Show>
+                </section>
 
-                <Show when={ watched }>
-                    <Panel pad="md" stack="sm" labelledBy="overview-server">
-                        <h2 id="overview-server" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.server') }</h2>
-                        <p class="text-ui-sm text-text" data-uptime>{ uptime }</p>
-                        <dl class="grid grid-cols-1 gap-x-4 gap-y-1 text-ui-sm sm:grid-cols-[auto_1fr]" data-health>
-                            <dt class="text-muted">{ locale.t('admin.overview.memory') }</dt>
-                            <dd class="text-text" data-memory>{ memory }</dd>
-                            <dt class="text-muted">{ locale.t('admin.overview.loop') }</dt>
-                            <dd class="text-text" data-loop>{ loop }</dd>
-                            <dt class="text-muted">{ locale.t('admin.overview.pool') }</dt>
-                            <dd class="text-text" data-pool>{ pool }</dd>
-                            <dt class="text-muted">{ locale.t('admin.overview.sockets') }</dt>
-                            <dd class="tally text-text" data-sockets>{ sockets }</dd>
-                            <dt class="text-muted">{ locale.t('admin.overview.hour') }</dt>
-                            <dd class="text-text" data-hour>{ hour }</dd>
-                        </dl>
-                        <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.overview.failures') }</h3>
-                        <Show when={ failing } fallback={ <p class="text-ui-sm text-muted" data-failures="none">{ locale.t('admin.overview.noFailures') }</p> }>
-                            <ul class="divide-y divide-line" data-failures>
-                                <For each={ failures } key={ (one) => one.key } let={ failure }>
-                                    <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 text-ui-xs">
-                                        <span class="tally font-semibold text-danger">{ failure.status }</span>
-                                        <span class="min-w-0 flex-1 break-all font-mono text-text" dir="ltr">{ failure.said }</span>
-                                        <span class="text-faint"><When at={ failure.at } /></span>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
+                <ul class="grid grid-cols-2 gap-3 lg:grid-cols-4" data-tiles>
+                    <li>
+                        <Panel to="/admin/people" pad="none" class="h-full" label={ accountsTile }>
+                            <span class={ TILE }>
+                                <span class="flex items-center gap-2 text-ui-xs font-semibold text-muted"><Icon name="people" size={ 16 } /><span data-tile-title>{ locale.t('admin.overview.people') }</span></span>
+                                <span class="tally text-ui-3xl font-bold text-text" data-accounts>{ accounts }</span>
+                                <span class="text-ui-xs text-faint" data-joined><span class="tally">{ joined.count }</span> { joined.label }</span>
+                            </span>
+                        </Panel>
+                    </li>
+                    <li>
+                        <Panel to="/admin/live" pad="none" class="h-full" label={ onlineTile }>
+                            <span class={ TILE }>
+                                <span class="flex items-center gap-2 text-ui-xs font-semibold text-muted"><Icon name="signal" size={ 16 } /><span data-tile-title>{ locale.t('admin.section.live') }</span></span>
+                                <span class="tally text-ui-3xl font-bold text-text" data-online>{ online }</span>
+                                <span class="text-ui-xs text-faint" data-seen><span class="tally">{ seen.count }</span> { seen.label }</span>
+                            </span>
+                        </Panel>
+                    </li>
+                    <li>
+                        <Panel to="/admin/reports" pad="none" class="h-full" label={ reportsTile }>
+                            <span class={ TILE }>
+                                <span class="flex items-center gap-2 text-ui-xs font-semibold text-muted"><Icon name="flag" size={ 16 } /><span data-tile-title>{ locale.t('admin.overview.tile.reports') }</span></span>
+                                <span class={ () => `tally text-ui-3xl font-bold ${ reported ? 'text-gold' : 'text-text' }` } data-waiting>{ reports }</span>
+                                <span class="text-ui-xs text-faint">{ locale.t('admin.overview.openReports') }</span>
+                            </span>
+                        </Panel>
+                    </li>
+                    <li>
+                        <Panel to={ playable ? '/admin/play?view=matches' : undefined } pad="none" class="h-full" label={ gamesTile }>
+                            <span class={ TILE }>
+                                <span class="flex items-center gap-2 text-ui-xs font-semibold text-muted"><Icon name="games" size={ 16 } /><span data-tile-title>{ locale.t('admin.overview.tile.games') }</span></span>
+                                <span class="tally text-ui-3xl font-bold text-text" data-playing>{ playing }</span>
+                                <span class="text-ui-xs text-faint" data-waiting-tables><span class="tally">{ tablesWaiting.count }</span> { tablesWaiting.label }</span>
+                            </span>
+                        </Panel>
+                    </li>
+                </ul>
+
+                <div class="grid items-start gap-4 lg:grid-cols-3">
+                    <Panel pad="none" class="lg:col-span-2" labelledBy="overview-games">
+                        <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                            <h2 id="overview-games" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.games') }</h2>
+                            <Show when={ playable }>
+                                <Link to="/admin/play" class={ LINK } data-open-play>{ locale.t('admin.overview.openPlay') }</Link>
+                            </Show>
+                        </div>
+                        <ul class="divide-y divide-line" data-games>
+                            <For each={ games } key={ (one) => one.game } let={ game }>
+                                <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3" data-game={ game.game }>
+                                    <Show when={ game.known } let={ known } fallback={ <span class="h-9 w-9 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
+                                        <GameIcon game={ known.id } class="h-9 w-9 shrink-0" />
+                                    </Show>
+                                    <span class="flex min-w-[8rem] flex-1 flex-wrap items-center gap-2">
+                                        <span class="text-ui-base font-semibold text-text">{ game.name }</span>
+                                        <Badge dot text={ game.status } tone={ game.tone } />
+                                    </span>
+                                    <span class="facts w-full ps-12 text-ui-xs text-muted sm:w-auto sm:ps-0">
+                                        <span data-matches><span class="tally">{ game.matches.count }</span> { game.matches.label }</span>
+                                        <span data-tables><span class="tally">{ game.tables.count }</span> { game.tables.label }</span>
+                                    </span>
+                                </li>
+                            </For>
+                        </ul>
                     </Panel>
-                </Show>
+
+                    <Panel pad="none" labelledBy="overview-people">
+                        <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                            <h2 id="overview-people" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.people') }</h2>
+                            <Link to="/admin/people" class={ LINK }>{ locale.t('admin.overview.openPeople') }</Link>
+                        </div>
+                        <ul class="flex flex-col gap-2 px-4 py-3 text-ui-base text-muted" data-facts>
+                            <li data-fact="week"><span class="tally font-semibold text-text">{ week.count }</span> { week.label }</li>
+                            <li><Link to="/admin/people?list=suspended" class={ LINK } data-suspended><span class="tally">{ suspended.count }</span> { suspended.label }</Link></li>
+                            <li><Link to="/admin/people?list=minors" class={ LINK } data-minors><span class="tally">{ minors.count }</span> { minors.label }</Link></li>
+                        </ul>
+                    </Panel>
+
+                    <Show when={ funded }>
+                        <Panel pad="none" labelledBy="overview-money">
+                            <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                                <h2 id="overview-money" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.money') }</h2>
+                                <Link to="/admin/money" class={ LINK }>{ locale.t('admin.overview.openMoney') }</Link>
+                            </div>
+                            <ul class="flex flex-col gap-2 px-4 py-3 text-ui-base text-muted" data-money>
+                                <li data-in-play><span class="tally text-ui-xl font-bold text-madder">{ inPlay }</span> { locale.t('admin.overview.inPlay') }</li>
+                                <li data-paid-playing><span class="tally font-semibold text-text">{ paidPlaying.count }</span> { paidPlaying.label }</li>
+                                <li class={ () => (owed ? 'font-semibold text-danger' : '') } data-paid-stuck><span class="tally">{ paidStuck.count }</span> { paidStuck.label }</li>
+                            </ul>
+                        </Panel>
+                    </Show>
+
+                    <Show when={ watched }>
+                        <Panel pad="none" class={ serverSpan } labelledBy="overview-server" data-health>
+                            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-3">
+                                <h2 id="overview-server" class="text-ui-md font-semibold text-text">{ locale.t('admin.overview.server') }</h2>
+                                <span class="text-ui-sm text-muted" data-uptime>{ uptime }</span>
+                            </div>
+                            <dl class="grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-3">
+                                <div class="flex flex-col gap-1 bg-field px-4 py-3">
+                                    <dt class="text-ui-xs font-semibold text-muted">{ locale.t('admin.overview.memory') }</dt>
+                                    <dd class="text-ui-base text-text" data-memory>{ memory }</dd>
+                                </div>
+                                <div class="flex flex-col gap-1.5 bg-field px-4 py-3">
+                                    <dt class="text-ui-xs font-semibold text-muted">{ locale.t('admin.overview.loop') }</dt>
+                                    <dd class="text-ui-base text-text" data-loop>{ loop }</dd>
+                                    <dd class="h-1.5 overflow-hidden rounded-full bg-sunk" aria-hidden="true"><span class="block h-full rounded-full bg-accent" style={ `inline-size: ${ loopShare }` }></span></dd>
+                                </div>
+                                <div class="flex flex-col gap-1.5 bg-field px-4 py-3">
+                                    <dt class="text-ui-xs font-semibold text-muted">{ locale.t('admin.overview.pool') }</dt>
+                                    <dd class="text-ui-base text-text" data-pool>{ pool }</dd>
+                                    <dd class="h-1.5 overflow-hidden rounded-full bg-sunk" aria-hidden="true"><span class="block h-full rounded-full bg-accent" style={ `inline-size: ${ poolShare }` }></span></dd>
+                                </div>
+                                <div class="flex flex-col gap-1 bg-field px-4 py-3">
+                                    <dt class="text-ui-xs font-semibold text-muted">{ locale.t('admin.overview.sockets') }</dt>
+                                    <dd class="tally text-ui-base text-text" data-sockets>{ sockets }</dd>
+                                </div>
+                                <div class="flex flex-col gap-1 bg-field px-4 py-3 sm:col-span-2">
+                                    <dt class="text-ui-xs font-semibold text-muted">{ locale.t('admin.overview.hour') }</dt>
+                                    <dd class={ () => `text-ui-base ${ failing ? 'text-danger' : 'text-text' }` } data-hour>{ hour }</dd>
+                                </div>
+                            </dl>
+                            <div class="flex flex-col gap-2 border-t border-line px-4 py-3">
+                                <h3 class="text-ui-sm font-semibold text-text">{ locale.t('admin.overview.failures') }</h3>
+                                <Show when={ listed } fallback={ <p class="text-ui-sm text-muted" data-failures="none">{ locale.t('admin.overview.noFailures') }</p> }>
+                                    <ul class="divide-y divide-line" data-failures>
+                                        <For each={ failures } key={ (one) => one.key } let={ failure }>
+                                            <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-ui-xs">
+                                                <span class="tally rounded-control bg-danger/15 px-1.5 py-0.5 font-semibold text-danger">{ failure.status }</span>
+                                                <span class="min-w-0 flex-1 break-all font-mono text-text" dir="ltr">{ failure.said }</span>
+                                                <span class="text-faint"><When at={ failure.at } /></span>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </div>
+                        </Panel>
+                    </Show>
+                </div>
             </div>
         </Show>
     </div>

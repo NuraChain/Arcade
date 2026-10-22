@@ -474,17 +474,25 @@ report about reza.t: nothing to do."). The kind, by whom and about whom are in t
 entries come a page at a time and are dropped whenever the first page is read again, so a new filter
 never shows the old one's tail.
 
-**Overview** is the first section, open to every role on the staff. It says the accounts (all of
-them as one number, then the new ones of the last day and the last week and those seen in the last
-day; the suspended and those under 18 as links to People's own lists), how many people are online
-and how many reports wait (each leading to its section), every game with how many are being
-played and how many tables wait, the games stuck in danger only when there are some, and the way
-into Play only for a role that opens it. A role that opens Money also sees the paid games being
-played, the NURA locked in games in madder, and the payments stuck on the way (in danger when
-there are some), with the way to Money; an admin and the owner see this server: how long it has
-been up ("less than a minute" when it is, minutes alone under an hour), its memory, how busy the
-event loop was and its longest wait, the database connections, the sockets, the hour's
-requests and failures, and the last failures by status, method and path, their exact time under a
+**Overview** is the first section, open to every role on the staff, and it is a dashboard. It
+opens with what needs the reader ("Needs you", with when it was read): the reports waiting in
+gold, and the games the sweep cannot play and the payments stuck on the way in danger, each only
+when there are some and each leading to its place (stuck games for a role that opens Play alone);
+when nothing does it says so, "Nothing needs you right now.". Then four tiles, two to a row on a
+phone and four from 1024px, each leading to its section and each named to a screen reader as one
+sentence ("Accounts: 1,234, 12 joined in the last day"): the accounts with the new ones of the
+last day, who is online with those seen in the last day, the reports waiting (gold while there
+are some), and the games being played with the tables waiting (leading to Play only for a role
+that opens it). Then every game with its status as a badge (on in green, paused in gold) and how
+many are being played and how many tables wait, the way into Play only for a role that opens it,
+and beside it the rest of the accounts (new in the last week, the suspended and those under 18 as
+links to People's own lists). A role that opens Money also sees the NURA locked in games in
+madder, the paid games being played and the payments stuck on the way (in danger when there are
+some), with the way to Money; an admin and the owner see this server: how long it has been up
+("less than a minute" when it is, minutes alone under an hour) and, as a grid of figures, its
+memory, how busy the event loop was and its longest wait (with a meter), the database
+connections (a meter of those in use), the sockets, the hour's requests and failures (in danger
+when one failed), then the last failures by status, method and path, their exact time under a
 pointer. It is read when it opens, at "Read again", every fifteen seconds while the tab is seen and
 at once when it is seen again (`whileSeen` in `lib/while-seen.ts`, on the product clock), never
 while the tab is hidden, and says when it was read. The count of reports it reads is the nav's too.

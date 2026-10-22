@@ -116,24 +116,70 @@ afterEach(() =>
 
 describe('the overview', () =>
 {
-    it('counts the accounts, who is online, the reports waiting and the games, each leading to its section', async () =>
+    it('says first what needs the reader, then four counts, each leading to its section, then every game and the rest of the accounts', async () =>
     {
         told();
         const container = await opened();
 
         expect(said(container, 'h1')).toBe('Overview');
         expect(said(container, '[data-read-at]')).toBe(`Read at ${ useLocale().date(Date.parse('2026-10-22T08:59:30.000Z'), { timeStyle: 'medium' }) }`);
-        expect(said(container, '[data-accounts]')).toBe('1,234 accounts');
-        expect(all(container, '[data-facts] li')).toEqual(['12 joined in the last day', '80 joined in the last week', '300 seen in the last day']);
+        expect(said(container, '#overview-needs')).toBe('Needs you');
+        expect(all(container, '[data-needs] li')).toEqual(['2 reports waiting', '1 game stuck', '1 payment stuck on the way']);
+        expect([href(container, '[data-reports]'), href(container, '[data-stuck]'), href(container, '[data-owed]')]).toEqual(['/admin/reports', '/admin/play?view=stuck', '/admin/money']);
+        expect(container.querySelector('[data-calm]')).toBeNull();
+        expect([...container.querySelectorAll('[data-tiles] > li a')].map((tile) => tile.getAttribute('aria-label'))).toEqual(['Accounts: 1,234, 12 joined in the last day', 'Online now: 57, 300 seen in the last day', '2 reports waiting', 'Games being played: 9, 7 tables waiting']);
+        expect(all(container, '[data-tile-title]')).toEqual(['Accounts', 'Online now', 'Reports waiting', 'Games being played']);
+        expect([said(container, '[data-joined]'), said(container, '[data-seen]'), said(container, '[data-playing]'), said(container, '[data-waiting-tables]')]).toEqual(['12 joined in the last day', '300 seen in the last day', '9', '7 tables waiting']);
+        expect([...container.querySelectorAll('[data-tiles] > li a')].map((tile) => tile.getAttribute('href'))).toEqual(['/admin/people', '/admin/live', '/admin/reports', '/admin/play?view=matches']);
+        expect(container.querySelector('[data-waiting]')?.className).toContain('text-gold');
+        expect(all(container, '[data-facts] li')).toEqual(['80 joined in the last week', '4 suspended', '1 under 18']);
         expect([said(container, '[data-suspended]'), href(container, '[data-suspended]')]).toEqual(['4 suspended', '/admin/people?list=suspended']);
         expect([said(container, '[data-minors]'), href(container, '[data-minors]')]).toEqual(['1 under 18', '/admin/people?list=minors']);
-        expect(said(container, '[data-online]')).toBe('57 people online now');
-        expect(said(container, '[data-reports]')).toBe('2 reports waiting');
         expect(all(container, '[data-game="ludo"] [data-matches], [data-game="ludo"] [data-tables]')).toEqual(['5 games being played', '4 tables waiting']);
         expect(all(container, '[data-game="hokm"] [data-matches], [data-game="hokm"] [data-tables]')).toEqual(['3 games being played', '1 table waiting']);
-        expect([said(container, '[data-stuck]'), container.querySelector<HTMLElement>('[data-stuck]')?.hidden]).toEqual(['1 game stuck', false]);
+        expect(said(container, '[data-game="poker"]')).toContain('Paused');
+        expect(said(container, '[data-game="ludo"]')).toContain('On');
+        expect([container.querySelector('[data-game="poker"] .bg-gold'), container.querySelector('[data-game="ludo"] .bg-live')].every((dot) => dot !== null)).toBe(true);
+        expect(container.querySelector('[data-game="poker"] .bg-live')).toBeNull();
         expect(href(container, '[data-open-play]')).toBe('/admin/play');
-        expect(['/admin/live', '/admin/reports', '/admin/people'].every((to) => container.querySelector(`a[href="${ to }"]`) !== null)).toBe(true);
+    });
+
+    it('says a payment stuck on the way needs the reader, though nothing else does', async () =>
+    {
+        server.lookout.overview = {
+            at: '2026-10-22T08:59:30.000Z',
+            people: { total: 3, day: 0, week: 1, active: 2, suspended: 0, minors: 0 },
+            online: 1,
+            games: [{ game: 'ludo', status: 'available', matches: 0, tables: 0 }],
+            stuck: 0,
+            reports: 0,
+            money: { playing: 1, inPlay: '10000000000000000000', stuck: 1 }
+        };
+        const container = await opened();
+
+        expect(all(container, '[data-needs] li')).toEqual(['1 payment stuck on the way']);
+        expect(container.querySelector('[data-calm]')).toBeNull();
+    });
+
+    it('says nothing needs the reader when nothing does', async () =>
+    {
+        told();
+        server.reset();
+        as('owner');
+        server.lookout.overview = {
+            at: '2026-10-22T08:59:30.000Z',
+            people: { total: 3, day: 0, week: 1, active: 2, suspended: 0, minors: 0 },
+            online: 1,
+            games: [{ game: 'ludo', status: 'available', matches: 0, tables: 0 }],
+            stuck: 0,
+            reports: 0,
+            money: { playing: 0, inPlay: '0', stuck: 0 }
+        };
+        const container = await opened();
+
+        expect(container.querySelector('[data-needs] ul')).toBeNull();
+        expect(said(container, '[data-calm]')).toBe('Nothing needs you right now.');
+        expect(container.querySelector('[data-waiting]')?.className).not.toContain('text-gold');
     });
 
     it('shows an admin the money in play and this server\'s health', async () =>
@@ -142,7 +188,7 @@ describe('the overview', () =>
         as('admin');
         const container = await opened();
 
-        expect(all(container, '[data-money] li')).toEqual(['2 games for NURA being played', '45 NURA locked in games', '1 payment stuck on the way']);
+        expect(all(container, '[data-money] li')).toEqual(['45 NURA locked in games', '2 games for NURA being played', '1 payment stuck on the way']);
         expect(container.querySelector('[data-paid-stuck]')?.className).toContain('text-danger');
         expect(said(container, '[data-uptime]')).toBe('Up for 1 day, 2 hours');
         expect(said(container, '[data-memory]')).toBe('180 MB in all · heap 64 MB');
@@ -150,6 +196,7 @@ describe('the overview', () =>
         expect(said(container, '[data-pool]')).toBe('6 open · 4 idle · 0 waiting');
         expect(said(container, '[data-sockets]')).toBe('61');
         expect(said(container, '[data-hour]')).toBe('4,210 requests · 3 failed');
+        expect(container.querySelector('[data-hour]')?.className).toContain('text-danger');
         expect(all(container, '[data-failures] li > span:not(.text-faint)')).toEqual(['500', 'POST /api/tables/abc/start']);
         expect(container.querySelector('[data-failures] time')?.getAttribute('datetime')).toBe('2026-10-22T08:40:00.000Z');
         expect(href(container, 'a[href="/admin/money"]')).toBe('/admin/money');
@@ -183,8 +230,11 @@ describe('the overview', () =>
         as('moderator');
         const container = await opened();
 
-        expect(said(container, '[data-accounts]')).toBe('1,234 accounts');
+        expect(said(container, '[data-accounts]')).toBe('1,234');
         expect([container.querySelector('[data-money]'), container.querySelector('[data-health]'), container.querySelector('[data-open-play]')]).toEqual([null, null, null]);
+        expect([container.querySelector('[data-stuck]'), container.querySelector('[data-owed]')]).toEqual([null, null]);
+        expect(container.querySelector('[data-tiles] a[href^="/admin/play"]')).toBeNull();
+        expect(all(container, '[data-needs] li')).toEqual(['2 reports waiting']);
     });
 
     it('says nothing is stuck by saying nothing, and that no request has failed', async () =>
@@ -198,7 +248,8 @@ describe('the overview', () =>
         };
         const container = await opened();
 
-        expect(container.querySelector<HTMLElement>('[data-stuck]')?.hidden).toBe(true);
+        expect([container.querySelector('[data-stuck]'), container.querySelector('[data-owed]')]).toEqual([null, null]);
+        expect(all(container, '[data-needs] li')).toEqual(['2 reports waiting']);
         expect(container.querySelector('[data-paid-stuck]')?.className).not.toContain('text-danger');
         expect(said(container, '[data-failures="none"]')).toBe('No request has failed since this server started.');
     });
@@ -214,7 +265,7 @@ describe('the overview', () =>
         clock.advance(READ_EVERY_MS);
         await settle();
 
-        expect([reads(), said(container, '[data-online]')]).toEqual([2, '58 people online now']);
+        expect([reads(), said(container, '[data-online]')]).toEqual([2, '58']);
 
         const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
 
@@ -260,7 +311,7 @@ describe('the overview', () =>
         [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Try again')!.click();
         await settle();
 
-        expect(said(container, '[data-accounts]')).toBe('1,234 accounts');
+        expect(said(container, '[data-accounts]')).toBe('1,234');
     });
 
     it('says it in Persian', async () =>
@@ -270,10 +321,15 @@ describe('the overview', () =>
         const container = await opened();
 
         expect(said(container, 'h1')).toBe('نمای کلی');
-        expect(said(container, '[data-accounts]')).toBe('۱٬۲۳۴ حساب');
-        expect(all(container, '[data-facts] li')).toEqual(['۱۲ نفر توی ۲۴ ساعت گذشته عضو شدن', '۸۰ نفر توی هفته‌ی گذشته عضو شدن', '۳۰۰ نفر توی ۲۴ ساعت گذشته سر زدن']);
+        expect(said(container, '#overview-needs')).toBe('نیاز به رسیدگی');
+        expect(said(container, '[data-accounts]')).toBe('۱٬۲۳۴');
+        expect(said(container, '[data-joined]')).toBe('۱۲ نفر توی ۲۴ ساعت گذشته عضو شدن');
+        expect(said(container, '[data-seen]')).toBe('۳۰۰ نفر توی ۲۴ ساعت گذشته سر زدن');
+        expect(all(container, '[data-facts] li')).toEqual(['۸۰ نفر توی هفته‌ی گذشته عضو شدن', '۴ حساب تعلیق‌شده', '۱ نفر زیر ۱۸']);
         expect(said(container, '[data-minors]')).toBe('۱ نفر زیر ۱۸');
         expect(said(container, '[data-reports]')).toBe('۲ گزارش منتظر بررسی');
+        expect(all(container, '[data-tile-title]')).toEqual(['حساب‌ها', 'آنلاین‌ها', 'گزارش‌های منتظر', 'بازی‌های در جریان']);
+        expect(container.querySelector('[data-tiles] > li a')?.getAttribute('aria-label')).toBe('حساب‌ها: ۱٬۲۳۴، ۱۲ نفر توی ۲۴ ساعت گذشته عضو شدن');
         expect(said(container, '[data-money] [data-in-play]')).toBe('۴۵ NURA قفل‌شده توی بازی‌ها');
     });
 });
