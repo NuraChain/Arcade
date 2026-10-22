@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1052,7 +1052,12 @@ describe('the owner\'s view of the vault', () =>
         const told: unknown[][] = [];
         const app = owned(told, null);
         const off = { on: false, reason: 'A bug in the deal, off until it is fixed' };
-        const answers = [await sent(app, '/play'), await sent(app, '/play/games/ludo', off)];
+        const answers = [
+            await sent(app, '/play'),
+            await sent(app, '/play/games/ludo', off),
+            await sent(app, '/play/matches?list=stuck&game=ludo&cursor=abc'),
+            await sent(app, '/play/tables?game=hokm')
+        ];
 
         for (const response of answers)
         {
@@ -1061,7 +1066,13 @@ describe('the owner\'s view of the vault', () =>
             expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
         }
 
-        expect(told).toEqual([['play', 'somebody'], ['switchGame', 'somebody', 'ludo', off]]);
+        expect(told).toEqual([
+            ['play', 'somebody'],
+            ['switchGame', 'somebody', 'ludo', off],
+            ['liveMatches', 'somebody', { list: 'stuck', game: 'ludo', cursor: 'abc' }],
+            ['waitingTables', 'somebody', { game: 'hokm' }]
+        ]);
+        expect((await sent(app, '/play/matches?list=open')).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: 'no', reason: 'A bug in the deal' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false, reason: 'no' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false })).status).toBe(422);
@@ -1143,6 +1154,8 @@ describe('the owner\'s view of the vault', () =>
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
         expect(queries).toContain(`'/admin/people/:handle/history': ['cursor']`);
         expect(queries).toContain(`'/admin/reports': ['status', 'cursor']`);
+        expect(queries).toContain(`'/admin/play/matches': ['list', 'game', 'cursor']`);
+        expect(queries).toContain(`'/admin/play/tables': ['game', 'cursor']`);
         expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
     });

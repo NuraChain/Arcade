@@ -1,0 +1,75 @@
+import type { AdminTables } from '../../../../backend/src/schemas.ts';
+import { GAMES } from '../../data/games.ts';
+import { nuraOf } from '../../lib/nura.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import When from './when.component.azeroth';
+
+export type AdminTableRow = AdminTables['rows'][number];
+
+const PRIVACY_WORDS: Record<AdminTableRow['privacy'], MessageKey> = {
+    public: 'admin.play.privacy.public',
+    friends: 'admin.play.privacy.friends',
+    invite: 'admin.play.privacy.invite',
+    room: 'admin.play.privacy.room'
+};
+
+export default component WaitingRow(props: { table: AdminTableRow })
+{
+    const locale = useLocale();
+
+    derived known = GAMES.find((one) => one.id === props.table.game) ?? null;
+
+    derived name = known === null ? props.table.game : locale.t(known.nameKey);
+
+    derived pace = locale.t(props.table.mode === 'live' ? 'games.mode.live' : 'games.mode.turns');
+
+    derived privacy = locale.t(PRIVACY_WORDS[props.table.privacy]);
+
+    derived taken = props.table.taken;
+
+    derived seats = props.table.seats;
+
+    derived opened = locale.t('admin.play.table.opened', { when: locale.relative(Date.parse(props.table.at)) });
+
+    derived quick = props.table.quick;
+
+    derived staked = props.table.stake !== undefined;
+
+    derived stake = props.table.stake === undefined ? '' : `${ locale.n(nuraOf(props.table.stake), { maximumFractionDigits: 4 }) } NURA`;
+
+    derived host = props.table.host ?? null;
+
+    <div class="flex items-center gap-3 px-4 py-3" data-table={ props.table.id }>
+        <Show when={ known } let={ shown } fallback={ <span class="h-10 w-10 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
+            <GameIcon game={ shown.id } class="h-10 w-10 shrink-0" />
+        </Show>
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="truncate text-ui-sm font-semibold text-text" data-name>{ name }</span>
+                <span class="tally text-ui-xs font-semibold uppercase tracking-wide text-muted" data-code>{ props.table.code }</span>
+                <Show when={ staked }>
+                    <span class="flex" data-stake><Badge text={ stake } tone="madder" /></span>
+                </Show>
+                <Show when={ quick }>
+                    <span class="flex" data-quick><Badge text={ locale.t('admin.play.table.quick') } tone="accent" /></span>
+                </Show>
+            </span>
+            <span class="facts text-ui-xs text-faint">
+                <span data-pace>{ pace }</span>
+                <span data-privacy>{ privacy }</span>
+                <span data-seated><span class="tally">{ locale.n(taken) }</span> { locale.t('admin.play.table.of', { seats: locale.n(seats) }) }</span>
+                <When at={ props.table.at } said={ opened } />
+            </span>
+        </div>
+        <Show when={ host } let={ hosted }>
+            <span class="flex min-w-0 max-w-[40%] shrink-0 items-center gap-1.5" data-host>
+                <Avatar person={ hosted } size="xs" />
+                <span class="truncate text-ui-xs text-muted" dir="ltr">{ hosted.handle }</span>
+            </span>
+        </Show>
+    </div>
+}

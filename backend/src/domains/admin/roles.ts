@@ -44,6 +44,16 @@ export type ReportList = (typeof REPORT_LISTS)[number];
 
 export const REPORTS_PAGE = 50;
 
+export const STUCK_KINDS = ['no-engine', 'no-turn', 'no-autoplay', 'refused', 'threw'] as const;
+
+export type StuckKind = (typeof STUCK_KINDS)[number];
+
+export const MATCH_LISTS = ['all', 'stuck'] as const;
+
+export type MatchList = (typeof MATCH_LISTS)[number];
+
+export const PLAY_PAGE = 50;
+
 export const ABILITIES = {
     people: 'moderator',
     reports: 'moderator',

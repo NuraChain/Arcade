@@ -38,7 +38,7 @@ import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
-import { createPlayService } from './domains/admin/play.ts';
+import { createPlayService, stuckKindOf, type Stuck } from './domains/admin/play.ts';
 import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
@@ -980,6 +980,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const plays = createPlayService(db);
 
+    const stuckNow = async () =>
+    {
+        const live = new Set(await plays.stillLive([...stuckMatches.keys()]));
+
+        for (const id of [...stuckMatches.keys()])
+        {
+            if (!live.has(id))
+            {
+                stuckMatches.delete(id);
+            }
+        }
+
+        return stuckMatches;
+    };
+
+    const playNow = async () => ({ games: await plays.games(), stuck: (await stuckNow()).size });
+
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
 
@@ -1177,9 +1194,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             if (!expired.played)
             {
                 stuck.push({ matchId: expired.matchId, game: expired.game, reason: expired.reason });
+
+                if (!stuckMatches.has(expired.matchId))
+                {
+                    stuckMatches.set(expired.matchId, { since: new Date(), kind: stuckKindOf(expired.reason) });
+                }
+
                 continue;
             }
 
+            stuckMatches.delete(expired.matchId);
             played += 1;
             await courtesy('game push', () => pushMatch(expired.matchId, expired.before));
 
@@ -1204,6 +1228,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     let struck: ReadonlySet<string> = new Set<string>();
+
+    const stuckMatches = new Map<string, Stuck>();
 
     const sweepTables = async (): Promise<TableSweep> =>
     {
@@ -1794,7 +1820,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async play(me)
             {
-                return await ableTo(me, 'play') === null ? null : { games: await plays.games() };
+                return await ableTo(me, 'play') === null ? null : await playNow();
             },
 
             async switchGame(me, game, input)
@@ -1812,7 +1838,19 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     live?.catalogueChanged();
                 }
 
-                return { games: await plays.games() };
+                return await playNow();
+            },
+
+            async liveMatches(me, query)
+            {
+                return await ableTo(me, 'play') === null
+                    ? null
+                    : await plays.matches(query.list ?? 'all', query.game ?? null, query.cursor ?? null, await stuckNow());
+            },
+
+            async waitingTables(me, query)
+            {
+                return await ableTo(me, 'play') === null ? null : await plays.tables(query.game ?? null, query.cursor ?? null);
             }
         },
 

@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
+import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, MATCH_LISTS, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, STUCK_KINDS, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -1205,7 +1205,8 @@ export const adminReviewInput = object({ outcome: enumOf(REPORT_OUTCOMES), reaso
 export const reportsWaiting = object({ count: number() });
 
 export const adminPlay = object({
-    games: array(object({ game: string(), status: gameStatus, matches: number(), tables: number() }))
+    games: array(object({ game: string(), status: gameStatus, matches: number(), tables: number() })),
+    stuck: number()
 });
 
 export type AdminPlay = Infer<typeof adminPlay>;
@@ -2494,3 +2495,43 @@ export const cursorQuery = object({ cursor: string().optional() });
 export const notificationQuery = object({ cursor: string().optional(), notice: string({ max: 16 }).optional() });
 
 export const threadQuery = object({ cursor: string().optional(), limit: string({ max: 3 }).optional() });
+
+const playFace = object({ handle: string(), displayName: string(), hue: number(), avatar: string().optional() });
+
+export const adminMatchRow = object({
+    id: string(),
+    game: string(),
+    code: string(),
+    mode: tableMode,
+    startedAt: string(),
+    deadline: string().optional(),
+    stake: string().optional(),
+    players: array(object({ seat: number(), handle: string(), displayName: string(), hue: number(), avatar: string().optional() })),
+    stuck: object({ since: string(), kind: enumOf(STUCK_KINDS) }).optional()
+});
+
+export const adminMatches = object({ rows: array(adminMatchRow), cursor: string().optional() });
+
+export type AdminMatches = Infer<typeof adminMatches>;
+
+export const adminMatchesQuery = object({ list: enumOf(MATCH_LISTS).optional(), game: string({ max: 32 }).optional(), cursor: string({ max: 80 }).optional() });
+
+export const adminTableRow = object({
+    id: string(),
+    code: string(),
+    game: string(),
+    mode: tableMode,
+    privacy: tablePrivacy,
+    seats: number(),
+    taken: number(),
+    host: playFace.optional(),
+    at: string(),
+    quick: boolean(),
+    stake: string().optional()
+});
+
+export const adminTables = object({ rows: array(adminTableRow), cursor: string().optional() });
+
+export type AdminTables = Infer<typeof adminTables>;
+
+export const adminTablesQuery = object({ game: string({ max: 32 }).optional(), cursor: string({ max: 80 }).optional() });

@@ -12,6 +12,8 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import type { AdminMatches, AdminTables } from '../../backend/src/schemas.ts';
+import { PLAY_PAGE } from '../../backend/src/domains/admin/roles.ts';
 import { ApiError, client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -29,15 +31,50 @@ const settle = async () =>
     await new Promise((resolve) => setTimeout(resolve, 30));
 };
 
-const opened = async () =>
+const mounted = async (at = '/admin/play') =>
 {
     const routes: Route[] = [{ path: '/admin/play', component: () => PlayPage({}) as unknown as HTMLElement }];
-    const router = createRouter({ routes, history: createMemoryHistory('/admin/play'), scroll: false });
+    const router = createRouter({ routes, history: createMemoryHistory(at), scroll: false });
     const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
 
     await settle();
-    return container;
+    return { router, container };
 };
+
+const opened = async (at = '/admin/play') => (await mounted(at)).container;
+
+const chips = (root: ParentNode) => [...root.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].map((one) => [one.textContent?.trim(), one.getAttribute('aria-pressed')]);
+
+const chip = (root: ParentNode, label: string) => [...root.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].find((one) => one.textContent?.trim().startsWith(label))!;
+
+const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
+
+const face = (handle: string, hue: number) => ({ handle, displayName: handle.toUpperCase(), hue });
+
+const matchOf = (id: string, game: string, extra: Partial<AdminMatches['rows'][number]> = {}): AdminMatches['rows'][number] => ({
+    id,
+    game,
+    code: `C${ id.toUpperCase() }`,
+    mode: 'live',
+    startedAt: minutesAgo(3),
+    deadline: new Date(NOW + 20_000).toISOString(),
+    players: [{ seat: 0, ...face('sara.k', 10) }, { seat: 1, ...face('reza.t', 200) }],
+    ...extra
+});
+
+const tableOf = (id: string, game: string, extra: Partial<AdminTables['rows'][number]> = {}): AdminTables['rows'][number] => ({
+    id,
+    code: `T${ id.toUpperCase() }`,
+    game,
+    mode: 'live',
+    privacy: 'public',
+    seats: 4,
+    taken: 1,
+    host: face('mina', 120),
+    at: minutesAgo(10),
+    quick: false,
+    ...extra
+});
 
 const said = (root: ParentNode, selector: string) => root.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 
@@ -221,6 +258,151 @@ describe('the games, on and off', () =>
         await settle();
 
         expect(statuses(container)).toHaveLength(4);
+    });
+
+    it('offers what to show, counting the games being played and the tables waiting, with Stuck only while a game is stuck', async () =>
+    {
+        let container = await opened();
+
+        expect(chips(container)).toEqual([['Games', 'true'], ['Being played3', 'false'], ['Waiting4', 'false']]);
+
+        cleanup();
+        server.play.stuck = 2;
+        container = await opened();
+
+        expect(chips(container).map((one) => one[0])).toEqual(['Games', 'Being played3', 'Waiting4', 'Stuck2']);
+    });
+
+    it('lists the games being played: the game, its code, the pace, when it started and when the turn runs out, the stake, and who plays in which seat', async () =>
+    {
+        server.playing.matches = [
+            matchOf('m2', 'hokm', { stake: '10000000000000000000' }),
+            matchOf('m1', 'ludo', { mode: 'turns', deadline: new Date(NOW + 3 * 3_600_000).toISOString(), stuck: { since: minutesAgo(60), kind: 'no-engine' } })
+        ];
+
+        const { router, container } = await mounted();
+
+        chip(container, 'Being played').click();
+        await settle();
+
+        const first = container.querySelector('[data-match="m2"]')!;
+        const second = container.querySelector('[data-match="m1"]')!;
+
+        expect(router.location().query.view).toBe('matches');
+        expect([...container.querySelectorAll('[data-match]')].map((one) => one.getAttribute('data-match'))).toEqual(['m2', 'm1']);
+        expect([said(first, '[data-name]'), said(first, '[data-code]'), said(first, '[data-stake]')]).toEqual(['Hokm', 'CM2', '10 NURA']);
+        expect([...first.querySelectorAll('[data-when]')].map((one) => one.textContent)).toEqual(['Started 3 minutes ago', 'Turn runs out in 20 seconds']);
+        expect(said(first, '[data-pace]')).toBe('Live');
+        expect([...first.querySelectorAll('[data-players] li [dir="ltr"]')].map((one) => one.textContent?.trim())).toEqual(['sara.k', 'reza.t']);
+        expect(first.querySelector('[data-stuck]')).toBeNull();
+        expect([said(second, '[data-pace]'), said(second, '[data-stuck-mark]')]).toEqual(['Turn-based', 'Stuck']);
+        expect(said(second, '[data-stuck] > span')).toBe('This server has no engine for its game.');
+        expect([...second.querySelectorAll('[data-stuck] [data-when]')].map((one) => one.textContent)).toEqual(['Since 1 hour ago']);
+        expect(server.calls).toContain('admin.liveMatches {}');
+    });
+
+    it('lists only the stuck games under Stuck, from the address', async () =>
+    {
+        server.play.stuck = 1;
+        server.playing.matches = [matchOf('m2', 'hokm'), matchOf('m1', 'ludo', { stuck: { since: minutesAgo(5), kind: 'no-turn' } })];
+
+        const container = await opened('/admin/play?view=stuck');
+
+        expect([...container.querySelectorAll('[data-match]')].map((one) => one.getAttribute('data-match'))).toEqual(['m1']);
+        expect(said(container, '[data-stuck] span')).toBe('Its game names nobody on turn.');
+        expect(chip(container, 'Stuck').getAttribute('aria-pressed')).toBe('true');
+        expect(server.calls).toContain('admin.liveMatches {"list":"stuck"}');
+    });
+
+    it('lists the tables waiting: the game, its code, the pace, who may sit, the chairs taken, quick play, when it opened, the host and the stake', async () =>
+    {
+        server.playing.tables = [
+            tableOf('t2', 'backgammon', { seats: 2, taken: 1, quick: true, privacy: 'public', stake: '5000000000000000000' }),
+            tableOf('t1', 'hokm', { mode: 'turns', privacy: 'room', taken: 3 }),
+            tableOf('t0', 'ludo', { privacy: 'invite', host: undefined })
+        ];
+
+        const { router, container } = await mounted();
+
+        chip(container, 'Waiting').click();
+        await settle();
+
+        const quick = container.querySelector('[data-table="t2"]')!;
+        const room = container.querySelector('[data-table="t1"]')!;
+
+        expect(router.location().query.view).toBe('tables');
+        expect([...container.querySelectorAll('[data-table]')].map((one) => one.getAttribute('data-table'))).toEqual(['t2', 't1', 't0']);
+        expect([said(quick, '[data-name]'), said(quick, '[data-code]'), said(quick, '[data-stake]'), said(quick, '[data-quick]')]).toEqual(['Backgammon', 'TT2', '5 NURA', 'Quick play']);
+        expect([said(quick, '[data-pace]'), said(quick, '[data-privacy]'), said(quick, '[data-seated]'), said(quick, '[data-when]')]).toEqual(['Live', 'Anyone', '1 of 2 seated', 'Opened 10 minutes ago']);
+        expect(said(quick, '[data-host] [dir="ltr"]')).toBe('mina');
+        expect([said(room, '[data-pace]'), said(room, '[data-privacy]'), said(room, '[data-seated]')]).toEqual(['Turn-based', 'In a chat', '3 of 4 seated']);
+        expect(room.querySelector('[data-quick]')).toBeNull();
+        expect(container.querySelector('[data-table="t0"] [data-host]')).toBeNull();
+        expect(said(container, '[data-table="t0"] [data-privacy]')).toBe('By invitation');
+    });
+
+    it('shows older games and tables a page at a time, each once', async () =>
+    {
+        server.playing.matches = Array.from({ length: PLAY_PAGE + 2 }, (_, at) => matchOf(`m${ at }`, 'ludo'));
+        server.playing.tables = Array.from({ length: PLAY_PAGE + 2 }, (_, at) => tableOf(`t${ at }`, 'hokm'));
+
+        let container = await opened('/admin/play?view=matches');
+
+        expect(container.querySelectorAll('[data-match]')).toHaveLength(PLAY_PAGE);
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Show older')!.click();
+        await settle();
+
+        expect(new Set([...container.querySelectorAll('[data-match]')].map((one) => one.getAttribute('data-match'))).size).toBe(PLAY_PAGE + 2);
+        expect([...container.querySelectorAll('button')].some((one) => one.textContent?.trim() === 'Show older')).toBe(false);
+
+        cleanup();
+        container = await opened('/admin/play?view=tables');
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Show older')!.click();
+        await settle();
+
+        expect(new Set([...container.querySelectorAll('[data-table]')].map((one) => one.getAttribute('data-table'))).size).toBe(PLAY_PAGE + 2);
+    });
+
+    it('says when nothing is being played, nothing is stuck and nothing waits, and when a list could not be read, with a way to try again', async () =>
+    {
+        let container = await opened('/admin/play?view=matches');
+
+        expect(container.textContent).toContain('No game is being played right now.');
+
+        cleanup();
+        container = await opened('/admin/play?view=stuck');
+
+        expect(container.textContent).toContain('No game is stuck.');
+
+        cleanup();
+        container = await opened('/admin/play?view=tables');
+
+        expect(container.textContent).toContain('No table is waiting for a game.');
+
+        cleanup();
+        vi.spyOn(client.admin, 'waitingTables').mockRejectedValueOnce(new ApiError(500, 'internal', 'Internal server error', undefined));
+        server.playing.tables = [tableOf('t1', 'hokm')];
+        container = await opened('/admin/play?view=tables');
+
+        expect(container.textContent).toContain('This list could not be read.');
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('common.retry'))!.click();
+        await settle();
+
+        expect(container.querySelectorAll('[data-table]')).toHaveLength(1);
+    });
+
+    it('says the lists in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        server.playing.tables = [tableOf('t1', 'hokm', { privacy: 'friends', taken: 2 })];
+
+        const container = await opened('/admin/play?view=tables');
+
+        expect(chips(container).map((one) => one[0])).toEqual(['همه‌ی بازی‌ها', 'در جریان۳', 'میزهای منتظر۴']);
+        expect([said(container, '[data-privacy]'), said(container, '[data-seated]')]).toEqual(['دوست‌ها', '۲ از ۴ صندلی پره']);
     });
 
     it('says it all in Persian', async () =>

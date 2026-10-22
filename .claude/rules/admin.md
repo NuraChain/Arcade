@@ -217,6 +217,23 @@ game can start here again once it is back.", under the clock and not the green d
 Start, so nobody presses one to be refused; Ready stays, and Start comes back when the game does.
 Its leaderboard stays: a board of results needs nothing to be playable.
 
+**What is being played, and what waits.** `GET /api/admin/play/matches?list=&game=&cursor=` lists
+the games being played newest first, fifty a page by the log's keyset over `(started_at, id)`: the
+game, the table's code and pace, when it started, when the turn runs out (`deadline`), its stake,
+and who plays in which seat. `GET /api/admin/play/tables?game=&cursor=` lists the tables waiting
+for a game the same way over `(created_at, id)`: open with no game on, the host (none once the host
+has left), the chairs taken of the seats, who may sit, whether quick play opened it, and its stake.
+A table a finished game left behind waits again; a closed one is gone.
+
+**A game the sweep cannot play is stuck, and says why.** The turn sweep postpones a match it cannot
+play (no engine for its game, nobody on turn, no turn it can play for the seat, a turn the game
+refuses, or a throw) and logs `unplayable match`; it also keeps each one in memory with when it
+first met it and the kind of reason (`STUCK_KINDS` in `roles.ts`, `stuckKindOf` in `play.ts`: what
+follows the colon, which can be an error's message, never leaves the server). `list=stuck` is the
+ones still live, and Play counts them (`stuck` on its answer); one the sweep plays after all, or
+that finishes, is forgotten. It is memory for the reason the table sweep's strikes are: a restart
+forgets it, and the sweep meets a stuck game again at its next deadline, a turn after its last.
+
 `admin-play.db.spec.ts` holds the list, the switch, the refusals, the row lock (two switches parked
 on a held row) and everything new refused while a live game plays on; `stake.db.spec.ts` the paid
 table; `realtime-hub.spec.ts` the pulse.
@@ -328,7 +345,13 @@ characters or more, and the sheet says so where it is typed), a pause as a destr
 that says what stops and what goes on, turning on as one that loses nothing. Said yes to, the
 game's new status is shown at the press, said once the server has ("Ludo is paused."), and a
 refusal takes it back with the refusal's words. The log says "mina paused Ludo." and "alex turned
-Ludo back on.", the game in the reader's own words.
+Ludo back on.", the game in the reader's own words. Above the games a filter in the address
+(`view`) shows the games, the games being played, the tables waiting, and the stuck games, the
+last offered only while one is stuck; each chip counts its list. A game being played is its game,
+code, pace, when it started and when its turn runs out (exact under a pointer, `When`), its stake
+in madder and its players by handle in seat order; a stuck one wears a danger badge and says why
+and since when. A table waiting is its game, code, pace, who may sit, the chairs taken, quick play,
+when it opened, its stake and its host. Both lists page with "Show older".
 
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
@@ -344,12 +367,13 @@ from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
-`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page, and `paused-game.spec.ts` what a player
-sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists as well),
+and `paused-game.spec.ts` what a player sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
 note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch and the vault's amounts as bodies, the pause as spared (its body is a
-switch), the log's four query words, the people's three and the reports' two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
+switch), the log's four query words, the people's three, the reports' two, the games being played's
+three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

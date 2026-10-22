@@ -16,7 +16,9 @@ import type {
     Account,
     AdminPeople,
     AdminPerson,
+    AdminMatches,
     AdminPlay,
+    AdminTables,
     AdminReport,
     AdminReports,
     AdminVault,
@@ -41,7 +43,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, PLAY_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -408,7 +410,18 @@ const staffFresh = () => ({
 
 type PlayStatus = AdminPlay['games'][number]['status'];
 
-const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })) });
+const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })), stuck: 0 });
+
+const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'] });
+
+const pageOf = <T extends { id: string }>(rows: readonly T[], cursor: string | undefined) =>
+{
+    const from = cursor === undefined ? 0 : rows.findIndex((one) => one.id === cursor) + 1;
+    const page = rows.slice(from, from + PLAY_PAGE);
+    const last = page.at(-1);
+
+    return { rows: structuredClone(page), ...(rows.length > from + PLAY_PAGE && last !== undefined ? { cursor: last.id } : {}) };
+};
 
 const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner' : server.staff.members.find((one) => one.handle === handle)?.role ?? null);
 
@@ -714,6 +727,7 @@ export const server =
     accounts: accountsFresh(),
     desk: reportsFresh(),
     play: playFresh(),
+    playing: playingFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -881,6 +895,7 @@ export const server =
         server.accounts = accountsFresh();
         server.desk = reportsFresh();
         server.play = playFresh();
+        server.playing = playingFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1440,6 +1455,24 @@ export const client =
             }
 
             return structuredClone(server.play);
+        },
+
+        async liveMatches({ query }: { query: { list?: 'all' | 'stuck'; game?: string; cursor?: string } })
+        {
+            server.calls.push(`admin.liveMatches ${ JSON.stringify(query) }`);
+            staffGate('play');
+
+            const rows = server.playing.matches.filter((one) => (query.list !== 'stuck' || one.stuck !== undefined) && (query.game === undefined || one.game === query.game));
+
+            return pageOf(rows, query.cursor);
+        },
+
+        async waitingTables({ query }: { query: { game?: string; cursor?: string } })
+        {
+            server.calls.push(`admin.waitingTables ${ JSON.stringify(query) }`);
+            staffGate('play');
+
+            return pageOf(server.playing.tables.filter((one) => query.game === undefined || one.game === query.game), query.cursor);
         }
     },
 

@@ -3,31 +3,40 @@ import { createResource, useHead } from 'azerothjs';
 import type { AdminPlay } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
 import GameSwitch from '../../components/admin/game-switch.component.azeroth';
+import PlayMatches from '../../components/admin/play-matches.component.azeroth';
+import PlayTables from '../../components/admin/play-tables.component.azeroth';
 import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { GAMES } from '../../data/games.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { whyStaffRefused } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+
+const VIEWS = ['games', 'matches', 'tables', 'stuck'] as const;
 
 export default component PlayPage()
 {
     const locale = useLocale();
     const overlay = useOverlay();
+    const address = useAddress();
 
     useHead({ title: () => locale.t('admin.section.play') });
 
-    const view = createResource(() => client.admin.play(), { name: 'admin.play' });
+    const read = createResource(() => client.admin.play(), { name: 'admin.play' });
 
     const guesses = createGuesses<AdminPlay>();
 
-    derived held = view.data() ?? null;
+    derived shown = VIEWS.find((one) => one === address.text('view')) ?? 'games';
 
-    derived trouble = view.error();
+    derived held = read.data() ?? null;
+
+    derived trouble = read.error();
 
     derived waiting = held === null && trouble === null;
 
@@ -36,6 +45,23 @@ export default component PlayPage()
     derived games = held === null ? [] : guesses.over(held).games;
 
     derived listed = games.length > 0;
+
+    derived onGames = shown === 'games';
+
+    derived onMatches = shown === 'matches' || shown === 'stuck';
+
+    derived onTables = shown === 'tables';
+
+    derived matchList = shown === 'stuck' ? 'stuck' as const : 'all' as const;
+
+    derived stuck = held?.stuck ?? 0;
+
+    derived views = [
+        { id: 'games', label: locale.t('admin.play.view.games') },
+        { id: 'matches', label: locale.t('admin.play.view.matches'), ...(held === null ? {} : { count: held.games.reduce((total, one) => total + one.matches, 0) }) },
+        { id: 'tables', label: locale.t('admin.play.view.tables'), ...(held === null ? {} : { count: held.games.reduce((total, one) => total + one.tables, 0) }) },
+        ...(stuck > 0 || shown === 'stuck' ? [{ id: 'stuck', label: locale.t('admin.play.view.stuck'), count: stuck }] : [])
+    ];
 
     const nameOf = (game: string) =>
     {
@@ -46,17 +72,18 @@ export default component PlayPage()
 
     const reread = async () =>
     {
-        await view.refetch();
+        await read.refetch();
 
-        if (view.error() !== null)
+        if (read.error() !== null)
         {
-            throw view.error();
+            throw read.error();
         }
 
         guesses.landed();
     };
 
     const switched = (game: string, on: boolean): Guess<AdminPlay> => (from) => ({
+        ...from,
         games: from.games.map((one) => (one.game === game ? { ...one, status: on ? 'available' : 'disabled' } : one))
     });
 
@@ -87,25 +114,37 @@ export default component PlayPage()
     <div class="flex flex-col gap-6">
         <PageHeader title={ locale.t('admin.section.play') } lead={ locale.t('admin.play.lead') } flush />
 
-        <Show when={ waiting }>
-            { () => <Skeleton lines={ 4 } avatar /> }
+        <FilterBar items={ views } value={ shown } label={ locale.t('admin.play.views') } onChange={ (id) => address.write({ view: id === 'games' ? '' : id }) } />
+
+        <Show when={ onGames }>
+            <Show when={ waiting }>
+                { () => <Skeleton lines={ 4 } avatar /> }
+            </Show>
+
+            <Show when={ failed }>
+                { () => <ErrorState title={ locale.t('admin.play.failed') } onRetry={ () => void read.refetch() } /> }
+            </Show>
+
+            <Show when={ listed }>
+                <section aria-labelledby="admin-play-games" class="flex flex-col gap-3">
+                    <h2 id="admin-play-games" class="text-ui-lg font-semibold text-text">{ locale.t('admin.play.games') }</h2>
+                    <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-games>
+                        <For each={ games } key={ (one) => one.game } let={ row }>
+                            <li>
+                                <GameSwitch row={ row } onSwitch={ (on) => void flip(row.game, on) } />
+                            </li>
+                        </For>
+                    </ul>
+                </section>
+            </Show>
         </Show>
 
-        <Show when={ failed }>
-            { () => <ErrorState title={ locale.t('admin.play.failed') } onRetry={ () => void view.refetch() } /> }
+        <Show when={ onMatches }>
+            <PlayMatches list={ matchList } />
         </Show>
 
-        <Show when={ listed }>
-            <section aria-labelledby="admin-play-games" class="flex flex-col gap-3">
-                <h2 id="admin-play-games" class="text-ui-lg font-semibold text-text">{ locale.t('admin.play.games') }</h2>
-                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-games>
-                    <For each={ games } key={ (one) => one.game } let={ row }>
-                        <li>
-                            <GameSwitch row={ row } onSwitch={ (on) => void flip(row.game, on) } />
-                        </li>
-                    </For>
-                </ul>
-            </section>
+        <Show when={ onTables }>
+            <PlayTables />
         </Show>
     </div>
 }

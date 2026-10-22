@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 
 import { errorResponse } from '@azerothjs/http';
 
-import { Game, Match, StaffAction, User, entities } from '../src/entities/index.ts';
+import { Game, Match, StaffAction, Table, User, entities } from '../src/entities/index.ts';
+import { PLAY_PAGE } from '../src/domains/admin/roles.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
@@ -145,6 +146,20 @@ const rolled = async (on: { host: Person; guest: Person; matchId: string }) =>
 };
 
 const statusOf = async (game: string) => (await db.getRepository(Game).findOneByOrFail({ id: game })).status;
+
+const engineless = async () =>
+{
+    await db.query(
+        `insert into games (id, slug, name_key, blurb_key, category_key, category, min_players, max_players, sort_order)
+         values ('engineless', 'engineless', 'g.n', 'g.b', 'g.c', 'cards', 2, 4, 90)
+         on conflict (id) do nothing`
+    );
+};
+
+const stranded = async (matchId: string) =>
+{
+    await db.query(`update matches set game = 'engineless', deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
+};
 
 const waitingOnLocks = async () =>
     (await db.query(
@@ -288,6 +303,145 @@ describe.skipIf(!active)('turning a game on and off, against a real database', (
         expect(changed).toBe(1);
     });
 
+    it('lists the games being played newest first, with the table\'s code and pace, who plays in which seat, when it started and when the turn runs out', async () =>
+    {
+        const owner = await makeUser(OWNER);
+        const admin = await makeUser(1);
+
+        await grant(owner, admin, 'admin');
+
+        const older = await started('ludo');
+        const newer = await started('hokm');
+        const over = await started('ludo');
+
+        await ports.match.resign(over.guest.id, over.matchId, { key: randomUUID() });
+
+        const listed = await ports.admin.liveMatches(admin.id, {});
+        const table = await db.getRepository(Table).findOneByOrFail({ id: newer.tableId });
+        const match = await db.getRepository(Match).findOneByOrFail({ id: newer.matchId });
+        const host = await db.getRepository(User).findOneByOrFail({ id: newer.host.id });
+
+        expect(listed?.rows.map((row) => row.id)).toEqual([newer.matchId, older.matchId]);
+        expect(listed?.cursor).toBeUndefined();
+        expect(listed?.rows[0]).toEqual({
+            id: newer.matchId,
+            game: 'hokm',
+            code: table.code,
+            mode: 'live',
+            startedAt: match.startedAt.toISOString(),
+            deadline: match.deadlineAt?.toISOString(),
+            players: [
+                { seat: 0, handle: newer.host.handle, displayName: host.displayName, hue: host.hue },
+                { seat: 1, handle: newer.guest.handle, displayName: expect.any(String), hue: expect.any(Number) }
+            ]
+        });
+        expect((await ports.admin.liveMatches(admin.id, { game: 'ludo' }))?.rows.map((row) => row.id)).toEqual([older.matchId]);
+    });
+
+    it('pages the games being played and the tables waiting fifty at a time, each once', async () =>
+    {
+        const owner = await makeUser(OWNER);
+        const admin = await makeUser(1);
+
+        await grant(owner, admin, 'admin');
+
+        for (let at = 0; at < PLAY_PAGE + 2; at += 1)
+        {
+            await started('ludo');
+            await opened(await makeUser(null), 'hokm');
+        }
+
+        const firstMatches = await ports.admin.liveMatches(admin.id, {});
+        const restMatches = await ports.admin.liveMatches(admin.id, { cursor: firstMatches?.cursor });
+        const firstTables = await ports.admin.waitingTables(admin.id, {});
+        const restTables = await ports.admin.waitingTables(admin.id, { cursor: firstTables?.cursor });
+        const matchIds = [...(firstMatches?.rows ?? []), ...(restMatches?.rows ?? [])].map((row) => row.id);
+        const tableIds = [...(firstTables?.rows ?? []), ...(restTables?.rows ?? [])].map((row) => row.id);
+
+        expect([firstMatches?.rows.length, restMatches?.rows.length, restMatches?.cursor]).toEqual([PLAY_PAGE, 2, undefined]);
+        expect(new Set(matchIds).size).toBe(PLAY_PAGE + 2);
+        expect([firstTables?.rows.length, restTables?.rows.length, restTables?.cursor]).toEqual([PLAY_PAGE, 2, undefined]);
+        expect(new Set(tableIds).size).toBe(PLAY_PAGE + 2);
+        expect((await ports.admin.liveMatches(admin.id, { cursor: 'not-a-cursor' }))?.rows).toHaveLength(PLAY_PAGE);
+    });
+
+    it('lists the tables waiting newest first, with the host, the chairs taken, the pace, who may sit, whether quick play opened it and its stake, and none with a game on or closed', async () =>
+    {
+        const owner = await makeUser(OWNER);
+        const admin = await makeUser(1);
+
+        await grant(owner, admin, 'admin');
+
+        const host = await makeUser(null);
+        const lone = await opened(host, 'hokm');
+
+        await db.query(`insert into table_stakes (table_id, amount) values ($1, '10000000000000000000')`, [lone.id]);
+
+        const quick = await ports.table.quick((await makeUser(null)).id, { game: 'backgammon', voice: 'off' });
+        const full = await readied('ludo');
+        await started('ludo');
+
+        const shut = await makeUser(null);
+        const closed = await opened(shut, 'poker');
+
+        await ports.table.close(shut.id, closed.id);
+
+        const listed = await ports.admin.waitingTables(admin.id, {});
+        const quickRow = listed?.rows.find((row) => row.id === quick.id);
+
+        expect(listed?.rows.map((row) => row.id)).toEqual([full.tableId, quick.id, lone.id]);
+        expect(listed?.rows[2]).toEqual({
+            id: lone.id,
+            code: lone.code,
+            game: 'hokm',
+            mode: 'live',
+            privacy: 'public',
+            seats: 2,
+            taken: 1,
+            host: { handle: host.handle, displayName: expect.any(String), hue: expect.any(Number) },
+            at: expect.any(String),
+            quick: false,
+            stake: '10000000000000000000'
+        });
+        expect([quickRow?.quick, quickRow?.game, quickRow?.taken, listed?.rows[0].taken]).toEqual([true, 'backgammon', 1, 2]);
+        expect((await ports.admin.waitingTables(admin.id, { game: 'ludo' }))?.rows.map((row) => row.id)).toEqual([full.tableId]);
+    });
+
+    it('says which games the sweep cannot play and why, counts them, and forgets one once it is played or over', async () =>
+    {
+        const owner = await makeUser(OWNER);
+        const admin = await makeUser(1);
+
+        await grant(owner, admin, 'admin');
+        await engineless();
+
+        const fine = await started('ludo');
+        const stuck = await started('ludo');
+        const mended = await started('ludo');
+
+        await stranded(stuck.matchId);
+        await stranded(mended.matchId);
+
+        const swept = await ports.jobs.sweepTurns(4000);
+        const listed = await ports.admin.liveMatches(admin.id, { list: 'stuck' });
+
+        expect(swept.stuck.map((one) => one.matchId).sort()).toEqual([stuck.matchId, mended.matchId].sort());
+        expect(listed?.rows.map((row) => [row.id, row.stuck?.kind]).sort()).toEqual([[stuck.matchId, 'no-engine'], [mended.matchId, 'no-engine']].sort());
+        expect(listed?.rows.every((row) => !Number.isNaN(Date.parse(row.stuck?.since ?? '')))).toBe(true);
+        expect((await ports.admin.play(admin.id))?.stuck).toBe(2);
+        expect((await ports.admin.liveMatches(admin.id, {}))?.rows.find((row) => row.id === fine.matchId)?.stuck).toBeUndefined();
+
+        await db.query(`update matches set game = 'ludo', deadline_at = now() - interval '1 second' where id = $1`, [mended.matchId]);
+        await ports.jobs.sweepTurns(4000);
+
+        expect((await ports.admin.liveMatches(admin.id, { list: 'stuck' }))?.rows.map((row) => row.id)).toEqual([stuck.matchId]);
+
+        await db.query(`update matches set finished_at = now(), deadline_at = null, outcome = 'abandoned' where id = $1`, [stuck.matchId]);
+
+        expect((await ports.admin.play(admin.id))?.stuck).toBe(0);
+        expect((await ports.admin.liveMatches(admin.id, { list: 'stuck' }))?.rows).toEqual([]);
+    });
+
     it('answers a moderator, a player, a suspended admin, a game nobody has heard of and one still coming as nothing, and changes nothing', async () =>
     {
         const owner = await makeUser(OWNER);
@@ -306,6 +460,8 @@ describe.skipIf(!active)('turning a game on and off, against a real database', (
         {
             expect(await ports.admin.play(who.id)).toBeNull();
             expect(await ports.admin.switchGame(who.id, 'ludo', off)).toBeNull();
+            expect(await ports.admin.liveMatches(who.id, {})).toBeNull();
+            expect(await ports.admin.waitingTables(who.id, {})).toBeNull();
         }
 
         expect(await ports.admin.switchGame(owner.id, 'chess', off)).toBeNull();
