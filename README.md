@@ -32,10 +32,8 @@ database says so in its log.
    after every update that changes them. It makes the database match the entities exactly, so a
    column an entity no longer has is dropped with everything in it: once the database holds
    anything, take a dump first (below).
-5. `sudo scripts/service-install.sh` installs a systemd service, and refuses while the build or a
-   filled-in `.env` is missing, or when root owns the clone. The service runs as the clone's
-   owner, can write nothing but its own `/tmp`, and cannot gain privileges. Then
-   `sudo scripts/service-start.sh`; the logs are in `.logs/`.
+5. `npm start` runs the server; keep it running with whatever supervises processes on the
+   machine. The logs are in `.logs/`.
 6. Point the proxy at `http://127.0.0.1:3200` (or the `PORT` you wrote), upgrading the WebSocket
    on `/ws`:
 
@@ -58,7 +56,7 @@ database says so in its log.
    ```
 
 To update: `git pull`, `npm ci`, `npm run build`, `pg_dump` the database, `npm run schema:sync`,
-then `sudo scripts/service-restart.sh`.
+then restart the server.
 
 Back up the database, because it is the only thing here that cannot be built again: every
 account, friendship, table, game, sealed message and uploaded picture lives in it. The build, the
