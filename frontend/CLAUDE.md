@@ -1578,6 +1578,18 @@ an accessibility check reads the aria, which was correct. `tools/budgets.mjs` re
 bundle and refuses the build on a bare `setProp(..., 'class', ...)` whose value calls anything,
 because the difference exists nowhere else. It is BUG-009 in the framework register.
 
+The check read only the line holding `setProp(`, and the bundle prints a class array over several
+lines, so for most bindings it saw an opening bracket and nothing else; and it never read a class
+handed to an element built inside a branch (`h("span", { class: [ ... ] })`). Inside an explicit
+arrow branch (`{ () => <span class={ [ ... ].join(' ') }> }`) the array is bound once even when what
+it reads is a `derived`, while a template literal beside it is wrapped (framework register, entry
+40). `Badge`'s status pill was that shape, so a report's status changed from Waiting to Reviewed in
+place kept the gold border and ground with a grey dot; `Panel`'s clickable shell was the same. The
+check now reads every binding whole in both forms, setting strings aside so a class that only
+mentions `scroll()` as CSS is not taken for a read, and refused exactly those five on the build
+before the fix. `primitives.spec.ts` (*takes a new tone and a new label where it stands*) and
+`components.spec.ts` (*takes a new tone where it stands when it is a button*) hold the two.
+
 **A component cannot be held in a signal by plain assignment.** A setter treats a bare function
 argument as an updater, so `Dialog = module.default` CALLS the component with the previous value
 — null — instead of storing it, and the symptom is a component whose `props` are null at

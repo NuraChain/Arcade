@@ -257,6 +257,27 @@ describe('Panel', () =>
         expect(panel.className).toContain('border-danger/40');
         expect(panel.className).not.toContain('bg-field');
     });
+
+    it('takes a new tone where it stands when it is a button', async () =>
+    {
+        const [tone, setTone] = createSignal<'field' | 'danger'>('field');
+        const { container } = renderTest(() => Panel({ children: 'Press', onClick: vi.fn(), get tone() { return tone(); } }) as Rendered);
+        const button = container.querySelector('button')!;
+
+        expect(button.className).toContain('bg-field');
+
+        setTone('danger');
+
+        for (let step = 0; step < 8; step += 1)
+        {
+            await Promise.resolve();
+        }
+
+        expect(container.querySelector('button'), 'the button was drawn again').toBe(button);
+        expect(button.className).toContain('border-danger/40');
+        expect(button.className).not.toContain('bg-field');
+        expect(button.className).toContain('w-full');
+    });
 });
 
 describe('the icon registry', () =>

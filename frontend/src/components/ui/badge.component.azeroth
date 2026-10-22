@@ -57,6 +57,10 @@ export default component Badge(props: {
 
     derived onBadge = props.tip === undefined ? anchored : '';
 
+    derived label = props.label;
+
+    derived role = props.label === undefined ? undefined : 'status';
+
     <Show when={ !hidden }>
         <Tooltip label={ props.tip ?? '' } class={ onHost }>
             <Show
@@ -66,7 +70,7 @@ export default component Badge(props: {
                         when={ props.dot === true }
                         fallback={
                             <span
-                                class={ [
+                                class={ () => [
                                     'tally inline-flex items-center justify-center rounded-full font-bold leading-none',
                                     BADGE_SIZE[size],
                                     paint,
@@ -74,8 +78,8 @@ export default component Badge(props: {
                                     props.anchor === true ? 'ring-2 ring-void' : '',
                                     props.class ?? ''
                                 ].filter(Boolean).join(' ') }
-                                aria-label={ props.label }
-                                role={ props.label === undefined ? undefined : 'status' }
+                                aria-label={ label }
+                                role={ role }
                             >
                                 { body }
                             </span>
@@ -83,7 +87,7 @@ export default component Badge(props: {
                     >
                         { () =>
                             <span
-                                class={ [
+                                class={ () => [
                                     'inline-block shrink-0 rounded-full',
                                     BADGE_DOT_SIZE[size],
                                     TONE_DOT[tone],
@@ -91,8 +95,8 @@ export default component Badge(props: {
                                     props.anchor === true ? 'ring-2 ring-void' : '',
                                     props.class ?? ''
                                 ].filter(Boolean).join(' ') }
-                                aria-label={ props.label }
-                                role={ props.label === undefined ? undefined : 'status' }
+                                aria-label={ label }
+                                role={ role }
                             ></span>
                         }
                     </Show>
@@ -100,14 +104,14 @@ export default component Badge(props: {
             >
                 { () =>
                     <span
-                        class={ [
+                        class={ () => [
                             'inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-ui-xs font-semibold leading-none',
                             TONE_PILL[tone],
                             onBadge,
                             props.class ?? ''
                         ].filter(Boolean).join(' ') }
-                        aria-label={ props.label }
-                        role={ props.label === undefined ? undefined : 'status' }
+                        aria-label={ label }
+                        role={ role }
                     >
                         <span class={ `h-1.5 w-1.5 shrink-0 rounded-full ${ TONE_DOT[tone] }` } aria-hidden="true"></span>
                         { body }
