@@ -969,14 +969,14 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             }
 
             const id = vaultIdOf(escrowId);
-            const [there, terms] = await Promise.all([vault.game(id), vault.terms()]);
+            const [there, terms, chainTime] = await Promise.all([vault.game(id), vault.terms(), vault.clock()]);
 
             if (there.status !== 'open')
             {
                 throw tableRefusal('paid-done', 'The stakes of that game are not locked any more.');
             }
 
-            if (Number(there.openedAt + terms.reclaimAfter) * 1000 > Date.now())
+            if (Number(there.openedAt + terms.reclaimAfter) * 1000 > Math.max(Date.now(), Number(chainTime) * 1000))
             {
                 throw tableRefusal('paid-early', 'The stakes of that game can be taken back once the vault\'s wait has passed.');
             }

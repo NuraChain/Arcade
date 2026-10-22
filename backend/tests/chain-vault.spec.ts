@@ -393,6 +393,19 @@ describe('reading the vault', () =>
         });
     });
 
+    it('reads the chain\'s own clock from its newest block', async () =>
+    {
+        const asked: unknown[] = [];
+        const { url } = await fakeChain((rpc): Answer =>
+        {
+            asked.push([rpc.method, ...rpc.params]);
+            return { result: { number: '0x10', hash: HASH, parentHash: HASH, timestamp: '0x6b49d200', transactions: [] } };
+        });
+
+        await expect(vaultOn(url).clock()).resolves.toBe(1_800_000_000n);
+        expect(asked).toEqual([['eth_getBlockByNumber', 'latest', false]]);
+    });
+
     it('composes a deposit carrying its value and a withdrawal carrying none, for the wallet to send', async () =>
     {
         const { url } = await fakeChain(() => ({ result: '0x2' }));

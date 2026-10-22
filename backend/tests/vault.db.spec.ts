@@ -60,6 +60,7 @@ const fakeVault = (overrides: Partial<VaultTerms> = {}, configured = true) =>
             return terms;
         },
         game: async () => ({ status: 'none', feeBps: 0, openedAt: 0n, amount: 0n, players: [] }),
+        clock: async () => BigInt(Math.floor(Date.now() / 1000)),
         async depositCall(amount)
         {
             asked.push(`deposit ${ amount }`);

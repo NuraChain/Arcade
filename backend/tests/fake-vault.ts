@@ -46,6 +46,7 @@ export function fakeVault(configured = true)
         mine: 'success' as Mined,
         refuse: null as Refusal | null,
         away: false,
+        clock: null as bigint | null,
         signs: (owner: Address, stake: Stake, signature: Hex) => signature === signatureOf(owner, stake)
     };
 
@@ -105,6 +106,11 @@ export function fakeVault(configured = true)
         {
             reach();
             return { status: games.get(id) ?? 'none', feeBps: 0, openedAt: openedAt.get(id) ?? 0n, amount: 0n, players: [] };
+        },
+        async clock()
+        {
+            reach();
+            return state.clock ?? BigInt(Math.floor(Date.now() / 1000));
         },
         depositCall: async (amount) => ({ to: FAKE_VAULT, data: '0xd0e30db0', value: amount, chainId: 31337, gasPrice: null }),
         withdrawCall: async () => ({ to: FAKE_VAULT, data: '0x2e1a7d4d', value: 0n, chainId: 31337, gasPrice: null }),

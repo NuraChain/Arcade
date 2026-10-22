@@ -226,6 +226,16 @@ are not locked any more and `paid-early` when the wait has not passed, and a gam
 play is answered as one that is not there. The worker then finds the game reclaimed on the chain
 when it next looks at it.
 
+**The wait is over when either clock says so: this server's, or the chain's own** (`vault.clock()`,
+the time of its newest block). The vault judges by the time of the block that takes the reclaim, and
+the server judged by its own clock alone, so a chain whose clock was past the wait was answered
+`paid-early` for a reclaim the vault would take: a server whose clock lags the chain's, and a local
+node moved three days on, which is how the paid pass found it. The server's clock stays in it for a
+chain that makes blocks only when it is sent something, whose newest block can be older than the
+block a reclaim would make. The wallet page still offers "Take the stakes back" by the reader's own
+clock, which on a chain that keeps time is the same moment. `stake.db.spec.ts` (*asks the chain's
+clock as well as its own*) and `chain-vault.spec.ts` hold it.
+
 ## The owner's view of the vault
 
 **`/admin` shows the vault to its owner, and the owner is whoever `/admin` already opens for**: the

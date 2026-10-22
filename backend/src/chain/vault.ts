@@ -202,6 +202,7 @@ export interface Vault
     balances(owner: Address): Promise<{ free: bigint; locked: bigint; wallet: bigint }>;
     terms(): Promise<VaultTerms>;
     game(id: Hex): Promise<VaultGame>;
+    clock(): Promise<bigint>;
     depositCall(amount: bigint): Promise<VaultCall>;
     withdrawCall(amount: bigint): Promise<VaultCall>;
     reclaimCall(id: Hex): Promise<VaultCall>;
@@ -529,6 +530,11 @@ export function createVault(settings: VaultSettings): Vault
             }));
 
             return { status: GAME_STATUS[status] ?? 'none', feeBps, openedAt, amount, players: [...players] };
+        },
+
+        async clock()
+        {
+            return (await reached(reader().getBlock({ blockTag: 'latest' }))).timestamp;
         },
 
         depositCall: (amount) => callTo(encodeFunctionData({ abi: VAULT_ABI, functionName: 'deposit' }), amount),

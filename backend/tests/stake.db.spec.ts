@@ -992,6 +992,28 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
 
             expect(await word(ports.vault.reclaim(host.id, escrowId))).toBe('409 paid-done');
         });
+
+        it('asks the chain\'s clock as well as its own whether the vault\'s wait has passed', async () =>
+        {
+            const { guest, escrowId } = await playing();
+            const id = vaultIdOf(escrowId);
+            const now = BigInt(Math.floor(Date.now() / 1000));
+            const reclaim = { data: `0xreclaim${ id.slice(2) }` };
+
+            fake.openedAt.set(id, now);
+            fake.state.clock = now + 259_201n;
+
+            expect(await ports.vault.reclaim(guest.id, escrowId), 'a chain whose clock is past the wait').toMatchObject(reclaim);
+
+            fake.state.clock = now - 600n;
+            fake.openedAt.set(id, now - 259_201n);
+
+            expect(await ports.vault.reclaim(guest.id, escrowId), 'a chain whose newest block is older than the wait').toMatchObject(reclaim);
+
+            fake.openedAt.set(id, now);
+
+            expect(await word(ports.vault.reclaim(guest.id, escrowId)), 'neither clock past the wait').toBe('409 paid-early');
+        });
     });
 
     describe('quick play at a stake', () =>
