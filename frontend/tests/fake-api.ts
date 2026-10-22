@@ -545,6 +545,8 @@ export const server =
     watches: {} as Record<string, unknown>,
     ledgers: {} as Record<string, { rev: number }[]>,
     watchedFrom: [] as string[],
+    proofs: {} as Record<string, unknown>,
+    proofRefused: null as { status: number; code: string } | null,
 
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
@@ -559,6 +561,8 @@ export const server =
         server.watches = {};
         server.ledgers = {};
         server.watchedFrom = [];
+        server.proofs = {};
+        server.proofRefused = null;
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
@@ -2027,6 +2031,26 @@ export const client =
         {
             server.calls.push('matches.history');
             return { matches: server.history.map((row) => ({ ...row })) };
+        },
+
+        async proof({ params }: { params: { id: string } })
+        {
+            server.calls.push('matches.proof');
+
+            const refused = server.proofRefused;
+            const held = server.proofs[params.id];
+
+            if (refused !== null)
+            {
+                throw new ApiError(refused.status, refused.code, refused.code, undefined);
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No game there.', undefined);
+            }
+
+            return structuredClone(held);
         },
 
         async watch({ params, query }: { params: { id: string }; query?: { rev?: string } })

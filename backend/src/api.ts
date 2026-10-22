@@ -106,6 +106,7 @@ import {
     walletSignIn,
     matchView,
     matchWatch,
+    matchProof,
     watchableTables,
     matchDelta,
     matchAck,
@@ -766,6 +767,18 @@ export function buildApi(ports: Ports)
                 if (found === null)
                 {
                     throw new NotFoundError('No game to watch there.');
+                }
+
+                return found;
+            }),
+
+            proof: routes.get('/:id/proof', { output: matchProof }, async (context) =>
+            {
+                const found = await ports.match.proof(context.principal.userId, context.params.id);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No game there.');
                 }
 
                 return found;

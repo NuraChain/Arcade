@@ -1,9 +1,9 @@
-import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
 import { deviceLine, namesDevice } from '../../../backend/src/domains/device/resource.ts';
 import type { PeerDevice } from '../api.ts';
 import { deviceVerifies } from './device-id.ts';
+import { addressFrom } from './signer.ts';
 
 /**
  * Checking, for ourselves, that somebody else's device is really theirs.
@@ -62,27 +62,6 @@ export type PeerVerdict =
 
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 
-const hexToBytes = (hex: string): Uint8Array =>
-{
-    const clean = hex.replace(/^0x/, '');
-    const bytes = new Uint8Array(clean.length / 2);
-    for (let index = 0; index < bytes.length; index += 1)
-    {
-        bytes[index] = Number.parseInt(clean.slice(index * 2, index * 2 + 2), 16);
-    }
-    return bytes;
-};
-
-const bytesToHex = (bytes: Uint8Array) =>
-{
-    let hex = '';
-    for (const byte of bytes)
-    {
-        hex += byte.toString(16).padStart(2, '0');
-    }
-    return hex;
-};
-
 /**
  * The 0x19 byte EIP-191 puts in front of everything it signs.
  *
@@ -114,39 +93,9 @@ function personalDigest(message: string): Uint8Array
 }
 
 /** The address that produced a `personal_sign`, or null if the signature is not recoverable. */
-export function addressFromPersonalSign(message: string, signature: string): string | null
+export function addressFromPersonalSign(message: string, signature: string)
 {
-    try
-    {
-        const raw = hexToBytes(signature);
-        if (raw.length !== 65)
-        {
-            return null;
-        }
-
-        // `v` is 27/28 from every wallet that follows the convention, and 0/1 from a few that do
-        // not. Both are accepted; anything else is not a recovery bit.
-        const v = raw[64] >= 27 ? raw[64] - 27 : raw[64];
-        if (v !== 0 && v !== 1)
-        {
-            return null;
-        }
-
-        const point = new secp256k1.Signature(
-            BigInt(`0x${ bytesToHex(raw.slice(0, 32)) }`),
-            BigInt(`0x${ bytesToHex(raw.slice(32, 64)) }`)
-        ).addRecoveryBit(v).recoverPublicKey(personalDigest(message));
-
-        // An Ethereum address is the last 20 bytes of the keccak of the uncompressed public key
-        // with its 0x04 prefix removed.
-        return `0x${ bytesToHex(keccak_256(point.toBytes(false).slice(1)).slice(-20)) }`;
-    }
-    catch
-    {
-        // Malformed hex, a point off the curve, an s value out of range: unverifiable is not
-        // verified, and there is nothing here worth telling apart.
-        return null;
-    }
+    return addressFrom(personalDigest(message), signature);
 }
 
 /**

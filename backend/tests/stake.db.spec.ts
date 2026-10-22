@@ -934,6 +934,7 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 share: (19n * WEI_PER_NURA).toString(),
                 openTx: expect.stringMatching(/^0x[0-9a-f]{64}$/),
                 closeTx: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+                match: first.matchId,
                 at: expect.any(String)
             }]);
             expect(won).not.toHaveProperty('cursor');
@@ -1277,6 +1278,52 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             {
                 expect(one.drawn, `revision ${ one.rev }`).toEqual(one.said);
             }
+        });
+
+        it('hands a player of a finished paid game what proves it, and nobody else anything', async () =>
+        {
+            const { host, guest, matchId, escrowId } = await playing();
+            const stranger = await makeUser(2);
+
+            expect(await ports.match.proof(host.id, matchId), 'a game still on').toBeNull();
+
+            await ports.match.resign(host.id, matchId, { key: 'done' });
+
+            const proof = await ports.match.proof(guest.id, matchId);
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId }, order: { seat: 'ASC' } });
+            const ledger = await db.getRepository(MatchAction).find({ where: { matchId }, order: { rev: 'ASC' } });
+
+            expect(proof).toMatchObject({ game: 'ludo', variant: 'standard', seats: [0, 1], target: 0, cube: false, blinds: 'low', chainId: 31337, amount: TEN, feeBps: 500 });
+            expect(proof?.vault).toBe(fake.vault.address);
+            expect(proof?.state).toBe((await db.getRepository(Escrow).findOneByOrFail({ id: escrowId })).state);
+            expect(proof?.players.map((seat) => [seat.seat, seat.who, seat.address, seat.commit, seat.secret, seat.nonce, seat.signature])).toEqual(
+                seats.map((seat) => [seat.seat, seat.seat === 0 ? host.handle : guest.handle, seat.address, seat.commitment, seat.secret, seat.nonce, seat.signature])
+            );
+            expect(proof?.players.map((seat) => seat.deadline)).toEqual(seats.map((seat) => Math.floor(seat.deadline.getTime() / 1000)));
+            expect(proof?.actions.map((action) => [action.rev, action.seat, action.kind, JSON.parse(action.payload), JSON.parse(action.events)])).toEqual(
+                ledger.map((action) => [action.rev, action.seat, action.kind, action.payload, action.events])
+            );
+            expect(proof?.openTx).toMatch(/^0x[0-9a-f]{64}$/);
+            expect(await ports.match.proof(host.id, matchId)).toEqual(proof);
+            expect(await ports.match.proof(stranger.id, matchId), 'somebody who did not play').toBeNull();
+            expect(await ports.match.proof(host.id, 'not-a-match'), 'an id that is no id').toBeNull();
+        });
+
+        it('proves nothing about a free game', async () =>
+        {
+            const host = await makeUser(0);
+            const guest = await makeUser(1);
+            const table = await ports.table.create(host.id, live());
+
+            await ports.table.claim(guest.id, table.id);
+            await ports.table.setReady(host.id, table.id, true);
+            await ports.table.setReady(guest.id, table.id, true);
+
+            const started = await ports.match.start(host.id, table.id);
+
+            await ports.match.resign(host.id, started.id, { key: 'done' });
+
+            expect(await ports.match.proof(host.id, started.id)).toBeNull();
         });
 
         it('draws a walkout from the seed as well', async () =>

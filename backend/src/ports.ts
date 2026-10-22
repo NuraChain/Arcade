@@ -4,6 +4,7 @@ import type {
     VoiceIce,
     Leaderboard,
     MatchWatch,
+    MatchProof,
     LiveCounts,
     MatchHistory,
     PersonRecord,
@@ -511,6 +512,8 @@ export interface MatchPort
     leaderboard(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>;
 
     watch(me: string, matchId: string, rev: number | null): Promise<MatchWatch | null>;
+
+    proof(me: string, matchId: string): Promise<MatchProof | null>;
 
     /** Public tables with a game running on them, for somebody looking for one to watch. */
     watchable(me: string, game: string | null): Promise<WatchableTables>;

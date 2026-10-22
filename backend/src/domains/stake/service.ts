@@ -117,6 +117,7 @@ interface PlayedRow
     open_tx: string | null;
     close_tx: string | null;
     created_at: Date;
+    match_id: string | null;
     seat: number;
     seats: number;
 }
@@ -887,6 +888,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 .addSelect('e.open_tx', 'open_tx')
                 .addSelect('e.close_tx', 'close_tx')
                 .addSelect('e.created_at', 'created_at')
+                .addSelect('e.match_id', 'match_id')
                 .addSelect('mine.seat', 'seat')
                 .addSelect('(select count(*)::int from escrow_seats s where s.escrow_id = e.id)', 'seats')
                 .where(`e.state <> 'failed'`);
@@ -923,11 +925,31 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                             : {}),
                         ...(row.open_tx === null ? {} : { openTx: row.open_tx }),
                         ...(row.close_tx === null ? {} : { closeTx: row.close_tx }),
+                        ...(row.match_id === null ? {} : { match: row.match_id }),
                         at: row.created_at.toISOString()
                     };
                 }),
                 ...(rows.length > GAMES_PAGE && last !== undefined ? { cursor: `${ last.created_at.toISOString() }|${ last.id }` } : {})
             };
+        },
+
+        async proofOf(matchId: string)
+        {
+            if (!vault.configured || vault.address === null)
+            {
+                return null;
+            }
+
+            const escrow = await db.getRepository(Escrow).findOne({ where: { matchId } });
+
+            if (escrow === null)
+            {
+                return null;
+            }
+
+            const seats = await db.getRepository(EscrowSeat).find({ where: { escrowId: escrow.id }, order: { seat: 'ASC' } });
+
+            return { chainId: vault.chainId, vault: vault.address, escrow, seats };
         },
 
         async reclaim(me: string, escrowId: string)

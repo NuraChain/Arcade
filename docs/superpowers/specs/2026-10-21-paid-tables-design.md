@@ -190,11 +190,20 @@ finished one.
   untouched: they are handed a `Draws` built from this, where a free table keeps `randomInt`.
 - `settle` reveals the secrets and the contract checks each against its commit, so the seed of every
   paid game is public on the chain once it is paid.
-- A finished paid game offers "Check this game": the browser reads the moves, rebuilds the seed from
-  the chain, replays every move through the same engines the server ran, and compares every event.
+- A finished paid game offers "Check this game": the browser reads the moves, rebuilds the seed,
+  replays every move through the same engines the server ran, and compares every event. As built,
+  the seed is rebuilt from the secrets and signatures the server hands over once the browser has
+  checked each signature against its player's address and each secret against its commit; the two
+  transactions where the vault checked the same values are linked, and are not read back from the
+  chain.
 - What that costs, stated: once a game is paid, its seed is public, so every card dealt in it can be
   worked out, folded poker hands included. What it does not cover: a referee that lies about who
   won, which the replay then shows.
+- As built, the page states two more limits. The server knows the seed once the last player signs,
+  so it can work out every roll and card of a game it locks before they come: a check shows that
+  nothing was changed, not that nobody was told. And a game the vault refunded for want of a winner,
+  or whose players took their stakes back, never had its secrets put to the vault, so the page says
+  what the chain checked by the escrow's state, which the proof carries.
 
 Node's and the browser's implementations of the draws are two copies of one formula, and one spec
 runs both, as `devices.spec.ts` does for the device id.

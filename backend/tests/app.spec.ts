@@ -928,6 +928,73 @@ describe('the vault', () =>
     });
 });
 
+describe('checking a game played for NURA', () =>
+{
+    const proof = {
+        game: 'ludo',
+        variant: 'standard',
+        seats: [0, 1],
+        target: 0,
+        cube: false,
+        blinds: 'low',
+        chainId: 31337,
+        vault: `0x${ '12'.repeat(20) }`,
+        amount: '10000000000000000000',
+        feeBps: 500,
+        state: 'settled',
+        players: [{
+            seat: 0,
+            who: 'dana',
+            address: `0x${ 'ab'.repeat(20) }`,
+            commit: `0x${ '01'.repeat(32) }`,
+            secret: `0x${ '02'.repeat(32) }`,
+            nonce: `0x${ '03'.repeat(32) }`,
+            deadline: 1_900_000_000,
+            signature: `0x${ '04'.repeat(65) }`
+        }],
+        actions: [{ rev: 1, seat: -1, kind: 'open', payload: '{}', events: '[]' }],
+        openTx: `0x${ 'ab'.repeat(32) }`
+    };
+
+    const checkedAs = (told: unknown[][], answer: unknown = proof) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            match: {
+                proof: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve(answer);
+                }
+            }
+        } as unknown as Ports
+    });
+
+    it('hands the read the reader and the id as it came, and sends what the wire declares and nothing else', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await call(checkedAs(told, { ...proof, secrets: 'x', players: [{ ...proof.players[0], key: 'y' }] }), '/api/matches/A-MATCH/proof');
+
+        expect(response.status).toBe(200);
+        expect(told).toEqual([['somebody', 'A-MATCH']]);
+        expect(await response.json()).toEqual(proof);
+    });
+
+    it('answers a game it will not prove in the bytes of a game that is not there', async () =>
+    {
+        const response = await call(checkedAs([], null), '/api/matches/a-match/proof');
+        const body = await response.json() as { error: { code: string; message: string } };
+
+        expect(response.status).toBe(404);
+        expect([body.error.code, body.error.message]).toEqual(['not-found', 'No game there.']);
+    });
+});
+
 describe('watching a game', () =>
 {
     const shown = {

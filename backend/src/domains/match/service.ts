@@ -809,6 +809,36 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
+        proof: async (me: string, matchId: string) =>
+        {
+            if (!UUID.test(matchId))
+            {
+                return null;
+            }
+
+            const match = await db.getRepository(Match).findOne({ where: { id: matchId } });
+
+            if (match === null || match.finishedAt === null || !await db.getRepository(MatchPlayer).existsBy({ matchId, userId: me }))
+            {
+                return null;
+            }
+
+            const table = await db.getRepository(Table).findOne({ select: { target: true, cube: true, blinds: true }, where: { id: match.tableId } });
+
+            if (table === null)
+            {
+                return null;
+            }
+
+            const actions = await db.getRepository(MatchAction).find({
+                select: { rev: true, seat: true, kind: true, payload: true, events: true },
+                where: { matchId },
+                order: { rev: 'ASC' }
+            });
+
+            return { match, table, players: await seatsOf(db, matchId), actions };
+        },
+
         playingAt: async (tx: EntityManager, me: string) =>
         {
             const seats = await tx.getRepository(MatchPlayer)

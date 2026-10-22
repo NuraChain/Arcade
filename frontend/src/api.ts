@@ -35,6 +35,7 @@ export type {
     MatchHistory,
     MatchHistoryEntry,
     MatchPlay,
+    MatchProof,
     MatchView,
     MatchWatch,
     WatchableTables,

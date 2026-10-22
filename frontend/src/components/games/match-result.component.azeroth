@@ -159,6 +159,8 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived moneyShown = moneyLine !== '';
 
+    derived checkTo = `/app/me/wallet/check/${ props.match.id }`;
+
     derived moneyLink = money?.closeTx === undefined || props.stake === undefined ? null : explorerTx(props.stake.chainId, money.closeTx);
 
     const moved = (player: MatchPlayer) =>
@@ -248,6 +250,13 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                     <a class="font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">{ locale.t('vault.tx') }</a>
                 </Show>
             </p>
+        </Show>
+
+        <Show when={ moneyShown }>
+            <Link to={ () => checkTo } class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline" data-check>
+                <Icon name="shield" size={ 15 } class="shrink-0" />
+                <span>{ locale.t('match.check') }</span>
+            </Link>
         </Show>
 
         <Show when={ voided }>

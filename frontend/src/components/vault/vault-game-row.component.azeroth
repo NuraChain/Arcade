@@ -1,3 +1,5 @@
+import { Link } from 'azerothjs';
+
 import type { VaultGame } from '../../api.ts';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -21,6 +23,8 @@ const WORD: Record<VaultGame['state'], MessageKey> = {
 };
 
 const STUCK = new Set<VaultGame['state']>(['open', 'settling', 'refunding']);
+
+const PAID = new Set<VaultGame['state']>(['settling', 'settled', 'refunding', 'refunded', 'reclaimed']);
 
 export default component VaultGameRow(props: {
     game: VaultGame;
@@ -51,7 +55,11 @@ export default component VaultGameRow(props: {
 
     derived stuck = STUCK.has(played.state) && Date.parse(played.at) + props.reclaimAfter * 1000 < runtime().clock.now();
 
-    derived acted = link !== null || stuck;
+    derived checkable = played.match !== undefined && PAID.has(played.state);
+
+    derived checkTo = `/app/me/wallet/check/${ played.match ?? '' }`;
+
+    derived acted = link !== null || stuck || checkable;
 
     <div class="flex flex-col gap-2 px-4 py-3" data-state={ played.state }>
         <div class="flex min-w-0 items-center gap-3">
@@ -77,6 +85,11 @@ export default component VaultGameRow(props: {
                         { locale.t('vault.tx') }
                         <Icon name="forward" size={ 12 } class="icon-flip" />
                     </a>
+                </Show>
+                <Show when={ checkable }>
+                    <Link to={ () => checkTo } class="inline-flex min-h-11 items-center gap-1 text-ui-xs font-semibold text-accent hover:underline" data-check>
+                        { locale.t('match.check') }
+                    </Link>
                 </Show>
                 <Show when={ stuck }>
                     <Button variant="outline" size="sm" loading={ props.busy } onClick={ () => props.onReclaim(played.id) }>

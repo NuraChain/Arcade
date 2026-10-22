@@ -156,7 +156,8 @@ What it does not cover, stated: the server learns the seed when the last player 
 still decline to lock a game it did not like, and anybody would see the lock fail; it cannot change
 a die or a card of a game it locked. It deals the cards, so it knows every hidden card while the
 game is on, as any dealer does. And once a game is paid every card dealt in it can be worked out,
-the hands nobody showed included.
+the hands nobody showed included. At a game of dice it can work out every roll before it is thrown,
+so a check shows that no roll was changed, not that nobody heard one in advance.
 
 `fair.spec.ts` holds the formula to a copy written apart from it, a draw that would favour the low
 faces drawn again, the seed to viem's keccak of the parts, and the opening revision of every engine
@@ -164,6 +165,50 @@ at every format. `stake.db.spec.ts` (*dice that can be checked*) plays a paid Lu
 rolls, moves, a turn the sweep played and a resignation, one through a walkout, and a six-seat paid
 poker game whose walkout deals the next hand, and replays every event of each from the seed; a
 seed with one secret changed does not replay.
+
+## Checking a finished game
+
+**`GET /matches/:id/proof` hands a player of a finished paid game everything that proves it**, and
+anybody else the bytes of a game that is not there (404, "No game there."): a game still on, a free
+game, an id that is no uuid, somebody who did not play. What it holds: the game and how it was set
+up (variant, seats, target, cube, blinds), the vault and its chain, the stake, the fee and the
+escrow's state, each
+seat's address, commit, secret, nonce, deadline and signature, and every row of the ledger from
+the opening on, its payload and its events as JSON text because the wire has no shape for an
+engine's own events. It is the players' alone because it publishes every card dealt, the hands
+nobody showed included, even though once the game is paid the chain holds the same secrets and
+signatures. The match half is `match.proof` and the money half `stake.proofOf`; `services.ts` puts
+them together, so the match domain still reads no vault.
+
+**The browser checks it with nothing of the server's but the data** (`lib/proof.ts`, fetched only by
+the page): each signature is recovered over the EIP-712 Stake the browser hashes itself
+(`stakeDigest`, with `addressFrom` in `lib/signer.ts`, which `attestation.ts` now recovers through
+too) and must be the seat's own address; each secret's keccak must be its commit; the seed is made
+from those parts; and every row is played again through the same four engines the server runs:
+the opening with `create`, a person's play through `parse`, a turn the clock played through
+`autoplay` (its payload says `auto`), a forfeit through `forfeit`, each with the draws of the
+revision it makes. Every replayed event must equal the logged one, compared with the keys sorted,
+because Postgres keeps a row's keys in its own order. Where the design said the browser rebuilds
+the seed from the chain, it rebuilds it from what the server hands over after checking every
+signature against its player and every secret against its commit; the two transactions where the
+vault checked the same values are linked on NuraChain, and reading them back from the chain is not
+built.
+
+**`/app/me/wallet/check/:id` is the page.** It says first whether everything checks out, then who
+signed, what the server promised and kept, the seed, the moves played again (or the first move the
+seed does not give, with both versions of it), the two transactions on NuraChain and what this
+does not show. It speaks of rolls at a game of dice and of cards at a game of cards (the
+catalogue's `category`), and what it says the chain checked follows the escrow's state: the secrets
+when the vault paid out, and none when every stake was given back for want of a winner or taken
+back by the players, where no closing transaction of the server's is linked. A player whose name is
+still their address is named once. A proof that will not load says so with a way to ask again; one
+it may not see says there is nothing to check. The result card at a paid table offers "Check this game" once the
+money line is shown, and so does each row of the wallet's paid games whose stakes were paid or
+given back. `fair.spec.ts` in the browser holds the two halves of the formula to each other, the
+stake's hash to the server's, all four games replayed, and a forged event, a changed opening deal,
+a wrong secret, a stranger's signature, another fee or vault, a reordered seat list and an unknown
+game each caught; `check-page.spec.ts` the page; `table-money.spec.ts` and `wallet-page.spec.ts`
+the links; `stake.db.spec.ts` and `app.spec.ts` the route.
 
 ## A player's paid games, and taking back stakes nobody paid out
 
@@ -288,4 +333,4 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: checking a finished game in the browser, and the admin's view of the vault.
+Not here yet: the admin's view of the vault.

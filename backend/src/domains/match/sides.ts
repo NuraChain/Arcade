@@ -1,4 +1,6 @@
-export type Variant = 'standard' | 'teams';
+export const VARIANTS = ['standard', 'teams'] as const;
+
+export type Variant = typeof VARIANTS[number];
 
 export interface Format
 {

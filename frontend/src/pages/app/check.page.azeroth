@@ -1,0 +1,263 @@
+import { createResource, untrack, useHead, useParams } from 'azerothjs';
+
+import { ApiError, client } from '../../api.ts';
+import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { chunk } from '../../lib/chunks.ts';
+import { explorerTx } from '../../lib/nura.ts';
+import type { Checked } from '../../lib/proof.ts';
+import { shortAddress } from '../../lib/wallet.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+
+const checker = chunk(() => import('../../lib/proof.ts'));
+
+export default component CheckPage()
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+    const people = usePeople();
+    const params = useParams();
+
+    useHead({ title: () => locale.t('fair.title') });
+
+    derived id = params().id ?? '';
+
+    const proof = createResource(
+        () => (id === '' ? null : id),
+        (matchId) => client.matches.proof({ params: { id: matchId } }),
+        { name: 'matches.proof' }
+    );
+
+    state checked = null as Checked | null;
+
+    state broken = false;
+
+    effect
+    {
+        const held = proof.data();
+
+        untrack(() =>
+        {
+            checked = null;
+            broken = false;
+        });
+
+        if (held === undefined || held === null)
+        {
+            return;
+        }
+
+        void people.want(held.players.map((player) => player.who));
+
+        void checker()
+            .then((module) => checked = module.check(held))
+            .catch(() => broken = true);
+    }
+
+    derived held = proof.data() ?? null;
+
+    derived trouble = proof.error();
+
+    derived missing = held === null && trouble instanceof ApiError && trouble.status === 404;
+
+    derived failed = held === null && trouble !== null && !missing;
+
+    derived waiting = held === null && trouble === null;
+
+    derived working = held !== null && checked === null && !broken;
+
+    derived shown = checked !== null;
+
+    derived game = held === null ? '' : locale.t(catalogue.byId(held.game as GameId).nameKey);
+
+    derived dealt = held !== null && catalogue.byId(held.game as GameId).category === 'cards';
+
+    derived good = checked !== null
+        && checked.wrong === null
+        && checked.seats.every((seat) => seat.signed && seat.kept);
+
+    derived verdict = locale.t(good ? 'fair.ok' : 'fair.bad');
+
+    derived verdictLead = locale.t(good ? (dealt ? 'fair.okLead.cards' : 'fair.okLead.dice') : 'fair.badLead');
+
+    derived lead = locale.t(dealt ? 'fair.lead.cards' : 'fair.lead.dice', { game });
+
+    derived seats = (checked?.seats ?? []).map((seat) =>
+    {
+        const person = people.byHandle(seat.who);
+        const name = person === null ? seat.who : locale.text(person.displayName);
+        const address = shortAddress(seat.address);
+
+        return {
+            ...seat,
+            name,
+            address: name.toLowerCase() === address.toLowerCase() ? '' : address,
+            commit: `${ seat.commit.slice(0, 10) }…${ seat.commit.slice(-8) }`
+        };
+    });
+
+    derived seed = checked?.seed ?? '';
+
+    derived replayed = checked === null ? '' : locale.plural(dealt ? 'fair.moves.ok.cards' : 'fair.moves.ok.dice', checked.moves, { game });
+
+    derived wrong = checked?.wrong ?? null;
+
+    derived wrongLine = wrong === null ? '' : locale.t('fair.moves.wrong', { rev: locale.n(wrong.rev) });
+
+    derived chainId = held?.chainId ?? 0;
+
+    derived lockLink = held?.openTx === undefined ? null : explorerTx(chainId, held.openTx);
+
+    derived given = held !== null && (held.state === 'refunding' || held.state === 'refunded');
+
+    derived taken = held !== null && held.state === 'reclaimed';
+
+    derived chainLead = locale.t(taken ? 'fair.chain.taken' : given ? 'fair.chain.given' : 'fair.chain.lead');
+
+    derived paidLink = taken || held?.closeTx === undefined ? null : explorerTx(chainId, held.closeTx);
+
+    derived paidLabel = locale.t(given ? 'fair.chain.back' : 'fair.chain.paid');
+
+    derived paying = held !== null && (held.state === 'settling' || held.state === 'refunding');
+
+    derived payingLine = locale.t(given ? 'fair.chain.giving' : 'fair.chain.paying');
+
+    derived limits = locale.t(dealt ? 'fair.limits.cards' : 'fair.limits.dice');
+
+    <Page width="narrow" label={ locale.t('fair.title') }>
+        <PageHeader title={ locale.t('fair.title') } lead={ lead } />
+
+        <Show when={ waiting }>
+            <div class="flex flex-col gap-3" aria-hidden="true">
+                <Skeleton class="h-24 rounded-panel" />
+                <Skeleton class="h-40 rounded-panel" />
+            </div>
+        </Show>
+
+        <Show when={ missing }>
+            <EmptyState icon="shield" title={ locale.t('fair.missing') } lead={ locale.t('fair.missingLead') } />
+        </Show>
+
+        <Show when={ failed }>
+            <ErrorState title={ locale.t('fair.failed') } onRetry={ () => void proof.refetch() } />
+        </Show>
+
+        <Show when={ broken }>
+            <ErrorState title={ locale.t('fair.broken') } />
+        </Show>
+
+        <Show when={ working }>
+            <p class="flex items-center gap-2 text-ui-sm text-muted" role="status">
+                <Icon name="timer" size={ 16 } class="shrink-0" />
+                <span>{ locale.t('fair.checking') }</span>
+            </p>
+        </Show>
+
+        <Show when={ shown }>
+            <div class="flex flex-col gap-4">
+                <Panel pad="md" stack="sm" tone={ good ? 'live' : 'danger' }>
+                    <p class="flex items-center gap-2 text-ui-lg font-semibold text-text" role="status" data-verdict={ good ? 'ok' : 'bad' }>
+                        <span class={ () => [ 'flex shrink-0', good ? 'text-win' : 'text-danger' ].join(' ') } aria-hidden="true"><Icon name={ good ? 'verified' : 'error-circle' } size={ 22 } /></span>
+                        <span class="min-w-0">{ verdict }</span>
+                    </p>
+                    <p class="text-ui-sm text-muted">{ verdictLead }</p>
+                </Panel>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-signed">
+                    <h2 id="fair-signed" class="title text-ui-lg text-text">{ locale.t('fair.signed.title') }</h2>
+                    <ul class="divide-y divide-line rounded-panel border border-line bg-field">
+                        <For each={ seats } key={ (seat) => seat.seat } let={ seat }>
+                            <li class="flex min-w-0 items-center gap-3 px-4 py-3" data-seat={ seat.seat } data-signed={ seat.signed ? 'yes' : 'no' }>
+                                <span class={ () => [ 'flex shrink-0', seat.signed ? 'text-win' : 'text-danger' ].join(' ') } aria-hidden="true"><Icon name={ seat.signed ? 'check-circle' : 'error-circle' } size={ 18 } /></span>
+                                <div class="flex min-w-0 flex-1 flex-col">
+                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ seat.name }</span>
+                                    <span class="truncate text-ui-xs text-faint empty:hidden" dir="ltr">{ seat.address }</span>
+                                </div>
+                                <span class={ () => [ 'shrink-0 text-ui-xs font-semibold', seat.signed ? 'text-win' : 'text-danger' ].join(' ') }>
+                                    { seat.signed ? locale.t('fair.signed.yes') : locale.t('fair.signed.no') }
+                                </span>
+                            </li>
+                        </For>
+                    </ul>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-kept">
+                    <h2 id="fair-kept" class="title text-ui-lg text-text">{ locale.t('fair.kept.title') }</h2>
+                    <p class="text-ui-sm text-muted">{ locale.t('fair.kept.lead') }</p>
+                    <ul class="divide-y divide-line rounded-panel border border-line bg-field">
+                        <For each={ seats } key={ (seat) => seat.seat } let={ seat }>
+                            <li class="flex min-w-0 items-center gap-3 px-4 py-3" data-seat={ seat.seat } data-kept={ seat.kept ? 'yes' : 'no' }>
+                                <span class={ () => [ 'flex shrink-0', seat.kept ? 'text-win' : 'text-danger' ].join(' ') } aria-hidden="true"><Icon name={ seat.kept ? 'check-circle' : 'error-circle' } size={ 18 } /></span>
+                                <div class="flex min-w-0 flex-1 flex-col">
+                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ seat.name }</span>
+                                    <span class="truncate text-ui-xs text-faint" dir="ltr">{ seat.commit }</span>
+                                </div>
+                                <span class={ () => [ 'shrink-0 text-ui-xs font-semibold', seat.kept ? 'text-win' : 'text-danger' ].join(' ') }>
+                                    { seat.kept ? locale.t('fair.kept.yes') : locale.t('fair.kept.no') }
+                                </span>
+                            </li>
+                        </For>
+                    </ul>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-seed">
+                    <h2 id="fair-seed" class="title text-ui-lg text-text">{ locale.t('fair.seed.title') }</h2>
+                    <p class="text-ui-sm text-muted">{ locale.t('fair.seed.lead') }</p>
+                    <p class="break-all rounded-tile bg-sunk px-3 py-2 font-mono text-ui-xs text-text" dir="ltr" data-seed>{ seed }</p>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-moves">
+                    <h2 id="fair-moves" class="title text-ui-lg text-text">{ locale.t('fair.moves.title') }</h2>
+                    <Show when={ wrong } let={ off } fallback={ <p class="text-ui-sm text-text" data-moves="ok">{ replayed }</p> }>
+                        <div class="flex flex-col gap-2" data-moves="wrong">
+                            <p class="text-ui-sm font-semibold text-danger">{ wrongLine }</p>
+                            <details class="rounded-tile border border-line bg-field px-3 py-2">
+                                <summary class="cursor-pointer text-ui-xs font-semibold text-muted">{ locale.t('fair.moves.said') }</summary>
+                                <pre class="mt-2 overflow-x-auto whitespace-pre-wrap break-all font-mono text-ui-2xs text-text" dir="ltr">{ off.said }</pre>
+                            </details>
+                            <details class="rounded-tile border border-line bg-field px-3 py-2">
+                                <summary class="cursor-pointer text-ui-xs font-semibold text-muted">{ locale.t('fair.moves.drawn') }</summary>
+                                <pre class="mt-2 overflow-x-auto whitespace-pre-wrap break-all font-mono text-ui-2xs text-text" dir="ltr">{ off.drawn }</pre>
+                            </details>
+                        </div>
+                    </Show>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-chain">
+                    <h2 id="fair-chain" class="title text-ui-lg text-text">{ locale.t('fair.chain.title') }</h2>
+                    <p class="text-ui-sm text-muted">{ chainLead }</p>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1">
+                        <Show when={ lockLink } let={ href }>
+                            <a class="inline-flex min-h-11 items-center gap-1 text-ui-sm font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">
+                                { locale.t('fair.chain.locked') }
+                                <Icon name="forward" size={ 12 } class="icon-flip" />
+                            </a>
+                        </Show>
+                        <Show when={ paidLink } let={ href }>
+                            <a class="inline-flex min-h-11 items-center gap-1 text-ui-sm font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">
+                                { paidLabel }
+                                <Icon name="forward" size={ 12 } class="icon-flip" />
+                            </a>
+                        </Show>
+                    </div>
+                    <Show when={ paying }>
+                        <p class="text-ui-xs text-faint">{ payingLine }</p>
+                    </Show>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="fair-limits">
+                    <h2 id="fair-limits" class="title text-ui-lg text-text">{ locale.t('fair.limits.title') }</h2>
+                    <p class="text-ui-sm text-muted">{ limits }</p>
+                </section>
+            </div>
+        </Show>
+    </Page>
+}

@@ -465,6 +465,26 @@ describe('the reader\'s games for NURA', () =>
         expect(link?.getAttribute('rel')).toContain('noopener');
     });
 
+    it('offers to check a game once its stakes are paid or given back, and not one still being played or one that never began', async () =>
+    {
+        server.nura.games = {
+            games: [
+                game('g-won', { won: true, share: (19n * WEI).toString(), match: 'm-won' }),
+                game('g-paying', { state: 'settling', won: true, match: 'm-paying' }),
+                game('g-back', { state: 'refunded', match: 'm-back' }),
+                game('g-playing', { state: 'open', match: 'm-playing' }),
+                game('g-never', { state: 'refunded' })
+            ]
+        };
+        signIn();
+
+        const container = await page();
+        const links = [...container.querySelectorAll('section[aria-labelledby="vault-games"] [data-check]')];
+
+        expect(links.map((one) => one.getAttribute('href'))).toEqual(['/app/me/wallet/check/m-won', '/app/me/wallet/check/m-paying', '/app/me/wallet/check/m-back']);
+        expect(links[0].textContent?.trim()).toBe('Check this game');
+    });
+
     it('offers to take back the stakes of a game nobody paid once the vault\'s wait has passed, and of no other', async () =>
     {
         const waited = new Date(NOW - 259_200_000 - 60_000).toISOString();

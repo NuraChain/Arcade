@@ -285,7 +285,7 @@ describe('the lobby of a table played for NURA', () =>
 
         try
         {
-            const container = shown(tableOf({ lastMatchId: 'm-paid', money: { state: 'settled', feeBps: 500, winners: [0] } }));
+            const container = routed(() => LobbyPanel({ table: tableOf({ lastMatchId: 'm-paid', money: { state: 'settled', feeBps: 500, winners: [0] } }), onInvite: () => undefined, onCopyLink: () => undefined, onLeave: () => undefined }) as unknown as HTMLElement);
 
             await vi.waitFor(() => expect(container.querySelector('[data-last-game] [data-money]')?.textContent).toContain('You won 19 NURA.'));
         }
@@ -373,12 +373,12 @@ describe('the lobby of a table played for NURA', () =>
 describe('the result of a game played for NURA', () =>
 {
     const card = (match: MatchView, stake?: Staked, mine: number | null = 0, rematch?: { ready: boolean; waiting: string[]; empty: number }) =>
-        renderTest(() => MatchResult({
+        routed(() => MatchResult({
             match,
             ...(mine === null ? {} : { mine }),
             ...(stake === undefined ? {} : { stake }),
             ...(rematch === undefined ? {} : { rematch, onAgain: () => undefined })
-        }) as HTMLElement).container;
+        }) as unknown as HTMLElement);
 
     const money = (container: HTMLElement) => container.querySelector('[data-money] > span')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 
@@ -388,6 +388,26 @@ describe('the result of a game played for NURA', () =>
 
         expect(money(container)).toBe('You won 19 NURA.');
         expect(container.querySelector('[data-money] a')?.getAttribute('href')).toBe(`https://explorer.nurachain.net/tx/${ CLOSE_TX }`);
+    });
+
+    it('leads a player to check the game the money was paid for, and nobody else', () =>
+    {
+        const paid = card(finished(0), stakeOf({ state: 'settled', winners: [0], closeTx: CLOSE_TX }));
+
+        expect(paid.querySelector('[data-check]')?.getAttribute('href')).toBe('/app/me/wallet/check/m-paid');
+        expect(paid.querySelector('[data-check]')?.textContent?.trim()).toBe('Check this game');
+
+        cleanup();
+        expect(card(finished(0), stakeOf({ state: 'refunded' })).querySelector('[data-check]')).not.toBeNull();
+
+        cleanup();
+        expect(card(finished(0), stakeOf({ state: 'settled', winners: [0] }), null).querySelector('[data-check]')).toBeNull();
+
+        cleanup();
+        expect(card(finished(0)).querySelector('[data-check]')).toBeNull();
+
+        cleanup();
+        expect(card(finished(0), stakeOf({ state: 'locking' })).querySelector('[data-check]')).toBeNull();
     });
 
     it('says the win is being paid out until it is', () =>
@@ -458,13 +478,13 @@ describe('the result of a game played for NURA', () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'settled', winners: [0], closeTx: CLOSE_TX }, 1020));
         const [match, rematch] = createSignal(finished(0));
-        const container = renderTest(() => MatchResult({ get match()
+        const container = routed(() => MatchResult({ get match()
         {
             return match();
         }, mine: 0, get stake()
         {
             return stake();
-        } }) as HTMLElement).container;
+        } }) as unknown as HTMLElement);
 
         await settle();
         restake(stakeOf({ state: 'locking' }, 1020));
@@ -508,10 +528,10 @@ describe('the result of a game played for NURA', () =>
     it('says only that the game is over until the table says what its stakes came to', async () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'open' }));
-        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
+        const container = routed(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
         {
             return stake();
-        } }) as HTMLElement).container;
+        } }) as unknown as HTMLElement);
 
         expect(headline(container)).toBe('That game is over.');
         expect(container.textContent).not.toContain('Ended too early to count.');
@@ -527,10 +547,10 @@ describe('the result of a game played for NURA', () =>
     it('goes on naming whoever was paid while the next game\'s stakes are locked', async () =>
     {
         const [stake, restake] = createSignal(stakeOf({ state: 'settled', winners: [0] }));
-        const container = renderTest(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
+        const container = routed(() => MatchResult({ match: walkedOut(1), mine: 0, get stake()
         {
             return stake();
-        } }) as HTMLElement).container;
+        } }) as unknown as HTMLElement);
 
         await settle();
         restake(stakeOf({ state: 'locking' }));

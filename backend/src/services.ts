@@ -53,6 +53,7 @@ import type {
     Notification,
     PersonSummary,
     MatchPlay,
+    MatchProof,
     MatchView,
     Pulse,
     TableSummary
@@ -2517,6 +2518,52 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const events = shown - from > WATCH_TAIL ? [] : await match.told(found.load, from);
 
                 return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live, events: logged(events) };
+            },
+
+            async proof(me, matchId)
+            {
+                const played = await match.proof(me, matchId);
+                const paid = played === null ? null : await stakes.proofOf(matchId);
+
+                if (played === null || paid === null)
+                {
+                    return null;
+                }
+
+                const who = new Map(played.players.map((player) => [player.seat, player.who]));
+
+                return {
+                    game: played.match.game,
+                    variant: played.match.variant,
+                    seats: played.players.map((player) => player.seat),
+                    target: played.table.target,
+                    cube: played.table.cube,
+                    blinds: played.table.blinds as MatchProof['blinds'],
+                    chainId: paid.chainId,
+                    vault: paid.vault,
+                    amount: paid.escrow.amount,
+                    feeBps: paid.escrow.feeBps,
+                    state: paid.escrow.state,
+                    players: paid.seats.map((seat) => ({
+                        seat: seat.seat,
+                        who: who.get(seat.seat) ?? '',
+                        address: seat.address,
+                        commit: seat.commitment,
+                        secret: seat.secret,
+                        nonce: seat.nonce,
+                        deadline: Math.floor(seat.deadline.getTime() / 1000),
+                        signature: seat.signature
+                    })),
+                    actions: played.actions.map((action) => ({
+                        rev: action.rev,
+                        seat: action.seat,
+                        kind: action.kind,
+                        payload: JSON.stringify(action.payload),
+                        events: JSON.stringify(action.events)
+                    })),
+                    ...(paid.escrow.openTx === null ? {} : { openTx: paid.escrow.openTx }),
+                    ...(paid.escrow.closeTx === null ? {} : { closeTx: paid.escrow.closeTx })
+                };
             },
 
             async watchable(me, game)

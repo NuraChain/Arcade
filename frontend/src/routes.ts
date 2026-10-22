@@ -51,6 +51,7 @@ export const routes: PageRoute[] = [
             { path: 'me', lazy: chunk(() => import('./pages/app/me.page.azeroth')), meta: defineMeta({ title: 'app.nav.profile', tab: 'me' }) },
             { path: 'me/nfts', lazy: chunk(() => import('./pages/app/nfts.page.azeroth')), meta: defineMeta({ title: 'nfts.title', tab: 'me', parent: '/app/me' }) },
             { path: 'me/wallet', lazy: chunk(() => import('./pages/app/wallet.page.azeroth')), meta: defineMeta({ title: 'vault.title', tab: 'me', parent: '/app/me' }) },
+            { path: 'me/wallet/check/:id', lazy: chunk(() => import('./pages/app/check.page.azeroth')), meta: defineMeta({ title: 'fair.title', tab: 'me', parent: '/app/me/wallet' }) },
             { path: 'me/settings', lazy: chunk(() => import('./pages/app/settings.page.azeroth')), meta: defineMeta({ title: 'app.nav.settings', tab: 'settings', parent: '/app/me' }) },
             { path: 'me/devices', lazy: chunk(() => import('./pages/app/devices.page.azeroth')), meta: defineMeta({ title: 'devices.title', tab: 'settings', parent: '/app/me/settings' }) }
         ]

@@ -1,6 +1,7 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
+import { VARIANTS } from './domains/match/sides.ts';
 import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
@@ -452,6 +453,7 @@ export const vaultGame = object({
     share: string().optional(),
     openTx: string().optional(),
     closeTx: string().optional(),
+    match: string().optional(),
     at: string()
 });
 
@@ -1843,6 +1845,45 @@ export const matchWatch = object({
 });
 
 export type MatchWatch = Infer<typeof matchWatch>;
+
+const proofSeat = object({
+    seat: number(),
+    who: string(),
+    address: string(),
+    commit: string(),
+    secret: string(),
+    nonce: string(),
+    deadline: number(),
+    signature: string()
+});
+
+const proofAction = object({
+    rev: number(),
+    seat: number(),
+    kind: enumOf(['open', 'play', 'forfeit']),
+    payload: string(),
+    events: string()
+});
+
+export const matchProof = object({
+    game: string(),
+    variant: enumOf(VARIANTS),
+    seats: array(number()),
+    target: number(),
+    cube: boolean(),
+    blinds: tableBlinds,
+    chainId: number(),
+    vault: string(),
+    amount: string(),
+    feeBps: number(),
+    state: enumOf(ESCROW_STATES),
+    players: array(proofSeat),
+    actions: array(proofAction),
+    openTx: string().optional(),
+    closeTx: string().optional()
+});
+
+export type MatchProof = Infer<typeof matchProof>;
 
 /** One table with a game running on it, as somebody looking for something to watch sees it. */
 export const watchableTable = object({
