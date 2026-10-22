@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter, RouterProvider, Routes, type Router 
 
 import type { StaffRole } from '../../backend/src/domains/admin/roles.ts';
 import AdminMore from '../src/components/admin/admin-more.component.azeroth';
+import '../src/locales/admin-catalogue.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
