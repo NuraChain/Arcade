@@ -53,7 +53,8 @@ const QUERIES = {
     '/chat/:id/messages': ['cursor', 'limit'],
     '/vault/games': ['cursor'],
     '/admin/log': ['cursor', 'staff', 'person', 'kind'],
-    '/admin/people': ['q', 'list', 'cursor']
+    '/admin/people': ['q', 'list', 'cursor'],
+    '/admin/people/:handle/history': ['cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });

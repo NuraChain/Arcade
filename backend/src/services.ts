@@ -1062,12 +1062,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
 
         const [history, games, paid] = await Promise.all([
-            team.about(found.id),
+            team.about(found.id, null),
             match.history(found.id, null),
             vaults.configured ? stakes.games(found.id, null) : { games: [] }
         ]);
 
-        return { ...found.person, history, games: games.matches, paidGames: paid.games };
+        return {
+            ...found.person,
+            history: history.rows,
+            ...(history.cursor === undefined ? {} : { historyCursor: history.cursor }),
+            games: games.matches,
+            paidGames: paid.games
+        };
     };
 
     const logged = (events: { rev: number; seat: number; at: Date; log: MatchEventLog['log'] }[]): MatchEventLog[] =>
@@ -1629,6 +1635,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async person(me, handle)
             {
                 return await ableTo(me, 'people') === null ? null : await personOf(handle);
+            },
+
+            async history(me, handle, cursor)
+            {
+                const id = await ableTo(me, 'people') === null ? null : await accounts.idOf(handle);
+
+                return id === null ? null : await team.about(id, cursor);
             },
 
             async note(me, handle, input)

@@ -466,9 +466,20 @@ const ACCOUNT_LISTS: Record<PeopleList, (row: AdminRow) => boolean> = {
     reported: (row) => row.reports > 0
 };
 
+const historyOf = (handle: string, cursor: string | null) =>
+{
+    const rows = server.staff.log.filter((row) => row.person === handle);
+    const from = cursor === null ? 0 : rows.findIndex((row) => row.id === cursor) + 1;
+    const page = rows.slice(from, from + LOG_PAGE);
+    const last = page[page.length - 1];
+
+    return { rows: structuredClone(page), ...(rows.length > from + LOG_PAGE && last !== undefined ? { cursor: last.id } : {}) };
+};
+
 const accountView = (handle: string): AdminPerson =>
 {
     const at = accountHandles().indexOf(handle);
+    const first = historyOf(handle, null);
 
     return {
         ...accountRow(handle, at),
@@ -481,7 +492,8 @@ const accountView = (handle: string): AdminPerson =>
         devices: [],
         reportsAbout: [],
         paid: {},
-        history: structuredClone(server.staff.log.filter((row) => row.person === handle)),
+        history: first.rows,
+        ...(first.cursor === undefined ? {} : { historyCursor: first.cursor }),
         games: [],
         paidGames: [],
         ...structuredClone(server.accounts.about[handle] ?? {})
@@ -1147,6 +1159,18 @@ export const client =
             }
 
             return accountView(params.handle);
+        },
+        async history({ params, query }: { params: { handle: string }; query: { cursor?: string } })
+        {
+            server.calls.push(`admin.history ${ params.handle } ${ query.cursor ?? '' }`);
+            staffGate('people');
+
+            if (!accountHandles().includes(params.handle))
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            return historyOf(params.handle, query.cursor ?? null);
         },
         async note({ params, input }: { params: { handle: string }; input: { text: string } })
         {

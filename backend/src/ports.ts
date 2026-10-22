@@ -582,6 +582,8 @@ export interface AdminPort
 
     person(me: string, handle: string): Promise<AdminPerson | null>;
 
+    history(me: string, handle: string, cursor: string | null): Promise<StaffLog | null>;
+
     note(me: string, handle: string, input: Infer<typeof adminNoteInput>): Promise<AdminPerson | null>;
 
     suspend(me: string, handle: string, input: Infer<typeof adminSuspendInput>): Promise<AdminPerson | null>;

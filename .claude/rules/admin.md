@@ -71,8 +71,13 @@ for an agent it does not know) and when it was opened and last used, the browser
 keys, the reports both ways (the other person, the category, the status, never a disclosed message),
 whether they accepted the terms of paid play and any break, their recent games and paid games (read
 by the account's id through the routes that serve a person their own; none when the server keeps
-no vault), and every staff action on them by their id, so a rename does not hide one. The account's
-id never leaves the server. No IP is stored or shown.
+no vault), and the newest fifty staff actions on them by their id, so a rename does not hide one,
+with `historyCursor` when there are more. The account's id never leaves the server. No IP is stored
+or shown.
+
+**A person's whole history is read a page at a time** (`GET /api/admin/people/:handle/history?cursor=`),
+fifty a page by the log's own keyset, for anybody whose role opens People. It is how a moderator, who
+cannot open the log, reads every change ever made about somebody.
 
 **A note is a staff action** (`kind = 'note'`, its words where a change keeps its reason): `POST
 /api/admin/people/:handle/notes`, `{ text }`, three to five hundred characters with one that is not a
@@ -203,7 +208,8 @@ know), the browsers holding their keys, the reports both ways (each a sentence w
 person's handle set apart, `handleParts`), their record (`PersonRecord`: the level, and the ratings once they have
 played, because its empty state speaks to the reader as the player),
 their recent games and paid games, and what the staff did about them, drawn by the log's own
-`LogEntry`. The note form is drawn only for somebody the reader outranks and never on their own
+`LogEntry`, older pages under "Show older"; the older pages are kept by the first page's cursor and
+dropped once that cursor moves (a new action, read again), so nothing is skipped between the two. The note form is drawn only for somebody the reader outranks and never on their own
 page; a note is shown at the press, said once kept, and taken back with the refusal's words. A
 handle nobody holds is "No one by that name." (a 404 read as missing, never as a failure).
 

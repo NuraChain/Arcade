@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note', 'suspend', 'lift', 'clear', 'signOut'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1020,6 +1020,7 @@ describe('the owner\'s view of the vault', () =>
         const answers = [
             await sent(app, '/people?list=minors&q=mina'),
             await sent(app, '/people/mina'),
+            await sent(app, '/people/mina/history?cursor=abc'),
             await sent(app, '/people/mina/notes', note),
             await sent(app, '/people/mina/suspend', suspension),
             await sent(app, '/people/mina/lift', lifting),
@@ -1037,6 +1038,7 @@ describe('the owner\'s view of the vault', () =>
         expect(told).toEqual([
             ['people', 'somebody', { list: 'minors', q: 'mina' }],
             ['person', 'somebody', 'mina'],
+            ['history', 'somebody', 'mina', 'abc'],
             ['note', 'somebody', 'mina', note],
             ['suspend', 'somebody', 'mina', suspension],
             ['lift', 'somebody', 'mina', lifting],
@@ -1063,6 +1065,7 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/people/mina/clear', { part: 'avatar', reason: 'An old picture' })).status).toBe(422);
         expect((await sent(app, '/people/mina/clear', { part: 'bio', reason: '  ' })).status).toBe(422);
         expect((await sent(app, '/people/mina/sign-out', {})).status).toBe(422);
+        expect((await sent(app, `/people/mina/history?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
         expect((await sent(app, '/log?kind=delete')).status).toBe(422);
@@ -1088,6 +1091,7 @@ describe('the owner\'s view of the vault', () =>
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
+        expect(queries).toContain(`'/admin/people/:handle/history': ['cursor']`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

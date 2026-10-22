@@ -622,6 +622,7 @@ export const adminPerson = object({
     paid: object({ acceptedAt: string().optional(), breakUntil: string().optional() }),
     suspension: object({ category: enumOf(SUSPEND_CATEGORIES), until: string().optional(), since: string() }).optional(),
     history: array(staffLogRow),
+    historyCursor: string().optional(),
     games: array(matchHistoryEntry),
     paidGames: array(vaultGame)
 });
@@ -641,6 +642,8 @@ export const adminLiftInput = object({ reason: said() });
 export const adminClearInput = object({ part: enumOf(CLEAR_PARTS), reason: said() });
 
 export const adminSignOutInput = object({ reason: said() });
+
+export const adminHistoryQuery = object({ cursor: string({ max: 80 }).optional() });
 
 export const reclaimInput = object({ id: string({ max: 36 }) });
 

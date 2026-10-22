@@ -9,7 +9,7 @@ import { errorResponse } from '@azerothjs/http';
 
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { PEOPLE_PAGE } from '../src/domains/admin/roles.ts';
+import { LOG_PAGE, PEOPLE_PAGE } from '../src/domains/admin/roles.ts';
 import { Avatar, Match, PushSubscription, Session, StaffAction, Suspension, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
@@ -333,6 +333,42 @@ describe.skipIf(!active)('the people, against a real database', () =>
             [admin.handle, 'admin', moderator.handle, 'Missed the handover'],
             [owner.handle, 'owner', admin.handle, 'Owns the Friday tables']
         ]);
+    });
+
+    it('reads a person\'s whole history a page at a time, to a moderator who cannot open the log, newest first and each row once', async () =>
+    {
+        const owner = await makeUser(OWNER);
+        const moderator = await makeUser(1);
+        const target = await makeUser(null);
+        const player = await makeUser(null);
+        const other = await makeUser(null);
+
+        await grant(owner, moderator, 'moderator');
+
+        for (let at = 0; at < LOG_PAGE + 5; at += 1)
+        {
+            await db.query(
+                `insert into staff_actions (staff_id, staff_handle, staff_role, kind, person_id, person_handle, reason, details, created_at)
+                 values ($1, $2, 'moderator', 'note', $3, $4, $5, '{}', now() - make_interval(secs => $6))`,
+                [moderator.id, moderator.handle, target.id, target.handle, `Note number ${ at }`, at]
+            );
+        }
+
+        await ports.admin.note(moderator.id, other.handle, { text: 'About somebody else' });
+
+        const first = await ports.admin.person(moderator.id, target.handle);
+        const rest = await ports.admin.history(moderator.id, target.handle, first?.historyCursor ?? null);
+        const reasons = [...(first?.history ?? []), ...(rest?.rows ?? [])].map((row) => row.reason);
+
+        expect(first?.history).toHaveLength(LOG_PAGE);
+        expect(first?.historyCursor).toBeDefined();
+        expect(rest?.rows).toHaveLength(5);
+        expect(rest?.cursor).toBeUndefined();
+        expect(reasons).toEqual(Array.from({ length: LOG_PAGE + 5 }, (_, at) => `Note number ${ at }`));
+        expect(await ports.admin.history(moderator.id, target.handle, 'not a cursor')).toEqual({ rows: first?.history, cursor: first?.historyCursor });
+        expect((await ports.admin.person(moderator.id, other.handle))?.historyCursor).toBeUndefined();
+        expect(await ports.admin.history(player.id, target.handle, null)).toBeNull();
+        expect(await ports.admin.history(moderator.id, 'nobody-here', null)).toBeNull();
     });
 
     describe('a suspension', () =>

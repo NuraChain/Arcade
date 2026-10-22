@@ -291,6 +291,11 @@ export function createPeopleService(db: DataSource, ownerWallet: string, origin:
 
         reachable: (actor: Actor, handle: string) => reachable(db.manager, actor, handle),
 
+        async idOf(handle: string)
+        {
+            return (await db.getRepository(User).findOne({ select: { id: true }, where: { handle } }))?.id ?? null;
+        },
+
         async note(actor: Actor, handle: string, text: string)
         {
             await db.transaction(async (tx) =>

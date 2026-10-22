@@ -13,6 +13,7 @@ import Avatar from '../../components/ui/avatar.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Field from '../../components/ui/field.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
@@ -32,6 +33,13 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 
 type Seen = AdminPerson['sessions'][number];
+
+interface Older
+{
+    from: string;
+    rows: AdminPerson['history'];
+    cursor: string | undefined;
+}
 
 const STATUS_WORDS: Record<string, MessageKey> = {
     received: 'admin.person.report.status.received',
@@ -106,6 +114,10 @@ export default component PersonPage()
     );
 
     const guesses = createGuesses<AdminPerson>();
+
+    state older = null as Older | null;
+
+    state paging = false;
 
     state noteText = '';
 
@@ -270,7 +282,15 @@ export default component PersonPage()
 
     derived paidPlayed = paidGames.length > 0;
 
-    derived history = person?.history ?? [];
+    derived firstCursor = person?.historyCursor ?? null;
+
+    derived continued = older !== null && older.from === firstCursor ? older : null;
+
+    derived history = [...(person?.history ?? []), ...(continued?.rows ?? [])];
+
+    derived moreCursor = continued === null ? firstCursor : continued.cursor ?? null;
+
+    derived hasMore = moreCursor !== null;
 
     derived acted = history.length > 0;
 
@@ -399,6 +419,33 @@ export default component PersonPage()
         const sent = guesses.during(signedOutFor(reason, runtime().clock.now()), () => client.admin.signOut({ params: { handle: about }, input: { reason } }), reread);
 
         return await attempt(sent, locale.t('admin.signOut.done', { name: called }), whyStaffRefused);
+    };
+
+    const olderHistory = async () =>
+    {
+        const from = firstCursor;
+        const after = moreCursor;
+        const about = handle;
+        const kept = continued?.rows ?? [];
+
+        if (from === null || after === null || paging)
+        {
+            return;
+        }
+
+        paging = true;
+
+        await attempt((async () =>
+        {
+            const next = await client.admin.history({ params: { handle: about }, query: { cursor: after } });
+
+            if (firstCursor === from)
+            {
+                older = { from, rows: [...kept, ...next.rows], cursor: next.cursor };
+            }
+        })());
+
+        paging = false;
     };
 
     const typedNote = (value: string) =>
@@ -617,6 +664,10 @@ export default component PersonPage()
                                 </li>
                             </For>
                         </ol>
+                    </Show>
+
+                    <Show when={ hasMore }>
+                        <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void olderHistory() } />
                     </Show>
 
                     <Show when={ mayAct }>

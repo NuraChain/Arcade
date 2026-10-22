@@ -235,11 +235,19 @@ export function createStaffService(db: DataSource, ownerWallet: string)
             return { rows: rows.slice(0, LOG_PAGE).map(wire), ...cursorOf(rows, LOG_PAGE) };
         },
 
-        async about(personId: string)
+        async about(personId: string, cursor: string | null): Promise<StaffLog>
         {
-            const rows = await newestFirst(actions().where('a.person_id = :personId', { personId })).limit(LOG_PAGE).getRawMany<LogRow>();
+            const after = keysetAfter(cursor);
+            const query = actions().where('a.person_id = :personId', { personId });
 
-            return rows.map(wire);
+            if (after !== null)
+            {
+                query.andWhere(olderThan('a.created_at', 'a.id'), after);
+            }
+
+            const rows = await newestFirst(query).limit(LOG_PAGE + 1).getRawMany<LogRow>();
+
+            return { rows: rows.slice(0, LOG_PAGE).map(wire), ...cursorOf(rows, LOG_PAGE) };
         }
     };
 }

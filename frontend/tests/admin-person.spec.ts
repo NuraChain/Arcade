@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
 import { createMemoryHistory, createRouter, RouterProvider, Routes, type Route } from 'azerothjs';
 
-import type { StaffRole } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
 import PersonPage from '../src/pages/admin/person.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import '../src/locales/admin-catalogue.ts';
@@ -220,6 +220,44 @@ describe('a person, as the staff read them', () =>
         expect(container.querySelectorAll('[data-history] [data-entry]')).toHaveLength(0);
         expect(toasts()).toEqual(['That is above what your role may do.']);
         expect(container.querySelector<HTMLTextAreaElement>('#admin-person-note')!.value).toBe('Rude at a Hokm table.');
+    });
+
+    it('shows their whole history a page at a time, and starts again from the newest once something new is written', async () =>
+    {
+        const many = LOG_PAGE * 2 + 3;
+
+        for (let one = 0; one < many; one += 1)
+        {
+            staffLogged({ at: hoursAgo(many - one), staff: 'mina', staffRole: 'moderator', kind: 'note', person: 'sara.k', reason: `Note ${ one }`, details: {} });
+        }
+
+        const container = await opened();
+        const more = () => button(container, 'Show older');
+        const reasons = () => all(container, '[data-history] [data-reason]');
+
+        expect(reasons()).toHaveLength(LOG_PAGE);
+        expect(reasons()[0]).toBe(`Note ${ many - 1 }`);
+
+        more()!.click();
+        await settle();
+
+        expect(reasons()).toHaveLength(LOG_PAGE * 2);
+
+        more()!.click();
+        await settle();
+
+        expect(reasons()).toHaveLength(many);
+        expect(new Set(reasons()).size).toBe(many);
+        expect(reasons().at(-1)).toBe('Note 0');
+        expect(more()).toBeUndefined();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-person-note')!, 'One more note on top.');
+        button(container, 'Keep the note')!.click();
+        await settle();
+
+        expect(reasons()).toHaveLength(LOG_PAGE);
+        expect(reasons()[0]).toBe('One more note on top.');
+        expect(more()).toBeDefined();
     });
 
     it('asks for three characters or more before it sends a note', async () =>

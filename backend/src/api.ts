@@ -25,6 +25,7 @@ import {
     vaultTermsInput,
     walletCall,
     adminClearInput,
+    adminHistoryQuery,
     adminLiftInput,
     adminNoteInput,
     adminPeople,
@@ -401,6 +402,9 @@ export function buildApi(ports: Ports)
 
             person: routes.get('/people/:handle', { output: adminPerson },
                 async (context) => onlyAdmin(await ports.admin.person(context.principal.userId, context.params.handle))),
+
+            history: routes.get('/people/:handle/history', { query: adminHistoryQuery, output: staffLog },
+                async (context) => onlyAdmin(await ports.admin.history(context.principal.userId, context.params.handle, context.query.cursor ?? null))),
 
             note: routes.post('/people/:handle/notes', { input: adminNoteInput, output: adminPerson },
                 async (context) => onlyAdmin(await ports.admin.note(context.principal.userId, context.params.handle, context.input))),
