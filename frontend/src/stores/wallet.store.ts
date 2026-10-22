@@ -28,6 +28,13 @@ import { useLocale } from './locale.store.ts';
 
 export type WalletStatus = 'idle' | 'connecting' | 'signing' | 'connected' | 'error';
 
+export interface Suspended
+{
+    category: string;
+    until?: string;
+    vault?: string;
+}
+
 export interface WalletApi
 {
     status: Getter<WalletStatus>;
@@ -36,6 +43,7 @@ export interface WalletApi
     available: Getter<boolean>;
     name: Getter<string | null>;
     failure: Getter<WalletFailure | null>;
+    suspension: Getter<Suspended | null>;
     onNuraChain: Getter<boolean>;
     connect(): Promise<Account | null>;
 
@@ -82,12 +90,44 @@ function serverFailure(error: unknown)
     return error instanceof ApiError && error.status === 429 ? 'busy' : 'unavailable';
 }
 
+const toldOf = (details: unknown, key: string) =>
+{
+    const value: unknown = typeof details === 'object' && details !== null ? Reflect.get(details, key) : undefined;
+
+    return typeof value === 'string' ? value : null;
+};
+
+function suspensionOf(error: unknown)
+{
+    if (!(error instanceof ApiError) || error.status !== 403 || error.code !== 'suspended')
+    {
+        return null;
+    }
+
+    const until = toldOf(error.details, 'until');
+    const vault = toldOf(error.details, 'vault');
+    const held: Suspended = { category: toldOf(error.details, 'category') ?? 'other' };
+
+    if (until !== null)
+    {
+        held.until = until;
+    }
+
+    if (vault !== null)
+    {
+        held.vault = vault;
+    }
+
+    return held;
+}
+
 export const useWallet = createStore((): WalletApi =>
 {
     const [status, setStatus] = createSignal<WalletStatus>('idle');
     const [address, setAddress] = createSignal<string | null>(null);
     const [chainId, setChainId] = createSignal('');
     const [failure, setFailure] = createSignal<WalletFailure | null>(null);
+    const [suspension, setSuspension] = createSignal<Suspended | null>(null);
     const [present, setPresent] = createSignal(detect() !== null);
 
     let injected: Eip1193Provider | null = detect();
@@ -213,6 +253,7 @@ export const useWallet = createStore((): WalletApi =>
         available: present,
         name: () => walletName(untrack(() => (present() ? injected : null))),
         failure,
+        suspension,
 
         onNuraChain: () => !chainIsConfigured() || chainId().toLowerCase() === NURA_CHAIN.chainId.toLowerCase(),
 
@@ -349,6 +390,7 @@ export const useWallet = createStore((): WalletApi =>
             }
 
             setFailure(null);
+            setSuspension(null);
             setStatus('connecting');
 
             let account: string;
@@ -445,8 +487,11 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                const held = suspensionOf(error);
+
                 why('auth.wallet', error);
-                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : serverFailure(error));
+                setSuspension(held);
+                setFailure(held !== null ? 'suspended' : error instanceof ApiError && error.status === 401 ? 'rejected' : serverFailure(error));
                 setStatus('error');
                 return null;
             }
@@ -484,6 +529,7 @@ export const useWallet = createStore((): WalletApi =>
             setStatus('idle');
             setAddress(null);
             setFailure(null);
+            setSuspension(null);
             setChainId('');
         },
 
@@ -493,6 +539,7 @@ export const useWallet = createStore((): WalletApi =>
             setChainId('');
             setStatus('idle');
             setFailure(null);
+            setSuspension(null);
         },
 
         onLeft(listener)
@@ -600,6 +647,7 @@ export const useWallet = createStore((): WalletApi =>
             setAddress(null);
             setChainId('');
             setFailure(null);
+            setSuspension(null);
         }
     };
 });

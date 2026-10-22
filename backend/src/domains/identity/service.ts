@@ -29,6 +29,7 @@ export interface IdentityConfig
     chainId: string;
     rpcUrl: string;
     sessionTtlSeconds: number;
+    vault: string;
 }
 
 interface UserRow
@@ -278,7 +279,11 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
 
                     throw new HttpError(403, 'This account is suspended.', {
                         code: 'suspended',
-                        details: held === null ? {} : { category: held.category, ...(held.until === null ? {} : { until: held.until.toISOString() }) }
+                        details: {
+                            ...(held === null ? {} : { category: held.category }),
+                            ...(held === null || held.until === null ? {} : { until: held.until.toISOString() }),
+                            ...(isAddress(config.vault) ? { vault: config.vault } : {})
+                        }
                     });
                 }
 

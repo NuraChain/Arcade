@@ -38,7 +38,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type GrantedRole, type PeopleList, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type GrantedRole, type PeopleList, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -50,7 +50,7 @@ import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
 import { runtime } from '../src/lib/runtime.ts';
 
-export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'chain-unreachable';
+export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'wallet-suspended' | 'chain-unreachable';
 
 interface GroupWire
 {
@@ -488,6 +488,28 @@ const accountView = (handle: string): AdminPerson =>
     };
 };
 
+const reachedBy = (handle: string) =>
+{
+    const actor = staffRoleOf(server.me);
+
+    if (!accountHandles().includes(handle))
+    {
+        throw staffRefused('staff-nobody', 'No one by that name.');
+    }
+
+    if (handle === server.me)
+    {
+        throw staffRefused('staff-self', 'Nobody does this to their own account.');
+    }
+
+    if (!outranks(actor, staffRoleOf(handle)))
+    {
+        throw staffRefused('staff-rank', 'That is above what your role may do.');
+    }
+
+    return actor ?? 'moderator';
+};
+
 const nuraRefusal = () =>
 {
     const refused = server.nura.refuse;
@@ -504,6 +526,7 @@ export const server =
     issued: null as { nonce: string; message: string; address: string; device?: string } | null,
     received: null as { address: string; nonce: string; signature: string; providerRdns?: string; device?: { id: string; exchangeKey: string; signingKey: string; label: string } } | null,
     refuse: null as Refusal | null,
+    suspension: {} as Record<string, string>,
     uploaded: null as string | null,
     chain: { configured: false, profile: null as ChainProfile | null },
     nfts: { configured: false, items: [] as NftItem[] },
@@ -780,6 +803,7 @@ export const server =
         server.issued = null;
         server.received = null;
         server.refuse = null;
+        server.suspension = {};
         server.uploaded = null;
         server.chain = { configured: false, profile: null };
         server.nfts = { configured: false, items: [] };
@@ -1129,24 +1153,59 @@ export const client =
             server.calls.push(`admin.note ${ params.handle } ${ input.text }`);
             staffGate('people');
 
-            const actor = staffRoleOf(server.me);
+            const actor = reachedBy(params.handle);
 
-            if (!accountHandles().includes(params.handle))
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'note', person: params.handle, reason: input.text, details: {} });
+
+            return accountView(params.handle);
+        },
+
+        async suspend({ params, input }: { params: { handle: string }; input: { days?: SuspendDays; category: SuspendCategory; reason: string } })
+        {
+            server.calls.push(`admin.suspend ${ params.handle } ${ JSON.stringify(input) }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const at = runtime().clock.now();
+            const until = input.days === undefined ? null : new Date(at + input.days * 86_400_000).toISOString();
+
+            server.accounts.suspended = [...server.accounts.suspended.filter((one) => one !== params.handle), params.handle];
+            server.accounts.about[params.handle] = {
+                ...server.accounts.about[params.handle],
+                sessions: [],
+                suspension: { category: input.category, ...(until === null ? {} : { until }), since: new Date(at).toISOString() }
+            };
+            staffLogged({
+                at: new Date(at).toISOString(),
+                staff: server.me,
+                staffRole: actor,
+                kind: 'suspend',
+                person: params.handle,
+                reason: input.reason,
+                details: { category: input.category, ...(until === null ? {} : { until }), ...(input.days === undefined ? {} : { days: String(input.days) }) }
+            });
+
+            return accountView(params.handle);
+        },
+
+        async lift({ params, input }: { params: { handle: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.lift ${ params.handle } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+
+            if (!server.accounts.suspended.includes(params.handle))
             {
-                throw staffRefused('staff-nobody', 'No one by that name.');
+                throw staffRefused('staff-not-suspended', 'They are not suspended.');
             }
 
-            if (params.handle === server.me)
-            {
-                throw staffRefused('staff-self', 'Nobody writes a note on themselves.');
-            }
+            const kept = { ...server.accounts.about[params.handle] };
 
-            if (!outranks(actor, staffRoleOf(params.handle)))
-            {
-                throw staffRefused('staff-rank', 'That is above what your role may do.');
-            }
-
-            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor ?? 'moderator', kind: 'note', person: params.handle, reason: input.text, details: {} });
+            delete kept.suspension;
+            server.accounts.suspended = server.accounts.suspended.filter((one) => one !== params.handle);
+            server.accounts.about[params.handle] = kept;
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'lift', person: params.handle, reason: input.reason, details: {} });
 
             return accountView(params.handle);
         }
@@ -2695,6 +2754,10 @@ export const client =
             if (server.refuse === 'wallet-busy')
             {
                 throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
+            }
+            if (server.refuse === 'wallet-suspended')
+            {
+                throw new ApiError(403, 'suspended', 'This account is suspended.', server.suspension);
             }
             server.account = walletAccount(input.address);
             return { account: server.account };

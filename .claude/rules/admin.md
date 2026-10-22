@@ -123,9 +123,11 @@ lift one twice, and writes `expire` with nobody's name on it: the one kind of ro
 (`staff_actions_actor_named`). A suspension for good is never touched by it.
 
 **Signing in says so, and opens no session.** `signInWithWallet` refuses a suspended account once the
-nonce is burned and the signature checked, with 403 `suspended` and `{ category, until? }` in the
-details. Before this the session was opened and the next request refused, so a suspended person was
-signed in and signed out again with nothing said.
+nonce is burned and the signature checked, with 403 `suspended` and `{ category, until?, vault? }` in
+the details: `vault` is the address `NURA_VAULT_ADDRESS` names, a public value, there so the page can
+say where the person's NURA still is. Before this the session was opened and the next request
+refused, so a suspended person was signed in and signed out again with nothing said. The browser's
+half is in `identity-and-profile.md` (*A suspended account is told why*).
 
 `admin-people.db.spec.ts` (*a suspension*) holds each step against a real database and
 `suspension-sweep.spec.ts` the sweep's place in `main.ts`.
@@ -186,12 +188,23 @@ their recent games and paid games, and what the staff did about them, drawn by t
 page; a note is shown at the press, said once kept, and taken back with the refusal's words. A
 handle nobody holds is "No one by that name." (a 404 read as missing, never as a failure).
 
+**A person's page acts on the account** for somebody the reader outranks, and never on their own
+(`PersonSuspension`, under "Act on this account"). Suspending asks for how long (a day, a week, 30
+days, for good), what it is for (no reason is chosen for the staff: "Choose one" until they do) and
+why, then asks as a destructive question naming the person and the term, with the keyboard on
+Cancel, and for a guest says that a guest cannot sign back in even once it is lifted. Said yes to,
+it is shown at the press: the status under the name ("Suspended until 29 October 2026 at 14:30:
+Cheating.", since when), signed in nowhere, the row in the history and the lift form; a refusal
+takes it all back in the refusal's words and keeps what was typed. A suspended person's page offers
+the lift, with its own reason, shown and taken back the same way.
+
 **Money** is the vault panel, and its calls are drawn for the owner alone (`may(role, 'wallet')`):
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.
 
-`admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts` and `admin-vault.spec.ts` hold the
-page; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
+`admin-person.spec.ts` and `admin-vault.spec.ts` hold the page; `app-stores.spec.ts` the guards and
+`profile-page.spec.ts` the shield.
 
 ## The garbage pass
 

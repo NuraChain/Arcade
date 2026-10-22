@@ -9,6 +9,7 @@ import '../src/locales/admin-catalogue.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { ApiError, client, server, staffLogged, staffMember } from './fake-api.ts';
@@ -62,6 +63,24 @@ const typeInto = (field: HTMLTextAreaElement, value: string) =>
 
 const toasts = () => useToasts().items().map((one) => one.text);
 
+const choose = async (root: ParentNode, label: string) =>
+{
+    root.querySelector<HTMLButtonElement>('[data-category] button[aria-haspopup="listbox"]')!.click();
+    await settle();
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((one) => one.textContent?.trim() === label)!.click();
+    await settle();
+};
+
+const asked = () => useOverlay().items()[0];
+
+const answered = async (yes: boolean) =>
+{
+    useOverlay().close(asked().id, yes);
+    await settle();
+};
+
+const longDate = (at: number) => useLocale().date(at, { dateStyle: 'long', timeStyle: 'short' });
+
 const told = () =>
 {
     server.accounts.about['sara.k'] = {
@@ -94,6 +113,7 @@ beforeEach(() =>
     useLocale().setLocale('en');
     useSession().reset();
     useToasts().dismissAll();
+    useOverlay().reset();
     as('owner');
 });
 
@@ -222,16 +242,16 @@ describe('a person, as the staff read them', () =>
         const offered = async (handle: string) =>
         {
             const container = await opened(`/admin/people/${ handle }`);
-            const has = container.querySelector('#admin-person-note') !== null;
+            const has = [container.querySelector('#admin-person-note') !== null, container.querySelector('[data-actions]') !== null];
 
             cleanup();
             return has;
         };
 
-        expect(await offered('sara.k')).toBe(true);
-        expect(await offered('mina')).toBe(true);
-        expect(await offered('reza.t')).toBe(false);
-        expect(await offered('alex')).toBe(false);
+        expect(await offered('sara.k')).toEqual([true, true]);
+        expect(await offered('mina')).toEqual([true, true]);
+        expect(await offered('reza.t')).toEqual([false, false]);
+        expect(await offered('alex')).toEqual([false, false]);
     });
 
     it('says nobody holds a handle that is not there, and when a person could not be read', async () =>
@@ -261,5 +281,211 @@ describe('a person, as the staff read them', () =>
         expect(all(container, '[data-report] [data-said] [dir="ltr"]')).toEqual(['mina', 'reza.t']);
         expect(said(container, '[data-filed]')).toBe('۱ بار گزارش داده.');
         expect(button(container, 'ثبت یادداشت')).toBeDefined();
+    });
+});
+
+describe('a suspension, from the person\'s page', () =>
+{
+    it('asks before it suspends, then shows it at the press and says so once the server has', async () =>
+    {
+        told();
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'suspend');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.suspend(request);
+        });
+        const container = await opened();
+
+        button(container, 'A week')!.click();
+        await choose(container, 'Cheating');
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, '  Played two seats at one table.  ');
+        button(container, 'Suspend')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Suspend Sara Kamali for a week?',
+            lead: 'Every game they are playing is lost and they are signed out everywhere. Lifting it later gives none of that back.',
+            confirm: 'Suspend them',
+            destructive: true
+        });
+        expect(sent).not.toHaveBeenCalled();
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { days: 7, category: 'cheating', reason: 'Played two seats at one table.' } });
+        expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(false);
+        expect(said(container, '[data-standing]')).toBe(`Suspended until ${ longDate(NOW + 7 * 86_400_000) }: Cheating.`);
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex suspended sara.k for a week: Cheating.']);
+        expect(said(container, '[data-sessions="none"]')).toBe('Not signed in anywhere.');
+        expect(button(container, 'Suspend')).toBeUndefined();
+        expect(button(container, 'Lift it')).toBeDefined();
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['Sara Kamali is suspended for a week.']);
+        expect(server.staff.log.map((row) => `${ row.kind } ${ row.person } ${ row.details.days } ${ row.details.category }`)).toEqual(['suspend sara.k 7 cheating']);
+    });
+
+    it('sends nothing when the question is answered no', async () =>
+    {
+        const sent = vi.spyOn(client.admin, 'suspend');
+        const container = await opened();
+
+        await choose(container, 'Spam or scams');
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Sold seats in the chat.');
+        button(container, 'Suspend')!.click();
+        await settle();
+        await answered(false);
+
+        expect(sent).not.toHaveBeenCalled();
+        expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
+        expect(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!.value).toBe('Sold seats in the chat.');
+    });
+
+    it('takes a refused suspension back and says why, keeping what was written', async () =>
+    {
+        vi.spyOn(client.admin, 'suspend').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
+        told();
+        const container = await opened();
+
+        await choose(container, 'Spam or scams');
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Sold seats in the chat.');
+        button(container, 'Suspend')!.click();
+        await settle();
+        await answered(true);
+
+        expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
+        expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
+        expect(all(container, '[data-session] [data-agent]')).toHaveLength(2);
+        expect(toasts()).toEqual(['That is above what your role may do.']);
+        expect(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!.value).toBe('Sold seats in the chat.');
+    });
+
+    it('asks what it is for and why before it asks anything else', async () =>
+    {
+        const container = await opened();
+        const before = server.calls.length;
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, ' ok ');
+        button(container, 'Suspend')!.click();
+        await settle();
+
+        expect(said(container, '[data-category] [role="alert"]')).toBe('Choose what it is for.');
+        expect(said(container, '#admin-suspend-why-error')).toBe('Say why, in three characters or more.');
+        expect(useOverlay().items()).toHaveLength(0);
+        expect(server.calls.slice(before)).toEqual([]);
+
+        await choose(container, 'Cheating');
+
+        expect(container.querySelector('[data-category] [role="alert"]')).toBeNull();
+    });
+
+    it('tells the staff a guest cannot come back, and suspends for good with no end', async () =>
+    {
+        const sent = vi.spyOn(client.admin, 'suspend');
+        const container = await opened();
+
+        button(container, 'For good')!.click();
+        await choose(container, 'Something else');
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Asked to be kept away.');
+        button(container, 'Suspend')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Suspend Sara Kamali for good?',
+            lead: 'Every game they are playing is lost and they are signed out everywhere. They are a guest, so they cannot sign back in, even once it is lifted.'
+        });
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { category: 'other', reason: 'Asked to be kept away.' } });
+        expect(said(container, '[data-standing]')).toBe('Suspended for good: Something else.');
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex suspended sara.k for good: Something else.']);
+    });
+
+    it('says how long somebody is suspended for and since when, and lifts it at the press', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'lift');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.lift(request);
+        });
+        server.accounts.suspended = ['sara.k'];
+        server.accounts.about['sara.k'] = { suspension: { category: 'spam', until: '2026-10-29T09:00:00.000Z', since: hoursAgo(5) } };
+        const container = await opened();
+
+        expect(said(container, '[data-standing]')).toBe(`Suspended until ${ longDate(Date.parse('2026-10-29T09:00:00.000Z')) }: Spam or scams.`);
+        expect(said(container, '[data-since]')).toBe('Since 5 hours ago');
+        expect(button(container, 'Suspend')).toBeUndefined();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, ' ok ');
+        button(container, 'Lift it')!.click();
+        await settle();
+
+        expect(said(container, '#admin-lift-why-error')).toBe('Say why, in three characters or more.');
+        expect(server.calls.filter((call) => call.startsWith('admin.lift'))).toEqual([]);
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, 'Said sorry to the table.');
+        button(container, 'Lift it')!.click();
+        await settle();
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { reason: 'Said sorry to the table.' } });
+        expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex lifted the suspension on sara.k.']);
+        expect(button(container, 'Suspend')).toBeDefined();
+        expect(server.accounts.suspended).toEqual(['sara.k']);
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
+        expect(toasts()).toEqual(['Sara Kamali can sign in again.']);
+        expect(server.accounts.suspended).toEqual([]);
+    });
+
+    it('takes a refused lift back in the refusal\'s own words', async () =>
+    {
+        vi.spyOn(client.admin, 'lift').mockRejectedValueOnce(new ApiError(409, 'staff-not-suspended', 'They are not suspended.', undefined));
+        server.accounts.suspended = ['sara.k'];
+        server.accounts.about['sara.k'] = { suspension: { category: 'cheating', since: hoursAgo(1) } };
+        const container = await opened();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, 'Said sorry to the table.');
+        button(container, 'Lift it')!.click();
+        await settle();
+
+        expect(said(container, '[data-standing]')).toBe('Suspended for good: Cheating.');
+        expect(toasts()).toEqual(['They are not suspended.']);
+        expect(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!.value).toBe('Said sorry to the table.');
+    });
+
+    it('says it in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        server.accounts.suspended = ['sara.k'];
+        server.accounts.about['sara.k'] = { suspension: { category: 'cheating', since: hoursAgo(1) } };
+        const suspended = await opened();
+
+        expect(said(suspended, '[data-standing]')).toBe('برای همیشه معلقه: تقلب.');
+        expect(said(suspended, '#person-lift')).toBe('برداشتن تعلیق');
+        expect(button(suspended, 'برش دار')).toBeDefined();
+        cleanup();
+
+        const container = await opened('/admin/people/mina');
+
+        button(container, 'یه هفته')!.click();
+        await choose(container, 'تقلب');
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'دو تا صندلی سر یه میز داشت.');
+        button(container, 'تعلیق')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'Mina Sadeghi برای یه هفته معلق بشه؟', confirm: 'تعلیقش کن' });
     });
 });

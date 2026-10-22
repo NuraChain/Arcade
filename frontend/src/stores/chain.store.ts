@@ -54,6 +54,7 @@ const REFUSAL: Record<WalletFailure, PublishOutcome> = {
     chain: 'wrong-chain',
     unavailable: 'unavailable',
     busy: 'unavailable',
+    suspended: 'unavailable',
     unknown: 'wallet-failed'
 };
 

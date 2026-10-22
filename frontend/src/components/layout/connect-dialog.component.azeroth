@@ -18,6 +18,7 @@ import '../../locales/wallet-catalogue.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
+import SuspendedNotice from './suspended-notice.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
@@ -60,6 +61,7 @@ const ERRORS: Record<WalletFailure, MessageKey> = {
     'chain': 'wallet.error.chain',
     'unavailable': 'wallet.error.unavailable',
     'busy': 'wallet.error.busy',
+    'suspended': 'wallet.error.suspended',
     'unknown': 'wallet.error.unknown'
 };
 
@@ -152,6 +154,8 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
 
     derived failure = wallet.failure();
 
+    derived suspension = wallet.suspension();
+
     const found = (choice: Choice) =>
         present.find((one) => one.rdns === choice.rdns || one.rdns.startsWith(`${ choice.rdns }.`));
 
@@ -221,9 +225,12 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                     <div class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 flex flex-col gap-3 p-5">
                         <Show when={ failure !== null }>
                             { () =>
-                                <p role="alert" class="rounded-tile bg-danger/10 px-3 py-2 text-ui-sm text-danger">
-                                    { locale.t(ERRORS[failure!], { chain: NURA_CHAIN.name }) }
-                                </p>
+                                <div role="alert" class="flex flex-col gap-1 rounded-tile bg-danger/10 px-3 py-2 text-ui-sm text-danger">
+                                    <p>{ locale.t(ERRORS[failure!], { chain: NURA_CHAIN.name }) }</p>
+                                    <Show when={ suspension } let={ held }>
+                                        <SuspendedNotice held={ held } />
+                                    </Show>
+                                </div>
                             }
                         </Show>
 

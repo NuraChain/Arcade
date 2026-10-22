@@ -4,6 +4,7 @@ import { outranks } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminPerson } from '../../../../backend/src/schemas.ts';
 import { ApiError, client } from '../../api.ts';
 import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
 import Said from '../../components/admin/said.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -21,7 +22,7 @@ import { attempt } from '../../lib/attempt.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { CATEGORY_WORDS, handleParts, ROLE_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import { CATEGORY_WORDS, handleParts, ROLE_WORDS, TERM_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -54,6 +55,8 @@ const STATE_WORDS: Record<AdminPerson['paidGames'][number]['state'], MessageKey>
 };
 
 const NOTE_MIN = 3;
+
+const DAY_MS = 86_400_000;
 
 const PLAYED: RecordPart[] = ['level', 'record'];
 
@@ -111,6 +114,8 @@ export default component PersonPage()
 
     derived name = person?.displayName ?? '';
 
+    derived calledBy = name === '' ? handle : name;
+
     useHead({ title: () => person?.displayName ?? handle });
 
     derived role = person?.staff ?? null;
@@ -123,6 +128,19 @@ export default component PersonPage()
 
     derived minor = person?.minor ?? false;
 
+    derived suspension = person?.suspension ?? null;
+
+    derived told = suspension !== null;
+
+    derived standing = suspension === null
+        ? ''
+        : locale.t(suspension.until === undefined ? 'admin.person.suspendedForGood' : 'admin.person.suspendedUntil', {
+            ...(suspension.until === undefined ? {} : { when: locale.date(Date.parse(suspension.until), { dateStyle: 'long', timeStyle: 'short' }) }),
+            category: locale.t(CATEGORY_WORDS[suspension.category] ?? 'report.category.other')
+        });
+
+    derived standingSince = suspension === null ? '' : locale.t('admin.person.suspendedSince', { when: locale.relative(Date.parse(suspension.since)) });
+
     derived joined = person === null ? '' : locale.t('admin.people.joined', { when: locale.relative(Date.parse(person.createdAt)) });
 
     derived wasSeen = person?.lastSeenAt !== undefined;
@@ -132,6 +150,8 @@ export default component PersonPage()
     derived wallets = person?.wallets ?? [];
 
     derived walleted = wallets.length > 0;
+
+    derived guest = person !== null && !walleted;
 
     derived strangers = locale.t(person?.strangers === false ? 'admin.person.strangers.off' : 'admin.person.strangers.on');
 
@@ -220,7 +240,7 @@ export default component PersonPage()
 
     derived acted = history.length > 0;
 
-    derived mayNote = person !== null && me !== null && person.handle !== me.handle && outranks(me.staff ?? null, person.staff ?? null);
+    derived mayAct = person !== null && me !== null && person.handle !== me.handle && outranks(me.staff ?? null, person.staff ?? null);
 
     const reread = async () =>
     {
@@ -241,6 +261,61 @@ export default component PersonPage()
             ...from.history
         ]
     });
+
+    const suspendedFor = (ask: SuspendAsk, at: number): Guess<AdminPerson> => (from) =>
+    {
+        const until = ask.days === null ? null : new Date(at + ask.days * DAY_MS).toISOString();
+
+        return {
+            ...from,
+            suspended: true,
+            suspension: { category: ask.category, ...(until === null ? {} : { until }), since: new Date(at).toISOString() },
+            sessions: [],
+            history: [
+                {
+                    id: `suspend-${ at }`,
+                    at: new Date(at).toISOString(),
+                    staff: me?.handle ?? '',
+                    staffRole: me?.staff ?? 'moderator',
+                    kind: 'suspend',
+                    person: from.handle,
+                    reason: ask.reason,
+                    details: { category: ask.category, ...(until === null ? {} : { until }), ...(ask.days === null ? {} : { days: String(ask.days) }) }
+                },
+                ...from.history
+            ]
+        };
+    };
+
+    const liftedFor = (reason: string, at: number): Guess<AdminPerson> => (from) => ({
+        ...from,
+        suspended: false,
+        suspension: undefined,
+        history: [
+            { id: `lift-${ at }`, at: new Date(at).toISOString(), staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'lift', person: from.handle, reason, details: {} },
+            ...from.history
+        ]
+    });
+
+    const suspendNow = async (ask: SuspendAsk) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const input = { ...(ask.days === null ? {} : { days: ask.days }), category: ask.category, reason: ask.reason };
+        const term = locale.t(ask.days === null ? 'admin.suspend.term.good' : TERM_WORDS[String(ask.days)] ?? 'admin.suspend.term.good');
+        const sent = guesses.during(suspendedFor(ask, runtime().clock.now()), () => client.admin.suspend({ params: { handle: about }, input }), reread);
+
+        return await attempt(sent, locale.t('admin.suspend.done', { name: called, term }), whyStaffRefused);
+    };
+
+    const liftNow = async (reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(liftedFor(reason, runtime().clock.now()), () => client.admin.lift({ params: { handle: about }, input: { reason } }), reread);
+
+        return await attempt(sent, locale.t('admin.lift.done', { name: called }), whyStaffRefused);
+    };
 
     const typedNote = (value: string) =>
     {
@@ -314,6 +389,10 @@ export default component PersonPage()
                             <span>{ seen }</span>
                         </Show>
                     </p>
+                    <div class="flex flex-col gap-0.5" hidden={ !told } data-suspension>
+                        <p class="text-ui-sm font-semibold text-danger" data-standing>{ standing }</p>
+                        <p class="text-ui-xs text-faint" data-since>{ standingSince }</p>
+                    </div>
                 </header>
 
                 <div class="grid gap-4 xl:grid-cols-2">
@@ -456,7 +535,7 @@ export default component PersonPage()
                         </ol>
                     </Show>
 
-                    <Show when={ mayNote }>
+                    <Show when={ mayAct }>
                         <Panel pad="md" stack="md" labelledBy="person-note">
                             <div class="flex flex-col gap-1">
                                 <h3 id="person-note" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.note') }</h3>
@@ -476,6 +555,16 @@ export default component PersonPage()
                         </Panel>
                     </Show>
                 </section>
+
+                <Show when={ mayAct }>
+                    <section class="flex flex-col gap-3" aria-labelledby="person-actions" data-actions>
+                        <div class="flex flex-col gap-1">
+                            <h2 id="person-actions" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.actions') }</h2>
+                            <p class="text-ui-sm text-muted">{ locale.t('admin.person.actionsLead') }</p>
+                        </div>
+                        <PersonSuspension name={ calledBy } suspended={ suspended } guest={ guest } onSuspend={ suspendNow } onLift={ liftNow } />
+                    </section>
+                </Show>
             </div>
         </Show>
     </div>

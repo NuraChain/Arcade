@@ -34,6 +34,7 @@ const REFUSAL: Record<WalletFailure, VaultOutcome> = {
     chain: 'wrong-chain',
     unavailable: 'unavailable',
     busy: 'unavailable',
+    suspended: 'unavailable',
     unknown: 'wallet-failed'
 };
 

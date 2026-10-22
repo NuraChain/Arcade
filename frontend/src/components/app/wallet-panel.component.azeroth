@@ -4,6 +4,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import type { MessageKey } from '../../locales/en.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
+import SuspendedNotice from '../layout/suspended-notice.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
@@ -21,6 +22,8 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
     derived busy = status === 'connecting' || status === 'signing';
 
     derived failure = wallet.failure();
+
+    derived suspension = wallet.suspension();
 
     derived errorKey = ((): MessageKey | null =>
     {
@@ -51,6 +54,10 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
         if (failure === 'busy')
         {
             return 'wallet.error.busy';
+        }
+        if (failure === 'suspended')
+        {
+            return 'wallet.error.suspended';
         }
         return failure === 'no-wallet' ? 'wallet.error.noWallet' : 'wallet.error.unknown';
     })();
@@ -108,10 +115,15 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
 
         <Show when={ errorKey !== null }>
             { () =>
-                <p class="relative mt-4 flex items-start gap-2 rounded-tile bg-danger/10 p-3 text-ui-sm text-danger" role="alert">
+                <div class="relative mt-4 flex items-start gap-2 rounded-tile bg-danger/10 p-3 text-ui-sm text-danger" role="alert">
                     <Icon name="alert" size={ 16 } class="mt-0.5 shrink-0" />
-                    { locale.t(errorKey!, { chain: NURA_CHAIN.name }) }
-                </p>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <p>{ locale.t(errorKey!, { chain: NURA_CHAIN.name }) }</p>
+                        <Show when={ suspension } let={ held }>
+                            <SuspendedNotice held={ held } />
+                        </Show>
+                    </div>
+                </div>
             }
         </Show>
 

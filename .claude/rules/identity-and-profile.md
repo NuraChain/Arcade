@@ -466,6 +466,16 @@ wallet store, "Too many sign-ins from this network. Try again in a minute." on t
 in the chooser, where it used to be `unavailable` and said the server could not be reached.
 `wallet.spec.ts` and `connect.spec.ts` hold both steps, both places and the Persian sentence.
 
+**A suspended account is told why.** The server refuses its wallet with 403 `suspended`, the
+category, the end when there is one and the vault where there is one (`.claude/rules/admin.md`, *A
+suspension*). The wallet store keeps that as `suspension()` beside the failure `suspended`, and
+forgets it at the next try, and `SuspendedNotice` says it under "This account is suspended." in the
+chooser and on the sign-in page: when it ends or that it is permanent, the reason in the page's own
+words (the wallet catalogue carries the five, because the chooser loads no other), and, where the
+server named a vault, that the NURA in it is still theirs and their wallet can take it out without
+this site, with the vault's page on the explorer. A refusal from the server is never shown in its
+own English. `connect.spec.ts` holds both places, both languages and the next try.
+
 **A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
 `candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.
 

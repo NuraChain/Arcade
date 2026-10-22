@@ -54,8 +54,11 @@ const CONFIG = {
     vapidPublicKey: '',
     vapidPrivateKey: '',
     vapidSubject: '',
+    vaultAddress: '',
     adminWallet: WALLETS[OWNER].toUpperCase().replace('0X', '0x')
 } as Parameters<typeof buildPorts>[1];
+
+const VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
@@ -443,31 +446,50 @@ describe.skipIf(!active)('the people, against a real database', () =>
             expect(await ports.jobs.liftSuspensions()).toBe(0);
         });
 
+        const WALLET = privateKeyToAccount('0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a');
+
+        const enter = async () =>
+        {
+            const { nonce, message } = await ports.identity.challenge(WALLET.address);
+
+            return await ports.identity.signInWithWallet({ address: WALLET.address, nonce, signature: await WALLET.signMessage({ message }), userAgent: 'test' });
+        };
+
+        const refusal = async () =>
+        {
+            const response = errorResponse(await enter().then(() => null, (error: unknown) => error));
+            const body = await response.json() as { error: { code: string; details: Record<string, string> } };
+
+            return { status: response.status, code: body.error.code, details: body.error.details };
+        };
+
         it('refuses a suspended wallet at sign-in, saying until when and why, and opens no session', async () =>
         {
             const owner = await makeUser(OWNER);
             const person = await makeUser(4);
-            const wallet = privateKeyToAccount('0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a');
-            const enter = async () =>
-            {
-                const { nonce, message } = await ports.identity.challenge(wallet.address);
-
-                return await ports.identity.signInWithWallet({ address: wallet.address, nonce, signature: await wallet.signMessage({ message }), userAgent: 'test' });
-            };
 
             expect((await enter()).account.handle).toBe(person.handle);
 
             await ports.admin.suspend(owner.id, person.handle, { days: 30, category: 'cheating', reason: 'Played two seats at one table' });
 
             const before = await db.getRepository(Session).countBy({ userId: person.id });
-            const thrown = await enter().then(() => null, (error: unknown) => error);
-            const response = errorResponse(thrown);
-            const body = await response.json() as { error: { code: string; details: { category: string; until: string } } };
+            const refused = await refusal();
             const held = await db.getRepository(Suspension).findOneByOrFail({ userId: person.id });
 
-            expect([response.status, body.error.code]).toEqual([403, 'suspended']);
-            expect(body.error.details).toEqual({ category: 'cheating', until: held.until!.toISOString() });
+            expect(refused).toEqual({ status: 403, code: 'suspended', details: { category: 'cheating', until: held.until!.toISOString() } });
             expect(await db.getRepository(Session).countBy({ userId: person.id })).toBe(before);
+        });
+
+        it('names the vault their NURA is still in where this server keeps one, and no end for a suspension for good', async () =>
+        {
+            ports = buildPorts(db, { ...CONFIG, vaultAddress: VAULT }, listener);
+
+            const owner = await makeUser(OWNER);
+            const person = await makeUser(4);
+
+            await ports.admin.suspend(owner.id, person.handle, { category: 'spam', reason: 'Sold seats in the chat' });
+
+            expect(await refusal()).toEqual({ status: 403, code: 'suspended', details: { category: 'spam', vault: VAULT } });
         });
     });
 });

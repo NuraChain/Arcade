@@ -93,7 +93,8 @@ const identity = createIdentityService(dataSource, {
     origin: config.origin,
     chainId: config.chainId,
     rpcUrl: config.rpcUrl,
-    sessionTtlSeconds: SESSION_TTL_SECONDS
+    sessionTtlSeconds: SESSION_TTL_SECONDS,
+    vault: config.vaultAddress
 });
 
 const hub = createHub({
