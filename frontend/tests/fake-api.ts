@@ -16,6 +16,8 @@ import type {
     Account,
     AdminPeople,
     AdminPerson,
+    AdminReport,
+    AdminReports,
     AdminVault,
     ChainProfile,
     ChatMessage,
@@ -38,7 +40,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -522,6 +524,70 @@ const reachedBy = (handle: string) =>
     return actor ?? 'moderator';
 };
 
+interface FiledReport
+{
+    id: string;
+    category: AdminReport['category'];
+    status: ReportStatus;
+    at: string;
+    by: string;
+    about: string;
+    message?: string;
+    together: AdminReport['together'];
+}
+
+const reportsFresh = () => ({ filed: [] as FiledReport[], count: 0 });
+
+export const reportFiled = (report: Pick<FiledReport, 'at' | 'by' | 'about'> & Partial<Omit<FiledReport, 'id'>>) =>
+{
+    server.desk.count += 1;
+
+    const id = `report-${ server.desk.count }`;
+
+    server.desk.filed.push({ category: 'harassment', status: 'received', together: [], ...report, id });
+
+    return id;
+};
+
+const reportFace = (handle: string) =>
+{
+    const person = personWire(handle);
+    const role = staffRoleOf(handle);
+
+    return { handle, displayName: person.displayName, hue: person.hue, ...(role === null ? {} : { staff: role }) };
+};
+
+const reportRow = (report: FiledReport): AdminReports['rows'][number] => ({
+    id: report.id,
+    category: report.category,
+    status: report.status,
+    at: report.at,
+    disclosed: report.message !== undefined,
+    by: reportFace(report.by),
+    about: reportFace(report.about)
+});
+
+const reportView = (report: FiledReport): AdminReport => ({
+    ...reportRow(report),
+    ...(report.message === undefined ? {} : { message: report.message }),
+    together: structuredClone(report.together),
+    history: structuredClone(server.staff.log.filter((row) => row.kind === 'report' && row.details.report === report.id))
+});
+
+const waitingReports = () => server.desk.filed.filter((one) => one.status === 'received').length;
+
+const reportNamed = (id: string) =>
+{
+    const found = server.desk.filed.find((one) => one.id === id);
+
+    if (found === undefined)
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+
+    return found;
+};
+
 const nuraRefusal = () =>
 {
     const refused = server.nura.refuse;
@@ -641,6 +707,7 @@ export const server =
     admin: adminFresh(),
     staff: staffFresh(),
     accounts: accountsFresh(),
+    desk: reportsFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -805,6 +872,7 @@ export const server =
         server.admin = adminFresh();
         server.staff = staffFresh();
         server.accounts = accountsFresh();
+        server.desk = reportsFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1279,6 +1347,59 @@ export const client =
             }
 
             return accountView(params.handle);
+        },
+
+        async reports({ query }: { query: { status?: ReportList; cursor?: string } })
+        {
+            server.calls.push(`admin.reports ${ JSON.stringify(query) }`);
+            staffGate('reports');
+
+            const list = query.status ?? 'received';
+            const rows = [...server.desk.filed]
+                .filter((one) => list === 'all' || one.status === list)
+                .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+            const from = query.cursor === undefined ? 0 : rows.findIndex((one) => one.id === query.cursor) + 1;
+            const page = rows.slice(from, from + REPORTS_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: page.map(reportRow),
+                ...(rows.length > from + REPORTS_PAGE && last !== undefined ? { cursor: last.id } : {}),
+                waiting: waitingReports()
+            };
+        },
+
+        async reportsWaiting()
+        {
+            server.calls.push('admin.reportsWaiting');
+            staffGate('reports');
+
+            return { count: waitingReports() };
+        },
+
+        async report({ params }: { params: { id: string } })
+        {
+            server.calls.push(`admin.report ${ params.id }`);
+            staffGate('reports');
+
+            return reportView(reportNamed(params.id));
+        },
+
+        async review({ params, input }: { params: { id: string }; input: { outcome: ReportOutcome; reason: string } })
+        {
+            server.calls.push(`admin.review ${ params.id } ${ input.outcome } ${ input.reason }`);
+            staffGate('reports');
+
+            const report = reportNamed(params.id);
+            const actor = reachedBy(report.about);
+
+            if (report.status !== input.outcome)
+            {
+                report.status = input.outcome;
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'report', person: report.about, reason: input.reason, details: { report: report.id, outcome: input.outcome, reporter: report.by } });
+            }
+
+            return reportView(report);
         }
     },
 

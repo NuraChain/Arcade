@@ -1,8 +1,9 @@
 import { ApiError } from '../api.ts';
 import { isStaffRefusal } from '../../../backend/src/domains/admin/refusals.ts';
-import { STAFF_ROLES, type StaffRole } from '../../../backend/src/domains/admin/roles.ts';
+import { STAFF_ROLES, type ReportStatus, type StaffRole } from '../../../backend/src/domains/admin/roles.ts';
 import { normalizeName } from '../../../backend/src/lib/naming.ts';
 import type { StaffLog } from '../../../backend/src/schemas.ts';
+import type { Tone } from '../components/ui/variants.ts';
 import type { MessageKey } from '../locales/en.ts';
 import type { LocaleApi } from '../stores/locale.store.ts';
 
@@ -14,7 +15,7 @@ export const ROLE_WORDS: Record<StaffRole, MessageKey> = {
     moderator: 'admin.role.moderator'
 };
 
-const ROLE_IN: Record<StaffRole, MessageKey> = {
+export const ROLE_IN: Record<StaffRole, MessageKey> = {
     owner: 'admin.role.in.owner',
     admin: 'admin.role.in.admin',
     moderator: 'admin.role.in.moderator'
@@ -26,6 +27,18 @@ export const CATEGORY_WORDS: Readonly<Record<string, MessageKey>> = {
     cheating: 'report.category.cheating',
     inappropriate: 'report.category.inappropriate',
     other: 'report.category.other'
+};
+
+export const STATUS_WORDS: Record<ReportStatus, MessageKey> = {
+    received: 'admin.person.report.status.received',
+    reviewed: 'admin.person.report.status.reviewed',
+    actioned: 'admin.person.report.status.actioned'
+};
+
+export const STATUS_TONES: Record<ReportStatus, Tone> = {
+    received: 'gold',
+    reviewed: 'neutral',
+    actioned: 'live'
 };
 
 export const TERM_WORDS: Readonly<Record<string, MessageKey>> = {

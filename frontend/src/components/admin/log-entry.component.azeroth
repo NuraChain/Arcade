@@ -1,9 +1,11 @@
+import { Link } from 'azerothjs';
+
 import { logParts, ROLE_WORDS, type LogRow } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Said from './said.component.azeroth';
 import When from './when.component.azeroth';
 
-export default component LogEntry(props: { row: LogRow })
+export default component LogEntry(props: { row: LogRow; report?: string })
 {
     const locale = useLocale();
 
@@ -19,6 +21,10 @@ export default component LogEntry(props: { row: LogRow })
 
     derived recalled = was !== '';
 
+    derived opened = props.row.kind === 'report' ? props.row.details.report ?? '' : '';
+
+    derived opens = opened !== '' && opened !== props.report;
+
     <div class="flex flex-col gap-1.5 px-4 py-3">
         <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
         <Show when={ reasoned }>
@@ -28,6 +34,13 @@ export default component LogEntry(props: { row: LogRow })
         <p class="facts text-ui-xs text-faint">
             <When at={ props.row.at } />
             <span class="empty:hidden">{ role }</span>
+            <Show when={ opens }>
+                <Link
+                    to={ () => `/admin/reports/${ encodeURIComponent(opened) }` }
+                    class="font-semibold text-accent hover:underline coarse:inline-flex coarse:min-h-11 coarse:items-center"
+                    data-open-report
+                >{ locale.t('admin.log.openReport') }</Link>
+            </Show>
         </p>
     </div>
 }

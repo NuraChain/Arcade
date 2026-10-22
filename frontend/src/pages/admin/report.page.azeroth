@@ -1,0 +1,290 @@
+import { createResource, Link, useHead, useParams } from 'azerothjs';
+
+import { outranks, type ReportOutcome } from '../../../../backend/src/domains/admin/roles.ts';
+import type { AdminReport } from '../../../../backend/src/schemas.ts';
+import { ApiError, client } from '../../api.ts';
+import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import ReportClose from '../../components/admin/report-close.component.azeroth';
+import ReportPerson from '../../components/admin/report-person.component.azeroth';
+import Said from '../../components/admin/said.component.azeroth';
+import When from '../../components/admin/when.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { decodeText } from '../../lib/body.ts';
+import { createGuesses, type Guess } from '../../lib/guess.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { CATEGORY_WORDS, handleParts, ROLE_IN, STATUS_TONES, STATUS_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useReports } from '../../stores/reports.store.ts';
+import { useSession } from '../../stores/session.store.ts';
+
+const RESULT_WORDS: Readonly<Record<string, MessageKey>> = {
+    won: 'history.result.won',
+    lost: 'history.result.lost',
+    abandoned: 'history.result.abandoned',
+    void: 'history.result.void'
+};
+
+const CLOSED: Readonly<Record<ReportOutcome, MessageKey>> = {
+    reviewed: 'admin.report.done.reviewed',
+    actioned: 'admin.report.done.actioned'
+};
+
+export default component ReportPage()
+{
+    const locale = useLocale();
+    const session = useSession();
+    const catalogue = useCatalogue();
+    const desk = useReports();
+    const params = useParams();
+
+    const view = createResource(
+        () => params().id ?? null,
+        async (id) =>
+        {
+            try
+            {
+                return await client.admin.report({ params: { id } });
+            }
+            catch (error)
+            {
+                if (error instanceof ApiError && error.status === 404)
+                {
+                    return null;
+                }
+
+                throw error;
+            }
+        },
+        { name: 'admin.report' }
+    );
+
+    const guesses = createGuesses<AdminReport>();
+
+    derived held = view.data();
+
+    derived trouble = view.error();
+
+    derived missing = held === null;
+
+    derived waiting = held === undefined && trouble === null;
+
+    derived failed = held === undefined && trouble !== null;
+
+    derived report = held === undefined || held === null ? null : guesses.over(held);
+
+    derived me = session.account();
+
+    derived id = report?.id ?? params().id ?? '';
+
+    derived category = report === null ? '' : locale.t(CATEGORY_WORDS[report.category] ?? 'report.category.other');
+
+    useHead({ title: () => (category === '' ? locale.t('admin.section.reports') : category) });
+
+    derived sentence = report === null
+        ? []
+        : handleParts(locale.t('admin.reports.row', { by: '{by}', about: '{about}' }), { by: report.by.handle, about: report.about.handle });
+
+    derived marked = report?.status ?? 'received';
+
+    derived status = locale.t(STATUS_WORDS[marked]);
+
+    derived tone = STATUS_TONES[marked];
+
+    derived filedAt = report?.at ?? '';
+
+    derived filed = report === null ? '' : locale.t('admin.report.filed', { when: locale.relative(Date.parse(report.at)) });
+
+    derived decoded = report?.message === undefined ? null : decodeText(report.message);
+
+    derived readable = decoded !== null;
+
+    derived unreadable = report?.message !== undefined && decoded === null;
+
+    derived words = decoded?.text ?? '';
+
+    derived forwarded = decoded?.fwd === true;
+
+    derived unsaid = locale.t(unreadable ? 'admin.report.messageUnread' : 'admin.report.messageNone');
+
+    derived together = (report?.together ?? []).map((one) => ({
+        id: one.id,
+        name: locale.t(catalogue.byId(one.game as GameId).nameKey),
+        live: one.live,
+        at: one.at,
+        by: report?.by.handle ?? '',
+        byResult: one.by === undefined ? '' : locale.t(RESULT_WORDS[one.by] ?? 'history.result.void'),
+        about: report?.about.handle ?? '',
+        aboutResult: one.about === undefined ? '' : locale.t(RESULT_WORDS[one.about] ?? 'history.result.void')
+    }));
+
+    derived played = together.length > 0;
+
+    derived history = report?.history ?? [];
+
+    derived acted = history.length > 0;
+
+    derived mayClose = report !== null && me !== null && report.about.handle !== me.handle && outranks(me.staff ?? null, report.about.staff ?? null);
+
+    derived whyNot = report === null || me === null
+        ? ''
+        : report.about.handle === me.handle
+            ? locale.t('admin.report.yours')
+            : report.about.staff === 'owner'
+                ? locale.t('admin.report.aboutOwner')
+                : locale.t('admin.report.above', { role: report.about.staff === undefined ? '' : locale.t(ROLE_IN[report.about.staff]) });
+
+    const reread = async () =>
+    {
+        await view.refetch();
+
+        if (view.error() !== null)
+        {
+            throw view.error();
+        }
+
+        guesses.landed();
+    };
+
+    const closedAs = (outcome: ReportOutcome, reason: string, at: number): Guess<AdminReport> => (from) => ({
+        ...from,
+        status: outcome,
+        history: [
+            {
+                id: `report-${ at }`,
+                at: new Date(at).toISOString(),
+                staff: me?.handle ?? '',
+                staffRole: me?.staff ?? 'moderator',
+                kind: 'report',
+                person: from.about.handle,
+                reason,
+                details: { report: from.id, outcome, reporter: from.by.handle }
+            },
+            ...from.history
+        ]
+    });
+
+    const closeNow = async (outcome: ReportOutcome, reason: string) =>
+    {
+        const asked = id;
+        const was = marked;
+        const sent = guesses.during(closedAs(outcome, reason, runtime().clock.now()), () => client.admin.review({ params: { id: asked }, input: { outcome, reason } }), reread);
+
+        if (was === 'received')
+        {
+            desk.shift(-1);
+        }
+
+        const done = await attempt(sent, locale.t(CLOSED[outcome]), whyStaffRefused);
+
+        void desk.read();
+
+        return done;
+    };
+
+    <div class="flex flex-col gap-6">
+        <Link to="/admin/reports" class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline">
+            <Icon name="back" size={ 16 } class="icon-flip" />
+            <span>{ locale.t('admin.report.back') }</span>
+        </Link>
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 6 } avatar /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.report.failed') } onRetry={ () => void view.refetch() } /> }
+        </Show>
+
+        <Show when={ missing }>
+            { () => <EmptyState icon="flag" title={ locale.t('admin.report.missing') } lead={ locale.t('admin.report.missingLead') } /> }
+        </Show>
+
+        <Show when={ report } let={ shown }>
+            <div class="flex flex-col gap-6" data-report={ id }>
+                <header class="flex flex-col gap-2">
+                    <h1 class="title text-ui-2xl" data-category>{ category }</h1>
+                    <p class="text-ui-md text-text" data-said><Said parts={ sentence } /></p>
+                    <p class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
+                        <span class="flex" data-status={ marked }><Badge dot text={ status } tone={ tone } /></span>
+                        <When at={ filedAt } said={ filed } />
+                    </p>
+                </header>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <ReportPerson label={ locale.t('admin.report.about') } person={ shown.about } side="about" />
+                    <ReportPerson label={ locale.t('admin.report.by') } person={ shown.by } side="by" />
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-2">
+                    <Panel pad="md" stack="sm" labelledBy="report-message">
+                        <h2 id="report-message" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.message') }</h2>
+                        <Show when={ readable } fallback={ <p class="text-ui-sm text-muted" data-message="none">{ unsaid }</p> }>
+                            <p class="text-ui-sm text-muted">{ locale.t('admin.report.messageLead') }</p>
+                            <blockquote class="whitespace-pre-wrap break-words rounded-tile border-s-2 border-accent bg-sunk px-3 py-2 text-ui-md text-text" dir="auto" data-message>{ words }</blockquote>
+                            <span class="flex" hidden={ !forwarded } data-forwarded>
+                                <Badge text={ locale.t('admin.report.forwarded') } tone="neutral" />
+                            </span>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="report-together">
+                        <h2 id="report-together" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.together') }</h2>
+                        <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-together="none">{ locale.t('admin.report.togetherNone') }</p> }>
+                            <ul class="divide-y divide-line" data-together>
+                                <For each={ together } key={ (one) => one.id } let={ game }>
+                                    <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
+                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                            <span class="font-semibold text-text" data-name>{ game.name }</span>
+                                            <span class="flex" hidden={ !game.live } data-live>
+                                                <Badge dot text={ locale.t('admin.report.live') } tone="live" />
+                                            </span>
+                                        </p>
+                                        <p class="facts text-ui-xs text-faint">
+                                            <span hidden={ game.live } data-seat="by"><span dir="ltr">{ game.by }</span>: { game.byResult }</span>
+                                            <span hidden={ game.live } data-seat="about"><span dir="ltr">{ game.about }</span>: { game.aboutResult }</span>
+                                            <When at={ game.at } />
+                                        </p>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+                </div>
+
+                <section class="flex flex-col gap-3" aria-labelledby="report-history">
+                    <h2 id="report-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.report.history') }</h2>
+                    <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.report.historyNone') }</p> }>
+                        <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-history>
+                            <For each={ history } key={ (row) => row.id } let={ row }>
+                                <li data-entry={ row.id } data-kind={ row.kind }>
+                                    <LogEntry row={ row } report={ id } />
+                                </li>
+                            </For>
+                        </ol>
+                    </Show>
+
+                    <Show
+                        when={ mayClose }
+                        fallback={
+                            <p class="flex items-start gap-2 rounded-tile border border-line bg-field px-3 py-2.5 text-ui-sm text-muted">
+                                <Icon name="shield" size={ 16 } class="mt-0.5 shrink-0 text-faint" />
+                                <span data-why-not>{ whyNot }</span>
+                            </p>
+                        }
+                    >
+                        <ReportClose status={ marked } onClose={ closeNow } />
+                    </Show>
+                </section>
+            </div>
+        </Show>
+    </div>
+}

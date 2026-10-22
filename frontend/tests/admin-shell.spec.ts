@@ -9,7 +9,8 @@ import { routes } from '../src/routes.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import { server } from './fake-api.ts';
+import { useReports } from '../src/stores/reports.store.ts';
+import { reportFiled, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -72,6 +73,7 @@ beforeEach(() =>
     useLocale().setLocale('en');
     useSession().reset();
     useToasts().dismissAll();
+    useReports().reset();
 });
 
 afterEach(() =>
@@ -86,7 +88,7 @@ describe('the admin', () =>
     it('answers anybody whose role opens no section of it as a page that is not there, at every address', async () =>
     {
         const refused: [StaffRole | undefined, string][] = [
-            ...['/admin', '/admin/people', '/admin/people/mina', '/admin/money', '/admin/staff', '/admin/log'].map((at) => [undefined, at] as [undefined, string]),
+            ...['/admin', '/admin/people', '/admin/people/mina', '/admin/reports', '/admin/reports/report-1', '/admin/money', '/admin/staff', '/admin/log'].map((at) => [undefined, at] as [undefined, string]),
             ...['/admin/money', '/admin/staff', '/admin/log'].map((at) => ['moderator', at] as [StaffRole, string])
         ];
 
@@ -115,13 +117,51 @@ describe('the admin', () =>
         }
     });
 
-    it('lists a moderator the one section a moderator opens', async () =>
+    it('lists a moderator the two sections a moderator opens', async () =>
     {
         signIn('moderator');
         const { container } = await opened('/admin/people');
 
-        expect(hrefs(container.querySelector('header nav')!, 'a')).toEqual(['/admin/people']);
-        expect(hrefs(container.querySelector('#admin-shell > div > nav')!, 'a')).toEqual(['/admin/people']);
+        expect(hrefs(container.querySelector('header nav')!, 'a')).toEqual(['/admin/people', '/admin/reports']);
+        expect(hrefs(container.querySelector('#admin-shell > div > nav')!, 'a')).toEqual(['/admin/people', '/admin/reports']);
+    });
+
+    it('says on Reports how many are waiting, read when the admin opens, at every other section and when the tab is seen again', async () =>
+    {
+        reportFiled({ at: '2026-10-22T08:00:00.000Z', by: 'sara.k', about: 'reza.t' });
+        reportFiled({ at: '2026-10-22T08:30:00.000Z', by: 'mina', about: 'reza.t' });
+        reportFiled({ at: '2026-10-22T07:00:00.000Z', by: 'mina', about: 'sara.k', status: 'reviewed' });
+        signIn('moderator');
+        const { router, container } = await opened('/admin/people');
+        const counts = () => [...container.querySelectorAll('nav a')].map((link) => [link.getAttribute('href'), link.querySelector('[role="status"]')?.textContent ?? null]);
+
+        expect(counts()).toEqual([
+            ['/admin/people', null],
+            ['/admin/reports', '2'],
+            ['/admin/people', null],
+            ['/admin/reports', '2']
+        ]);
+        expect(container.querySelector('nav a[href="/admin/reports"] [role="status"]')?.getAttribute('aria-label')).toBe('2 reports waiting');
+
+        reportFiled({ at: '2026-10-22T08:45:00.000Z', by: 'sara.k', about: 'mina' });
+        await router.navigate('/admin/reports');
+        await arrived(router, container, '#admin-main h1', 'Reports');
+
+        expect(container.querySelector('nav a[href="/admin/reports"] [role="status"]')?.textContent).toBe('3');
+        expect(hrefs(container, '[aria-current="page"]')).toEqual(['/admin/reports', '/admin/reports']);
+
+        reportFiled({ at: '2026-10-22T08:50:00.000Z', by: 'sara.k', about: 'mina' });
+        await router.navigate('/admin/people');
+        await arrived(router, container, '#admin-main h1', 'People');
+
+        expect(container.querySelector('nav a[href="/admin/reports"] [role="status"]')?.textContent).toBe('4');
+
+        reportFiled({ at: '2026-10-22T08:55:00.000Z', by: 'reza.t', about: 'mina' });
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle();
+
+        expect(container.querySelector('nav a[href="/admin/reports"] [role="status"]')?.textContent).toBe('5');
+        expect(server.calls.filter((call) => call === 'admin.reportsWaiting').length).toBeGreaterThanOrEqual(2);
     });
 
     it('lists the sections the role opens, on a phone as a rail and on a wide screen down the side, and marks the one on screen', async () =>
@@ -133,8 +173,8 @@ describe('the admin', () =>
 
         expect(rail.className).toContain('lg:hidden');
         expect(side.className).toContain('lg:block');
-        expect(hrefs(rail, 'a')).toEqual(['/admin/people', '/admin/money', '/admin/staff', '/admin/log']);
-        expect(hrefs(side, 'a')).toEqual(['/admin/people', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(rail, 'a')).toEqual(['/admin/people', '/admin/reports', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(side, 'a')).toEqual(['/admin/people', '/admin/reports', '/admin/money', '/admin/staff', '/admin/log']);
         expect(hrefs(container, '[aria-current="page"]')).toEqual(['/admin/staff', '/admin/staff']);
         expect(rail.getAttribute('aria-label')).toBe('The admin');
 
@@ -172,7 +212,7 @@ describe('the admin', () =>
 
         expect(header.querySelector('h1')?.textContent).toBe('مدیریت');
         expect(header.textContent).toContain('مالک');
-        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['کاربرها', 'پول', 'تیم', 'گزارش کارها']);
+        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['کاربرها', 'گزارش‌ها', 'پول', 'تیم', 'تاریخچه']);
         expect(container.querySelector('#admin-main h1')?.textContent).toBe('پول');
     });
 });

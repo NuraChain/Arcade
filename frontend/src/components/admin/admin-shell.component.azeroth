@@ -1,4 +1,6 @@
-import { Link, Outlet, useHead, useRoute, type MountNode } from 'azerothjs';
+import { Link, Outlet, untrack, useHead, useRoute, type MountNode } from 'azerothjs';
+
+import { may } from '../../../../backend/src/domains/admin/roles.ts';
 
 import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
@@ -10,6 +12,7 @@ import { ROLE_WORDS } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+import { useReports } from '../../stores/reports.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { ACTIVE_ROW } from '../app/nav-items.ts';
@@ -22,6 +25,7 @@ import Rail from '../ui/rail.component.azeroth';
 
 const LOOK: Record<AdminSection, { icon: IconName; label: MessageKey }> = {
     people: { icon: 'people', label: 'admin.section.people' },
+    reports: { icon: 'flag', label: 'admin.section.reports' },
     money: { icon: 'coins', label: 'admin.section.money' },
     staff: { icon: 'shield', label: 'admin.section.staff' },
     log: { icon: 'history', label: 'admin.section.log' }
@@ -33,12 +37,13 @@ export default component AdminShell(props: { children?: MountNode })
     const session = useSession();
     const overlay = useOverlay();
     const route = useRoute();
+    const reports = useReports();
 
     useHead({ titleTemplate: `%s · ${ locale.t('admin.title') }` });
 
     mount
     {
-        const stops = [useToasts().start(), session.start(), watchSignedOut()];
+        const stops = [useToasts().start(), session.start(), watchSignedOut(), reports.start()];
 
         return () =>
         {
@@ -68,6 +73,23 @@ export default component AdminShell(props: { children?: MountNode })
 
     derived sections = sectionsFor(role).map((section) => ({ section, to: `/admin/${ section }`, icon: LOOK[section].icon, label: locale.t(LOOK[section].label) }));
 
+    derived watching = may(role, 'reports');
+
+    derived waiting = reports.waiting();
+
+    derived waitingLabel = locale.plural('admin.reports.waiting', waiting);
+
+    effect
+    {
+        if (here !== '' && watching)
+        {
+            untrack(() =>
+            {
+                void reports.read();
+            });
+        }
+    }
+
     <div class="contents">
         <div id="admin-shell" inert={ overlay.blocking() } class="min-h-dvh bg-void text-text">
             <header class="safe-t sticky top-0 z-20 border-b border-line bg-void/95 backdrop-blur">
@@ -95,6 +117,7 @@ export default component AdminShell(props: { children?: MountNode })
                                 >
                                     <Icon name={ item.icon } size={ 16 } />
                                     <span>{ item.label }</span>
+                                    <Badge count={ item.section === 'reports' ? waiting : 0 } size="sm" tone="gold" label={ waitingLabel } />
                                 </Link>
                             </span>
                         </For>
@@ -114,6 +137,7 @@ export default component AdminShell(props: { children?: MountNode })
                                 >
                                     <Icon name={ item.icon } size={ 20 } />
                                     <span class="min-w-0 flex-1 truncate">{ item.label }</span>
+                                    <Badge count={ item.section === 'reports' ? waiting : 0 } tone="gold" label={ waitingLabel } />
                                 </Link>
                             </li>
                         </For>

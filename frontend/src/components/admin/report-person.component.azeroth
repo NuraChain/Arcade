@@ -1,0 +1,44 @@
+import { Link } from 'azerothjs';
+
+import type { AdminReport } from '../../../../backend/src/schemas.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { ROLE_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+
+export type ReportFace = AdminReport['about'];
+
+export default component ReportPerson(props: { label: string; person: ReportFace; side: 'about' | 'by' })
+{
+    const locale = useLocale();
+
+    derived handle = props.person.handle;
+
+    derived name = props.person.displayName;
+
+    derived label = props.label;
+
+    derived role = props.person.staff ?? null;
+
+    derived ranked = role !== null;
+
+    derived roleWord = role === null ? '' : locale.t(ROLE_WORDS[role]);
+
+    <Link
+        to={ () => `/admin/people/${ encodeURIComponent(handle) }` }
+        class="flex min-h-16 items-center gap-3 rounded-panel border border-line bg-field px-4 py-3 transition-colors duration-150 hover:border-line-strong hover:bg-raised"
+        data-side={ props.side }
+    >
+        <Avatar person={ props.person } size="md" />
+        <span class="flex min-w-0 flex-1 flex-col">
+            <span class="text-ui-xs font-semibold text-faint">{ label }</span>
+            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
+            <span class="truncate text-ui-xs text-muted" dir="ltr">@{ handle }</span>
+        </span>
+        <Show when={ ranked }>
+            <Badge text={ roleWord } tone="accent" />
+        </Show>
+        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+    </Link>
+}

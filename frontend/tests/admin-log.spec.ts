@@ -124,6 +124,7 @@ describe('the log', () =>
         expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'sara.k']);
         expect(facts(container, '[data-entry]:first-child')).toEqual(['1 hour ago', 'Admin']);
         expect(facts(container, '[data-entry]:last-child')).toEqual(['2 days ago', 'Owner']);
+        expect(container.querySelectorAll('[data-entry] [data-open-report]')).toHaveLength(0);
     });
 
     it('says a note as a note, with its words where a change keeps its reason', async () =>
@@ -183,6 +184,8 @@ describe('the log', () =>
         expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'sara.k', 'omid']);
         expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('Nothing rude in the chat.');
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Reports');
+        expect(container.querySelector('[data-entry]:first-child [data-open-report]')?.getAttribute('href')).toBe('/admin/reports/r-2');
+        expect(said(container, '[data-entry]:last-child [data-open-report]')).toBe('Open the report');
     });
 
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
@@ -317,7 +320,7 @@ describe('the log', () =>
         story();
         const { container } = await opened();
 
-        expect(said(container, 'h1')).toBe('گزارش کارها');
+        expect(said(container, 'h1')).toBe('تاریخچه');
         expect(lines(container)).toEqual([
             'mina، sara.k رو از تیم برداشت.',
             'alex، mina رو از ناظر کرد ادمین.',
@@ -354,6 +357,7 @@ describe('the log', () =>
             'mina، گزارش sara.k درباره‌ی reza.t رو بررسی کرد: کاری لازم نبود.'
         ]);
         expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'sara.k', 'reza.t']);
+        expect(said(container, '[data-entry]:last-child [data-open-report]')).toBe('دیدن گزارش');
     });
 
     it('says a suspension, a lift and one that ran its time in Persian, each handle a run of its own', async () =>

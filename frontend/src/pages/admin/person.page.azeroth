@@ -19,14 +19,13 @@ import Field from '../../components/ui/field.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import TextArea from '../../components/ui/text-area.component.azeroth';
-import type { Tone } from '../../components/ui/variants.ts';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { CATEGORY_WORDS, handleParts, ROLE_WORDS, TERM_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import { CATEGORY_WORDS, handleParts, ROLE_WORDS, STATUS_TONES, STATUS_WORDS, TERM_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -40,18 +39,6 @@ interface Older
     rows: AdminPerson['history'];
     cursor: string | undefined;
 }
-
-const STATUS_WORDS: Record<string, MessageKey> = {
-    received: 'admin.person.report.status.received',
-    reviewed: 'admin.person.report.status.reviewed',
-    actioned: 'admin.person.report.status.actioned'
-};
-
-const STATUS_TONES: Record<string, Tone> = {
-    received: 'gold',
-    reviewed: 'neutral',
-    actioned: 'live'
-};
 
 const RESULT_WORDS: Record<AdminPerson['games'][number]['result'], MessageKey> = {
     won: 'history.result.won',
@@ -248,9 +235,9 @@ export default component PersonPage()
             locale.t(one.against ? 'admin.person.report.against' : 'admin.person.report.by', { other: '{other}', category: locale.t(CATEGORY_WORDS[one.category] ?? 'report.category.other') }),
             { other: one.other }
         ),
-        status: locale.t(STATUS_WORDS[one.status] ?? 'admin.person.report.status.received'),
+        status: locale.t(STATUS_WORDS[one.status]),
         state: one.status,
-        tone: STATUS_TONES[one.status] ?? 'gold',
+        tone: STATUS_TONES[one.status],
         at: one.at
     }));
 
@@ -552,12 +539,18 @@ export default component PersonPage()
                         <Show when={ reported } fallback={ <p class="text-ui-sm text-muted" data-reports="none">{ locale.t('admin.person.reports.none') }</p> }>
                             <ul class="divide-y divide-line" data-reports>
                                 <For each={ reports } key={ (one) => one.id } let={ report }>
-                                    <li class="flex flex-col gap-1.5 py-2" data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
-                                        <p class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></p>
-                                        <p class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
-                                            <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
-                                            <When at={ report.at } />
-                                        </p>
+                                    <li data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
+                                        <Link
+                                            to={ `/admin/reports/${ encodeURIComponent(report.id) }` }
+                                            class="-mx-2 flex flex-col gap-1.5 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised"
+                                            data-open
+                                        >
+                                            <span class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></span>
+                                            <span class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
+                                                <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
+                                                <When at={ report.at } />
+                                            </span>
+                                        </Link>
                                     </li>
                                 </For>
                             </ul>

@@ -554,12 +554,12 @@ describe('guards', () =>
         expect(await requireAbility('money')()).toBe(false);
 
         useSession().establish(DARYA);
-        expect(await requireAbility('money')()).toBe(false);
+        expect([await requireAbility('money')(), await requireAbility('reports')()]).toEqual([false, false]);
 
         const staff = { id: 'u-staff', handle: 'staff.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' };
 
         useSession().establish({ ...staff, staff: 'moderator' });
-        expect(await requireAbility('money')()).toBe(false);
+        expect([await requireAbility('money')(), await requireAbility('people')(), await requireAbility('reports')()]).toEqual([false, true, true]);
 
         useSession().establish({ ...staff, staff: 'admin' });
         expect([await requireAbility('money')(), await requireAbility('staff')(), await requireAbility('wallet')()]).toEqual([true, true, false]);

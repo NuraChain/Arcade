@@ -147,6 +147,7 @@ describe('a person, as the staff read them', () =>
         expect(all(container, '[data-report] [data-said] [dir="ltr"]')).toEqual(['mina', 'reza.t']);
         expect([...container.querySelectorAll('[data-report] [data-status]')].map((one) => [one.getAttribute('data-status'), one.textContent?.trim()])).toEqual([['received', 'Waiting'], ['reviewed', 'Reviewed']]);
         expect([...container.querySelectorAll<HTMLTimeElement>('[data-report] [data-when]')].map((one) => one.dateTime)).toEqual([hoursAgo(5), hoursAgo(6)]);
+        expect([...container.querySelectorAll('[data-report] a')].map((one) => one.getAttribute('href'))).toEqual(['/admin/reports/r1', '/admin/reports/r2']);
         expect(said(container, '[data-game="g1"]')).toContain('Won');
         expect(said(container, '[data-game="g1"] [dir="ltr"]')).toBe('mina');
         expect(said(container, '[data-paid-game="e1"]')).toContain('Lost');

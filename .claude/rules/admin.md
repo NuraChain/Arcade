@@ -199,8 +199,12 @@ opens, as a rail under the header on a phone and down the side from 64rem, each 
 role opens some section) and decides the shield in the profile's corner; each section keeps its own
 `requireAbility`. `/admin` itself goes to the first section the role opens (`firstSection`), and
 anybody whose role opens none is shown the page that is not there at every address under it, as
-the server answers them. The shell starts the toasts, the session and the signed-out watch and holds
-the overlays and the toasts; it opens no socket.
+the server answers them. The shell starts the toasts, the session, the signed-out watch and the
+count of waiting reports, and holds the overlays and the toasts; it opens no socket. With no socket
+the count is read rather than rung (`stores/reports.store.ts`): when the admin opens, whenever the
+reader moves to another section, when the tab is seen again, and from every page of the queue, which
+carries it. Reports wears it as a badge in the rail and down the side ("3 reports waiting" to a
+screen reader).
 
 **The admin's words are a catalogue of their own** (`locales/{en,fa}/admin.ts`, registered by
 `locales/admin-catalogue.ts`, which only the admin shell imports), so the app's catalogue carries
@@ -257,6 +261,25 @@ while they are signed in somewhere, and tells the staff that a guest cannot come
 the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
 what it said ("It said: …", in its own direction).
 
+**Reports** is the queue, waiting first: a filter in the address (`status`: Waiting, the default and
+never written, Reviewed, Acted on, All), the waiting count on its chip, and a row for each report as
+who reported whom (both handles set apart, `handleParts`), what for, when, whether a message came
+with it, its status as a badge, and the accused's role when they are on the staff; older ones under
+"Show older". A row leads to `/admin/reports/:id`, which keeps Reports lit and draws the report from
+one read: what it is for as the title, who reported whom, the status and when it was filed, both
+people as cards leading to their pages (the accused first: acting on their account is done there),
+the message as the reporter showed it (the document decoded by `decodeText`, plain text in its own
+direction, marked when it was forwarded; a document that does not decode says it could not be read),
+their last games together with both seats' results or a live mark, and what the staff did about it,
+by `LogEntry`. The close form (a reason, then "Reviewed, nothing to do" or "Acted on it", the one
+the report already has not drawn) is drawn only for a report about somebody the reader outranks; a
+report about the reader, about somebody at or above them, or about the owner says why in its place.
+A close is shown at the press (the status, the row, and one off the waiting count when it was
+waiting), said once the server has, taken back with the refusal's words, and the count is read
+again either way. A row of the log about a report offers "Open the report", except on that report's
+own page, and a report on a person's page leads to it. In Persian the log is «تاریخچه», so that it
+is never read as «گزارش‌ها» beside it.
+
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
 `Tooltip` says the date and the minute in the reader's own calendar, with the moment in `datetime`.
@@ -270,8 +293,8 @@ an admin whose wallet happens to hold a role on the vault is told that only the 
 from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
-`admin-person.spec.ts` and `admin-vault.spec.ts` hold the page; `app-stores.spec.ts` the guards and
-`profile-page.spec.ts` the shield.
+`admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts` and `admin-vault.spec.ts`
+hold the page; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 

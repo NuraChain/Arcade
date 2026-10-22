@@ -616,7 +616,7 @@ export const adminPerson = object({
         against: boolean(),
         other: string(),
         category: string(),
-        status: string(),
+        status: enumOf(REPORT_STATUSES),
         at: string()
     })),
     paid: object({ acceptedAt: string().optional(), breakUntil: string().optional() }),
