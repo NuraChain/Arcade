@@ -25,6 +25,7 @@ import { TableRemoval } from './table-removal.entity.ts';
 import { TableSeat } from './table-seat.entity.ts';
 import { Table } from './table.entity.ts';
 import { Mute } from './mute.entity.ts';
+import { Notice } from './notice.entity.ts';
 import { Notification } from './notification.entity.ts';
 import { PaidAccount } from './paid-account.entity.ts';
 import { PushSubscription } from './push-subscription.entity.ts';
@@ -46,7 +47,7 @@ export {
     Achievement, Avatar, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey, Escrow, EscrowSeat,
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
-    Notification, PaidAccount, PlayerStats, PushSubscription,
+    Notice, Notification, PaidAccount, PlayerStats, PushSubscription,
     QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, StaffAction, StaffMember, StakeConsent, Suspension, Table, TableRemoval, TableSeat, TableStake, User,
     UserAchievement, Wallet
 };
@@ -72,5 +73,5 @@ export const entities: Function[] = [
     Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
     Notification, PushSubscription,
     PaidAccount, TableStake, StakeConsent, Escrow, EscrowSeat,
-    StaffMember, StaffAction, Suspension
+    StaffMember, StaffAction, Suspension, Notice
 ];
