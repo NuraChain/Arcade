@@ -16,6 +16,7 @@ import {
     pad,
     parseAbi,
     recoverTypedDataAddress,
+    stringToHex,
     type Address,
     type Hex
 } from 'viem';
@@ -39,6 +40,16 @@ export const VAULT_ABI = parseAbi([
     'function reclaimAfter() view returns (uint256)',
     'function paused() view returns (bool)',
     'function gameOf(bytes32 id) view returns (uint8 status, uint16 feeBps, uint64 openedAt, uint256 amount, address[] players)',
+    'function fees() view returns (uint256)',
+    'function totalBalances() view returns (uint256)',
+    'function totalLocked() view returns (uint256)',
+    'function solvent() view returns (bool)',
+    'function hasRole(bytes32 role, address account) view returns (bool)',
+    'function setFee(uint16 newFee)',
+    'function setMaxStake(uint256 newMaxStake)',
+    'function withdrawFees(address to, uint256 amount)',
+    'function pause()',
+    'function unpause()',
     'error StakeExpired(address player, uint64 deadline)',
     'error StakeTooLong(address player, uint64 deadline)',
     'error NonceUsed(address player, bytes32 nonce)',
@@ -56,6 +67,9 @@ export const VAULT_ABI = parseAbi([
     'error BadSecrets()',
     'error TooEarly(bytes32 id, uint256 due)',
     'error EnforcedPause()',
+    'error ExpectedPause()',
+    'error FeeTooHigh(uint16 feeBps)',
+    'error InsufficientFees(uint256 available, uint256 required)',
     'error AccessControlUnauthorizedAccount(address account, bytes32 neededRole)'
 ]);
 
@@ -87,6 +101,12 @@ export type GameStatus = typeof GAME_STATUS[number];
 export const NURA_CHAIN = 1020;
 
 export const NURA_GAS_FLOOR = 47_000_000_000n;
+
+export const VAULT_ROLES = {
+    admin: `0x${ '00'.repeat(32) }` as Hex,
+    pauser: keccak256(stringToHex('PAUSER_ROLE')),
+    referee: keccak256(stringToHex('REFEREE_ROLE'))
+};
 
 const TERMS_MS = 15_000;
 
@@ -146,6 +166,23 @@ export interface VaultCall
     gasPrice: bigint | null;
 }
 
+export interface VaultLedger
+{
+    terms: VaultTerms;
+    fees: bigint;
+    free: bigint;
+    locked: bigint;
+    held: bigint;
+    solvent: boolean;
+    gas: bigint;
+    gasPrice: bigint;
+    refereeAllowed: boolean;
+    adminAllowed: boolean;
+    pauserAllowed: boolean;
+}
+
+export type Asked = { ok: true; call: VaultCall } | { ok: false; refusal: Refusal };
+
 export interface VaultSettings
 {
     rpcUrl: string;
@@ -173,6 +210,11 @@ export interface Vault
     refund(id: Hex): Promise<Sent>;
     mined(hash: Hex): Promise<Mined>;
     gas(): Promise<bigint>;
+    ledger(admin: Address): Promise<VaultLedger>;
+    feeCall(admin: Address, feeBps: number): Promise<Asked>;
+    ceilingCall(admin: Address, amount: bigint): Promise<Asked>;
+    feesCall(admin: Address, amount: bigint): Promise<Asked>;
+    pauseCall(admin: Address, paused: boolean): Promise<Asked>;
 }
 
 export function freshBytes(): Hex
@@ -372,6 +414,29 @@ export function createVault(settings: VaultSettings): Vault
         }
     };
 
+    const asked = async (from: Address, data: Hex): Promise<Asked> =>
+    {
+        const { vault: to } = ready();
+
+        try
+        {
+            await reader().call({ account: from, to, data });
+        }
+        catch (error)
+        {
+            const refusal = refusalOf(error);
+
+            if (refusal !== null)
+            {
+                return { ok: false, refusal };
+            }
+
+            return await reached(Promise.reject(error));
+        }
+
+        return { ok: true, call: await callTo(data, 0n) };
+    };
+
     return {
         configured,
         address: vault,
@@ -503,6 +568,54 @@ export function createVault(settings: VaultSettings): Vault
         async gas()
         {
             return await reached(reader().getBalance({ address: ready().account.address }));
-        }
+        },
+
+        async ledger(admin)
+        {
+            const { vault: at, account } = ready();
+            const client = reader();
+            const role = (id: Hex, holder: Address) => client.readContract({ address: at, abi: VAULT_ABI, functionName: 'hasRole', args: [id, holder] });
+            const [fee, maxStake, reclaimAfter, paused, fees, free, locked, solvent, holds, gas, price, refereeAllowed, adminAllowed, pauserAllowed] = await reached(Promise.all([
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'fee' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'maxStake' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'reclaimAfter' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'paused' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'fees' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'totalBalances' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'totalLocked' }),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'solvent' }),
+                client.getBalance({ address: at }),
+                client.getBalance({ address: account.address }),
+                client.getGasPrice(),
+                role(VAULT_ROLES.referee, account.address),
+                role(VAULT_ROLES.admin, admin),
+                role(VAULT_ROLES.pauser, admin)
+            ]));
+            const terms = { fee, maxStake, reclaimAfter, paused };
+
+            held = { terms, at: Date.now() };
+
+            return {
+                terms,
+                fees,
+                free,
+                locked,
+                held: holds,
+                solvent,
+                gas,
+                gasPrice: price > floor ? price : floor,
+                refereeAllowed,
+                adminAllowed,
+                pauserAllowed
+            };
+        },
+
+        feeCall: (admin, feeBps) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setFee', args: [feeBps] })),
+
+        ceilingCall: (admin, amount) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setMaxStake', args: [amount] })),
+
+        feesCall: (admin, amount) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'withdrawFees', args: [admin, amount] })),
+
+        pauseCall: (admin, paused) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: paused ? 'pause' : 'unpause' }))
     };
 }

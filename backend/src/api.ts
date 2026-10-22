@@ -24,6 +24,9 @@ import {
     vaultState,
     vaultTermsInput,
     walletCall,
+    adminVault,
+    adminFeeInput,
+    adminPauseInput,
     chatMessage,
     archiveInput,
     archiveList,
@@ -152,6 +155,16 @@ function rankAfter(raw: string | undefined): number | undefined
 export function buildApi(ports: Ports)
 {
     const session = requireSession((request) => ports.identity.principal(request));
+
+    const onlyAdmin = <T>(answer: T | null) =>
+    {
+        if (answer === null)
+        {
+            throw new NotFoundError('Nothing there.');
+        }
+
+        return answer;
+    };
 
     return {
         meta: feature('/meta', (routes) => ({
@@ -346,6 +359,22 @@ export function buildApi(ports: Ports)
                     Math.max(0, Number.parseInt(context.query.offset ?? '0', 10) || 0),
                     Math.min(48, Math.max(0, Number.parseInt(context.query.limit ?? '24', 10) || 0))
                 ))
+        })),
+
+        admin: feature('/admin', [session], (routes) => ({
+            vault: routes.get('/vault', { output: adminVault }, async (context) => onlyAdmin(await ports.admin.vault(context.principal.userId))),
+
+            fee: routes.post('/vault/fee', { input: adminFeeInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.fee(context.principal.userId, context.input.bps))),
+
+            ceiling: routes.post('/vault/ceiling', { input: vaultAmountInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.ceiling(context.principal.userId, context.input.amount))),
+
+            fees: routes.post('/vault/fees', { input: vaultAmountInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.fees(context.principal.userId, context.input.amount))),
+
+            pause: routes.post('/vault/pause', { input: adminPauseInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.pause(context.principal.userId, context.input.paused)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

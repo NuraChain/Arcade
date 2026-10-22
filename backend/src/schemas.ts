@@ -439,6 +439,56 @@ export const walletCall = object({
 
 export type WalletCall = Infer<typeof walletCall>;
 
+const adminEscrow = object({
+    id: string(),
+    game: string(),
+    state: enumOf(ESCROW_STATES),
+    amount: string(),
+    seats: number(),
+    since: string(),
+    table: string(),
+    match: string().optional(),
+    error: string().optional(),
+    openTx: string().optional(),
+    closeTx: string().optional()
+});
+
+export const adminVault = union([
+    object({ configured: literal(false) }),
+    object({
+        configured: literal(true),
+        vault: string(),
+        chainId: number(),
+        fee: number(),
+        maxFee: number(),
+        maxStake: string(),
+        reclaimAfter: number(),
+        paused: boolean(),
+        held: string(),
+        free: string(),
+        locked: string(),
+        fees: string(),
+        solvent: boolean(),
+        referee: object({
+            address: string(),
+            gas: string(),
+            games: string().optional(),
+            low: boolean(),
+            allowed: boolean()
+        }),
+        roles: object({ admin: boolean(), pauser: boolean() }),
+        playing: number(),
+        states: array(object({ state: enumOf(ESCROW_STATES), count: number() })),
+        stuck: array(adminEscrow)
+    })
+]);
+
+export type AdminVault = Infer<typeof adminVault>;
+
+export const adminFeeInput = object({ bps: number({ int: true, min: 0, max: 10_000 }) });
+
+export const adminPauseInput = object({ paused: boolean() });
+
 export const vaultAmountInput = object({ amount: string({ max: 40 }) });
 
 export const vaultGame = object({

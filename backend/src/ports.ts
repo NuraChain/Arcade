@@ -1,6 +1,7 @@
 import type { Principal } from './http/auth.ts';
 import type {
     AchievementLadder,
+    AdminVault,
     VoiceIce,
     Leaderboard,
     MatchWatch,
@@ -555,6 +556,19 @@ export interface VaultPort
     reclaim(me: string, escrowId: string): Promise<WalletCall>;
 }
 
+export interface AdminPort
+{
+    vault(me: string): Promise<AdminVault | null>;
+
+    fee(me: string, feeBps: number): Promise<WalletCall | null>;
+
+    ceiling(me: string, amount: string): Promise<WalletCall | null>;
+
+    fees(me: string, amount: string): Promise<WalletCall | null>;
+
+    pause(me: string, paused: boolean): Promise<WalletCall | null>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface VoicePort
 {
@@ -576,5 +590,6 @@ export interface Ports
     chat: ChatPort;
     chain: ChainPort;
     vault: VaultPort;
+    admin: AdminPort;
     voice: VoicePort;
 }

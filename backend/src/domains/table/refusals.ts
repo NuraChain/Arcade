@@ -21,7 +21,13 @@ export const TABLE_REFUSALS = {
     'paid-funds': 409,
     'paid-locking': 409,
     'paid-early': 409,
-    'paid-done': 409
+    'paid-done': 409,
+    'vault-role': 409,
+    'vault-fee': 422,
+    'vault-fees': 409,
+    'vault-paused': 409,
+    'vault-running': 409,
+    'vault-refused': 409
 } as const satisfies Record<string, 404 | 409 | 422>;
 
 export type TableRefusal = keyof typeof TABLE_REFUSALS;

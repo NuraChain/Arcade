@@ -1,6 +1,6 @@
 import { keccak256, stringToHex, type Address, type Hex } from 'viem';
 
-import { GAME_STATUS, stakeTypedData, type Mined, type Refusal, type Stake, type Vault, type VaultTerms } from '../src/chain/vault.ts';
+import { GAME_STATUS, stakeTypedData, type Asked, type Mined, type Refusal, type Stake, type Vault, type VaultTerms } from '../src/chain/vault.ts';
 
 export const FAKE_VAULT: Address = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
@@ -27,8 +27,22 @@ export function fakeVault(configured = true)
     const opened: OpenCall[] = [];
     const settled: { id: Hex; winners: bigint; secrets: Hex[] }[] = [];
     const refunded: Hex[] = [];
+    const adminCalls: { name: string; admin: Address; args: unknown[] }[] = [];
     const state = {
         terms: { fee: 500, maxStake: 1_000n * 10n ** 18n, reclaimAfter: 259_200n, paused: false } as VaultTerms,
+        ledger: {
+            fees: 0n,
+            free: 0n,
+            locked: 0n,
+            held: 0n,
+            solvent: true,
+            gas: 10n ** 18n,
+            gasPrice: 1_000_000_000n,
+            refereeAllowed: true,
+            adminAllowed: true,
+            pauserAllowed: true
+        },
+        adminRefuse: null as Refusal | null,
         mine: 'success' as Mined,
         refuse: null as Refusal | null,
         away: false,
@@ -60,6 +74,16 @@ export function fakeVault(configured = true)
         }
 
         return { ok: true as const, hash };
+    };
+
+    const asked = (name: string, admin: Address, args: unknown[]): Asked =>
+    {
+        reach();
+        adminCalls.push({ name, admin, args });
+
+        return state.adminRefuse === null
+            ? { ok: true, call: { to: FAKE_VAULT, data: `0x${ name }` as Hex, value: 0n, chainId: 31337, gasPrice: null } }
+            : { ok: false, refusal: state.adminRefuse };
     };
 
     const vault: Vault = {
@@ -114,7 +138,16 @@ export function fakeVault(configured = true)
             reach();
             return receipts.get(hash) ?? 'pending';
         },
-        gas: async () => 0n
+        gas: async () => 0n,
+        async ledger()
+        {
+            reach();
+            return { terms: state.terms, ...state.ledger };
+        },
+        feeCall: async (admin, feeBps) => asked('setFee', admin, [feeBps]),
+        ceilingCall: async (admin, amount) => asked('setMaxStake', admin, [amount]),
+        feesCall: async (admin, amount) => asked('withdrawFees', admin, [admin, amount]),
+        pauseCall: async (admin, paused) => asked(paused ? 'pause' : 'unpause', admin, [])
     };
 
     return {
@@ -127,6 +160,7 @@ export function fakeVault(configured = true)
         opened,
         settled,
         refunded,
+        adminCalls,
         fund: (address: string, nura: bigint) => free.set(address.toLowerCase(), nura * 10n ** 18n)
     };
 }

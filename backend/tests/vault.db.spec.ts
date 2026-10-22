@@ -75,7 +75,12 @@ const fakeVault = (overrides: Partial<VaultTerms> = {}, configured = true) =>
         settle: async () => ({ ok: true, hash: `0x${ '00'.repeat(32) }` as Hex }),
         refund: async () => ({ ok: true, hash: `0x${ '00'.repeat(32) }` as Hex }),
         mined: async () => 'pending',
-        gas: async () => 0n
+        gas: async () => 0n,
+        ledger: async () => ({ terms, fees: 0n, free: 0n, locked: 0n, held: 0n, solvent: true, gas: 0n, gasPrice: 0n, refereeAllowed: true, adminAllowed: false, pauserAllowed: false }),
+        feeCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
+        ceilingCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
+        feesCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
+        pauseCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } })
     };
 
     return {

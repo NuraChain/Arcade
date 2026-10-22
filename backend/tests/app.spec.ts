@@ -928,6 +928,70 @@ describe('the vault', () =>
     });
 });
 
+describe('the owner\'s view of the vault', () =>
+{
+    const owned = (told: unknown[][], answer: unknown) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause'].map((verb) => [verb, (...said: unknown[]) =>
+            {
+                told.push([verb, ...said]);
+
+                return Promise.resolve(answer);
+            }]))
+        } as unknown as Ports
+    });
+
+    const sent = (app: ReturnType<typeof buildApp>, path: string, body?: unknown) => app.handle(new Request(`http://local/api/admin${ path }`, body === undefined
+        ? {}
+        : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+
+    it('answers anybody who is not the owner as a page that is not there, on every route', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const answers = [
+            await sent(app, '/vault'),
+            await sent(app, '/vault/fee', { bps: 400 }),
+            await sent(app, '/vault/ceiling', { amount: '9' }),
+            await sent(app, '/vault/fees', { amount: '2' }),
+            await sent(app, '/vault/pause', { paused: true })
+        ];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['vault', 'somebody'], ['fee', 'somebody', 400], ['ceiling', 'somebody', '9'], ['fees', 'somebody', '2'], ['pause', 'somebody', true]]);
+    });
+
+    it('hands the owner\'s wallet the call the port composed, and nothing the wire does not declare', async () =>
+    {
+        const call = { from: `0x${ 'ab'.repeat(20) }`, to: `0x${ '12'.repeat(20) }`, data: '0x1234', value: '0x0', chainId: 31337 };
+        const response = await sent(owned([], { ...call, secret: 'x' }), '/vault/fee', { bps: 400 });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(call);
+    });
+
+    it('refuses a fee the wire cannot hold before any port is asked', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await sent(owned(told, null), '/vault/fee', { bps: 10_001 });
+
+        expect(response.status).toBe(422);
+        expect(told).toEqual([]);
+    });
+});
+
 describe('checking a game played for NURA', () =>
 {
     const proof = {

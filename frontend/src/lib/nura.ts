@@ -23,6 +23,13 @@ export function parseNura(text: string)
     return wei > 0n ? wei : null;
 }
 
+export function bpsOf(text: string)
+{
+    const found = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(latin(text.trim()));
+
+    return found === null ? null : Number(found[1]) * 100 + Number((found[2] ?? '').padEnd(2, '0'));
+}
+
 export function nuraOf(wei: string | bigint)
 {
     const value = typeof wei === 'bigint' ? wei : BigInt(wei);

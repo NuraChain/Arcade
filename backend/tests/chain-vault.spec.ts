@@ -23,7 +23,9 @@ import {
     stakeTypedData,
     STAKE_FIELDS,
     VAULT_ABI,
+    VAULT_ROLES,
     vaultIdOf,
+    type Asked,
     type Stake
 } from '../src/chain/vault.ts';
 import { callOf, closeChains, fakeChain, silentChain, type Answer, type Rpc } from './fake-chain.ts';
@@ -265,6 +267,108 @@ describe('the referee', () =>
         await expect(vault.mined(HASH)).resolves.toBe('success');
         answer = receipt('0x0');
         await expect(vault.mined(HASH)).resolves.toBe('reverted');
+    });
+});
+
+describe('the owner\'s view of the vault', () =>
+{
+    const OWNER: Address = '0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f';
+
+    const answering = (asked: string[]) => (rpc: Rpc): Answer =>
+    {
+        if (rpc.method === 'eth_gasPrice')
+        {
+            return { result: '0x3b9aca00' };
+        }
+
+        if (rpc.method === 'eth_getBalance')
+        {
+            return { result: String(rpc.params[0]).toLowerCase() === VAULT.toLowerCase() ? '0x64' : '0x32' };
+        }
+
+        const called = decodeFunctionData({ abi: VAULT_ABI, data: callOf(rpc).data });
+        asked.push(called.functionName);
+
+        switch (called.functionName)
+        {
+            case 'fee': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'fee', result: 400 }) };
+            case 'maxStake': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'maxStake', result: 9n }) };
+            case 'reclaimAfter': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'reclaimAfter', result: 259_200n }) };
+            case 'paused': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'paused', result: true }) };
+            case 'fees': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'fees', result: 7n }) };
+            case 'totalBalances': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'totalBalances', result: 20n }) };
+            case 'totalLocked': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'totalLocked', result: 30n }) };
+            case 'solvent': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'solvent', result: true }) };
+            case 'hasRole':
+            {
+                const [role, holder] = called.args;
+                const owner = holder.toLowerCase() === OWNER.toLowerCase();
+
+                return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'hasRole', result: owner ? role === VAULT_ROLES.admin : role === VAULT_ROLES.referee }) };
+            }
+            default: return { error: { code: -32601, message: `no ${ called.functionName }` } };
+        }
+    };
+
+    it('names the roles as the vault does', () =>
+    {
+        expect(VAULT_ROLES).toEqual({
+            admin: `0x${ '00'.repeat(32) }`,
+            pauser: '0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a',
+            referee: '0xaef88082b8671e875d97d0d6c81d06fb9e76f97b3ad7523a55a378e5298aeeee'
+        });
+    });
+
+    it('reads what the vault holds, the referee\'s gas and the roles the owner holds, and keeps the terms it read', async () =>
+    {
+        const asked: string[] = [];
+        const { url } = await fakeChain(answering(asked));
+        const vault = vaultOn(url);
+
+        await expect(vault.ledger(OWNER)).resolves.toEqual({
+            terms: { fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true },
+            fees: 7n,
+            free: 20n,
+            locked: 30n,
+            held: 100n,
+            solvent: true,
+            gas: 50n,
+            gasPrice: 1_000_000_000n,
+            refereeAllowed: true,
+            adminAllowed: true,
+            pauserAllowed: false
+        });
+
+        const before = asked.length;
+
+        await expect(vault.terms()).resolves.toEqual({ fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true });
+        expect(asked.length, 'the terms it had just read were asked for again').toBe(before);
+        await expect(vaultOn(url, '1020').ledger(OWNER)).resolves.toMatchObject({ gasPrice: NURA_GAS_FLOOR });
+    });
+
+    it('asks the vault as the owner before it hands the owner\'s wallet a call, and names what the vault would refuse', async () =>
+    {
+        const seen: { from?: string; data: Hex }[] = [];
+        const { url } = await fakeChain((rpc): Answer =>
+        {
+            const call = rpc.params[0] as { from?: string; data: Hex };
+            seen.push(call);
+
+            return decodeFunctionData({ abi: VAULT_ABI, data: call.data }).functionName === 'withdrawFees'
+                ? { error: { code: 3, message: 'execution reverted', data: encodeErrorResult({ abi: VAULT_ABI, errorName: 'InsufficientFees', args: [1n, 2n] }) } }
+                : { result: '0x' };
+        });
+        const vault = vaultOn(url);
+        const decoded = (asked: Asked) => (asked.ok ? decodeFunctionData({ abi: VAULT_ABI, data: asked.call.data }) : asked.refusal);
+
+        expect(decoded(await vault.feeCall(OWNER, 400))).toEqual({ functionName: 'setFee', args: [400] });
+        expect(decoded(await vault.ceilingCall(OWNER, 9n))).toEqual({ functionName: 'setMaxStake', args: [9n] });
+        expect(decoded(await vault.pauseCall(OWNER, true))).toEqual({ functionName: 'pause' });
+        expect(decoded(await vault.pauseCall(OWNER, false))).toEqual({ functionName: 'unpause' });
+        expect(await vault.feesCall(OWNER, 2n)).toEqual({ ok: false, refusal: { error: 'InsufficientFees', player: null } });
+        expect(decodeFunctionData({ abi: VAULT_ABI, data: seen[4].data })).toEqual({ functionName: 'withdrawFees', args: [OWNER, 2n] });
+        expect(seen.map((call) => call.from?.toLowerCase())).toEqual(Array(5).fill(OWNER.toLowerCase()));
+        await expect(vault.feeCall(OWNER, 400)).resolves.toMatchObject({ ok: true, call: { to: VAULT, value: 0n, chainId: 31337, gasPrice: null } });
     });
 });
 

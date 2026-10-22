@@ -15,7 +15,7 @@ import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
 import { OPENING, drawOf, drawsOf, seedOf } from '../src/domains/match/fair.ts';
 import type { Variant } from '../src/domains/match/sides.ts';
-import { WEI_PER_NURA } from '../src/domains/stake/policy.ts';
+import { WEI_PER_NURA, type EscrowState } from '../src/domains/stake/policy.ts';
 import { hmacSha256, keccak } from '../src/lib/crypto.ts';
 import type { MatchPlay } from '../src/schemas.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
@@ -1091,6 +1091,170 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             await ports.table.quick(second.id, { game: 'backgammon', voice: 'off' });
 
             expect(await db.getRepository(TableSeat).existsBy({ tableId: locking.id, userId: second.id })).toBe(true);
+        });
+    });
+
+    describe('the owner\'s view of the vault', () =>
+    {
+        const OWNER = 5;
+
+        const owned = () =>
+        {
+            ports = buildPorts(db, { ...CONFIG, adminWallet: WALLETS[OWNER] }, listener, undefined, undefined, fake.vault);
+        };
+
+        const backdated = async (id: string, minutes: number) =>
+        {
+            await db.getRepository(Escrow).createQueryBuilder()
+                .update()
+                .set({ updatedAt: () => 'now() - make_interval(mins => :minutes)' })
+                .setParameter('minutes', minutes)
+                .where('id = :id', { id })
+                .execute();
+        };
+
+        const escrowAt = async (tableId: string, state: EscrowState, minutes: number, error: string | null = null) =>
+        {
+            const saved = await db.getRepository(Escrow).save({
+                tableId,
+                game: 'ludo',
+                amount: TEN,
+                feeBps: 500,
+                state,
+                winners: state === 'settling' || state === 'settled' ? 1 : null,
+                error
+            });
+
+            await backdated(saved.id, minutes);
+
+            return saved.id;
+        };
+
+        it('answers the owner\'s wallet and nobody else, a guest included', async () =>
+        {
+            owned();
+            const owner = await makeUser(OWNER);
+            const player = await makeUser(0);
+            const guest = await makeUser(null);
+
+            expect(await ports.admin.vault(player.id)).toBeNull();
+            expect(await ports.admin.vault(guest.id)).toBeNull();
+            expect(await ports.admin.fee(player.id, 400)).toBeNull();
+            expect(await ports.admin.fees(player.id, TEN)).toBeNull();
+            expect(await ports.admin.pause(guest.id, true)).toBeNull();
+            expect(fake.adminCalls, 'a call was composed for somebody who is not the owner').toEqual([]);
+            expect(await ports.admin.vault(owner.id)).toMatchObject({ configured: true, vault: fake.vault.address, chainId: 31337 });
+        });
+
+        it('counts the games in each state and lists those stuck on their way, the oldest first', async () =>
+        {
+            owned();
+            const owner = await makeUser(OWNER);
+            const { matchId, escrowId, tableId } = await playing();
+
+            await db.getRepository(Escrow).update({ id: escrowId }, { state: 'settling', winners: 1 });
+            await backdated(escrowId, 20);
+
+            const tables = await Promise.all([0, 1, 2, 3].map(() => ports.table.create(owner.id, live(TEN))));
+            const made = [
+                await escrowAt(tables[0].id, 'refunding', 0, 'missing'),
+                await escrowAt(tables[1].id, 'locking', 1),
+                await escrowAt(tables[2].id, 'open', 30),
+                await escrowAt(tables[3].id, 'settled', 30)
+            ];
+
+            fake.state.ledger = { ...fake.state.ledger, fees: 7n, free: 20n, locked: 30n, held: 57n, gas: 10n ** 18n, gasPrice: 47_000_000_000n };
+
+            const standing = await ports.admin.vault(owner.id);
+
+            expect(standing).toMatchObject({
+                configured: true,
+                fee: 500,
+                maxFee: 1000,
+                maxStake: (1_000n * WEI_PER_NURA).toString(),
+                paused: false,
+                held: '57',
+                free: '20',
+                locked: '30',
+                fees: '7',
+                solvent: true,
+                referee: { address: fake.vault.referee, gas: WEI_PER_NURA.toString(), games: '19', low: true, allowed: true },
+                roles: { admin: true, pauser: true },
+                playing: 1
+            });
+            expect(standing?.configured === true && standing.states.filter((one) => one.count > 0)).toEqual([
+                { state: 'locking', count: 1 },
+                { state: 'open', count: 1 },
+                { state: 'settling', count: 1 },
+                { state: 'settled', count: 1 },
+                { state: 'refunding', count: 1 }
+            ]);
+            expect(standing?.configured === true && standing.stuck.map((row) => [row.id, row.state, row.seats, row.error ?? null, row.match ?? null, row.table])).toEqual([
+                [escrowId, 'settling', 2, null, matchId, tableId],
+                [made[0], 'refunding', 0, 'missing', null, tables[0].id]
+            ]);
+            expect(standing?.configured === true && standing.stuck[0].openTx).toMatch(/^0x[0-9a-f]{64}$/);
+
+            fake.state.ledger = { ...fake.state.ledger, gas: 2n * WEI_PER_NURA };
+            expect(await ports.admin.vault(owner.id)).toMatchObject({ referee: { games: '38', low: false } });
+
+            fake.state.ledger = { ...fake.state.ledger, gasPrice: 0n };
+            const unpriced = await ports.admin.vault(owner.id);
+            expect(unpriced?.configured === true && unpriced.referee).toEqual({ address: fake.vault.referee, gas: (2n * WEI_PER_NURA).toString(), low: false, allowed: true });
+
+            await db.getRepository(Escrow).delete(made);
+        });
+
+        it('composes the owner\'s calls from the owner\'s own wallet, and says what the vault would refuse in its words', async () =>
+        {
+            owned();
+            const owner = await makeUser(OWNER);
+            const address = getAddress(WALLETS[OWNER]);
+
+            expect(await ports.admin.fee(owner.id, 400)).toMatchObject({ from: address, to: fake.vault.address, value: '0x0', chainId: 31337 });
+            expect(await ports.admin.ceiling(owner.id, TEN)).toMatchObject({ from: address });
+            expect(await ports.admin.fees(owner.id, TEN)).toMatchObject({ from: address });
+            expect(await ports.admin.pause(owner.id, true)).toMatchObject({ from: address });
+            expect(fake.adminCalls).toEqual([
+                { name: 'setFee', admin: address, args: [400] },
+                { name: 'setMaxStake', admin: address, args: [BigInt(TEN)] },
+                { name: 'withdrawFees', admin: address, args: [address, BigInt(TEN)] },
+                { name: 'pause', admin: address, args: [] }
+            ]);
+
+            expect(await word(ports.admin.fee(owner.id, 1001)), 'a fee past the vault\'s own ceiling').toBe('422 vault-fee');
+            expect(await word(ports.admin.ceiling(owner.id, 'ten')), 'an amount that is no amount').toBe('422 paid-amount');
+            expect(await word(ports.admin.fees(owner.id, '0')), 'nothing to take').toBe('422 paid-amount');
+            expect(fake.adminCalls, 'the vault was asked about a call refused here').toHaveLength(4);
+
+            for (const [error, said] of [
+                ['AccessControlUnauthorizedAccount', '409 vault-role'],
+                ['FeeTooHigh', '422 vault-fee'],
+                ['InsufficientFees', '409 vault-fees'],
+                ['EnforcedPause', '409 vault-paused'],
+                ['ExpectedPause', '409 vault-running'],
+                ['ZeroAmount', '422 paid-amount'],
+                ['SomethingElse', '409 vault-refused']
+            ])
+            {
+                fake.state.adminRefuse = { error, player: null };
+                expect(await word(ports.admin.pause(owner.id, false)), error).toBe(said);
+            }
+
+            fake.state.adminRefuse = null;
+        });
+
+        it('says the vault is not set up, and composes nothing, where it is not', async () =>
+        {
+            fake = fakeVault(false);
+            owned();
+            const owner = await makeUser(OWNER);
+
+            expect(await ports.admin.vault(owner.id)).toEqual({ configured: false });
+            expect(await word(ports.admin.fee(owner.id, 400))).toBe('404 paid-off');
+            expect(await word(ports.admin.ceiling(owner.id, TEN))).toBe('404 paid-off');
+            expect(await word(ports.admin.fees(owner.id, TEN))).toBe('404 paid-off');
+            expect(await word(ports.admin.pause(owner.id, true))).toBe('404 paid-off');
         });
     });
 

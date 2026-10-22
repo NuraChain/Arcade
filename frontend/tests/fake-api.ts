@@ -14,6 +14,7 @@ import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
 import type { VoiceScope } from '../../backend/src/domains/table/voices.ts';
 import type {
     Account,
+    AdminVault,
     ChainProfile,
     ChatMessage,
     ConversationDevices,
@@ -31,7 +32,7 @@ import type {
     VaultState,
     WalletCall
 } from '../../backend/src/schemas.ts';
-import { STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
+import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -329,6 +330,48 @@ const nuraFresh = () => ({
     signatures: [] as (string | undefined)[]
 });
 
+export const adminState = (): AdminVault => ({
+    configured: true,
+    vault: NURA_VAULT,
+    chainId: 31337,
+    fee: 500,
+    maxFee: 1000,
+    maxStake: '1000000000000000000000',
+    reclaimAfter: 259_200,
+    paused: false,
+    held: '81000000000000000000',
+    free: '50000000000000000000',
+    locked: '30000000000000000000',
+    fees: '1000000000000000000',
+    solvent: true,
+    referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '5000000000000000000', games: '96', low: false, allowed: true },
+    roles: { admin: true, pauser: true },
+    playing: 3,
+    states: ESCROW_STATES.map((state) => ({ state, count: state === 'open' ? 3 : state === 'settled' ? 12 : 0 })),
+    stuck: []
+});
+
+const adminFresh = () => ({
+    state: adminState(),
+    owner: true,
+    refuse: null as { status: number; code: string } | null
+});
+
+const adminRefusal = () =>
+{
+    if (!server.admin.owner)
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+
+    const refused = server.admin.refuse;
+
+    if (refused !== null)
+    {
+        throw new ApiError(refused.status, refused.code, refused.code, undefined);
+    }
+};
+
 const nuraRefusal = () =>
 {
     const refused = server.nura.refuse;
@@ -444,6 +487,7 @@ export const server =
      */
     vault: null as { salt: string; publicKey: string; wrapped: string; checkValue: string } | null,
     nura: nuraFresh(),
+    admin: adminFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -605,6 +649,7 @@ export const server =
         server.sealDevice = null;
         server.vault = null;
         server.nura = nuraFresh();
+        server.admin = adminFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -821,6 +866,40 @@ export function walletAccount(address: string): Account
 
 export const client =
 {
+    admin:
+    {
+        async vault()
+        {
+            server.calls.push('admin.vault');
+            adminRefusal();
+            return structuredClone(server.admin.state);
+        },
+        async fee({ input }: { input: { bps: number } })
+        {
+            server.calls.push(`admin.fee ${ input.bps }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xfee' };
+        },
+        async ceiling({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`admin.ceiling ${ input.amount }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xceiling' };
+        },
+        async fees({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`admin.fees ${ input.amount }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xfees' };
+        },
+        async pause({ input }: { input: { paused: boolean } })
+        {
+            server.calls.push(`admin.pause ${ input.paused }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xpause' };
+        }
+    },
+
     vault:
     {
         async state()

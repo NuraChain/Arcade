@@ -58,6 +58,7 @@ export interface VaultApi
     deposit(wei: bigint): Promise<MessageKey | null>;
     withdraw(wei: bigint): Promise<MessageKey | null>;
     reclaim(escrowId: string): Promise<MessageKey | null>;
+    send(compose: () => Promise<WalletCall>): Promise<MessageKey | null>;
     signStake(tableId: string): Promise<Signed>;
     signSearch(game: string, stake: string): Promise<Signed>;
     reset(): void;
@@ -306,6 +307,8 @@ export const useVault = createStore((): VaultApi =>
         withdraw: (wei) => sent(() => client.vault.withdraw({ input: { amount: wei.toString() } })),
 
         reclaim: (escrowId) => sent(() => client.vault.reclaim({ input: { id: escrowId } })),
+
+        send: sent,
 
         signStake: (tableId) => signed(() => client.tables.stake({ params: { id: tableId } })),
 

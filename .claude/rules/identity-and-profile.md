@@ -278,8 +278,10 @@ short.
 case by `isAdminAddress`, and empty means nobody. The server decides it - the account payload carries
 `admin: true` for that wallet and omits the field for everybody else - and `requireAdmin` only reads
 the answer. Anybody else, signed in or not, is refused by the guard and shown the ordinary not-found
-page, never a "forbidden" one. The page holds nothing yet; whatever an admin can DO has to be a
-server route that checks `isAdminAddress` itself, because the guard is a courtesy like every other.
+page, never a "forbidden" one. The page holds the vault (`.claude/rules/stakes.md`, *The owner's
+view of the vault*). Whatever an admin can DO is a server route that asks `adminOf` in `services.ts`
+itself and answers anybody else as a page that is not there, because the guard is a courtesy like
+every other.
 
 ## Signing in
 

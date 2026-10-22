@@ -1,0 +1,456 @@
+import { createResource } from 'azerothjs';
+
+import { client, type WalletCall } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
+import { bpsOf, explorerTx, nuraOf, parseNura, typedNura } from '../../lib/nura.ts';
+import { shortAddress } from '../../lib/wallet.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
+import Button from '../ui/button.component.azeroth';
+import EmptyState from '../ui/empty-state.component.azeroth';
+import ErrorState from '../ui/error-state.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import Skeleton from '../ui/skeleton.component.azeroth';
+
+const STATE_WORDS = {
+    locking: 'admin.vault.state.locking',
+    open: 'admin.vault.state.open',
+    settling: 'admin.vault.state.settling',
+    settled: 'admin.vault.state.settled',
+    refunding: 'admin.vault.state.refunding',
+    refunded: 'admin.vault.state.refunded',
+    reclaimed: 'admin.vault.state.reclaimed',
+    failed: 'admin.vault.state.failed'
+} as const satisfies Record<string, MessageKey>;
+
+const PILL = 'inline-flex items-center rounded-full px-2.5 py-1 text-ui-xs font-semibold';
+
+export default component AdminVault()
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+    const vaults = useVault();
+
+    const admin = createResource(() => true, () => client.admin.vault(), { name: 'admin.vault' });
+
+    state feeText = '';
+
+    state feeTold = null as string | null;
+
+    state ceilingText = '';
+
+    state ceilingTold = null as string | null;
+
+    state feesText = '';
+
+    state feesTold = null as string | null;
+
+    state confirming = false;
+
+    state said = '';
+
+    state wrong = false;
+
+    const nura = (wei: string | bigint) => locale.n(nuraOf(wei), { maximumFractionDigits: 4 });
+
+    const percent = (bps: number) => locale.n(bps / 10_000, { style: 'percent', maximumFractionDigits: 2 });
+
+    derived held = admin.data() ?? null;
+
+    derived trouble = admin.error();
+
+    derived waiting = held === null && trouble === null;
+
+    derived failed = held === null && trouble !== null;
+
+    derived off = held !== null && !held.configured;
+
+    derived open = held !== null && held.configured ? held : null;
+
+    derived shown = open !== null;
+
+    derived chainId = open?.chainId ?? 0;
+
+    derived fee = open === null ? '' : percent(open.fee);
+
+    derived maxFee = open === null ? '' : percent(open.maxFee);
+
+    derived ceiling = open === null ? '' : nura(open.maxStake);
+
+    derived locked = open === null ? '' : nura(open.locked);
+
+    derived playing = locale.plural('admin.vault.playing', open?.playing ?? 0);
+
+    derived free = open === null ? '' : nura(open.free);
+
+    derived fees = open === null ? '' : nura(open.fees);
+
+    derived holds = open === null ? '' : nura(open.held);
+
+    derived solvent = open?.solvent ?? true;
+
+    derived paused = open?.paused ?? false;
+
+    derived referee = open === null ? '' : shortAddress(open.referee.address);
+
+    derived gas = open === null ? '' : nura(open.referee.gas);
+
+    derived priced = open?.referee.games !== undefined;
+
+    derived games = open?.referee.games === undefined ? '' : locale.plural('admin.vault.games', Number(open.referee.games));
+
+    derived low = open?.referee.low ?? false;
+
+    derived lost = open !== null && !open.referee.allowed;
+
+    derived mayChange = open?.roles.admin ?? false;
+
+    derived mayPause = open?.roles.pauser ?? false;
+
+    derived mayNothing = open !== null && !open.roles.admin && !open.roles.pauser;
+
+    derived pauseOffered = !paused && !confirming;
+
+    derived pauseAsked = !paused && confirming;
+
+    derived states = (open?.states ?? []).filter((one) => one.count > 0).map((one) => ({
+        state: one.state,
+        word: locale.t(STATE_WORDS[one.state]),
+        count: locale.n(one.count)
+    }));
+
+    derived counted = states.length > 0;
+
+    derived stuck = (open?.stuck ?? []).map((row) =>
+    {
+        const tx = row.closeTx ?? row.openTx;
+
+        return {
+            id: row.id,
+            game: locale.t(catalogue.byId(row.game as GameId).nameKey),
+            word: locale.t(STATE_WORDS[row.state]),
+            stake: locale.t('admin.vault.stake', { amount: nura(row.amount), seats: locale.n(row.seats) }),
+            since: locale.relative(Date.parse(row.since)),
+            error: row.error === undefined ? '' : locale.t('admin.vault.error', { error: row.error }),
+            link: tx === undefined ? null : explorerTx(chainId, tx)
+        };
+    });
+
+    derived anyStuck = stuck.length > 0;
+
+    const act = async (compose: () => Promise<WalletCall>, done: string) =>
+    {
+        said = '';
+        wrong = false;
+
+        const answer = await vaults.send(compose);
+
+        if (answer !== null)
+        {
+            said = locale.t(answer);
+            wrong = true;
+            return false;
+        }
+
+        await admin.refetch();
+        said = done;
+        return true;
+    };
+
+    const typedFee = (value: string) =>
+    {
+        feeText = value;
+        feeTold = null;
+    };
+
+    const typedCeiling = (value: string) =>
+    {
+        ceilingText = value;
+        ceilingTold = null;
+    };
+
+    const typedFees = (value: string) =>
+    {
+        feesText = value;
+        feesTold = null;
+    };
+
+    const changeFee = async () =>
+    {
+        const bps = bpsOf(feeText);
+
+        if (bps === null || open === null || bps > open.maxFee)
+        {
+            feeTold = locale.t('admin.vault.feeBad', { max: maxFee });
+            return;
+        }
+
+        if (await act(() => client.admin.fee({ input: { bps } }), locale.t('admin.vault.feeDone', { fee: percent(bps) })))
+        {
+            feeText = '';
+        }
+    };
+
+    const changeCeiling = async () =>
+    {
+        const wei = parseNura(ceilingText);
+
+        if (wei === null)
+        {
+            ceilingTold = locale.t('vault.amountBad');
+            return;
+        }
+
+        if (await act(() => client.admin.ceiling({ input: { amount: wei.toString() } }), locale.t('admin.vault.ceilingDone', { amount: nura(wei) })))
+        {
+            ceilingText = '';
+        }
+    };
+
+    const takeFees = async () =>
+    {
+        const wei = parseNura(feesText);
+
+        if (wei === null)
+        {
+            feesTold = locale.t('vault.amountBad');
+            return;
+        }
+
+        if (open !== null && wei > BigInt(open.fees))
+        {
+            feesTold = locale.t('tables.refused.vault-fees');
+            return;
+        }
+
+        if (await act(() => client.admin.fees({ input: { amount: wei.toString() } }), locale.t('admin.vault.feesDone')))
+        {
+            feesText = '';
+        }
+    };
+
+    const allFees = () =>
+    {
+        feesText = open === null ? '' : typedNura(BigInt(open.fees));
+        feesTold = null;
+    };
+
+    const pause = async (on: boolean) =>
+    {
+        confirming = false;
+        await act(() => client.admin.pause({ input: { paused: on } }), locale.t(on ? 'admin.vault.pausedDone' : 'admin.vault.resumed'));
+    };
+
+    <section class="flex flex-col gap-4" aria-labelledby="admin-vault">
+        <div class="flex flex-col gap-1">
+            <h2 id="admin-vault" class="title text-ui-2xl text-text">{ locale.t('admin.vault.title') }</h2>
+            <p class="text-ui-md text-muted">{ locale.t('admin.vault.lead') }</p>
+        </div>
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 4 } /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.vault.failed') } onRetry={ () => void admin.refetch() } /> }
+        </Show>
+
+        <Show when={ off }>
+            { () => <EmptyState icon="coins" title={ locale.t('admin.vault.off') } lead={ locale.t('admin.vault.offLead') } /> }
+        </Show>
+
+        <Show when={ shown }>
+            <div class="flex flex-col gap-4">
+                <dl class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="fee">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.fee') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ fee }</span></dd>
+                    </div>
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="ceiling">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.ceiling') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ ceiling }</span> NURA</dd>
+                    </div>
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="locked">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.locked') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ locked }</span> NURA</dd>
+                        <dd class="text-ui-xs text-muted">{ playing }</dd>
+                    </div>
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="free">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.free') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ free }</span> NURA</dd>
+                    </div>
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="fees">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.fees') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ fees }</span> NURA</dd>
+                    </div>
+                    <div class="flex flex-col gap-1 rounded-tile border border-line bg-field p-3" data-fact="held">
+                        <dt class="text-ui-xs text-muted">{ locale.t('admin.vault.held') }</dt>
+                        <dd class="text-ui-lg font-semibold text-text"><span class="tally">{ holds }</span> NURA</dd>
+                        <dd>
+                            <span class={ () => [ PILL, solvent ? 'bg-live/15 text-live' : 'bg-danger/15 text-danger' ].join(' ') } data-solvent={ solvent ? 'yes' : 'no' }>
+                                { solvent ? locale.t('admin.vault.solvent') : locale.t('admin.vault.short') }
+                            </span>
+                        </dd>
+                    </div>
+                </dl>
+
+                <p>
+                    <span class={ () => [ PILL, paused ? 'bg-gold/15 text-gold' : 'bg-live/15 text-live' ].join(' ') } data-paused={ paused ? 'yes' : 'no' }>
+                        { paused ? locale.t('admin.vault.paused') : locale.t('admin.vault.open') }
+                    </span>
+                </p>
+
+                <Panel pad="md" stack="sm">
+                    <h3 class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.referee') }</h3>
+                    <p class="text-ui-sm text-muted">{ locale.t('admin.vault.refereeLead') }</p>
+                    <p class="truncate text-ui-sm text-text" dir="ltr" data-referee>{ referee }</p>
+                    <p class="flex flex-wrap items-baseline gap-x-1.5 text-ui-sm text-muted">
+                        <span>{ locale.t('admin.vault.gas') }</span>
+                        <span class="font-semibold text-text"><span class="tally">{ gas }</span> NURA</span>
+                    </p>
+                    <Show when={ priced }>
+                        <p class="text-ui-sm text-muted" data-games>{ games }</p>
+                    </Show>
+                    <Show when={ low }>
+                        <p class="text-ui-sm font-semibold text-gold" role="alert" data-low>{ locale.t('admin.vault.low') }</p>
+                    </Show>
+                    <Show when={ lost }>
+                        <p class="text-ui-sm font-semibold text-danger" role="alert" data-lost>{ locale.t('admin.vault.lost') }</p>
+                    </Show>
+                </Panel>
+
+                <Panel pad="md" stack="sm">
+                    <h3 class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.roles') }</h3>
+                    <Show when={ mayChange }>
+                        <p class="text-ui-sm text-text" data-role="admin">{ locale.t('admin.vault.mayChange') }</p>
+                    </Show>
+                    <Show when={ mayPause }>
+                        <p class="text-ui-sm text-text" data-role="pauser">{ locale.t('admin.vault.mayPause') }</p>
+                    </Show>
+                    <Show when={ mayNothing }>
+                        <p class="text-ui-sm text-muted" data-role="none">{ locale.t('admin.vault.mayNothing') }</p>
+                    </Show>
+                </Panel>
+
+                <Show when={ mayChange }>
+                    <Panel pad="md" stack="md">
+                        <Field id="admin-fee" label={ locale.t('admin.vault.feeLabel') } hint={ locale.t('admin.vault.feeHint', { max: maxFee }) } error={ feeTold }>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Input
+                                    id="admin-fee"
+                                    class="min-w-40 flex-1"
+                                    value={ feeText }
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    enterkeyhint="send"
+                                    invalid={ feeTold !== null }
+                                    describedBy={ feeTold !== null ? 'admin-fee-error' : 'admin-fee-hint' }
+                                    onInput={ typedFee }
+                                    onEnter={ () => void changeFee() }
+                                />
+                                <Button variant="outline" loading={ vaults.busy() } onClick={ () => void changeFee() }>{ locale.t('admin.vault.feeSend') }</Button>
+                            </div>
+                        </Field>
+                        <Field id="admin-ceiling" label={ locale.t('admin.vault.ceilingLabel') } hint={ locale.t('vault.amountHint') } error={ ceilingTold }>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Input
+                                    id="admin-ceiling"
+                                    class="min-w-40 flex-1"
+                                    value={ ceilingText }
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    enterkeyhint="send"
+                                    invalid={ ceilingTold !== null }
+                                    describedBy={ ceilingTold !== null ? 'admin-ceiling-error' : 'admin-ceiling-hint' }
+                                    onInput={ typedCeiling }
+                                    onEnter={ () => void changeCeiling() }
+                                />
+                                <Button variant="outline" loading={ vaults.busy() } onClick={ () => void changeCeiling() }>{ locale.t('admin.vault.ceilingSend') }</Button>
+                            </div>
+                        </Field>
+                        <Field id="admin-fees" label={ locale.t('admin.vault.feesLabel') } hint={ locale.t('vault.amountHint') } error={ feesTold }>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Input
+                                    id="admin-fees"
+                                    class="min-w-40 flex-1"
+                                    value={ feesText }
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    enterkeyhint="send"
+                                    invalid={ feesTold !== null }
+                                    describedBy={ feesTold !== null ? 'admin-fees-error' : 'admin-fees-hint' }
+                                    onInput={ typedFees }
+                                    onEnter={ () => void takeFees() }
+                                />
+                                <Button variant="ghost" onClick={ allFees }>{ locale.t('vault.max') }</Button>
+                                <Button variant="outline" loading={ vaults.busy() } onClick={ () => void takeFees() }>{ locale.t('admin.vault.feesSend') }</Button>
+                            </div>
+                        </Field>
+                    </Panel>
+                </Show>
+
+                <Show when={ mayPause }>
+                    <Panel pad="md" stack="sm">
+                        <p class="text-ui-sm text-muted">{ locale.t('admin.vault.pauseLead') }</p>
+                        <Show when={ pauseOffered }>
+                            <Button variant="destructive" class="self-start" onClick={ () => confirming = true }>{ locale.t('admin.vault.pause') }</Button>
+                        </Show>
+                        <Show when={ pauseAsked }>
+                            <div class="flex flex-wrap gap-2">
+                                <Button variant="destructive" loading={ vaults.busy() } onClick={ () => void pause(true) }>{ locale.t('admin.vault.pauseYes') }</Button>
+                                <Button variant="outline" autofocus onClick={ () => confirming = false }>{ locale.t('admin.vault.pauseNo') }</Button>
+                            </div>
+                        </Show>
+                        <Show when={ paused }>
+                            <Button variant="primary" class="self-start" loading={ vaults.busy() } onClick={ () => void pause(false) }>{ locale.t('admin.vault.resume') }</Button>
+                        </Show>
+                    </Panel>
+                </Show>
+
+                <p class={ () => [ 'min-h-5 text-ui-sm', wrong ? 'text-danger' : 'text-win' ].join(' ') } role="status" data-said>{ said }</p>
+
+                <Show when={ counted }>
+                    <section class="flex flex-col gap-2" aria-labelledby="admin-states">
+                        <h3 id="admin-states" class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.states') }</h3>
+                        <ul class="flex flex-wrap gap-2">
+                            <For each={ states } key={ (one) => one.state } let={ one }>
+                                <li class="rounded-full border border-line bg-field px-3 py-1 text-ui-xs text-text" data-state={ one.state }><span>{ one.word }</span> <span class="tally font-semibold">{ one.count }</span></li>
+                            </For>
+                        </ul>
+                    </section>
+                </Show>
+
+                <section class="flex flex-col gap-2" aria-labelledby="admin-stuck">
+                    <h3 id="admin-stuck" class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.stuck') }</h3>
+                    <p class="text-ui-sm text-muted">{ locale.t('admin.vault.stuckLead') }</p>
+                    <Show when={ anyStuck } fallback={ <p class="text-ui-sm text-text" data-stuck="none">{ locale.t('admin.vault.stuckNone') }</p> }>
+                        <ul class="divide-y divide-line rounded-panel border border-line bg-field">
+                            <For each={ stuck } key={ (row) => row.id } let={ row }>
+                                <li class="flex flex-col gap-1 px-4 py-3" data-stuck={ row.id }>
+                                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                        <span class="text-ui-sm font-semibold text-text">{ row.game }</span>
+                                        <span class="text-ui-xs font-semibold text-gold">{ row.word }</span>
+                                    </div>
+                                    <p class="flex flex-wrap gap-x-3 text-ui-xs text-muted">
+                                        <span>{ row.stake }</span>
+                                        <span class="tally">{ row.since }</span>
+                                    </p>
+                                    <p class="text-ui-xs text-danger empty:hidden" dir="auto">{ row.error }</p>
+                                    <Show when={ row.link } let={ href }>
+                                        <a class="inline-flex min-h-11 items-center self-start text-ui-xs font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">
+                                            { locale.t('vault.tx') }
+                                        </a>
+                                    </Show>
+                                </li>
+                            </For>
+                        </ul>
+                    </Show>
+                </section>
+            </div>
+        </Show>
+    </section>
+}

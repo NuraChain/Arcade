@@ -4,6 +4,7 @@ import type { Api } from '../../backend/src/api.ts';
 
 export type {
     Account,
+    AdminVault,
     AchievementFamily,
     AchievementLadder,
     AchievementRarity,

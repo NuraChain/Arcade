@@ -16,6 +16,8 @@ export type EscrowState = typeof ESCROW_STATES[number];
 
 export const BPS = 10_000n;
 
+export const MAX_FEE_BPS = 1_000;
+
 export const ELIGIBILITIES = ['yes', 'paid-wallet', 'paid-minor', 'paid-terms', 'paid-break'] as const;
 
 export type Eligibility = typeof ELIGIBILITIES[number];

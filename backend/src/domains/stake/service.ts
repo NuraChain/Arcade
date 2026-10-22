@@ -88,7 +88,7 @@ const REFUSED = {
 
 export const notOpen = () => tableRefusal('paid-off', 'Playing for NURA is not open here.');
 
-const notAmount = () => tableRefusal('paid-amount', 'That is not an amount of NURA.');
+export const notAmount = () => tableRefusal('paid-amount', 'That is not an amount of NURA.');
 
 const halted = () => tableRefusal('paid-paused', 'The vault is not taking deposits or new games right now.');
 
@@ -130,7 +130,7 @@ const gamesAfter = (cursor: string | null) =>
     return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
 };
 
-const wireCall = (from: Address, call: VaultCall) => ({
+export const wireCall = (from: Address, call: VaultCall) => ({
     from,
     to: call.to,
     data: call.data,

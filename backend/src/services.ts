@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
+import { getAddress } from 'viem';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
@@ -35,6 +36,7 @@ import { seatsOfMask } from './domains/stake/policy.ts';
 import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
+import { createVaultAdmin } from './domains/stake/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -954,12 +956,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         });
     };
 
-    const stakes = createStakeService(db, vault ?? createVault({
+    const vaults = vault ?? createVault({
         rpcUrl: config.rpcUrl,
         chainId: config.chainId,
         vault: config.vaultAddress,
         refereeKey: config.refereeKey
-    }), {
+    });
+
+    const vaultAdmin = createVaultAdmin(db, vaults);
+
+    const adminOf = async (me: string) =>
+    {
+        const row = await identity.profileFor(me);
+
+        return row === null || row.address === null || !isAdminAddress(row.address, config.adminWallet) ? null : getAddress(row.address);
+    };
+
+    const stakes = createStakeService(db, vaults, {
         begin: (escrowId) => match.begin(escrowId),
 
         async began(matchId)
@@ -1463,6 +1476,43 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             withdraw: (me, amount) => stakes.withdraw(me, amount),
             games: (me, cursor) => stakes.games(me, cursor),
             reclaim: (me, escrowId) => stakes.reclaim(me, escrowId)
+        },
+
+        admin: {
+            async vault(me)
+            {
+                const admin = await adminOf(me);
+
+                return admin === null ? null : await vaultAdmin.standing(admin);
+            },
+
+            async fee(me, feeBps)
+            {
+                const admin = await adminOf(me);
+
+                return admin === null ? null : await vaultAdmin.fee(admin, feeBps);
+            },
+
+            async ceiling(me, amount)
+            {
+                const admin = await adminOf(me);
+
+                return admin === null ? null : await vaultAdmin.ceiling(admin, amount);
+            },
+
+            async fees(me, amount)
+            {
+                const admin = await adminOf(me);
+
+                return admin === null ? null : await vaultAdmin.fees(admin, amount);
+            },
+
+            async pause(me, paused)
+            {
+                const admin = await adminOf(me);
+
+                return admin === null ? null : await vaultAdmin.pause(admin, paused);
+            }
         },
 
         voice: {

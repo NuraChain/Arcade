@@ -226,6 +226,39 @@ are not locked any more and `paid-early` when the wait has not passed, and a gam
 play is answered as one that is not there. The worker then finds the game reclaimed on the chain
 when it next looks at it.
 
+## The owner's view of the vault
+
+**`/admin` shows the vault to its owner, and the owner is whoever `/admin` already opens for**: the
+account whose wallet is `ADMIN_WALLET_ADDRESS`. One function decides it (`adminOf` in `services.ts`,
+through `isAdminAddress`), so more than one admin replaces one function. Every route under
+`/admin/vault` answers anybody else as a page that is not there (404, "Nothing there."), the read and
+the four calls alike, and asks the chain nothing for them.
+
+**What it reads** (`GET /admin/vault`, `domains/stake/admin.ts`): the fee and its ceiling of 10%
+(`MAX_FEE_BPS`, the contract's constant), the most a seat may stake, whether the vault is paused,
+what it holds, the players' free NURA, what is in play, the fees held and whether it covers all of
+that, in one `ledger` read that also refreshes the terms every player reads; the referee's address,
+its gas, whether it still holds `REFEREE_ROLE`, and how many nine-seat games that gas pays for at
+today's gas price (1.1M gas a game: `open` was measured at 943k and `settle` at 114k for nine
+seats), low under twenty; the roles the owner's wallet holds (`DEFAULT_ADMIN_ROLE`, `PAUSER_ROLE`);
+how many paid games are in each state; and the games stuck on the way: locking, paying or giving
+back for more than ten minutes, or carrying an error the chain gave, oldest first, fifty at most.
+
+**What it composes, and never sends**: a new fee, a new ceiling, fees taken out to the owner's own
+wallet, and a pause or a resume, each asked of the vault from the owner's address first, so what the
+vault would refuse is said in a sentence (`vault-role`, `vault-fee`, `vault-fees`, `vault-paused`,
+`vault-running`, `vault-refused`) before the wallet is asked anything. The owner's wallet sends it
+through the path a deposit takes (`vault.send`). A new fee applies to stakes signed after it: a table
+whose players signed the old one fails its lock and asks them to sign again, as any failed lock does.
+
+**The page** is `components/admin/admin-vault.component.azeroth`, one section of `/admin`, so the
+admin console the owner asked for next can place it. It offers only what the wallet's roles allow,
+asks before it pauses (deposits and new games stop; withdrawals, payouts and reclaims carry on),
+keeps what was typed when something is refused, and says each result in a line of its own, because
+`/admin` is outside the app shell and has no toast host. `admin-vault.spec.ts` holds the page,
+`stake.db.spec.ts` (*the owner's view of the vault*) the service through the real ports,
+`chain-vault.spec.ts` the reads and the calls asked of the vault, and `app.spec.ts` the routes.
+
 ## In the browser
 
 **`stores/vault.store.ts` is the one place the browser talks to the vault.** It reads `GET /vault`
@@ -333,4 +366,5 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: the admin's view of the vault.
+Not here yet: the passes that play paid games end to end over the local chain, and the deploy to
+NuraChain.
