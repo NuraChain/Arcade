@@ -1246,6 +1246,26 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await ports.admin.vault(owner.id)).toMatchObject({ configured: true, vault: fake.vault.address, chainId: 31337 });
         });
 
+        it('shows an admin the vault, a moderator nothing, and hands the wallet\'s calls to the owner alone', async () =>
+        {
+            owned();
+            const owner = await makeUser(OWNER);
+            const admin = await makeUser(0);
+            const moderator = await makeUser(1);
+
+            await ports.admin.setStaff(owner.id, { handle: admin.handle, role: 'admin', reason: 'Keeps an eye on the money' });
+            await ports.admin.setStaff(owner.id, { handle: moderator.handle, role: 'moderator', reason: 'Reads the reports' });
+
+            expect(await ports.admin.vault(admin.id)).toMatchObject({ configured: true, vault: fake.vault.address });
+            expect(await ports.admin.vault(moderator.id)).toBeNull();
+            expect(await ports.admin.fee(admin.id, 400)).toBeNull();
+            expect(await ports.admin.ceiling(admin.id, TEN)).toBeNull();
+            expect(await ports.admin.fees(admin.id, TEN)).toBeNull();
+            expect(await ports.admin.pause(admin.id, true)).toBeNull();
+            expect(fake.adminCalls, 'a call was composed for an admin').toEqual([]);
+            expect(await ports.admin.fee(owner.id, 400)).not.toBeNull();
+        });
+
         it('counts the games in each state and lists those stuck on their way, the oldest first', async () =>
         {
             owned();

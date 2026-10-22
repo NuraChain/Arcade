@@ -4,6 +4,7 @@ import { BadRequestError, ConflictError, UnauthorizedError } from '@azerothjs/ht
 import type { DataSource } from 'typeorm';
 
 import type { Principal } from '../../http/auth.ts';
+import type { GrantedRole } from '../admin/roles.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '../../lib/crypto.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { Avatar } from '../../entities/avatar.entity.ts';
@@ -48,6 +49,8 @@ export interface ProfileRow extends UserRow
 
     /** The most recently used linked wallet. */
     address: string | null;
+
+    staff_role: GrantedRole | null;
 }
 
 export interface SignedIn
@@ -355,6 +358,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 .addSelect('u.is_suspended', 'is_suspended')
                 .addSelect('u.created_at', 'created_at')
                 .addSelect('(select w.address from wallets w where w.user_id = u.id order by w.last_used_at desc nulls last limit 1)', 'address')
+                .addSelect('(select m.role from staff_members m where m.user_id = u.id)', 'staff_role')
                 .where('u.id = :userId', { userId })
                 .getRawOne<ProfileRow>();
             return row ?? null;

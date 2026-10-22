@@ -60,7 +60,7 @@ beforeEach(() =>
     server.reset();
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'owner', handle: 'owner', displayName: 'Owner', bio: '', hue: 40, isMinor: false, address: OWNER, admin: true });
+    useSession().establish({ id: 'owner', handle: 'owner', displayName: 'Owner', bio: '', hue: 40, isMinor: false, address: OWNER, staff: 'owner' });
     useVault().reset();
 });
 

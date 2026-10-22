@@ -36,6 +36,8 @@ import { seatsOfMask } from './domains/stake/policy.ts';
 import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
+import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
+import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
@@ -965,11 +967,26 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const vaultAdmin = createVaultAdmin(db, vaults);
 
-    const adminOf = async (me: string) =>
+    const team = createStaffService(db, config.adminWallet);
+
+    const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
+        isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
+
+    const staffOf = async (me: string) =>
     {
         const row = await identity.profileFor(me);
+        const role = row === null || row.is_suspended ? null : roleOf(row);
 
-        return row === null || row.address === null || !isAdminAddress(row.address, config.adminWallet) ? null : getAddress(row.address);
+        return row === null || role === null
+            ? null
+            : { id: row.id, handle: row.handle, role, address: row.address === null ? null : getAddress(row.address) };
+    };
+
+    const ableTo = async (me: string, ability: Ability) =>
+    {
+        const actor = await staffOf(me);
+
+        return actor !== null && may(actor.role, ability) ? actor : null;
     };
 
     const stakes = createStakeService(db, vaults, {
@@ -1315,18 +1332,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         is_minor: boolean;
         address: string | null;
         created_at: Date;
-    }): Account => ({
-        id: row.id,
-        handle: row.handle,
-        displayName: row.display_name,
-        bio: row.bio,
-        ...(row.avatar === null ? {} : { avatar: row.avatar }),
-        hue: row.hue,
-        isMinor: row.is_minor,
-        joinedAt: row.created_at.toISOString(),
-        address: row.address ?? undefined,
-        ...(isAdminAddress(row.address, config.adminWallet) ? { admin: true } : {})
-    });
+        staff_role: GrantedRole | null;
+    }): Account =>
+    {
+        const role = roleOf(row);
+
+        return {
+            id: row.id,
+            handle: row.handle,
+            displayName: row.display_name,
+            bio: row.bio,
+            ...(row.avatar === null ? {} : { avatar: row.avatar }),
+            hue: row.hue,
+            isMinor: row.is_minor,
+            joinedAt: row.created_at.toISOString(),
+            address: row.address ?? undefined,
+            ...(role === null ? {} : { staff: role })
+        };
+    };
 
     /**
      * A person, with what the viewer may not know REMOVED rather than flagged.
@@ -1481,37 +1504,60 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         admin: {
             async vault(me)
             {
-                const admin = await adminOf(me);
+                const actor = await ableTo(me, 'money');
 
-                return admin === null ? null : await vaultAdmin.standing(admin);
+                return actor === null || actor.address === null ? null : await vaultAdmin.standing(actor.address);
             },
 
             async fee(me, feeBps)
             {
-                const admin = await adminOf(me);
+                const actor = await ableTo(me, 'wallet');
 
-                return admin === null ? null : await vaultAdmin.fee(admin, feeBps);
+                return actor === null || actor.address === null ? null : await vaultAdmin.fee(actor.address, feeBps);
             },
 
             async ceiling(me, amount)
             {
-                const admin = await adminOf(me);
+                const actor = await ableTo(me, 'wallet');
 
-                return admin === null ? null : await vaultAdmin.ceiling(admin, amount);
+                return actor === null || actor.address === null ? null : await vaultAdmin.ceiling(actor.address, amount);
             },
 
             async fees(me, amount)
             {
-                const admin = await adminOf(me);
+                const actor = await ableTo(me, 'wallet');
 
-                return admin === null ? null : await vaultAdmin.fees(admin, amount);
+                return actor === null || actor.address === null ? null : await vaultAdmin.fees(actor.address, amount);
             },
 
             async pause(me, paused)
             {
-                const admin = await adminOf(me);
+                const actor = await ableTo(me, 'wallet');
 
-                return admin === null ? null : await vaultAdmin.pause(admin, paused);
+                return actor === null || actor.address === null ? null : await vaultAdmin.pause(actor.address, paused);
+            },
+
+            async staff(me)
+            {
+                return await ableTo(me, 'staff') === null ? null : await team.list();
+            },
+
+            async setStaff(me, input)
+            {
+                const actor = await ableTo(me, 'staff');
+
+                return actor === null ? null : await team.set(actor, input.handle, input.role, input.reason);
+            },
+
+            async log(me, query)
+            {
+                return await ableTo(me, 'log') === null
+                    ? null
+                    : await team.log({
+                        ...(query.staff === undefined ? {} : { staff: query.staff }),
+                        ...(query.person === undefined ? {} : { person: query.person }),
+                        ...(query.kind === undefined ? {} : { kind: query.kind })
+                    }, query.cursor ?? null);
             }
         },
 

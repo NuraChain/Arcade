@@ -1,5 +1,7 @@
 import { redirect, type GuardContext, type GuardVerdict } from 'azerothjs';
 
+import { may, type Ability } from '../../../backend/src/domains/admin/roles.ts';
+
 export function safeNext(candidate: string | string[] | undefined)
 {
     const value = Array.isArray(candidate) ? candidate[0] : candidate;
@@ -23,13 +25,13 @@ export async function requireSession(context: GuardContext): Promise<GuardVerdic
     return redirect({ pathname: '/sign-in', query: { next: context.pathname } });
 }
 
-export async function requireAdmin(): Promise<GuardVerdict>
+export const requireAbility = (ability: Ability) => async (): Promise<GuardVerdict> =>
 {
     const { useSession } = await import('../stores/session.store.ts');
     const session = useSession();
     await session.ready();
-    return session.account()?.admin === true;
-}
+    return may(session.account()?.staff ?? null, ability);
+};
 
 export async function requireAnonymous(context: GuardContext): Promise<GuardVerdict>
 {

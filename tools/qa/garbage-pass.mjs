@@ -51,7 +51,8 @@ const QUERIES = {
     '/chat': ['cursor'],
     '/chat/:id/epoch': ['epoch', 'device'],
     '/chat/:id/messages': ['cursor', 'limit'],
-    '/vault/games': ['cursor']
+    '/vault/games': ['cursor'],
+    '/admin/log': ['cursor', 'staff', 'person', 'kind']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });
@@ -98,7 +99,11 @@ const BODIES = {
     '/tables/:id/ready': (bad) => [{ ready: true, signature: bad.slice(0, 4096) }, { ready: false, signature: bad.slice(0, 4096) }],
     '/vault/deposit': (bad) => [{ amount: bad.slice(0, 40) }],
     '/vault/withdraw': (bad) => [{ amount: bad.slice(0, 40) }],
-    '/vault/reclaim': (bad) => [{ id: bad.slice(0, 36) }]
+    '/vault/reclaim': (bad) => [{ id: bad.slice(0, 36) }],
+    '/admin/vault/fee': (bad) => [{ bps: bad.length }],
+    '/admin/vault/ceiling': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/admin/vault/fees': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/admin/staff': (bad) => [{ handle: bad.slice(0, 32), role: 'moderator', reason: bad.slice(0, 500).padEnd(3, 'x') }, { handle: bad.slice(0, 32), role: 'none', reason: 'garbage' }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);
@@ -108,7 +113,7 @@ const SPARED = new Set([
     '/tables/:id/seat', '/tables/:id/leave', '/tables/:id/close', '/tables/:id/voice', '/tables/:id/start', '/tables/:id/stake',
     '/parties/:id/accept', '/parties/:id/decline', '/parties/:id/leave',
     '/notifications/:id/read', '/notifications/read-all', '/notifications/:id/dismiss', '/devices/:id/revoke', '/devices/recovery/off',
-    '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin', '/vault/terms', '/vault/break'
+    '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin', '/vault/terms', '/vault/break', '/admin/vault/pause'
 ]);
 
 const SIGNED_OUT = new Set(['/auth/challenge', '/auth/wallet']);

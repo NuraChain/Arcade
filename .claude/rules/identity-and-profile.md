@@ -274,14 +274,14 @@ short.
 
 ## The admin
 
-`/admin` opens for one wallet: `ADMIN_WALLET_ADDRESS` in the root `.env`, compared without regard to
-case by `isAdminAddress`, and empty means nobody. The server decides it - the account payload carries
-`admin: true` for that wallet and omits the field for everybody else - and `requireAdmin` only reads
-the answer. Anybody else, signed in or not, is refused by the guard and shown the ordinary not-found
-page, never a "forbidden" one. The page holds the vault (`.claude/rules/stakes.md`, *The owner's
-view of the vault*). Whatever an admin can DO is a server route that asks `adminOf` in `services.ts`
-itself and answers anybody else as a page that is not there, because the guard is a courtesy like
-every other.
+`/admin` opens for the staff: the owner, whose wallet is `ADMIN_WALLET_ADDRESS` in the root `.env`,
+and the admins and moderators the owner makes. The server decides it - the account payload carries
+`staff` with the role and omits the field for everybody else - and `requireAbility` only reads the
+answer, asking the same `may` the server asks. Anybody else, signed in or not, is refused by the
+guard and shown the ordinary not-found page, never a "forbidden" one. Whatever the staff can DO is
+a server route that asks `staffOf` in `services.ts` itself and answers anybody whose role does not
+reach it as a page that is not there, because the guard is a courtesy like every other. The roles,
+who may change whom and the log every change writes are in `.claude/rules/admin.md`.
 
 ## Signing in
 

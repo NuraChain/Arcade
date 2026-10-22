@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -989,6 +989,61 @@ describe('the owner\'s view of the vault', () =>
 
         expect(response.status).toBe(422);
         expect(told).toEqual([]);
+    });
+
+    it('answers anybody who is not on the staff as a page that is not there, on the staff and the log as well', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const change = { handle: 'mina', role: 'moderator', reason: 'Reads the reports' };
+        const answers = [await sent(app, '/staff'), await sent(app, '/staff', change), await sent(app, '/log?kind=grant&person=mina')];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['staff', 'somebody'], ['setStaff', 'somebody', change], ['log', 'somebody', { kind: 'grant', person: 'mina' }]]);
+    });
+
+    it('refuses a change with no real reason, a role the page cannot grant, and a kind the log does not have, before any port is asked', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'moderator', reason: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
+        expect((await sent(app, '/log?kind=delete')).status).toBe(422);
+        expect(told).toEqual([]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+        const queries = pass.slice(pass.indexOf('const QUERIES ='), pass.indexOf('const message ='));
+
+        expect(bodies).toContain(`'/admin/vault/fee': (bad) => [`);
+        expect(bodies).toContain(`'/admin/vault/ceiling': (bad) => [`);
+        expect(bodies).toContain(`'/admin/vault/fees': (bad) => [`);
+        expect(bodies).toContain(`'/admin/staff': (bad) => [`);
+        expect(spared).toContain(`'/admin/vault/pause'`);
+        expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
+    });
+
+    it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>
+    {
+        const member = { handle: 'mina', displayName: 'Mina', hue: 40, role: 'moderator', grantedBy: 'dana.w', grantedAt: '2026-10-22T09:00:00.000Z' };
+        const list = await sent(owned([], { members: [{ ...member, address: '0xsecret' }], secret: 'x' }), '/staff');
+        const row = { id: 'a-row', at: '2026-10-22T09:00:00.000Z', staff: 'dana.w', staffRole: 'owner', kind: 'grant', person: 'mina', reason: 'Reads the reports', details: { to: 'moderator' } };
+        const log = await sent(owned([], { rows: [{ ...row, staffId: 'a-uuid' }] }), '/log');
+
+        expect(await list.json()).toEqual({ members: [member] });
+        expect(await log.json()).toEqual({ rows: [row] });
     });
 });
 

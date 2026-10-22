@@ -1,4 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
+import { ACTION_KINDS, GRANTED_ROLES, STAFF_ROLES } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -282,7 +283,7 @@ export const account = object({
      * UI renders it as "no wallet linked" rather than assuming.
      */
     address: string().optional(),
-    admin: boolean().optional()
+    staff: enumOf(STAFF_ROLES).optional()
 });
 
 export type Account = Infer<typeof account>;
@@ -486,6 +487,48 @@ export const adminVault = union([
 export type AdminVault = Infer<typeof adminVault>;
 
 export const adminFeeInput = object({ bps: number({ int: true, min: 0, max: 10_000 }) });
+
+export const staffMember = object({
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    avatar: string().optional(),
+    role: enumOf(STAFF_ROLES),
+    grantedBy: string().optional(),
+    grantedAt: string().optional()
+});
+
+export const staffList = object({ owner: staffMember.optional(), members: array(staffMember) });
+
+export type StaffList = Infer<typeof staffList>;
+
+export const staffInput = object({
+    handle: string({ min: 1, max: 32 }),
+    role: enumOf([...GRANTED_ROLES, 'none']),
+    reason: string({ min: 3, max: 500 })
+});
+
+export const staffLogQuery = object({
+    cursor: string({ max: 80 }).optional(),
+    staff: string({ max: 32 }).optional(),
+    person: string({ max: 32 }).optional(),
+    kind: enumOf(ACTION_KINDS).optional()
+});
+
+export const staffLogRow = object({
+    id: string(),
+    at: string(),
+    staff: string(),
+    staffRole: enumOf(STAFF_ROLES),
+    kind: enumOf(ACTION_KINDS),
+    person: string().optional(),
+    reason: string(),
+    details: record(string())
+});
+
+export const staffLog = object({ rows: array(staffLogRow), cursor: string().optional() });
+
+export type StaffLog = Infer<typeof staffLog>;
 
 export const adminPauseInput = object({ paused: boolean() });
 

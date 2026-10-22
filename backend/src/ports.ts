@@ -46,10 +46,12 @@ import type {
     MatchPlay,
     MatchView,
     NftPage,
-    PartyState
+    PartyState,
+    StaffList,
+    StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { matchEvent } from './schemas.ts';
+import type { matchEvent, staffInput, staffLogQuery } from './schemas.ts';
 import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
@@ -567,6 +569,12 @@ export interface AdminPort
     fees(me: string, amount: string): Promise<WalletCall | null>;
 
     pause(me: string, paused: boolean): Promise<WalletCall | null>;
+
+    staff(me: string): Promise<StaffList | null>;
+
+    setStaff(me: string, input: Infer<typeof staffInput>): Promise<StaffList | null>;
+
+    log(me: string, query: Infer<typeof staffLogQuery>): Promise<StaffLog | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

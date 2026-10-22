@@ -238,11 +238,12 @@ clock as well as its own*) and `chain-vault.spec.ts` hold it.
 
 ## The owner's view of the vault
 
-**`/admin` shows the vault to its owner, and the owner is whoever `/admin` already opens for**: the
-account whose wallet is `ADMIN_WALLET_ADDRESS`. One function decides it (`adminOf` in `services.ts`,
-through `isAdminAddress`), so more than one admin replaces one function. Every route under
-`/admin/vault` answers anybody else as a page that is not there (404, "Nothing there."), the read and
-the four calls alike, and asks the chain nothing for them.
+**`/admin` shows the vault to the owner and to the admins, and composes its calls for the owner
+alone**: the read is the `money` ability and the four calls are `wallet`
+(`.claude/rules/admin.md`), both asked through `staffOf` in `services.ts`. The owner is the account
+whose wallet is `ADMIN_WALLET_ADDRESS`; an admin is shown the vault as their own wallet's roles on it
+read it. Every route under `/admin/vault` answers anybody whose role does not reach it as a page that
+is not there (404, "Nothing there."), and asks the chain nothing for them.
 
 **What it reads** (`GET /admin/vault`, `domains/stake/admin.ts`): the fee and its ceiling of 10%
 (`MAX_FEE_BPS`, the contract's constant), the most a seat may stake, whether the vault is paused,

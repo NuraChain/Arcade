@@ -190,7 +190,9 @@ Loaded only when a session touches the matching code:
 - `.claude/rules/games.md` - tables, voice, the engines, the boards, records, and the second audit.
 - `.claude/rules/chat-and-keys.md` - chat, `nura-e2ee/v1`, devices, sealing, recovery, franking,
   notifications, realtime, and the first audit.
-- `.claude/rules/identity-and-profile.md` - signing in, the Nura Profile, NFTs, the admin.
+- `.claude/rules/identity-and-profile.md` - signing in, the Nura Profile, NFTs.
 - `.claude/rules/stakes.md` - playing for NURA: the vault, who may play, the signed Ready, the lock
   and the payout.
+- `.claude/rules/admin.md` - running the platform: the staff and their roles, and the log every
+  change writes.
 - `tools/blender/CLAUDE.md` and `tools/qa/CLAUDE.md` - the 3D asset kit and the browser passes.
