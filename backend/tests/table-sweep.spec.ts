@@ -139,7 +139,7 @@ describe('what runs the sweep of the waiting tables', () =>
 
     it('hands the ports a way to say what a search did', () =>
     {
-        expect(main).toMatch(/\}, \(event, fields\) => log\.info\(event, fields\)\);/);
+        expect(main).toMatch(/\}, \(event, fields\) => log\.info\(event, fields\), undefined, ops\);/);
     });
 
     it('is stopped on the way down, before the hub lets everybody go and has nobody left to call here', () =>
@@ -152,7 +152,7 @@ describe('what runs the sweep of the waiting tables', () =>
     it('is told everybody is here from the moment the server starts going down, never by a hub that has just let everybody go', () =>
     {
         expect(main).toMatch(/let goingDown = false;/);
-        expect(main).toMatch(/buildPorts\(dataSource, config, hub, \{\s*present: \(userIds\) => goingDown \? new Set\(userIds\) : hub\.present\(userIds\)\s*\}, \(event, fields\) => log\.info\(event, fields\)\)/);
+        expect(main).toMatch(/buildPorts\(dataSource, config, hub, \{\s*present: \(userIds\) => goingDown \? new Set\(userIds\) : hub\.present\(userIds\),[^}]*\}, \(event, fields\) => log\.info\(event, fields\), undefined, ops\)/);
         expect(main).not.toMatch(/buildPorts\(dataSource, config, hub, hub\)/);
         expect(main.match(/goingDown = true;/g)).toHaveLength(1);
         expect(shutdown.indexOf('goingDown = true;')).toBeGreaterThan(-1);

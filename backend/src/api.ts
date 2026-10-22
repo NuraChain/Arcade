@@ -42,6 +42,9 @@ import {
     adminMatchesQuery,
     adminTables,
     adminTablesQuery,
+    adminOverview,
+    adminLive,
+    adminLiveQuery,
     adminVoidInput,
     adminCloseInput,
     adminSignOutInput,
@@ -466,7 +469,13 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.voidMatch(context.principal.userId, context.params.id, context.input))),
 
             closeTable: routes.post('/play/tables/:id/close', { input: adminCloseInput, output: adminPlay },
-                async (context) => onlyAdmin(await ports.admin.closeTable(context.principal.userId, context.params.id, context.input)))
+                async (context) => onlyAdmin(await ports.admin.closeTable(context.principal.userId, context.params.id, context.input))),
+
+            overview: routes.get('/overview', { output: adminOverview },
+                async (context) => onlyAdmin(await ports.admin.overview(context.principal.userId))),
+
+            live: routes.get('/live', { query: adminLiveQuery, output: adminLive },
+                async (context) => onlyAdmin(await ports.admin.live(context.principal.userId, context.query)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

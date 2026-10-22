@@ -146,6 +146,8 @@ export interface Hub
 
     presenceOf(userId: string): PresenceEntry[];
     present(userIds: readonly string[]): ReadonlySet<string>;
+    online(): { userId: string; state: PresenceState; since: number }[];
+    calls(): { tableId: string; people: string[] }[];
     size(): number;
     /**
      * Sends a close frame with a code to every connection, and answers how many it sent.
@@ -1232,6 +1234,12 @@ export function createHub(deps: HubDeps): Hub
 
             return new Set(userIds.filter((userId) => online.has(userId) || (sighted.get(userId) ?? Number.NEGATIVE_INFINITY) > since));
         },
+
+        online: () => [...online]
+            .filter(([, record]) => record.leftAt === null)
+            .map(([userId, record]) => ({ userId, state: record.state, since: record.since })),
+
+        calls: () => [...rooms].map(([call, room]) => ({ tableId: call.split('#')[0], people: [...room.keys()] })),
 
         size()
         {

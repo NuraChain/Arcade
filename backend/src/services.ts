@@ -38,6 +38,7 @@ import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
+import { createLiveService, type Call, type Online } from './domains/admin/live.ts';
 import { createPlayService, stuckKindOf, type Stuck } from './domains/admin/play.ts';
 import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
@@ -47,6 +48,7 @@ import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
+import type { OpsReader } from './http/ops.ts';
 import type { MatchEventLog, Ports } from './ports.ts';
 import type {
     Account,
@@ -98,6 +100,9 @@ export interface WriteListener
 export interface PresenceReader
 {
     present(userIds: readonly string[]): ReadonlySet<string>;
+    online?(): readonly Online[];
+    calls?(): readonly Call[];
+    sockets?(): number;
 }
 
 /**
@@ -145,7 +150,7 @@ const WATCHABLE_MAX = 48;
 
 const WAITING_SEATS = 500;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note, vault?: Vault): Services
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note, vault?: Vault, ops?: OpsReader): Services
 {
     const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
 
@@ -987,6 +992,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const desk = createReportsService(db, config.adminWallet);
 
     const plays = createPlayService(db, config.adminWallet);
+
+    const onlineNow = createLiveService(db, config.adminWallet);
+
+    const poolOf = () =>
+    {
+        const pool = (db.driver as unknown as { master?: { totalCount: number; idleCount: number; waitingCount: number } }).master;
+
+        return { total: pool?.totalCount ?? 0, idle: pool?.idleCount ?? 0, waiting: pool?.waitingCount ?? 0 };
+    };
 
     const stuckNow = async () =>
     {
@@ -1947,6 +1961,42 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 live?.tableChanged(id, await table.peopleAt(id));
 
                 return await playNow();
+            },
+
+            async overview(me)
+            {
+                const actor = await ableTo(me, 'overview');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const [people, games, reports, stuck, money] = await Promise.all([
+                    accounts.counts(),
+                    plays.games(),
+                    desk.waiting(),
+                    stuckNow(),
+                    may(actor.role, 'money') && vaults.configured ? vaultAdmin.counts() : null
+                ]);
+
+                return {
+                    at: new Date().toISOString(),
+                    people,
+                    online: presence?.online?.().length ?? 0,
+                    games,
+                    stuck: stuck.size,
+                    reports,
+                    ...(money === null ? {} : { money }),
+                    ...(may(actor.role, 'health') && ops !== undefined ? { health: { ...ops.health(), pool: poolOf(), sockets: presence?.sockets?.() ?? 0 } } : {})
+                };
+            },
+
+            async live(me, query)
+            {
+                return await ableTo(me, 'live') === null
+                    ? null
+                    : await onlineNow.now(presence?.online?.() ?? [], presence?.calls?.() ?? [], query.cursor ?? null);
             }
         },
 

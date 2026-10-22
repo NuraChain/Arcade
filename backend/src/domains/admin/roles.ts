@@ -55,14 +55,19 @@ export type MatchList = (typeof MATCH_LISTS)[number];
 export const PLAY_PAGE = 50;
 
 export const ABILITIES = {
+    overview: 'moderator',
+    live: 'moderator',
     people: 'moderator',
     reports: 'moderator',
     play: 'admin',
     money: 'admin',
     staff: 'admin',
     log: 'admin',
+    health: 'admin',
     wallet: 'owner'
 } as const satisfies Record<string, StaffRole>;
+
+export const LIVE_PAGE = 50;
 
 export type Ability = keyof typeof ABILITIES;
 

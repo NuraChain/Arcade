@@ -296,6 +296,20 @@ export function createPeopleService(db: DataSource, ownerWallet: string, origin:
             return (await db.getRepository(User).findOne({ select: { id: true }, where: { handle } }))?.id ?? null;
         },
 
+        async counts()
+        {
+            const row = await db.getRepository(User).createQueryBuilder('u')
+                .select('count(*)::int', 'total')
+                .addSelect(`(count(*) filter (where u.created_at > now() - interval '1 day'))::int`, 'day')
+                .addSelect(`(count(*) filter (where u.created_at > now() - interval '7 days'))::int`, 'week')
+                .addSelect(`(count(*) filter (where u.last_seen_at > now() - interval '1 day'))::int`, 'active')
+                .addSelect('(count(*) filter (where u.is_suspended))::int', 'suspended')
+                .addSelect('(count(*) filter (where u.is_minor))::int', 'minors')
+                .getRawOne<{ total: number; day: number; week: number; active: number; suspended: number; minors: number }>();
+
+            return row ?? { total: 0, day: 0, week: 0, active: 0, suspended: 0, minors: 0 };
+        },
+
         async note(actor: Actor, handle: string, text: string)
         {
             await db.transaction(async (tx) =>

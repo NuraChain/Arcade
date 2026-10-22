@@ -77,6 +77,25 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
     };
 
     return {
+        async counts()
+        {
+            const [row, stuck] = await Promise.all([
+                db.getRepository(Escrow).createQueryBuilder('e')
+                    .select(`(count(*) filter (where e.state = 'open'))::int`, 'playing')
+                    .addSelect(
+                        `coalesce(sum(e.amount * (select count(*) from escrow_seats s where s.escrow_id = e.id)) filter (where e.state in ('locking', 'open', 'settling')), 0)::text`,
+                        'in_play'
+                    )
+                    .getRawOne<{ playing: number; in_play: string }>(),
+                db.getRepository(Escrow).createQueryBuilder('e')
+                    .where('e.state in (:...flight)', { flight: IN_FLIGHT })
+                    .andWhere('(e.updated_at < now() - make_interval(mins => :minutes) or e.error is not null)', { minutes: STUCK_MINUTES })
+                    .getCount()
+            ]);
+
+            return { playing: row?.playing ?? 0, inPlay: row?.in_play ?? '0', stuck };
+        },
+
         async standing(admin: Address): Promise<AdminVault>
         {
             if (!vault.configured || vault.address === null || vault.referee === null)

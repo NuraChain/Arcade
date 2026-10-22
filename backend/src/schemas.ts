@@ -1206,12 +1206,37 @@ export const adminReviewInput = object({ outcome: enumOf(REPORT_OUTCOMES), reaso
 
 export const reportsWaiting = object({ count: number() });
 
+const adminGameRow = object({ game: string(), status: gameStatus, matches: number(), tables: number() });
+
 export const adminPlay = object({
-    games: array(object({ game: string(), status: gameStatus, matches: number(), tables: number() })),
+    games: array(adminGameRow),
     stuck: number()
 });
 
 export type AdminPlay = Infer<typeof adminPlay>;
+
+export const adminOverview = object({
+    at: string(),
+    people: object({ total: number(), day: number(), week: number(), active: number(), suspended: number(), minors: number() }),
+    online: number(),
+    games: array(adminGameRow),
+    stuck: number(),
+    reports: number(),
+    money: object({ playing: number(), inPlay: string(), stuck: number() }).optional(),
+    health: object({
+        uptime: number(),
+        rss: number(),
+        heap: number(),
+        loop: object({ p50: number(), p99: number(), max: number() }),
+        pool: object({ total: number(), idle: number(), waiting: number() }),
+        sockets: number(),
+        requests: number(),
+        failed: number(),
+        failures: array(object({ at: string(), method: string(), path: string(), status: number() }))
+    }).optional()
+});
+
+export type AdminOverview = Infer<typeof adminOverview>;
 
 export const adminGameInput = object({ on: boolean(), reason: said() });
 
@@ -2547,3 +2572,21 @@ export const adminTables = object({ rows: array(adminTableRow), cursor: string()
 export type AdminTables = Infer<typeof adminTables>;
 
 export const adminTablesQuery = object({ game: string({ max: 32 }).optional(), cursor: string({ max: 80 }).optional() });
+
+export const adminLiveRow = object({
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    avatar: string().optional(),
+    staff: enumOf(STAFF_ROLES).optional(),
+    state: enumOf(['online', 'away']),
+    since: string(),
+    tables: array(object({ code: string(), game: string(), mode: tableMode, playing: boolean() })),
+    call: object({ code: string(), game: string() }).optional()
+});
+
+export const adminLive = object({ total: number(), rows: array(adminLiveRow), cursor: string().optional() });
+
+export type AdminLive = Infer<typeof adminLive>;
+
+export const adminLiveQuery = object({ cursor: string({ max: 80 }).optional() });

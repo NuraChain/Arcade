@@ -92,7 +92,7 @@ interface TableRow extends Keyed
 
 const isKind = (value: string): value is StuckKind => STUCK_KINDS.some((kind) => kind === value);
 
-const STAFF_OF = `case when u.is_suspended then null
+export const STAFF_OF = `case when u.is_suspended then null
                       when exists (select 1 from wallets o where o.user_id = u.id and o.address = :owner) then 'owner'
                       else (select s.role from staff_members s where s.user_id = u.id) end`;
 
