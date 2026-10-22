@@ -203,7 +203,7 @@ export default component MessageBubble(props: {
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
-    derived headline = ((): string =>
+    derived headline = (() =>
     {
         const played = game === null ? '' : locale.t(game.nameKey);
 
