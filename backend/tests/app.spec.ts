@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1008,12 +1008,34 @@ describe('the owner\'s view of the vault', () =>
         expect(told).toEqual([['staff', 'somebody'], ['setStaff', 'somebody', change], ['log', 'somebody', { kind: 'grant', person: 'mina' }]]);
     });
 
+    it('answers anybody who may not read the people as a page that is not there, on the list, a person and a note', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const note = { text: 'Watches the Friday tables' };
+        const answers = [await sent(app, '/people?list=minors&q=mina'), await sent(app, '/people/mina'), await sent(app, '/people/mina/notes', note)];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['people', 'somebody', { list: 'minors', q: 'mina' }], ['person', 'somebody', 'mina'], ['note', 'somebody', 'mina', note]]);
+    });
+
     it('refuses a change with no real reason, a role the page cannot grant, and a kind the log does not have, before any port is asked', async () =>
     {
         const told: unknown[][] = [];
         const app = owned(told, null);
 
         expect((await sent(app, '/staff', { handle: 'mina', role: 'moderator', reason: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'moderator', reason: '      ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: `\t${ ' '.repeat(40) }\n` })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: 'x'.repeat(501) })).status).toBe(422);
+        expect((await sent(app, '/people?list=everybody')).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
         expect((await sent(app, '/log?kind=delete')).status).toBe(422);
@@ -1031,8 +1053,10 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/vault/ceiling': (bad) => [`);
         expect(bodies).toContain(`'/admin/vault/fees': (bad) => [`);
         expect(bodies).toContain(`'/admin/staff': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/notes': (bad) => [`);
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
+        expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

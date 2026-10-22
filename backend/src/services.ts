@@ -37,6 +37,7 @@ import { createStakeService, type StakeSweep } from './domains/stake/service.ts'
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
+import { createPeopleService } from './domains/admin/people.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
@@ -969,6 +970,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const team = createStaffService(db, config.adminWallet);
 
+    const accounts = createPeopleService(db, config.adminWallet);
+
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
 
@@ -1015,6 +1018,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             }
         })
     });
+
+    const personOf = async (handle: string) =>
+    {
+        const found = await accounts.view(handle);
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        const [history, games, paid] = await Promise.all([
+            team.about(found.id),
+            match.history(found.id, null),
+            vaults.configured ? stakes.games(found.id, null) : { games: [] }
+        ]);
+
+        return { ...found.person, history, games: games.matches, paidGames: paid.games };
+    };
 
     const logged = (events: { rev: number; seat: number; at: Date; log: MatchEventLog['log'] }[]): MatchEventLog[] =>
         events.map((entry) => ({ rev: entry.rev, seat: entry.seat, at: entry.at.toISOString(), log: entry.log }));
@@ -1558,6 +1579,35 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                         ...(query.person === undefined ? {} : { person: query.person }),
                         ...(query.kind === undefined ? {} : { kind: query.kind })
                     }, query.cursor ?? null);
+            },
+
+            async people(me, query)
+            {
+                return await ableTo(me, 'people') === null
+                    ? null
+                    : await accounts.find({
+                        ...(query.q === undefined ? {} : { q: query.q }),
+                        ...(query.list === undefined ? {} : { list: query.list }),
+                        ...(query.cursor === undefined ? {} : { cursor: query.cursor })
+                    });
+            },
+
+            async person(me, handle)
+            {
+                return await ableTo(me, 'people') === null ? null : await personOf(handle);
+            },
+
+            async note(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                await accounts.note(actor, handle, input.text);
+                return await personOf(handle);
             }
         },
 

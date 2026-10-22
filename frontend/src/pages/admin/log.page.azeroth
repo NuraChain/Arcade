@@ -37,7 +37,8 @@ const KIND_WORDS: Record<ActionKind | 'all', MessageKey> = {
     all: 'admin.log.kind.all',
     grant: 'admin.log.kind.grant',
     change: 'admin.log.kind.change',
-    revoke: 'admin.log.kind.revoke'
+    revoke: 'admin.log.kind.revoke',
+    note: 'admin.log.kind.note'
 };
 
 const queryOf = (asked: Asked) => ({

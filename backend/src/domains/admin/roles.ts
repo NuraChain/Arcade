@@ -6,13 +6,20 @@ export const GRANTED_ROLES = ['moderator', 'admin'] as const;
 
 export type GrantedRole = (typeof GRANTED_ROLES)[number];
 
-export const ACTION_KINDS = ['grant', 'change', 'revoke'] as const;
+export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
 export const LOG_PAGE = 50;
 
+export const PEOPLE_LISTS = ['newest', 'suspended', 'minors', 'staff', 'reported'] as const;
+
+export type PeopleList = (typeof PEOPLE_LISTS)[number];
+
+export const PEOPLE_PAGE = 50;
+
 export const ABILITIES = {
+    people: 'moderator',
     money: 'admin',
     staff: 'admin',
     log: 'admin',

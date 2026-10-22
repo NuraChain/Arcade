@@ -1,9 +1,10 @@
-import type { DataSource, EntityManager } from 'typeorm';
+import type { DataSource, EntityManager, ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 import { HttpError } from '@azerothjs/http';
 
 import { StaffAction, StaffMember, User, Wallet } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { StaffList, StaffLog } from '../../schemas.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from './refusals.ts';
 import { LOG_PAGE, outranks, type ActionKind, type GrantedRole, type StaffRole } from './roles.ts';
 
@@ -41,9 +42,8 @@ interface MemberRow
     granted_by: string | null;
 }
 
-interface LogRow
+interface LogRow extends Keyed
 {
-    id: string;
     created_at: Date;
     staff_handle: string;
     staff_role: StaffRole;
@@ -52,8 +52,6 @@ interface LogRow
     reason: string;
     details: Record<string, string>;
 }
-
-const LOG_CURSOR = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 export const staffRefusal = (word: StaffRefusal, message: string) => new HttpError(STAFF_REFUSALS[word], message, { code: word });
 
@@ -75,13 +73,18 @@ export const record = async (tx: EntityManager, actor: Actor, entry: Entry) =>
     });
 };
 
-const logAfter = (cursor: string | null) =>
-{
-    const found = cursor === null ? null : LOG_CURSOR.exec(cursor);
-    const at = found === null ? null : new Date(found[1]);
+const wire = (row: LogRow) => ({
+    id: row.id,
+    at: row.created_at.toISOString(),
+    staff: row.staff_handle,
+    staffRole: row.staff_role,
+    kind: row.kind,
+    ...(row.person_handle === null ? {} : { person: row.person_handle }),
+    reason: row.reason,
+    details: row.details
+});
 
-    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
-};
+const newestFirst = <T extends ObjectLiteral>(query: SelectQueryBuilder<T>) => query.orderBy('a.created_at', 'DESC').addOrderBy('a.id', 'DESC');
 
 export function createStaffService(db: DataSource, ownerWallet: string)
 {
@@ -91,6 +94,17 @@ export function createStaffService(db: DataSource, ownerWallet: string)
         .addSelect('u.display_name', 'display_name')
         .addSelect('u.hue', 'hue')
         .addSelect('u.avatar', 'avatar');
+
+    const actions = () => db.getRepository(StaffAction).createQueryBuilder('a')
+        .select('a.id', 'id')
+        .addSelect('a.created_at', 'created_at')
+        .addSelect(keyOf('a.created_at'), 'at_key')
+        .addSelect('a.staff_handle', 'staff_handle')
+        .addSelect('a.staff_role', 'staff_role')
+        .addSelect('a.kind', 'kind')
+        .addSelect('a.person_handle', 'person_handle')
+        .addSelect('a.reason', 'reason')
+        .addSelect('a.details', 'details');
 
     const ownerOf = async (manager: EntityManager) => ownerWallet === ''
         ? null
@@ -193,17 +207,8 @@ export function createStaffService(db: DataSource, ownerWallet: string)
 
         async log(filters: LogFilters, cursor: string | null): Promise<StaffLog>
         {
-            const after = logAfter(cursor);
-            const query = db.getRepository(StaffAction).createQueryBuilder('a')
-                .select('a.id', 'id')
-                .addSelect('a.created_at', 'created_at')
-                .addSelect('a.staff_handle', 'staff_handle')
-                .addSelect('a.staff_role', 'staff_role')
-                .addSelect('a.kind', 'kind')
-                .addSelect('a.person_handle', 'person_handle')
-                .addSelect('a.reason', 'reason')
-                .addSelect('a.details', 'details')
-                .where('true');
+            const after = keysetAfter(cursor);
+            const query = actions().where('true');
 
             if (filters.staff !== undefined)
             {
@@ -222,30 +227,19 @@ export function createStaffService(db: DataSource, ownerWallet: string)
 
             if (after !== null)
             {
-                query.andWhere('(a.created_at, a.id) < (:at, :id)', { at: after.at, id: after.id });
+                query.andWhere(olderThan('a.created_at', 'a.id'), after);
             }
 
-            const rows = await query
-                .orderBy('a.created_at', 'DESC')
-                .addOrderBy('a.id', 'DESC')
-                .limit(LOG_PAGE + 1)
-                .getRawMany<LogRow>();
-            const page = rows.slice(0, LOG_PAGE);
-            const last = page.at(-1);
+            const rows = await newestFirst(query).limit(LOG_PAGE + 1).getRawMany<LogRow>();
 
-            return {
-                rows: page.map((row) => ({
-                    id: row.id,
-                    at: row.created_at.toISOString(),
-                    staff: row.staff_handle,
-                    staffRole: row.staff_role,
-                    kind: row.kind,
-                    ...(row.person_handle === null ? {} : { person: row.person_handle }),
-                    reason: row.reason,
-                    details: row.details
-                })),
-                ...(rows.length > LOG_PAGE && last !== undefined ? { cursor: `${ last.created_at.toISOString() }|${ last.id }` } : {})
-            };
+            return { rows: rows.slice(0, LOG_PAGE).map(wire), ...cursorOf(rows, LOG_PAGE) };
+        },
+
+        async about(personId: string)
+        {
+            const rows = await newestFirst(actions().where('a.person_id = :personId', { personId })).limit(LOG_PAGE).getRawMany<LogRow>();
+
+            return rows.map(wire);
         }
     };
 }

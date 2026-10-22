@@ -24,6 +24,10 @@ import {
     vaultState,
     vaultTermsInput,
     walletCall,
+    adminNoteInput,
+    adminPeople,
+    adminPeopleQuery,
+    adminPerson,
     adminVault,
     adminFeeInput,
     adminPauseInput,
@@ -386,7 +390,16 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.setStaff(context.principal.userId, context.input))),
 
             log: routes.get('/log', { query: staffLogQuery, output: staffLog },
-                async (context) => onlyAdmin(await ports.admin.log(context.principal.userId, context.query)))
+                async (context) => onlyAdmin(await ports.admin.log(context.principal.userId, context.query))),
+
+            people: routes.get('/people', { query: adminPeopleQuery, output: adminPeople },
+                async (context) => onlyAdmin(await ports.admin.people(context.principal.userId, context.query))),
+
+            person: routes.get('/people/:handle', { output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.person(context.principal.userId, context.params.handle))),
+
+            note: routes.post('/people/:handle/notes', { input: adminNoteInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.note(context.principal.userId, context.params.handle, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

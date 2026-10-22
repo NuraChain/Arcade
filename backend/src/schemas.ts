@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, GRANTED_ROLES, STAFF_ROLES } from './domains/admin/roles.ts';
+import { ACTION_KINDS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -7,9 +7,15 @@ import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
-const NUL_FREE = new RegExp(`^[^${ String.fromCharCode(0) }]*$`);
+const NUL = String.fromCharCode(0);
+
+const NUL_FREE = new RegExp(`^[^${ NUL }]*$`);
+
+const SAYS_SOMETHING = new RegExp(`^[^${ NUL }]*[^\\s${ NUL }][^${ NUL }]*$`);
 
 const string = (options: StringOptions = {}) => text({ pattern: NUL_FREE, ...options });
+
+const said = () => string({ min: 3, max: 500, pattern: SAYS_SOMETHING });
 
 /**
  * The wire shape, declared once.
@@ -505,7 +511,7 @@ export type StaffList = Infer<typeof staffList>;
 export const staffInput = object({
     handle: string({ min: 1, max: 32 }),
     role: enumOf([...GRANTED_ROLES, 'none']),
-    reason: string({ min: 3, max: 500 })
+    reason: said()
 });
 
 export const staffLogQuery = object({
@@ -557,6 +563,71 @@ export const vaultGames = object({ games: array(vaultGame), cursor: string().opt
 export type VaultGames = Infer<typeof vaultGames>;
 
 export const vaultGamesQuery = object({ cursor: string({ max: 80 }).optional() });
+
+export const adminPeopleQuery = object({
+    q: string({ max: 80 }).optional(),
+    list: enumOf(PEOPLE_LISTS).optional(),
+    cursor: string({ max: 80 }).optional()
+});
+
+const adminFace = {
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    avatar: string().optional(),
+    address: string().optional(),
+    createdAt: string(),
+    minor: boolean(),
+    suspended: boolean(),
+    staff: enumOf(STAFF_ROLES).optional(),
+    reports: number()
+};
+
+export const adminPeople = object({ rows: array(object(adminFace)), cursor: string().optional() });
+
+export type AdminPeople = Infer<typeof adminPeople>;
+
+export const adminPerson = object({
+    ...adminFace,
+    bio: string(),
+    lastSeenAt: string().optional(),
+    strangers: boolean(),
+    shown: boolean(),
+    wallets: array(string()),
+    filed: number(),
+    sessions: array(object({
+        browser: string().optional(),
+        system: string().optional(),
+        openedAt: string(),
+        usedAt: string().optional(),
+        device: boolean()
+    })),
+    devices: array(object({
+        label: string(),
+        browser: string().optional(),
+        system: string().optional(),
+        attested: string(),
+        createdAt: string(),
+        seenAt: string().optional(),
+        revoked: boolean()
+    })),
+    reportsAbout: array(object({
+        id: string(),
+        against: boolean(),
+        other: string(),
+        category: string(),
+        status: string(),
+        at: string()
+    })),
+    paid: object({ acceptedAt: string().optional(), breakUntil: string().optional() }),
+    history: array(staffLogRow),
+    games: array(matchHistoryEntry),
+    paidGames: array(vaultGame)
+});
+
+export type AdminPerson = Infer<typeof adminPerson>;
+
+export const adminNoteInput = object({ text: said() });
 
 export const reclaimInput = object({ id: string({ max: 36 }) });
 

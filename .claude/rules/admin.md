@@ -7,8 +7,8 @@ design, with the decisions and what was not chosen, is
 ## The staff
 
 **Three roles, each above the last: moderator, admin, owner.** `domains/admin/roles.ts` imports
-nothing and both halves read it: `ABILITIES` says which role a section needs (`money`, `staff` and
-`log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
+nothing and both halves read it: `ABILITIES` says which role a section needs (`people` a moderator,
+`money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
 the one rule about rank. Nobody outranks their own role, and every role outranks somebody who holds
 none. The browser draws a section only where `may` says so; the server asks the same function on
 every route, because the drawing is a courtesy.
@@ -52,6 +52,38 @@ deletes a row. A reversal is a row of its own.
 that is not one reads the first page), by staff member, person (both whatever the case of the
 handle) and kind. A row's time is its transaction's start, `now()`, as everywhere else here: two
 changes that race for one person are told apart by the rows they leave, not by their order.
+
+## People
+
+**Anybody with an account can be found and read by the staff, a moderator included** (`people`,
+the one section a moderator opens). `GET /api/admin/people` lists them newest first, fifty a page,
+by a search (a handle or a name, folded as the social search folds them, so a name stored with
+Arabic letterforms is found by its Persian ones and the other way round, with `%` and `_` read as
+letters; or the start of a wallet) and by a list: `newest`, `suspended`, `minors`, `staff` (the
+owner by the wallet the server names, and every row of `staff_members`) and `reported` (anybody a
+report was filed against). A row carries the face, the first wallet, when the account was made,
+the two flags, the role and how many reports there are against them.
+
+`GET /api/admin/people/:handle` is one person: who they are and their settings, every wallet, the
+sessions that are live (not ended, not expired), each with the browser and the system read from
+its user agent (`agentOf` in `domains/admin/agent.ts`, names a person would recognise and nothing
+for an agent it does not know) and when it was opened and last used, the browsers holding their
+keys, the reports both ways (the other person, the category, the status, never a disclosed message),
+whether they accepted the terms of paid play and any break, their recent games and paid games (read
+by the account's id through the routes that serve a person their own; none when the server keeps
+no vault), and every staff action on them by their id, so a rename does not hide one. The account's
+id never leaves the server. No IP is stored or shown.
+
+**A note is a staff action** (`kind = 'note'`, its words where a change keeps its reason): `POST
+/api/admin/people/:handle/notes`, `{ text }`, three to five hundred characters with one that is not a
+space. The writer must outrank the person, as for any action on an account (a moderator writes on
+players, an admin on players and moderators, the owner on anybody), and nobody writes one on
+themselves (`staff-self`). It answers with the person as they now read.
+
+**A cursor here carries microseconds** (`domains/admin/keyset.ts`): the time of the page's last row
+in whole microseconds since the epoch and its id, compared in SQL. A JavaScript date has
+milliseconds, and a cursor built from one skipped a row written in the same millisecond as the
+page's last row and a few microseconds before it. The log uses the same cursor.
 
 ## Money
 

@@ -45,6 +45,11 @@ const said = (row: LogRow, locale: LocaleApi) =>
         return locale.t('admin.log.line.change', { ...slots, from: named(row.details.from), to: named(row.details.to) });
     }
 
+    if (row.kind === 'note')
+    {
+        return locale.t('admin.log.line.note', slots);
+    }
+
     return locale.t('admin.log.line.revoke', slots);
 };
 

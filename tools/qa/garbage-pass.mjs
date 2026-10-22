@@ -52,7 +52,8 @@ const QUERIES = {
     '/chat/:id/epoch': ['epoch', 'device'],
     '/chat/:id/messages': ['cursor', 'limit'],
     '/vault/games': ['cursor'],
-    '/admin/log': ['cursor', 'staff', 'person', 'kind']
+    '/admin/log': ['cursor', 'staff', 'person', 'kind'],
+    '/admin/people': ['q', 'list', 'cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });
@@ -103,7 +104,8 @@ const BODIES = {
     '/admin/vault/fee': (bad) => [{ bps: bad.length }],
     '/admin/vault/ceiling': (bad) => [{ amount: bad.slice(0, 40) }],
     '/admin/vault/fees': (bad) => [{ amount: bad.slice(0, 40) }],
-    '/admin/staff': (bad) => [{ handle: bad.slice(0, 32), role: 'moderator', reason: bad.slice(0, 500).padEnd(3, 'x') }, { handle: bad.slice(0, 32), role: 'none', reason: 'garbage' }]
+    '/admin/staff': (bad) => [{ handle: bad.slice(0, 32), role: 'moderator', reason: bad.slice(0, 500).padEnd(3, 'x') }, { handle: bad.slice(0, 32), role: 'none', reason: 'garbage' }],
+    '/admin/people/:handle/notes': (bad) => [{ text: bad.slice(0, 500).padEnd(3, 'x') }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);

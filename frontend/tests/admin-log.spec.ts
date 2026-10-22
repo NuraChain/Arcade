@@ -102,6 +102,16 @@ describe('the log', () =>
         expect(facts(container, '[data-entry]:last-child')).toEqual(['2 days ago', 'Owner']);
     });
 
+    it('says a note as a note, with its words where a change keeps its reason', async () =>
+    {
+        staffLogged({ at: hoursAgo(2), staff: 'mina', staffRole: 'moderator', kind: 'note', person: 'reza.t', reason: 'Rude at a Hokm table, twice.', details: {} });
+        const { container } = await opened('/admin/log?kind=note');
+
+        expect(lines(container)).toEqual(['mina wrote a note on reza.t.']);
+        expect(said(container, '[data-entry] [data-reason]')).toBe('Rude at a Hokm table, twice.');
+        expect(isolated(container, '[data-entry]')).toEqual(['mina', 'reza.t']);
+    });
+
     it('keeps its filters in the address: the kind at a press, a handle after a pause or at Enter', async () =>
     {
         story();
@@ -208,7 +218,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 });

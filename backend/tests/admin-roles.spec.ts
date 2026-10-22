@@ -12,9 +12,9 @@ describe('who on the staff may do what', () =>
         const reach = (role: StaffRole | null) => (Object.keys(ABILITIES) as Ability[]).filter((ability) => may(role, ability)).sort();
 
         expect(reach(null)).toEqual([]);
-        expect(reach('moderator')).toEqual([]);
-        expect(reach('admin')).toEqual(['log', 'money', 'staff']);
-        expect(reach('owner')).toEqual(['log', 'money', 'staff', 'wallet']);
+        expect(reach('moderator')).toEqual(['people']);
+        expect(reach('admin')).toEqual(['log', 'money', 'people', 'staff']);
+        expect(reach('owner')).toEqual(['log', 'money', 'people', 'staff', 'wallet']);
     });
 
     it('puts the owner above an admin, an admin above a moderator, and every role above somebody who is none', () =>

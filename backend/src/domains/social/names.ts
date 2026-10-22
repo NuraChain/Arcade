@@ -8,6 +8,10 @@ export const LETTERS_TYPED = 'يىكأإآۀ';
 
 export const LETTERS_READ = 'ییکاااه';
 
+export const folded = (column: string) => `translate(lower(${ column }), '${ LETTERS_TYPED }', '${ LETTERS_READ }')`;
+
+export const likeLiteral = (needle: string) => needle.replace(/[\\%_]/g, (mark) => `\\${ mark }`);
+
 export function searchNeedle(asked: string)
 {
     return [...asked.trim().toLowerCase().replace(/\s+/g, ' ')]
