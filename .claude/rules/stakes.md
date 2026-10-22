@@ -262,11 +262,12 @@ vault would refuse is said in a sentence (`vault-role`, `vault-fee`, `vault-fees
 through the path a deposit takes (`vault.send`). A new fee applies to stakes signed after it: a table
 whose players signed the old one fails its lock and asks them to sign again, as any failed lock does.
 
-**The page** is `components/admin/admin-vault.component.azeroth`, one section of `/admin`, so the
-admin console the owner asked for next can place it. It offers only what the wallet's roles allow,
-asks before it pauses (deposits and new games stop; withdrawals, payouts and reclaims carry on),
-keeps what was typed when something is refused, and says each result in a line of its own, because
-`/admin` is outside the app shell and has no toast host. `admin-vault.spec.ts` holds the page,
+**The page** is `components/admin/admin-vault.component.azeroth`, the admin's Money section. It
+offers only what the wallet's roles allow, asks before it pauses as a question that loses something
+(deposits and new games stop; withdrawals, payouts and reclaims carry on), keeps what was typed when
+something is refused, and says each result as a toast once the vault has been read again, as every
+other section of the admin does. Whether the vault covers what it owes, whether it is open and the
+state of a game stuck on the way are status badges. `admin-vault.spec.ts` holds the page,
 `stake.db.spec.ts` (*the owner's view of the vault*) the service through the real ports,
 `chain-vault.spec.ts` the reads and the calls asked of the vault, and `app.spec.ts` the routes.
 

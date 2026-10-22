@@ -9,7 +9,9 @@ import '../src/locales/admin-catalogue.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
 import { useVault } from '../src/stores/vault.store.ts';
 import type { AdminVault as Standing } from '../../backend/src/schemas.ts';
 import { adminState, client, server } from './fake-api.ts';
@@ -39,6 +41,8 @@ const shown = async () =>
 
 const said = (root: ParentNode, selector: string) => root.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 
+const toasts = () => useToasts().items().map((one) => `${ one.kind } ${ one.text }`);
+
 const button = (root: ParentNode, label: string) => [...root.querySelectorAll('button')].find((one) => one.textContent?.trim() === label);
 
 const typeInto = (field: HTMLInputElement, value: string) =>
@@ -63,6 +67,8 @@ beforeEach(() =>
     useSession().reset();
     useSession().establish({ id: 'owner', handle: 'owner', displayName: 'Owner', bio: '', hue: 40, isMinor: false, address: OWNER, staff: 'owner' });
     useVault().reset();
+    useToasts().dismissAll();
+    useOverlay().reset();
 });
 
 afterEach(() =>
@@ -166,12 +172,12 @@ describe('the vault, as its owner sees it', () =>
 
         expect(send).toHaveBeenCalledTimes(1);
         expect(server.calls).toContain('admin.fee 450');
-        expect(said(container, '[data-said]')).toBe('The fee is now 4.5%.');
+        expect(toasts()).toEqual(['success The fee is now 4.5%.']);
         expect(server.calls.filter((call) => call === 'admin.vault')).toHaveLength(2);
         expect(field.value).toBe('');
     });
 
-    it('says what came of a change only once the vault has been read again, so the line and the figures agree', async () =>
+    it('says what came of a change only once the vault has been read again, so the toast and the figures agree', async () =>
     {
         const container = await shown();
         const admin = client.admin as unknown as Record<string, unknown>;
@@ -191,13 +197,13 @@ describe('the vault, as its owner sees it', () =>
             fire(button(container, 'Change the fee')!, 'click');
             await settle();
 
-            expect(said(container, '[data-said]'), 'the line came before the figures').toBe('');
+            expect(toasts(), 'the toast came before the figures').toEqual([]);
             expect(said(container, '[data-fact="fee"] dd')).toBe('5%');
 
             release();
             await settle();
 
-            expect(said(container, '[data-said]')).toBe('The fee is now 4.5%.');
+            expect(toasts()).toEqual(['success The fee is now 4.5%.']);
             expect(said(container, '[data-fact="fee"] dd')).toBe('4.5%');
         }
         finally
@@ -249,7 +255,7 @@ describe('the vault, as its owner sees it', () =>
         await settle();
 
         expect(server.calls).toContain('admin.ceiling 500000000000000000000');
-        expect(said(container, '[data-said]')).toBe('A seat can now stake up to 500 NURA.');
+        expect(toasts()).toEqual(['success A seat can now stake up to 500 NURA.']);
     });
 
     it('takes out all of the fees the vault holds, and no more', async () =>
@@ -275,40 +281,47 @@ describe('the vault, as its owner sees it', () =>
         await settle();
 
         expect(server.calls).toContain('admin.fees 1000000000000000000');
-        expect(said(container, '[data-said]')).toBe('The fees are in this wallet.');
+        expect(toasts()).toEqual(['success The fees are in this wallet.']);
     });
 
-    it('asks before it pauses the vault, keeps it open when told not now, and opens it again', async () =>
+    it('asks before it pauses the vault, as a question that loses something, keeps it open when told not now, and opens it again', async () =>
     {
         const container = await shown();
+        const asked = () => useOverlay().items().find((one) => one.phase !== 'closing')!;
 
         sending();
         fire(button(container, 'Pause the vault')!, 'click');
         await settle();
 
-        expect(said(container, '[aria-labelledby="admin-vault"]')).toContain('Pausing stops deposits and new games. Withdrawals, payouts and reclaims carry on.');
-        expect(button(container, 'Not now')).toBeDefined();
+        expect(asked().props).toMatchObject({
+            title: 'Pause the vault?',
+            lead: 'Pausing stops deposits and new games. Withdrawals, payouts and reclaims carry on.',
+            confirm: 'Pause it',
+            cancel: 'Not now',
+            destructive: true
+        });
         expect(server.calls.filter((call) => call.startsWith('admin.pause'))).toEqual([]);
 
-        fire(button(container, 'Not now')!, 'click');
+        useOverlay().close(asked().id, false);
         await settle();
 
-        expect(button(container, 'Pause it')).toBeUndefined();
+        expect(server.calls.filter((call) => call.startsWith('admin.pause'))).toEqual([]);
 
         fire(button(container, 'Pause the vault')!, 'click');
         await settle();
         vaultWith({ paused: true });
-        fire(button(container, 'Pause it')!, 'click');
+        useOverlay().close(asked().id, true);
         await settle();
 
         expect(server.calls).toContain('admin.pause true');
-        expect(said(container, '[data-said]')).toBe('The vault is paused.');
+        expect(toasts()).toEqual(['success The vault is paused.']);
 
         fire(button(container, 'Open the vault again')!, 'click');
         await settle();
 
         expect(server.calls).toContain('admin.pause false');
-        expect(said(container, '[data-said]')).toBe('The vault is open again.');
+        expect(useOverlay().items().filter((one) => one.phase !== 'closing')).toHaveLength(0);
+        expect(toasts()).toContain('success The vault is open again.');
     });
 
     it('says what the wallet or the vault refused, and keeps what was typed', async () =>
@@ -322,8 +335,7 @@ describe('the vault, as its owner sees it', () =>
         fire(button(container, 'Change the fee')!, 'click');
         await settle();
 
-        expect(said(container, '[data-said]')).toBe('This wallet does not hold that role on the vault.');
-        expect(container.querySelector('[data-said]')?.className).toContain('text-danger');
+        expect(toasts()).toEqual(['error This wallet does not hold that role on the vault.']);
         expect(field.value).toBe('4');
         expect(server.calls.filter((call) => call === 'admin.vault')).toHaveLength(1);
     });

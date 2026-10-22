@@ -165,6 +165,38 @@ describe('the log', () =>
         expect(said(container, '[data-entry]:first-child [data-reason]')).toBe('Their wallet was taken.');
     });
 
+    it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
+    {
+        story();
+        const { container } = await opened();
+        const time = container.querySelector<HTMLTimeElement>('[data-entry]:first-child [data-when]')!;
+        const hover = () =>
+        {
+            const enter = new Event('pointerenter', { bubbles: true });
+
+            Object.defineProperty(enter, 'pointerType', { value: 'mouse' });
+            time.parentElement!.dispatchEvent(enter);
+        };
+
+        expect(time.dateTime).toBe(hoursAgo(1));
+        expect(time.textContent).toBe('1 hour ago');
+
+        hover();
+        clock.advance(400);
+        await settle();
+
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toBe(useLocale().date(NOW - 3_600_000, { dateStyle: 'long', timeStyle: 'short' }));
+        time.parentElement!.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+        useLocale().setLocale('fa');
+        await settle();
+        hover();
+        clock.advance(400);
+        await settle();
+
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toMatch(/[۰-۹]/);
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toBe(useLocale().date(NOW - 3_600_000, { dateStyle: 'long', timeStyle: 'short' }));
+    });
+
     it('keeps its filters in the address: the kind at a press, a handle after a pause or at Enter', async () =>
     {
         story();

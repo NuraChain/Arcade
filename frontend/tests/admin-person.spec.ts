@@ -71,7 +71,7 @@ const choose = async (root: ParentNode, label: string) =>
     await settle();
 };
 
-const asked = () => useOverlay().items()[0];
+const asked = () => useOverlay().items().find((one) => one.phase !== 'closing')!;
 
 const answered = async (yes: boolean) =>
 {
@@ -145,6 +145,8 @@ describe('a person, as the staff read them', () =>
         expect(said(container, '[data-filed]')).toBe('They filed 1 report.');
         expect(all(container, '[data-report] [data-said]')).toEqual(['mina reported them: Harassment or abuse', 'They reported reza.t: Spam or scams']);
         expect(all(container, '[data-report] [data-said] [dir="ltr"]')).toEqual(['mina', 'reza.t']);
+        expect([...container.querySelectorAll('[data-report] [data-status]')].map((one) => [one.getAttribute('data-status'), one.textContent?.trim()])).toEqual([['received', 'Waiting'], ['reviewed', 'Reviewed']]);
+        expect([...container.querySelectorAll<HTMLTimeElement>('[data-report] [data-when]')].map((one) => one.dateTime)).toEqual([hoursAgo(5), hoursAgo(6)]);
         expect(said(container, '[data-game="g1"]')).toContain('Won');
         expect(said(container, '[data-game="g1"] [dir="ltr"]')).toBe('mina');
         expect(said(container, '[data-paid-game="e1"]')).toContain('Lost');

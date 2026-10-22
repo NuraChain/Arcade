@@ -7,6 +7,7 @@ import LogEntry from '../../components/admin/log-entry.component.azeroth';
 import PersonContent from '../../components/admin/person-content.component.azeroth';
 import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
 import Said from '../../components/admin/said.component.azeroth';
+import When from '../../components/admin/when.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
@@ -17,6 +18,7 @@ import Field from '../../components/ui/field.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import TextArea from '../../components/ui/text-area.component.azeroth';
+import type { Tone } from '../../components/ui/variants.ts';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
@@ -35,6 +37,12 @@ const STATUS_WORDS: Record<string, MessageKey> = {
     received: 'admin.person.report.status.received',
     reviewed: 'admin.person.report.status.reviewed',
     actioned: 'admin.person.report.status.actioned'
+};
+
+const STATUS_TONES: Record<string, Tone> = {
+    received: 'gold',
+    reviewed: 'neutral',
+    actioned: 'live'
 };
 
 const RESULT_WORDS: Record<AdminPerson['games'][number]['result'], MessageKey> = {
@@ -146,7 +154,13 @@ export default component PersonPage()
             category: locale.t(CATEGORY_WORDS[suspension.category] ?? 'report.category.other')
         });
 
+    derived sinceAt = suspension?.since ?? '';
+
     derived standingSince = suspension === null ? '' : locale.t('admin.person.suspendedSince', { when: locale.relative(Date.parse(suspension.since)) });
+
+    derived joinedAt = person?.createdAt ?? '';
+
+    derived seenAt = person?.lastSeenAt ?? '';
 
     derived joined = person === null ? '' : locale.t('admin.people.joined', { when: locale.relative(Date.parse(person.createdAt)) });
 
@@ -193,7 +207,10 @@ export default component PersonPage()
         agent: agentOf(one),
         opened: locale.t('admin.person.session.opened', { when: locale.relative(Date.parse(one.openedAt)) }),
         used: one.usedAt === undefined ? '' : locale.t('admin.person.session.used', { when: locale.relative(Date.parse(one.usedAt)) }),
-        keys: one.device
+        keys: one.device,
+        openedAt: one.openedAt,
+        usedAt: one.usedAt ?? '',
+        wasUsed: one.usedAt !== undefined
     }));
 
     derived signedIn = sessions.length > 0;
@@ -204,7 +221,10 @@ export default component PersonPage()
         agent: agentOf(one),
         added: locale.t('admin.person.device.added', { when: locale.relative(Date.parse(one.createdAt)) }),
         seen: one.seenAt === undefined ? '' : locale.t('admin.person.device.seen', { when: locale.relative(Date.parse(one.seenAt)) }),
-        revoked: one.revoked
+        revoked: one.revoked,
+        createdAt: one.createdAt,
+        seenAt: one.seenAt ?? '',
+        wasSeen: one.seenAt !== undefined
     }));
 
     derived keyed = devices.length > 0;
@@ -217,8 +237,9 @@ export default component PersonPage()
             { other: one.other }
         ),
         status: locale.t(STATUS_WORDS[one.status] ?? 'admin.person.report.status.received'),
-        waiting: one.status === 'received',
-        when: locale.relative(Date.parse(one.at))
+        state: one.status,
+        tone: STATUS_TONES[one.status] ?? 'gold',
+        at: one.at
     }));
 
     derived reported = reports.length > 0;
@@ -447,14 +468,14 @@ export default component PersonPage()
                         </div>
                     </div>
                     <p class="facts text-ui-xs text-faint">
-                        <span>{ joined }</span>
+                        <When at={ joinedAt } said={ joined } />
                         <Show when={ wasSeen }>
-                            <span>{ seen }</span>
+                            <When at={ seenAt } said={ seen } />
                         </Show>
                     </p>
                     <div class="flex flex-col gap-0.5" hidden={ !told } data-suspension>
                         <p class="text-ui-sm font-semibold text-danger" data-standing>{ standing }</p>
-                        <p class="text-ui-xs text-faint" data-since>{ standingSince }</p>
+                        <p class="text-ui-xs text-faint" data-since><When at={ sinceAt } said={ standingSince } /></p>
                     </div>
                 </header>
 
@@ -484,11 +505,11 @@ export default component PersonPage()
                         <Show when={ reported } fallback={ <p class="text-ui-sm text-muted" data-reports="none">{ locale.t('admin.person.reports.none') }</p> }>
                             <ul class="divide-y divide-line" data-reports>
                                 <For each={ reports } key={ (one) => one.id } let={ report }>
-                                    <li class="flex flex-col gap-1 py-2" data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
+                                    <li class="flex flex-col gap-1.5 py-2" data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
                                         <p class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <span class={ () => (report.waiting ? 'font-semibold text-gold' : '') }>{ report.status }</span>
-                                            <span>{ report.when }</span>
+                                        <p class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
+                                            <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
+                                            <When at={ report.at } />
                                         </p>
                                     </li>
                                 </For>
@@ -509,8 +530,8 @@ export default component PersonPage()
                                             </span>
                                         </p>
                                         <p class="facts text-ui-xs text-faint">
-                                            <span>{ one.opened }</span>
-                                            <span class="empty:hidden">{ one.used }</span>
+                                            <When at={ one.openedAt } said={ one.opened } />
+                                            <span hidden={ !one.wasUsed }><When at={ one.usedAt } said={ one.used } /></span>
                                         </p>
                                     </li>
                                 </For>
@@ -532,8 +553,8 @@ export default component PersonPage()
                                             </span>
                                         </p>
                                         <p class="facts text-ui-xs text-faint">
-                                            <span>{ device.added }</span>
-                                            <span class="empty:hidden">{ device.seen }</span>
+                                            <When at={ device.createdAt } said={ device.added } />
+                                            <span hidden={ !device.wasSeen }><When at={ device.seenAt } said={ device.seen } /></span>
                                         </p>
                                     </li>
                                 </For>

@@ -240,6 +240,7 @@ export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.vault.feesDone': 'کارمزدها اومد توی همین کیف پول.',
     'admin.vault.pauseLead': 'با توقف، واریز و بازی جدید بسته می‌شه. برداشت، پرداخت و پس گرفتن مبلغ‌ها ادامه داره.',
     'admin.vault.pause': 'توقف صندوق',
+    'admin.vault.pauseAsk': 'صندوق متوقف بشه؟',
     'admin.vault.pauseYes': 'متوقفش کن',
     'admin.vault.pauseNo': 'فعلاً نه',
     'admin.vault.pausedDone': 'صندوق متوقف شد.',

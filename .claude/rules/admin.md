@@ -224,6 +224,14 @@ while they are signed in somewhere, and tells the staff that a guest cannot come
 the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
 what it said ("It said: …", in its own direction).
 
+**A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
+`components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
+`Tooltip` says the date and the minute in the reader's own calendar, with the moment in `datetime`.
+A log row and a person's history, their joining, last seen and suspension, their sessions, their
+keyed browsers and their reports, who made a member of the staff and when, and a paid game stuck on
+the way each use it, because the staff ask "when exactly" of exactly these. A report's status on a
+person is a status badge (waiting in gold, reviewed plain, acted on in green).
+
 **Money** is the vault panel, and its calls are drawn for the owner alone (`may(role, 'wallet')`):
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.

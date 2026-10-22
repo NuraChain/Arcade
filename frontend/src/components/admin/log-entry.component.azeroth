@@ -1,14 +1,13 @@
 import { logParts, ROLE_WORDS, type LogRow } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Said from './said.component.azeroth';
+import When from './when.component.azeroth';
 
 export default component LogEntry(props: { row: LogRow })
 {
     const locale = useLocale();
 
     derived parts = logParts(props.row, locale);
-
-    derived when = locale.relative(Date.parse(props.row.at));
 
     derived role = props.row.staffRole === undefined ? '' : locale.t(ROLE_WORDS[props.row.staffRole]);
 
@@ -27,7 +26,7 @@ export default component LogEntry(props: { row: LogRow })
         </Show>
         <p class="text-ui-xs text-faint" hidden={ !recalled } data-was><span>{ locale.t('admin.log.was') }</span> <span class="text-muted" dir="auto">{ was }</span></p>
         <p class="facts text-ui-xs text-faint">
-            <span>{ when }</span>
+            <When at={ props.row.at } />
             <span class="empty:hidden">{ role }</span>
         </p>
     </div>

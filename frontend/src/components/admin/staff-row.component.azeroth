@@ -6,6 +6,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import type { Tone } from '../ui/variants.ts';
+import When from './when.component.azeroth';
 
 export type StaffMember = StaffList['members'][number];
 
@@ -27,8 +28,6 @@ export default component StaffRow(props: { member: StaffMember; changeable: bool
 
     derived granted = grantedBy !== '' && grantedAt !== '';
 
-    derived when = grantedAt === '' ? '' : locale.relative(Date.parse(grantedAt));
-
     <div class="flex items-center gap-3 px-4 py-3" data-member={ props.member.handle } data-role={ props.member.role }>
         <Avatar person={ props.member } size="md" />
         <div class="flex min-w-0 flex-1 flex-col">
@@ -37,7 +36,7 @@ export default component StaffRow(props: { member: StaffMember; changeable: bool
             <Show when={ granted }>
                 <p class="facts text-ui-xs text-faint" data-made>
                     <span class="flex min-w-0 gap-1"><span>{ locale.t('admin.staff.by') }</span><span class="truncate" dir="ltr" data-by>{ grantedBy }</span></span>
-                    <span data-when>{ when }</span>
+                    <When at={ grantedAt } />
                 </p>
             </Show>
         </div>

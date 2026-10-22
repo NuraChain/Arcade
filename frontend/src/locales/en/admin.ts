@@ -237,6 +237,7 @@ export const admin = {
     'admin.vault.feesDone': 'The fees are in this wallet.',
     'admin.vault.pauseLead': 'Pausing stops deposits and new games. Withdrawals, payouts and reclaims carry on.',
     'admin.vault.pause': 'Pause the vault',
+    'admin.vault.pauseAsk': 'Pause the vault?',
     'admin.vault.pauseYes': 'Pause it',
     'admin.vault.pauseNo': 'Not now',
     'admin.vault.pausedDone': 'The vault is paused.',
