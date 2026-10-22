@@ -89,7 +89,7 @@ beforeAll(async () =>
         report: () => undefined,
         voiceCall: async () => null,
         mayTalk: async () => false,
-        pulse: async () => ({ games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' })
+        pulse: async () => ({ games: [{ game: 'ludo', status: 'available', playing: 2, tables: 1 }], watching: 'one-game-on' })
     });
 
     const hub = {
@@ -350,7 +350,7 @@ describe('a bound socket', () =>
         await settle(600);
 
         expect(talker.frames.filter((frame) => frame.t === 'pulse')).toMatchObject([
-            { games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' }
+            { games: [{ game: 'ludo', status: 'available', playing: 2, tables: 1 }], watching: 'one-game-on' }
         ]);
         talker.end();
     });

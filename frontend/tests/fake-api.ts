@@ -16,6 +16,7 @@ import type {
     Account,
     AdminPeople,
     AdminPerson,
+    AdminPlay,
     AdminReport,
     AdminReports,
     AdminVault,
@@ -405,6 +406,10 @@ const staffFresh = () => ({
     logged: 0
 });
 
+type PlayStatus = AdminPlay['games'][number]['status'];
+
+const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })) });
+
 const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner' : server.staff.members.find((one) => one.handle === handle)?.role ?? null);
 
 const staffRefused = (word: StaffRefusal, message: string) => new ApiError(STAFF_REFUSALS[word], word, message, undefined);
@@ -620,7 +625,7 @@ export const server =
      * store that used to invent these numbers should not have a fake inventing them either, and a
      * spec that cares about a count says so by putting one here.
      */
-    live: [] as { game: string; playing: number; tables: number }[],
+    live: [] as { game: string; status?: PlayStatus; playing: number; tables: number }[],
     games: [] as unknown[],
     achievements: { scopes: [], families: [], recent: [] } as unknown,
     progress: { xp: 0, level: 1, into: 0, span: 100 },
@@ -708,6 +713,7 @@ export const server =
     staff: staffFresh(),
     accounts: accountsFresh(),
     desk: reportsFresh(),
+    play: playFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -828,6 +834,7 @@ export const server =
         server.proofs = {};
         server.proofRefused = null;
         server.games = [];
+        server.live = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
@@ -873,6 +880,7 @@ export const server =
         server.staff = staffFresh();
         server.accounts = accountsFresh();
         server.desk = reportsFresh();
+        server.play = playFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1400,6 +1408,38 @@ export const client =
             }
 
             return reportView(report);
+        },
+
+        async play()
+        {
+            server.calls.push('admin.play');
+            staffGate('play');
+
+            return structuredClone(server.play);
+        },
+
+        async switchGame({ params, input }: { params: { game: string }; input: { on: boolean; reason: string } })
+        {
+            server.calls.push(`admin.switchGame ${ params.game } ${ input.on } ${ input.reason }`);
+            staffGate('play');
+
+            const held = server.play.games.find((one) => one.game === params.game);
+
+            if (held === undefined || held.status === 'coming-soon')
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            const to: PlayStatus = input.on ? 'available' : 'disabled';
+            const actor = staffRoleOf(server.me);
+
+            if (held.status !== to)
+            {
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'game', reason: input.reason, details: { game: params.game, from: held.status, to } });
+                held.status = to;
+            }
+
+            return structuredClone(server.play);
         }
     },
 
@@ -1538,7 +1578,9 @@ export const client =
         async live()
         {
             server.calls.push('catalogue.live');
-            return { games: server.live.map((row) => ({ ...row })) };
+            const statusOf = (game: string) => (server.games as { id?: string; status?: PlayStatus }[]).find((one) => one.id === game)?.status ?? 'available';
+
+            return { games: server.live.map((row) => ({ status: statusOf(row.game), ...row })) };
         },
         async leaderboard(input: { params: { game: string }; query?: { window?: string } })
         {

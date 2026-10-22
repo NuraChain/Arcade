@@ -33,6 +33,7 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
+    catalogueChanged: () => undefined,
     sessionsRevoked: () => undefined,
     seen: () => undefined
 };

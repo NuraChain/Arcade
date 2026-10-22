@@ -6,7 +6,7 @@ export const GRANTED_ROLES = ['moderator', 'admin'] as const;
 
 export type GrantedRole = (typeof GRANTED_ROLES)[number];
 
-export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out', 'report'] as const;
+export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out', 'report', 'game'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -47,6 +47,7 @@ export const REPORTS_PAGE = 50;
 export const ABILITIES = {
     people: 'moderator',
     reports: 'moderator',
+    play: 'admin',
     money: 'admin',
     staff: 'admin',
     log: 'admin',

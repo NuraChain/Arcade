@@ -19,6 +19,8 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
 
     derived playable = known && catalogue.playable(props.game.id);
 
+    derived shutLead = locale.t(catalogue.status(props.game.id) === 'disabled' ? 'games.pausedLead' : 'games.soonLead');
+
     derived rules = catalogue.rules(props.game.id);
 
     derived pairable = rules.partners === 'optional';
@@ -52,7 +54,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
                         fallback={
                             <p class="flex items-start gap-2 rounded-tile border border-line bg-void/40 p-3 text-ui-sm text-muted">
                                 <Icon name="clock" size={ 16 } class="mt-0.5 shrink-0 text-muted" />
-                                <span>{ locale.t('games.soonLead') }</span>
+                                <span>{ shutLead }</span>
                             </p>
                         }
                     >

@@ -245,8 +245,8 @@ eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The
 any more* in `frontend/CLAUDE.md`.
 
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
-each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready` and
-`kept-out` at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
+each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready`,
+`kept-out` and `game-off` (a game the staff paused, `.claude/rules/admin.md`, *Play*) at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
 `table/service.ts` is the only way the
 table service, the start, the walkout and the invite port throw one: the word is checked where it is
 thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals

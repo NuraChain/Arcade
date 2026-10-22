@@ -41,6 +41,7 @@ const listener: WriteListener = {
     },
     tableChanged: () => undefined,
     tableViewed: () => undefined,
+    catalogueChanged: () => undefined,
     sessionsRevoked: () => undefined,
     seen: () => undefined
 };

@@ -26,6 +26,7 @@ import Rail from '../ui/rail.component.azeroth';
 const LOOK: Record<AdminSection, { icon: IconName; label: MessageKey }> = {
     people: { icon: 'people', label: 'admin.section.people' },
     reports: { icon: 'flag', label: 'admin.section.reports' },
+    play: { icon: 'games', label: 'admin.section.play' },
     money: { icon: 'coins', label: 'admin.section.money' },
     staff: { icon: 'shield', label: 'admin.section.staff' },
     log: { icon: 'history', label: 'admin.section.log' }

@@ -26,12 +26,16 @@ export default component GamesPage()
 
     derived totals = catalogue.totals();
 
-    derived building = !catalogue.loading() && catalogue.games.some((game) => !catalogue.playable(game.id));
+    derived building = !catalogue.loading() && catalogue.games.some((game) => catalogue.status(game.id) !== 'disabled' && !catalogue.playable(game.id));
+
+    derived pausing = !catalogue.loading() && catalogue.games.some((game) => catalogue.status(game.id) === 'disabled');
+
+    derived lead = [locale.t('games.lead'), building ? locale.t('games.leadSoon') : '', pausing ? locale.t('games.leadPaused') : ''].filter((part) => part !== '').join(' ');
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>
         <PageHeader
             title={ locale.t('app.nav.games') }
-            lead={ building ? `${ locale.t('games.lead') } ${ locale.t('games.leadSoon') }` : locale.t('games.lead') }
+            lead={ lead }
             actions={
                 <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-sm text-muted">
                     <span class="flex items-center gap-2">

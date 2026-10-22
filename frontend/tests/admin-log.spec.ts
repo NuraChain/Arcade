@@ -79,6 +79,12 @@ const handled = () =>
     staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'report', person: 'omid', reason: 'Suspended them for a week.', details: { report: 'r-2', outcome: 'actioned', reporter: 'sara.k' } });
 };
 
+const switched = () =>
+{
+    staffLogged({ at: hoursAgo(5), staff: 'mina', staffRole: 'admin', kind: 'game', reason: 'A bug in the dice.', details: { game: 'ludo', from: 'available', to: 'disabled' } });
+    staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'game', reason: 'The dice are fixed.', details: { game: 'ludo', from: 'disabled', to: 'available' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -186,6 +192,21 @@ describe('the log', () =>
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Reports');
         expect(container.querySelector('[data-entry]:first-child [data-open-report]')?.getAttribute('href')).toBe('/admin/reports/r-2');
         expect(said(container, '[data-entry]:last-child [data-open-report]')).toBe('Open the report');
+    });
+
+    it('says a game paused and turned back on, naming the game in the reader\'s words and nobody else', async () =>
+    {
+        switched();
+        const { container } = await opened('/admin/log?kind=game');
+
+        expect(lines(container)).toEqual([
+            'alex turned Ludo back on.',
+            'mina paused Ludo.'
+        ]);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex']);
+        expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('A bug in the dice.');
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games');
+        expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"game"');
     });
 
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
@@ -326,7 +347,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 
@@ -344,6 +365,18 @@ describe('the log', () =>
         ]);
         expect(was(container)).toEqual([null, null, 'نوشته بود: DM me for seats', 'نوشته بود: Reza the Cheat']);
         expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+    });
+
+    it('says a game paused and turned back on in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        switched();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'alex، منچ رو دوباره فعال کرد.',
+            'mina، منچ رو متوقف کرد.'
+        ]);
     });
 
     it('says a report the staff handled in Persian', async () =>

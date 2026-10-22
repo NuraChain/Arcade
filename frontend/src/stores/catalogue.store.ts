@@ -106,6 +106,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
 
     const rulesFor = (id: GameId) => published().get(id)?.rules ?? TABLE_RULES[id];
 
+    const statusOf = (id: GameId): GameStatus => rows().find((row) => row.game === id)?.status ?? published().get(id)?.status ?? 'available';
+
     const counts = (): Map<string, LiveStats> => new Map(
         rows().map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])
     );
@@ -130,9 +132,9 @@ export const useCatalogue = createStore((): CatalogueApi =>
             };
         },
 
-        status: (id) => published().get(id)?.status ?? 'available',
+        status: statusOf,
 
-        playable: (id) => (published().get(id)?.status ?? 'available') === 'available' && drawable(id),
+        playable: (id) => statusOf(id) === 'available' && drawable(id),
         loading: () => catalogue.loading(),
 
         stats: (id) => counts().get(id) ?? QUIET,
@@ -167,7 +169,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
          */
         featured: () =>
         {
-            const open = GAMES.filter((game) => (published().get(game.id)?.status ?? 'available') === 'available' && drawable(game.id));
+            const open = GAMES.filter((game) => statusOf(game.id) === 'available' && drawable(game.id));
             const from = open.length > 0 ? open : GAMES;
 
             return from[Math.floor(runtime().clock.now() / (24 * 3600000)) % from.length].id;

@@ -13,7 +13,7 @@ import { TableStake } from '../../entities/table-stake.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { VaultState } from '../../schemas.ts';
-import { lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
+import { gameOff, gameOn, lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
 import { CONSENT_MS, eligibilityOf, onLadder, potOf, seatsOfMask, shareOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
 
 interface StandingRow
@@ -325,7 +325,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             const table = await tx.getRepository(Table).findOne({ select: { id: true, game: true, status: true, seats: true }, where: { id: tableId } });
             const stake = await tx.getRepository(TableStake).findOne({ where: { tableId } });
 
-            if (table === null || stake === null || table.status === 'closed')
+            if (table === null || stake === null || table.status === 'closed' || !await gameOn(tx, tableId))
             {
                 return { locked: null, dropped: [] as string[] };
             }
@@ -1046,6 +1046,11 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 throw tableRefusal('table-closed', 'That table has closed.');
             }
 
+            if (!await gameOn(db.manager, tableId))
+            {
+                throw gameOff();
+            }
+
             const terms = await vault.terms();
 
             if (terms.paused)
@@ -1157,6 +1162,11 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
 
             await db.transaction(async (tx) =>
             {
+                if (!await gameOn(tx, tableId))
+                {
+                    throw gameOff();
+                }
+
                 const signed = await tx.getRepository(StakeConsent).update({ nonce, userId: me, tableId }, { signature });
 
                 if ((signed.affected ?? 0) === 0)

@@ -39,6 +39,7 @@ export default component LobbyPanel(props: {
     table: TableSummary;
     starting?: boolean;
     removed?: boolean;
+    paused?: boolean;
     onStart?: () => void;
     onSit?: () => void;
     onInvite: () => void;
@@ -95,6 +96,8 @@ export default component LobbyPanel(props: {
 
     derived startable = props.onStart !== undefined;
 
+    derived paused = props.paused === true;
+
     derived closable = props.onClose !== undefined;
 
     derived ludo = props.table.game === 'ludo';
@@ -103,17 +106,19 @@ export default component LobbyPanel(props: {
 
     derived status = !seated
         ? locale.t(props.removed === true ? 'play.table.removed' : 'play.table.watching')
-        : (startable
-            ? locale.t('match.startHint')
-            : (searching
-                ? locale.t('play.lobby.looking', { here: locale.n(props.table.taken), seats: locale.n(props.table.seats) })
-                : (empty > 0
-                    ? locale.plural('play.lobby.emptySeats', empty)
-                    : (meNotReady
-                        ? locale.t('play.lobby.youNotReady')
-                        : (waitingOn.length > 0
-                            ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
-                            : locale.t('play.lobby.allReady'))))));
+        : (paused
+            ? locale.t('play.lobby.paused')
+            : (startable
+                ? locale.t('match.startHint')
+                : (searching
+                    ? locale.t('play.lobby.looking', { here: locale.n(props.table.taken), seats: locale.n(props.table.seats) })
+                    : (empty > 0
+                        ? locale.plural('play.lobby.emptySeats', empty)
+                        : (meNotReady
+                            ? locale.t('play.lobby.youNotReady')
+                            : (waitingOn.length > 0
+                                ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
+                                : locale.t('play.lobby.allReady')))))));
 
     derived room = !seated && empty > 0 ? locale.plural('play.lobby.emptySeats', empty) : '';
 
@@ -317,7 +322,7 @@ export default component LobbyPanel(props: {
 
         <div class="flex flex-col items-center gap-1 text-center">
             <p class="flex items-center justify-center gap-2 text-ui-base text-muted" aria-live="polite">
-                <Show when={ seated && full } fallback={ <Icon name="clock" size={ 15 } class="shrink-0" /> }>
+                <Show when={ seated && full && !paused } fallback={ <Icon name="clock" size={ 15 } class="shrink-0" /> }>
                     { () => <span class="live-dot h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true"></span> }
                 </Show>
                 <span>{ status }</span>

@@ -129,6 +129,7 @@ export interface Hub
     reply(connection: Connection, build: (n: number) => ServerFrame): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
+    catalogueChanged(): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
     seen(userId: string): void;
 
@@ -874,6 +875,11 @@ export function createHub(deps: HubDeps): Hub
             const current = pendingTable.get(tableId);
             pendingTable.set(tableId, { at: deps.now(), people: new Set([...(current?.people ?? []), ...people]) });
             schedule();
+            feel();
+        },
+
+        catalogueChanged()
+        {
             feel();
         },
 

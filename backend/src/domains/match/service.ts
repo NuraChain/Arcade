@@ -10,7 +10,7 @@ import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
 import { maskOf } from '../stake/policy.ts';
-import { lockTable, stillLocking, tableRefusal } from '../table/service.ts';
+import { gameOff, gameOn, lockTable, stillLocking, tableRefusal } from '../table/service.ts';
 import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
@@ -610,6 +610,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 if (table.status === 'closed')
                 {
                     throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
+                if (!await gameOn(tx, tableId))
+                {
+                    throw gameOff();
                 }
 
                 if (await tx.getRepository(TableStake).existsBy({ tableId }))

@@ -4,6 +4,7 @@ import { STAFF_ROLES, type ReportStatus, type StaffRole } from '../../../backend
 import { normalizeName } from '../../../backend/src/lib/naming.ts';
 import type { StaffLog } from '../../../backend/src/schemas.ts';
 import type { Tone } from '../components/ui/variants.ts';
+import { GAMES } from '../data/games.ts';
 import type { MessageKey } from '../locales/en.ts';
 import type { LocaleApi } from '../stores/locale.store.ts';
 
@@ -129,6 +130,13 @@ const said = (row: LogRow, locale: LocaleApi) =>
     if (row.kind === 'report')
     {
         return locale.t(row.details.outcome === 'actioned' ? 'admin.log.line.report.actioned' : 'admin.log.line.report.reviewed', { ...slots, reporter: '{reporter}' });
+    }
+
+    if (row.kind === 'game')
+    {
+        const game = GAMES.find((one) => one.id === row.details.game);
+
+        return locale.t(row.details.to === 'available' ? 'admin.log.line.game.on' : 'admin.log.line.game.off', { ...slots, game: game === undefined ? row.details.game ?? '' : locale.t(game.nameKey) });
     }
 
     return locale.t('admin.log.line.revoke', slots);

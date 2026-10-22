@@ -13,8 +13,8 @@ describe('who on the staff may do what', () =>
 
         expect(reach(null)).toEqual([]);
         expect(reach('moderator')).toEqual(['people', 'reports']);
-        expect(reach('admin')).toEqual(['log', 'money', 'people', 'reports', 'staff']);
-        expect(reach('owner')).toEqual(['log', 'money', 'people', 'reports', 'staff', 'wallet']);
+        expect(reach('admin')).toEqual(['log', 'money', 'people', 'play', 'reports', 'staff']);
+        expect(reach('owner')).toEqual(['log', 'money', 'people', 'play', 'reports', 'staff', 'wallet']);
     });
 
     it('puts the owner above an admin, an admin above a moderator, and every role above somebody who is none', () =>

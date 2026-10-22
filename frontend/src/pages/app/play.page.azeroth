@@ -369,7 +369,9 @@ export default component PlayPage()
 
     derived roomOpen = lobbyOpen || standing;
 
-    derived startable = !showing && ready && seated && table?.stake === undefined;
+    derived paused = table !== null && catalogue.status(table.game as GameId) === 'disabled';
+
+    derived startable = !showing && ready && seated && table?.stake === undefined && !paused;
 
     derived watched = watchReady ? spectated : null;
 
@@ -1083,6 +1085,7 @@ export default component PlayPage()
                                     table: shown,
                                     starting,
                                     removed,
+                                    paused,
                                     onStart: startable ? () => void begin() : undefined,
                                     onSit: standing && seatOffered ? () => void sitDown() : undefined,
                                     onInvite: () => invite(shown.id),

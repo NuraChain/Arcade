@@ -8,7 +8,7 @@ design, with the decisions and what was not chosen, is
 
 **Three roles, each above the last: moderator, admin, owner.** `domains/admin/roles.ts` imports
 nothing and both halves read it: `ABILITIES` says which role a section needs (`people` and `reports`
-a moderator, `money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
+a moderator, `play`, `money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
 the one rule about rank. Nobody outranks their own role, and every role outranks somebody who holds
 none. The browser draws a section only where `may` says so; the server asks the same function on
 every route, because the drawing is a courtesy.
@@ -182,6 +182,45 @@ already has changes nothing and writes nothing; a later outcome is a row of its 
 `social` scope is rung, so their own list of reports shows the new status; nobody is notified (D9).
 `admin-reports.db.spec.ts` holds the queue, one report, the outcomes and the refusals.
 
+## Play
+
+**An admin or the owner turns a game off and on** (`play`, `domains/admin/play.ts`). `GET
+/api/admin/play` lists every row of `games` in the catalogue's order with its status, the games
+being played (`matches` with no finish) and the tables waiting for one (open, with no game on: a
+table a finished game left behind is waiting, a closed one is not). `POST /api/admin/play/games/:game`,
+`{ on, reason }`, locks the game's row (`pessimistic_write`, so two switches at once write one
+change), sets `available` or `disabled`, and writes one row of kind `game` with `{ game, from, to }`
+and no person, in that transaction; it answers the list as it now stands. A game nobody has heard
+of and one still `coming-soon` are answered as a page that is not there: coming soon is the state
+of a game whose table does not exist yet, and a switch is not how one ships. A switch to what the
+game already is changes nothing, writes nothing and rings nobody.
+
+**Off stops everything new and nothing under way** (D10). Nobody can open a table of it (`create`
+reads the rules through `available`), look for one (`quick-game`) or start one: the start asks
+`gameOn` under the table's lock and refuses `game-off` (409, "That game is paused, so no game can
+start here for now."), and the browser says it in the reader's words (`tables.refused.game-off`).
+A table played for NURA is asked the same at both of its starts: the stake to sign is refused
+`game-off` and so is a signed Ready, so nothing is locked on the chain for a paused game, and a
+lock whose last Ready landed in the moment of the switch locks nothing while the game is off; the
+sweep that locks a paid table whose chairs all signed locks it once the game is on again. A lock
+already sent to the chain deals its game, as a start already under way does: the stakes are
+locked, and refunding them would cost the players a game they had agreed to. The games being
+played go on to their end, moves, sweeps and walkouts alike.
+
+**Everybody learns at once.** A switch that changed something rings `catalogueChanged`, the hub
+asks for a pulse, and the pulse carries every game's status (`gameLive.status`) beside its counts,
+so every page that is open hears it: the catalogue store takes a game's status from the newest
+counts it holds over the catalogue it read once (`statusOf`), a paused game is not `playable`, and
+its card, tile, page and create page say "Paused" where a game still coming says "Coming soon".
+A waiting room of a paused game says so where it would say go ("This game is paused for now. A
+game can start here again once it is back.", under the clock and not the green dot) and offers no
+Start, so nobody presses one to be refused; Ready stays, and Start comes back when the game does.
+Its leaderboard stays: a board of results needs nothing to be playable.
+
+`admin-play.db.spec.ts` holds the list, the switch, the refusals, the row lock (two switches parked
+on a held row) and everything new refused while a live game plays on; `stake.db.spec.ts` the paid
+table; `realtime-hub.spec.ts` the pulse.
+
 ## Money
 
 The vault section (`.claude/rules/stakes.md`, *The owner's view of the vault*) is `money`: an admin
@@ -280,6 +319,17 @@ again either way. A row of the log about a report offers "Open the report", exce
 own page, and a report on a person's page leads to it. In Persian the log is «تاریخچه», so that it
 is never read as «گزارش‌ها» beside it.
 
+**Play** lists the games in the server's order, each as its picture, its name, its status as a
+badge (on in green, paused in gold, coming soon plain) and how many games are being played and
+tables wait, with one button: Pause for a game that is on, Turn on for one that is paused, and
+nothing but "Not ready to be played yet" for one still coming. The button asks why in a sheet
+(`ReasonSheet`, `components/admin/`, which closes with the reason or nothing: the reason is three
+characters or more, and the sheet says so where it is typed), a pause as a destructive question
+that says what stops and what goes on, turning on as one that loses nothing. Said yes to, the
+game's new status is shown at the press, said once the server has ("Ludo is paused."), and a
+refusal takes it back with the refusal's words. The log says "mina paused Ludo." and "alex turned
+Ludo back on.", the game in the reader's own words.
+
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
 `Tooltip` says the date and the minute in the reader's own calendar, with the moment in `datetime`.
@@ -293,12 +343,13 @@ an admin whose wallet happens to hold a role on the vault is told that only the 
 from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
-`admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts` and `admin-vault.spec.ts`
-hold the page; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
+`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page, and `paused-game.spec.ts` what a player
+sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a report's outcome and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three and the reports' two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

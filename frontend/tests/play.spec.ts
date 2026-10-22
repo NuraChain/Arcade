@@ -176,7 +176,7 @@ describe('GameCard', () =>
         await new Promise((resolve) => setTimeout(resolve, 30));
     };
 
-    const summary = (id: string, status: 'available' | 'coming-soon'): unknown => ({
+    const summary = (id: string, status: 'available' | 'coming-soon' | 'disabled'): unknown => ({
         id,
         slug: id,
         nameKey: `game.${ id }.name`,
@@ -253,6 +253,29 @@ describe('GameCard', () =>
         expect(button.disabled).toBe(true);
         expect(button.textContent).toContain('Coming soon');
         expect(container.textContent, 'a game that cannot be played yet says Play now').not.toContain('Play now');
+    });
+
+    it('says a game the staff paused is paused, on its picture and on its button, and offers no play', async () =>
+    {
+        server.games = [summary('poker', 'disabled')];
+        server.live = [{ game: 'poker', playing: 5, tables: 1 }];
+        useCatalogue().reset();
+        const container = mount('poker');
+        await settle();
+
+        const button = container.querySelector('button')!;
+
+        expect(button.disabled).toBe(true);
+        expect(button.textContent?.trim()).toBe('Paused');
+        expect(container.querySelector('a')?.textContent?.trim()).toBe('Paused');
+        expect(container.textContent).not.toContain('Coming soon');
+        expect(container.textContent).not.toContain('Live');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(button.textContent?.trim()).toBe('متوقف');
+        useLocale().setLocale('en');
     });
 
     it('holds its call to action until the catalogue has answered', () =>
@@ -928,6 +951,7 @@ describe('PlayPage', () =>
         {
             useOverlay().reset();
             useLocale().setLocale('en');
+            server.live = [];
 
             for (const one of server.tables)
             {
@@ -964,6 +988,31 @@ describe('PlayPage', () =>
             await vi.waitFor(() => expect(pressable(container, 'play.lobby.readyTag')).toBeDefined(), { timeout: 4000 });
 
             expect(pressable(container, 'match.start')).toBeUndefined();
+        });
+
+        it('offers no Start at a table whose game the staff paused, says so where it would say go, and offers it again once the game is back', async () =>
+        {
+            const id = await useLobby().host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[0].ready = true;
+            held.chairs[1].who = 'sara.k';
+            held.chairs[1].ready = true;
+            server.live = [{ game: 'backgammon', status: 'disabled', playing: 2, tables: 0 }];
+            useCatalogue().refresh();
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('play.lobby.paused')), { timeout: 4000 });
+
+            expect(pressable(container, 'match.start')).toBeUndefined();
+            expect(pressable(container, 'play.lobby.readyTag')).toBeDefined();
+
+            server.live = [{ game: 'backgammon', status: 'available', playing: 2, tables: 0 }];
+            useCatalogue().refresh();
+
+            await vi.waitFor(() => expect(pressable(container, 'match.start')).toBeDefined(), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('play.lobby.paused'));
         });
 
         it('says a chair is empty when somebody stood up before the start arrived', async () =>

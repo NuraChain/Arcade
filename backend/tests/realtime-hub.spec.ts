@@ -1614,8 +1614,8 @@ describe('voice at a table', () =>
 
 describe('how busy the games are', () =>
 {
-    const quiet = [{ game: 'ludo', playing: 0, tables: 0 }];
-    const busier = [{ game: 'ludo', playing: 2, tables: 1 }];
+    const quiet = [{ game: 'ludo', status: 'available' as const, playing: 0, tables: 0 }];
+    const busier = [{ game: 'ludo', status: 'available' as const, playing: 2, tables: 1 }];
     const NOTHING_ON = 'nothing-on';
 
     const pulsesOf = (wire: FakeWire) =>
@@ -1716,6 +1716,31 @@ describe('how busy the games are', () =>
         expect(pulsesOf(alex.wire)).toHaveLength(1);
     });
 
+    it('tells everybody when a game is turned on or off, and nothing when the catalogue says what it said', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        await pass(PULSE_MS);
+
+        const asked = world.asked;
+        const off = [{ game: 'ludo', status: 'disabled' as const, playing: 0, tables: 0 }];
+
+        world.pulse = { games: off, watching: NOTHING_ON };
+        world.hub.catalogueChanged();
+        await pass(PULSE_MS);
+
+        expect(world.asked).toBe(asked + 1);
+        expect(pulsesOf(alex.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: off, watching: NOTHING_ON }]);
+        expect(pulsesOf(sara.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: off, watching: NOTHING_ON }]);
+
+        world.hub.catalogueChanged();
+        await pass(PULSE_MS);
+
+        expect(world.asked).toBe(asked + 2);
+        expect(pulsesOf(alex.wire)).toHaveLength(2);
+    });
+
     it('says so when what there is to watch has changed and no number has', async () =>
     {
         const alex = await connect('alex');
@@ -1740,7 +1765,7 @@ describe('how busy the games are', () =>
 
         for (let change = 1; change <= CHANGES; change += 1)
         {
-            world.pulse = { games: [{ game: 'ludo', playing: change, tables: 1 }], watching: NOTHING_ON };
+            world.pulse = { games: [{ game: 'ludo', status: 'available', playing: change, tables: 1 }], watching: NOTHING_ON };
             world.hub.tableChanged(`t-${ change }`, []);
             await pass(EVERY_MS);
         }
@@ -1749,7 +1774,7 @@ describe('how busy the games are', () =>
 
         expect(world.asked - asked).toBeGreaterThanOrEqual(2);
         expect(world.asked - asked).toBeLessThanOrEqual(Math.ceil((CHANGES * EVERY_MS + PULSE_MS) / PULSE_MS) + 1);
-        expect(pulsesOf(alex.wire).at(-1)).toEqual({ games: [{ game: 'ludo', playing: CHANGES, tables: 1 }], watching: NOTHING_ON });
+        expect(pulsesOf(alex.wire).at(-1)).toEqual({ games: [{ game: 'ludo', status: 'available', playing: CHANGES, tables: 1 }], watching: NOTHING_ON });
     });
 
     it('asks again about a change that arrived while it was asking', async () =>

@@ -38,6 +38,7 @@ import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
+import { createPlayService } from './domains/admin/play.ts';
 import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
@@ -89,6 +90,7 @@ export interface WriteListener
     gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
+    catalogueChanged(): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
     seen(userId: string): void;
 }
@@ -976,6 +978,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const desk = createReportsService(db, config.adminWallet);
 
+    const plays = createPlayService(db);
+
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
 
@@ -1786,6 +1790,29 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 return await reportOf(id);
+            },
+
+            async play(me)
+            {
+                return await ableTo(me, 'play') === null ? null : { games: await plays.games() };
+            },
+
+            async switchGame(me, game, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const changed = actor === null ? null : await plays.switchGame(actor, game, input.on, input.reason);
+
+                if (changed === null)
+                {
+                    return null;
+                }
+
+                if (changed)
+                {
+                    live?.catalogueChanged();
+                }
+
+                return { games: await plays.games() };
             }
         },
 

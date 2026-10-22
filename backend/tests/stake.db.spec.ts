@@ -7,7 +7,7 @@ import { getAddress, keccak256, encodeAbiParameters, type Hex } from 'viem';
 import { errorResponse } from '@azerothjs/http';
 
 import { vaultIdOf } from '../src/chain/vault.ts';
-import { Conversation, Escrow, EscrowSeat, Match, MatchAction, MatchPlayer, Message, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
+import { Conversation, Escrow, EscrowSeat, Game, Match, MatchAction, MatchPlayer, Message, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { endingOf } from '../src/domains/match/declare.ts';
@@ -47,6 +47,7 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
+    catalogueChanged: () => undefined,
     sessionsRevoked: () => undefined,
     seen: () => undefined
 };
@@ -718,6 +719,41 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 await db.query(`update stake_consents set signature = $1 where table_id = $2 and user_id = $3`, [signFor(person, terms.typedData), tableId, person.id]);
             }
             await db.query(`update table_seats set ready = true where table_id = $1`, [tableId]);
+
+            await sweep();
+
+            expect((await escrowOf(tableId))?.state).toBe('locking');
+        });
+
+        it('asks nobody to sign for a game that is paused, refuses a stake signed before the pause, locks nothing while it lasts and locks once it is back', async () =>
+        {
+            const { host, guest, tableId } = await seated();
+            const early = await ports.table.stake(guest.id, tableId);
+            const late = await ports.table.stake(host.id, tableId);
+
+            await db.getRepository(Game).update({ id: 'ludo' }, { status: 'disabled' });
+
+            try
+            {
+                expect(await word(ports.table.stake(host.id, tableId))).toBe('409 game-off');
+                expect(await word(ports.table.setReady(guest.id, tableId, true, signFor(guest, early.typedData)))).toBe('409 game-off');
+                expect(await readiness(tableId)).toEqual([false, false]);
+
+                for (const [person, terms] of [[host, late], [guest, early]] as const)
+                {
+                    await db.query(`update stake_consents set signature = $1 where table_id = $2 and user_id = $3`, [signFor(person, terms.typedData), tableId, person.id]);
+                }
+                await db.query(`update table_seats set ready = true where table_id = $1`, [tableId]);
+
+                await sweep();
+
+                expect(await escrowOf(tableId)).toBeNull();
+                expect(await readiness(tableId)).toEqual([true, true]);
+            }
+            finally
+            {
+                await db.getRepository(Game).update({ id: 'ludo' }, { status: 'available' });
+            }
 
             await sweep();
 

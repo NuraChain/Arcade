@@ -32,6 +32,7 @@ export const routes: PageRoute[] = [
             { path: 'people/:handle', lazy: chunk(() => import('./pages/admin/person.page.azeroth')), guard: requireAbility('people') },
             { path: 'reports', lazy: chunk(() => import('./pages/admin/reports.page.azeroth')), guard: requireAbility('reports') },
             { path: 'reports/:id', lazy: chunk(() => import('./pages/admin/report.page.azeroth')), guard: requireAbility('reports') },
+            { path: 'play', lazy: chunk(() => import('./pages/admin/play.page.azeroth')), guard: requireAbility('play') },
             { path: 'money', lazy: chunk(() => import('./pages/admin/money.page.azeroth')), guard: requireAbility('money') },
             { path: 'staff', lazy: chunk(() => import('./pages/admin/staff.page.azeroth')), guard: requireAbility('staff') },
             { path: 'log', lazy: chunk(() => import('./pages/admin/log.page.azeroth')), guard: requireAbility('log') }

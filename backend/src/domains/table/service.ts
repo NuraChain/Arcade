@@ -320,6 +320,14 @@ export const lockTable = async (tx: EntityManager, tableId: string) =>
 
 export const stillLocking = () => tableRefusal('paid-locking', 'The stakes are being locked on NuraChain. Wait a moment.');
 
+export const gameOff = () => tableRefusal('game-off', 'That game is paused, so no game can start here for now.');
+
+export const gameOn = (tx: EntityManager, tableId: string) =>
+    tx.getRepository(Table).createQueryBuilder('t')
+        .innerJoin(Game, 'g', `g.id = t.game and g.status = 'available'`)
+        .where('t.id = :tableId', { tableId })
+        .getExists();
+
 export const lockingAt = (tx: EntityManager, tableId: string) =>
     tx.getRepository(Escrow).existsBy({ tableId, state: 'locking' });
 

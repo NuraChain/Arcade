@@ -253,6 +253,7 @@ export type MatchHistory = Infer<typeof matchHistory>;
 
 export const gameLive = object({
     game: string(),
+    status: gameStatus,
     playing: number(),
     tables: number()
 });
@@ -1202,6 +1203,14 @@ export const adminReportsQuery = object({ status: enumOf(REPORT_LISTS).optional(
 export const adminReviewInput = object({ outcome: enumOf(REPORT_OUTCOMES), reason: said() });
 
 export const reportsWaiting = object({ count: number() });
+
+export const adminPlay = object({
+    games: array(object({ game: string(), status: gameStatus, matches: number(), tables: number() }))
+});
+
+export type AdminPlay = Infer<typeof adminPlay>;
+
+export const adminGameInput = object({ on: boolean(), reason: said() });
 
 /**
  * The two switches an account controls, and the one it does not.

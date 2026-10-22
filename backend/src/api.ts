@@ -36,6 +36,8 @@ import {
     adminReportsQuery,
     adminReviewInput,
     reportsWaiting,
+    adminPlay,
+    adminGameInput,
     adminSignOutInput,
     adminSuspendInput,
     adminVault,
@@ -436,7 +438,13 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.report(context.principal.userId, context.params.id))),
 
             review: routes.post('/reports/:id/review', { input: adminReviewInput, output: adminReport },
-                async (context) => onlyAdmin(await ports.admin.review(context.principal.userId, context.params.id, context.input)))
+                async (context) => onlyAdmin(await ports.admin.review(context.principal.userId, context.params.id, context.input))),
+
+            play: routes.get('/play', { output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.play(context.principal.userId))),
+
+            switchGame: routes.post('/play/games/:game', { input: adminGameInput, output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.switchGame(context.principal.userId, context.params.game, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({
