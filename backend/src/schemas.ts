@@ -1227,7 +1227,7 @@ export const adminOverview = object({
         uptime: number(),
         rss: number(),
         heap: number(),
-        loop: object({ p50: number(), p99: number(), max: number() }),
+        loop: object({ busy: number(), stall: number() }),
         pool: object({ total: number(), idle: number(), waiting: number() }),
         sockets: number(),
         requests: number(),

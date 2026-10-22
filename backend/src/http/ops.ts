@@ -1,4 +1,4 @@
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 
 import type { RequestObserver } from '@azerothjs/http';
 
@@ -7,6 +7,8 @@ export const MINUTE_MS = 60_000;
 export const HOUR_MINUTES = 60;
 
 export const FAILURES_KEPT = 50;
+
+export const LOOP_TICK_MS = 20;
 
 export interface Failure
 {
@@ -18,9 +20,8 @@ export interface Failure
 
 export interface Loop
 {
-    p50: number;
-    p99: number;
-    max: number;
+    busy: number;
+    stall: number;
 }
 
 export interface ProcessHealth
@@ -45,12 +46,14 @@ export function createOps(now: () => number = Date.now)
 {
     const minutes: { minute: number; requests: number; failed: number }[] = [];
     const failures: Failure[] = [];
-    const delay = monitorEventLoopDelay({ resolution: 20 });
+    const delay = monitorEventLoopDelay({ resolution: LOOP_TICK_MS });
+    let since = performance.eventLoopUtilization();
     let last: Loop | null = null;
 
-    const read = (): Loop => (delay.count === 0
-        ? { p50: 0, p99: 0, max: 0 }
-        : { p50: delay.percentile(50) / NS_PER_MS, p99: delay.percentile(99) / NS_PER_MS, max: delay.max / NS_PER_MS });
+    const read = (): Loop => ({
+        busy: performance.eventLoopUtilization(since).utilization,
+        stall: delay.count === 0 ? 0 : Math.max(0, delay.max / NS_PER_MS - LOOP_TICK_MS)
+    });
 
     delay.enable();
 
@@ -58,6 +61,7 @@ export function createOps(now: () => number = Date.now)
     {
         last = read();
         delay.reset();
+        since = performance.eventLoopUtilization();
     }, MINUTE_MS);
 
     roll.unref();

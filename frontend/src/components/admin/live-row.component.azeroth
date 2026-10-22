@@ -1,0 +1,67 @@
+import { Link } from 'azerothjs';
+
+import type { AdminLive } from '../../../../backend/src/schemas.ts';
+import { GAMES } from '../../data/games.ts';
+import { handleParts, ROLE_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Said from './said.component.azeroth';
+import When from './when.component.azeroth';
+
+export type AdminLiveRow = AdminLive['rows'][number];
+
+export default component LiveRow(props: { row: AdminLiveRow })
+{
+    const locale = useLocale();
+
+    derived row = props.row;
+
+    derived name = row.displayName;
+
+    derived handle = row.handle;
+
+    derived ranked = row.staff !== undefined;
+
+    derived roleWord = row.staff === undefined ? '' : locale.t(ROLE_WORDS[row.staff]);
+
+    derived away = row.state === 'away';
+
+    derived since = row.since;
+
+    derived came = locale.t('admin.live.came', { when: locale.relative(Date.parse(row.since)) });
+
+    const nameOf = (game: string) =>
+    {
+        const known = GAMES.find((one) => one.id === game);
+
+        return known === undefined ? game : locale.t(known.nameKey);
+    };
+
+    derived doing = [
+        ...row.tables.map((table) => ({
+            key: `table ${ table.code }`,
+            parts: handleParts(locale.t(table.playing ? 'admin.live.playing' : 'admin.live.waiting', { game: nameOf(table.game), code: '{code}' }), { code: table.code.toUpperCase() })
+        })),
+        ...(row.call === undefined ? [] : [{ key: 'call', parts: handleParts(locale.t('admin.live.call', { code: '{code}' }), { code: row.call.code.toUpperCase() }) }]),
+        ...(row.tables.length === 0 ? [{ key: 'idle', parts: [{ at: 0, text: locale.t('admin.live.idle'), handle: false }] }] : [])
+    ];
+
+    <Link to={ () => `/admin/people/${ encodeURIComponent(props.row.handle) }` } class="flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-raised" data-open>
+        <Avatar person={ row } size="md" />
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="truncate text-ui-sm font-semibold text-text" dir="auto" data-name>{ name }</span>
+                <span class="truncate text-ui-xs text-muted" dir="ltr">@{ handle }</span>
+                <span class="flex" hidden={ !ranked } data-role><Badge text={ roleWord } tone="accent" /></span>
+                <span class="flex" hidden={ !away } data-away><Badge dot text={ locale.t('admin.live.away') } tone="gold" /></span>
+            </span>
+            <span class="text-ui-xs text-faint" data-came><When at={ since } said={ came } /></span>
+            <ul class="flex flex-col gap-0.5 text-ui-xs text-muted" data-doing>
+                <For each={ doing } key={ (one) => one.key } let={ one }>
+                    <li><Said parts={ one.parts } /></li>
+                </For>
+            </ul>
+        </span>
+    </Link>
+}

@@ -581,7 +581,7 @@ describe('guards', () =>
         {
             useSession().establish({ ...staff, staff: role });
             expect(await requireStaff(), role).toBe(true);
-            expect(await firstSection(), role).toMatchObject({ to: '/admin/people', replace: true });
+            expect(await firstSection(), role).toMatchObject({ to: '/admin/overview', replace: true });
         }
     });
 

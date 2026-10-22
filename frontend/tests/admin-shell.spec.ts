@@ -88,7 +88,7 @@ describe('the admin', () =>
     it('answers anybody whose role opens no section of it as a page that is not there, at every address', async () =>
     {
         const refused: [StaffRole | undefined, string][] = [
-            ...['/admin', '/admin/people', '/admin/people/mina', '/admin/reports', '/admin/reports/report-1', '/admin/money', '/admin/staff', '/admin/log'].map((at) => [undefined, at] as [undefined, string]),
+            ...['/admin', '/admin/overview', '/admin/live', '/admin/people', '/admin/people/mina', '/admin/reports', '/admin/reports/report-1', '/admin/money', '/admin/staff', '/admin/log'].map((at) => [undefined, at] as [undefined, string]),
             ...['/admin/money', '/admin/staff', '/admin/log'].map((at) => ['moderator', at] as [StaffRole, string])
         ];
 
@@ -103,27 +103,27 @@ describe('the admin', () =>
         }
     });
 
-    it('takes every role on the staff from /admin to the first section it opens, the people', async () =>
+    it('takes every role on the staff from /admin to the first section it opens, the overview', async () =>
     {
         for (const staff of ['moderator', 'admin', 'owner'] as const)
         {
             signIn(staff);
             const { router, container } = await opened('/admin');
 
-            expect(router.location().pathname, staff).toBe('/admin/people');
+            expect(router.location().pathname, staff).toBe('/admin/overview');
             expect(container.querySelector('#admin-shell')).not.toBeNull();
-            expect(container.querySelector('#admin-main h1')?.textContent).toBe('People');
+            expect(container.querySelector('#admin-main h1')?.textContent).toBe('Overview');
             cleanup();
         }
     });
 
-    it('lists a moderator the two sections a moderator opens', async () =>
+    it('lists a moderator the four sections a moderator opens', async () =>
     {
         signIn('moderator');
         const { container } = await opened('/admin/people');
 
-        expect(hrefs(container.querySelector('header nav')!, 'a')).toEqual(['/admin/people', '/admin/reports']);
-        expect(hrefs(container.querySelector('#admin-shell > div > nav')!, 'a')).toEqual(['/admin/people', '/admin/reports']);
+        expect(hrefs(container.querySelector('header nav')!, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports']);
+        expect(hrefs(container.querySelector('#admin-shell > div > nav')!, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports']);
     });
 
     it('says on Reports how many are waiting, read when the admin opens, at every other section and when the tab is seen again', async () =>
@@ -136,8 +136,12 @@ describe('the admin', () =>
         const counts = () => [...container.querySelectorAll('nav a')].map((link) => [link.getAttribute('href'), link.querySelector('[role="status"]')?.textContent ?? null]);
 
         expect(counts()).toEqual([
+            ['/admin/overview', null],
+            ['/admin/live', null],
             ['/admin/people', null],
             ['/admin/reports', '2'],
+            ['/admin/overview', null],
+            ['/admin/live', null],
             ['/admin/people', null],
             ['/admin/reports', '2']
         ]);
@@ -173,8 +177,8 @@ describe('the admin', () =>
 
         expect(rail.className).toContain('lg:hidden');
         expect(side.className).toContain('lg:block');
-        expect(hrefs(rail, 'a')).toEqual(['/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
-        expect(hrefs(side, 'a')).toEqual(['/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(rail, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(side, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
         expect(hrefs(container, '[aria-current="page"]')).toEqual(['/admin/staff', '/admin/staff']);
         expect(rail.getAttribute('aria-label')).toBe('The admin');
 
@@ -212,7 +216,7 @@ describe('the admin', () =>
 
         expect(header.querySelector('h1')?.textContent).toBe('مدیریت');
         expect(header.textContent).toContain('مالک');
-        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['کاربرها', 'گزارش‌ها', 'بازی‌ها', 'پول', 'تیم', 'تاریخچه']);
+        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['نمای کلی', 'آنلاین‌ها', 'کاربرها', 'گزارش‌ها', 'بازی‌ها', 'پول', 'تیم', 'تاریخچه']);
         expect(container.querySelector('#admin-main h1')?.textContent).toBe('پول');
     });
 });

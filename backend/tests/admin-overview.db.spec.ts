@@ -56,7 +56,7 @@ const HEALTH: ProcessHealth = {
     uptime: 3600,
     rss: 120_000_000,
     heap: 60_000_000,
-    loop: { p50: 1.5, p99: 12.25, max: 40 },
+    loop: { busy: 0.0125, stall: 4.5 },
     requests: 900,
     failed: 2,
     failures: [{ at: '2026-10-22T09:00:00.000Z', method: 'POST', path: '/api/tables/t1/start', status: 500 }]

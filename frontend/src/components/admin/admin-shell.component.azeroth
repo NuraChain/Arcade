@@ -24,6 +24,8 @@ import IconButton from '../ui/icon-button.component.azeroth';
 import Rail from '../ui/rail.component.azeroth';
 
 const LOOK: Record<AdminSection, { icon: IconName; label: MessageKey }> = {
+    overview: { icon: 'activity', label: 'admin.section.overview' },
+    live: { icon: 'signal', label: 'admin.section.live' },
     people: { icon: 'people', label: 'admin.section.people' },
     reports: { icon: 'flag', label: 'admin.section.reports' },
     play: { icon: 'games', label: 'admin.section.play' },

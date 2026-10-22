@@ -14,6 +14,93 @@ export const admin = {
     'admin.section.people': 'People',
     'admin.section.reports': 'Reports',
     'admin.section.play': 'Play',
+    'admin.section.overview': 'Overview',
+    'admin.section.live': 'Online now',
+    'admin.overview.lead': 'What is happening on Nura Games now, counted from the database and this server. It is read again every 15 seconds while you look at it.',
+    'admin.overview.read': 'Read again',
+    'admin.overview.readAt': 'Read at {time}',
+    'admin.overview.failed': 'The overview could not be read.',
+    'admin.overview.people': 'Accounts',
+    'admin.overview.accounts': {
+        one: 'account',
+        other: 'accounts'
+    },
+    'admin.overview.day': {
+        one: 'joined in the last day',
+        other: 'joined in the last day'
+    },
+    'admin.overview.week': {
+        one: 'joined in the last week',
+        other: 'joined in the last week'
+    },
+    'admin.overview.active': {
+        one: 'seen in the last day',
+        other: 'seen in the last day'
+    },
+    'admin.overview.suspended': {
+        one: 'suspended',
+        other: 'suspended'
+    },
+    'admin.overview.minors': {
+        one: 'under 18',
+        other: 'under 18'
+    },
+    'admin.overview.openPeople': 'Open People',
+    'admin.overview.onlineCount': {
+        one: 'person online now',
+        other: 'people online now'
+    },
+    'admin.overview.openLive': 'See who',
+    'admin.overview.reportsWaiting': {
+        one: 'report waiting',
+        other: 'reports waiting'
+    },
+    'admin.overview.openReports': 'Open the queue',
+    'admin.overview.games': 'Games',
+    'admin.overview.stuck': {
+        one: 'game stuck',
+        other: 'games stuck'
+    },
+    'admin.overview.openPlay': 'Open Play',
+    'admin.overview.money': 'Playing for NURA',
+    'admin.overview.paidPlaying': {
+        one: 'game for NURA being played',
+        other: 'games for NURA being played'
+    },
+    'admin.overview.inPlay': 'NURA locked in games',
+    'admin.overview.paidStuck': {
+        one: 'payment stuck on the way',
+        other: 'payments stuck on the way'
+    },
+    'admin.overview.openMoney': 'Open Money',
+    'admin.overview.server': 'This server',
+    'admin.overview.uptime': 'Up for {time}',
+    'admin.overview.uptimeFresh': 'Up for less than a minute',
+    'admin.overview.memory': 'Memory',
+    'admin.overview.memoryValue': '{rss} in all · heap {heap}',
+    'admin.overview.loop': 'Event loop',
+    'admin.overview.loopValue': 'busy {busy} of the time · the longest wait {stall}',
+    'admin.overview.pool': 'Database connections',
+    'admin.overview.poolValue': '{open} open · {idle} idle · {waiting} waiting',
+    'admin.overview.sockets': 'Sockets open',
+    'admin.overview.hour': 'In the last hour',
+    'admin.overview.hourValue': '{requests} requests · {failed} failed',
+    'admin.overview.failures': 'The last failures',
+    'admin.overview.noFailures': 'No request has failed since this server started.',
+    'admin.live.lead': 'Everybody with Nura Games open now, and what each of them is doing. A private table is named here and never watched.',
+    'admin.live.count': {
+        one: 'online',
+        other: 'online'
+    },
+    'admin.live.none': 'Nobody is online right now.',
+    'admin.live.failed': 'Who is online could not be read.',
+    'admin.live.away': 'Away',
+    'admin.live.came': 'Came {when}',
+    'admin.live.playing': 'Playing {game} at {code}',
+    'admin.live.waiting': 'Waiting at a {game} table, {code}',
+    'admin.live.call': 'In the call at {code}',
+    'admin.live.idle': 'Not at a table',
+    'admin.live.more': 'Show more',
     'admin.play.lead': 'Pause a game when something is wrong with it. While it is paused nobody can open a table of it, look for a game of it or start one, and the games already being played go on to their end. A game being played that cannot go on can be ended, and then it counts for nobody. A table waiting for a game can be closed.',
     'admin.play.games': 'The games',
     'admin.play.failed': 'The games could not be read.',

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createOps, FAILURES_KEPT, MINUTE_MS } from '../src/http/ops.ts';
+import { createOps, FAILURES_KEPT, LOOP_TICK_MS, MINUTE_MS } from '../src/http/ops.ts';
 
 const START = Date.parse('2026-10-22T10:00:00.000Z');
 
@@ -106,13 +106,33 @@ describe('what this server knows of itself', () =>
         expect(ops.health().failures[0].path).toBe('/api/x');
     });
 
-    it('says how long it has run, what it holds, and how late its event loop has run', () =>
+    it('says how long it has run and what it holds', () =>
     {
         const health = opened({ at: START }).health();
 
         expect(Number.isInteger(health.uptime) && health.uptime >= 0).toBe(true);
         expect([health.rss > 0, health.heap > 0]).toEqual([true, true]);
-        expect(health.loop.p99).toBeGreaterThanOrEqual(health.loop.p50);
-        expect(health.loop.max).toBeGreaterThanOrEqual(health.loop.p99);
+    });
+
+    it('says how much of the time its event loop was busy, and the longest it waited past its own tick', async () =>
+    {
+        const ops = opened({ at: START });
+
+        await new Promise((resolve) => setTimeout(resolve, 3 * LOOP_TICK_MS));
+
+        const until = Date.now() + 150;
+
+        while (Date.now() < until)
+        {
+            Math.sqrt(Date.now());
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 3 * LOOP_TICK_MS));
+
+        const loop = ops.health().loop;
+
+        expect(loop.busy).toBeGreaterThan(0.3);
+        expect(loop.busy).toBeLessThanOrEqual(1);
+        expect(loop.stall).toBeGreaterThan(80);
     });
 });

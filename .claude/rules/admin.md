@@ -355,12 +355,17 @@ could not play, and the reports waiting. For a role that opens Money it adds the
 database alone, so the page never waits on the chain: the paid games being played, the NURA locked
 in games (every stake of an escrow locking, open or settling) and the payments stuck on the way, by
 the vault panel's own rule (`vaultAdmin.counts`). For an admin and the owner (`health`) it adds this
-server's health: how long it has run, its memory, how late its event loop ran over the last full
-minute, the database pool, the sockets open, the requests of the last hour and how many of them
-failed, and the last fifty failures by method, path and status, never a query and never an error's
-message (`http/ops.ts`, fed by the request observer `main.ts` wraps round the request log). A
-minute's count is a slot of a ring of sixty, so what it keeps is bounded by its shape. The numbers
-are this server's: one server per database stays the rule.
+server's health: how long it has run, its memory, how much of the last full minute its event loop
+was busy and the longest it waited past its own tick, the database pool, the sockets open, the
+requests of the last hour and how many of them failed, and the last fifty failures by method, path
+and status, never a query and never an error's message (`http/ops.ts`, fed by the request observer
+`main.ts` wraps round the request log). A minute's count is a slot of a ring of sixty, so what it
+keeps is bounded by its shape. The loop is said as a share of the time it was busy
+(`eventLoopUtilization`) and not as the delay percentiles `monitorEventLoopDelay` keeps: those
+record the whole interval between its ticks, so on Windows, where a timer fires on the next 15.6 ms
+tick of the clock, an idle loop read as 32 ms of delay at a 20 ms tick; what is left of the
+monitor is the longest wait less the tick, which is what a stall looks like. The numbers are this
+server's: one server per database stays the rule.
 
 **Who is online now** (`live`, a moderator included): `GET /api/admin/live?cursor=` lists everybody
 with a socket open now (`hub.online()`: a tab looked away from as `away`, nobody whose last socket
@@ -417,7 +422,29 @@ report about reza.t: nothing to do."). The kind, by whom and about whom are in t
 entries come a page at a time and are dropped whenever the first page is read again, so a new filter
 never shows the old one's tail.
 
-**People** is the first section, and the one a moderator has. The list searches once the typing
+**Overview** is the first section, open to every role on the staff. It says the accounts (all of
+them as one number, then the new ones of the last day and the last week and those seen in the last
+day; the suspended and those under 18 as links to People's own lists), how many people are online
+and how many reports wait (each leading to its section), every game with how many are being
+played and how many tables wait, the games stuck in danger only when there are some, and the way
+into Play only for a role that opens it. A role that opens Money also sees the paid games being
+played, the NURA locked in games in madder, and the payments stuck on the way (in danger when
+there are some), with the way to Money; an admin and the owner see this server: how long it has
+been up ("less than a minute" when it is, minutes alone under an hour), its memory, how busy the
+event loop was and its longest wait, the database connections, the sockets, the hour's
+requests and failures, and the last failures by status, method and path, their exact time under a
+pointer. It is read when it opens, at "Read again", every fifteen seconds while the tab is seen and
+at once when it is seen again (`whileSeen` in `lib/while-seen.ts`, on the product clock), never
+while the tab is hidden, and says when it was read. The count of reports it reads is the nav's too.
+
+**Online now** lists everybody online by handle, each leading to their page: the name, the
+handle, their role on the staff, "Away" when no tab of theirs is looked at, when they came (exact
+under a pointer), and what they are doing in sentences with the code set apart ("Playing Ludo at
+K7QX", "Waiting at a Hokm table, H2AB", "In the call at K7QX", or "Not at a table"). How many are
+online stands beside "Read again"; fifty come a page at a time under "Show more", the older pages
+dropped whenever the first page is read again; and it is read again as the overview is.
+
+**People** is open to a moderator, as the two before it are. The list searches once the typing
 pauses or at Enter, keeps its words and its list in the address (`q`, `list`), and pages like the
 log. A row leads to `/admin/people/:handle`, which keeps People lit in the nav and draws the person
 from one read: who they are and their flags, their account and paid play, their wallets, where they
@@ -525,7 +552,7 @@ person is a status badge (waiting in gold, reviewed plain, acted on in green).
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.
 
-`admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
+`admin-shell.spec.ts`, `admin-overview.spec.ts`, `admin-live.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
 `reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
 `paused-game.spec.ts` what a player sees of a paused game and `play.spec.ts` of a table the staff closed; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.

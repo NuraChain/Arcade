@@ -17,6 +17,93 @@ export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.section.people': 'کاربرها',
     'admin.section.reports': 'گزارش‌ها',
     'admin.section.play': 'بازی‌ها',
+    'admin.section.overview': 'نمای کلی',
+    'admin.section.live': 'آنلاین‌ها',
+    'admin.overview.lead': 'الان توی بازی‌های نورا چه خبره، شمرده‌شده از پایگاه داده و همین سرور. تا وقتی نگاهش می‌کنی هر ۱۵ ثانیه دوباره خونده می‌شه.',
+    'admin.overview.read': 'دوباره بخون',
+    'admin.overview.readAt': 'ساعت {time} خونده شد',
+    'admin.overview.failed': 'نمای کلی خونده نشد.',
+    'admin.overview.people': 'حساب‌ها',
+    'admin.overview.accounts': {
+        one: 'حساب',
+        other: 'حساب'
+    },
+    'admin.overview.day': {
+        one: 'نفر توی ۲۴ ساعت گذشته عضو شد',
+        other: 'نفر توی ۲۴ ساعت گذشته عضو شدن'
+    },
+    'admin.overview.week': {
+        one: 'نفر توی هفته‌ی گذشته عضو شد',
+        other: 'نفر توی هفته‌ی گذشته عضو شدن'
+    },
+    'admin.overview.active': {
+        one: 'نفر توی ۲۴ ساعت گذشته سر زد',
+        other: 'نفر توی ۲۴ ساعت گذشته سر زدن'
+    },
+    'admin.overview.suspended': {
+        one: 'حساب تعلیق‌شده',
+        other: 'حساب تعلیق‌شده'
+    },
+    'admin.overview.minors': {
+        one: 'نفر زیر ۱۸',
+        other: 'نفر زیر ۱۸'
+    },
+    'admin.overview.openPeople': 'برو به کاربرها',
+    'admin.overview.onlineCount': {
+        one: 'نفر الان آنلاینه',
+        other: 'نفر الان آنلاینن'
+    },
+    'admin.overview.openLive': 'ببین کیا',
+    'admin.overview.reportsWaiting': {
+        one: 'گزارش منتظر بررسی',
+        other: 'گزارش منتظر بررسی'
+    },
+    'admin.overview.openReports': 'برو سراغ صف',
+    'admin.overview.games': 'بازی‌ها',
+    'admin.overview.stuck': {
+        one: 'بازی گیرکرده',
+        other: 'بازی گیرکرده'
+    },
+    'admin.overview.openPlay': 'برو به بازی‌ها',
+    'admin.overview.money': 'بازی با NURA',
+    'admin.overview.paidPlaying': {
+        one: 'بازی پولی در جریان',
+        other: 'بازی پولی در جریان'
+    },
+    'admin.overview.inPlay': 'NURA قفل‌شده توی بازی‌ها',
+    'admin.overview.paidStuck': {
+        one: 'پرداخت گیرکرده',
+        other: 'پرداخت گیرکرده'
+    },
+    'admin.overview.openMoney': 'برو به پول',
+    'admin.overview.server': 'این سرور',
+    'admin.overview.uptime': '{time} که روشنه',
+    'admin.overview.uptimeFresh': 'کمتر از یه دقیقه‌ست که روشنه',
+    'admin.overview.memory': 'حافظه',
+    'admin.overview.memoryValue': '{rss} در کل · هیپ {heap}',
+    'admin.overview.loop': 'حلقه‌ی رویداد',
+    'admin.overview.loopValue': '{busy} از وقتش مشغول بوده · طولانی‌ترین انتظار {stall}',
+    'admin.overview.pool': 'اتصال‌های پایگاه داده',
+    'admin.overview.poolValue': '{open} باز · {idle} بیکار · {waiting} در صف',
+    'admin.overview.sockets': 'سوکت‌های باز',
+    'admin.overview.hour': 'توی یه ساعت گذشته',
+    'admin.overview.hourValue': '{requests} درخواست · {failed} خطا',
+    'admin.overview.failures': 'آخرین خطاها',
+    'admin.overview.noFailures': 'از وقتی این سرور روشن شده هیچ درخواستی خطا نداده.',
+    'admin.live.lead': 'هر کی الان بازی‌های نورا رو باز کرده و داره چی کار می‌کنه. اسم میز خصوصی اینجا میاد ولی هیچ‌وقت تماشا نمی‌شه.',
+    'admin.live.count': {
+        one: 'نفر آنلاین',
+        other: 'نفر آنلاین'
+    },
+    'admin.live.none': 'الان هیچ‌کس آنلاین نیست.',
+    'admin.live.failed': 'نشد بفهمیم کی آنلاینه.',
+    'admin.live.away': 'در دسترس نیست',
+    'admin.live.came': '{when} اومد',
+    'admin.live.playing': 'سر میز {code} داره {game} بازی می‌کنه',
+    'admin.live.waiting': 'سر یه میز {game} با کد {code} منتظره',
+    'admin.live.call': 'توی تماس صوتی میز {code}',
+    'admin.live.idle': 'سر هیچ میزی نیست',
+    'admin.live.more': 'بیشتر نشون بده',
     'admin.play.lead': 'اگه یه بازی مشکل پیدا کرده، متوقفش کن. تا وقتی متوقفه هیچ‌کس نمی‌تونه میزش رو باز کنه، دنبالش بگرده یا شروعش کنه، و بازی‌هایی که الان دارن انجام می‌شن تا آخر ادامه دارن. بازی‌ای که در جریانه و دیگه نمی‌تونه جلو بره رو می‌تونی تموم کنی، اون‌وقت برای هیچ‌کس حساب نمی‌شه. میزی رو هم که منتظر شروع بازیه می‌تونی ببندی.',
     'admin.play.games': 'فهرست بازی‌ها',
     'admin.play.failed': 'فهرست بازی‌ها خونده نشد.',

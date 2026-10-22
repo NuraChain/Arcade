@@ -16,7 +16,9 @@ import type {
     Account,
     AdminPeople,
     AdminPerson,
+    AdminLive,
     AdminMatches,
+    AdminOverview,
     AdminPlay,
     AdminTables,
     AdminReport,
@@ -43,7 +45,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, PLAY_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
+import { LIVE_PAGE, LOG_PAGE, may, outranks, PEOPLE_PAGE, PLAY_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -557,6 +559,20 @@ interface FiledReport
 
 const reportsFresh = () => ({ filed: [] as FiledReport[], count: 0 });
 
+const lookoutFresh = () => ({
+    overview: {
+        at: '2026-10-22T09:00:00.000Z',
+        people: { total: 0, day: 0, week: 0, active: 0, suspended: 0, minors: 0 },
+        online: 0,
+        games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as const, matches: 0, tables: 0 })),
+        stuck: 0,
+        reports: 0,
+        money: { playing: 0, inPlay: '0', stuck: 0 },
+        health: { uptime: 0, rss: 0, heap: 0, loop: { busy: 0, stall: 0 }, pool: { total: 0, idle: 0, waiting: 0 }, sockets: 0, requests: 0, failed: 0, failures: [] }
+    } as AdminOverview,
+    online: [] as AdminLive['rows']
+});
+
 export const reportFiled = (report: Pick<FiledReport, 'at' | 'by' | 'about'> & Partial<Omit<FiledReport, 'id'>>) =>
 {
     server.desk.count += 1;
@@ -729,6 +745,7 @@ export const server =
     desk: reportsFresh(),
     play: playFresh(),
     playing: playingFresh(),
+    lookout: lookoutFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -897,6 +914,7 @@ export const server =
         server.desk = reportsFresh();
         server.play = playFresh();
         server.playing = playingFresh();
+        server.lookout = lookoutFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1407,6 +1425,35 @@ export const client =
                 ...(rows.length > from + REPORTS_PAGE && last !== undefined ? { cursor: last.id } : {}),
                 waiting: waitingReports()
             };
+        },
+
+        async overview()
+        {
+            server.calls.push('admin.overview');
+            staffGate('overview');
+
+            const role = staffRoleOf(server.me);
+            const { money, health, ...seen } = structuredClone(server.lookout.overview);
+
+            return {
+                ...seen,
+                reports: waitingReports(),
+                ...(may(role, 'money') && money !== undefined ? { money } : {}),
+                ...(may(role, 'health') && health !== undefined ? { health } : {})
+            };
+        },
+
+        async live({ query }: { query: { cursor?: string } })
+        {
+            server.calls.push(`admin.live ${ JSON.stringify(query) }`);
+            staffGate('live');
+
+            const all = [...server.lookout.online].sort((a, b) => a.handle.localeCompare(b.handle));
+            const from = query.cursor === undefined ? 0 : all.findIndex((one) => one.handle === query.cursor) + 1;
+            const rows = all.slice(from, from + LIVE_PAGE);
+            const last = rows.at(-1);
+
+            return { total: all.length, rows: structuredClone(rows), ...(from + LIVE_PAGE < all.length && last !== undefined ? { cursor: last.handle } : {}) };
         },
 
         async reportsWaiting()
