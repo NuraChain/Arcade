@@ -60,6 +60,49 @@ sees it, read for their own wallet's roles on the vault. The calls that change i
 fees, pause) are `wallet`, the owner's alone: an admin asking for one is answered as a page that is
 not there and no call is composed (`stake.db.spec.ts`).
 
+## The page
+
+**`/admin` is a layout of its own, outside the app shell** (`components/admin/admin-shell`): a
+header with the way back to the app and the reader's handle and role, then the sections the role
+opens, as a rail under the header on a phone and down the side from 64rem, each a lazy page under
+`pages/admin/`. `lib/admin-sections.ts` lists the sections in order, and a section IS an ability of
+`roles.ts`, so one list (`sectionsFor(role)`) draws the nav, guards the layout (`requireStaff`: the
+role opens some section) and decides the shield in the profile's corner; each section keeps its own
+`requireAbility`. `/admin` itself goes to the first section the role opens (`firstSection`), and
+anybody whose role opens none is shown the page that is not there at every address under it, as
+the server answers them. The shell starts the toasts, the session and the signed-out watch and holds
+the overlays and the toasts; it opens no socket.
+
+**The admin's words are a catalogue of their own** (`locales/{en,fa}/admin.ts`, registered by
+`locales/admin-catalogue.ts`, which only the admin shell imports), so the app's catalogue carries
+none of them.
+
+**Staff** lists the owner apart, then the team in the server's order with who made each and when,
+and has one form: a handle (folded as the server folds one, a leading @ dropped), a role from those
+below the reader's own, and a reason. A change is shown at the press (`createGuesses`), said once
+the server has (`attempt`), and a refusal takes it back and says why in the reader's words
+(`whyStaffRefused`, `admin.refused.<word>`), keeping what was typed. Change on a row fills the form
+with that person and puts the keyboard on their role; it is drawn only on somebody the reader
+outranks.
+
+**Log** draws each row as a sentence, the reason as written, when, and the role the change was made
+with. `logParts` in `lib/staff-words.ts` hands the sentence over in parts, each handle a part of its
+own that the page draws with `dir="ltr"`: a handle runs left to right, and two of them side by side in
+a Persian sentence ("{staff}، {person} رو … کرد") were one run, which put the person before whoever
+acted for a reader going from the right. The same goes for "by whom" on a member of the staff, which
+is the word and the handle beside the time as a line of facts, not one string with a number after a
+handle. The kind, by whom and about whom are in the address
+(`kind`, `staff`, `person`); a handle is written there once the typing pauses, or at Enter. Older
+entries come a page at a time and are dropped whenever the first page is read again, so a new filter
+never shows the old one's tail.
+
+**Money** is the vault panel, and its calls are drawn for the owner alone (`may(role, 'wallet')`):
+an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
+from here, because the server would refuse the call.
+
+`admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts` and `admin-vault.spec.ts` hold the
+page; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change and

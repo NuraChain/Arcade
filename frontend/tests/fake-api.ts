@@ -26,6 +26,8 @@ import type {
     PersonSummary,
     Privacy,
     Standing,
+    StaffList,
+    StaffLog,
     StakeTerms,
     TableMoney,
     VaultGames,
@@ -33,6 +35,8 @@ import type {
     WalletCall
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
+import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
+import { LOG_PAGE, may, outranks, type ActionKind, type GrantedRole, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -372,6 +376,57 @@ const adminRefusal = () =>
     }
 };
 
+type StaffMember = StaffList['members'][number];
+
+type StaffLogRow = StaffLog['rows'][number];
+
+export const staffMember = (handle: string, role: StaffRole, grantedBy?: string, grantedAt?: string): StaffMember =>
+{
+    const person = personWire(handle);
+
+    return {
+        handle,
+        displayName: person.displayName,
+        hue: person.hue,
+        role,
+        ...(grantedBy === undefined ? {} : { grantedBy }),
+        ...(grantedAt === undefined ? {} : { grantedAt })
+    };
+};
+
+const staffFresh = () => ({
+    owner: 'alex' as string | null,
+    members: [] as StaffMember[],
+    log: [] as StaffLogRow[],
+    logged: 0
+});
+
+const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner' : server.staff.members.find((one) => one.handle === handle)?.role ?? null);
+
+const staffRefused = (word: StaffRefusal, message: string) => new ApiError(STAFF_REFUSALS[word], word, message, undefined);
+
+const staffGate = (ability: 'staff' | 'log') =>
+{
+    if (!may(staffRoleOf(server.me), ability))
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+};
+
+const staffListed = (): StaffList => ({
+    ...(server.staff.owner === null ? {} : { owner: staffMember(server.staff.owner, 'owner') }),
+    members: structuredClone(server.staff.members).sort((a, b) =>
+        Number(a.role !== 'admin') - Number(b.role !== 'admin')
+        || (a.grantedAt ?? '').localeCompare(b.grantedAt ?? '')
+        || a.handle.localeCompare(b.handle))
+});
+
+export const staffLogged = (row: Omit<StaffLogRow, 'id'>) =>
+{
+    server.staff.logged += 1;
+    server.staff.log.unshift({ id: `log-${ server.staff.logged }`, ...row });
+};
+
 const nuraRefusal = () =>
 {
     const refused = server.nura.refuse;
@@ -488,6 +543,7 @@ export const server =
     vault: null as { salt: string; publicKey: string; wrapped: string; checkValue: string } | null,
     nura: nuraFresh(),
     admin: adminFresh(),
+    staff: staffFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -650,6 +706,7 @@ export const server =
         server.vault = null;
         server.nura = nuraFresh();
         server.admin = adminFresh();
+        server.staff = staffFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -897,6 +954,81 @@ export const client =
             server.calls.push(`admin.pause ${ input.paused }`);
             adminRefusal();
             return { ...server.nura.call, data: '0xpause' };
+        },
+        async staff()
+        {
+            server.calls.push('admin.staff');
+            staffGate('staff');
+            return staffListed();
+        },
+        async setStaff({ input }: { input: { handle: string; role: GrantedRole | 'none'; reason: string } })
+        {
+            server.calls.push(`admin.setStaff ${ input.handle } ${ input.role }`);
+            staffGate('staff');
+
+            const actor = staffRoleOf(server.me);
+            const known = input.handle === server.me || input.handle === server.staff.owner || PEOPLE_FIXTURES.some((one) => one.handle === input.handle);
+
+            if (!known)
+            {
+                throw staffRefused('staff-nobody', 'No one by that name.');
+            }
+
+            if (input.handle === server.staff.owner)
+            {
+                throw staffRefused('staff-owner', 'The owner is the wallet the server’s .env names, and is changed there.');
+            }
+
+            if (input.handle === server.me)
+            {
+                throw staffRefused('staff-self', 'Nobody changes their own role.');
+            }
+
+            const current = server.staff.members.find((one) => one.handle === input.handle)?.role ?? null;
+
+            if ((current !== null && !outranks(actor, current)) || (input.role !== 'none' && !outranks(actor, input.role)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            const at = new Date(runtime().clock.now()).toISOString();
+            const entry = { at, staff: server.me, staffRole: actor ?? 'moderator', person: input.handle, reason: input.reason };
+
+            if (input.role === 'none' && current !== null)
+            {
+                server.staff.members = server.staff.members.filter((one) => one.handle !== input.handle);
+                staffLogged({ ...entry, kind: 'revoke', details: { from: current } });
+            }
+            else if (input.role !== 'none' && current === null)
+            {
+                server.staff.members = [...server.staff.members, staffMember(input.handle, input.role, server.me, at)];
+                staffLogged({ ...entry, kind: 'grant', details: { to: input.role } });
+            }
+            else if (input.role !== 'none' && current !== input.role)
+            {
+                server.staff.members = server.staff.members.map((one) => (one.handle === input.handle ? staffMember(one.handle, input.role as GrantedRole, server.me, at) : one));
+                staffLogged({ ...entry, kind: 'change', details: { from: current ?? '', to: input.role } });
+            }
+
+            return staffListed();
+        },
+        async log({ query }: { query: { cursor?: string; staff?: string; person?: string; kind?: ActionKind } })
+        {
+            server.calls.push(`admin.log ${ JSON.stringify(query) }`);
+            staffGate('log');
+
+            const matching = server.staff.log.filter((row) =>
+                (query.staff === undefined || row.staff.toLowerCase() === query.staff.toLowerCase())
+                && (query.person === undefined || row.person?.toLowerCase() === query.person.toLowerCase())
+                && (query.kind === undefined || row.kind === query.kind));
+            const from = query.cursor === undefined ? 0 : matching.findIndex((row) => row.id === query.cursor) + 1;
+            const page = matching.slice(from, from + LOG_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: structuredClone(page),
+                ...(matching.length > from + LOG_PAGE && last !== undefined ? { cursor: last.id } : {})
+            };
         }
     },
 

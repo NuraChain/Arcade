@@ -96,6 +96,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'profile.savedNotChain': 'روی این سرور ذخیره شد، ولی روی بلاکچین نه. {reason}',
 
     'me.shared': 'لینک پروفایل کپی شد',
+    'me.admin': 'مدیریت',
     'me.settings': 'تنظیمات',
 
     'settings.title': 'تنظیمات',

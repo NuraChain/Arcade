@@ -2,7 +2,7 @@ import type { PageRoute } from '@azerothjs/kit';
 
 import PublicShell from './components/layout/public-shell.component.azeroth';
 import { chunk } from './lib/chunks.ts';
-import { requireAbility, requireAnonymous, requireSession } from './lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff } from './lib/guards.ts';
 import { defineMeta } from './lib/route-meta.ts';
 import Landing from './pages/landing.page.azeroth';
 
@@ -23,9 +23,15 @@ export const routes: PageRoute[] = [
     },
     {
         path: '/admin',
-        lazy: chunk(() => import('./pages/admin.page.azeroth')),
+        lazy: chunk(() => import('./components/admin/admin-shell.component.azeroth')),
         render: 'client',
-        guard: requireAbility('money')
+        guard: requireStaff,
+        children: [
+            { path: '', lazy: chunk(() => import('./pages/admin/money.page.azeroth')), guard: firstSection },
+            { path: 'money', lazy: chunk(() => import('./pages/admin/money.page.azeroth')), guard: requireAbility('money') },
+            { path: 'staff', lazy: chunk(() => import('./pages/admin/staff.page.azeroth')), guard: requireAbility('staff') },
+            { path: 'log', lazy: chunk(() => import('./pages/admin/log.page.azeroth')), guard: requireAbility('log') }
+        ]
     },
     {
         path: '/app',

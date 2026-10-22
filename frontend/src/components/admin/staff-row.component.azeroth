@@ -1,0 +1,49 @@
+import type { StaffRole } from '../../../../backend/src/domains/admin/roles.ts';
+import type { StaffList } from '../../../../backend/src/schemas.ts';
+import { ROLE_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import type { Tone } from '../ui/variants.ts';
+
+export type StaffMember = StaffList['members'][number];
+
+const ROLE_TONE: Record<StaffRole, Tone> = {
+    owner: 'gold',
+    admin: 'accent',
+    moderator: 'neutral'
+};
+
+export default component StaffRow(props: { member: StaffMember; changeable: boolean; onChange: (member: StaffMember) => void })
+{
+    const locale = useLocale();
+
+    derived changeable = props.changeable;
+
+    derived grantedBy = props.member.grantedBy ?? '';
+
+    derived grantedAt = props.member.grantedAt ?? '';
+
+    derived granted = grantedBy !== '' && grantedAt !== '';
+
+    derived when = grantedAt === '' ? '' : locale.relative(Date.parse(grantedAt));
+
+    <div class="flex items-center gap-3 px-4 py-3" data-member={ props.member.handle } data-role={ props.member.role }>
+        <Avatar person={ props.member } size="md" />
+        <div class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ props.member.displayName }</span>
+            <span class="truncate text-ui-xs text-muted" dir="ltr">@{ props.member.handle }</span>
+            <Show when={ granted }>
+                <p class="facts text-ui-xs text-faint" data-made>
+                    <span class="flex min-w-0 gap-1"><span>{ locale.t('admin.staff.by') }</span><span class="truncate" dir="ltr" data-by>{ grantedBy }</span></span>
+                    <span data-when>{ when }</span>
+                </p>
+            </Show>
+        </div>
+        <Badge text={ locale.t(ROLE_WORDS[props.member.role]) } tone={ ROLE_TONE[props.member.role] } />
+        <Show when={ changeable }>
+            { () => <Button variant="outline" size="sm" label={ locale.t('admin.staff.changeLabel', { name: props.member.displayName }) } onClick={ () => props.onChange(props.member) }>{ locale.t('admin.staff.change') }</Button> }
+        </Show>
+    </div>
+}

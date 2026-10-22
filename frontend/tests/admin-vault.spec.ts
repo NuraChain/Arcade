@@ -3,8 +3,9 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createMemoryHistory, createRouter, RouterProvider, Routes, type Route } from 'azerothjs';
 
 import AdminVault from '../src/components/admin/admin-vault.component.azeroth';
-import AdminPage from '../src/pages/admin.page.azeroth';
+import MoneyPage from '../src/pages/admin/money.page.azeroth';
 import '../src/locales/app-catalogue.ts';
+import '../src/locales/admin-catalogue.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -125,6 +126,19 @@ describe('the vault, as its owner sees it', () =>
         const container = await shown();
 
         expect(said(container, '[data-role="none"]')).toBe('Holds no role on the vault, so it can change nothing here.');
+        expect(container.querySelector('#admin-fee')).toBeNull();
+        expect(button(container, 'Pause the vault')).toBeUndefined();
+    });
+
+    it('offers an admin who is not the owner nothing to change, whatever their wallet holds on the vault, and says the owner changes it', async () =>
+    {
+        useSession().establish({ id: 'admin', handle: 'admin', displayName: 'Admin', bio: '', hue: 40, isMinor: false, address: OWNER, staff: 'admin' });
+        const container = await shown();
+
+        expect(said(container, '[data-fact="fee"] dd')).toBe('5%');
+        expect(said(container, '[data-role="owner-only"]')).toBe('Only the owner changes the vault from here.');
+        expect(container.querySelector('[data-role="admin"]')).toBeNull();
+        expect(container.querySelector('[data-role="pauser"]')).toBeNull();
         expect(container.querySelector('#admin-fee')).toBeNull();
         expect(button(container, 'Pause the vault')).toBeUndefined();
     });
@@ -375,14 +389,15 @@ describe('the vault, as its owner sees it', () =>
         expect(container.querySelector('#admin-fee')).toBeNull();
     });
 
-    it('is on the admin page', async () =>
+    it('is the Money section of the admin', async () =>
     {
-        const routes: Route[] = [{ path: '/admin', component: () => AdminPage({}) as unknown as HTMLElement }];
-        const router = createRouter({ routes, history: createMemoryHistory('/admin'), scroll: false });
+        const routes: Route[] = [{ path: '/admin/money', component: () => MoneyPage({}) as unknown as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory('/admin/money'), scroll: false });
         const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
 
         await settle();
 
+        expect(said(container, 'h1')).toBe('Money');
         expect(container.querySelector('[aria-labelledby="admin-vault"]')).not.toBeNull();
         expect(said(container, '#admin-vault')).toBe('The vault');
     });

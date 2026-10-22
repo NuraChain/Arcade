@@ -1,0 +1,17 @@
+import { useHead } from 'azerothjs';
+
+import AdminVault from '../../components/admin/admin-vault.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component MoneyPage()
+{
+    const locale = useLocale();
+
+    useHead({ title: () => locale.t('admin.section.money') });
+
+    <div class="flex flex-col">
+        <PageHeader title={ locale.t('admin.section.money') } />
+        <AdminVault />
+    </div>
+}

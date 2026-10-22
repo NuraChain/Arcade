@@ -93,6 +93,7 @@ export const me = {
     'profile.savedNotChain': 'Saved on this server, but not on the chain. {reason}',
 
     'me.shared': 'Profile link copied',
+    'me.admin': 'Admin',
     'me.settings': 'Settings',
 
     'settings.title': 'Settings',

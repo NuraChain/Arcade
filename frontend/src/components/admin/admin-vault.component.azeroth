@@ -1,5 +1,6 @@
 import { createResource } from 'azerothjs';
 
+import { may } from '../../../../backend/src/domains/admin/roles.ts';
 import { client, type WalletCall } from '../../api.ts';
 import type { GameId } from '../../data/games.ts';
 import { bpsOf, explorerTx, nuraOf, parseNura, typedNura } from '../../lib/nura.ts';
@@ -7,6 +8,7 @@ import { shortAddress } from '../../lib/wallet.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSession } from '../../stores/session.store.ts';
 import { useVault } from '../../stores/vault.store.ts';
 import Button from '../ui/button.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
@@ -34,6 +36,7 @@ export default component AdminVault()
     const locale = useLocale();
     const catalogue = useCatalogue();
     const vaults = useVault();
+    const session = useSession();
 
     const admin = createResource(() => true, () => client.admin.vault(), { name: 'admin.vault' });
 
@@ -107,11 +110,13 @@ export default component AdminVault()
 
     derived lost = open !== null && !open.referee.allowed;
 
-    derived mayChange = open?.roles.admin ?? false;
+    derived owner = may(session.account()?.staff ?? null, 'wallet');
 
-    derived mayPause = open?.roles.pauser ?? false;
+    derived mayChange = owner && (open?.roles.admin ?? false);
 
-    derived mayNothing = open !== null && !open.roles.admin && !open.roles.pauser;
+    derived mayPause = owner && (open?.roles.pauser ?? false);
+
+    derived mayNothing = owner && open !== null && !open.roles.admin && !open.roles.pauser;
 
     derived pauseOffered = !paused && !confirming;
 
@@ -323,18 +328,20 @@ export default component AdminVault()
                     </Show>
                 </Panel>
 
-                <Panel pad="md" stack="sm">
-                    <h3 class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.roles') }</h3>
-                    <Show when={ mayChange }>
-                        <p class="text-ui-sm text-text" data-role="admin">{ locale.t('admin.vault.mayChange') }</p>
-                    </Show>
-                    <Show when={ mayPause }>
-                        <p class="text-ui-sm text-text" data-role="pauser">{ locale.t('admin.vault.mayPause') }</p>
-                    </Show>
-                    <Show when={ mayNothing }>
-                        <p class="text-ui-sm text-muted" data-role="none">{ locale.t('admin.vault.mayNothing') }</p>
-                    </Show>
-                </Panel>
+                <Show when={ owner } fallback={ <p class="text-ui-sm text-muted" data-role="owner-only">{ locale.t('admin.vault.ownerOnly') }</p> }>
+                    <Panel pad="md" stack="sm">
+                        <h3 class="text-ui-md font-semibold text-text">{ locale.t('admin.vault.roles') }</h3>
+                        <Show when={ mayChange }>
+                            <p class="text-ui-sm text-text" data-role="admin">{ locale.t('admin.vault.mayChange') }</p>
+                        </Show>
+                        <Show when={ mayPause }>
+                            <p class="text-ui-sm text-text" data-role="pauser">{ locale.t('admin.vault.mayPause') }</p>
+                        </Show>
+                        <Show when={ mayNothing }>
+                            <p class="text-ui-sm text-muted" data-role="none">{ locale.t('admin.vault.mayNothing') }</p>
+                        </Show>
+                    </Panel>
+                </Show>
 
                 <Show when={ mayChange }>
                     <Panel pad="md" stack="md">

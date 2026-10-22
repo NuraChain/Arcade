@@ -5,7 +5,7 @@ import { StaffAction, StaffMember, User, Wallet } from '../../entities/index.ts'
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { StaffList, StaffLog } from '../../schemas.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from './refusals.ts';
-import { outranks, type ActionKind, type GrantedRole, type StaffRole } from './roles.ts';
+import { LOG_PAGE, outranks, type ActionKind, type GrantedRole, type StaffRole } from './roles.ts';
 
 export interface Actor
 {
@@ -52,8 +52,6 @@ interface LogRow
     reason: string;
     details: Record<string, string>;
 }
-
-const LOG_PAGE = 50;
 
 const LOG_CURSOR = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 

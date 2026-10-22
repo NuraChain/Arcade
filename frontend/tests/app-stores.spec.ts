@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { requireAbility, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff, safeNext } from '../src/lib/guards.ts';
 import { heldUp } from '../src/lib/held-up.ts';
 import NotFoundPage from '../src/pages/not-found.page.azeroth';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -566,6 +566,27 @@ describe('guards', () =>
 
         useSession().establish({ ...staff, staff: 'owner' });
         expect(await requireAbility('wallet')()).toBe(true);
+    });
+
+    it('lets into /admin only somebody whose role opens a section of it, and opens the first section it does', async () =>
+    {
+        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
+
+        useSession().establish(DARYA);
+        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
+
+        const staff = { id: 'u-staff', handle: 'staff.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' };
+
+        useSession().establish({ ...staff, staff: 'moderator' });
+        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
+
+        useSession().establish({ ...staff, staff: 'admin' });
+        expect(await requireStaff()).toBe(true);
+        expect(await firstSection()).toMatchObject({ to: '/admin/money', replace: true });
+
+        useSession().establish({ ...staff, staff: 'owner' });
+        expect(await requireStaff()).toBe(true);
+        expect(await firstSection()).toMatchObject({ to: '/admin/money', replace: true });
     });
 
     it('never follows a next that leaves the app', () =>

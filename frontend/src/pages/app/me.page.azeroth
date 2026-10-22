@@ -16,6 +16,7 @@ import { client } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { copyText } from '../../lib/clipboard.ts';
+import { sectionsFor } from '../../lib/admin-sections.ts';
 
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -120,6 +121,8 @@ export default component MePage()
 
     derived unpublished = face.data()?.configured === true && shown === undefined;
 
+    derived staffed = sectionsFor(session.account()?.staff ?? null).length > 0;
+
     <Page label={ locale.t('app.nav.profile') }>
         <Show
             when={ user !== null }
@@ -162,6 +165,9 @@ export default component MePage()
                         }
                         corner={
                             <span class="contents">
+                                <Show when={ staffed }>
+                                    { () => <IconButton icon="shield" label={ locale.t('me.admin') } variant="bare" size="xs" to="/admin" /> }
+                                </Show>
                                 <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" size="xs" to="/app/me/settings" />
                                 <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" size="xs" onClick={ editProfile } />
                                 <IconButton icon="share" label={ locale.t('me.share') } variant="bare" size="xs" onClick={ () => void share() } />

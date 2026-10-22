@@ -1,6 +1,7 @@
 import { redirect, type GuardContext, type GuardVerdict } from 'azerothjs';
 
 import { may, type Ability } from '../../../backend/src/domains/admin/roles.ts';
+import { sectionsFor } from './admin-sections.ts';
 
 export function safeNext(candidate: string | string[] | undefined)
 {
@@ -25,13 +26,26 @@ export async function requireSession(context: GuardContext): Promise<GuardVerdic
     return redirect({ pathname: '/sign-in', query: { next: context.pathname } });
 }
 
-export const requireAbility = (ability: Ability) => async (): Promise<GuardVerdict> =>
+async function staffRole()
 {
     const { useSession } = await import('../stores/session.store.ts');
     const session = useSession();
     await session.ready();
-    return may(session.account()?.staff ?? null, ability);
-};
+    return session.account()?.staff ?? null;
+}
+
+export const requireAbility = (ability: Ability) => async (): Promise<GuardVerdict> => may(await staffRole(), ability);
+
+export async function requireStaff(): Promise<GuardVerdict>
+{
+    return sectionsFor(await staffRole()).length > 0;
+}
+
+export async function firstSection(): Promise<GuardVerdict>
+{
+    const [first] = sectionsFor(await staffRole());
+    return first === undefined ? false : redirect(`/admin/${ first }`);
+}
 
 export async function requireAnonymous(context: GuardContext): Promise<GuardVerdict>
 {

@@ -10,6 +10,8 @@ export const ACTION_KINDS = ['grant', 'change', 'revoke'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
+export const LOG_PAGE = 50;
+
 export const ABILITIES = {
     money: 'admin',
     staff: 'admin',
