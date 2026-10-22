@@ -18,6 +18,7 @@ import { syncSchema } from './db/schema.ts';
 import { loadServerConfig } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
 import { headersFor } from './http/headers.ts';
+import { createOps } from './http/ops.ts';
 import { apiRateLimit, signInRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
@@ -136,9 +137,14 @@ let goingDown = false;
 
 // ONE instance, shared by the API and by the gateway. It used to be built twice here, once for
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
+const ops = createOps();
+
 const ports = buildPorts(dataSource, config, hub, {
-    present: (userIds) => goingDown ? new Set(userIds) : hub.present(userIds)
-}, (event, fields) => log.info(event, fields));
+    present: (userIds) => goingDown ? new Set(userIds) : hub.present(userIds),
+    online: () => hub.online(),
+    calls: () => hub.calls(),
+    sockets: () => hub.size()
+}, (event, fields) => log.info(event, fields), undefined, ops);
 
 const serving = config.servePages;
 
@@ -173,7 +179,7 @@ const app = buildApp({
     config,
     log,
     ports,
-    observe: logRequests(requestLog(log)),
+    observe: ops.observer(logRequests(requestLog(log))),
     pages: ssr === undefined
         ? undefined
         : {
@@ -421,6 +427,7 @@ handleShutdownSignals(served, {
         clearInterval(expiries);
         clearInterval(suspensions);
         clearInterval(housekeeping);
+        ops.stop();
         if (turns !== null)
         {
             clearTimeout(turns);

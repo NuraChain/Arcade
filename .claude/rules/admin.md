@@ -7,8 +7,9 @@ design, with the decisions and what was not chosen, is
 ## The staff
 
 **Three roles, each above the last: moderator, admin, owner.** `domains/admin/roles.ts` imports
-nothing and both halves read it: `ABILITIES` says which role a section needs (`people` and `reports`
-a moderator, `play`, `money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
+nothing and both halves read it: `ABILITIES` says which role a section needs (`overview`, `live`,
+`people` and `reports` a moderator, `play`, `money`, `staff`, `log` and `health` an admin, `wallet`
+the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
 the one rule about rank. Nobody outranks their own role, and every role outranks somebody who holds
 none. The browser draws a section only where `may` says so; the server asks the same function on
 every route, because the drawing is a courtesy.
@@ -343,6 +344,38 @@ sees it, read for their own wallet's roles on the vault. The calls that change i
 fees, pause) are `wallet`, the owner's alone: an admin asking for one is answered as a page that is
 not there and no call is composed (`stake.db.spec.ts`).
 
+## The overview, and who is online
+
+**The overview is counted, never estimated** (D11), and every member of the staff reads it
+(`overview`). `GET /api/admin/overview` answers the accounts (every one, the new ones of the last
+day and the last week, those seen in the last day, the suspended and those under 18:
+`accounts.counts`, by Postgres's clock), how many people are online now (the hub's own list), every
+game with how many are being played and how many tables wait (Play's own read), the games the sweep
+could not play, and the reports waiting. For a role that opens Money it adds the money from the
+database alone, so the page never waits on the chain: the paid games being played, the NURA locked
+in games (every stake of an escrow locking, open or settling) and the payments stuck on the way, by
+the vault panel's own rule (`vaultAdmin.counts`). For an admin and the owner (`health`) it adds this
+server's health: how long it has run, its memory, how late its event loop ran over the last full
+minute, the database pool, the sockets open, the requests of the last hour and how many of them
+failed, and the last fifty failures by method, path and status, never a query and never an error's
+message (`http/ops.ts`, fed by the request observer `main.ts` wraps round the request log). A
+minute's count is a slot of a ring of sixty, so what it keeps is bounded by its shape. The numbers
+are this server's: one server per database stays the rule.
+
+**Who is online now** (`live`, a moderator included): `GET /api/admin/live?cursor=` lists everybody
+with a socket open now (`hub.online()`: a tab looked away from as `away`, nobody whose last socket
+has closed), fifty a page by handle, each with their role on the staff, when they came, the tables
+they sit at (code, game, pace, and whether a game is on there) and the call they are in
+(`hub.calls()`, a call for each side under its table), named only at a table they sit at. A private
+table is named and never offered to watch (D12). It is memory, as presence is: the server holding
+the sockets is the one that knows.
+
+`admin-overview.db.spec.ts` holds the counts against rows dated by hand, the money and the health
+for the roles that open them and for nobody else, and the money left out where there is no vault;
+`admin-live.db.spec.ts` the list, its pages and who is answered as nothing; `ops.spec.ts` the
+requests, the failures and the hour's ring; `realtime-hub.spec.ts` (*who the staff see online*, and
+the calls) the hub's two reads.
+
 ## The page
 
 **`/admin` is a layout of its own, outside the app shell** (`components/admin/admin-shell`): a
@@ -502,5 +535,5 @@ from here, because the server would refuse the call.
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
 note, a suspension, a lift, a clear, a sign-out, a mark under 18, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three, the reports' two, the games being played's
-three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
+three, the tables waiting's two and the live list's one. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

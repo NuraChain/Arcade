@@ -195,7 +195,12 @@ describe('a chain that cannot be reached', () =>
     {
         const main = readFileSync(fileURLToPath(new URL('../src/main.ts', import.meta.url)), 'utf8');
 
-        expect(main).toContain('observe: logRequests(requestLog(log)),');
+        expect(main).toContain('observe: ops.observer(logRequests(requestLog(log))),');
+        expect(main).toContain('}, (event, fields) => log.info(event, fields), undefined, ops);');
+        expect(main).toContain('    online: () => hub.online(),');
+        expect(main).toContain('    calls: () => hub.calls(),');
+        expect(main).toContain('    sockets: () => hub.size()');
+        expect(main).toContain('        ops.stop();');
     });
 
     it('is not what a fault of our own is answered as, or written down as', async () =>
@@ -938,7 +943,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable', 'overview', 'live'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1090,6 +1095,23 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/play/games/ludo', { on: false })).status).toBe(422);
     });
 
+    it('answers anybody who may not see the overview or who is online as a page that is not there', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const answers = [await sent(app, '/overview'), await sent(app, '/live?cursor=mina')];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['overview', 'somebody'], ['live', 'somebody', { cursor: 'mina' }]]);
+        expect((await sent(app, `/live?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
+    });
+
     it('answers anybody who may not work the reports as a page that is not there, on the queue, the count, a report and an outcome', async () =>
     {
         const told: unknown[][] = [];
@@ -1172,6 +1194,7 @@ describe('the owner\'s view of the vault', () =>
         expect(queries).toContain(`'/admin/reports': ['status', 'cursor']`);
         expect(queries).toContain(`'/admin/play/matches': ['list', 'game', 'cursor']`);
         expect(queries).toContain(`'/admin/play/tables': ['game', 'cursor']`);
+        expect(queries).toContain(`'/admin/live': ['cursor']`);
         expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/matches/:id/void': (bad) => [`);

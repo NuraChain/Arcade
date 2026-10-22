@@ -57,7 +57,8 @@ const QUERIES = {
     '/admin/people/:handle/history': ['cursor'],
     '/admin/reports': ['status', 'cursor'],
     '/admin/play/matches': ['list', 'game', 'cursor'],
-    '/admin/play/tables': ['game', 'cursor']
+    '/admin/play/tables': ['game', 'cursor'],
+    '/admin/live': ['cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });

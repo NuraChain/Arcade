@@ -827,6 +827,22 @@ describe('who is here', () =>
     });
 });
 
+describe('who the staff see online', () =>
+{
+    it('lists everybody with a socket open now, a tab looked away from included, and nobody whose last socket has closed', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        await connect('reza.t');
+        world.hub.setState(sara.connection, 'away');
+        world.hub.release(alex.connection);
+
+        expect(world.hub.online().map((one) => [one.userId, one.state]).sort()).toEqual([['reza.t', 'online'], ['sara.k', 'away']]);
+        expect(world.hub.online().every((one) => one.since === world.at)).toBe(true);
+    });
+});
+
 describe('sessions', () =>
 {
     it('closes a socket whose session was revoked, with a code rather than a destroy', async () =>
@@ -1049,6 +1065,30 @@ describe('voice at a table', () =>
         expect(world.hub.voiceOf(TABLE)).toEqual(['alex', 'sara.k']);
     });
 
+    it('tells the staff who is in each call, and forgets a call once its last caller has gone', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false, false);
+        await rest();
+
+        expect(world.hub.calls()).toEqual([{ tableId: TABLE, people: ['alex', 'sara.k'] }]);
+
+        world.hub.voice(alex.connection, TABLE, false, false, false);
+        await rest();
+
+        expect(world.hub.calls()).toEqual([{ tableId: TABLE, people: ['sara.k'] }]);
+
+        world.hub.voice(sara.connection, TABLE, false, false, false);
+        await rest();
+
+        expect(world.hub.calls()).toEqual([]);
+    });
+
     it('names on the roster whether each caller can hear Opus, and what they say when it changes', async () =>
     {
         seat('alex', 'sara.k');
@@ -1206,6 +1246,20 @@ describe('voice at a table', () =>
         };
 
         const rosterOf = (wire: FakeWire) => lastVoice(wire)?.peers.map((peer) => peer.who) ?? [];
+
+        it('tells the staff each side\'s call apart, both under the table they are at', async () =>
+        {
+            sided({ alex: 0, mina: 0, 'sara.k': 1, 'omid.k': 1 });
+            const people = await Promise.all(['alex', 'mina', 'sara.k', 'omid.k'].map((handle) => connect(handle)));
+
+            for (const one of people)
+            {
+                world.hub.voice(one.connection, TABLE, true, false, false);
+                await rest();
+            }
+
+            expect(world.hub.calls().map((call) => [call.tableId, [...call.people].sort()]).sort()).toEqual([[TABLE, ['alex', 'mina']], [TABLE, ['omid.k', 'sara.k']]]);
+        });
 
         it('keeps the two sides in two calls: nobody is told of the other side\'s call, and no signal crosses it', async () =>
         {
