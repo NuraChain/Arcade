@@ -1,0 +1,195 @@
+import type { ClearPart } from '../../../../backend/src/domains/admin/roles.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/all.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import ReasonSheet from './reason-sheet.component.azeroth';
+import SuspendSheet, { type SuspendAsk } from './suspend-sheet.component.azeroth';
+
+type Act = 'suspend' | 'lift' | 'minor' | 'adult' | ClearPart | 'sign-out';
+
+const PRESS: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.picture',
+    name: 'admin.content.name',
+    bio: 'admin.content.bio'
+};
+
+const ASK: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.ask.picture',
+    name: 'admin.content.ask.name',
+    bio: 'admin.content.ask.bio'
+};
+
+const ASK_LEAD: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.askLead.picture',
+    name: 'admin.content.askLead.name',
+    bio: 'admin.content.askLead.bio'
+};
+
+const ICONS: Readonly<Record<Act, IconName>> = {
+    suspend: 'block',
+    lift: 'check-circle',
+    minor: 'calendar',
+    adult: 'calendar',
+    picture: 'image',
+    name: 'edit',
+    bio: 'trash',
+    'sign-out': 'sign-out'
+};
+
+const isAsk = (value: unknown): value is SuspendAsk => typeof value === 'object' && value !== null && 'reason' in value && 'category' in value;
+
+export default component PersonActions(props: {
+    name: string;
+    suspended: boolean;
+    minor: boolean;
+    guest: boolean;
+    pictured: boolean;
+    named: boolean;
+    described: boolean;
+    signedIn: boolean;
+    onSuspend: (ask: SuspendAsk) => Promise<boolean>;
+    onLift: (reason: string) => Promise<boolean>;
+    onMark: (minor: boolean, reason: string) => Promise<boolean>;
+    onClear: (part: ClearPart, reason: string) => Promise<boolean>;
+    onSignOut: (reason: string) => Promise<boolean>;
+})
+{
+    const locale = useLocale();
+    const overlay = useOverlay();
+    const kept = new Map<Act, string>();
+
+    let keptAsk: SuspendAsk | null = null;
+
+    const row = (id: Act, label: MessageKey, danger: boolean) => ({ id, label: locale.t(label), danger });
+
+    derived acts = [
+        props.suspended ? row('lift', 'admin.lift.title', false) : row('suspend', 'admin.suspend.title', true),
+        props.minor ? row('adult', 'admin.age.markAdult', false) : row('minor', 'admin.age.markMinor', true),
+        ...(props.pictured ? [row('picture', PRESS.picture, true)] : []),
+        ...(props.named ? [row('name', PRESS.name, true)] : []),
+        ...(props.described ? [row('bio', PRESS.bio, true)] : []),
+        ...(props.signedIn ? [row('sign-out', 'admin.signOut.title', true)] : [])
+    ];
+
+    const words = (act: Exclude<Act, 'suspend'>) =>
+    {
+        const name = props.name;
+
+        if (act === 'lift')
+        {
+            return { title: locale.t('admin.lift.ask', { name }), lead: locale.t('admin.lift.lead'), confirm: locale.t('admin.lift.send'), destructive: false, label: locale.t('admin.lift.title') };
+        }
+
+        if (act === 'minor' || act === 'adult')
+        {
+            const to = act === 'minor';
+
+            return {
+                title: locale.t(to ? 'admin.age.askMinor' : 'admin.age.askAdult', { name }),
+                lead: locale.t(to ? 'admin.age.askMinorLead' : 'admin.age.askAdultLead'),
+                confirm: locale.t(to ? 'admin.age.markMinor' : 'admin.age.markAdult'),
+                destructive: to,
+                label: locale.t('admin.age.title')
+            };
+        }
+
+        if (act === 'sign-out')
+        {
+            return {
+                title: locale.t('admin.signOut.ask', { name }),
+                lead: locale.t(props.guest ? 'admin.signOut.askGuest' : 'admin.signOut.askLead'),
+                confirm: locale.t('admin.signOut.confirm'),
+                destructive: true,
+                label: locale.t('admin.signOut.title')
+            };
+        }
+
+        return { title: locale.t(ASK[act], { name }), lead: locale.t(ASK_LEAD[act]), confirm: locale.t('admin.content.confirm'), destructive: true, label: locale.t('admin.content.title') };
+    };
+
+    const sent = (act: Exclude<Act, 'suspend'>, reason: string) =>
+    {
+        if (act === 'lift')
+        {
+            return props.onLift(reason);
+        }
+
+        if (act === 'minor' || act === 'adult')
+        {
+            return props.onMark(act === 'minor', reason);
+        }
+
+        return act === 'sign-out' ? props.onSignOut(reason) : props.onClear(act, reason);
+    };
+
+    const suspend = async () =>
+    {
+        const ask = await overlay.open(
+            SuspendSheet,
+            { name: props.name, guest: props.guest, ...(keptAsk === null ? {} : { initial: keptAsk }) },
+            { label: locale.t('admin.suspend.title') }
+        ).closed;
+
+        if (isAsk(ask))
+        {
+            keptAsk = await props.onSuspend(ask) ? null : ask;
+        }
+    };
+
+    const run = async (act: Act) =>
+    {
+        if (act === 'suspend')
+        {
+            await suspend();
+            return;
+        }
+
+        const asked = words(act);
+        const typed = kept.get(act);
+        const reason = await overlay.open(
+            ReasonSheet,
+            { title: asked.title, lead: asked.lead, confirm: asked.confirm, destructive: asked.destructive, ...(typed === undefined ? {} : { initial: typed }) },
+            { label: asked.label }
+        ).closed;
+
+        if (typeof reason !== 'string')
+        {
+            return;
+        }
+
+        if (await sent(act, reason))
+        {
+            kept.delete(act);
+        }
+        else
+        {
+            kept.set(act, reason);
+        }
+    };
+
+    <section class="overflow-hidden rounded-panel border border-line bg-field" aria-labelledby="person-actions" data-actions>
+        <div class="flex flex-col gap-0.5 border-b border-line px-4 py-3">
+            <h2 id="person-actions" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.actions') }</h2>
+            <p class="text-ui-xs text-muted">{ locale.t('admin.person.actionsLead') }</p>
+        </div>
+        <ul class="divide-y divide-line">
+            <For each={ acts } key={ (one) => one.id } let={ act }>
+                <li>
+                    <button
+                        type="button"
+                        aria-haspopup="dialog"
+                        class={ () => `flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-start text-ui-sm font-semibold transition-colors duration-150 hover:bg-raised ${ act.danger ? 'text-danger' : 'text-text' }` }
+                        data-act={ act.id }
+                        onClick={ () => void run(act.id) }
+                    >
+                        <Icon name={ ICONS[act.id] } size={ 18 } />
+                        <span class="min-w-0 flex-1">{ act.label }</span>
+                        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                    </button>
+                </li>
+            </For>
+        </ul>
+    </section>
+}

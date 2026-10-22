@@ -1,0 +1,126 @@
+import { untrack } from 'azerothjs';
+
+import { SUSPEND_CATEGORIES, type SuspendCategory, type SuspendDays } from '../../../../backend/src/domains/admin/roles.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { CATEGORY_WORDS, TERM_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
+import Select from '../ui/select.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
+
+export interface SuspendAsk
+{
+    days: SuspendDays | null;
+    category: SuspendCategory;
+    reason: string;
+}
+
+type Term = '1' | '7' | '30' | 'good';
+
+const TERMS: readonly Term[] = ['1', '7', '30', 'good'];
+
+const TERM_DAYS: Readonly<Record<Term, SuspendDays | null>> = { 1: 1, 7: 7, 30: 30, good: null };
+
+const termOf = (days: SuspendDays | null) => (days === null ? 'good' : TERMS.find((one) => TERM_DAYS[one] === days) ?? '1');
+
+const REASON_MIN = 3;
+
+export default component SuspendSheet(props: OverlayProps & { name: string; guest: boolean; initial?: SuspendAsk })
+{
+    const locale = useLocale();
+    const first = untrack(() => props.initial);
+
+    state term = (first === undefined ? '1' : termOf(first.days)) as Term;
+
+    state category = first?.category ?? '';
+
+    state why = first?.reason ?? '';
+
+    state whyTold = null as string | null;
+
+    state categoryTold = null as string | null;
+
+    derived days = TERM_DAYS[term];
+
+    derived termSaid = locale.t(days === null ? 'admin.suspend.term.good' : TERM_WORDS[String(days)] ?? 'admin.suspend.term.good');
+
+    derived title = locale.t('admin.suspend.ask', { name: props.name, term: termSaid });
+
+    derived lead = locale.t(props.guest ? 'admin.suspend.askGuest' : 'admin.suspend.askLead');
+
+    derived missing = categoryTold !== null;
+
+    derived categoryWords = categoryTold ?? '';
+
+    derived terms = TERMS.map((id) => ({ id, label: locale.t(`admin.suspend.days.${ id }`) }));
+
+    derived categories = [
+        { value: '', label: locale.t('admin.suspend.categoryNone') },
+        ...SUSPEND_CATEGORIES.map((one) => ({ value: one, label: locale.t(CATEGORY_WORDS[one] ?? 'report.category.other') }))
+    ];
+
+    const chose = (value: string) =>
+    {
+        category = value;
+        categoryTold = null;
+    };
+
+    const typedWhy = (value: string) =>
+    {
+        why = value;
+        whyTold = null;
+    };
+
+    const send = () =>
+    {
+        const reason = why.trim();
+        const kind = SUSPEND_CATEGORIES.find((one) => one === category);
+
+        categoryTold = kind === undefined ? locale.t('admin.suspend.categoryMissing') : null;
+        whyTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (kind === undefined || whyTold !== null)
+        {
+            return;
+        }
+
+        haptic('warn');
+
+        const ask: SuspendAsk = { days, category: kind, reason };
+
+        props.close(ask);
+    };
+
+    <div class="flex flex-col gap-5 p-5" data-suspend-sheet>
+        <div>
+            <h2 class="title text-ui-xl text-text" data-ask>{ title }</h2>
+            <p class="mt-2 text-ui-base text-muted" data-lead>{ lead }</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+            <span class="text-ui-sm font-semibold text-text" aria-hidden="true">{ locale.t('admin.suspend.howLong') }</span>
+            <Segmented block items={ terms } value={ term } label={ locale.t('admin.suspend.howLong') } onChange={ (id) => term = TERMS.find((one) => one === id) ?? '1' } />
+        </div>
+        <div class="flex flex-col gap-1.5" data-category>
+            <Select label={ locale.t('admin.suspend.category') } value={ category } options={ categories } onChange={ chose } />
+            <Show when={ missing }>
+                <p class="text-ui-xs font-medium text-danger" role="alert">{ categoryWords }</p>
+            </Show>
+        </div>
+        <Field id="admin-suspend-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
+            <TextArea
+                id="admin-suspend-why"
+                value={ why }
+                maxlength={ 500 }
+                describedBy={ whyTold !== null ? 'admin-suspend-why-error' : 'admin-suspend-why-hint' }
+                onInput={ typedWhy }
+            />
+        </Field>
+        <div class="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant="destructive" block onClick={ send }>{ locale.t('admin.suspend.confirm') }</Button>
+            <Button variant="ghost" block onClick={ () => props.close(null) }>{ locale.t('common.cancel') }</Button>
+        </div>
+    </div>
+}

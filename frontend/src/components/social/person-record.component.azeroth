@@ -20,7 +20,7 @@ import { useRecord } from '../../stores/record.store.ts';
 
 export type RecordPart = 'level' | 'record' | 'achievements' | 'history';
 
-export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[]; game?: string })
+export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[]; game?: string; blank?: string })
 {
     const locale = useLocale();
     const record = useRecord();
@@ -96,6 +96,10 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     derived unplayed = !record.loading() && games.length === 0;
 
+    derived blankWords = props.blank ?? '';
+
+    derived plain = blankWords !== '';
+
     derived played = games.length > 0;
 
     derived achieved = summary !== null && parts.includes('achievements');
@@ -128,7 +132,9 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                 <Show when={ unplayed }>
                 { () =>
                     <Panel>
-                        <EmptyState icon="dice" title={ locale.t('record.empty') } lead={ locale.t('record.emptyLead') } class="py-6" />
+                        <Show when={ plain } fallback={ <EmptyState icon="dice" title={ locale.t('record.empty') } lead={ locale.t('record.emptyLead') } class="py-6" /> }>
+                            <p class="text-ui-sm text-muted" data-record-blank>{ blankWords }</p>
+                        </Show>
                     </Panel>
                 }
                 </Show>

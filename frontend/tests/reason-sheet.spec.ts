@@ -73,6 +73,18 @@ describe('the question that asks the staff why', () =>
         expect(close.mock.calls).toEqual([['abc']]);
     });
 
+    it('opens with a reason already written when it is handed one, so a refused change is asked again as it was', () =>
+    {
+        const close = vi.fn();
+        const container = renderTest(() => ReasonSheet({ overlayId: 'reason', close, title: 'Pause Ludo?', confirm: 'Pause it', initial: 'A bug in the dice' }) as HTMLElement).container;
+
+        expect(container.querySelector<HTMLTextAreaElement>('#admin-reason')?.value).toBe('A bug in the dice');
+
+        fire(button(container, 'Pause it'), 'click');
+
+        expect(close.mock.calls).toEqual([['A bug in the dice']]);
+    });
+
     it('closes with nothing when it is put away', () =>
     {
         const close = vi.fn();

@@ -4,10 +4,9 @@ import { outranks, type ClearPart } from '../../../../backend/src/domains/admin/
 import type { AdminPerson } from '../../../../backend/src/schemas.ts';
 import { ApiError, client } from '../../api.ts';
 import LogEntry from '../../components/admin/log-entry.component.azeroth';
-import PersonAge from '../../components/admin/person-age.component.azeroth';
-import PersonContent from '../../components/admin/person-content.component.azeroth';
-import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
+import PersonActions from '../../components/admin/person-actions.component.azeroth';
 import Said from '../../components/admin/said.component.azeroth';
+import type { SuspendAsk } from '../../components/admin/suspend-sheet.component.azeroth';
 import When from '../../components/admin/when.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -17,16 +16,21 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import LoadMore from '../../components/ui/load-more.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Field from '../../components/ui/field.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import Tabs from '../../components/ui/tabs.component.azeroth';
 import TextArea from '../../components/ui/text-area.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
+import { copyText } from '../../lib/clipboard.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
 import { nuraOf } from '../../lib/nura.ts';
+import { useAddress } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { CATEGORY_WORDS, handleParts, ROLE_WORDS, STATUS_TONES, STATUS_WORDS, TERM_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import { shortAddress } from '../../lib/wallet.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -73,12 +77,15 @@ const PLAYED: RecordPart[] = ['level', 'record'];
 
 const UNPLAYED: RecordPart[] = ['level'];
 
+const TABS = ['overview', 'reports', 'games', 'history'] as const;
+
 export default component PersonPage()
 {
     const locale = useLocale();
     const session = useSession();
     const catalogue = useCatalogue();
     const params = useParams();
+    const address = useAddress();
 
     const view = createResource(
         () => params().handle ?? null,
@@ -284,6 +291,47 @@ export default component PersonPage()
 
     derived mayAct = person !== null && me !== null && person.handle !== me.handle && outranks(me.staff ?? null, person.staff ?? null);
 
+    derived tab = TABS.find((one) => one === address.text('tab')) ?? 'overview';
+
+    derived onOverview = tab === 'overview';
+
+    derived onReports = tab === 'reports';
+
+    derived onGames = tab === 'games';
+
+    derived onHistory = tab === 'history';
+
+    derived tabs = [
+        { id: 'overview', label: locale.t('admin.person.tab.overview') },
+        { id: 'reports', label: locale.t('admin.person.tab.reports'), count: reports.length },
+        { id: 'games', label: locale.t('admin.person.tab.games') },
+        { id: 'history', label: locale.t('admin.person.tab.history') }
+    ];
+
+    derived against = reports.filter((one) => one.against).length;
+
+    derived accused = against > 0;
+
+    derived againstWords = locale.plural('admin.people.reports', against);
+
+    derived reach = signedIn ? locale.plural('admin.person.signedIn', sessions.length) : locale.t('admin.person.signedInNowhere');
+
+    derived firstWallet = wallets[0] ?? '';
+
+    derived shortWallet = shortAddress(firstWallet);
+
+    derived split = mayAct ? '@4xl:grid-cols-[minmax(0,1fr)_19rem]' : '';
+
+    const show = (id: string) =>
+    {
+        address.write({ tab: id === 'overview' ? '' : id });
+    };
+
+    const copyWallet = () =>
+    {
+        void copyText(firstWallet, 'admin.person.walletCopied', { dedupe: 'admin-wallet' });
+    };
+
     const reread = async () =>
     {
         await view.refetch();
@@ -482,7 +530,7 @@ export default component PersonPage()
         }
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <Link to="/admin/people" class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline">
             <Icon name="back" size={ 16 } class="icon-flip" />
             <span>{ locale.t('admin.person.back') }</span>
@@ -502,13 +550,13 @@ export default component PersonPage()
 
         <Show when={ person } let={ shownPerson }>
             <div class="flex flex-col gap-6" data-person={ handle }>
-                <header class="flex flex-col gap-3">
-                    <div class="flex items-center gap-4">
+                <header class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4 @2xl:p-5" data-summary>
+                    <div class="flex items-start gap-4">
                         <Avatar person={ shownPerson } size="xl" />
-                        <div class="flex min-w-0 flex-col gap-1">
+                        <div class="flex min-w-0 flex-1 flex-col gap-1">
                             <h1 class="title truncate text-ui-2xl" dir="auto">{ name }</h1>
                             <span class="truncate text-ui-sm text-muted" dir="ltr">@{ handle }</span>
-                            <div class="flex flex-wrap gap-1.5 empty:hidden" data-flags>
+                            <div class="mt-1 flex flex-wrap gap-1.5 empty:hidden" data-flags>
                                 <Show when={ ranked }>
                                     <Badge text={ roleWord } tone="accent" />
                                 </Show>
@@ -518,212 +566,233 @@ export default component PersonPage()
                                 <Show when={ minor }>
                                     <Badge text={ locale.t('admin.people.minor') } tone="gold" />
                                 </Show>
+                                <Show when={ accused }>
+                                    <Badge text={ againstWords } tone="neutral" />
+                                </Show>
                             </div>
                         </div>
                     </div>
-                    <p class="facts text-ui-xs text-faint">
-                        <When at={ joinedAt } said={ joined } />
-                        <Show when={ wasSeen }>
-                            <When at={ seenAt } said={ seen } />
-                        </Show>
-                    </p>
-                    <div class="flex flex-col gap-0.5" hidden={ !told } data-suspension>
+                    <div class="flex flex-col gap-0.5 rounded-tile border border-danger/30 bg-danger/10 px-3 py-2" hidden={ !told } data-suspension>
                         <p class="text-ui-sm font-semibold text-danger" data-standing>{ standing }</p>
                         <p class="text-ui-xs text-faint" data-since><When at={ sinceAt } said={ standingSince } /></p>
                     </div>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                        <p class="facts min-w-0 text-ui-xs text-faint" data-facts>
+                            <When at={ joinedAt } said={ joined } />
+                            <Show when={ wasSeen }>
+                                <When at={ seenAt } said={ seen } />
+                            </Show>
+                            <span data-reach>{ reach }</span>
+                        </p>
+                        <Show when={ walleted }>
+                            <span class="flex items-center gap-0.5" data-wallet>
+                                <span class="tally text-ui-xs text-muted" dir="ltr">{ shortWallet }</span>
+                                <IconButton icon="copy" label={ locale.t('admin.person.copyWallet') } variant="ghost" size="sm" onClick={ copyWallet } />
+                            </span>
+                        </Show>
+                    </div>
                 </header>
 
-                <div class="grid gap-4 xl:grid-cols-2">
-                    <Panel pad="md" stack="sm" labelledBy="person-account">
-                        <h2 id="person-account" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.about') }</h2>
-                        <p class="text-ui-sm text-text" data-strangers>{ strangers }</p>
-                        <p class="text-ui-sm text-text" data-shown>{ shown }</p>
-                        <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.paid') }</h3>
-                        <p class="text-ui-sm text-muted" data-paid>{ accepted }</p>
-                        <Show when={ resting }>
-                            <p class="text-ui-sm text-gold" data-break>{ rest }</p>
-                        </Show>
-                        <Show when={ walleted }>
-                            <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.wallets') }</h3>
-                            <ul class="flex flex-col gap-1" data-wallets>
-                                <For each={ wallets } key={ (one) => one } let={ wallet }>
-                                    <li class="break-all font-mono text-ui-xs text-muted" dir="ltr">{ wallet }</li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="person-reports">
-                        <h2 id="person-reports" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.reports') }</h2>
-                        <p class="text-ui-sm text-muted" data-filed>{ filed }</p>
-                        <Show when={ reported } fallback={ <p class="text-ui-sm text-muted" data-reports="none">{ locale.t('admin.person.reports.none') }</p> }>
-                            <ul class="divide-y divide-line" data-reports>
-                                <For each={ reports } key={ (one) => one.id } let={ report }>
-                                    <li data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
-                                        <Link
-                                            to={ `/admin/reports/${ encodeURIComponent(report.id) }` }
-                                            class="-mx-2 flex flex-col gap-1.5 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised"
-                                            data-open
-                                        >
-                                            <span class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></span>
-                                            <span class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
-                                                <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
-                                                <When at={ report.at } />
-                                            </span>
-                                        </Link>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="person-sessions">
-                        <h2 id="person-sessions" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.sessions') }</h2>
-                        <Show when={ signedIn } fallback={ <p class="text-ui-sm text-muted" data-sessions="none">{ locale.t('admin.person.sessions.none') }</p> }>
-                            <ul class="divide-y divide-line" data-sessions>
-                                <For each={ sessions } key={ (one) => one.key } let={ one }>
-                                    <li class="flex flex-col gap-1 py-2" data-session>
-                                        <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
-                                            <span data-agent>{ one.agent }</span>
-                                            <span hidden={ !one.keys } data-keys>
-                                                <Badge text={ locale.t('admin.person.session.keys') } tone="neutral" />
-                                            </span>
-                                        </p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <When at={ one.openedAt } said={ one.opened } />
-                                            <span hidden={ !one.wasUsed }><When at={ one.usedAt } said={ one.used } /></span>
-                                        </p>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="person-devices">
-                        <h2 id="person-devices" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.devices') }</h2>
-                        <Show when={ keyed } fallback={ <p class="text-ui-sm text-muted" data-devices="none">{ locale.t('admin.person.devices.none') }</p> }>
-                            <ul class="divide-y divide-line" data-devices>
-                                <For each={ devices } key={ (one) => one.key } let={ device }>
-                                    <li class="flex flex-col gap-1 py-2" data-device>
-                                        <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
-                                            <span dir="auto">{ device.label }</span>
-                                            <span class="text-muted">{ device.agent }</span>
-                                            <span hidden={ !device.revoked } data-revoked>
-                                                <Badge text={ locale.t('admin.person.device.revoked') } tone="neutral" />
-                                            </span>
-                                        </p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <When at={ device.createdAt } said={ device.added } />
-                                            <span hidden={ !device.wasSeen }><When at={ device.seenAt } said={ device.seen } /></span>
-                                        </p>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm">
-                        <PersonRecord handle={ handle } show={ recordParts } />
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="person-games">
-                        <h2 id="person-games" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.games') }</h2>
-                        <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-games="none">{ locale.t('admin.person.games.none') }</p> }>
-                            <ul class="divide-y divide-line" data-games>
-                                <For each={ games } key={ (one) => one.id } let={ game }>
-                                    <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
-                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
-                                            <span class="font-semibold text-text">{ game.game }</span>
-                                            <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.result }</span>
-                                        </p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <span class="empty:hidden" dir="ltr">{ game.with }</span>
-                                            <span>{ game.when }</span>
-                                        </p>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="person-paid">
-                        <h2 id="person-paid" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.paidGames') }</h2>
-                        <Show when={ paidPlayed } fallback={ <p class="text-ui-sm text-muted" data-paid-games="none">{ locale.t('admin.person.paidGames.none') }</p> }>
-                            <ul class="divide-y divide-line" data-paid-games>
-                                <For each={ paidGames } key={ (one) => one.id } let={ game }>
-                                    <li class="flex flex-col gap-1 py-2" data-paid-game={ game.id }>
-                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
-                                            <span class="font-semibold text-text">{ game.game }</span>
-                                            <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.outcome }</span>
-                                        </p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <span>{ game.stake }</span>
-                                            <span>{ game.when }</span>
-                                        </p>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
-                </div>
-
-                <section class="flex flex-col gap-3" aria-labelledby="person-history">
-                    <h2 id="person-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.history') }</h2>
-                    <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.person.history.none') }</p> }>
-                        <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-history>
-                            <For each={ history } key={ (row) => row.id } let={ row }>
-                                <li data-entry={ row.id } data-kind={ row.kind }>
-                                    <LogEntry row={ row } />
-                                </li>
-                            </For>
-                        </ol>
-                    </Show>
-
-                    <Show when={ hasMore }>
-                        <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void olderHistory() } />
-                    </Show>
-
+                <div class={ () => `grid items-start gap-6 ${ split }` } data-layout>
                     <Show when={ mayAct }>
-                        <Panel pad="md" stack="md" labelledBy="person-note">
-                            <div class="flex flex-col gap-1">
-                                <h3 id="person-note" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.note') }</h3>
-                                <p class="text-ui-sm text-muted">{ locale.t('admin.person.noteLead') }</p>
-                            </div>
-                            <Field id="admin-person-note" label={ locale.t('admin.person.noteLabel') } error={ noteTold }>
-                                <TextArea
-                                    id="admin-person-note"
-                                    class="max-w-xl"
-                                    value={ noteText }
-                                    maxlength={ 500 }
-                                    describedBy={ noteTold !== null ? 'admin-person-note-error' : undefined }
-                                    onInput={ typedNote }
-                                />
-                            </Field>
-                            <Button variant="primary" class="self-start" onClick={ () => void keep() }>{ locale.t('admin.person.noteSave') }</Button>
-                        </Panel>
-                    </Show>
-                </section>
-
-                <Show when={ mayAct }>
-                    <section class="flex flex-col gap-3" aria-labelledby="person-actions" data-actions>
-                        <div class="flex flex-col gap-1">
-                            <h2 id="person-actions" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.actions') }</h2>
-                            <p class="text-ui-sm text-muted">{ locale.t('admin.person.actionsLead') }</p>
+                        <div class="@4xl:sticky @4xl:top-8 @4xl:col-start-2 @4xl:row-start-1">
+                            <PersonActions
+                                name={ calledBy }
+                                suspended={ suspended }
+                                minor={ minor }
+                                guest={ guest }
+                                pictured={ pictured }
+                                named={ named }
+                                described={ described }
+                                signedIn={ signedIn }
+                                onSuspend={ suspendNow }
+                                onLift={ liftNow }
+                                onMark={ markNow }
+                                onClear={ clearNow }
+                                onSignOut={ signOutNow }
+                            />
                         </div>
-                        <PersonSuspension name={ calledBy } suspended={ suspended } guest={ guest } onSuspend={ suspendNow } onLift={ liftNow } />
-                        <PersonAge name={ calledBy } minor={ minor } onMark={ markNow } />
-                        <PersonContent
-                            name={ calledBy }
-                            pictured={ pictured }
-                            named={ named }
-                            described={ described }
-                            signedIn={ signedIn }
-                            guest={ guest }
-                            onClear={ clearNow }
-                            onSignOut={ signOutNow }
-                        />
-                    </section>
-                </Show>
+                    </Show>
+
+                    <div class="flex min-w-0 flex-col gap-4 @4xl:col-start-1 @4xl:row-start-1">
+                        <Tabs label={ locale.t('admin.person.tabs') } value={ tab } onChange={ show } items={ tabs } />
+
+                        <div class="flex flex-col gap-4" role="tabpanel" aria-label={ locale.t('admin.person.tab.overview') } hidden={ !onOverview } data-panel="overview">
+                            <Panel pad="md" stack="sm" labelledBy="person-account">
+                                <h2 id="person-account" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.about') }</h2>
+                                <p class="text-ui-sm text-text" data-strangers>{ strangers }</p>
+                                <p class="text-ui-sm text-text" data-shown>{ shown }</p>
+                                <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.paid') }</h3>
+                                <p class="text-ui-sm text-muted" data-paid>{ accepted }</p>
+                                <Show when={ resting }>
+                                    <p class="text-ui-sm text-gold" data-break>{ rest }</p>
+                                </Show>
+                                <Show when={ walleted }>
+                                    <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.wallets') }</h3>
+                                    <ul class="flex flex-col gap-1" data-wallets>
+                                        <For each={ wallets } key={ (one) => one } let={ wallet }>
+                                            <li class="break-all font-mono text-ui-xs text-muted" dir="ltr">{ wallet }</li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+
+                            <Panel pad="md" stack="sm" labelledBy="person-sessions">
+                                <h2 id="person-sessions" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.sessions') }</h2>
+                                <Show when={ signedIn } fallback={ <p class="text-ui-sm text-muted" data-sessions="none">{ locale.t('admin.person.sessions.none') }</p> }>
+                                    <ul class="divide-y divide-line" data-sessions>
+                                        <For each={ sessions } key={ (one) => one.key } let={ one }>
+                                            <li class="flex flex-col gap-1 py-2" data-session>
+                                                <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
+                                                    <span data-agent>{ one.agent }</span>
+                                                    <span hidden={ !one.keys } data-keys>
+                                                        <Badge text={ locale.t('admin.person.session.keys') } tone="neutral" />
+                                                    </span>
+                                                </p>
+                                                <p class="facts text-ui-xs text-faint">
+                                                    <When at={ one.openedAt } said={ one.opened } />
+                                                    <span hidden={ !one.wasUsed }><When at={ one.usedAt } said={ one.used } /></span>
+                                                </p>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+
+                            <Panel pad="md" stack="sm" labelledBy="person-devices">
+                                <h2 id="person-devices" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.devices') }</h2>
+                                <Show when={ keyed } fallback={ <p class="text-ui-sm text-muted" data-devices="none">{ locale.t('admin.person.devices.none') }</p> }>
+                                    <ul class="divide-y divide-line" data-devices>
+                                        <For each={ devices } key={ (one) => one.key } let={ device }>
+                                            <li class="flex flex-col gap-1 py-2" data-device>
+                                                <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
+                                                    <span dir="auto">{ device.label }</span>
+                                                    <span class="text-muted">{ device.agent }</span>
+                                                    <span hidden={ !device.revoked } data-revoked>
+                                                        <Badge text={ locale.t('admin.person.device.revoked') } tone="neutral" />
+                                                    </span>
+                                                </p>
+                                                <p class="facts text-ui-xs text-faint">
+                                                    <When at={ device.createdAt } said={ device.added } />
+                                                    <span hidden={ !device.wasSeen }><When at={ device.seenAt } said={ device.seen } /></span>
+                                                </p>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+                        </div>
+
+                        <div class="flex flex-col gap-4" role="tabpanel" aria-label={ locale.t('admin.person.tab.reports') } hidden={ !onReports } data-panel="reports">
+                            <Panel pad="md" stack="sm" labelledBy="person-reports">
+                                <h2 id="person-reports" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.reports') }</h2>
+                                <p class="text-ui-sm text-muted" data-filed>{ filed }</p>
+                                <Show when={ reported } fallback={ <p class="text-ui-sm text-muted" data-reports="none">{ locale.t('admin.person.reports.none') }</p> }>
+                                    <ul class="divide-y divide-line" data-reports>
+                                        <For each={ reports } key={ (one) => one.id } let={ report }>
+                                            <li data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
+                                                <Link
+                                                    to={ `/admin/reports/${ encodeURIComponent(report.id) }` }
+                                                    class="-mx-2 flex flex-col gap-1.5 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised"
+                                                    data-open
+                                                >
+                                                    <span class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></span>
+                                                    <span class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
+                                                        <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
+                                                        <When at={ report.at } />
+                                                    </span>
+                                                </Link>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+                        </div>
+
+                        <div class="flex flex-col gap-4" role="tabpanel" aria-label={ locale.t('admin.person.tab.games') } hidden={ !onGames } data-panel="games">
+                            <Panel pad="md" stack="sm">
+                                <PersonRecord handle={ handle } show={ recordParts } blank={ locale.t('admin.person.record.none') } />
+                            </Panel>
+
+                            <Panel pad="md" stack="sm" labelledBy="person-games">
+                                <h2 id="person-games" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.games') }</h2>
+                                <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-games="none">{ locale.t('admin.person.games.none') }</p> }>
+                                    <ul class="divide-y divide-line" data-games>
+                                        <For each={ games } key={ (one) => one.id } let={ game }>
+                                            <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
+                                                <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                                    <span class="font-semibold text-text">{ game.game }</span>
+                                                    <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.result }</span>
+                                                </p>
+                                                <p class="facts text-ui-xs text-faint">
+                                                    <span class="empty:hidden" dir="ltr">{ game.with }</span>
+                                                    <span>{ game.when }</span>
+                                                </p>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+
+                            <Panel pad="md" stack="sm" labelledBy="person-paid">
+                                <h2 id="person-paid" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.paidGames') }</h2>
+                                <Show when={ paidPlayed } fallback={ <p class="text-ui-sm text-muted" data-paid-games="none">{ locale.t('admin.person.paidGames.none') }</p> }>
+                                    <ul class="divide-y divide-line" data-paid-games>
+                                        <For each={ paidGames } key={ (one) => one.id } let={ game }>
+                                            <li class="flex flex-col gap-1 py-2" data-paid-game={ game.id }>
+                                                <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                                    <span class="font-semibold text-text">{ game.game }</span>
+                                                    <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.outcome }</span>
+                                                </p>
+                                                <p class="facts text-ui-xs text-faint">
+                                                    <span>{ game.stake }</span>
+                                                    <span>{ game.when }</span>
+                                                </p>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </Show>
+                            </Panel>
+                        </div>
+
+                        <section class="flex flex-col gap-3" role="tabpanel" aria-labelledby="person-history" hidden={ !onHistory } data-panel="history">
+                            <h2 id="person-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.history') }</h2>
+
+                            <Show when={ mayAct }>
+                                <Panel pad="md" stack="md" labelledBy="person-note">
+                                    <div class="flex flex-col gap-1">
+                                        <h3 id="person-note" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.note') }</h3>
+                                        <p class="text-ui-sm text-muted">{ locale.t('admin.person.noteLead') }</p>
+                                    </div>
+                                    <Field id="admin-person-note" label={ locale.t('admin.person.noteLabel') } error={ noteTold }>
+                                        <TextArea
+                                            id="admin-person-note"
+                                            value={ noteText }
+                                            maxlength={ 500 }
+                                            describedBy={ noteTold !== null ? 'admin-person-note-error' : undefined }
+                                            onInput={ typedNote }
+                                        />
+                                    </Field>
+                                    <Button variant="primary" class="self-start" onClick={ () => void keep() }>{ locale.t('admin.person.noteSave') }</Button>
+                                </Panel>
+                            </Show>
+
+                            <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.person.history.none') }</p> }>
+                                <ol class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-history>
+                                    <For each={ history } key={ (row) => row.id } let={ row }>
+                                        <li data-entry={ row.id } data-kind={ row.kind }>
+                                            <LogEntry row={ row } />
+                                        </li>
+                                    </For>
+                                </ol>
+                            </Show>
+
+                            <Show when={ hasMore }>
+                                <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void olderHistory() } />
+                            </Show>
+                        </section>
+                    </div>
+                </div>
             </div>
         </Show>
     </div>

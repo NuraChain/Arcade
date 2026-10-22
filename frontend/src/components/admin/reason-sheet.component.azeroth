@@ -1,3 +1,5 @@
+import { untrack } from 'azerothjs';
+
 import { haptic } from '../../lib/haptics.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
@@ -12,11 +14,12 @@ export default component ReasonSheet(props: OverlayProps & {
     lead?: string;
     confirm: string;
     destructive?: boolean;
+    initial?: string;
 })
 {
     const locale = useLocale();
 
-    state why = '';
+    state why = untrack(() => props.initial ?? '');
 
     state told = null as string | null;
 

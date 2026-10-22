@@ -63,21 +63,19 @@ const typeInto = (field: HTMLTextAreaElement, value: string) =>
 
 const toasts = () => useToasts().items().map((one) => one.text);
 
-const choose = async (root: ParentNode, label: string) =>
-{
-    root.querySelector<HTMLButtonElement>('[data-category] button[aria-haspopup="listbox"]')!.click();
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((one) => one.textContent?.trim() === label)!.click();
-    await settle();
-};
-
 const asked = () => useOverlay().items().find((one) => one.phase !== 'closing')!;
 
-const answered = async (yes: boolean) =>
+const answered = async (value: unknown) =>
 {
-    useOverlay().close(asked().id, yes);
+    useOverlay().close(asked().id, value);
     await settle();
 };
+
+const act = (root: ParentNode, id: string) => root.querySelector<HTMLButtonElement>(`[data-act="${ id }"]`)!.click();
+
+const acts = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-act]')].map((one) => one.dataset.act);
+
+const labels = (root: ParentNode) => all(root, '[data-act]');
 
 const longDate = (at: number) => useLocale().date(at, { dateStyle: 'long', timeStyle: 'short' });
 
@@ -325,25 +323,161 @@ describe('a person, as the staff read them', () =>
     });
 });
 
-describe('a profile cleared and every session ended, from the person\'s page', () =>
+describe('a person\'s page, laid out', () =>
 {
-    it('offers only what their profile has, and says so when it has nothing of its own', async () =>
+    it('opens on a summary of who they are: their flags, when they joined and were seen, where they are signed in and their first wallet', async () =>
+    {
+        told();
+        server.staff.members = [staffMember('sara.k', 'moderator', 'alex', hoursAgo(10))];
+        const container = await opened();
+        const summary = container.querySelector('[data-person] header[data-summary]')!;
+
+        expect(summary.querySelector('h1')?.textContent).toBe('Sara Kamali');
+        expect(all(summary, '[data-flags] > *')).toEqual(['Moderator', '1 report']);
+        expect(said(summary, '[data-reach]')).toBe('Signed in on 2 browsers');
+        expect([...summary.querySelectorAll<HTMLTimeElement>('[data-facts] time')].map((one) => one.dateTime)).toEqual([new Date(Date.parse('2026-10-20T09:00:00.000Z') - 3_600_000).toISOString(), hoursAgo(2)]);
+        expect(said(summary, '[data-wallet] [dir="ltr"]')).toBe('0x3c44…93bc');
+        cleanup();
+
+        server.staff.members = [];
+        server.accounts.about['sara.k'] = {};
+        const bare = await opened();
+
+        expect(said(bare, '[data-reach]')).toBe('Signed in nowhere');
+        expect(bare.querySelector('[data-wallet]')).toBeNull();
+        expect(said(bare, '[data-flags]')).toBe('');
+    });
+
+    it('copies their whole first wallet from the summary', async () =>
+    {
+        told();
+        const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+        const wrote = vi.fn(async () => undefined);
+
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: wrote } });
+
+        try
+        {
+            const container = await opened();
+
+            container.querySelector<HTMLButtonElement>('[data-wallet] button')!.click();
+            await settle();
+
+            expect(container.querySelector('[data-wallet] button')?.getAttribute('aria-label')).toBe('Copy the wallet');
+            expect(wrote).toHaveBeenCalledWith('0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc');
+            expect(toasts()).toEqual(['Wallet copied']);
+        }
+        finally
+        {
+            if (original === undefined)
+            {
+                Reflect.deleteProperty(navigator, 'clipboard');
+            }
+            else
+            {
+                Object.defineProperty(navigator, 'clipboard', original);
+            }
+        }
+    });
+
+    it('keeps what it shows in tabs named in the address, the overview first and the reports counted', async () =>
+    {
+        told();
+        const routes: Route[] = [{ path: '/admin/people/:handle', component: () => PersonPage({}) as unknown as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory('/admin/people/sara.k'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+        const shown = () => [...container.querySelectorAll<HTMLElement>('[data-panel]')].filter((one) => !one.hidden).map((one) => one.dataset.panel);
+        const tab = (id: string) => container.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${ id }"]`)!;
+
+        await settle();
+
+        expect([...container.querySelectorAll('[role="tab"]')].map((one) => one.textContent?.trim())).toEqual(['Overview', 'Reports2', 'Games', 'History']);
+        expect(shown()).toEqual(['overview']);
+        expect(tab('overview').getAttribute('aria-selected')).toBe('true');
+        expect([...container.querySelectorAll('[data-panel]')].map((one) => one.getAttribute('role'))).toEqual(['tabpanel', 'tabpanel', 'tabpanel', 'tabpanel']);
+
+        tab('reports').click();
+        await settle();
+
+        expect(router.location().query.tab).toBe('reports');
+        expect(shown()).toEqual(['reports']);
+
+        tab('overview').click();
+        await settle();
+
+        expect(router.location().query.tab).toBeUndefined();
+        cleanup();
+
+        const history = await opened('/admin/people/sara.k?tab=history');
+
+        expect([...history.querySelectorAll<HTMLElement>('[data-panel]')].filter((one) => !one.hidden).map((one) => one.dataset.panel)).toEqual(['history']);
+        cleanup();
+
+        const unknown = await opened('/admin/people/sara.k?tab=nothing');
+
+        expect([...unknown.querySelectorAll<HTMLElement>('[data-panel]')].filter((one) => !one.hidden).map((one) => one.dataset.panel)).toEqual(['overview']);
+    });
+
+    it('puts the actions beside the tabs once there is room, and asks for no column where the reader may not act', async () =>
+    {
+        const container = await opened();
+        const layout = container.querySelector<HTMLElement>('[data-layout]')!;
+
+        expect(layout.classList.contains('@4xl:grid-cols-[minmax(0,1fr)_19rem]')).toBe(true);
+        expect(layout.querySelector('[data-actions]')?.parentElement?.className).toContain('@4xl:col-start-2');
+        expect(layout.querySelector('[data-actions]')?.parentElement?.classList.contains('@4xl:sticky')).toBe(true);
+        expect(layout.closest('.\\@container')).not.toBeNull();
+        cleanup();
+
+        server.staff.owner = 'reza.t';
+        server.staff.members = [staffMember('alex', 'admin', 'reza.t', hoursAgo(20))];
+        as('admin');
+        const above = await opened('/admin/people/reza.t');
+
+        expect(above.querySelector('[data-actions]')).toBeNull();
+        expect(above.querySelector<HTMLElement>('[data-layout]')!.classList.contains('@4xl:grid-cols-[minmax(0,1fr)_19rem]')).toBe(false);
+    });
+
+    it('tells the staff a player has no rated games yet in plain words, never the player\'s invitation to sit down', async () =>
+    {
+        server.accounts.about['sara.k'] = { games: [{ id: 'g1', game: 'ludo', finishedAt: hoursAgo(4), result: 'void', players: ['sara.k', 'mina'] }] };
+        const container = await opened();
+
+        await vi.waitFor(() => expect(said(container, '[data-record-blank]')).toBe('No rated games yet.'));
+        expect(container.textContent).not.toContain(useLocale().t('record.emptyLead'));
+        expect(container.querySelector('[data-panel="games"] .empty-art')).toBeNull();
+    });
+});
+
+describe('acting on an account, from the person\'s page', () =>
+{
+    it('offers what can be done to them as one list, each opening a sheet: only what their profile has, and the sign-out only while they are signed in', async () =>
     {
         server.accounts.about['sara.k'] = { avatar: 'http://localhost:1/avatars/abc.webp', bio: 'DM me for seats' };
         const container = await opened();
 
-        expect(all(container, '[data-clear] button')).toEqual(['Remove the picture', 'Reset the name', 'Clear the bio']);
+        expect(acts(container)).toEqual(['suspend', 'minor', 'picture', 'name', 'bio']);
+        expect(labels(container)).toEqual(['Suspend the account', 'Mark as under 18', 'Remove the picture', 'Reset the name', 'Clear the bio']);
+        expect([...container.querySelectorAll('[data-act]')].every((one) => one.getAttribute('aria-haspopup') === 'dialog')).toBe(true);
+        expect([...container.querySelectorAll('[data-act]')].map((one) => one.classList.contains('text-danger'))).toEqual([true, true, true, true, true]);
         cleanup();
 
         server.accounts.about['sara.k'] = { displayName: 'sara.k' };
         const bare = await opened();
 
-        expect(said(bare, '[data-content="none"]')).toBe('Their profile has no picture, name or bio of their own.');
-        expect(bare.querySelector('#admin-content-why')).toBeNull();
-        expect(said(bare, '[data-sign-out="none"]')).toBe('They are not signed in anywhere.');
-    });
+        expect(acts(bare)).toEqual(['suspend', 'minor']);
+        cleanup();
 
-    it('resets a name at the press after asking, keeps what it said in the history, and says so once the server has', async () =>
+        told();
+        const signedIn = await opened();
+
+        expect(acts(signedIn)).toEqual(['suspend', 'minor', 'name', 'sign-out']);
+    });
+});
+
+describe('a profile cleared and every session ended, from the person\'s page', () =>
+{
+    it('resets a name at the press after asking why, keeps what it said in the history, and says so once the server has', async () =>
     {
         let answer: () => void = () => undefined;
         const sent = vi.spyOn(client.admin, 'clear');
@@ -354,8 +488,7 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         });
         const container = await opened();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, '  A name meant to insult.  ');
-        button(container, 'Reset the name')!.click();
+        act(container, 'name');
         await settle();
 
         expect(asked().props).toMatchObject({
@@ -364,15 +497,16 @@ describe('a profile cleared and every session ended, from the person\'s page', (
             confirm: 'Take it off',
             destructive: true
         });
+        expect(asked().props).not.toHaveProperty('initial');
         expect(sent).not.toHaveBeenCalled();
 
-        await answered(true);
+        await answered('A name meant to insult.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { part: 'name', reason: 'A name meant to insult.' } });
         expect(said(container, '[data-person] h1')).toBe('sara.k');
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex reset sara.k’s name.']);
         expect(said(container, '[data-history] [data-was]')).toBe('It said: Sara Kamali');
-        expect(button(container, 'Reset the name')).toBeUndefined();
+        expect(acts(container)).not.toContain('name');
         expect(toasts()).toEqual([]);
 
         answer();
@@ -382,7 +516,7 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.part } ${ row.details.from }`)).toEqual(['clear name Sara Kamali']);
     });
 
-    it('removes a picture at the press after asking', async () =>
+    it('removes a picture at the press after asking why', async () =>
     {
         let answer: () => void = () => undefined;
         const sent = vi.spyOn(client.admin, 'clear');
@@ -396,13 +530,12 @@ describe('a profile cleared and every session ended, from the person\'s page', (
 
         expect(container.querySelector('[data-person] header img')).not.toBeNull();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'A picture nobody should see.');
-        button(container, 'Remove the picture')!.click();
+        act(container, 'picture');
         await settle();
 
         expect(asked().props).toMatchObject({ title: 'Remove Sara Kamali’s picture?', lead: 'It goes from their profile, and from this server when no other account shows it.' });
 
-        await answered(true);
+        await answered('A picture nobody should see.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { part: 'picture', reason: 'A picture nobody should see.' } });
         expect(container.querySelector('[data-person] header img')).toBeNull();
@@ -416,54 +549,51 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         expect(toasts()).toEqual(['Sara Kamali’s picture is gone.']);
     });
 
-    it('takes a refused clear back in the refusal\'s words, keeping the reason, and asks for one first', async () =>
+    it('takes a refused clear back in the refusal\'s words, and asks again with the reason it was given', async () =>
     {
         vi.spyOn(client.admin, 'clear').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
         server.accounts.about['sara.k'] = { bio: 'DM me for seats' };
         const container = await opened();
         const before = server.calls.length;
 
-        button(container, 'Clear the bio')!.click();
+        act(container, 'bio');
         await settle();
 
-        expect(said(container, '#admin-content-why-error')).toBe('Say why, in three characters or more.');
-        expect(useOverlay().items()).toHaveLength(0);
         expect(server.calls.slice(before)).toEqual([]);
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'Selling seats in the bio.');
-        button(container, 'Clear the bio')!.click();
-        await settle();
-        await answered(true);
+        await answered('Selling seats in the bio.');
 
-        expect(button(container, 'Clear the bio')).toBeDefined();
+        expect(acts(container)).toContain('bio');
         expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
         expect(toasts()).toEqual(['That is above what your role may do.']);
-        expect(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!.value).toBe('Selling seats in the bio.');
+
+        act(container, 'bio');
+        await settle();
+
+        expect(asked().props).toMatchObject({ initial: 'Selling seats in the bio.' });
     });
 
-    it('sends nothing when a clear or a sign-out is answered no', async () =>
+    it('sends nothing when the sheet is put away', async () =>
     {
         const clear = vi.spyOn(client.admin, 'clear');
         const signOut = vi.spyOn(client.admin, 'signOut');
         told();
         const container = await opened();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'A name meant to insult.');
-        button(container, 'Reset the name')!.click();
+        act(container, 'name');
         await settle();
-        await answered(false);
+        await answered(null);
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their wallet was taken.');
-        button(container, 'Sign them out')!.click();
+        act(container, 'sign-out');
         await settle();
-        await answered(false);
+        await answered(null);
 
         expect([clear, signOut].map((one) => one.mock.calls.length)).toEqual([0, 0]);
         expect(said(container, '[data-person] h1')).toBe('Sara Kamali');
         expect(all(container, '[data-session] [data-agent]')).toHaveLength(2);
     });
 
-    it('signs them out everywhere at the press after asking, and says nothing is left to end', async () =>
+    it('signs them out everywhere at the press after asking why, and offers it no longer', async () =>
     {
         let answer: () => void = () => undefined;
         const sent = vi.spyOn(client.admin, 'signOut');
@@ -475,8 +605,7 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         told();
         const container = await opened();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their wallet was taken.');
-        button(container, 'Sign them out')!.click();
+        act(container, 'sign-out');
         await settle();
 
         expect(asked().props).toMatchObject({
@@ -486,11 +615,12 @@ describe('a profile cleared and every session ended, from the person\'s page', (
             destructive: true
         });
 
-        await answered(true);
+        await answered('Their wallet was taken.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { reason: 'Their wallet was taken.' } });
         expect(said(container, '[data-sessions="none"]')).toBe('Not signed in anywhere.');
-        expect(said(container, '[data-sign-out="none"]')).toBe('They are not signed in anywhere.');
+        expect(said(container, '[data-reach]')).toBe('Signed in nowhere');
+        expect(acts(container)).not.toContain('sign-out');
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex signed sara.k out everywhere.']);
         expect(toasts()).toEqual([]);
 
@@ -506,8 +636,7 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         server.accounts.about['sara.k'] = { sessions: [{ openedAt: hoursAgo(1), device: false }] };
         const container = await opened();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their device was stolen.');
-        button(container, 'Sign them out')!.click();
+        act(container, 'sign-out');
         await settle();
 
         expect(asked().props).toMatchObject({ lead: 'Every browser they use is signed out at once. They are a guest, so they cannot sign back in.' });
@@ -519,11 +648,9 @@ describe('a profile cleared and every session ended, from the person\'s page', (
         server.accounts.about['sara.k'] = { bio: 'DM me for seats', sessions: [{ openedAt: hoursAgo(1), device: false }] };
         const container = await opened();
 
-        expect(all(container, '[data-clear] button')).toEqual(['برگردوندن اسم', 'پاک کردن بیو']);
-        expect(said(container, '#person-sign-out')).toBe('خارج کردنش از همه‌جا');
+        expect(labels(container).slice(2)).toEqual(['برگردوندن اسم', 'پاک کردن بیو', 'خارج کردنش از همه‌جا']);
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'توی بیوش صندلی می‌فروشه.');
-        button(container, 'پاک کردن بیو')!.click();
+        act(container, 'bio');
         await settle();
 
         expect(asked().props).toMatchObject({ title: 'بیوی Sara Kamali پاک بشه؟', confirm: 'برش دار' });
@@ -532,7 +659,7 @@ describe('a profile cleared and every session ended, from the person\'s page', (
 
 describe('a suspension, from the person\'s page', () =>
 {
-    it('asks before it suspends, then shows it at the press and says so once the server has', async () =>
+    it('asks how long, what for and why in a sheet, then shows it at the press and says so once the server has', async () =>
     {
         told();
         let answer: () => void = () => undefined;
@@ -544,29 +671,22 @@ describe('a suspension, from the person\'s page', () =>
         });
         const container = await opened();
 
-        button(container, 'A week')!.click();
-        await choose(container, 'Cheating');
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, '  Played two seats at one table.  ');
-        button(container, 'Suspend')!.click();
+        act(container, 'suspend');
         await settle();
 
-        expect(asked().props).toMatchObject({
-            title: 'Suspend Sara Kamali for a week?',
-            lead: 'Every game they are playing is lost and they are signed out everywhere. Lifting it later gives none of that back.',
-            confirm: 'Suspend them',
-            destructive: true
-        });
+        expect(asked().props).toMatchObject({ name: 'Sara Kamali', guest: false });
+        expect(asked().props).not.toHaveProperty('initial');
         expect(sent).not.toHaveBeenCalled();
 
-        await answered(true);
+        await answered({ days: 7, category: 'cheating', reason: 'Played two seats at one table.' });
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { days: 7, category: 'cheating', reason: 'Played two seats at one table.' } });
         expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(false);
         expect(said(container, '[data-standing]')).toBe(`Suspended until ${ longDate(NOW + 7 * 86_400_000) }: Cheating.`);
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex suspended sara.k for a week: Cheating.']);
         expect(said(container, '[data-sessions="none"]')).toBe('Not signed in anywhere.');
-        expect(button(container, 'Suspend')).toBeUndefined();
-        expect(button(container, 'Lift it')).toBeDefined();
+        expect(acts(container)).toEqual(['lift', 'minor', 'name']);
+        expect(said(container, '[data-flags]')).toContain('Suspended');
         expect(toasts()).toEqual([]);
 
         answer();
@@ -576,84 +696,60 @@ describe('a suspension, from the person\'s page', () =>
         expect(server.staff.log.map((row) => `${ row.kind } ${ row.person } ${ row.details.days } ${ row.details.category }`)).toEqual(['suspend sara.k 7 cheating']);
     });
 
-    it('sends nothing when the question is answered no', async () =>
+    it('sends nothing when the sheet is put away', async () =>
     {
         const sent = vi.spyOn(client.admin, 'suspend');
         const container = await opened();
 
-        await choose(container, 'Spam or scams');
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Sold seats in the chat.');
-        button(container, 'Suspend')!.click();
+        act(container, 'suspend');
         await settle();
-        await answered(false);
+        await answered(null);
 
         expect(sent).not.toHaveBeenCalled();
         expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
-        expect(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!.value).toBe('Sold seats in the chat.');
     });
 
-    it('takes a refused suspension back and says why, keeping what was written', async () =>
+    it('takes a refused suspension back and says why, and asks again with what was chosen and written', async () =>
     {
         vi.spyOn(client.admin, 'suspend').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
         told();
         const container = await opened();
+        const ask = { days: 30, category: 'spam', reason: 'Sold seats in the chat.' };
 
-        await choose(container, 'Spam or scams');
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Sold seats in the chat.');
-        button(container, 'Suspend')!.click();
+        act(container, 'suspend');
         await settle();
-        await answered(true);
+        await answered(ask);
 
         expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
         expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
         expect(all(container, '[data-session] [data-agent]')).toHaveLength(2);
         expect(toasts()).toEqual(['That is above what your role may do.']);
-        expect(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!.value).toBe('Sold seats in the chat.');
-    });
+        expect(acts(container)[0]).toBe('suspend');
 
-    it('asks what it is for and why before it asks anything else', async () =>
-    {
-        const container = await opened();
-        const before = server.calls.length;
-
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, ' ok ');
-        button(container, 'Suspend')!.click();
+        act(container, 'suspend');
         await settle();
 
-        expect(said(container, '[data-category] [role="alert"]')).toBe('Choose what it is for.');
-        expect(said(container, '#admin-suspend-why-error')).toBe('Say why, in three characters or more.');
-        expect(useOverlay().items()).toHaveLength(0);
-        expect(server.calls.slice(before)).toEqual([]);
-
-        await choose(container, 'Cheating');
-
-        expect(container.querySelector('[data-category] [role="alert"]')).toBeNull();
+        expect(asked().props).toMatchObject({ initial: ask });
     });
 
-    it('tells the staff a guest cannot come back, and suspends for good with no end', async () =>
+    it('tells the sheet a guest cannot come back, and suspends for good with no end', async () =>
     {
         const sent = vi.spyOn(client.admin, 'suspend');
         const container = await opened();
 
-        button(container, 'For good')!.click();
-        await choose(container, 'Something else');
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'Asked to be kept away.');
-        button(container, 'Suspend')!.click();
+        act(container, 'suspend');
         await settle();
 
-        expect(asked().props).toMatchObject({
-            title: 'Suspend Sara Kamali for good?',
-            lead: 'Every game they are playing is lost and they are signed out everywhere. They are a guest, so they cannot sign back in, even once it is lifted.'
-        });
+        expect(asked().props).toMatchObject({ name: 'Sara Kamali', guest: true });
 
-        await answered(true);
+        await answered({ days: null, category: 'other', reason: 'Asked to be kept away.' });
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { category: 'other', reason: 'Asked to be kept away.' } });
         expect(said(container, '[data-standing]')).toBe('Suspended for good: Something else.');
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex suspended sara.k for good: Something else.']);
     });
 
-    it('says how long somebody is suspended for and since when, and lifts it at the press', async () =>
+    it('says how long somebody is suspended for and since when, and lifts it at the press once asked why', async () =>
     {
         let answer: () => void = () => undefined;
         const sent = vi.spyOn(client.admin, 'lift');
@@ -668,23 +764,25 @@ describe('a suspension, from the person\'s page', () =>
 
         expect(said(container, '[data-standing]')).toBe(`Suspended until ${ longDate(Date.parse('2026-10-29T09:00:00.000Z')) }: Spam or scams.`);
         expect(said(container, '[data-since]')).toBe('Since 5 hours ago');
-        expect(button(container, 'Suspend')).toBeUndefined();
+        expect(acts(container)[0]).toBe('lift');
+        expect(container.querySelector('[data-act="lift"]')?.classList.contains('text-danger')).toBe(false);
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, ' ok ');
-        button(container, 'Lift it')!.click();
+        act(container, 'lift');
         await settle();
 
-        expect(said(container, '#admin-lift-why-error')).toBe('Say why, in three characters or more.');
-        expect(server.calls.filter((call) => call.startsWith('admin.lift'))).toEqual([]);
+        expect(asked().props).toMatchObject({
+            title: 'Lift the suspension on Sara Kamali?',
+            lead: 'They can sign in again straight away. The games they lost and the sessions that ended do not come back.',
+            confirm: 'Lift it',
+            destructive: false
+        });
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, 'Said sorry to the table.');
-        button(container, 'Lift it')!.click();
-        await settle();
+        await answered('Said sorry to the table.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { reason: 'Said sorry to the table.' } });
         expect(container.querySelector<HTMLElement>('[data-suspension]')!.hidden).toBe(true);
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex lifted the suspension on sara.k.']);
-        expect(button(container, 'Suspend')).toBeDefined();
+        expect(acts(container)[0]).toBe('suspend');
         expect(server.accounts.suspended).toEqual(['sara.k']);
         expect(toasts()).toEqual([]);
 
@@ -696,20 +794,24 @@ describe('a suspension, from the person\'s page', () =>
         expect(server.accounts.suspended).toEqual([]);
     });
 
-    it('takes a refused lift back in the refusal\'s own words', async () =>
+    it('takes a refused lift back in the refusal\'s own words, and asks again with the reason', async () =>
     {
         vi.spyOn(client.admin, 'lift').mockRejectedValueOnce(new ApiError(409, 'staff-not-suspended', 'They are not suspended.', undefined));
         server.accounts.suspended = ['sara.k'];
         server.accounts.about['sara.k'] = { suspension: { category: 'cheating', since: hoursAgo(1) } };
         const container = await opened();
 
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!, 'Said sorry to the table.');
-        button(container, 'Lift it')!.click();
+        act(container, 'lift');
         await settle();
+        await answered('Said sorry to the table.');
 
         expect(said(container, '[data-standing]')).toBe('Suspended for good: Cheating.');
         expect(toasts()).toEqual(['They are not suspended.']);
-        expect(container.querySelector<HTMLTextAreaElement>('#admin-lift-why')!.value).toBe('Said sorry to the table.');
+
+        act(container, 'lift');
+        await settle();
+
+        expect(asked().props).toMatchObject({ initial: 'Said sorry to the table.' });
     });
 
     it('says it in Persian', async () =>
@@ -720,29 +822,18 @@ describe('a suspension, from the person\'s page', () =>
         const suspended = await opened();
 
         expect(said(suspended, '[data-standing]')).toBe('برای همیشه معلقه: تقلب.');
-        expect(said(suspended, '#person-lift')).toBe('برداشتن تعلیق');
-        expect(button(suspended, 'برش دار')).toBeDefined();
-        cleanup();
+        expect(labels(suspended)[0]).toBe('برداشتن تعلیق');
 
-        const container = await opened('/admin/people/mina');
-
-        button(container, 'یه هفته')!.click();
-        await choose(container, 'تقلب');
-        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-suspend-why')!, 'دو تا صندلی سر یه میز داشت.');
-        button(container, 'تعلیق')!.click();
+        act(suspended, 'lift');
         await settle();
 
-        expect(asked().props).toMatchObject({ title: 'Mina Sadeghi برای یه هفته معلق بشه؟', confirm: 'تعلیقش کن' });
+        expect(asked().props).toMatchObject({ title: 'تعلیق Sara Kamali برداشته بشه؟', confirm: 'برش دار' });
     });
 });
 
 describe('marking somebody under 18, from the person\'s page', () =>
 {
-    const field = (root: ParentNode) => root.querySelector<HTMLTextAreaElement>('#admin-age-why')!;
-
-    const press = (root: ParentNode, to: 'minor' | 'adult') => root.querySelector<HTMLButtonElement>(`[data-mark="${ to }"] button`)!.click();
-
-    it('asks before it marks somebody under 18, as a question that loses something, then shows it at the press and says so once the server has', async () =>
+    it('asks why before it marks somebody under 18, as a question that loses something, then shows it at the press and says so once the server has', async () =>
     {
         let answer: () => void = () => undefined;
         const sent = vi.spyOn(client.admin, 'minor');
@@ -754,11 +845,10 @@ describe('marking somebody under 18, from the person\'s page', () =>
         server.accounts.about['sara.k'] = { strangers: true };
         const container = await opened();
 
-        expect(said(container, '[data-age-lead]')).toBe('Somebody under 18 gets no messages from strangers and cannot play for NURA. Marked as under 18, they are stood up from any table played for NURA that waits, and any such game they are playing ends as no contest with every stake given back.');
-        expect(container.querySelector('[data-mark="adult"]')).toBeNull();
+        expect(acts(container)).toContain('minor');
+        expect(acts(container)).not.toContain('adult');
 
-        typeInto(field(container), 'Said in a report that she is fifteen.');
-        press(container, 'minor');
+        act(container, 'minor');
         await settle();
 
         expect(asked().props).toMatchObject({
@@ -768,21 +858,19 @@ describe('marking somebody under 18, from the person\'s page', () =>
             destructive: true
         });
 
-        await answered(true);
+        await answered('Said in a report that she is fifteen.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { minor: true, reason: 'Said in a report that she is fifteen.' } });
         expect(said(container, '[data-flags]')).toBe('Minor');
         expect(said(container, '[data-strangers]')).toBe('Strangers may not message them.');
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex marked sara.k as under 18.']);
-        expect(said(container, '[data-age-lead]')).toBe('Marked as under 18. Marked as an adult, they can turn messages from strangers back on themselves, and play for NURA once they accept its terms.');
-        expect(container.querySelector('[data-mark="adult"] button')?.textContent?.trim()).toBe('Mark as an adult');
+        expect(said(container, '[data-act="adult"]')).toBe('Mark as an adult');
         expect(toasts()).toEqual([]);
 
         answer();
         await settle();
 
         expect(toasts()).toEqual(['Sara Kamali is marked as under 18.']);
-        expect(field(container).value).toBe('');
         expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.to }`)).toEqual(['minor minor']);
     });
 
@@ -799,10 +887,9 @@ describe('marking somebody under 18, from the person\'s page', () =>
         const container = await opened();
 
         expect(said(container, '[data-flags]')).toBe('Minor');
-        expect(container.querySelector('[data-mark="minor"]')).toBeNull();
+        expect(acts(container)).not.toContain('minor');
 
-        typeInto(field(container), 'Showed an ID that says she is nineteen.');
-        press(container, 'adult');
+        act(container, 'adult');
         await settle();
 
         expect(asked().props).toMatchObject({
@@ -812,13 +899,13 @@ describe('marking somebody under 18, from the person\'s page', () =>
             destructive: false
         });
 
-        await answered(true);
+        await answered('Showed an ID that says she is nineteen.');
 
         expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { minor: false, reason: 'Showed an ID that says she is nineteen.' } });
         expect(said(container, '[data-flags]')).toBe('');
         expect(said(container, '[data-strangers]')).toBe('Strangers may not message them.');
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex marked sara.k as an adult.']);
-        expect(container.querySelector('[data-mark="minor"] button')?.textContent?.trim()).toBe('Mark as under 18');
+        expect(said(container, '[data-act="minor"]')).toBe('Mark as under 18');
         expect(toasts()).toEqual([]);
 
         answer();
@@ -828,44 +915,37 @@ describe('marking somebody under 18, from the person\'s page', () =>
         expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.to }`)).toEqual(['minor adult']);
     });
 
-    it('takes a refused mark back in the refusal\'s words, keeping the reason, and asks for one first', async () =>
+    it('takes a refused mark back in the refusal\'s words, and asks again with the reason', async () =>
     {
         vi.spyOn(client.admin, 'minor').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
         const container = await opened();
-        const before = server.calls.length;
 
-        press(container, 'minor');
+        act(container, 'minor');
         await settle();
-
-        expect(said(container, '#admin-age-why-error')).toBe('Say why, in three characters or more.');
-        expect(useOverlay().items()).toHaveLength(0);
-        expect(server.calls.slice(before)).toEqual([]);
-
-        typeInto(field(container), 'Said in a report that she is fifteen.');
-        press(container, 'minor');
-        await settle();
-        await answered(true);
+        await answered('Said in a report that she is fifteen.');
 
         expect(said(container, '[data-flags]')).toBe('');
-        expect(container.querySelector('[data-mark="minor"] button')).not.toBeNull();
+        expect(acts(container)).toContain('minor');
         expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
         expect(toasts()).toEqual(['That is above what your role may do.']);
-        expect(field(container).value).toBe('Said in a report that she is fifteen.');
+
+        act(container, 'minor');
+        await settle();
+
+        expect(asked().props).toMatchObject({ initial: 'Said in a report that she is fifteen.' });
     });
 
-    it('sends nothing when the question is answered no', async () =>
+    it('sends nothing when the sheet is put away', async () =>
     {
         const sent = vi.spyOn(client.admin, 'minor');
         const container = await opened();
 
-        typeInto(field(container), 'Said in a report that she is fifteen.');
-        press(container, 'minor');
+        act(container, 'minor');
         await settle();
-        await answered(false);
+        await answered(null);
 
         expect(sent).not.toHaveBeenCalled();
         expect(said(container, '[data-flags]')).toBe('');
-        expect(field(container).value).toBe('Said in a report that she is fifteen.');
     });
 
     it('says it in Persian', async () =>
@@ -873,16 +953,14 @@ describe('marking somebody under 18, from the person\'s page', () =>
         useLocale().setLocale('fa');
         const container = await opened();
 
-        expect(said(container, '#person-age')).toBe('سن');
-        expect(container.querySelector('[data-mark="minor"] button')?.textContent?.trim()).toBe('ثبت زیر ۱۸');
+        expect(said(container, '[data-act="minor"]')).toBe('ثبت زیر ۱۸');
 
-        typeInto(field(container), 'توی یه گزارش گفته پونزده سالشه.');
-        press(container, 'minor');
+        act(container, 'minor');
         await settle();
 
         expect(asked().props).toMatchObject({ title: 'Sara Kamali زیر ۱۸ ثبت بشه؟', confirm: 'ثبت زیر ۱۸', destructive: true });
 
-        await answered(true);
+        await answered('توی یه گزارش گفته پونزده سالشه.');
 
         expect(all(container, '[data-history] [data-line]')).toEqual(['alex، sara.k رو زیر ۱۸ ثبت کرد.']);
         expect(toasts()).toEqual(['Sara Kamali زیر ۱۸ ثبت شد.']);

@@ -530,43 +530,51 @@ pauses or at Enter, keeps its words and its list in the address (`q`, `list`), a
 log; the search and the lists share one toolbar when there is room. On a phone a row is the name,
 then the handle and when they joined in the short form ("Joined 3 hr. ago"); wide, it is the person,
 their first wallet shortened (or "Guest" for an account with none), when they joined (exact under a
-pointer) and how they stand (their role, suspended, under 18, how many reports). A row leads to `/admin/people/:handle`, which keeps People lit in the nav and draws the person
-from one read: who they are and their flags, their account and paid play, their wallets, where they
-are signed in now ("Chrome on Windows", or "An unknown browser" for an agent `agentOf` does not
-know), the browsers holding their keys, the reports both ways (each a sentence with the other
-person's handle set apart, `handleParts`), their record (`PersonRecord`: the level, and the ratings once they have
-played, because its empty state speaks to the reader as the player),
-their recent games and paid games, and what the staff did about them, drawn by the log's own
-`LogEntry`, older pages under "Show older"; the older pages are kept by the first page's cursor and
-dropped once that cursor moves (a new action, read again), so nothing is skipped between the two. The note form is drawn only for somebody the reader outranks and never on their own
-page; a note is shown at the press, said once kept, and taken back with the refusal's words. A
+pointer) and how they stand (their role, suspended, under 18, how many reports).
+
+**A person's page** (`/admin/people/:handle`, People lit in the nav) is drawn from one read, and
+opens on a summary of them: the picture, the name and handle, their flags (their role on the staff,
+suspended, under 18, how many reports against them), a suspension in danger with its end and since
+when, a line of facts (when they joined and were last seen, both exact under a pointer, and how many
+browsers they are signed in on, or "Signed in nowhere"), and their first wallet shortened with a
+button that copies the whole of it. Under it, in tabs kept in the address (`tab`: Overview, the
+default and never written, Reports with how many there are both ways, Games and History; a word the
+page does not know is Overview): their account and paid play, their wallets, where they are signed
+in now ("Chrome on Windows", or "An unknown browser" for an agent `agentOf` does not know) and the
+browsers holding their keys; the reports both ways (each a sentence with the other person's handle
+set apart, `handleParts`); their record (`PersonRecord`: the level, and the ratings once they have
+played, and "No rated games yet." in plain words where a player would be shown its invitation to
+sit down), their recent games and paid games; and what the staff did about them, drawn by the
+log's own `LogEntry`, older pages under "Show older", kept by the first page's cursor and dropped
+once that cursor moves (a new action, read again), so nothing is skipped between the two. All four
+panels are drawn and the three not chosen are hidden, so a note half written survives a change of
+tab. The note form heads History, drawn only for somebody the reader outranks and never on their
+own page; a note is shown at the press, said once kept, and taken back with the refusal's words. A
 handle nobody holds is "No one by that name." (a 404 read as missing, never as a failure).
 
-**A person's page acts on the account** for somebody the reader outranks, and never on their own
-(`PersonSuspension`, under "Act on this account"). Suspending asks for how long (a day, a week, 30
-days, for good), what it is for (no reason is chosen for the staff: "Choose one" until they do) and
-why, then asks as a destructive question naming the person and the term, with the keyboard on
-Cancel, and for a guest says that a guest cannot sign back in even once it is lifted. Said yes to,
-it is shown at the press: the status under the name ("Suspended until 29 October 2026 at 14:30:
-Cheating.", since when), signed in nowhere, the row in the history and the lift form; a refusal
-takes it all back in the refusal's words and keeps what was typed. A suspended person's page offers
-the lift, with its own reason, shown and taken back the same way.
+**What can be done to the account is one list** (`PersonActions`, "Act on this account"), for
+somebody the reader outranks and never on the reader's own page: beside the tabs from 56rem of the
+page, held in view while they scroll, and under the summary on a phone. Each row names one thing,
+in danger when it costs the person something: Suspend the account (or Lift the suspension), Mark as
+under 18 (or Mark as an adult), Remove the picture, Reset the name and Clear the bio (each only when
+the profile has one of its own) and Sign them out everywhere (only while they are signed in
+somewhere). A row opens a sheet, and the sheet is the question.
 
-Under it (`PersonContent`) the profile's panel offers only what the profile has of its own (a
-picture, a name other than the handle, a bio) with one reason for whichever is pressed, each asked
-as a destructive question that says what happens to it; the sign-out panel offers the sign-out only
-while they are signed in somewhere, and tells the staff that a guest cannot come back. Both show at
-the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
-what it said ("It said: …", in its own direction).
-
-Between the two (`PersonAge`) a panel says what being under 18 means here and offers one press with a
-reason: "Mark as under 18" for an adult, asked as a destructive question that says what stops and
-what ends (messages from strangers, playing for NURA, the paid tables they wait at and the paid games
-they play, with every stake given back), and "Mark as an adult" for a minor, asked as one that loses
-nothing. Said yes to, the Minor badge, the strangers line and the history's row change at the press,
-the toast says so once the server has, and a refusal takes it back in the refusal's words and keeps
-the reason. The log says "mina marked reza.t as under 18." and "alex marked reza.t as an adult.",
-under the chip "Age".
+Suspending (`SuspendSheet`) asks for how long (a day, a week, 30 days, for good), what it is for
+(no reason is chosen for the staff: "Choose one" until they do) and why, under a question that names
+the person and the term chosen and says what it costs, and for a guest that a guest cannot sign back
+in even once it is lifted. Everything else asks why in the reason sheet (`ReasonSheet`): lifting a
+suspension and marking somebody an adult as questions that lose nothing; marking somebody under 18
+(what stops and what ends: messages from strangers, playing for NURA, the paid tables they wait at
+and the paid games they play, with every stake given back), clearing a part of the profile (what
+happens to it) and signing them out everywhere (and that a guest cannot come back) as destructive
+ones. Said yes to, each is shown at the press: the status under the name ("Suspended until 29
+October 2026 at 14:30: Cheating.", since when), the flags, signed in nowhere, the history's row and
+the list's rows change, and the toast says so once the server has. A refusal takes it all back in
+the refusal's words, and the next sheet for that row opens with what was chosen and written, so
+nothing has to be typed again. A cleared name or bio is drawn in the log with what it said ("It
+said: …", in its own direction). The log says "mina marked reza.t as under 18." and "alex marked
+reza.t as an adult.", under the chip "Age".
 
 **Reports** is the queue, waiting first: a filter in the address (`status`: Waiting, the default and
 never written, Reviewed, Acted on, All), the waiting count on its chip, and a row for each report as
@@ -666,7 +674,7 @@ from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-overview.spec.ts`, `admin-live.spec.ts`, `admin-notice.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
-`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
+`reason-sheet.spec.ts`, `suspend-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
 `paused-game.spec.ts` what a player sees of a paused game, `play.spec.ts` of a table the staff closed and `notice-strip.spec.ts` the notice on every page and at a table; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
