@@ -208,7 +208,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         .orderBy('s.seat', 'ASC')
         .getRawMany<{ secret: string; signature: string }>());
 
-    const drawsAt = (seed: Uint8Array | null, rev: number): Draws => seed === null ? draws : drawsOf(hmacSha256, seed, rev);
+    const drawsAt = (seed: Uint8Array | null, rev: number) => seed === null ? draws : drawsOf(hmacSha256, seed, rev);
 
     const deal = async (tx: EntityManager, table: Table, chairs: TableSeat[], dice: Draws) =>
     {
