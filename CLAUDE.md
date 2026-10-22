@@ -113,8 +113,8 @@ the third so nobody re-investigates it.
   values are real there (the Nurachain id, rpc and contract addresses). A personal value - an admin
   wallet included - goes in `.env` only.
 - No absolute path naming a machine. `~` is fine; `/c/Users/<somebody>` is a person's name.
-- The `0x…` keys in tests and `seed-wallets.ts` are hardhat's published accounts; nothing else here is
-  key material (`recovery.ts`'s look-alike is the P-256 curve order).
+- The `0x…` keys in tests, `seed-wallets.ts` and `tools/qa/vault-deploy.mjs` are hardhat's published
+  accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).
 
 **No comments in code.** Names and structure carry the meaning; these notes and the tests hold the
 reasoning.

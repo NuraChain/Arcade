@@ -6,8 +6,10 @@
  * that talks to the api with `fetch` and one that drives a browser through its request context.
  * Nothing here loads Playwright: the api-only passes import this and must stay that light.
  *
- * The key is thrown away. It never held anything, it is never written anywhere, and the account it
- * opened is one more row in a database the passes are told to run against only when it is disposable.
+ * The key is thrown away unless the pass hands one in: a pass that plays for NURA keeps its wallet in
+ * memory, to put NURA in the vault and sign its stakes with, and writes it nowhere either. Either way
+ * the account it opened is one more row in a database the passes are told to run against only when
+ * it is disposable.
  */
 import { webcrypto } from 'node:crypto';
 
@@ -29,9 +31,8 @@ async function mintDevice()
 
 const said = (answer) => `${ answer.status } ${ JSON.stringify(answer.body ?? '').slice(0, 200) }`;
 
-export async function signInWallet(post, name)
+export async function signInWallet(post, name, wallet = privateKeyToAccount(generatePrivateKey()))
 {
-    const wallet = privateKeyToAccount(generatePrivateKey());
     const device = await mintDevice();
     const issued = await post('/auth/challenge', { address: wallet.address, device: device.id });
 

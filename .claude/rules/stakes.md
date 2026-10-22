@@ -376,5 +376,6 @@ refuses, whether it can be reached. A lock or a finish nudges the worker in the 
 spec that awaits `jobs.sweepStakes` after one gets the nudged pass and one more. `app.spec.ts`
 holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
-Not here yet: the passes that play paid games end to end over the local chain, and the deploy to
-NuraChain.
+`tools/qa/paid-pass.mjs` plays every format end to end for NURA over the api of the built server and
+a local chain, and holds every lock and payout to a ledger of its own (`tools/qa/CLAUDE.md`, *The
+paid pass*). Not here yet: the same in real browsers, and the deploy to NuraChain.
