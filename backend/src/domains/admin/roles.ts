@@ -6,7 +6,7 @@ export const GRANTED_ROLES = ['moderator', 'admin'] as const;
 
 export type GrantedRole = (typeof GRANTED_ROLES)[number];
 
-export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out', 'report', 'game', 'void', 'close', 'minor'] as const;
+export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out', 'report', 'game', 'void', 'close', 'minor', 'notice'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -54,12 +54,19 @@ export type MatchList = (typeof MATCH_LISTS)[number];
 
 export const PLAY_PAGE = 50;
 
+export const NOTICE_HOURS = [1, 6, 24, 72, 168] as const;
+
+export type NoticeHours = (typeof NOTICE_HOURS)[number];
+
+export const NOTICE_MAX = 200;
+
 export const ABILITIES = {
     overview: 'moderator',
     live: 'moderator',
     people: 'moderator',
     reports: 'moderator',
     play: 'admin',
+    notice: 'admin',
     money: 'admin',
     staff: 'admin',
     log: 'admin',

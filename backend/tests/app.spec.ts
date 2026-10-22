@@ -60,6 +60,24 @@ function fakeDb(answers: { initialized: boolean; query?: () => Promise<unknown> 
 const call = (app: ReturnType<typeof buildApp>, path: string) =>
     app.handle(new Request(`http://local${ path }`));
 
+describe('the notice everybody sees', () =>
+{
+    it('is sent with the live counts as its id, its two lines and its end, and nothing else', async () =>
+    {
+        const notice = { id: 'n-1', en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', until: '2026-10-22T22:00:00.000Z' };
+        const games = [{ game: 'ludo', status: 'available', playing: 2, tables: 1 }];
+        const app = (answer: unknown) => buildApp({
+            db: fakeDb({ initialized: true }),
+            config,
+            log: silent,
+            ports: { catalogue: { live: () => Promise.resolve(answer) } } as unknown as Ports
+        });
+
+        expect(await (await call(app({ games, notice: { ...notice, by: 'mina', staffId: 'a-uuid' } }), '/api/catalogue/live')).json()).toEqual({ games, notice });
+        expect(await (await call(app({ games }), '/api/catalogue/live')).json()).toEqual({ games });
+    });
+});
+
 describe('health', () =>
 {
     it('reports ok only when the database actually answers', async () =>
@@ -943,7 +961,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable', 'overview', 'live'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable', 'overview', 'live', 'notice', 'putNotice', 'endNotice'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1112,6 +1130,51 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, `/live?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
     });
 
+    it('answers anybody who may not run the notice as a page that is not there, and takes one only in both languages for the hours offered', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const put = { en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', hours: 6, reason: 'Maintenance tonight' };
+        const answers = [await sent(app, '/notice'), await sent(app, '/notice', put), await sent(app, '/notice/end', { id: 'n-1', reason: 'It is done' })];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['notice', 'somebody'], ['putNotice', 'somebody', put], ['endNotice', 'somebody', { id: 'n-1', reason: 'It is done' }]]);
+
+        for (const bad of [
+            { ...put, en: 'no' },
+            { ...put, fa: '     ' },
+            { ...put, en: 'x'.repeat(201) },
+            { ...put, hours: 2 },
+            { ...put, hours: '6' },
+            { ...put, reason: 'no' },
+            { en: put.en, hours: 6, reason: put.reason }
+        ])
+        {
+            expect((await sent(app, '/notice', bad)).status).toBe(422);
+        }
+
+        expect((await sent(app, '/notice/end', {})).status).toBe(422);
+        expect((await sent(app, '/notice/end', { reason: 'It is done' })).status).toBe(422);
+        expect((await sent(app, '/notice/end', { id: 'x'.repeat(37), reason: 'It is done' })).status).toBe(422);
+        expect(told).toHaveLength(3);
+    });
+
+    it('hands the notice\'s lines to the port without the spaces round them', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+
+        await sent(app, '/notice', { en: '  Back at ten  ', fa: ' ساعت ده برمی‌گردیم ', hours: 1, reason: 'Maintenance tonight' });
+
+        expect(told).toEqual([['putNotice', 'somebody', { en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', hours: 1, reason: 'Maintenance tonight' }]]);
+    });
+
     it('answers anybody who may not work the reports as a page that is not there, on the queue, the count, a report and an outcome', async () =>
     {
         const told: unknown[][] = [];
@@ -1199,6 +1262,8 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/matches/:id/void': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/tables/:id/close': (bad) => [`);
+        expect(bodies).toContain(`'/admin/notice': (bad) => [`);
+        expect(bodies).toContain(`'/admin/notice/end': (bad) => [`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

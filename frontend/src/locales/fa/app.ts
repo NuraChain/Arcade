@@ -75,6 +75,9 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'connection.unreached': 'به‌روزرسانی زنده نمی‌رسه. این صفحه هر چند ثانیه یه بار خودش سر می‌زنه.',
     'connection.restored': 'دوباره آنلاین شدی.',
 
+    'notice.close': 'بستن اطلاعیه',
+    'notice.gotIt': 'فهمیدم',
+
     'state.errorTitle': 'این بخش بالا نیومد.',
     'state.errorLead': 'اگه بازم این‌طوری شد، اینترنتت رو چک کن.'
 };

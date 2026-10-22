@@ -51,6 +51,33 @@ afterEach(() =>
     vi.restoreAllMocks();
 });
 
+describe('the notice everybody sees, in the browser', () =>
+{
+    const notice = { id: 'n-1', en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', until: '2026-10-22T22:00:00.000Z' };
+
+    it('reads the notice with the numbers, takes the one the socket tells it, and forgets one taken down', async () =>
+    {
+        server.notice = { ...notice, at: '2026-10-22T18:00:00.000Z', by: 'alex' };
+
+        const catalogue = useCatalogue();
+
+        catalogue.refresh();
+        await settle();
+        catalogue.start();
+
+        expect(catalogue.notice()).toEqual(notice);
+
+        await connected();
+        socket.deliver({ v: 1, t: 'pulse', n: 3, games: [], watching: 'nothing-on', notice: { ...notice, id: 'n-2' } });
+
+        expect(catalogue.notice()?.id).toBe('n-2');
+
+        socket.deliver({ v: 1, t: 'pulse', n: 4, games: [], watching: 'nothing-on' });
+
+        expect(catalogue.notice()).toBeNull();
+    });
+});
+
 describe('how busy the games are, in the browser', () =>
 {
     it('reads the numbers once when it starts, and adds them up', async () =>

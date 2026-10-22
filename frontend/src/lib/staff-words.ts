@@ -48,6 +48,14 @@ export const TERM_WORDS: Readonly<Record<string, MessageKey>> = {
     30: 'admin.suspend.term.30'
 };
 
+export const NOTICE_TERMS: Readonly<Record<string, MessageKey>> = {
+    1: 'admin.notice.term.1',
+    6: 'admin.notice.term.6',
+    24: 'admin.notice.term.24',
+    72: 'admin.notice.term.72',
+    168: 'admin.notice.term.168'
+};
+
 const CLEAR_LINES: Readonly<Record<string, MessageKey>> = {
     picture: 'admin.log.line.clear.picture',
     name: 'admin.log.line.clear.name',
@@ -142,6 +150,13 @@ const said = (row: LogRow, locale: LocaleApi) =>
     if (row.kind === 'minor')
     {
         return locale.t(row.details.to === 'adult' ? 'admin.log.line.adult' : 'admin.log.line.minor', slots);
+    }
+
+    if (row.kind === 'notice')
+    {
+        return row.details.to === 'down'
+            ? locale.t('admin.log.line.notice.down', slots)
+            : locale.t('admin.log.line.notice.up', { ...slots, term: locale.t(NOTICE_TERMS[row.details.hours ?? ''] ?? 'admin.notice.term.6') });
     }
 
     if (row.kind === 'void' || row.kind === 'close')

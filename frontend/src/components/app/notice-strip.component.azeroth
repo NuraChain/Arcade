@@ -1,0 +1,59 @@
+import { onCleanup, untrack } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import { standing } from './notice.ts';
+
+export default component NoticeStrip()
+{
+    const catalogue = useCatalogue();
+    const locale = useLocale();
+    const settings = useSettings();
+
+    state now = runtime().clock.now();
+
+    let stop: () => void = () => undefined;
+
+    derived notice = catalogue.notice();
+
+    derived shown = standing(notice, settings.settings().noticeSeen, now);
+
+    derived words = notice === null ? '' : locale.text(notice);
+
+    effect
+    {
+        const ends = notice === null ? null : Date.parse(notice.until);
+
+        untrack(() =>
+        {
+            stop();
+            stop = ends === null ? () => undefined : runtime().clock.after(Math.max(0, ends - runtime().clock.now()), () => now = runtime().clock.now());
+        });
+    }
+
+    onCleanup(() => stop());
+
+    const close = () =>
+    {
+        const id = notice?.id;
+
+        if (id !== undefined)
+        {
+            settings.update({ noticeSeen: id });
+        }
+    };
+
+    <Show when={ shown }>
+        <div class="z-banner flex items-center gap-2 bg-accent/15 py-1 ps-4 pe-1 text-ui-sm text-text" role="status" data-notice>
+            <Icon name="megaphone" size={ 16 } class="shrink-0 text-accent" />
+            <p class="min-w-0 flex-1 py-1 font-semibold">
+                <span dir="auto">{ words }</span>
+            </p>
+            <IconButton icon="close" size="sm" label={ locale.t('notice.close') } onClick={ close } />
+        </div>
+    </Show>
+}

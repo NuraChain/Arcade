@@ -5,6 +5,7 @@ import type {
     AdminPerson,
     AdminMatches,
     AdminLive,
+    AdminNotice,
     AdminOverview,
     AdminPlay,
     AdminTables,
@@ -60,7 +61,7 @@ import type {
     StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { adminClearInput, adminGameInput, adminLiftInput, adminMatchesQuery, adminLiveQuery, adminTablesQuery, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminMinorInput, adminSuspendInput, adminVoidInput, adminCloseInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
+import type { adminClearInput, adminGameInput, adminLiftInput, adminNoticeEnd, adminNoticeInput, adminMatchesQuery, adminLiveQuery, adminTablesQuery, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminMinorInput, adminSuspendInput, adminVoidInput, adminCloseInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
 import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
@@ -626,6 +627,12 @@ export interface AdminPort
     overview(me: string): Promise<AdminOverview | null>;
 
     live(me: string, query: Infer<typeof adminLiveQuery>): Promise<AdminLive | null>;
+
+    notice(me: string): Promise<AdminNotice | null>;
+
+    putNotice(me: string, input: Infer<typeof adminNoticeInput>): Promise<AdminNotice | null>;
+
+    endNotice(me: string, input: Infer<typeof adminNoticeEnd>): Promise<AdminNotice | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

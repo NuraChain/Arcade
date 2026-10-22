@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, MATCH_LISTS, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, STUCK_KINDS, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
+import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, MATCH_LISTS, NOTICE_HOURS, NOTICE_MAX, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, STUCK_KINDS, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -258,7 +258,11 @@ export const gameLive = object({
     tables: number()
 });
 
-export const liveCounts = object({ games: array(gameLive) });
+export const siteNotice = object({ id: string(), en: string(), fa: string(), until: string() });
+
+export type SiteNotice = Infer<typeof siteNotice>;
+
+export const liveCounts = object({ games: array(gameLive), notice: siteNotice.optional() });
 
 export type LiveCounts = Infer<typeof liveCounts>;
 
@@ -266,6 +270,7 @@ export interface Pulse
 {
     games: LiveCounts['games'];
     watching: string;
+    notice?: SiteNotice;
 }
 
 /* -------------------------------------------------------------------------- identity */
@@ -1243,6 +1248,23 @@ export const adminGameInput = object({ on: boolean(), reason: said() });
 export const adminVoidInput = object({ reason: said() });
 
 export const adminCloseInput = object({ reason: said() });
+
+const noticeLine = () => string({ trim: true, min: 3, max: NOTICE_MAX, pattern: SAYS_SOMETHING });
+
+export const adminNotice = object({
+    notice: object({ id: string(), en: string(), fa: string(), until: string(), at: string(), by: string().optional() }).optional()
+});
+
+export type AdminNotice = Infer<typeof adminNotice>;
+
+export const adminNoticeInput = object({
+    en: noticeLine(),
+    fa: noticeLine(),
+    hours: union(NOTICE_HOURS.map((hours) => literal(hours))),
+    reason: said()
+});
+
+export const adminNoticeEnd = object({ id: string({ max: 36 }), reason: said() });
 
 /**
  * The two switches an account controls, and the one it does not.

@@ -1,0 +1,332 @@
+import { Link, createResource, useHead } from 'azerothjs';
+
+import { NOTICE_HOURS, NOTICE_MAX, type NoticeHours } from '../../../../backend/src/domains/admin/roles.ts';
+import type { AdminNotice } from '../../../../backend/src/schemas.ts';
+import { client } from '../../api.ts';
+import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
+import When from '../../components/admin/when.component.azeroth';
+import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import Chip from '../../components/ui/chip.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Field from '../../components/ui/field.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import TextArea from '../../components/ui/text-area.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { createGuesses } from '../../lib/guess.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { whyStaffRefused } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useSession } from '../../stores/session.store.ts';
+
+const PENDING = 'pending';
+
+const REASON_MIN = 3;
+
+const HOUR_MS = 3_600_000;
+
+const LINK = 'self-start text-ui-sm font-semibold text-accent hover:underline';
+
+const line = (typed: string) => typed.replace(/\s+/g, ' ').trim();
+
+export default component NoticePage()
+{
+    const locale = useLocale();
+    const overlay = useOverlay();
+    const session = useSession();
+
+    useHead({ title: () => locale.t('admin.section.notice') });
+
+    const read = createResource(() => client.admin.notice(), { name: 'admin.notice' });
+
+    const guesses = createGuesses<AdminNotice>();
+
+    state en = '';
+
+    state fa = '';
+
+    state why = '';
+
+    state hours = '6';
+
+    state enTold = null as string | null;
+
+    state faTold = null as string | null;
+
+    state whyTold = null as string | null;
+
+    derived held = read.data() ?? null;
+
+    derived trouble = read.error();
+
+    derived waiting = held === null && trouble === null;
+
+    derived failed = held === null && trouble !== null;
+
+    derived known = held !== null;
+
+    derived standing = held === null ? null : guesses.over(held).notice ?? null;
+
+    derived up = standing !== null;
+
+    derived empty = known && standing === null;
+
+    derived settled = standing !== null && standing.id !== PENDING;
+
+    derived seen = standing === null ? '' : locale.text(standing);
+
+    derived english = standing?.en ?? '';
+
+    derived persian = standing?.fa ?? '';
+
+    derived until = standing?.until ?? '';
+
+    derived at = standing?.at ?? '';
+
+    derived by = standing?.by ?? '';
+
+    derived named = by !== '';
+
+    derived terms = NOTICE_HOURS.map((one) => ({ id: String(one), label: locale.t(`admin.notice.hours.${ one }`) }));
+
+    derived sendWords = up ? locale.t('admin.notice.replace') : locale.t('admin.notice.send');
+
+    const reread = async () =>
+    {
+        await read.refetch();
+
+        if (read.error() !== null)
+        {
+            throw read.error();
+        }
+
+        guesses.landed();
+    };
+
+    const typedEn = (value: string) =>
+    {
+        en = value;
+        enTold = null;
+    };
+
+    const typedFa = (value: string) =>
+    {
+        fa = value;
+        faTold = null;
+    };
+
+    const typedWhy = (value: string) =>
+    {
+        why = value;
+        whyTold = null;
+    };
+
+    const put = async () =>
+    {
+        const english = line(en);
+        const persian = line(fa);
+        const reason = why.trim();
+        const span = NOTICE_HOURS.find((one) => String(one) === hours) ?? 6;
+
+        enTold = english.length < 3 ? locale.t('admin.notice.lineShort') : null;
+        faTold = persian.length < 3 ? locale.t('admin.notice.lineShort') : null;
+        whyTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (enTold !== null || faTold !== null || whyTold !== null)
+        {
+            return;
+        }
+
+        if (up)
+        {
+            const yes = await overlay.open(
+                ConfirmSheet,
+                {
+                    title: locale.t('admin.notice.askReplace'),
+                    lead: locale.t('admin.notice.askReplaceLead'),
+                    confirm: locale.t('admin.notice.confirmReplace')
+                },
+                { label: locale.t('admin.section.notice') }
+            ).closed;
+
+            if (yes !== true)
+            {
+                return;
+            }
+        }
+
+        if (await send(english, persian, span, reason))
+        {
+            en = '';
+            fa = '';
+            why = '';
+            return;
+        }
+
+        void read.refetch();
+    };
+
+    const send = (english: string, persian: string, span: NoticeHours, reason: string) =>
+    {
+        const now = runtime().clock.now();
+        const guessed: AdminNotice = {
+            notice: {
+                id: PENDING,
+                en: english,
+                fa: persian,
+                until: new Date(now + (span * HOUR_MS)).toISOString(),
+                at: new Date(now).toISOString(),
+                ...(session.account() === null ? {} : { by: session.account()!.handle })
+            }
+        };
+        const sent = guesses.during(() => guessed, () => client.admin.putNotice({ input: { en: english, fa: persian, hours: span, reason } }), reread);
+
+        return attempt(sent, locale.t('admin.notice.done.up'));
+    };
+
+    const end = async () =>
+    {
+        const id = standing?.id;
+
+        if (id === undefined || id === PENDING)
+        {
+            return;
+        }
+
+        const reason = await overlay.open(
+            ReasonSheet,
+            {
+                title: locale.t('admin.notice.askEnd'),
+                lead: locale.t('admin.notice.askEndLead'),
+                confirm: locale.t('admin.notice.confirmEnd')
+            },
+            { label: locale.t('admin.section.notice') }
+        ).closed;
+
+        if (typeof reason !== 'string')
+        {
+            return;
+        }
+
+        const sent = guesses.during(() => ({}), () => client.admin.endNotice({ input: { id, reason } }), reread);
+
+        if (!await attempt(sent, locale.t('admin.notice.done.down'), whyStaffRefused))
+        {
+            void read.refetch();
+        }
+    };
+
+    <div class="flex flex-col gap-6">
+        <PageHeader title={ locale.t('admin.section.notice') } lead={ locale.t('admin.notice.lead') } flush />
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 3 } /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.notice.failed') } onRetry={ () => void read.refetch() } /> }
+        </Show>
+
+        <Show when={ up }>
+            <Panel pad="md" stack="md" labelledBy="admin-notice-now">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 id="admin-notice-now" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.now') }</h2>
+                    <Badge dot text={ locale.t('admin.notice.live') } tone="live" />
+                </div>
+                <div class="flex items-start gap-2 rounded-tile bg-accent/15 px-3 py-2 text-ui-sm text-text" data-preview>
+                    <Icon name="megaphone" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
+                    <p class="min-w-0 flex-1 font-semibold">
+                        <span dir="auto">{ seen }</span>
+                    </p>
+                </div>
+                <dl class="grid gap-3 sm:grid-cols-2">
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.english') }</dt>
+                        <dd class="text-ui-sm text-text" dir="ltr" lang="en" data-english>{ english }</dd>
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.persian') }</dt>
+                        <dd class="text-ui-sm text-text" dir="rtl" lang="fa" data-persian>{ persian }</dd>
+                    </div>
+                </dl>
+                <p class="facts text-ui-xs text-faint" data-facts>
+                    <span><span>{ locale.t('admin.notice.ends') }</span> <When at={ until } /></span>
+                    <span hidden={ !named }><span>{ locale.t('admin.notice.by') }</span> <bdi class="font-semibold text-muted" dir="ltr">{ by }</bdi></span>
+                    <When at={ at } />
+                </p>
+                <Show when={ settled }>
+                    <Button variant="secondary" class="self-start" onClick={ () => void end() }>{ locale.t('admin.notice.end') }</Button>
+                </Show>
+            </Panel>
+        </Show>
+
+        <Show when={ empty }>
+            { () => <EmptyState icon="megaphone" title={ locale.t('admin.notice.none') } lead={ locale.t('admin.notice.noneLead') } class="rounded-panel border border-line bg-field" /> }
+        </Show>
+
+        <Show when={ known }>
+            <Panel pad="md" stack="md" labelledBy="admin-notice-new">
+                <div class="flex flex-col gap-1">
+                    <h2 id="admin-notice-new" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.form') }</h2>
+                    <p class="text-ui-sm text-muted">{ locale.t('admin.notice.formLead') }</p>
+                </div>
+                <Field id="admin-notice-en" label={ locale.t('admin.notice.english') } hint={ locale.t('admin.notice.lineHint') } error={ enTold }>
+                    <TextArea
+                        id="admin-notice-en"
+                        class="max-w-xl"
+                        value={ en }
+                        maxlength={ NOTICE_MAX }
+                        describedBy={ enTold !== null ? 'admin-notice-en-error' : 'admin-notice-en-hint' }
+                        onInput={ typedEn }
+                        onEnter={ () => undefined }
+                    />
+                </Field>
+                <Field id="admin-notice-fa" label={ locale.t('admin.notice.persian') } hint={ locale.t('admin.notice.lineHint') } error={ faTold }>
+                    <TextArea
+                        id="admin-notice-fa"
+                        class="max-w-xl"
+                        value={ fa }
+                        maxlength={ NOTICE_MAX }
+                        describedBy={ faTold !== null ? 'admin-notice-fa-error' : 'admin-notice-fa-hint' }
+                        onInput={ typedFa }
+                        onEnter={ () => undefined }
+                    />
+                </Field>
+                <fieldset class="flex flex-col gap-1.5" data-hours>
+                    <legend class="mb-1.5 text-ui-sm font-semibold text-text">{ locale.t('admin.notice.howLong') }</legend>
+                    <ul class="flex flex-wrap gap-2">
+                        <For each={ terms } key={ (term) => term.id } let={ term }>
+                            <li>
+                                <Chip selected={ hours === term.id } onClick={ () => hours = term.id }>
+                                    <span>{ term.label }</span>
+                                </Chip>
+                            </li>
+                        </For>
+                    </ul>
+                </fieldset>
+                <Field id="admin-notice-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
+                    <TextArea
+                        id="admin-notice-why"
+                        class="max-w-xl"
+                        value={ why }
+                        maxlength={ 500 }
+                        describedBy={ whyTold !== null ? 'admin-notice-why-error' : 'admin-notice-why-hint' }
+                        onInput={ typedWhy }
+                    />
+                </Field>
+                <Button variant="primary" class="self-start" onClick={ () => void put() }>{ sendWords }</Button>
+            </Panel>
+        </Show>
+
+        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
+            <span>{ locale.t('admin.notice.history') }</span>
+            <Link to="/admin/log?kind=notice" class={ LINK } data-history>{ locale.t('admin.notice.historyLink') }</Link>
+        </p>
+    </div>
+}

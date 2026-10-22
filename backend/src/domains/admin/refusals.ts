@@ -8,7 +8,8 @@ export const STAFF_REFUSALS = {
     'staff-in-game': 409,
     'staff-seated': 409,
     'staff-table-closed': 409,
-    'staff-table-playing': 409
+    'staff-table-playing': 409,
+    'staff-no-notice': 409
 } as const satisfies Record<string, 404 | 409 | 422>;
 
 export type StaffRefusal = keyof typeof STAFF_REFUSALS;

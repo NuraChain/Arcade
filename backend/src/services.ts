@@ -40,6 +40,7 @@ import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
 import { createLiveService, type Call, type Online } from './domains/admin/live.ts';
 import { createPlayService, stuckKindOf, type Stuck } from './domains/admin/play.ts';
+import { createNoticeService } from './domains/admin/notice.ts';
 import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
@@ -995,6 +996,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const onlineNow = createLiveService(db, config.adminWallet);
 
+    const notices = createNoticeService(db);
+
+    const liveNow = async () =>
+    {
+        const [counts, notice] = await Promise.all([catalogue.live(), notices.current()]);
+
+        return { ...counts, ...(notice === null ? {} : { notice }) };
+    };
+
     const poolOf = () =>
     {
         const pool = (db.driver as unknown as { master?: { totalCount: number; idleCount: number; waitingCount: number } }).master;
@@ -1535,16 +1545,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
         async pulse()
         {
-            const [counts, watching] = await Promise.all([catalogue.live(), table.watchingMark()]);
+            const [counts, watching] = await Promise.all([liveNow(), table.watchingMark()]);
 
-            return { games: counts.games, watching };
+            return { games: counts.games, watching, ...(counts.notice === undefined ? {} : { notice: counts.notice }) };
         },
 
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: config.env })
         },
 
-        catalogue,
+        catalogue: { ...catalogue, live: liveNow },
 
         identity: {
             secureCookies,
@@ -1997,6 +2007,43 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return await ableTo(me, 'live') === null
                     ? null
                     : await onlineNow.now(presence?.online?.() ?? [], presence?.calls?.() ?? [], query.cursor ?? null);
+            },
+
+            async notice(me)
+            {
+                return await ableTo(me, 'notice') === null ? null : await notices.standing();
+            },
+
+            async putNotice(me, input)
+            {
+                const actor = await ableTo(me, 'notice');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const standing = await notices.put(actor, input);
+
+                live?.catalogueChanged();
+
+                return standing;
+            },
+
+            async endNotice(me, input)
+            {
+                const actor = await ableTo(me, 'notice');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const standing = await notices.end(actor, input.id, input.reason);
+
+                live?.catalogueChanged();
+
+                return standing;
             }
         },
 

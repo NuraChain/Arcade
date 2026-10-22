@@ -101,6 +101,12 @@ const marked = () =>
     staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'minor', person: 'reza.t', reason: 'Showed an ID that says he is nineteen.', details: { to: 'adult' } });
 };
 
+const announced = () =>
+{
+    staffLogged({ at: hoursAgo(5), staff: 'alex', staffRole: 'owner', kind: 'notice', reason: 'Maintenance tonight.', details: { to: 'up', en: 'Nura restarts at 22:00.', fa: 'نورا ساعت ۲۲ ری‌استارت می‌شه.', hours: '24', until: hoursAgo(-19) } });
+    staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'notice', reason: 'The restart is done.', details: { to: 'down', en: 'Nura restarts at 22:00.', fa: 'نورا ساعت ۲۲ ری‌استارت می‌شه.' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -249,6 +255,23 @@ describe('the log', () =>
         await settle();
 
         expect(lines(container)).toEqual(['mina، میز پوکر با کد P3QA رو بست.']);
+    });
+
+    it('says who put an announcement up and for how long, who took it down, and what it said in the reader\'s own language', async () =>
+    {
+        announced();
+        const { container } = await opened('/admin/log?kind=notice');
+
+        expect(lines(container)).toEqual(['mina took the announcement down.', 'alex put up an announcement for a day.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina']);
+        expect(was(container)).toEqual(['It said: Nura restarts at 22:00.', 'It said: Nura restarts at 22:00.']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Announcements');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(lines(container)).toEqual(['mina، اطلاعیه رو برداشت.', 'alex، یه اطلاعیه برای یه روز گذاشت.']);
+        expect(was(container)).toEqual(['نوشته بود: نورا ساعت ۲۲ ری‌استارت می‌شه.', 'نوشته بود: نورا ساعت ۲۲ ری‌استارت می‌شه.']);
     });
 
     it('says who marked somebody under 18 and who marked them an adult again, each handle set apart', async () =>
@@ -404,7 +427,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده', 'سن']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده', 'سن', 'اطلاعیه‌ها']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 

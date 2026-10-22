@@ -33,6 +33,7 @@ export interface Settings
     hintRules: boolean;
     quickAsks: Record<string, unknown>;
     notify: boolean;
+    noticeSeen: string;
 }
 
 export type VoiceNoise = 'off' | 'standard' | 'strong';
@@ -72,7 +73,8 @@ export function defaultSettings(): Settings
         hintOutcome: true,
         hintRules: true,
         quickAsks: {},
-        notify: false
+        notify: false,
+        noticeSeen: ''
     };
 }
 

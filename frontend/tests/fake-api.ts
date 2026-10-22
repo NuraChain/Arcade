@@ -18,6 +18,7 @@ import type {
     AdminPerson,
     AdminLive,
     AdminMatches,
+    AdminNotice,
     AdminOverview,
     AdminPlay,
     AdminTables,
@@ -430,6 +431,15 @@ const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner'
 
 const staffRefused = (word: StaffRefusal, message: string) => new ApiError(STAFF_REFUSALS[word], word, message, undefined);
 
+type NoticeShown = NonNullable<AdminNotice['notice']>;
+
+const noticeNow = () =>
+{
+    const held = server.notice;
+
+    return held !== null && Date.parse(held.until) > runtime().clock.now() ? held : null;
+};
+
 const staffGate = (ability: Ability) =>
 {
     if (!may(staffRoleOf(server.me), ability))
@@ -747,6 +757,10 @@ export const server =
     playing: playingFresh(),
     lookout: lookoutFresh(),
 
+    /** The notice everybody sees, as the staff put it up: none until a spec or a press puts one there. */
+    notice: null as NoticeShown | null,
+    noticeSeq: 0,
+
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
     /**
@@ -915,6 +929,8 @@ export const server =
         server.play = playFresh();
         server.playing = playingFresh();
         server.lookout = lookoutFresh();
+        server.notice = null;
+        server.noticeSeq = 0;
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1610,6 +1626,72 @@ export const client =
             staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'close', reason: input.reason, details: { id: held.id, table: held.code, game: held.game } });
 
             return structuredClone(server.play);
+        },
+
+        async notice(): Promise<AdminNotice>
+        {
+            server.calls.push('admin.notice');
+            staffGate('notice');
+
+            const held = noticeNow();
+
+            return held === null ? {} : { notice: structuredClone(held) };
+        },
+
+        async putNotice({ input }: { input: { en: string; fa: string; hours: number; reason: string } }): Promise<AdminNotice>
+        {
+            server.calls.push(`admin.putNotice ${ input.hours } ${ input.reason }`);
+            staffGate('notice');
+
+            const actor = staffRoleOf(server.me);
+            const now = runtime().clock.now();
+
+            server.noticeSeq += 1;
+            server.notice = {
+                id: `notice-${ server.noticeSeq }`,
+                en: input.en,
+                fa: input.fa,
+                until: new Date(now + (input.hours * 3_600_000)).toISOString(),
+                at: new Date(now).toISOString(),
+                by: server.me
+            };
+            staffLogged({
+                at: new Date(now).toISOString(),
+                staff: server.me,
+                ...(actor === null ? {} : { staffRole: actor }),
+                kind: 'notice',
+                reason: input.reason,
+                details: { to: 'up', en: input.en, fa: input.fa, hours: String(input.hours), until: server.notice.until }
+            });
+
+            return { notice: structuredClone(server.notice) };
+        },
+
+        async endNotice({ input }: { input: { id: string; reason: string } }): Promise<AdminNotice>
+        {
+            server.calls.push(`admin.endNotice ${ input.id } ${ input.reason }`);
+            staffGate('notice');
+
+            const held = noticeNow();
+
+            if (held === null || held.id !== input.id)
+            {
+                throw staffRefused('staff-no-notice', 'That notice is not up.');
+            }
+
+            const actor = staffRoleOf(server.me);
+
+            server.notice = null;
+            staffLogged({
+                at: new Date(runtime().clock.now()).toISOString(),
+                staff: server.me,
+                ...(actor === null ? {} : { staffRole: actor }),
+                kind: 'notice',
+                reason: input.reason,
+                details: { to: 'down', en: held.en, fa: held.fa }
+            });
+
+            return {};
         }
     },
 
@@ -1750,7 +1832,12 @@ export const client =
             server.calls.push('catalogue.live');
             const statusOf = (game: string) => (server.games as { id?: string; status?: PlayStatus }[]).find((one) => one.id === game)?.status ?? 'available';
 
-            return { games: server.live.map((row) => ({ status: statusOf(row.game), ...row })) };
+            const notice = noticeNow();
+
+            return {
+                games: server.live.map((row) => ({ status: statusOf(row.game), ...row })),
+                ...(notice === null ? {} : { notice: { id: notice.id, en: notice.en, fa: notice.fa, until: notice.until } })
+            };
         },
         async leaderboard(input: { params: { game: string }; query?: { window?: string } })
         {

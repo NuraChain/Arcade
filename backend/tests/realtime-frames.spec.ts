@@ -231,6 +231,14 @@ describe('server frames', () =>
         expect(frame).toEqual({ v: 1, t: 'pulse', n: 5, games, watching: 'a-mark' });
     });
 
+    it('carries the notice standing as its id, its two lines and its end, and nothing when none stands', () =>
+    {
+        const notice = { id: 'n-1', en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', until: '2026-10-22T22:00:00.000Z' };
+
+        expect(pulse(6, { games: [], watching: 'a-mark', notice })).toEqual({ v: 1, t: 'pulse', n: 6, games: [], watching: 'a-mark', notice });
+        expect('notice' in pulse(7, { games: [], watching: 'a-mark' })).toBe(false);
+    });
+
     it('never says anything about a message, which is the whole design', () =>
     {
         const frames = [

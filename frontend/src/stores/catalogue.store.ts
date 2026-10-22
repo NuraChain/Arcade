@@ -1,6 +1,6 @@
 import { createStore, createResource, createSignal, type Getter } from 'azerothjs';
 
-import { client, type LiveCounts } from '../api.ts';
+import { client, type LiveCounts, type SiteNotice } from '../api.ts';
 import { drawable } from '../components/games/boards.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
@@ -47,6 +47,7 @@ export interface CatalogueApi
     stats(id: GameId): LiveStats;
     totals: Getter<{ tablesOpen: number; playersOnline: number }>;
     watching: Getter<string | null>;
+    notice: Getter<SiteNotice | null>;
     featured: Getter<GameId>;
 
     status(id: GameId): GameStatus;
@@ -67,7 +68,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
     let stop: (() => void) | null = null;
     let asked = 0;
 
-    const [told, setTold] = createSignal<{ after: number; games: LiveCounts['games']; watching: string } | null>(null);
+    const [told, setTold] = createSignal<{ after: number; games: LiveCounts['games']; watching: string; notice: SiteNotice | null } | null>(null);
 
     const catalogue = createResource(
         () => client.catalogue.games(),
@@ -78,19 +79,22 @@ export const useCatalogue = createStore((): CatalogueApi =>
         async () =>
         {
             const turn = asked += 1;
+            const counts = await client.catalogue.live();
 
-            return { turn, games: (await client.catalogue.live()).games };
+            return { turn, games: counts.games, notice: counts.notice ?? null };
         },
         { name: 'catalogue.live' }
     );
 
-    const rows = () =>
+    const newest = () =>
     {
         const pushed = told();
         const pulled = live.data();
 
-        return pushed !== null && (pulled == null || pulled.turn <= pushed.after) ? pushed.games : pulled?.games ?? [];
+        return pushed !== null && (pulled == null || pulled.turn <= pushed.after) ? pushed : pulled ?? null;
     };
+
+    const rows = () => newest()?.games ?? [];
 
     const published = (): Map<string, { status: GameStatus; rules: TableRules }> =>
     {
@@ -155,6 +159,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
 
         watching: () => told()?.watching ?? null,
 
+        notice: () => newest()?.notice ?? null,
+
         /**
          * The game of the day, and only ever one somebody can actually play.
          *
@@ -182,7 +188,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
             if (stop === null)
             {
                 const realtime = useRealtime();
-                const unhear = realtime.onPulse((frame) => setTold({ after: asked, games: frame.games, watching: frame.watching }));
+                const unhear = realtime.onPulse((frame) => setTold({ after: asked, games: frame.games, watching: frame.watching, notice: frame.notice ?? null }));
                 const unring = realtime.onNudge((scope) =>
                 {
                     if (scope === 'table' && realtime.status() !== 'connected')

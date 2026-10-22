@@ -500,9 +500,11 @@ signature), and `give` NEVER rejects: `enrol` reports through `failure()`, so ev
 read back and spoken. A browser is live the moment it is added, so there is no second step to
 point anybody at.
 
-**The status strips are a chunk of their own.** `strips.component` draws the connection strip
-and the strip that says a search for players is on (`looking-strip`, *A waiting table IS the
-search* in `games.md`), and starts the connection store; the shell fetches it one promise after
+**The status strips are a chunk of their own.** `strips.component` draws the connection strip,
+the strip that says a search for players is on (`looking-strip`, *A waiting table IS the
+search* in `games.md`) and the notice the staff put up (`notice-strip`, *The notice everybody sees*
+in `.claude/rules/admin.md`), and starts the connection store and the toast that says a notice at
+a table; the shell fetches it one promise after
 itself through `strips-loader.ts`, the cues loader's shape. The shell stood at 12,225 of its
 12,288 bytes, neither strip is drawn unless something is wrong, and a direct `import()` in the
 shell would have put the chunk table back into it, which is what a loader module is for.

@@ -655,7 +655,7 @@ export function createHub(deps: HubDeps): Hub
         try
         {
             const next = await deps.pulse();
-            const text = JSON.stringify([next.games, next.watching]);
+            const text = JSON.stringify([next.games, next.watching, next.notice ?? null]);
 
             if (told?.text !== text)
             {

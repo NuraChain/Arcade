@@ -72,6 +72,9 @@ export const app = {
     'connection.unreached': 'Live updates are not getting through. This page checks for changes every few seconds.',
     'connection.restored': 'Back online.',
 
+    'notice.close': 'Close this announcement',
+    'notice.gotIt': 'Got it',
+
     'state.errorTitle': 'Couldn’t load this.',
     'state.errorLead': 'If this keeps happening, check your connection.'
 };

@@ -13,8 +13,8 @@ describe('who on the staff may do what', () =>
 
         expect(reach(null)).toEqual([]);
         expect(reach('moderator')).toEqual(['live', 'overview', 'people', 'reports']);
-        expect(reach('admin')).toEqual(['health', 'live', 'log', 'money', 'overview', 'people', 'play', 'reports', 'staff']);
-        expect(reach('owner')).toEqual(['health', 'live', 'log', 'money', 'overview', 'people', 'play', 'reports', 'staff', 'wallet']);
+        expect(reach('admin')).toEqual(['health', 'live', 'log', 'money', 'notice', 'overview', 'people', 'play', 'reports', 'staff']);
+        expect(reach('owner')).toEqual(['health', 'live', 'log', 'money', 'notice', 'overview', 'people', 'play', 'reports', 'staff', 'wallet']);
     });
 
     it('puts the owner above an admin, an admin above a moderator, and every role above somebody who is none', () =>
@@ -48,7 +48,7 @@ describe('what the staff are refused in words', () =>
 {
     it('lists each word once with its status, and answers a word it does not have as none', () =>
     {
-        expect(STAFF_REFUSALS).toEqual({ 'staff-nobody': 404, 'staff-owner': 409, 'staff-self': 409, 'staff-rank': 409, 'staff-not-suspended': 409, 'staff-match-over': 409, 'staff-in-game': 409, 'staff-seated': 409, 'staff-table-closed': 409, 'staff-table-playing': 409 });
+        expect(STAFF_REFUSALS).toEqual({ 'staff-nobody': 404, 'staff-owner': 409, 'staff-self': 409, 'staff-rank': 409, 'staff-not-suspended': 409, 'staff-match-over': 409, 'staff-in-game': 409, 'staff-seated': 409, 'staff-table-closed': 409, 'staff-table-playing': 409, 'staff-no-notice': 409 });
         expect(isStaffRefusal('staff-rank')).toBe(true);
         expect(isStaffRefusal('toString')).toBe(false);
         expect(isStaffRefusal('not-found')).toBe(false);

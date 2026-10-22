@@ -177,8 +177,8 @@ describe('the admin', () =>
 
         expect(rail.className).toContain('lg:hidden');
         expect(side.className).toContain('lg:block');
-        expect(hrefs(rail, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
-        expect(hrefs(side, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(rail, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/notice', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(side, 'a')).toEqual(['/admin/overview', '/admin/live', '/admin/people', '/admin/reports', '/admin/play', '/admin/notice', '/admin/money', '/admin/staff', '/admin/log']);
         expect(hrefs(container, '[aria-current="page"]')).toEqual(['/admin/staff', '/admin/staff']);
         expect(rail.getAttribute('aria-label')).toBe('The admin');
 
@@ -216,7 +216,7 @@ describe('the admin', () =>
 
         expect(header.querySelector('h1')?.textContent).toBe('مدیریت');
         expect(header.textContent).toContain('مالک');
-        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['نمای کلی', 'آنلاین‌ها', 'کاربرها', 'گزارش‌ها', 'بازی‌ها', 'پول', 'تیم', 'تاریخچه']);
+        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['نمای کلی', 'آنلاین‌ها', 'کاربرها', 'گزارش‌ها', 'بازی‌ها', 'اطلاعیه', 'پول', 'تیم', 'تاریخچه']);
         expect(container.querySelector('#admin-main h1')?.textContent).toBe('پول');
     });
 });

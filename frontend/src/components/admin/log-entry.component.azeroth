@@ -17,7 +17,9 @@ export default component LogEntry(props: { row: LogRow; report?: string })
 
     derived reason = props.row.reason;
 
-    derived was = props.row.kind === 'clear' ? props.row.details.from ?? '' : '';
+    derived was = props.row.kind === 'clear'
+        ? props.row.details.from ?? ''
+        : (props.row.kind === 'notice' ? locale.text({ en: props.row.details.en ?? '', fa: props.row.details.fa ?? '' }) : '');
 
     derived recalled = was !== '';
 

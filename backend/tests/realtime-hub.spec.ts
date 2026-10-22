@@ -1673,7 +1673,7 @@ describe('how busy the games are', () =>
     const NOTHING_ON = 'nothing-on';
 
     const pulsesOf = (wire: FakeWire) =>
-        wire.framesOf('pulse').map((frame) => (frame.t === 'pulse' ? { games: frame.games, watching: frame.watching } : null));
+        wire.framesOf('pulse').map((frame) => (frame.t === 'pulse' ? { games: frame.games, watching: frame.watching, ...(frame.notice === undefined ? {} : { notice: frame.notice }) } : null));
 
     const STEP_MS = 50;
 
@@ -1793,6 +1793,30 @@ describe('how busy the games are', () =>
 
         expect(world.asked).toBe(asked + 2);
         expect(pulsesOf(alex.wire)).toHaveLength(2);
+    });
+
+    it('says so when the notice has changed and no number has, and when it is taken down', async () =>
+    {
+        const alex = await connect('alex');
+        const notice = { id: 'n-1', en: 'Back at ten', fa: 'ساعت ده برمی‌گردیم', until: '2026-10-22T22:00:00.000Z' };
+
+        await pass(PULSE_MS);
+        world.pulse = { games: quiet, watching: NOTHING_ON, notice };
+        world.hub.catalogueChanged();
+        await pass(PULSE_MS);
+
+        const sara = await connect('sara.k');
+
+        world.pulse = { games: quiet, watching: NOTHING_ON };
+        world.hub.catalogueChanged();
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(alex.wire)).toEqual([
+            { games: quiet, watching: NOTHING_ON },
+            { games: quiet, watching: NOTHING_ON, notice },
+            { games: quiet, watching: NOTHING_ON }
+        ]);
+        expect(pulsesOf(sara.wire)).toEqual([{ games: quiet, watching: NOTHING_ON, notice }, { games: quiet, watching: NOTHING_ON }]);
     });
 
     it('says so when what there is to watch has changed and no number has', async () =>

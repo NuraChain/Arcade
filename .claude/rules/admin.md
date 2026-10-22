@@ -8,8 +8,8 @@ design, with the decisions and what was not chosen, is
 
 **Three roles, each above the last: moderator, admin, owner.** `domains/admin/roles.ts` imports
 nothing and both halves read it: `ABILITIES` says which role a section needs (`overview`, `live`,
-`people` and `reports` a moderator, `play`, `money`, `staff`, `log` and `health` an admin, `wallet`
-the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
+`people` and `reports` a moderator, `play`, `notice`, `money`, `staff`, `log` and `health` an admin,
+`wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
 the one rule about rank. Nobody outranks their own role, and every role outranks somebody who holds
 none. The browser draws a section only where `may` says so; the server asks the same function on
 every route, because the drawing is a courtesy.
@@ -381,6 +381,42 @@ for the roles that open them and for nobody else, and the money left out where t
 requests, the failures and the hour's ring; `realtime-hub.spec.ts` (*who the staff see online*, and
 the calls) the hub's two reads.
 
+## The notice everybody sees
+
+**One line, in English and in Persian, at the top of every page of the app, for as long as an admin
+or the owner says** (`notice`, D13; the page calls it the announcement). `notices` is a table of
+its own: the two lines (three to two hundred characters each, held by the wire and by a CHECK), until
+when it stands, who put it up and when, and when it was taken down if that was early. The one that
+stands is the newest with no end and an `until` still ahead of Postgres's `now()`
+(`createNoticeService` in `domains/admin/notice.ts`). One stands at a time: putting one up ends
+whatever stands in the same transaction, and two of the staff putting one up at once go one after
+the other (`pg_advisory_xact_lock(hashtext('nura:notice'))`, raw, because no repository can say
+it). A notice that ran out needs no sweep: it is simply not the one that stands.
+
+`GET /api/admin/notice` is the one that stands, with when it was put up and by whom.
+`POST /api/admin/notice`, `{ en, fa, hours, reason }`, puts one up for an hour, six, a day, three
+days or a week (`NOTICE_HOURS` in `roles.ts`), the lines trimmed by the wire, and writes one row of
+kind `notice` with `{ to: 'up', en, fa, hours, until }`. `POST /api/admin/notice/end`,
+`{ id, reason }`, takes down the one it NAMES and writes `{ to: 'down', en, fa }`; a notice that
+is not the one standing, gone or replaced meanwhile, is `staff-no-notice` (409), so a take-down never
+takes down something its reader never saw. **A notice ends no earlier than it began**
+(`greatest(now(), created_at)`): a change that began first and waited for the lock would otherwise
+end, with its own earlier `now()`, a notice committed while it waited, and the CHECK on the end
+refused that as a 500. The database spec met it once by chance, in a run of its test of two puts at
+once; a notice written by hand to begin a minute ahead holds it now, for a put and for a take-down.
+
+**Everybody learns at once.** Putting one up or taking it down rings `catalogueChanged`, and the
+pulse carries the notice standing (its id, its two lines and its end, nothing about who put it up)
+beside each game's counts, as `GET /catalogue/live` does, so a page with no socket reads it on the
+lifeline's beat. The hub tells a pulse only when what it says differs, and the notice is part of
+what it compares.
+
+`admin-notice.db.spec.ts` holds the rows, the log, the rings, the pulse and the live counts, a
+notice replaced and one that ran out, the newest shown when two stand, the refusals, a moderator, a
+player and a suspended admin answered as nothing, the lock for a put and for a take-down, and an end
+that comes before its beginning; `app.spec.ts` the routes, their words and the live counts on the
+wire; `realtime-frames.spec.ts` and `realtime-hub.spec.ts` the pulse.
+
 ## The page
 
 **`/admin` is a layout of its own, outside the app shell** (`components/admin/admin-shell`): a
@@ -540,6 +576,26 @@ has ("The Ludo table K7QX is closed."), and a refusal brings it back in the refu
 list and the counts are read again either way. The log says "mina closed the Ludo table K7QX.", the
 code set apart as a handle is.
 
+**Announcement** (`notice`, for an admin and the owner) shows the notice standing as everybody
+sees it, in the reader's language, with both lines under it (the English left to right and the
+Persian right to left, whatever the page), when it ends and who put it up, each time exact under a
+pointer, and a way to take it down that asks why in the sheet; with nothing standing it says so.
+Under it is the form: the line in English and the line in Persian (each folded to one line as it is
+sent, two hundred characters at most), how long it stands, and why. Putting one up while one stands
+asks first. Both are shown at the press, said once the server has, and taken back with the
+refusal's words, and the page reads the server again after a refusal, so a notice somebody else put
+up meanwhile is the one shown. Nothing on its way can be taken down until the server has said what
+it put up. A link leads to every notice so far, which is the log's kind `notice` ("alex put up an
+announcement for a day.", with what it said in the reader's language).
+
+**The strip** is the strips chunk's (`components/app/notice-strip`), on every page of the app that
+draws the strips: the line in the reader's language beside a megaphone, and a close that keeps the
+id of the notice closed on this device (`settings.noticeSeen`), so the next notice is shown again.
+It goes by itself when its time is up, on the product clock, and it is the same strip through every
+pulse. A table draws no strip (nothing takes room from a board), so `sayAtTable`
+(`components/app/notice.ts`, started by the chunk's `begin`) says a notice once a page as a toast
+at the table the reader has open, with "Got it", which closes it as the strip's close does.
+
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
 `Tooltip` says the date and the minute in the reader's own calendar, with the moment in `datetime`.
@@ -552,15 +608,15 @@ person is a status badge (waiting in gold, reviewed plain, acted on in green).
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.
 
-`admin-shell.spec.ts`, `admin-overview.spec.ts`, `admin-live.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
+`admin-shell.spec.ts`, `admin-overview.spec.ts`, `admin-live.spec.ts`, `admin-notice.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
 `reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
-`paused-game.spec.ts` what a player sees of a paused game and `play.spec.ts` of a table the staff closed; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`paused-game.spec.ts` what a player sees of a paused game, `play.spec.ts` of a table the staff closed and `notice-strip.spec.ts` the notice on every page and at a table; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a mark under 18, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out, a mark under 18, a report's outcome, a game's switch, a game's end, a table's close, a notice put up and one taken down, and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three, the reports' two, the games being played's
 three, the tables waiting's two and the live list's one. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

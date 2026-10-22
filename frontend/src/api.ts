@@ -58,6 +58,7 @@ export type {
     RecoveryState,
     ServerInfo,
     SessionState,
+    SiteNotice,
     SocialGraph,
     TableSeat,
     TableStatus,

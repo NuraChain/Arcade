@@ -43,6 +43,9 @@ import {
     adminTables,
     adminTablesQuery,
     adminOverview,
+    adminNotice,
+    adminNoticeEnd,
+    adminNoticeInput,
     adminLive,
     adminLiveQuery,
     adminVoidInput,
@@ -475,7 +478,16 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.overview(context.principal.userId))),
 
             live: routes.get('/live', { query: adminLiveQuery, output: adminLive },
-                async (context) => onlyAdmin(await ports.admin.live(context.principal.userId, context.query)))
+                async (context) => onlyAdmin(await ports.admin.live(context.principal.userId, context.query))),
+
+            notice: routes.get('/notice', { output: adminNotice },
+                async (context) => onlyAdmin(await ports.admin.notice(context.principal.userId))),
+
+            putNotice: routes.post('/notice', { input: adminNoticeInput, output: adminNotice },
+                async (context) => onlyAdmin(await ports.admin.putNotice(context.principal.userId, context.input))),
+
+            endNotice: routes.post('/notice/end', { input: adminNoticeEnd, output: adminNotice },
+                async (context) => onlyAdmin(await ports.admin.endNotice(context.principal.userId, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({
