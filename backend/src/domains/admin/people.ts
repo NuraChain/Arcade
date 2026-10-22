@@ -439,6 +439,24 @@ export function createPeopleService(db: DataSource, ownerWallet: string, origin:
             });
         },
 
+        async minor(actor: Actor, handle: string, minor: boolean, reason: string)
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await locked(tx, handle);
+                const target = await reachable(tx, actor, handle);
+                const changed = target.is_minor !== minor;
+
+                if (changed)
+                {
+                    await tx.getRepository(User).update({ id: target.id }, minor ? { isMinor: true, allowStrangerMessages: false } : { isMinor: false });
+                    await record(tx, actor, { kind: 'minor', person: { id: target.id, handle: target.handle }, reason, details: { to: minor ? 'minor' : 'adult' } });
+                }
+
+                return { id: target.id, changed };
+            });
+        },
+
         async expireDue()
         {
             return await db.transaction(async (tx) =>

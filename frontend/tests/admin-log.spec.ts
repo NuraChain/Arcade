@@ -85,6 +85,22 @@ const switched = () =>
     staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'game', reason: 'The dice are fixed.', details: { game: 'ludo', from: 'disabled', to: 'available' } });
 };
 
+const ended = () =>
+{
+    staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'void', reason: 'Stuck after a fault in the sweep.', details: { match: 'm-1', game: 'hokm', table: 'k7qx' } });
+};
+
+const shut = () =>
+{
+    staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'close', reason: 'Left open by a fault.', details: { id: 't-1', game: 'poker', table: 'p3qa' } });
+};
+
+const marked = () =>
+{
+    staffLogged({ at: hoursAgo(2), staff: 'mina', staffRole: 'moderator', kind: 'minor', person: 'reza.t', reason: 'Said in a report that he is fifteen.', details: { to: 'minor' } });
+    staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'minor', person: 'reza.t', reason: 'Showed an ID that says he is nineteen.', details: { to: 'adult' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -207,6 +223,47 @@ describe('the log', () =>
         expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('A bug in the dice.');
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games');
         expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"game"');
+    });
+
+    it('says a game the staff ended, naming the game in the reader\'s words and the table\'s code set apart', async () =>
+    {
+        ended();
+        const { container } = await opened('/admin/log?kind=void');
+
+        expect(lines(container)).toEqual(['mina ended a game of Hokm at K7QX as no contest.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'K7QX']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games ended');
+        expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"void"');
+    });
+
+    it('says a table the staff closed, naming the game in the reader\'s words and the table\'s code set apart', async () =>
+    {
+        shut();
+        const { container } = await opened('/admin/log?kind=close');
+
+        expect(lines(container)).toEqual(['mina closed the Poker table P3QA.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'P3QA']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Tables closed');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(lines(container)).toEqual(['mina، میز پوکر با کد P3QA رو بست.']);
+    });
+
+    it('says who marked somebody under 18 and who marked them an adult again, each handle set apart', async () =>
+    {
+        marked();
+        const { container } = await opened('/admin/log?kind=minor');
+
+        expect(lines(container)).toEqual(['alex marked reza.t as an adult.', 'mina marked reza.t as under 18.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Age');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(lines(container)).toEqual(['alex، reza.t رو بزرگ‌سال ثبت کرد.', 'mina، reza.t رو زیر ۱۸ ثبت کرد.']);
     });
 
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
@@ -347,7 +404,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده', 'سن']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 
@@ -377,6 +434,16 @@ describe('the log', () =>
             'alex، منچ رو دوباره فعال کرد.',
             'mina، منچ رو متوقف کرد.'
         ]);
+    });
+
+    it('says a game the staff ended in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        ended();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual(['mina، بازی حکم سر میز K7QX رو بدون نتیجه تموم کرد.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'K7QX']);
     });
 
     it('says a report the staff handled in Persian', async () =>

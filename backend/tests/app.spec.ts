@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1017,6 +1017,7 @@ describe('the owner\'s view of the vault', () =>
         const lifting = { reason: 'Said sorry to the table' };
         const clearing = { part: 'name', reason: 'A name meant to insult' };
         const ending = { reason: 'Their wallet was taken' };
+        const marking = { minor: true, reason: 'Said they are fifteen in a report' };
         const answers = [
             await sent(app, '/people?list=minors&q=mina'),
             await sent(app, '/people/mina'),
@@ -1025,7 +1026,8 @@ describe('the owner\'s view of the vault', () =>
             await sent(app, '/people/mina/suspend', suspension),
             await sent(app, '/people/mina/lift', lifting),
             await sent(app, '/people/mina/clear', clearing),
-            await sent(app, '/people/mina/sign-out', ending)
+            await sent(app, '/people/mina/sign-out', ending),
+            await sent(app, '/people/mina/minor', marking)
         ];
 
         for (const response of answers)
@@ -1043,16 +1045,25 @@ describe('the owner\'s view of the vault', () =>
             ['suspend', 'somebody', 'mina', suspension],
             ['lift', 'somebody', 'mina', lifting],
             ['clear', 'somebody', 'mina', clearing],
-            ['signOut', 'somebody', 'mina', ending]
+            ['signOut', 'somebody', 'mina', ending],
+            ['minor', 'somebody', 'mina', marking]
         ]);
     });
 
-    it('answers anybody who may not run the games as a page that is not there, on the games and on a switch', async () =>
+    it('answers anybody who may not run the games as a page that is not there, on the games, a switch, a game ended and a table closed', async () =>
     {
         const told: unknown[][] = [];
         const app = owned(told, null);
         const off = { on: false, reason: 'A bug in the deal, off until it is fixed' };
-        const answers = [await sent(app, '/play'), await sent(app, '/play/games/ludo', off)];
+        const ending = { reason: 'Stuck after a fault in the sweep' };
+        const answers = [
+            await sent(app, '/play'),
+            await sent(app, '/play/games/ludo', off),
+            await sent(app, '/play/matches?list=stuck&game=ludo&cursor=abc'),
+            await sent(app, '/play/tables?game=hokm'),
+            await sent(app, '/play/matches/m1/void', ending),
+            await sent(app, '/play/tables/t1/close', ending)
+        ];
 
         for (const response of answers)
         {
@@ -1061,7 +1072,19 @@ describe('the owner\'s view of the vault', () =>
             expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
         }
 
-        expect(told).toEqual([['play', 'somebody'], ['switchGame', 'somebody', 'ludo', off]]);
+        expect(told).toEqual([
+            ['play', 'somebody'],
+            ['switchGame', 'somebody', 'ludo', off],
+            ['liveMatches', 'somebody', { list: 'stuck', game: 'ludo', cursor: 'abc' }],
+            ['waitingTables', 'somebody', { game: 'hokm' }],
+            ['voidMatch', 'somebody', 'm1', ending],
+            ['closeTable', 'somebody', 't1', ending]
+        ]);
+        expect((await sent(app, '/play/matches?list=open')).status).toBe(422);
+        expect((await sent(app, '/play/matches/m1/void', { reason: 'no' })).status).toBe(422);
+        expect((await sent(app, '/play/matches/m1/void', {})).status).toBe(422);
+        expect((await sent(app, '/play/tables/t1/close', { reason: 'no' })).status).toBe(422);
+        expect((await sent(app, '/play/tables/t1/close', {})).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: 'no', reason: 'A bug in the deal' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false, reason: 'no' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false })).status).toBe(422);
@@ -1115,6 +1138,9 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/people/mina/clear', { part: 'avatar', reason: 'An old picture' })).status).toBe(422);
         expect((await sent(app, '/people/mina/clear', { part: 'bio', reason: '  ' })).status).toBe(422);
         expect((await sent(app, '/people/mina/sign-out', {})).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { reason: 'Said they are fifteen' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { minor: 'yes', reason: 'Said they are fifteen' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { minor: true, reason: 'ok' })).status).toBe(422);
         expect((await sent(app, `/people/mina/history?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
@@ -1138,13 +1164,18 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/people/:handle/lift': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/clear': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/sign-out': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/minor': (bad) => [`);
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
         expect(queries).toContain(`'/admin/people/:handle/history': ['cursor']`);
         expect(queries).toContain(`'/admin/reports': ['status', 'cursor']`);
+        expect(queries).toContain(`'/admin/play/matches': ['list', 'game', 'cursor']`);
+        expect(queries).toContain(`'/admin/play/tables': ['game', 'cursor']`);
         expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
+        expect(bodies).toContain(`'/admin/play/matches/:id/void': (bad) => [`);
+        expect(bodies).toContain(`'/admin/play/tables/:id/close': (bad) => [`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

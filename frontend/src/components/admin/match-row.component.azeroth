@@ -1,0 +1,123 @@
+import { outranks, type StaffRole, type StuckKind } from '../../../../backend/src/domains/admin/roles.ts';
+import type { AdminMatches } from '../../../../backend/src/schemas.ts';
+import { GAMES } from '../../data/games.ts';
+import { nuraOf } from '../../lib/nura.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import When from './when.component.azeroth';
+
+export type AdminMatchRow = AdminMatches['rows'][number];
+
+export interface PlayReader
+{
+    handle: string;
+    role: StaffRole | null;
+}
+
+const STUCK_WORDS: Record<StuckKind, MessageKey> = {
+    'no-engine': 'admin.play.stuck.no-engine',
+    'no-turn': 'admin.play.stuck.no-turn',
+    'no-autoplay': 'admin.play.stuck.no-autoplay',
+    refused: 'admin.play.stuck.refused',
+    threw: 'admin.play.stuck.threw'
+};
+
+export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayReader; onEnd?: () => void })
+{
+    const locale = useLocale();
+
+    derived known = GAMES.find((one) => one.id === props.match.game) ?? null;
+
+    derived name = known === null ? props.match.game : locale.t(known.nameKey);
+
+    derived pace = locale.t(props.match.mode === 'live' ? 'games.mode.live' : 'games.mode.turns');
+
+    derived started = locale.t('admin.play.match.started', { when: locale.relative(Date.parse(props.match.startedAt)) });
+
+    derived deadline = props.match.deadline ?? '';
+
+    derived timed = deadline !== '';
+
+    derived turn = timed ? locale.t('admin.play.match.turn', { when: locale.relative(Date.parse(deadline)) }) : '';
+
+    derived staked = props.match.stake !== undefined;
+
+    derived stake = props.match.stake === undefined ? '' : `${ locale.n(nuraOf(props.match.stake), { maximumFractionDigits: 4 }) } NURA`;
+
+    derived stuck = props.match.stuck ?? null;
+
+    derived stranded = stuck !== null;
+
+    derived why = stuck === null ? '' : locale.t(STUCK_WORDS[stuck.kind]);
+
+    derived since = stuck === null ? '' : stuck.since;
+
+    derived sinceSaid = stuck === null ? '' : locale.t('admin.play.match.since', { when: locale.relative(Date.parse(stuck.since)) });
+
+    derived reader = props.reader ?? null;
+
+    derived playing = reader !== null && props.match.players.some((one) => one.handle === reader.handle);
+
+    derived above = reader !== null && props.match.players.some((one) => !outranks(reader.role, one.staff ?? null));
+
+    derived endable = reader !== null && props.onEnd !== undefined && !playing && !above;
+
+    derived barred = reader !== null && (playing || above);
+
+    derived barredWhy = locale.t(playing ? 'admin.play.end.yours' : 'admin.play.end.above');
+
+    derived endLabel = locale.t('admin.play.endLabel', { game: name, code: props.match.code.toUpperCase() });
+
+    <div class="flex flex-col gap-2 px-4 py-3" data-match={ props.match.id }>
+        <div class="flex items-center gap-3">
+            <Show when={ known } let={ shown } fallback={ <span class="h-10 w-10 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
+                <GameIcon game={ shown.id } class="h-10 w-10 shrink-0" />
+            </Show>
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+                <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span class="truncate text-ui-sm font-semibold text-text" data-name>{ name }</span>
+                    <span class="tally text-ui-xs font-semibold uppercase tracking-wide text-muted" data-code>{ props.match.code }</span>
+                    <Show when={ staked }>
+                        <span class="flex" data-stake><Badge text={ stake } tone="madder" /></span>
+                    </Show>
+                    <Show when={ stranded }>
+                        <span class="flex" data-stuck-mark><Badge dot text={ locale.t('admin.play.stuck') } tone="danger" /></span>
+                    </Show>
+                </span>
+                <span class="facts text-ui-xs text-faint">
+                    <span data-pace>{ pace }</span>
+                    <When at={ props.match.startedAt } said={ started } />
+                    <Show when={ timed }>
+                        <When at={ deadline } said={ turn } />
+                    </Show>
+                </span>
+            </div>
+            <Show when={ endable }>
+                <div class="ms-auto flex shrink-0 items-center" data-end>
+                    <Button variant="destructive" size="sm" label={ endLabel } onClick={ () => props.onEnd?.() }>{ locale.t('admin.play.end') }</Button>
+                </div>
+            </Show>
+        </div>
+        <ul class="flex flex-wrap gap-x-3 gap-y-1.5" data-players>
+            <For each={ props.match.players } key={ (one) => one.seat } let={ one }>
+                <li class="flex min-w-0 items-center gap-1.5">
+                    <Avatar person={ one } size="xs" />
+                    <span class="truncate text-ui-xs text-muted" dir="ltr">{ one.handle }</span>
+                </li>
+            </For>
+        </ul>
+        <Show when={ stranded }>
+            <p class="flex flex-wrap items-center gap-x-2 text-ui-xs text-danger" data-stuck>
+                <span>{ why }</span>
+                <When at={ since } said={ sinceSaid } />
+            </p>
+        </Show>
+        <Show when={ barred }>
+            <p class="text-ui-xs text-faint" data-end-barred>{ barredWhy }</p>
+        </Show>
+    </div>
+}

@@ -304,7 +304,8 @@ raw, because no repository can say it - and it is the first statement of the tra
 in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
 tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*), and so
 does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*),
-and so do a host's removal and an invitation (*The host can take somebody out of a chair*).
+and so do a host's removal and an invitation (*The host can take somebody out of a chair*), and the
+staff's close of a table waiting (`shutIn`, *Play* in `.claude/rules/admin.md`).
 It is the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person
 never meets it. Under it the start reads the table and the chairs again and asks every question of THAT
 read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -
@@ -797,8 +798,15 @@ Under the lock, in order:
   put out of chips search as they always did while the game goes on without them. The table
   service is handed the question (`playing`), as a leave is handed its walkout, because a
   table knows no game. It is asked first, under the searcher's own lock (*One live search at a
-  time*) and before the game's, so two searches of one person that cross the start of the game
-  the first one filled meet one answer. A turn-based search asks nothing, and a turn-based game
+  time*) and before the game's, and asked again when no table the searcher waits at is found
+  (*Already waiting*), so two searches of one person that cross the start of the game the first
+  one filled meet one answer. Asked once, they did not: the game started after the second search
+  had found no game and before it looked for a wait, a table with a game on is not one anybody
+  waits at, and the second search opened a table of its own. A full run of the database specs
+  met it once; `quick.db.spec.ts` now parks a search at the game's lock while the game starts,
+  and with the second question taken out it opens a second table every time. The start takes
+  the table's lock and not the game's, which is why no lock closes the window and a second
+  question does. A turn-based search asks nothing, and a turn-based game
   is not one being played here: a game of a move a day is not one somebody sits at. The browser
   goes to the table it is given and, when that is another game than the one looked for, says
   "Your Backgammon game is still on" (`quickMatch.stillPlaying`). `quick.db.spec.ts`
@@ -2500,7 +2508,9 @@ nothing had read it since. `tests/engine-seam.spec.ts` covers the whole shared p
 over, and `asMatch` sent that null as `turn: 0`: seat 0 on turn in every finished game - in the
 answer to the play that ended it, in every read after, in the last `game` push and on a watcher's
 board - a fact the server made up. `matchView.turn` is optional now and absent then, the way `mine`
-is absent for somebody with no chair and `yourTurn` for a table with no go to be had. Nothing on
+is absent for somebody with no chair and `yourTurn` for a table with no go to be had. A game the
+staff ended is finished with its engine's state still in the middle of a turn, so `asMatch` asks
+`finishedAt` before it asks `turnOf`. Nothing on
 screen ever showed the zero, which is how it lasted: every reader asks `finishedAt` first, and the
 ludo canvas, which was handed seat 0's colour, only tints a die a finished board does not have. What
 a reader must not do is compare `mine` with `turn` before asking whether `mine` is there: somebody
@@ -7028,7 +7038,9 @@ suffix and never appear whole in the source.
 `declareResult` writes the result line into the table's own thread, and it lives in a module of
 its own (`endingOf` in `match/declare.ts`) because a game ends three ways - somebody plays the last
 move or gives up, the sweep forfeits the last player holding a turn, or somebody walks out - and all
-three have to say it identically. A game somebody won names them; a game nobody won
+three have to say it identically. A fourth says something else: a game the staff ended as no
+contest (`voided` in its state, `.claude/rules/admin.md`, *Play*) says so
+(`chat.line.result.void`) and names nobody, whatever its seats or its escrow say. A game somebody won names them; a game nobody won
 (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and must not, because the engine
 calls the last player standing a winner so the board can stop. A table played for NURA is the one
 exception, and only once its stakes are being paid: the line names whoever they were paid to, read

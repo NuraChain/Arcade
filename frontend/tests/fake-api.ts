@@ -16,7 +16,9 @@ import type {
     Account,
     AdminPeople,
     AdminPerson,
+    AdminMatches,
     AdminPlay,
+    AdminTables,
     AdminReport,
     AdminReports,
     AdminVault,
@@ -41,7 +43,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, PLAY_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -119,6 +121,7 @@ interface TableWire
     matchId?: string;
     yourTurn?: boolean;
     removed?: boolean;
+    closedBy?: 'staff';
     keptOut?: string[];
     quick?: boolean;
     stake?: string;
@@ -408,7 +411,18 @@ const staffFresh = () => ({
 
 type PlayStatus = AdminPlay['games'][number]['status'];
 
-const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })) });
+const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })), stuck: 0 });
+
+const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'], over: [] as string[], shut: [] as string[] });
+
+const pageOf = <T extends { id: string }>(rows: readonly T[], cursor: string | undefined) =>
+{
+    const from = cursor === undefined ? 0 : rows.findIndex((one) => one.id === cursor) + 1;
+    const page = rows.slice(from, from + PLAY_PAGE);
+    const last = page.at(-1);
+
+    return { rows: structuredClone(page), ...(rows.length > from + PLAY_PAGE && last !== undefined ? { cursor: last.id } : {}) };
+};
 
 const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner' : server.staff.members.find((one) => one.handle === handle)?.role ?? null);
 
@@ -714,6 +728,7 @@ export const server =
     accounts: accountsFresh(),
     desk: reportsFresh(),
     play: playFresh(),
+    playing: playingFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -881,6 +896,7 @@ export const server =
         server.accounts = accountsFresh();
         server.desk = reportsFresh();
         server.play = playFresh();
+        server.playing = playingFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1357,6 +1373,22 @@ export const client =
             return accountView(params.handle);
         },
 
+        async minor({ params, input }: { params: { handle: string }; input: { minor: boolean; reason: string } })
+        {
+            server.calls.push(`admin.minor ${ params.handle } ${ input.minor } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+
+            if (accountView(params.handle).minor !== input.minor)
+            {
+                server.accounts.about[params.handle] = { ...server.accounts.about[params.handle], minor: input.minor, ...(input.minor ? { strangers: false } : {}) };
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'minor', person: params.handle, reason: input.reason, details: { to: input.minor ? 'minor' : 'adult' } });
+            }
+
+            return accountView(params.handle);
+        },
+
         async reports({ query }: { query: { status?: ReportList; cursor?: string } })
         {
             server.calls.push(`admin.reports ${ JSON.stringify(query) }`);
@@ -1438,6 +1470,97 @@ export const client =
                 staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'game', reason: input.reason, details: { game: params.game, from: held.status, to } });
                 held.status = to;
             }
+
+            return structuredClone(server.play);
+        },
+
+        async liveMatches({ query }: { query: { list?: 'all' | 'stuck'; game?: string; cursor?: string } })
+        {
+            server.calls.push(`admin.liveMatches ${ JSON.stringify(query) }`);
+            staffGate('play');
+
+            const rows = server.playing.matches.filter((one) => (query.list !== 'stuck' || one.stuck !== undefined) && (query.game === undefined || one.game === query.game));
+
+            return pageOf(rows, query.cursor);
+        },
+
+        async waitingTables({ query }: { query: { game?: string; cursor?: string } })
+        {
+            server.calls.push(`admin.waitingTables ${ JSON.stringify(query) }`);
+            staffGate('play');
+
+            return pageOf(server.playing.tables.filter((one) => query.game === undefined || one.game === query.game), query.cursor);
+        },
+
+        async voidMatch({ params, input }: { params: { id: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.voidMatch ${ params.id } ${ input.reason }`);
+            staffGate('play');
+
+            const actor = staffRoleOf(server.me);
+            const held = server.playing.matches.find((one) => one.id === params.id);
+
+            if (held === undefined && server.playing.over.includes(params.id))
+            {
+                throw staffRefused('staff-match-over', 'That game has already ended.');
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            if (held.players.some((one) => one.handle === server.me))
+            {
+                throw staffRefused('staff-in-game', 'Nobody ends a game they are playing in.');
+            }
+
+            if (held.players.some((one) => !outranks(actor, one.staff ?? null)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            server.playing.matches = server.playing.matches.filter((one) => one.id !== held.id);
+            server.playing.over.push(held.id);
+            server.play.games = server.play.games.map((one) => (one.game === held.game ? { ...one, matches: Math.max(0, one.matches - 1) } : one));
+            server.play.stuck = Math.max(0, server.play.stuck - (held.stuck === undefined ? 0 : 1));
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'void', reason: input.reason, details: { match: held.id, game: held.game, table: held.code } });
+
+            return structuredClone(server.play);
+        },
+
+        async closeTable({ params, input }: { params: { id: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.closeTable ${ params.id } ${ input.reason }`);
+            staffGate('play');
+
+            const actor = staffRoleOf(server.me);
+            const held = server.playing.tables.find((one) => one.id === params.id);
+
+            if (held === undefined && server.playing.shut.includes(params.id))
+            {
+                throw staffRefused('staff-table-closed', 'That table has already closed.');
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            if (held.people.some((one) => one.handle === server.me))
+            {
+                throw staffRefused('staff-seated', 'Nobody closes a table they sit at.');
+            }
+
+            if (held.people.some((one) => !outranks(actor, one.staff ?? null)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            server.playing.tables = server.playing.tables.filter((one) => one.id !== held.id);
+            server.playing.shut.push(held.id);
+            server.play.games = server.play.games.map((one) => (one.game === held.game ? { ...one, tables: Math.max(0, one.tables - 1) } : one));
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'close', reason: input.reason, details: { id: held.id, table: held.code, game: held.game } });
 
             return structuredClone(server.play);
         }

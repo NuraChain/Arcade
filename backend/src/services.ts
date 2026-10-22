@@ -20,7 +20,7 @@ import { isNotice, NOTICE_OF, type Notice } from './domains/notify/notices.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
-import { createMatchService, type MatchLoad } from './domains/match/service.ts';
+import { createMatchService, voidedOf, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, WATCH_TAIL } from './domains/match/turns.ts';
 import { createWatchService } from './domains/match/watch.ts';
 import { createParties, type PartyWhy } from './domains/party/parties.ts';
@@ -38,7 +38,7 @@ import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
-import { createPlayService } from './domains/admin/play.ts';
+import { createPlayService, stuckKindOf, type Stuck } from './domains/admin/play.ts';
 import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
@@ -638,6 +638,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.removed = true;
         }
+        if (row.closed_by_staff)
+        {
+            summary.closedBy = 'staff';
+        }
         if (row.quick)
         {
             summary.quick = true;
@@ -698,7 +702,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const asMatch = (load: MatchLoad) =>
     {
         const state = load.state;
-        const turn = match.turnOf(load.match.game, state);
+        const turn = load.match.finishedAt === null ? match.turnOf(load.match.game, state) : null;
 
         /**
          * The seats come from `match_players`, not from the engine's state.
@@ -752,6 +756,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         if (load.match.outcome !== null)
         {
             view.outcome = load.match.outcome;
+        }
+        if (voidedOf(state))
+        {
+            view.voided = true;
         }
         if (load.match.finishedAt !== null)
         {
@@ -978,7 +986,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const desk = createReportsService(db, config.adminWallet);
 
-    const plays = createPlayService(db);
+    const plays = createPlayService(db, config.adminWallet);
+
+    const stuckNow = async () =>
+    {
+        const live = new Set(await plays.stillLive([...stuckMatches.keys()]));
+
+        for (const id of [...stuckMatches.keys()])
+        {
+            if (!live.has(id))
+            {
+                stuckMatches.delete(id);
+            }
+        }
+
+        return stuckMatches;
+    };
+
+    const playNow = async () => ({ games: await plays.games(), stuck: (await stuckNow()).size });
 
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
@@ -1057,6 +1082,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             live?.chatChanged(before.conversation_id, me);
         }
         live?.tableChanged(before.id, people);
+    };
+
+    const afterVoid = async (matchId: string, ended: { tableId: string; before: number }) =>
+    {
+        await courtesy('game push', () => pushMatch(matchId, ended.before));
+
+        const load = await match.peek(matchId);
+
+        if (load !== null)
+        {
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+        }
+
+        await courtesy('result line', () => declareResult(matchId));
+        live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
+        stakes.kick();
     };
 
     const reportOf = async (id: string) =>
@@ -1177,9 +1218,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             if (!expired.played)
             {
                 stuck.push({ matchId: expired.matchId, game: expired.game, reason: expired.reason });
+
+                if (!stuckMatches.has(expired.matchId))
+                {
+                    stuckMatches.set(expired.matchId, { since: new Date(), kind: stuckKindOf(expired.reason) });
+                }
+
                 continue;
             }
 
+            stuckMatches.delete(expired.matchId);
             played += 1;
             await courtesy('game push', () => pushMatch(expired.matchId, expired.before));
 
@@ -1204,6 +1252,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     let struck: ReadonlySet<string> = new Set<string>();
+
+    const stuckMatches = new Map<string, Stuck>();
 
     const sweepTables = async (): Promise<TableSweep> =>
     {
@@ -1757,6 +1807,44 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return await personOf(handle);
             },
 
+            async minor(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, changed } = await accounts.minor(actor, handle, input.minor, input.reason);
+
+                if (input.minor)
+                {
+                    for (const seat of await table.mine(id))
+                    {
+                        if (seat.stake !== null && seat.match_id === null)
+                        {
+                            await courtesy('paid table left', () => walkAway(id, seat.id, false));
+                        }
+                    }
+
+                    for (const { matchId, ended } of await plays.voidPaid(actor, id, input.reason, match.voidIn))
+                    {
+                        await afterVoid(matchId, ended);
+                    }
+                }
+
+                if (changed)
+                {
+                    await courtesy('party revalidate', () => party.revalidate(id));
+                    live?.edgesChanged(id);
+                    live?.selfChanged(id, 'vault');
+                    await courtesy('profile changed', () => ringProfile(id));
+                }
+
+                return await personOf(handle);
+            },
+
             async reports(me, query)
             {
                 return await ableTo(me, 'reports') === null ? null : await desk.queue(query.status ?? 'received', query.cursor ?? null);
@@ -1794,7 +1882,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async play(me)
             {
-                return await ableTo(me, 'play') === null ? null : { games: await plays.games() };
+                return await ableTo(me, 'play') === null ? null : await playNow();
             },
 
             async switchGame(me, game, input)
@@ -1812,7 +1900,53 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     live?.catalogueChanged();
                 }
 
-                return { games: await plays.games() };
+                return await playNow();
+            },
+
+            async liveMatches(me, query)
+            {
+                return await ableTo(me, 'play') === null
+                    ? null
+                    : await plays.matches(query.list ?? 'all', query.game ?? null, query.cursor ?? null, await stuckNow());
+            },
+
+            async waitingTables(me, query)
+            {
+                return await ableTo(me, 'play') === null ? null : await plays.tables(query.game ?? null, query.cursor ?? null);
+            },
+
+            async voidMatch(me, id, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const ended = actor === null ? null : await plays.voidMatch(actor, id, input.reason, match.voidIn);
+
+                if (ended === null)
+                {
+                    return null;
+                }
+
+                await afterVoid(id, ended);
+
+                return await playNow();
+            },
+
+            async closeTable(me, id, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const closed = actor === null ? null : await plays.closeTable(actor, id, input.reason, table.shutIn);
+
+                if (closed === null)
+                {
+                    return null;
+                }
+
+                if (closed.conversationId !== null)
+                {
+                    live?.chatChanged(closed.conversationId);
+                }
+                live?.tableChanged(id, await table.peopleAt(id));
+
+                return await playNow();
             }
         },
 

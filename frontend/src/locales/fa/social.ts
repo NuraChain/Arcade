@@ -211,6 +211,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.line.invite': '{who} دعوت شد',
     'chat.line.result': { one: '{winners} برد', other: '{winners} بردن' },
     'chat.line.result.none': 'بازی بدون برنده تموم شد',
+    'chat.line.result.void': 'تیم نورا بازی رو بی‌نتیجه تموم کرد',
     'chat.line.group.created': '{who} این گروه رو ساخت',
     'chat.line.group.joined': '{who} اومد توی گروه',
     'chat.line.group.left': '{who} رفت',

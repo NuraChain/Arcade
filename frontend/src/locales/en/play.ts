@@ -213,6 +213,7 @@ export const play = {
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',
     'play.closed': 'This table has closed.',
     'play.closedLead': 'Whoever opened it ended it. Open another whenever you like.',
+    'play.closedLead.staff': 'Nura’s team closed it. Open another whenever you like.',
 
     'play.table.chat': 'Table chat',
     'watch.title': 'You are watching',
@@ -265,6 +266,8 @@ export const play = {
     'match.over.voidLead': 'It counts only against whoever stopped playing.',
     'match.over.voidMine': 'This one did not count for you: your rating and streak are as they were.',
     'match.over.voidPaid': 'The game ended too early to move your rating or your streak.',
+    'match.over.staff': 'Nura’s team ended this game.',
+    'match.over.staffLead': 'It counts for nobody: no rating moved and nobody earned anything from it.',
     'match.check': 'Check this game',
     'match.rematch': 'Play again',
     'match.money.won': 'You won {amount} NURA.',

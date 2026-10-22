@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
@@ -44,6 +44,11 @@ const walkedOut = (tableId: string) => ({
         seats: COLOURS.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: seat === 0, side: seat }))
     }
 } as MatchView);
+
+beforeAll(async () =>
+{
+    await import('../src/components/games/table-chat.component.azeroth');
+});
 
 beforeEach(() =>
 {

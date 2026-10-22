@@ -104,7 +104,9 @@ there for the one after it:
 - Every table they sit at is left as they would leave it themselves, with the forfeit
   (`walkAway(target, table, true)`, the leave port's own path, each through `courtesy`): a live game
   is lost as a walkout, and the others are told and play on or are shown the result; at a paid
-  table that loses the stake, as any walkout does; a waiting table stands them up.
+  table that loses the stake, as any walkout does; a waiting table stands them up. A table whose
+  stakes are being locked cannot be left (`paid-locking`), so they stay in that chair, and when the
+  lock lands no game is dealt and every stake goes back (*Marking somebody under 18*, below).
 - Then, in one transaction with the target's row locked: the account is marked
   (`users.is_suspended`), the suspension is written (`suspensions`, one row an account, ending
   `now()` and the days later, or never), every live session is ended, and the log's row says the
@@ -155,6 +157,39 @@ left as it is, and with none live nothing is written. A wallet account can sign 
 whose session is the whole account, cannot.
 
 `admin-people.db.spec.ts` (*what the staff take off a profile, and every session ended*) holds both.
+
+## Marking somebody under 18
+
+**`POST /api/admin/people/:handle/minor`, `{ minor, reason }`**, an action of People, so a moderator
+marks players, held to the note's rank rule (a moderator marks players, an admin players and
+moderators, the owner anybody but themselves). In one transaction with the person's row locked:
+`users.is_minor` is set, marking them under 18 turns `allow_stranger_messages` off with it (the
+`users_minor_no_strangers` CHECK holds the pair), and the log's row is kind `minor`, about the
+person, with `{ to: 'minor' }` or `{ to: 'adult' }`. A mark they already carry changes nothing,
+writes nothing and rings nobody. Marked an adult, they keep strangers off until they turn them on
+in Settings themselves.
+
+**What being under 18 takes away is what the product already refuses a minor** (D7): no messages
+from strangers either way and offline to strangers (`social/policy.ts`), never seated beside an adult
+stranger by quick play, and no playing for NURA (`paid-minor`). The mark makes the rest of that true
+at once, each step through `courtesy`: they are stood up from every table played for NURA that waits
+(`walkAway`, no forfeit, since nothing has begun there), and every paid game they are playing ends
+as no contest with every stake given back (`voidPaid` in `play.ts`, through the same `voided` as
+End game, one `void` row a game with the mark's reason). The others in such a game are asked no
+rank, because giving every stake back costs nobody anything. A free table and a free game are left as
+they are, as sitting down by a link always was. Then a team-up with a stranger ends
+(`party.revalidate`), and the hub (`edgesChanged`), their vault page and their profile are rung.
+
+**A lock already on its way refunds rather than deals.** A table whose stakes are being locked cannot
+be left (`paid-locking`), so a player sitting there stays; when the lock lands, `match.begin` deals
+the game only if nobody it locked for has since been marked under 18 or suspended, and otherwise the
+escrow is `refunding` (`.claude/rules/stakes.md`, *The worker*). A suspension meets the same moment
+and is answered the same way.
+
+`admin-minor.db.spec.ts` holds the mark both ways, a mark that changes nothing, the rank rule, who is
+answered as nothing, a team-up with a stranger ending and a free table and game left alone;
+`stake.db.spec.ts` (*a player marked under 18, or suspended*) the paid game ended, the paid table
+stood up from, and a lock that lands after a mark or a suspension.
 
 ## Reports
 
@@ -217,9 +252,89 @@ game can start here again once it is back.", under the clock and not the green d
 Start, so nobody presses one to be refused; Ready stays, and Start comes back when the game does.
 Its leaderboard stays: a board of results needs nothing to be playable.
 
+**What is being played, and what waits.** `GET /api/admin/play/matches?list=&game=&cursor=` lists
+the games being played newest first, fifty a page by the log's keyset over `(started_at, id)`: the
+game, the table's code and pace, when it started, when the turn runs out (`deadline`), its stake,
+and who plays in which seat. `GET /api/admin/play/tables?game=&cursor=` lists the tables waiting
+for a game the same way over `(created_at, id)`: open with no game on, the host (none once the host
+has left), who sits in which chair, the chairs taken of the seats, who may sit, whether quick play
+opened it, and its stake.
+A table a finished game left behind waits again; a closed one is gone.
+
+**A game the sweep cannot play is stuck, and says why.** The turn sweep postpones a match it cannot
+play (no engine for its game, nobody on turn, no turn it can play for the seat, a turn the game
+refuses, or a throw) and logs `unplayable match`; it also keeps each one in memory with when it
+first met it and the kind of reason (`STUCK_KINDS` in `roles.ts`, `stuckKindOf` in `play.ts`: what
+follows the colon, which can be an error's message, never leaves the server). `list=stuck` is the
+ones still live, and Play counts them (`stuck` on its answer); one the sweep plays after all, or
+that finishes, is forgotten. It is memory for the reason the table sweep's strikes are: a restart
+forgets it, and the sweep meets a stuck game again at its next deadline, a turn after its last.
+
+**A game being played can be ended as no contest** (`POST /api/admin/play/matches/:id/void`,
+`{ reason }`, D10). `voidIn` in the match service is the finish, in one transaction with the
+match row locked (`pessimistic_write`, and never the table's lock, which a finish never takes): the
+match is finished `abandoned` with no winner and no deadline; its revision moves on by one, with
+`voided: true` written into the state beside `rev`, and one ledger row at that revision (seat -1,
+nobody's id, kind `forfeit`, `{ verb: 'void' }`, no events, `VOIDED`), so every catch-up and every
+push reaches the end; every seat is `void` with no XP and no rating pair, a seat that had walked
+out as well, so the recorder never runs and nothing reaches `player_stats` or the achievements;
+the chairs stop being ready; and an escrow that is `open` becomes `refunding`, every stake going
+back in full. The admin's half (`voidMatch` in `play.ts`) writes the log's row in the same
+transaction, kind `void`, no person, `{ match, game, table }` with the table's code. Then each seat
+is pushed the end, a turn notice is taken back, the table's chat says
+`chat.line.result.void` ("Nura's team ended it as no contest"), the table is
+rung, the stake worker is nudged, and the answer is Play as it now stands (a stuck game it ended
+is forgotten by the next read, as one that finishes is).
+
+**It is held to the rank rule against everybody in the game**, asked before anything is written:
+nobody ends a game they play in (`staff-in-game`, 409) or one with anybody at or above their
+role in it (`staff-rank`), so an admin ends the games of players and moderators and the owner
+any game but their own. The owner is known by the wallet the server names and a suspended account
+holds no role (`STAFF_OF` in `play.ts`, one expression for the rank and for the list). A game
+already over is `staff-match-over` (409), asked under the row's lock, so two of the staff ending
+one game write one end; a game that is not there, and an id that is no uuid, are the page that is
+not there. The list of games being played names each player's role on the staff (`staff`), as a
+report names its two people's, so the page offers the end only where it would be taken.
+
+**A game ended this way says so wherever it is read.** A match view of it carries `voided: true`
+and names nobody on turn: the engine's state was not finished by the engine, so `asMatch` asks
+`finishedAt` before it asks `turnOf`. A play in it is `game-over`. The player's history lists it
+as `void`. The proof of a paid one leaves the end's ledger row out (`isVoided`), so every move
+still checks in the browser.
+
+**A table waiting can be closed by the staff** (`POST /api/admin/play/tables/:id/close`,
+`{ reason }`, D10). `shutIn` in the table service is the close, under the table's lock as the
+host's own close is (`lockTable`): a table that is not there is the page that is not there, one
+already closed is `staff-table-closed` (409), and one with a game on or whose stakes are being
+locked on the chain is `staff-table-playing` (409), because a game under way is ended as no contest
+first and a lock already sent is the chain's to finish. Otherwise the table is closed (`status`,
+`closedAt`), and the admin's half (`closeTable` in `play.ts`) writes the log's row in the same
+transaction: kind `close`, no person, `{ id, table, game }` with the table's code. Then the table's
+chat and the table are rung, and the answer is Play as it now stands. Nothing is locked at a table
+played for NURA while it waits, so nothing is refunded; the Readies its chairs signed are never used.
+
+**It is held to the rank rule against everybody in a chair**, asked before the table is touched:
+nobody closes a table they sit at (`staff-seated`, 409) or one where anybody sits at or above their
+role (`staff-rank`), so an admin closes the tables of players and moderators and the owner any table
+they do not sit at. The list of tables waiting names who sits in which chair with their role on the
+staff (`people`, by `STAFF_OF`, a suspended account holding none), so the page offers the close only
+where it would be taken. Two of the staff closing one table at once close it once: the second waits
+on the table's lock and finds it closed.
+
+**Whoever sits there is told who closed it.** A closed table that a `close` row of the log names
+reads `closedBy: 'staff'` (`closed_by_staff` in the table query, so `tables` takes no column, D16),
+and its page says "Nura’s team closed it. Open another whenever you like." where a table its host
+closed says whoever opened it ended it. Nobody is sent a notification (D8).
+
 `admin-play.db.spec.ts` holds the list, the switch, the refusals, the row lock (two switches parked
-on a held row) and everything new refused while a live game plays on; `stake.db.spec.ts` the paid
-table; `realtime-hub.spec.ts` the pulse.
+on a held row) and everything new refused while a live game plays on; `admin-void.db.spec.ts` the
+end of a game: what is written and what is not, who is told, a seat that had walked out, the
+escrow, a stuck game, every refusal, a suspended member of the staff, a move holding the row, two
+ends at once and no table lock; `admin-close.db.spec.ts` the close of a table waiting: what is
+written, a host's own close saying nothing of the staff, the refusals, the people at each table with
+their roles, a close waiting on the table's lock and two closes at once; `stake.db.spec.ts` the paid
+table and a paid game ended, refunded by the worker with its proof whole; `realtime-hub.spec.ts` the
+pulse.
 
 ## Money
 
@@ -300,6 +415,15 @@ while they are signed in somewhere, and tells the staff that a guest cannot come
 the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
 what it said ("It said: …", in its own direction).
 
+Between the two (`PersonAge`) a panel says what being under 18 means here and offers one press with a
+reason: "Mark as under 18" for an adult, asked as a destructive question that says what stops and
+what ends (messages from strangers, playing for NURA, the paid tables they wait at and the paid games
+they play, with every stake given back), and "Mark as an adult" for a minor, asked as one that loses
+nothing. Said yes to, the Minor badge, the strangers line and the history's row change at the press,
+the toast says so once the server has, and a refusal takes it back in the refusal's words and keeps
+the reason. The log says "mina marked reza.t as under 18." and "alex marked reza.t as an adult.",
+under the chip "Age".
+
 **Reports** is the queue, waiting first: a filter in the address (`status`: Waiting, the default and
 never written, Reviewed, Acted on, All), the waiting count on its chip, and a row for each report as
 who reported whom (both handles set apart, `handleParts`), what for, when, whether a message came
@@ -328,7 +452,33 @@ characters or more, and the sheet says so where it is typed), a pause as a destr
 that says what stops and what goes on, turning on as one that loses nothing. Said yes to, the
 game's new status is shown at the press, said once the server has ("Ludo is paused."), and a
 refusal takes it back with the refusal's words. The log says "mina paused Ludo." and "alex turned
-Ludo back on.", the game in the reader's own words.
+Ludo back on.", the game in the reader's own words. Above the games a filter in the address
+(`view`) shows the games, the games being played, the tables waiting, and the stuck games, the
+last offered only while one is stuck; each chip counts its list. A game being played is its game,
+code, pace, when it started and when its turn runs out (exact under a pointer, `When`), its stake
+in madder and its players by handle in seat order; a stuck one wears a danger badge and says why
+and since when. A table waiting is its game, code, pace, who may sit, the chairs taken, quick play,
+when it opened and its stake. Both lists page with "Show older".
+
+A game being played offers "End game" to a reader who outranks everybody in it, and says why in
+its place where the reader plays in it or somebody there is at or above their role. The press
+asks why in the same sheet, as a destructive question that says the game counts for nobody and
+everybody stays at the table, and at a table played for NURA that every stake goes back. Said yes
+to, the game leaves the list at the press, is said once the server has ("The Ludo game at K7QX is
+over and counts for nobody."), and a refusal brings it back in the refusal's words; the list and
+the counts are read again either way. The log says "mina ended a game of Hokm at K7QX as no
+contest.", the code set apart as a handle is. A player's result card says "Nura's team ended this
+game." and that it counts for nobody (`match.over.staff`), in place of the words for a game that
+ended too early.
+
+A table waiting lists the people in its chairs by handle, the host with a crown, and offers "Close
+table" to a reader who outranks everybody at it, saying why in its place where the reader sits there
+or somebody there is at or above their role. The press asks why in the same sheet, as a destructive
+question that says nobody can sit or start a game there again and that whoever sits there is told
+Nura's team closed it. Said yes to, the table leaves the list at the press, is said once the server
+has ("The Ludo table K7QX is closed."), and a refusal brings it back in the refusal's words; the
+list and the counts are read again either way. The log says "mina closed the Ludo table K7QX.", the
+code set apart as a handle is.
 
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
@@ -344,12 +494,13 @@ from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
-`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page, and `paused-game.spec.ts` what a player
-sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
+`paused-game.spec.ts` what a player sees of a paused game and `play.spec.ts` of a table the staff closed; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch and the vault's amounts as bodies, the pause as spared (its body is a
-switch), the log's four query words, the people's three and the reports' two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
+note, a suspension, a lift, a clear, a sign-out, a mark under 18, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
+switch), the log's four query words, the people's three, the reports' two, the games being played's
+three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

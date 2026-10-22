@@ -353,6 +353,8 @@ export default component PlayPage()
 
     derived closed = table?.status === 'closed';
 
+    derived closedLead = locale.t(table?.closedBy === 'staff' ? 'play.closedLead.staff' : 'play.closedLead');
+
     derived dealing = behind && !showing && !unfetched;
 
     derived lobbyOpen = seated && !showing && !behind;
@@ -954,7 +956,7 @@ export default component PlayPage()
                 <EmptyState
                     icon="clock"
                     title={ locale.t('play.closed') }
-                    lead={ locale.t('play.closedLead') }
+                    lead={ closedLead }
                     action={ locale.t('app.nav.games') }
                     to="/app/games"
                     class="py-12"

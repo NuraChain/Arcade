@@ -38,7 +38,14 @@ import {
     reportsWaiting,
     adminPlay,
     adminGameInput,
+    adminMatches,
+    adminMatchesQuery,
+    adminTables,
+    adminTablesQuery,
+    adminVoidInput,
+    adminCloseInput,
     adminSignOutInput,
+    adminMinorInput,
     adminSuspendInput,
     adminVault,
     adminFeeInput,
@@ -428,6 +435,9 @@ export function buildApi(ports: Ports)
             signOut: routes.post('/people/:handle/sign-out', { input: adminSignOutInput, output: adminPerson },
                 async (context) => onlyAdmin(await ports.admin.signOut(context.principal.userId, context.params.handle, context.input))),
 
+            minor: routes.post('/people/:handle/minor', { input: adminMinorInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.minor(context.principal.userId, context.params.handle, context.input))),
+
             reports: routes.get('/reports', { query: adminReportsQuery, output: adminReports },
                 async (context) => onlyAdmin(await ports.admin.reports(context.principal.userId, context.query))),
 
@@ -444,7 +454,19 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.play(context.principal.userId))),
 
             switchGame: routes.post('/play/games/:game', { input: adminGameInput, output: adminPlay },
-                async (context) => onlyAdmin(await ports.admin.switchGame(context.principal.userId, context.params.game, context.input)))
+                async (context) => onlyAdmin(await ports.admin.switchGame(context.principal.userId, context.params.game, context.input))),
+
+            liveMatches: routes.get('/play/matches', { query: adminMatchesQuery, output: adminMatches },
+                async (context) => onlyAdmin(await ports.admin.liveMatches(context.principal.userId, context.query))),
+
+            waitingTables: routes.get('/play/tables', { query: adminTablesQuery, output: adminTables },
+                async (context) => onlyAdmin(await ports.admin.waitingTables(context.principal.userId, context.query))),
+
+            voidMatch: routes.post('/play/matches/:id/void', { input: adminVoidInput, output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.voidMatch(context.principal.userId, context.params.id, context.input))),
+
+            closeTable: routes.post('/play/tables/:id/close', { input: adminCloseInput, output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.closeTable(context.principal.userId, context.params.id, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

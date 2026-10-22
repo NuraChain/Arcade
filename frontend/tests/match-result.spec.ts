@@ -417,6 +417,28 @@ describe('a seat the match never judged', () =>
         expect(useLocale().t('match.over.voidLead')).not.toBe('match.over.voidLead');
     });
 
+    it('says a game Nura\'s team ended, and that it counts for nobody, in place of the words for one that ended too early', () =>
+    {
+        const ended = { ...voided, voided: true, players: voided.players.map((one) => ({ seat: one.seat, who: one.who, timeouts: 0, result: 'void' as const })) } as MatchView;
+        const container = renderTest(() => MatchResult({ match: ended, mine: 0 }) as Rendered).container;
+
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Nura’s team ended this game.');
+        expect(container.querySelector('[data-staffed]')?.textContent).toBe('It counts for nobody: no rating moved and nobody earned anything from it.');
+        expect(container.textContent).not.toContain('Ended too early to count.');
+        expect(container.textContent).not.toContain('It counts only against whoever stopped playing.');
+        expect(container.textContent).not.toContain('This one did not count for you');
+    });
+
+    it('says it in Persian', () =>
+    {
+        useLocale().setLocale('fa');
+        const ended = { ...voided, voided: true, players: voided.players.map((one) => ({ seat: one.seat, who: one.who, timeouts: 0, result: 'void' as const })) } as MatchView;
+        const container = renderTest(() => MatchResult({ match: ended, mine: 0 }) as Rendered).container;
+
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('تیم نورا این بازی رو تموم کرد.');
+        expect(container.querySelector('[data-staffed]')?.textContent).toBe('برای هیچ‌کس حساب نمی‌شه: ریتینگ کسی عوض نشد و کسی هم چیزی ازش نگرفت.');
+    });
+
     it('tells a player whose own seat did not count, in a game somebody else won', () =>
     {
         const partly = {

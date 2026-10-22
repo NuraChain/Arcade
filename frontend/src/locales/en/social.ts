@@ -208,6 +208,7 @@ export const social = {
     'chat.line.invite': '{who} was invited',
     'chat.line.result': { one: '{winners} won', other: '{winners} won' },
     'chat.line.result.none': 'The game ended with nobody winning',
+    'chat.line.result.void': 'Nura’s team ended it as no contest',
     'chat.line.group.created': '{who} started this group',
     'chat.line.group.joined': '{who} joined',
     'chat.line.group.left': '{who} left',

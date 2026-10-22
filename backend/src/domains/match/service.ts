@@ -9,6 +9,7 @@ import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import { maskOf } from '../stake/policy.ts';
 import { gameOff, gameOn, lockTable, stillLocking, tableRefusal } from '../table/service.ts';
 import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
@@ -174,6 +175,12 @@ function stateOf(match: Match)
 export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine, pokerEngine];
 
 export const FOLD_MAX = 8;
+
+export const VOIDED = { seat: -1, kind: 'forfeit', verb: 'void' } as const;
+
+export const voidedOf = (state: unknown) => (state as { voided?: unknown }).voided === true;
+
+const isVoided = (action: Pick<MatchAction, 'seat' | 'kind'>) => action.seat === VOIDED.seat && action.kind === VOIDED.kind;
 
 export const sameTurn = (engine: Engine, before: unknown, after: unknown) =>
     engine.turnOf(before) === engine.turnOf(after) && engine.turnKey(before) === engine.turnKey(after);
@@ -687,7 +694,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 const same = table !== null
                     && table.status !== 'closed'
                     && chairs.length === staked.length
-                    && chairs.every((chair, index) => chair.seat === staked[index].seat && chair.userId === staked[index].userId && chair.ready);
+                    && chairs.every((chair, index) => chair.seat === staked[index].seat && chair.userId === staked[index].userId && chair.ready)
+                    && !await tx.getRepository(User).createQueryBuilder('u')
+                        .where('u.id in (:...ids)', { ids: staked.map((one) => one.userId) })
+                        .andWhere('(u.is_minor or u.is_suspended)')
+                        .getExists();
                 const matchId = same ? await deal(tx, table, chairs, drawsAt(seeded(staked), OPENING)) : null;
 
                 await tx.getRepository(Escrow).update(
@@ -841,7 +852,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 order: { rev: 'ASC' }
             });
 
-            return { match, table, players: await seatsOf(db, matchId), actions };
+            return { match, table, players: await seatsOf(db, matchId), actions: actions.filter((action) => !isVoided(action)) };
         },
 
         playingAt: async (tx: EntityManager, me: string) =>
@@ -992,6 +1003,45 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         /** Who sat where, for callers outside this module that need it without a viewer. */
         seatsOf: async (matchId: string) => await seatsOf(db, matchId),
+
+        voidIn: async (tx: EntityManager, matchId: string) =>
+        {
+            const held = await tx.getRepository(Match).findOne({ where: { id: matchId }, lock: { mode: 'pessimistic_write' } });
+
+            if (held === null)
+            {
+                return null;
+            }
+
+            if (held.finishedAt !== null)
+            {
+                return 'over' as const;
+            }
+
+            const rev = held.rev + 1;
+            const state = { ...(stateOf(held) as Record<string, unknown>), rev, voided: true };
+
+            await tx.getRepository(Match).update(
+                { id: matchId },
+                { state, rev, finishedAt: () => 'now()', deadlineAt: null, outcome: 'abandoned', winnerSeat: null }
+            );
+            await tx.getRepository(MatchAction).insert({
+                matchId,
+                rev,
+                seat: VOIDED.seat,
+                userId: null,
+                kind: VOIDED.kind,
+                payload: { verb: VOIDED.verb },
+                events: [],
+                state,
+                idempotencyKey: null
+            });
+            await tx.getRepository(MatchPlayer).update({ matchId }, { result: 'void', xp: 0 });
+            await tx.getRepository(TableSeat).update({ tableId: held.tableId, ready: true }, { ready: false });
+            await tx.getRepository(Escrow).update({ matchId, state: 'open' }, { state: 'refunding', updatedAt: () => 'now()' });
+
+            return { tableId: held.tableId, game: held.game, before: held.rev };
+        },
 
         expireNext: async (): Promise<Expired | null> =>
         {

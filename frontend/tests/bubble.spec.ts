@@ -202,6 +202,27 @@ describe('a message bubble', () =>
         expect(card.querySelector('.text-win'), 'a game nobody won was given a trophy').toBeNull();
     });
 
+    it('says a game Nura\'s team ended, with no trophy, in the room\'s own words', () =>
+    {
+        const ended = () => text('m-ended', '', {
+            kind: 'result',
+            ref: { game: 'ludo', winners: [] },
+            line: { key: 'chat.line.result.void', params: { game: 'ludo' } }
+        });
+        const card = show(ended()).querySelector('.rounded-panel')!;
+        const [title, said] = [...card.querySelectorAll('.truncate')].map((one) => one.textContent?.trim());
+
+        expect([title, said]).toEqual(['Ludo', 'Nura’s team ended it as no contest']);
+        expect(card.querySelector('.text-win'), 'a game nobody won was given a trophy').toBeNull();
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = show(ended()).querySelector('.rounded-panel')!;
+
+        expect([...persian.querySelectorAll('.truncate')].map((one) => one.textContent?.trim())).toEqual(['منچ', 'تیم نورا بازی رو بی‌نتیجه تموم کرد']);
+    });
+
     it('says a forwarded message was forwarded', () =>
     {
         expect(show(text('m-1', 'look', { forwarded: true })).textContent).toContain('Forwarded');

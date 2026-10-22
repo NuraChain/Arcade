@@ -4,6 +4,7 @@ import { outranks, type ClearPart } from '../../../../backend/src/domains/admin/
 import type { AdminPerson } from '../../../../backend/src/schemas.ts';
 import { ApiError, client } from '../../api.ts';
 import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import PersonAge from '../../components/admin/person-age.component.azeroth';
 import PersonContent from '../../components/admin/person-content.component.azeroth';
 import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
 import Said from '../../components/admin/said.component.azeroth';
@@ -408,6 +409,25 @@ export default component PersonPage()
         return await attempt(sent, locale.t('admin.signOut.done', { name: called }), whyStaffRefused);
     };
 
+    const markedFor = (to: boolean, reason: string, at: number): Guess<AdminPerson> => (from) => ({
+        ...from,
+        minor: to,
+        strangers: to ? false : from.strangers,
+        history: [
+            { id: `minor-${ at }`, at: new Date(at).toISOString(), staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'minor', person: from.handle, reason, details: { to: to ? 'minor' : 'adult' } },
+            ...from.history
+        ]
+    });
+
+    const markNow = async (to: boolean, reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(markedFor(to, reason, runtime().clock.now()), () => client.admin.minor({ params: { handle: about }, input: { minor: to, reason } }), reread);
+
+        return await attempt(sent, locale.t(to ? 'admin.age.doneMinor' : 'admin.age.doneAdult', { name: called }), whyStaffRefused);
+    };
+
     const olderHistory = async () =>
     {
         const from = firstCursor;
@@ -691,6 +711,7 @@ export default component PersonPage()
                             <p class="text-ui-sm text-muted">{ locale.t('admin.person.actionsLead') }</p>
                         </div>
                         <PersonSuspension name={ calledBy } suspended={ suspended } guest={ guest } onSuspend={ suspendNow } onLift={ liftNow } />
+                        <PersonAge name={ calledBy } minor={ minor } onMark={ markNow } />
                         <PersonContent
                             name={ calledBy }
                             pictured={ pictured }

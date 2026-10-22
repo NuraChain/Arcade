@@ -119,6 +119,8 @@ export interface TableRow
 
     removed: boolean;
 
+    closed_by_staff: boolean;
+
     kept_out: string[];
 
     stake: string | null;
@@ -230,6 +232,10 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect(
         `(exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :me))`,
         'removed'
+    )
+    .addSelect(
+        `(t.status = 'closed' and exists (select 1 from staff_actions a where a.kind = 'close' and a.details ->> 'id' = t.id::text))`,
+        'closed_by_staff'
     )
     .addSelect(
         `(select coalesce(jsonb_agg(u.handle::text order by r.removed_at desc, u.handle::text), '[]'::jsonb)
@@ -700,6 +706,13 @@ export function createTableService(db: DataSource, social: SocialService)
                 if (waiting !== undefined)
                 {
                     return { id: waiting.id, seated: false };
+                }
+
+                const begun = want.filter.mode === 'live' ? await playing(tx) : null;
+
+                if (begun !== null)
+                {
+                    return { id: begun, seated: false };
                 }
 
                 await mustHaveRoom(lead, tx);
@@ -1473,6 +1486,34 @@ export function createTableService(db: DataSource, social: SocialService)
                     throw tableRefusal('playing', 'Finish or resign the game first.');
                 }
             });
+        },
+
+        async shutIn(tx: EntityManager, tableId: string)
+        {
+            await lockTable(tx, tableId);
+
+            const held = await tx.getRepository(Table).findOne({ select: { id: true, code: true, game: true, status: true }, where: { id: tableId } });
+
+            if (held === null)
+            {
+                return null;
+            }
+
+            if (held.status === 'closed')
+            {
+                return 'closed' as const;
+            }
+
+            if (await lockingAt(tx, tableId) || await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+            {
+                return 'playing' as const;
+            }
+
+            await tx.getRepository(Table).update({ id: tableId }, { status: 'closed', closedAt: () => 'now()' });
+
+            const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId, kind: 'game' } });
+
+            return { code: held.code, game: held.game, conversationId: thread?.id ?? null };
         },
 
         async setVoice(me: string, tableId: string, voice: VoiceScope)

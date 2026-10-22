@@ -950,6 +950,30 @@ describe.skipIf(!active)('quick play, against a real database', () =>
             }
         }, 60_000);
 
+        it('is answered with the game that starts between asking whether they play and asking whether they wait', async () =>
+        {
+            const one = door();
+            const two = door();
+            const [waiting, me] = await crowd(2);
+            const theirs = await one.table.quick(waiting, { game: 'backgammon', voice: 'off' });
+
+            await one.table.claim(me, theirs.id);
+            await one.table.setReady(me, theirs.id, true);
+
+            const [answer, start] = await parkedBehind(
+                (tx) => tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext('backgammon'))`),
+                [
+                    () => two.table.quick(me, { game: 'backgammon', voice: 'off' }),
+                    () => one.match.start(waiting, theirs.id)
+                ]
+            );
+
+            expect(start.status).toBe('fulfilled');
+            expect(answer.status === 'fulfilled' ? (answer.value as { id: string }).id : answer.reason).toBe(theirs.id);
+            expect(await chairsOf(me)).toHaveLength(1);
+            expect(await live(theirs.id)).toBe(1);
+        });
+
         it('still looks for a turn-based game while a live one is on, and for a live one while only a turn-based one is', async () =>
         {
             const ports = door();
