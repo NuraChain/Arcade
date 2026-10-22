@@ -378,4 +378,7 @@ holds the routes, and `tools/qa/garbage-pass.mjs` sends them garbage.
 
 `tools/qa/paid-pass.mjs` plays every format end to end for NURA over the api of the built server and
 a local chain, and holds every lock and payout to a ledger of its own (`tools/qa/CLAUDE.md`, *The
-paid pass*). Not here yet: the same in real browsers, and the deploy to NuraChain.
+paid pass*). `tools/qa/paid-play-pass.mjs` does it in two real browsers, a desk in English and a
+phone in Persian: NURA put in from the wallet page, a table from the create form, a Ready signed in
+the wallet, a game played by pressing the die and the pawns, what each card says it came to, and the
+winnings taken out. Not here yet: the deploy to NuraChain.

@@ -859,3 +859,31 @@ and the vault's coin is exactly its players' balances, the stakes in play and th
 vault's wait by its own clock alone, so a chain whose clock was past it was answered `paid-early` for
 a reclaim the vault would take, and the game's stakes stayed locked (`.claude/rules/stakes.md`, *A
 player's paid games*).
+
+**`tools/qa/paid-play-pass.mjs` is the same in two real browsers**: `QA_BASE=http://localhost:5300
+node tools/qa/paid-play-pass.mjs`, about a minute, 31 checks, against the server and the node
+`paid-pass.mjs` wants, before that pass moves the node's clock or on a node of its own. One player
+is a desk in English and the other a phone in Persian, and every control is found by the
+catalogue's own words. Each is a wallet the pass keeps in memory and puts in its page as an
+EIP-1193 provider (`walletSeat` takes the wallet too, then `exposeFunction`), as an extension
+would be: it answers with the account and the chain, signs a stake and sends a transaction here,
+passes every read to the node, and counts what the page asked of it.
+
+- Each player accepts the terms and puts NURA in from the wallet page, and the page shows what the
+  vault holds.
+- The desk opens a table for anyone at ten NURA from the create form, which says what the pot, the
+  fee and the winner's share come to; the phone sits down, and both waiting rooms say what each
+  stakes and what the winner takes.
+- Each Ready asks its wallet for one signature and no transaction, the stakes lock on the chain,
+  and both pages show the board.
+- Eight moves are made by pressing the die and the pawns, and the server takes each one.
+- When the phone gives up, the desk's card says what it won once the pot is paid, with the way to
+  check the game, and the phone's says in Persian what it lost; the vault paid the pot less the fee.
+- The wallet page shows both balances as the vault holds them and lists the game as won and as
+  lost; the desk takes all of it out, and its wallet holds it, less the gas. That wallet was asked
+  to send two transactions and to sign one stake. No page logs anything or is refused anything.
+
+**Proved red on two broken builds.** A wallet page that shows what is in play where it says what is
+in the vault, and a result card that never says the pot was paid, failed the four figures and the
+winner's line and nothing else; a Ready that sends no signature failed the lock and everything after
+it.

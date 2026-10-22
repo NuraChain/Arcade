@@ -170,7 +170,7 @@ async function open(browser, viewport, signIn)
     return { handle: signedIn, context, page, errors, api };
 }
 
-export async function walletSeat(browser, name, viewport = { width: 1280, height: 900 })
+export async function walletSeat(browser, name, viewport = { width: 1280, height: 900 }, wallet = undefined)
 {
     return await open(browser, viewport, async (context) =>
     {
@@ -181,7 +181,7 @@ export async function walletSeat(browser, name, viewport = { width: 1280, height
             return { status: answer.status(), body: await answer.json().catch(() => null) };
         };
 
-        return (await signInWallet(post, name)).handle;
+        return (await signInWallet(post, name, wallet)).handle;
     });
 }
 
