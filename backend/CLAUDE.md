@@ -570,8 +570,10 @@ half left behind.
   member with `insert ... select` over `unnest`, checking the same mutes and blocks `tell` checks, and
   answers who it told so exactly those are rung and woken. It was five queries per recipient per
   message.
-- **Reading or pinning a thread rings only the reader** (`chatSeen`), because nobody else's screen
-  changes; it rang every member.
+- **Reading a thread rings the reader and whoever's lines the read passed; pinning rings only the
+  reader** (`chatSeen`, once a person). A read changes the ticks on the lines it passed (*A line of
+  mine says whether it was read* in `chat-and-keys.md`), and nobody else's screen; it rang every
+  member once, and then nobody but the reader until the ticks.
 - **The chat list is a page.** Every pinned room and the sixty most recently active, keyset over
   `(last activity, id)` for the rest - "Show older conversations" at the foot of the list. A room with
   something unread is by definition recently active, so the first page carries every unread count

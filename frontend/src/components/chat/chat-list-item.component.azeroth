@@ -60,6 +60,10 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
     derived muted = social.isMuted('conversation', props.conversation.id);
 
+    derived said = last !== undefined && last.kind === 'text' && last.from === props.me && last.locked === undefined;
+
+    derived seen = last?.read === true;
+
     derived preview = (() =>
     {
         if (typing.length > 0)
@@ -124,7 +128,17 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
             <span class={ () => folded ? 'absolute -end-0.5 -top-0.5' : 'flex shrink-0 flex-col items-end gap-1' }>
                 <Show when={ last } let={ spoken }>
-                    <span class={ () => folded ? 'hidden' : 'text-ui-2xs text-faint' }>{ locale.relative(spoken.at) }</span>
+                    <span class={ () => folded ? 'hidden' : 'flex items-center gap-1 text-ui-2xs text-faint' }>
+                        <Show when={ said }>
+                            { () =>
+                                <span class={ () => seen ? 'flex text-accent' : 'flex' } data-status={ seen ? 'read' : 'sent' }>
+                                    <Icon name={ seen ? 'read' : 'sent' } size={ 14 } />
+                                    <span class="sr-only">{ locale.t(seen ? 'chat.read' : 'chat.sent') }</span>
+                                </span>
+                            }
+                        </Show>
+                        { locale.relative(spoken.at) }
+                    </span>
                 </Show>
                 <Show when={ unread > 0 }>
                     { () =>

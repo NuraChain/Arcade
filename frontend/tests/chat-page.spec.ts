@@ -362,3 +362,27 @@ describe('on a desktop, the thread takes its pane', () =>
         expect(headings[0].textContent).toBe(useLocale().t('app.nav.chats'));
     });
 });
+
+describe('the ticks on the reader’s own lines', () =>
+{
+    it('puts the mark of the reader’s last line beside its time in the list, and on the line in the thread', async () =>
+    {
+        const thread = server.conversations.find((row) => server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from === 'alex'))!;
+        const mine = server.messages.filter((one) => one.conversationId === thread.id && one.kind === 'text' && one.from === 'alex').at(-1)!;
+
+        thread.last = { ...mine, read: true };
+
+        const container = opened(thread.id, 'sidebar');
+        const listed = () => container.querySelector(`aside a[href="/app/chats/${ thread.id }"] [data-status]`);
+        const lined = () => container.querySelector(`[data-message="${ mine.id }"] time [data-status]`);
+
+        await vi.waitFor(() => expect(listed()?.getAttribute('data-status')).toBe('read'), { timeout: 4000 });
+        await vi.waitFor(() => expect(lined()?.getAttribute('data-status')).toBe('sent'), { timeout: 4000 });
+
+        mine.read = true;
+        await useChat().refresh();
+        await settle();
+
+        await vi.waitFor(() => expect(lined()?.getAttribute('data-status')).toBe('read'), { timeout: 4000 });
+    });
+});

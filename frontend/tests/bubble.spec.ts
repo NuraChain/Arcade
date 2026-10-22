@@ -348,3 +348,57 @@ describe('a message the thread reads again', () =>
         expect(container.querySelector('p'), 'the line was drawn again').toBe(pill);
     });
 });
+
+describe('what became of a line of the reader’s', () =>
+{
+    const statusOf = (container: HTMLElement) => container.querySelector('time [data-status]');
+
+    it('says a line was sent until somebody has read it, and read after', async () =>
+    {
+        const first = text('mine', 'Up for a game?', { from: 'alex' });
+        const { container, read } = await held(first);
+        const status = statusOf(container);
+
+        expect(status?.getAttribute('data-status')).toBe('sent');
+        expect(status?.textContent).toContain(useLocale().t('chat.sent'));
+        expect(status?.querySelector('svg'), 'a mark, not only words for a screen reader').not.toBeNull();
+
+        const row = container.querySelector('[data-message]');
+
+        await read({ ...first, read: true });
+
+        expect(statusOf(container)?.getAttribute('data-status')).toBe('read');
+        expect(statusOf(container)?.textContent).toContain(useLocale().t('chat.read'));
+        expect(container.querySelector('[data-message]'), 'the line was drawn again').toBe(row);
+    });
+
+    it('says nothing of the sort on anybody else’s line, read or not', () =>
+    {
+        expect(statusOf(show(text('theirs', 'Sure', { read: true })))).toBeNull();
+    });
+
+    it('keeps room after the time for the mark, so the last line never runs under it', () =>
+    {
+        const mine = show(text('mine', 'Up for a game?', { from: 'alex' }));
+        const reserve = [...mine.querySelectorAll('.invisible')].find((node) => node.getAttribute('aria-hidden') === 'true');
+
+        expect(reserve?.classList.contains('pe-4'), 'the reserve after the reader’s own line').toBe(true);
+
+        cleanup();
+
+        const theirs = show(text('theirs', 'Sure'));
+        const plain = [...theirs.querySelectorAll('.invisible')].find((node) => node.getAttribute('aria-hidden') === 'true');
+
+        expect(plain?.classList.contains('pe-4'), 'and none after anybody else’s').toBe(false);
+    });
+
+    it('says it in Persian too', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const sent = show(text('mine', 'سلام', { from: 'alex' }));
+
+        expect(statusOf(sent)?.textContent).toContain(useLocale().t('chat.sent'));
+        expect(useLocale().t('chat.sent')).not.toBe('Sent');
+    });
+});

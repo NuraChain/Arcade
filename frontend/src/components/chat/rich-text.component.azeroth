@@ -3,7 +3,7 @@ import { useNavigate } from 'azerothjs';
 import { paintMarkdown } from '../../lib/markdown-dom.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
-export default component RichText(props: { text: string; mine?: boolean; reserve?: string; class?: string })
+export default component RichText(props: { text: string; mine?: boolean; reserve?: string; trail?: boolean; class?: string })
 {
     const locale = useLocale();
     const { navigate } = useNavigate();
@@ -20,10 +20,11 @@ export default component RichText(props: { text: string; mine?: boolean; reserve
         const dir = locale.dir();
         const reserve = props.reserve;
         const mine = props.mine === true;
+        const trail = props.trail === true;
 
         if (target !== null)
         {
-            paintMarkdown(target, text, { spoiler, mine, dir, open, ...(reserve === undefined ? {} : { reserve }) });
+            paintMarkdown(target, text, { spoiler, mine, dir, open, trail, ...(reserve === undefined ? {} : { reserve }) });
         }
     }
 

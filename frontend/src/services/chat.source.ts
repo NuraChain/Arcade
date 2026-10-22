@@ -254,6 +254,7 @@ export function createApiSource()
             ...(signed === undefined || signed.reactions.length === 0 ? {} : { reactions: signed.reactions }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
             ...(wire.expiresAt === undefined ? {} : { expiresAt: Date.parse(wire.expiresAt) }),
+            ...(wire.read === true ? { read: true } : {}),
             at: wire.clientAt === undefined ? Date.parse(wire.at) : Date.parse(wire.clientAt),
             ref: wire.payload === undefined
                 ? null

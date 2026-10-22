@@ -133,6 +133,8 @@ export const social = {
 
     'chat.composer': 'Message',
     'chat.send': 'Send',
+    'chat.sent': 'Sent',
+    'chat.read': 'Read',
     'chat.gameMenu': 'Start a game',
     'chat.invite.title': '{name} opened a {game} table',
     'chat.invite.titleMine': 'You opened a {game} table',

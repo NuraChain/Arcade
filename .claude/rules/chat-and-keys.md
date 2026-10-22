@@ -231,6 +231,20 @@ different answers when the thing being looked for is something somebody remember
 message is also excluded from the results outright: its `text` is empty but its `from` is not, so it
 would otherwise match on the sender's handle and render an empty row that reads as a bug.
 
+**A line of mine says whether it was read** (the owner asked for the chat to feel like Telegram's):
+✓ beside its time once it is stored, ✓✓ once somebody else in the room has read up to it, in the
+thread and on the list's last line. It is the server's own fact, as the unread count is: a line of
+the reader's is read when the newest `last_read_at` among the room's other members is at or past
+its `created_at`, compared in Postgres (`seen` on the history read, `last_seen` on the list; a
+JavaScript date has milliseconds and would call a line read by a watermark a few microseconds older
+than it). In a direct thread that is the other person; in a group or a table's chat it is anybody.
+A reply has read what it answers, because sending moves the sender's own watermark. A read rings
+whoever's lines it passed (`markRead` answers them), because their ticks are what changed. It is
+always on, as Telegram's private chats are, and tells nobody anything new: every member already
+knows who is in the room, and the server already kept the watermark to count unread lines.
+`chat-read.db.spec.ts` holds it against Postgres, `bubble.spec.ts` and `chat-page.spec.ts` the
+marks, and the reserve after a line keeps room for the mark (`trail` in `markdown-dom.ts`).
+
 **Sending is not optimistic.** `send` seals, posts and revalidates, so the message appears when the
 server has acknowledged it. That is a round trip plus a signature rather than a microtask now, which
 is why `chat.listLoading()` is what a test waits on rather than one macrotask.

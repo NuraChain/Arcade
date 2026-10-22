@@ -41,6 +41,9 @@ export interface ConversationRow
     last_sender_device_id: string | null;
     last_signature: string | null;
     last_client_at: Date | null;
+
+    /** The last line is mine and somebody else has read up to it. */
+    last_seen: boolean | null;
     last_commitment: string | null;
     last_frank: string | null;
     last_expires_at: Date | null;
@@ -79,6 +82,9 @@ export interface MessageRow
     /** The server's own MAC. Never sent to a client - it is only ever checked here. */
     frank: string | null;
     target_id: string | null;
+
+    /** Mine, and read by somebody else in the room. Only the history read asks. */
+    seen?: boolean | null;
 }
 
 /** What a client states when it sends something sealed. */
@@ -322,6 +328,9 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         last.commitment                                                  as last_commitment,
                         last.frank                                                       as last_frank,
                         last.expires_at                                                  as last_expires_at,
+                        (last.sender_account_id = $1
+                         and last.created_at <= (select max(o.last_read_at) from conversation_members o
+                                                  where o.conversation_id = c.id and o.user_id <> $1)) as last_seen,
                         ${ keyOf(ACTIVITY) }                                             as last_key
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
@@ -390,9 +399,13 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             await mustBeMember(me, conversationId);
 
             const after = keysetAfter(cursor);
+            // Whether a line of mine was read is the room's newest watermark among the others,
+            // compared in Postgres: both are its own microseconds, and a JavaScript date would
+            // call a line read by a watermark a few microseconds older than it.
             const query = envelope()
                 .addSelect(keyOf('x.created_at'), 'at_key')
-                .where('x.conversation_id = :conversationId', { conversationId })
+                .addSelect(`(x.sender_id = :me and x.created_at <= (select max(o.last_read_at) from conversation_members o where o.conversation_id = x.conversation_id and o.user_id <> :me))`, 'seen')
+                .where('x.conversation_id = :conversationId', { conversationId, me })
                 .andWhere(`x.kind <> 'reaction'`)
                 .andWhere('(x.expires_at is null or x.expires_at > now())');
 
@@ -779,13 +792,34 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             return affectedBy(gone);
         },
 
-        async markRead(me: string, conversationId: string)
+        /**
+         * Moves my watermark to now, and answers whose lines it has just passed.
+         *
+         * Those are the people whose ticks change, so they are the ones to ring. A line of theirs
+         * stored after my old watermark is one I had not read; one stored before it they already
+         * saw as read.
+         */
+        async markRead(me: string, conversationId: string): Promise<string[]>
         {
-            await mustBeMember(me, conversationId);
+            const held = await mustBeMember(me, conversationId);
+
             await db.query(
                 'update conversation_members set last_read_at = now() where conversation_id = $1 and user_id = $2',
                 [conversationId, me]
             );
+
+            const senders = await db.getRepository(Message)
+                .createQueryBuilder('x')
+                .select('x.sender_id', 'sender')
+                .distinct(true)
+                .where('x.conversation_id = :conversationId', { conversationId })
+                .andWhere(`x.kind = 'text'`)
+                .andWhere('x.sender_id is not null')
+                .andWhere('x.sender_id <> :me', { me })
+                .andWhere('x.created_at > :before', { before: held.last_read_at })
+                .getRawMany<{ sender: string }>();
+
+            return senders.map((row) => row.sender);
         },
 
         async setPinned(me: string, conversationId: string, pinned: boolean)

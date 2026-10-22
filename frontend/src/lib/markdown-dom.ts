@@ -6,6 +6,9 @@ export interface PaintOptions
     spoiler: string;
     mine: boolean;
     reserve?: string;
+
+    /** Whether a status mark stands after the time, so the reserve keeps room for it too. */
+    trail?: boolean;
     dir?: 'ltr' | 'rtl';
     open?: (handle: string) => void;
 }
@@ -170,7 +173,7 @@ function blockNode(block: Block, options: PaintOptions): Node
 
 function reserved(options: PaintOptions, block: boolean): HTMLElement
 {
-    const slot = element('span', block ? 'invisible block text-end text-ui-2xs leading-none' : 'invisible ms-2 inline-block text-ui-2xs', [document.createTextNode(options.reserve ?? '')]);
+    const slot = element('span', `${ block ? 'invisible block text-end text-ui-2xs leading-none' : 'invisible ms-2 inline-block text-ui-2xs' }${ options.trail === true ? ' pe-4' : '' }`, [document.createTextNode(options.reserve ?? '')]);
     slot.setAttribute('aria-hidden', 'true');
     if (options.dir !== undefined)
     {

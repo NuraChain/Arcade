@@ -201,6 +201,10 @@ export default component MessageBubble(props: {
 
     derived alarming = locked !== null && ALARMING.includes(locked);
 
+    derived ticked = mine && typed && locked === null;
+
+    derived seen = props.message.read === true;
+
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
     derived headline = (() =>
@@ -363,12 +367,22 @@ export default component MessageBubble(props: {
                                         </button>
                                     }
                                 </Show>
-                                <RichText text={ said } mine={ mine } reserve={ time } />
+                                <RichText text={ said } mine={ mine } reserve={ time } trail={ ticked } />
                                 <time
                                     class={ () => [ 'absolute bottom-1 end-3 text-ui-2xs leading-none', mine && !jumbo ? 'text-accent-ink/70' : 'text-faint' ].join(' ') }
                                     datetime={ new Date(props.message.at).toISOString() }
                                 >
-                                    <span dir={ locale.dir() }>{ time }</span>
+                                    <span class="inline-flex items-center gap-0.5" dir={ locale.dir() }>
+                                        { time }
+                                        <Show when={ ticked }>
+                                            { () =>
+                                                <span class={ () => seen ? (jumbo ? 'flex text-accent' : 'flex text-accent-ink') : 'flex' } data-status={ seen ? 'read' : 'sent' }>
+                                                    <Icon name={ seen ? 'read' : 'sent' } size={ 14 } />
+                                                    <span class="sr-only">{ locale.t(seen ? 'chat.read' : 'chat.sent') }</span>
+                                                </span>
+                                            }
+                                        </Show>
+                                    </span>
                                 </time>
                             </span>
                         }

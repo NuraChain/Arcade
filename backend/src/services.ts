@@ -303,6 +303,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             message.expiresAt = row.expires_at.toISOString();
         }
 
+        if (row.seen === true)
+        {
+            message.read = true;
+        }
+
         return message;
     };
 
@@ -443,7 +448,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 commitment: row.last_commitment,
                 frank: row.last_frank,
                 expires_at: row.last_expires_at,
-                target_id: null
+                target_id: null,
+                seen: row.last_seen
             });
         }
         return summary;
@@ -3454,8 +3460,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async markRead(me, conversationId)
             {
-                await chat.markRead(me, conversationId);
+                const passed = await chat.markRead(me, conversationId);
+
                 live?.chatSeen(conversationId, me);
+
+                for (const sender of passed)
+                {
+                    live?.chatSeen(conversationId, sender);
+                }
             },
 
             async setPinned(me, conversationId, pinned)

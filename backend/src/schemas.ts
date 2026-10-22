@@ -2361,7 +2361,14 @@ export const chatMessage = object({
 
     /** When it stops existing, if it does. Absent on a message that lasts. */
     expiresAt: string().optional(),
-    reactions: array(chatReaction).optional()
+    reactions: array(chatReaction).optional(),
+
+    /**
+     * The reader's own line, and somebody else in the room has read up to it: the newest read
+     * watermark among the others is at or past the moment it was stored. The server's own fact,
+     * as the unread count is, and absent from anybody else's line.
+     */
+    read: literal(true).optional()
 });
 
 export type ChatMessage = Infer<typeof chatMessage>;

@@ -127,6 +127,9 @@ export interface Message
      */
     expiresAt?: number;
 
+    /** The reader's own line, and somebody else in the room has read up to it. */
+    read?: boolean;
+
     ref: MessageRef | null;
 }
 

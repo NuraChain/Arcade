@@ -136,6 +136,8 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
 
     'chat.composer': 'پیام',
     'chat.send': 'فرستادن',
+    'chat.sent': 'فرستاده شد',
+    'chat.read': 'خونده شد',
     'chat.gameMenu': 'شروع یه بازی',
     'chat.invite.title': '{name} یه میز {game} باز کرد',
     'chat.invite.titleMine': 'یه میز {game} باز کردی',
