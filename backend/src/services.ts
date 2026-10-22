@@ -128,6 +128,7 @@ export interface Services extends Ports
         waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
         otherServers(): Promise<number>;
         tidy(): Promise<Record<string, number>>;
+        liftSuspensions(): Promise<number>;
     };
 
     pulse(): Promise<Pulse>;
@@ -1019,6 +1020,38 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         })
     });
 
+    const walkAway = async (me: string, tableId: string, forfeit: boolean) =>
+    {
+        const before = await mustTable(me, tableId);
+        const people = await table.peopleAt(before.id);
+
+        const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id, forfeit));
+
+        if (walked !== null)
+        {
+            await courtesy('game push', () => pushMatch(walked.matchId, walked.before));
+
+            const load = await match.peek(walked.matchId);
+
+            if (load !== null)
+            {
+                await courtesy('turn notice', () => nudgeTurn(load, me));
+            }
+
+            if (load !== null && load.match.finishedAt !== null)
+            {
+                await courtesy('result line', () => declareResult(walked.matchId));
+                stakes.kick();
+            }
+        }
+
+        if (before.conversation_id !== null)
+        {
+            live?.chatChanged(before.conversation_id, me);
+        }
+        live?.tableChanged(before.id, people);
+    };
+
     const personOf = async (handle: string) =>
     {
         const found = await accounts.view(handle);
@@ -1403,7 +1436,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, sweepTables, sweepStakes: (forMs) => stakes.sweep(forMs), waiting: () => table.waitingByGame(), otherServers, tidy },
+        jobs: { sweepTurns, sweepTables, sweepStakes: (forMs) => stakes.sweep(forMs), waiting: () => table.waitingByGame(), otherServers, tidy, liftSuspensions: () => accounts.expireDue() },
 
         async pulse()
         {
@@ -1607,6 +1640,43 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 await accounts.note(actor, handle, input.text);
+                return await personOf(handle);
+            },
+
+            async suspend(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const target = await accounts.reachable(actor, handle);
+
+                for (const seat of await table.mine(target.id))
+                {
+                    await courtesy('suspension forfeit', () => walkAway(target.id, seat.id, true));
+                }
+
+                const { id, sessions } = await accounts.suspend(actor, handle, { days: input.days ?? null, category: input.category, reason: input.reason });
+
+                live?.sessionsRevoked(sessions);
+                await courtesy('letting go of push subscriptions', () => notify.forgetReach(id));
+
+                return await personOf(handle);
+            },
+
+            async lift(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                await accounts.lift(actor, handle, input.reason);
                 return await personOf(handle);
             }
         },
@@ -2406,37 +2476,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { table: asTable(after), seat };
             },
 
-            async leave(me, tableId, forfeit)
-            {
-                const before = await mustTable(me, tableId);
-                const people = await table.peopleAt(before.id);
-
-                const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id, forfeit));
-
-                if (walked !== null)
-                {
-                    await courtesy('game push', () => pushMatch(walked.matchId, walked.before));
-
-                    const load = await match.peek(walked.matchId);
-
-                    if (load !== null)
-                    {
-                        await courtesy('turn notice', () => nudgeTurn(load, me));
-                    }
-
-                    if (load !== null && load.match.finishedAt !== null)
-                    {
-                        await courtesy('result line', () => declareResult(walked.matchId));
-                        stakes.kick();
-                    }
-                }
-
-                if (before.conversation_id !== null)
-                {
-                    live?.chatChanged(before.conversation_id, me);
-                }
-                live?.tableChanged(before.id, people);
-            },
+            leave: (me, tableId, forfeit) => walkAway(me, tableId, forfeit),
 
             async setReady(me, tableId, ready, signature)
             {

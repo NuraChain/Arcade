@@ -247,6 +247,15 @@ const expiries = setInterval(() =>
 
 expiries.unref();
 
+const suspensions = setInterval(() =>
+{
+    void ports.jobs.liftSuspensions()
+        .then((lifted) => { if (lifted > 0) { log.info('suspensions ran out', { lifted }); } })
+        .catch((error: unknown) => log.error('suspension sweep failed', { error }));
+}, 60_000);
+
+suspensions.unref();
+
 const TIDY_MS = 24 * 60 * 60 * 1000;
 
 const tidyNow = () =>
@@ -409,6 +418,7 @@ handleShutdownSignals(served, {
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
         clearInterval(expiries);
+        clearInterval(suspensions);
         clearInterval(housekeeping);
         if (turns !== null)
         {

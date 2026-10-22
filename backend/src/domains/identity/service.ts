@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { BadRequestError, ConflictError, UnauthorizedError } from '@azerothjs/http';
+import { BadRequestError, ConflictError, HttpError, UnauthorizedError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import type { Principal } from '../../http/auth.ts';
@@ -9,6 +9,7 @@ import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '..
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { Avatar } from '../../entities/avatar.entity.ts';
 import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
+import { Suspension } from '../../entities/suspension.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import { AVATAR_MAX_BYTES, avatarHashOf, avatarUrl, sniffAvatar } from './avatar.ts';
 import { candidatesFor, checkHandle, handleFromAddress, normalizeHandle } from './handle.ts';
@@ -271,6 +272,16 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             }
             else
             {
+                if (user.is_suspended)
+                {
+                    const held = await db.getRepository(Suspension).findOneBy({ userId: user.id });
+
+                    throw new HttpError(403, 'This account is suspended.', {
+                        code: 'suspended',
+                        details: held === null ? {} : { category: held.category, ...(held.until === null ? {} : { until: held.until.toISOString() }) }
+                    });
+                }
+
                 await db.query('update wallets set last_used_at = now() where address = $1', [address]);
             }
 

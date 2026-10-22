@@ -45,8 +45,8 @@ interface MemberRow
 interface LogRow extends Keyed
 {
     created_at: Date;
-    staff_handle: string;
-    staff_role: StaffRole;
+    staff_handle: string | null;
+    staff_role: StaffRole | null;
     kind: ActionKind;
     person_handle: string | null;
     reason: string;
@@ -59,12 +59,12 @@ const nobody = () => staffRefusal('staff-nobody', 'No one by that name.');
 
 const aboveYou = () => staffRefusal('staff-rank', 'That is above what your role may do.');
 
-export const record = async (tx: EntityManager, actor: Actor, entry: Entry) =>
+export const record = async (tx: EntityManager, actor: Actor | null, entry: Entry) =>
 {
     await tx.getRepository(StaffAction).insert({
-        staffId: actor.id,
-        staffHandle: actor.handle,
-        staffRole: actor.role,
+        staffId: actor?.id ?? null,
+        staffHandle: actor?.handle ?? null,
+        staffRole: actor?.role ?? null,
         kind: entry.kind,
         personId: entry.person?.id ?? null,
         personHandle: entry.person?.handle ?? null,
@@ -76,8 +76,8 @@ export const record = async (tx: EntityManager, actor: Actor, entry: Entry) =>
 const wire = (row: LogRow) => ({
     id: row.id,
     at: row.created_at.toISOString(),
-    staff: row.staff_handle,
-    staffRole: row.staff_role,
+    ...(row.staff_handle === null ? {} : { staff: row.staff_handle }),
+    ...(row.staff_role === null ? {} : { staffRole: row.staff_role }),
     kind: row.kind,
     ...(row.person_handle === null ? {} : { person: row.person_handle }),
     reason: row.reason,

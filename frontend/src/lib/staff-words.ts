@@ -20,6 +20,20 @@ const ROLE_IN: Record<StaffRole, MessageKey> = {
     moderator: 'admin.role.in.moderator'
 };
 
+export const CATEGORY_WORDS: Readonly<Record<string, MessageKey>> = {
+    harassment: 'report.category.harassment',
+    spam: 'report.category.spam',
+    cheating: 'report.category.cheating',
+    inappropriate: 'report.category.inappropriate',
+    other: 'report.category.other'
+};
+
+export const TERM_WORDS: Readonly<Record<string, MessageKey>> = {
+    1: 'admin.suspend.term.1',
+    7: 'admin.suspend.term.7',
+    30: 'admin.suspend.term.30'
+};
+
 const isRole = (value: string | undefined): value is StaffRole => STAFF_ROLES.some((role) => role === value);
 
 export const foldHandle = (typed: string) => normalizeName(typed.trim().replace(/^@/, ''));
@@ -64,7 +78,26 @@ const said = (row: LogRow, locale: LocaleApi) =>
         return locale.t('admin.log.line.note', slots);
     }
 
+    if (row.kind === 'suspend')
+    {
+        return locale.t('admin.log.line.suspend', {
+            ...slots,
+            term: locale.t(TERM_WORDS[row.details.days ?? ''] ?? 'admin.suspend.term.good'),
+            category: locale.t(CATEGORY_WORDS[row.details.category ?? ''] ?? 'report.category.other')
+        });
+    }
+
+    if (row.kind === 'lift')
+    {
+        return locale.t('admin.log.line.lift', slots);
+    }
+
+    if (row.kind === 'expire')
+    {
+        return locale.t('admin.log.line.expire', slots);
+    }
+
     return locale.t('admin.log.line.revoke', slots);
 };
 
-export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff, person: row.person ?? '' });
+export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '' });

@@ -5,9 +5,12 @@ import { DataSource } from 'typeorm';
 
 import { errorResponse } from '@azerothjs/http';
 
+import { privateKeyToAccount } from 'viem/accounts';
+
 import { PEOPLE_PAGE } from '../src/domains/admin/roles.ts';
-import { StaffAction, User, entities } from '../src/entities/index.ts';
+import { Match, PushSubscription, Session, StaffAction, Suspension, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
+import { seedReference } from '../src/db/seed-reference.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -35,9 +38,14 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
-    sessionsRevoked: () => undefined,
+    sessionsRevoked: (sessionIds) =>
+    {
+        revoked.push(...sessionIds);
+    },
     seen: () => undefined
 };
+
+const revoked: string[] = [];
 
 const CONFIG = {
     secret: 'a-test-secret-that-is-long-enough-to-use',
@@ -117,14 +125,14 @@ describe.skipIf(!active)('the people, against a real database', () =>
         db = new DataSource({ type: 'postgres', uuidExtension: 'pgcrypto', url, entities, synchronize: false, logging: ['error'] });
         await db.initialize();
         await syncSchema(db);
+        await seedReference(db);
     }, 60_000);
 
     afterAll(async () =>
     {
         if (db?.isInitialized)
         {
-            await db.getRepository(StaffAction).createQueryBuilder().delete().execute();
-            await db.getRepository(User).createQueryBuilder().delete().execute();
+            await db.query('truncate table users cascade');
             await db.destroy();
         }
     });
@@ -132,8 +140,8 @@ describe.skipIf(!active)('the people, against a real database', () =>
     beforeEach(async () =>
     {
         ports = buildPorts(db, CONFIG, listener);
-        await db.getRepository(StaffAction).createQueryBuilder().delete().execute();
-        await db.getRepository(User).createQueryBuilder().delete().execute();
+        revoked.length = 0;
+        await db.query('truncate table users cascade');
     });
 
     it('opens the people to a moderator and above, and answers a player and a suspended moderator as nothing', async () =>
@@ -304,5 +312,162 @@ describe.skipIf(!active)('the people, against a real database', () =>
             [admin.handle, 'admin', moderator.handle, 'Missed the handover'],
             [owner.handle, 'owner', admin.handle, 'Owns the Friday tables']
         ]);
+    });
+
+    describe('a suspension', () =>
+    {
+        const TABLE: Omit<Parameters<Services['table']['create']>[1], 'game' | 'seats'> = { mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: [] };
+
+        const playing = async (one: Person, other: Person) =>
+        {
+            const table = await ports.table.create(one.id, { ...TABLE, game: 'ludo', seats: 2 });
+
+            await ports.table.claim(other.id, table.id);
+            await ports.table.setReady(one.id, table.id, true);
+            await ports.table.setReady(other.id, table.id, true);
+
+            return await ports.match.start(one.id, table.id);
+        };
+
+        const signedIn = async (person: Person) =>
+        {
+            const [made] = await db.query(
+                `insert into sessions (user_id, token_hash, expires_at, user_agent) values ($1, $2, now() + interval '1 day', 'test') returning id`,
+                [person.id, `${ person.id.replaceAll('-', '') }`.padEnd(64, '0').slice(0, 64)]
+            );
+
+            return (made as { id: string }).id;
+        };
+
+        const suspend = (actor: Person, target: Person, days?: 1 | 7 | 30) =>
+            ports.admin.suspend(actor.id, target.handle, { ...(days === undefined ? {} : { days }), category: 'harassment', reason: 'Rude at every table this week' });
+
+        it('forfeits their live game, stands them up from a waiting table, ends their sessions and closes their sockets, and writes one row', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const moderator = await makeUser(1);
+            const target = await makeUser(null);
+            const opponent = await makeUser(null);
+            const host = await makeUser(null);
+
+            await grant(owner, moderator, 'moderator');
+
+            const game = await playing(target, opponent);
+            const waiting = await ports.table.create(host.id, { ...TABLE, game: 'ludo', seats: 4 });
+
+            await ports.table.claim(target.id, waiting.id);
+            await db.getRepository(PushSubscription).insert({ userId: target.id, endpoint: `https://push.example/${ target.id }`, p256dh: 'key', auth: 'auth' });
+            await db.getRepository(PushSubscription).insert({ userId: opponent.id, endpoint: `https://push.example/${ opponent.id }`, p256dh: 'key', auth: 'auth' });
+            const session = await signedIn(target);
+            const seen = await suspend(moderator, target, 7);
+
+            const finished = await db.getRepository(Match).findOneByOrFail({ id: game.id });
+            const suspended = await db.getRepository(User).findOneByOrFail({ id: target.id });
+            const held = await db.getRepository(Suspension).findOneByOrFail({ userId: target.id });
+            const days = (held.until!.getTime() - held.createdAt.getTime()) / 86_400_000;
+            const rows = await db.getRepository(StaffAction).find({ where: { kind: 'suspend' } });
+
+            expect(finished.finishedAt).not.toBeNull();
+            expect(await db.getRepository(TableSeat).countBy({ userId: target.id })).toBe(0);
+            expect(suspended.isSuspended).toBe(true);
+            expect((await db.getRepository(Session).findOneByOrFail({ id: session })).revokedAt).not.toBeNull();
+            expect(revoked).toEqual([session]);
+            expect([held.category, Math.round(days)]).toEqual(['harassment', 7]);
+            expect(rows.map((row) => [row.staffHandle, row.staffRole, row.personHandle, row.details.category, row.details.days])).toEqual([[moderator.handle, 'moderator', target.handle, 'harassment', '7']]);
+            expect(rows[0].details.until).toBe(held.until!.toISOString());
+            expect(seen?.suspension).toMatchObject({ category: 'harassment', until: held.until!.toISOString() });
+            expect(seen?.suspended).toBe(true);
+            expect((await db.getRepository(PushSubscription).find()).map((row) => row.userId)).toEqual([opponent.id]);
+        });
+
+        it('refuses a suspension at or above the suspender, on themselves or on nobody, and forfeits nothing then', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const admin = await makeUser(1);
+            const moderator = await makeUser(2);
+            const opponent = await makeUser(null);
+
+            await grant(owner, admin, 'admin');
+            await grant(owner, moderator, 'moderator');
+
+            const game = await playing(admin, opponent);
+
+            expect(await word(suspend(moderator, admin))).toBe('409 staff-rank');
+            expect(await word(suspend(moderator, moderator))).toBe('409 staff-self');
+            expect(await word(suspend(admin, owner))).toBe('409 staff-rank');
+            expect(await word(ports.admin.suspend(owner.id, 'nobody-here', { category: 'spam', reason: 'About nobody' }))).toBe('404 staff-nobody');
+            expect((await db.getRepository(Match).findOneByOrFail({ id: game.id })).finishedAt).toBeNull();
+            expect(await db.getRepository(Suspension).count()).toBe(0);
+            expect(await db.getRepository(StaffAction).countBy({ kind: 'suspend' })).toBe(0);
+        });
+
+        it('suspends for good with no end, and lifts it once with a row, refusing a lift of nobody suspended', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const target = await makeUser(null);
+
+            await suspend(owner, target);
+
+            expect((await db.getRepository(Suspension).findOneByOrFail({ userId: target.id })).until).toBeNull();
+
+            const lifted = await ports.admin.lift(owner.id, target.handle, { reason: 'Said sorry to the table' });
+
+            expect(lifted?.suspended).toBe(false);
+            expect(lifted?.suspension).toBeUndefined();
+            expect(await db.getRepository(Suspension).count()).toBe(0);
+            expect(await word(ports.admin.lift(owner.id, target.handle, { reason: 'Again, for luck' }))).toBe('409 staff-not-suspended');
+            expect((await db.getRepository(StaffAction).find({ order: { createdAt: 'ASC' } })).map((row) => row.kind)).toEqual(['suspend', 'lift']);
+        });
+
+        it('lets a suspension for a time run out on the sweep, and not before, with a row nobody signed', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const target = await makeUser(null);
+            const forGood = await makeUser(null);
+
+            await suspend(owner, target, 1);
+            await suspend(owner, forGood);
+
+            expect(await ports.jobs.liftSuspensions()).toBe(0);
+
+            await db.query(`update suspensions set created_at = now() - interval '2 days', until = now() - interval '1 second' where user_id = $1`, [target.id]);
+
+            expect(await ports.jobs.liftSuspensions()).toBe(1);
+            expect((await db.getRepository(User).findOneByOrFail({ id: target.id })).isSuspended).toBe(false);
+            expect((await db.getRepository(User).findOneByOrFail({ id: forGood.id })).isSuspended).toBe(true);
+
+            const expired = await db.getRepository(StaffAction).findOneByOrFail({ kind: 'expire' });
+
+            expect([expired.staffId, expired.staffHandle, expired.staffRole, expired.personHandle]).toEqual([null, null, null, target.handle]);
+            expect((await ports.admin.log(owner.id, { person: target.handle }))?.rows.map((row) => [row.kind, row.staff ?? null])).toEqual([['expire', null], ['suspend', owner.handle]]);
+            expect(await ports.jobs.liftSuspensions()).toBe(0);
+        });
+
+        it('refuses a suspended wallet at sign-in, saying until when and why, and opens no session', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const person = await makeUser(4);
+            const wallet = privateKeyToAccount('0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a');
+            const enter = async () =>
+            {
+                const { nonce, message } = await ports.identity.challenge(wallet.address);
+
+                return await ports.identity.signInWithWallet({ address: wallet.address, nonce, signature: await wallet.signMessage({ message }), userAgent: 'test' });
+            };
+
+            expect((await enter()).account.handle).toBe(person.handle);
+
+            await ports.admin.suspend(owner.id, person.handle, { days: 30, category: 'cheating', reason: 'Played two seats at one table' });
+
+            const before = await db.getRepository(Session).countBy({ userId: person.id });
+            const thrown = await enter().then(() => null, (error: unknown) => error);
+            const response = errorResponse(thrown);
+            const body = await response.json() as { error: { code: string; details: { category: string; until: string } } };
+            const held = await db.getRepository(Suspension).findOneByOrFail({ userId: person.id });
+
+            expect([response.status, body.error.code]).toEqual([403, 'suspended']);
+            expect(body.error.details).toEqual({ category: 'cheating', until: held.until!.toISOString() });
+            expect(await db.getRepository(Session).countBy({ userId: person.id })).toBe(before);
+        });
     });
 });

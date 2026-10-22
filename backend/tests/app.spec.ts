@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note', 'suspend', 'lift'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1013,7 +1013,15 @@ describe('the owner\'s view of the vault', () =>
         const told: unknown[][] = [];
         const app = owned(told, null);
         const note = { text: 'Watches the Friday tables' };
-        const answers = [await sent(app, '/people?list=minors&q=mina'), await sent(app, '/people/mina'), await sent(app, '/people/mina/notes', note)];
+        const suspension = { days: 7, category: 'harassment', reason: 'Rude at a Ludo table' };
+        const lifting = { reason: 'Said sorry to the table' };
+        const answers = [
+            await sent(app, '/people?list=minors&q=mina'),
+            await sent(app, '/people/mina'),
+            await sent(app, '/people/mina/notes', note),
+            await sent(app, '/people/mina/suspend', suspension),
+            await sent(app, '/people/mina/lift', lifting)
+        ];
 
         for (const response of answers)
         {
@@ -1022,7 +1030,13 @@ describe('the owner\'s view of the vault', () =>
             expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
         }
 
-        expect(told).toEqual([['people', 'somebody', { list: 'minors', q: 'mina' }], ['person', 'somebody', 'mina'], ['note', 'somebody', 'mina', note]]);
+        expect(told).toEqual([
+            ['people', 'somebody', { list: 'minors', q: 'mina' }],
+            ['person', 'somebody', 'mina'],
+            ['note', 'somebody', 'mina', note],
+            ['suspend', 'somebody', 'mina', suspension],
+            ['lift', 'somebody', 'mina', lifting]
+        ]);
     });
 
     it('refuses a change with no real reason, a role the page cannot grant, and a kind the log does not have, before any port is asked', async () =>
@@ -1036,6 +1050,10 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/people/mina/notes', { text: `\t${ ' '.repeat(40) }\n` })).status).toBe(422);
         expect((await sent(app, '/people/mina/notes', { text: 'x'.repeat(501) })).status).toBe(422);
         expect((await sent(app, '/people?list=everybody')).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { days: 2, category: 'spam', reason: 'Two days of it' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { days: 7, category: 'rude', reason: 'Rude all week' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { category: 'spam', reason: '   ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/lift', { reason: 'ok' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
         expect((await sent(app, '/log?kind=delete')).status).toBe(422);
@@ -1054,6 +1072,8 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/vault/fees': (bad) => [`);
         expect(bodies).toContain(`'/admin/staff': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/notes': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/suspend': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/lift': (bad) => [`);
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);

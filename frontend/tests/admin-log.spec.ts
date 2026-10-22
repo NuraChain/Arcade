@@ -57,6 +57,14 @@ const typeInto = (field: HTMLInputElement, value: string) =>
 
 const hoursAgo = (hours: number) => new Date(NOW - hours * 3_600_000).toISOString();
 
+const suspensions = () =>
+{
+    staffLogged({ at: hoursAgo(30), staff: 'mina', staffRole: 'moderator', kind: 'suspend', person: 'reza.t', reason: 'Rude at every table this week.', details: { category: 'harassment', days: '7', until: hoursAgo(-138) } });
+    staffLogged({ at: hoursAgo(20), staff: 'alex', staffRole: 'owner', kind: 'suspend', person: 'omid', reason: 'Played two seats at one table.', details: { category: 'cheating' } });
+    staffLogged({ at: hoursAgo(10), staff: 'alex', staffRole: 'owner', kind: 'lift', person: 'omid', reason: 'Said sorry to the table.', details: {} });
+    staffLogged({ at: hoursAgo(1), kind: 'expire', person: 'reza.t', reason: 'The suspension ran its time.', details: {} });
+};
+
 const story = () =>
 {
     staffLogged({ at: hoursAgo(48), staff: 'alex', staffRole: 'owner', kind: 'grant', person: 'mina', reason: 'Runs the Friday tables.', details: { to: 'moderator' } });
@@ -110,6 +118,25 @@ describe('the log', () =>
         expect(lines(container)).toEqual(['mina wrote a note on reza.t.']);
         expect(said(container, '[data-entry] [data-reason]')).toBe('Rude at a Hokm table, twice.');
         expect(isolated(container, '[data-entry]')).toEqual(['mina', 'reza.t']);
+    });
+
+    it('says a suspension with its term and its category, a lift, and one that ran its time with nobody named and no reason', async () =>
+    {
+        suspensions();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'The suspension on reza.t ran its time.',
+            'alex lifted the suspension on omid.',
+            'alex suspended omid for good: Cheating.',
+            'mina suspended reza.t for a week: Harassment or abuse.'
+        ]);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['reza.t']);
+        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'reza.t']);
+        expect(container.querySelector('[data-entry]:first-child [data-reason]')).toBeNull();
+        expect(facts(container, '[data-entry]:first-child')).toEqual(['1 hour ago', '']);
+        expect(said(container, '[data-entry]:nth-child(2) [data-reason]')).toBe('Said sorry to the table.');
+        expect(facts(container, '[data-entry]:last-child')[1]).toBe('Moderator');
     });
 
     it('keeps its filters in the address: the kind at a press, a handle after a pause or at Enter', async () =>
@@ -218,7 +245,23 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
+    });
+
+    it('says a suspension, a lift and one that ran its time in Persian, each handle a run of its own', async () =>
+    {
+        useLocale().setLocale('fa');
+        suspensions();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'تعلیق reza.t تموم شد.',
+            'alex، تعلیق omid رو برداشت.',
+            'alex، omid رو برای همیشه معلق کرد: تقلب.',
+            'mina، reza.t رو برای یه هفته معلق کرد: آزار یا توهین.'
+        ]);
+        expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'omid']);
+        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'reza.t']);
     });
 });

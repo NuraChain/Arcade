@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES } from './domains/admin/roles.ts';
+import { ACTION_KINDS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -524,8 +524,8 @@ export const staffLogQuery = object({
 export const staffLogRow = object({
     id: string(),
     at: string(),
-    staff: string(),
-    staffRole: enumOf(STAFF_ROLES),
+    staff: string().optional(),
+    staffRole: enumOf(STAFF_ROLES).optional(),
     kind: enumOf(ACTION_KINDS),
     person: string().optional(),
     reason: string(),
@@ -620,6 +620,7 @@ export const adminPerson = object({
         at: string()
     })),
     paid: object({ acceptedAt: string().optional(), breakUntil: string().optional() }),
+    suspension: object({ category: enumOf(SUSPEND_CATEGORIES), until: string().optional(), since: string() }).optional(),
     history: array(staffLogRow),
     games: array(matchHistoryEntry),
     paidGames: array(vaultGame)
@@ -628,6 +629,14 @@ export const adminPerson = object({
 export type AdminPerson = Infer<typeof adminPerson>;
 
 export const adminNoteInput = object({ text: said() });
+
+export const adminSuspendInput = object({
+    days: union(SUSPEND_DAYS.map((days) => literal(days))).optional(),
+    category: enumOf(SUSPEND_CATEGORIES),
+    reason: said()
+});
+
+export const adminLiftInput = object({ reason: said() });
 
 export const reclaimInput = object({ id: string({ max: 36 }) });
 

@@ -1081,7 +1081,7 @@ export const client =
             staffGate('log');
 
             const matching = server.staff.log.filter((row) =>
-                (query.staff === undefined || row.staff.toLowerCase() === query.staff.toLowerCase())
+                (query.staff === undefined || row.staff?.toLowerCase() === query.staff.toLowerCase())
                 && (query.person === undefined || row.person?.toLowerCase() === query.person.toLowerCase())
                 && (query.kind === undefined || row.kind === query.kind));
             const from = query.cursor === undefined ? 0 : matching.findIndex((row) => row.id === query.cursor) + 1;

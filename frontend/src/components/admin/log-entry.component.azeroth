@@ -10,14 +10,20 @@ export default component LogEntry(props: { row: LogRow })
 
     derived when = locale.relative(Date.parse(props.row.at));
 
-    derived role = locale.t(ROLE_WORDS[props.row.staffRole]);
+    derived role = props.row.staffRole === undefined ? '' : locale.t(ROLE_WORDS[props.row.staffRole]);
+
+    derived reasoned = props.row.kind !== 'expire';
+
+    derived reason = props.row.reason;
 
     <div class="flex flex-col gap-1.5 px-4 py-3">
         <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
-        <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ props.row.reason }</p>
+        <Show when={ reasoned }>
+            <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ reason }</p>
+        </Show>
         <p class="facts text-ui-xs text-faint">
             <span>{ when }</span>
-            <span>{ role }</span>
+            <span class="empty:hidden">{ role }</span>
         </p>
     </div>
 }

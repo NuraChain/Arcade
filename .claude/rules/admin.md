@@ -85,6 +85,51 @@ in whole microseconds since the epoch and its id, compared in SQL. A JavaScript 
 milliseconds, and a cursor built from one skipped a row written in the same millisecond as the
 page's last row and a few microseconds before it. The log uses the same cursor.
 
+## A suspension
+
+**`POST /api/admin/people/:handle/suspend`**, `{ days?, category, reason }`: `days` is 1, 7 or 30,
+and none means for good; the category is harassment, spam, cheating, inappropriate or other
+(`SUSPEND_DAYS` and `SUSPEND_CATEGORIES` in `roles.ts`). Who may suspend whom is the note's rule: a
+moderator suspends players, an admin players and moderators, the owner anybody but themselves.
+
+**It happens in one order** (`suspend` among the admin ports in `services.ts`), and each step is
+there for the one after it:
+
+- The rank is asked first (`accounts.reachable`), so a refusal changes nothing anywhere.
+- Every table they sit at is left as they would leave it themselves, with the forfeit
+  (`walkAway(target, table, true)`, the leave port's own path, each through `courtesy`): a live game
+  is lost as a walkout, and the others are told and play on or are shown the result; at a paid
+  table that loses the stake, as any walkout does; a waiting table stands them up.
+- Then, in one transaction with the target's row locked: the account is marked
+  (`users.is_suspended`), the suspension is written (`suspensions`, one row an account, ending
+  `now()` and the days later, or never), every live session is ended, and the log's row says the
+  category, the term (`days`) and the end (`until`). Suspending somebody already suspended replaces
+  the term and writes another row.
+- Then their sockets are closed (`sessionsRevoked`) and their push subscriptions forgotten, so
+  nothing wakes a phone for an account that cannot sign in.
+
+A suspended account is hidden wherever it was before this (sessions, the social reads, quick play),
+and holds no role on the staff. A guest's session is the whole of a guest account, so a guest who is
+suspended has no way back in even once it is lifted.
+
+**A lift** (`POST .../lift`, `{ reason }`) unmarks the account, deletes the suspension and writes
+`lift`. Lifting somebody who is not suspended is `staff-not-suspended` (409). Their sessions stay
+ended: they sign in again.
+
+**A suspension for a time runs out by itself.** `main.ts` asks `jobs.liftSuspensions` once a minute
+(stopped with the other minute sweeps on the way down). It lifts every suspension whose end is at or
+before `now()`, by Postgres's clock as every window here is, with the rows locked so two sweeps cannot
+lift one twice, and writes `expire` with nobody's name on it: the one kind of row that has none
+(`staff_actions_actor_named`). A suspension for good is never touched by it.
+
+**Signing in says so, and opens no session.** `signInWithWallet` refuses a suspended account once the
+nonce is burned and the signature checked, with 403 `suspended` and `{ category, until? }` in the
+details. Before this the session was opened and the next request refused, so a suspended person was
+signed in and signed out again with nothing said.
+
+`admin-people.db.spec.ts` (*a suspension*) holds each step against a real database and
+`suspension-sweep.spec.ts` the sweep's place in `main.ts`.
+
 ## Money
 
 The vault section (`.claude/rules/stakes.md`, *The owner's view of the vault*) is `money`: an admin
@@ -150,7 +195,7 @@ page; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
-`tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change and
-the vault's amounts as bodies, the pause as spared (its body is a switch), the log's four query
-words. Its garbage accounts are not staff, so every one of them is answered as missing; what it
+`tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
+note, a suspension, a lift and the vault's amounts as bodies, the pause as spared (its body is a
+switch), the log's four query words and the people's three. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

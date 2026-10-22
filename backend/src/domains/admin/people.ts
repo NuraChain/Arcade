@@ -1,12 +1,12 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { Device, PaidAccount, Report, Session, User, Wallet } from '../../entities/index.ts';
+import { Device, PaidAccount, Report, Session, Suspension, User, Wallet } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { AdminPeople } from '../../schemas.ts';
 import { folded, likeLiteral, SEARCH_FROM, searchNeedle } from '../social/names.ts';
 import { agentOf } from './agent.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
-import { outranks, PEOPLE_PAGE, type GrantedRole, type PeopleList } from './roles.ts';
+import { outranks, PEOPLE_PAGE, type GrantedRole, type PeopleList, type SuspendCategory, type SuspendDays } from './roles.ts';
 import { record, staffRefusal, type Actor } from './staff.ts';
 
 export interface PeopleAsk
@@ -77,6 +77,8 @@ const LISTED: Record<PeopleList, string> = {
 
 const SHOWN_MOST = 20;
 
+const RAN_OUT = 'The suspension ran its time.';
+
 const roleOf = (row: PersonRow) => (row.owner ? 'owner' as const : row.staff_role);
 
 const nobody = () => staffRefusal('staff-nobody', 'No one by that name.');
@@ -119,6 +121,11 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
         .addSelect('(select count(*)::int from reports r where r.against = u.id)', 'reports')
         .setParameter('owner', owner());
 
+    const locked = async (tx: EntityManager, handle: string) =>
+    {
+        await tx.getRepository(User).createQueryBuilder('u').setLock('pessimistic_write').where('u.handle = :handle', { handle }).getOne();
+    };
+
     const one = async (manager: EntityManager, handle: string) => await people(manager)
         .addSelect('u.bio', 'bio')
         .addSelect('u.last_seen_at', 'last_seen_at')
@@ -126,6 +133,28 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
         .addSelect('u.show_online', 'show_online')
         .where('u.handle = :handle', { handle })
         .getRawOne<FullRow>() ?? null;
+
+    const reachable = async (manager: EntityManager, actor: Actor, handle: string) =>
+    {
+        const target = await one(manager, handle);
+
+        if (target === null)
+        {
+            throw nobody();
+        }
+
+        if (target.id === actor.id)
+        {
+            throw staffRefusal('staff-self', 'Nobody does this to their own account.');
+        }
+
+        if (!outranks(actor.role, roleOf(target)))
+        {
+            throw staffRefusal('staff-rank', 'That is above what your role may do.');
+        }
+
+        return target;
+    };
 
     return {
         async find(ask: PeopleAsk): Promise<AdminPeople>
@@ -166,7 +195,7 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
                 return null;
             }
 
-            const [wallets, sessions, devices, reports, filed, paid] = await Promise.all([
+            const [wallets, sessions, devices, reports, filed, paid, suspension] = await Promise.all([
                 db.getRepository(Wallet).find({ where: { userId: row.id }, order: { createdAt: 'ASC' } }),
                 db.getRepository(Session).createQueryBuilder('s')
                     .select('s.created_at', 'created_at')
@@ -204,7 +233,8 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
                     .limit(SHOWN_MOST)
                     .getRawMany<ReportRow>(),
                 db.getRepository(Report).countBy({ reporter: row.id }),
-                db.getRepository(PaidAccount).findOneBy({ userId: row.id })
+                db.getRepository(PaidAccount).findOneBy({ userId: row.id }),
+                db.getRepository(Suspension).findOneBy({ userId: row.id })
             ]);
 
             return {
@@ -244,33 +274,116 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
                         : {
                             acceptedAt: paid.acceptedAt.toISOString(),
                             ...(paid.breakUntil === null ? {} : { breakUntil: paid.breakUntil.toISOString() })
-                        }
+                        },
+                    ...(suspension === null
+                        ? {}
+                        : {
+                            suspension: {
+                                category: suspension.category,
+                                ...(suspension.until === null ? {} : { until: suspension.until.toISOString() }),
+                                since: suspension.createdAt.toISOString()
+                            }
+                        })
                 }
             };
         },
+
+        reachable: (actor: Actor, handle: string) => reachable(db.manager, actor, handle),
 
         async note(actor: Actor, handle: string, text: string)
         {
             await db.transaction(async (tx) =>
             {
-                const target = await one(tx, handle);
-
-                if (target === null)
-                {
-                    throw nobody();
-                }
-
-                if (target.id === actor.id)
-                {
-                    throw staffRefusal('staff-self', 'Nobody writes a note on themselves.');
-                }
-
-                if (!outranks(actor.role, roleOf(target)))
-                {
-                    throw staffRefusal('staff-rank', 'That is above what your role may do.');
-                }
+                const target = await reachable(tx, actor, handle);
 
                 await record(tx, actor, { kind: 'note', person: { id: target.id, handle: target.handle }, reason: text });
+            });
+        },
+
+        async suspend(actor: Actor, handle: string, ask: { days: SuspendDays | null; category: SuspendCategory; reason: string })
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await locked(tx, handle);
+                const target = await reachable(tx, actor, handle);
+
+                await tx.getRepository(User).update({ id: target.id }, { isSuspended: true });
+                await tx.createQueryBuilder()
+                    .insert()
+                    .into(Suspension)
+                    .values({
+                        userId: target.id,
+                        category: ask.category,
+                        until: ask.days === null ? null : () => 'now() + make_interval(days => :days)',
+                        staffId: actor.id,
+                        createdAt: () => 'now()'
+                    })
+                    .orUpdate(['category', 'until', 'staff_id', 'created_at'], ['user_id'])
+                    .setParameter('days', ask.days)
+                    .execute();
+
+                const placed = await tx.getRepository(Suspension).findOneByOrFail({ userId: target.id });
+                const ended = await tx.getRepository(Session).createQueryBuilder()
+                    .update()
+                    .set({ revokedAt: () => 'now()' })
+                    .where('user_id = :id and revoked_at is null', { id: target.id })
+                    .returning('id')
+                    .execute();
+                const sessions: { id: string }[] = ended.raw;
+
+                await record(tx, actor, {
+                    kind: 'suspend',
+                    person: { id: target.id, handle: target.handle },
+                    reason: ask.reason,
+                    details: {
+                        category: ask.category,
+                        ...(placed.until === null ? {} : { until: placed.until.toISOString() }),
+                        ...(ask.days === null ? {} : { days: String(ask.days) })
+                    }
+                });
+
+                return { id: target.id, sessions: sessions.map((session) => session.id) };
+            });
+        },
+
+        async lift(actor: Actor, handle: string, reason: string)
+        {
+            await db.transaction(async (tx) =>
+            {
+                await locked(tx, handle);
+                const target = await reachable(tx, actor, handle);
+
+                if (!target.is_suspended)
+                {
+                    throw staffRefusal('staff-not-suspended', 'They are not suspended.');
+                }
+
+                await tx.getRepository(User).update({ id: target.id }, { isSuspended: false });
+                await tx.getRepository(Suspension).delete({ userId: target.id });
+                await record(tx, actor, { kind: 'lift', person: { id: target.id, handle: target.handle }, reason });
+            });
+        },
+
+        async expireDue()
+        {
+            return await db.transaction(async (tx) =>
+            {
+                const due = await tx.getRepository(Suspension).createQueryBuilder('s')
+                    .innerJoin(User, 'u', 'u.id = s.user_id')
+                    .select('s.user_id', 'id')
+                    .addSelect('u.handle', 'handle')
+                    .where('s.until <= now()')
+                    .setLock('pessimistic_write', undefined, ['s'])
+                    .getRawMany<{ id: string; handle: string }>();
+
+                for (const person of due)
+                {
+                    await tx.getRepository(User).update({ id: person.id }, { isSuspended: false });
+                    await tx.getRepository(Suspension).delete({ userId: person.id });
+                    await record(tx, null, { kind: 'expire', person, reason: RAN_OUT });
+                }
+
+                return due.length;
             });
         }
     };

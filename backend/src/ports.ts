@@ -53,7 +53,7 @@ import type {
     StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { adminNoteInput, adminPeopleQuery, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
+import type { adminLiftInput, adminNoteInput, adminPeopleQuery, adminSuspendInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
 import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
@@ -583,6 +583,10 @@ export interface AdminPort
     person(me: string, handle: string): Promise<AdminPerson | null>;
 
     note(me: string, handle: string, input: Infer<typeof adminNoteInput>): Promise<AdminPerson | null>;
+
+    suspend(me: string, handle: string, input: Infer<typeof adminSuspendInput>): Promise<AdminPerson | null>;
+
+    lift(me: string, handle: string, input: Infer<typeof adminLiftInput>): Promise<AdminPerson | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

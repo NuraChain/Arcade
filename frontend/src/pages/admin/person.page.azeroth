@@ -21,21 +21,13 @@ import { attempt } from '../../lib/attempt.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { handleParts, ROLE_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import { CATEGORY_WORDS, handleParts, ROLE_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 
 type Seen = AdminPerson['sessions'][number];
-
-const CATEGORY_WORDS: Record<string, MessageKey> = {
-    harassment: 'report.category.harassment',
-    spam: 'report.category.spam',
-    cheating: 'report.category.cheating',
-    inappropriate: 'report.category.inappropriate',
-    other: 'report.category.other'
-};
 
 const STATUS_WORDS: Record<string, MessageKey> = {
     received: 'admin.person.report.status.received',

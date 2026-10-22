@@ -24,10 +24,12 @@ import {
     vaultState,
     vaultTermsInput,
     walletCall,
+    adminLiftInput,
     adminNoteInput,
     adminPeople,
     adminPeopleQuery,
     adminPerson,
+    adminSuspendInput,
     adminVault,
     adminFeeInput,
     adminPauseInput,
@@ -399,7 +401,13 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.person(context.principal.userId, context.params.handle))),
 
             note: routes.post('/people/:handle/notes', { input: adminNoteInput, output: adminPerson },
-                async (context) => onlyAdmin(await ports.admin.note(context.principal.userId, context.params.handle, context.input)))
+                async (context) => onlyAdmin(await ports.admin.note(context.principal.userId, context.params.handle, context.input))),
+
+            suspend: routes.post('/people/:handle/suspend', { input: adminSuspendInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.suspend(context.principal.userId, context.params.handle, context.input))),
+
+            lift: routes.post('/people/:handle/lift', { input: adminLiftInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.lift(context.principal.userId, context.params.handle, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({
