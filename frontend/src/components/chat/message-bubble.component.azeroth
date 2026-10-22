@@ -156,7 +156,9 @@ export default component MessageBubble(props: {
             : '';
     })();
 
-    derived winners = (props.message.ref?.winners ?? []).map((handle) => handle === props.me ? locale.t('common.you') : nameOf(handle));
+    derived winners = props.message.ref?.winners ?? [];
+
+    derived others = winners.filter((handle) => handle !== props.me).map(nameOf);
 
     derived won = scored && winners.length > 0;
 
@@ -201,6 +203,20 @@ export default component MessageBubble(props: {
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
+    derived headline = ((): string =>
+    {
+        const played = game === null ? '' : locale.t(game.nameKey);
+
+        if (others.length === winners.length)
+        {
+            return locale.plural('chat.result.title', others.length, { winners: locale.list(others), game: played });
+        }
+
+        return others.length === 0
+            ? locale.t('chat.result.you', { game: played })
+            : locale.t('chat.result.youAnd', { others: locale.list(others), game: played });
+    })();
+
     const sitDown = () =>
     {
         if (game === null)
@@ -237,10 +253,7 @@ export default component MessageBubble(props: {
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="truncate text-ui-base font-semibold text-text">
                                     { won
-                                        ? locale.plural('chat.result.title', winners.length, {
-                                            winners: locale.list(winners),
-                                            game: game === null ? '' : locale.t(game.nameKey)
-                                        })
+                                        ? headline
                                         : (scored
                                             ? (game === null ? '' : locale.t(game.nameKey))
                                             : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) })) }

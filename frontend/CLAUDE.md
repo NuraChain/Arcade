@@ -1784,6 +1784,11 @@ string the product shows was rewritten that way, the server's achievement ladder
   imperative where that is how people would say it (`برو سر میز`, `دیگه نگرد`). A plate's tag stays a
   word or two (`وقت تمام`, `ترک کرد`, `نوبتته`): the plates are measured.
 - No suffix is glued to a placeholder (`{name}ه`, `{game}ت`): the sentence is built round it.
+- The reader is never a name in somebody else's sentence. Where a line names whoever did something
+  and the reader may be one of them, the reader has a sentence of their own in the second person:
+  «تو» put into "{winners} توی {game} برد" made a game the reader won read «تو توی منچ برد». The
+  chat's result card says «توی منچ بردی», and «تو و سارا توی حکم بردین» beside a partner
+  (`bubble.spec.ts`). «تو» as a label with no verb after it (a chip, a quoted author) is fine.
 - One word for one thing: «چت» for a conversation, «نام کاربری» for a handle, «بلاک» and «آنبلاک»,
   «بلاکچین» and «رجیستری», «رمزگذاری» for sealing, «کپی»، «فوروارد»، «اسپویلر»، «مدیر گروه», «اکسپلور»
   for Discover. A rating is «ریتینگ», experience «تجربه», a backgammon point «امتیاز».

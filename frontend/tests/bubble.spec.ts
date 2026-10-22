@@ -158,6 +158,34 @@ describe('a message bubble', () =>
         expect(card.querySelector('.text-win'), 'a game that was won has no trophy').not.toBeNull();
     });
 
+    it('says a game the reader won in their own words, alone and beside a partner, in both languages', () =>
+    {
+        const title = (winners: string[]) =>
+        {
+            const container = show(text('m-won', '', {
+                kind: 'result',
+                ref: { game: 'hokm', winners },
+                line: { key: 'chat.line.result', params: { game: 'hokm', winners } }
+            }));
+            const said = container.querySelector('.rounded-panel .truncate')?.textContent?.trim();
+
+            cleanup();
+
+            return said;
+        };
+
+        expect(title(['alex'])).toBe('You won Hokm');
+        expect(title(['alex', 'sara.k'])).toBe('You and sara.k won Hokm');
+        expect(title(['sara.k', 'alex'])).toBe('You and sara.k won Hokm');
+
+        useLocale().setLocale('fa');
+
+        expect(title(['alex'])).toBe('توی حکم بردی');
+        expect(title(['alex', 'sara.k'])).toBe('تو و sara.k توی حکم بردین');
+        expect(title(['sara.k'])).toBe('sara.k توی حکم برد');
+        expect(title(['sara.k', 'omid.k'])).toBe('sara.k و omid.k توی حکم بردن');
+    });
+
     it('does not say a game nobody won was won: the card is the game\'s name, with no trophy', () =>
     {
         const container = show(text('m-void', '', {
