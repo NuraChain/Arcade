@@ -297,6 +297,21 @@ fold the sidebar, so moving from the list to a thread changes nothing but the ri
 keeps the two pages it always had, pull-to-refresh and all, which is why the split is a posture and
 not a container query: `Page` owns the scroll, and a list pane has to own its own.
 
+**The thread fills its pane, and the list beside it folds to faces.** The owner, of the desktop:
+"it can have full width instead of half when i'm trying to write something". The lines and the
+composer were held to 48rem in the middle of the pane, so at 1920 the composer was 742px of 1328.
+Nothing between a line and its pane caps it now: theirs run along the start edge and the reader's
+along the end, a bubble is at most 36rem (or 80% of a narrow pane) so a line still reads, and
+notices keep their own measure. `ChatPane` is the list beside a thread on both routes; its head folds
+it to a column of faces (`settings.chatListOpen`, kept on the device), each the conversation's link
+with its name under a pointer and its unread count on the face, and the heading stays in the page
+for a screen reader. **The folded list is the same row restyled, not a second row.** A row of a
+keyed list built its `Link` inside a branch (`<Show>`, as children or as the fallback) or inside
+another component's children (`Tooltip`) was drawn again, everything in it, at every read of the
+list; the same `Link` at the top of the row's markup was not. So `ChatListItem` keeps one link and
+changes its classes, and the tooltip goes round the face inside it. `chat-page.spec.ts` (*on a
+desktop, the thread takes its pane*) holds the widths, the fold, the device's memory and the heading.
+
 A route with a new parameter is a NEW page here - `chats/:id` remounts on every switch - so the pane
 is rebuilt each time somebody opens a conversation. The desktop has no transition, so nothing flashes;
 what would be lost is the reader's place, and the pane keeps its tab and its scroll position in module

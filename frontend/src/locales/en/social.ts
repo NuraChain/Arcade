@@ -116,6 +116,8 @@ export const social = {
     'chats.emptyLead': 'Message a friend, or open a group.',
     'chats.emptyFiltered': 'Nothing in this tab.',
     'chats.older': 'Show older conversations',
+    'chats.fold': 'Fold the list',
+    'chats.unfold': 'Unfold the list',
     'chats.loadFailed': 'Could not load your conversations.',
     'chats.loadFailedLead': 'The connection dropped, or the server is having a moment.',
     'chats.you': 'You: ',

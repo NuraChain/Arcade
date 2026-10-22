@@ -4,6 +4,7 @@ import ChatActions from './chat-actions.component.azeroth';
 import ChatListItem from './chat-list-item.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
 import EmptyState from '../ui/empty-state.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
 import LoadMore from '../ui/load-more.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
@@ -20,7 +21,7 @@ import { useGroups } from '../../stores/groups.store.ts';
 
 const kept = { tab: 'all', scroll: 0 };
 
-export default component ChatList(props: { active?: string; pane?: boolean; class?: string })
+export default component ChatList(props: { active?: string; pane?: boolean; folded?: boolean; class?: string })
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -33,6 +34,10 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
     const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
 
     derived pane = props.pane === true;
+
+    derived folded = props.folded === true;
+
+    derived searching = !folded;
 
     state tab = props.pane === true ? kept.tab : 'all';
     state query = '';
@@ -84,8 +89,8 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     derived filtered = (() =>
     {
-        const needle = fold(query);
-        const byTab = all.filter((conversation) => tab === 'all'
+        const needle = folded ? '' : fold(query);
+        const byTab = all.filter((conversation) => folded || tab === 'all'
             || (tab === 'direct' && conversation.kind === 'direct')
             || (tab === 'groups' && conversation.kind === 'group')
             || (tab === 'games' && conversation.kind === 'game'));
@@ -111,7 +116,13 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     derived none = filtered.length === 0;
 
-    derived older = chat.hasMoreConversations() && query === '';
+    derived older = chat.hasMoreConversations() && query === '' && !folded;
+
+    derived quietly = none && !folded;
+
+    derived failedQuietly = lost && !folded;
+
+    derived failedFolded = lost && folded;
 
     effect
     {
@@ -131,17 +142,21 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
     ];
 
     <div class={ () => [ 'flex min-h-0 flex-col', props.class ?? '' ].filter(Boolean).join(' ') }>
-        <div class={ () => pane ? 'shrink-0 px-3' : '' }>
-            <SearchInput
-                value={ query }
-                onInput={ (value) => query = value }
-                placeholder={ locale.t('chats.search') }
-                label={ locale.t('chats.search') }
-                class="mb-3"
-            />
+        <Show when={ searching }>
+            { () =>
+                <div class={ () => pane ? 'shrink-0 px-3' : '' }>
+                    <SearchInput
+                        value={ query }
+                        onInput={ (value) => query = value }
+                        placeholder={ locale.t('chats.search') }
+                        label={ locale.t('chats.search') }
+                        class="mb-3"
+                    />
 
-            <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-2" onChange={ choose } />
-        </div>
+                    <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-2" onChange={ choose } />
+                </div>
+            }
+        </Show>
 
         <div ref={ (element) => scroller = pane ? element : null } class={ () => pane ? 'min-h-0 flex-1 overflow-y-auto px-2 pb-3' : '' }>
             <Switch
@@ -149,9 +164,11 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                     <>
                         <ul
                             ref={ (element) => rows = element }
-                            class={ () => pane
-                                ? 'flex flex-col gap-0.5'
-                                : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5' }
+                            class={ () => folded
+                                ? 'flex flex-col items-center gap-1'
+                                : (pane
+                                    ? 'flex flex-col gap-0.5'
+                                    : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5') }
                             aria-label={ locale.t('app.nav.chats') }
                         >
                             <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
@@ -160,6 +177,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                                         conversation={ conversation }
                                         me={ mine }
                                         active={ conversation.id === props.active }
+                                        folded={ folded }
                                         onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
                                     />
                                 </li>
@@ -176,15 +194,24 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                         <For each={ [0, 1, 2, 3, 4] } key={ (row) => row } let={ row }>
                             <li class="flex items-center gap-3 rounded-tile px-3 py-3">
                                 <Skeleton class="h-11 w-11 shrink-0 rounded-full" />
-                                <span class="flex min-w-0 flex-1 flex-col gap-2">
-                                    <Skeleton class="h-3.5 w-32" />
-                                    <Skeleton class={ row % 2 === 0 ? 'h-3 w-56' : 'h-3 w-40' } />
-                                </span>
+                                <Show when={ searching }>
+                                    { () =>
+                                        <span class="flex min-w-0 flex-1 flex-col gap-2">
+                                            <Skeleton class="h-3.5 w-32" />
+                                            <Skeleton class={ row % 2 === 0 ? 'h-3 w-56' : 'h-3 w-40' } />
+                                        </span>
+                                    }
+                                </Show>
                             </li>
                         </For>
                     </ul>
                 </Match>
-                <Match when={ lost }>
+                <Match when={ failedFolded }>
+                    <div class="flex justify-center py-3">
+                        <IconButton icon="refresh" label={ locale.t('chats.loadFailed') } variant="ghost" tipSide="end" onClick={ () => void chat.refresh() } />
+                    </div>
+                </Match>
+                <Match when={ failedQuietly }>
                     <EmptyState
                         icon="refresh"
                         title={ locale.t('chats.loadFailed') }
@@ -194,7 +221,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                         class="py-10"
                     />
                 </Match>
-                <Match when={ none }>
+                <Match when={ quietly }>
                     <EmptyState
                         icon="chats"
                         title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }

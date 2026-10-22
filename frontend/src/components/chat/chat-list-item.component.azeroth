@@ -11,15 +11,13 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
-import { usePresence } from '../../stores/presence.store.ts';
-import Avatar from '../ui/avatar.component.azeroth';
-import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
-import GroupCrest from '../social/group-crest.component.azeroth';
-import { gameNameOf, groupNameOf, othersOf, titleOf } from './chat-title.ts';
+import Tooltip from '../ui/tooltip.component.azeroth';
+import ChatFace from './chat-face.component.azeroth';
+import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
 import { plainOf } from '../../lib/markdown.ts';
 
-export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; onHold?: () => void })
+export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; folded?: boolean; onHold?: () => void })
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -27,7 +25,6 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
     const social = useSocial();
     const chat = useChat();
-    const presence = usePresence();
     const groups = useGroups();
     const people = usePeople();
 
@@ -49,15 +46,13 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    derived others = othersOf(props.conversation, props.me, people.byHandle);
+    derived title = locale.text(titleOf(props.conversation, props.me, people.byHandle, { group: groupNameOf(props.conversation, groups.byId), game: gameNameOf(props.conversation, gameName) }));
 
-    derived group = props.conversation.groupId === null ? undefined : groups.byId(props.conversation.groupId);
+    derived folded = props.folded === true;
 
     derived last = chat.lastOf(props.conversation.id);
 
     derived starred = chat.pinned(props.conversation.id);
-
-    derived tabled = props.conversation.kind === 'game';
 
     derived unread = chat.unread(props.conversation.id);
 
@@ -94,39 +89,26 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     <span ref={ (element) => row = element } class="contents">
         <Link
             to={ `/app/chats/${ props.conversation.id }` }
-            class={ [
-                'flex min-h-16 items-center gap-3 rounded-tile px-2 py-2.5 transition-colors duration-150 hover:bg-raised/60',
+            class={ () => [
+                folded
+                    ? 'relative flex h-14 w-14 items-center justify-center rounded-tile'
+                    : 'flex min-h-16 items-center gap-3 rounded-tile px-2 py-2.5',
+                'transition-colors duration-150 hover:bg-raised/60',
                 props.onHold === undefined ? '' : 'holdable',
                 props.active === true ? 'bg-raised' : ''
             ].filter(Boolean).join(' ') }
+            aria-label={ folded ? title : undefined }
+            data-face={ folded ? '' : undefined }
             prefetch="viewport"
         >
-            <Show
-                when={ group }
-                let={ crew }
-                fallback={
-                    <Show
-                        when={ others.length === 1 ? others[0] : null }
-                        let={ peer }
-                        fallback={
-                            <Show when={ tabled } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }>
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-raised text-muted" aria-hidden="true">
-                                    <Icon name="seat" size={ 18 } />
-                                </span>
-                            </Show>
-                        }
-                    >
-                        <Avatar person={ peer } size="md" presence={ presence.dot(peer.id) } />
-                    </Show>
-                }
-            >
-                <GroupCrest crest={ crew.crest } hue={ crew.hue } size="sm" />
-            </Show>
+            <Tooltip label={ folded ? title : '' } side="end" class="flex shrink-0">
+                <ChatFace conversation={ props.conversation } me={ props.me } />
+            </Tooltip>
 
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class={ () => folded ? 'hidden' : 'flex min-w-0 flex-1 flex-col gap-0.5' }>
                 <span class="flex items-center gap-1.5">
-                    <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') } dir="auto">
-                        { locale.text(titleOf(props.conversation, props.me, people.byHandle, { group: groupNameOf(props.conversation, groups.byId), game: gameNameOf(props.conversation, gameName) })) }
+                    <span class={ () => [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') } dir="auto">
+                        { title }
                     </span>
                     <Show when={ starred }>
                         { () => <Icon name="star" size={ 12 } class="shrink-0 text-accent" /> }
@@ -135,14 +117,14 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                         { () => <Icon name="sound-off" size={ 12 } class="shrink-0 text-faint" /> }
                     </Show>
                 </span>
-                <span class={ [ 'truncate text-ui-sm', typing.length > 0 ? 'text-live' : (unread > 0 ? 'text-text' : 'text-muted') ].join(' ') }>
+                <span class={ () => [ 'truncate text-ui-sm', typing.length > 0 ? 'text-live' : (unread > 0 ? 'text-text' : 'text-muted') ].join(' ') }>
                     <span dir="auto">{ preview }</span>
                 </span>
             </span>
 
-            <span class="flex shrink-0 flex-col items-end gap-1">
+            <span class={ () => folded ? 'absolute -end-0.5 -top-0.5' : 'flex shrink-0 flex-col items-end gap-1' }>
                 <Show when={ last } let={ spoken }>
-                    <span class="text-ui-2xs text-faint">{ locale.relative(spoken.at) }</span>
+                    <span class={ () => folded ? 'hidden' : 'text-ui-2xs text-faint' }>{ locale.relative(spoken.at) }</span>
                 </Show>
                 <Show when={ unread > 0 }>
                     { () =>

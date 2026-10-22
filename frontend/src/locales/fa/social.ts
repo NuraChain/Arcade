@@ -119,6 +119,8 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chats.emptyLead': 'به یه دوست پیام بده، یا یه گروه باز کن.',
     'chats.emptyFiltered': 'توی این بخش چیزی نیست.',
     'chats.older': 'نشون دادن چت‌های قدیمی‌تر',
+    'chats.fold': 'جمع کردن لیست',
+    'chats.unfold': 'باز کردن لیست',
     'chats.loadFailed': 'چت‌هات بالا نیومدن.',
     'chats.loadFailedLead': 'اتصال قطع شده، یا سرور یه لحظه حالش خوب نیست.',
     'chats.you': 'تو: ',

@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import ChatPage from '../src/pages/app/chat.page.azeroth';
+import ChatsPage from '../src/pages/app/chats.page.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -16,6 +17,7 @@ import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -66,6 +68,7 @@ beforeEach(() =>
     useSocial().reset();
     useGroups().reset();
     useChat().reset();
+    useSettings().reset();
 });
 
 afterEach(() =>
@@ -241,5 +244,121 @@ describe('a thread that is read again', () =>
 
         expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
         expect(lost(container, drawn), 'drawn again for the answer it already had').toEqual([]);
+    });
+});
+
+describe('on a desktop, the thread takes its pane', () =>
+{
+    const capsBetween = (node: Element, until: Element) =>
+    {
+        const caps: string[] = [];
+
+        for (let at: Element | null = node.parentElement; at !== null && at !== until; at = at.parentElement)
+        {
+            caps.push(...[...at.classList].filter((name) => name.startsWith('max-w-')));
+        }
+
+        return caps;
+    };
+
+    const spoken = () => server.conversations.find((row) => server.messages.some((one) => one.conversationId === row.id && one.kind === 'text'))!;
+
+    it('lays the lines and the composer across the pane, with nothing holding them to a strip', async () =>
+    {
+        const container = opened(spoken().id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(container.querySelector('#chat-thread form')).not.toBeNull(), { timeout: 4000 });
+
+        const pane = container.querySelector('#chat-thread')!;
+
+        expect(capsBetween(container.querySelector('[data-message]')!, pane), 'a cap between a line and its pane').toEqual([]);
+        expect(capsBetween(container.querySelector('#chat-thread form')!, pane), 'a cap between the composer and its pane').toEqual([]);
+    });
+
+    it('keeps a line to a width that reads, at most 36rem', async () =>
+    {
+        const container = opened(spoken().id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-message] .bubble')).not.toBeNull(), { timeout: 4000 });
+
+        expect([...container.querySelector('[data-message] .bubble')!.parentElement!.classList]).toContain('max-w-[min(36rem,80%)]');
+    });
+
+    it('folds the list beside it to a column of faces and back, and the device keeps the choice', async () =>
+    {
+        const waiting = server.conversations.find((row) => row.unread > 0)!;
+        const thread = server.conversations.find((row) => row.id !== waiting.id)!;
+        let container = opened(thread.id, 'sidebar');
+        const aside = () => container.querySelector('aside')!;
+        const named = (label: string) => [...aside().querySelectorAll<HTMLButtonElement>('button')].find((one) => one.getAttribute('aria-label') === label);
+
+        await vi.waitFor(() => expect(aside().querySelectorAll('li a').length).toBeGreaterThan(1), { timeout: 4000 });
+
+        expect(aside().hasAttribute('data-folded'), 'the list starts open').toBe(false);
+        expect(aside().querySelector('input'), 'an open list searches').not.toBeNull();
+
+        fire(named(useLocale().t('chats.fold'))!, 'click');
+
+        await vi.waitFor(() => expect(aside().hasAttribute('data-folded')).toBe(true));
+
+        const faces = [...aside().querySelectorAll('a[data-face]')];
+        const listed = aside().querySelectorAll('li').length;
+
+        expect(aside().querySelector('input'), 'no search in a column of faces').toBeNull();
+        expect(aside().querySelector('[role="tablist"]'), 'no tabs either').toBeNull();
+        expect(faces.length, 'a face for every conversation listed').toBe(listed);
+        expect(faces.every((face) => (face.getAttribute('aria-label') ?? '') !== ''), 'each face says whose it is').toBe(true);
+        const face = faces.find((one) => one.getAttribute('href') === `/app/chats/${ waiting.id }`)!;
+        const count = [...face.querySelectorAll('*')].find((node) => node.children.length === 0 && node.textContent?.trim() === String(waiting.unread));
+        const hidden = (node: Element) =>
+        {
+            for (let at: Element | null = node; at !== null && at !== face; at = at.parentElement)
+            {
+                if (at.classList.contains('hidden') || at.classList.contains('sr-only'))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        expect(count, 'the unread count rides on its face').toBeDefined();
+        expect(hidden(count!), 'and is drawn there').toBe(false);
+        expect(useSettings().settings().chatListOpen, 'the device remembers').toBe(false);
+        expect(aside().querySelector('h2')?.classList.contains('sr-only'), 'the heading is still there to be read').toBe(true);
+
+        cleanup();
+        container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(aside().querySelectorAll('a[data-face]').length).toBeGreaterThan(1), { timeout: 4000 });
+
+        expect(aside().hasAttribute('data-folded'), 'the thread opens with the list as it was left').toBe(true);
+
+        fire(named(useLocale().t('chats.unfold'))!, 'click');
+
+        await vi.waitFor(() => expect(aside().hasAttribute('data-folded')).toBe(false));
+
+        expect(aside().querySelector('input'), 'searching again').not.toBeNull();
+        expect(useSettings().settings().chatListOpen).toBe(true);
+    });
+
+    it('keeps the chats page its one heading while the list is folded', async () =>
+    {
+        useSettings().update({ chatListOpen: false });
+        useDevice().override('sidebar');
+
+        const table: Route[] = [{ path: '/app/chats', component: (): HTMLElement => ChatsPage() as HTMLElement }];
+        const router = createRouter({ routes: table, history: createMemoryHistory('/app/chats'), scroll: false });
+        const container = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered).container;
+
+        await vi.waitFor(() => expect(container.querySelectorAll('aside a[data-face]').length).toBeGreaterThan(0), { timeout: 4000 });
+
+        const headings = [...container.querySelectorAll('h1')];
+
+        expect(headings).toHaveLength(1);
+        expect(headings[0].classList.contains('sr-only')).toBe(true);
+        expect(headings[0].textContent).toBe(useLocale().t('app.nav.chats'));
     });
 });

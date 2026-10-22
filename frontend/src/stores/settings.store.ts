@@ -9,6 +9,7 @@ export interface Settings
     railOpen: boolean;
     sidebarOpen: boolean;
     tableSidebarOpen: boolean;
+    chatListOpen: boolean;
     recentEmoji: string[];
     voiceStartMuted: boolean;
     voiceAutoJoin: boolean;
@@ -50,6 +51,7 @@ export function defaultSettings(): Settings
         railOpen: false,
         sidebarOpen: true,
         tableSidebarOpen: false,
+        chatListOpen: true,
         recentEmoji: [],
         voiceStartMuted: false,
         voiceAutoJoin: true,

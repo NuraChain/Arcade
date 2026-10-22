@@ -3,6 +3,7 @@ import { useHead } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import ChatList from '../../components/chat/chat-list.component.azeroth';
+import ChatPane from '../../components/chat/chat-pane.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { CHAT_WELL } from '../../components/ui/variants.ts';
 import { useChat } from '../../stores/chat.store.ts';
@@ -40,10 +41,7 @@ export default component ChatsPage()
         { () =>
             <Page padded={ false } fill label={ locale.t('app.nav.chats') } class="flex">
                 <div class="flex h-full min-h-0 w-full">
-                    <aside class="flex w-[22rem] shrink-0 flex-col border-e border-line bg-void" aria-label={ locale.t('app.nav.chats') }>
-                        <h1 class="shrink-0 px-4 pb-2.5 pt-4 text-ui-xl font-bold text-text">{ locale.t('app.nav.chats') }</h1>
-                        <ChatList pane class="min-h-0 flex-1" />
-                    </aside>
+                    <ChatPane main />
                     <div class={ [ CHAT_WELL, 'flex min-w-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center' ].join(' ') }>
                         <span class="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-field text-accent shadow-1">
                             <Icon name="chats" size={ 28 } />

@@ -1,0 +1,46 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import ChatList from './chat-list.component.azeroth';
+
+/**
+ * The conversations beside a thread on a desktop, which fold to a column of faces.
+ *
+ * The page's heading stays in the page when the list is folded, read and not drawn, so the chats
+ * page keeps its one heading.
+ */
+export default component ChatPane(props: { active?: string; main?: boolean })
+{
+    const locale = useLocale();
+    const settings = useSettings();
+
+    derived open = settings.settings().chatListOpen;
+
+    derived folded = !open;
+
+    derived heading = open ? 'min-w-0 flex-1 truncate text-ui-xl font-bold text-text' : 'sr-only';
+
+    const toggle = () => settings.update({ chatListOpen: !open });
+
+    <aside
+        class={ () => `flex shrink-0 flex-col border-e border-line bg-void ${ open ? 'w-[22rem]' : 'w-[4.75rem]' }` }
+        aria-label={ locale.t('app.nav.chats') }
+        data-folded={ folded ? '' : undefined }
+    >
+        <div class={ () => `flex shrink-0 items-center gap-1 pb-1.5 pt-3 ${ open ? 'pe-2 ps-4' : 'justify-center' }` }>
+            <Show when={ props.main === true } fallback={ <h2 class={ heading }>{ locale.t('app.nav.chats') }</h2> }>
+                <h1 class={ heading }>{ locale.t('app.nav.chats') }</h1>
+            </Show>
+            <IconButton
+                icon={ open ? 'sidebar-close' : 'sidebar-open' }
+                label={ locale.t(open ? 'chats.fold' : 'chats.unfold') }
+                variant="ghost"
+                flip
+                tipSide={ open ? 'bottom' : 'end' }
+                expanded={ open }
+                onClick={ toggle }
+            />
+        </div>
+        <ChatList pane folded={ folded } active={ props.active } class="min-h-0 flex-1" />
+    </aside>
+}

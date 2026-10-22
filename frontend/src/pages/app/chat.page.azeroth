@@ -8,7 +8,7 @@ import { attachStick } from '../../lib/stick.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { threadRows } from '../../lib/thread.ts';
-import ChatList from '../../components/chat/chat-list.component.azeroth';
+import ChatPane from '../../components/chat/chat-pane.component.azeroth';
 import Composer from '../../components/chat/composer.component.azeroth';
 import DayDivider from '../../components/chat/day-divider.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
@@ -415,12 +415,7 @@ export default component ChatPage()
     <Page padded={ false } fill label={ title } class="flex">
         <div class="flex h-full min-h-0 w-full">
             <Show when={ split }>
-                { () =>
-                    <aside class="flex w-[22rem] shrink-0 flex-col border-e border-line bg-void" aria-label={ locale.t('app.nav.chats') }>
-                        <h2 class="shrink-0 px-4 pb-2.5 pt-4 text-ui-xl font-bold text-text">{ locale.t('app.nav.chats') }</h2>
-                        <ChatList pane active={ id } class="min-h-0 flex-1" />
-                    </aside>
-                }
+                { () => <ChatPane active={ id } /> }
             </Show>
 
             <section id="chat-thread" class="@container flex min-w-0 flex-1 flex-col">
@@ -487,7 +482,7 @@ export default component ChatPage()
                             </header>
 
                             <div ref={ (element) => list = element } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
-                                <div class="mx-auto mt-auto flex w-full max-w-[48rem] flex-col pb-3 pt-4">
+                                <div class="mt-auto flex w-full flex-col pb-3 pt-4">
                                     <Show when={ !chat.hasEarlier() && stop === null && !seal.loading() && messages.length > 0 }>
                                         { () =>
                                             <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
@@ -587,16 +582,16 @@ export default component ChatPage()
 
                             <Show when={ quiet }>
                                 { () =>
-                                    <div class="border-t border-line bg-void px-3 py-3">
-                                        <QuietNote class="mx-auto w-full max-w-[48rem]" />
+                                    <div class="border-t border-line bg-void px-3 py-3 sm:px-5">
+                                        <QuietNote class="w-full" />
                                     </div>
                                 }
                             </Show>
 
                             <Show when={ noticed }>
                                 { () =>
-                                    <div class="border-t border-line bg-void px-3 pt-2">
-                                        <div class="mx-auto w-full max-w-[48rem]">
+                                    <div class="border-t border-line bg-void px-3 pt-2 sm:px-5">
+                                        <div class="w-full">
                                             <SealNotice stop={ stop } />
                                         </div>
                                     </div>

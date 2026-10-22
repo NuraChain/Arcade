@@ -100,7 +100,7 @@ export default component Composer(props: {
         class={ () => props.compact === true ? '' : 'safe-b border-t border-line bg-void/95 backdrop-blur-md' }
         onKeyDown={ dismiss }
     >
-        <div class={ () => props.compact === true ? 'flex flex-col gap-2' : 'mx-auto flex w-full max-w-[48rem] flex-col gap-2 px-3 py-2.5' }>
+        <div class={ () => props.compact === true ? 'flex flex-col gap-2' : 'flex w-full flex-col gap-2 px-3 py-2.5 sm:px-5' }>
             <Show when={ docked && props.disabled !== true }>
                 { () => <LazyEmojiPicker onPick={ insert } /> }
             </Show>

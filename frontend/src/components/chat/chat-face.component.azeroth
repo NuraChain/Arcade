@@ -1,0 +1,44 @@
+import type { Conversation } from '../../data/chat.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useGroups } from '../../stores/groups.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import AvatarGroup from '../ui/avatar-group.component.azeroth';
+import GroupCrest from '../social/group-crest.component.azeroth';
+import { othersOf } from './chat-title.ts';
+
+export default component ChatFace(props: { conversation: Conversation; me: string })
+{
+    const presence = usePresence();
+    const groups = useGroups();
+    const people = usePeople();
+
+    derived others = othersOf(props.conversation, props.me, people.byHandle);
+
+    derived group = props.conversation.groupId === null ? undefined : groups.byId(props.conversation.groupId);
+
+    derived tabled = props.conversation.kind === 'game';
+
+    <Show
+        when={ group }
+        let={ crew }
+        fallback={
+            <Show
+                when={ others.length === 1 ? others[0] : null }
+                let={ peer }
+                fallback={
+                    <Show when={ tabled } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }>
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-raised text-muted" aria-hidden="true">
+                            <Icon name="seat" size={ 18 } />
+                        </span>
+                    </Show>
+                }
+            >
+                <Avatar person={ peer } size="md" presence={ presence.dot(peer.id) } />
+            </Show>
+        }
+    >
+        <GroupCrest crest={ crew.crest } hue={ crew.hue } size="sm" />
+    </Show>
+}

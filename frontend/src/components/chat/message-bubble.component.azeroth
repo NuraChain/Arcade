@@ -304,7 +304,7 @@ export default component MessageBubble(props: {
                         </span>
                     }
                 </Show>
-                <div class={ () => [ 'relative flex min-w-0 max-w-[min(34rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
+                <div class={ () => [ 'relative flex min-w-0 max-w-[min(36rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
                     <Show when={ crowd && first }>
                         { () =>
                             <span class="mb-1 px-3 text-ui-2xs font-semibold" style={ `color: hsl(${ person?.hue ?? 210 } 72% 72%)` } dir="auto">{ firstName }</span>
