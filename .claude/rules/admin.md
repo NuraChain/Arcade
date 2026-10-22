@@ -104,7 +104,9 @@ there for the one after it:
 - Every table they sit at is left as they would leave it themselves, with the forfeit
   (`walkAway(target, table, true)`, the leave port's own path, each through `courtesy`): a live game
   is lost as a walkout, and the others are told and play on or are shown the result; at a paid
-  table that loses the stake, as any walkout does; a waiting table stands them up.
+  table that loses the stake, as any walkout does; a waiting table stands them up. A table whose
+  stakes are being locked cannot be left (`paid-locking`), so they stay in that chair, and when the
+  lock lands no game is dealt and every stake goes back (*Marking somebody under 18*, below).
 - Then, in one transaction with the target's row locked: the account is marked
   (`users.is_suspended`), the suspension is written (`suspensions`, one row an account, ending
   `now()` and the days later, or never), every live session is ended, and the log's row says the
@@ -155,6 +157,39 @@ left as it is, and with none live nothing is written. A wallet account can sign 
 whose session is the whole account, cannot.
 
 `admin-people.db.spec.ts` (*what the staff take off a profile, and every session ended*) holds both.
+
+## Marking somebody under 18
+
+**`POST /api/admin/people/:handle/minor`, `{ minor, reason }`**, an action of People, so a moderator
+marks players, held to the note's rank rule (a moderator marks players, an admin players and
+moderators, the owner anybody but themselves). In one transaction with the person's row locked:
+`users.is_minor` is set, marking them under 18 turns `allow_stranger_messages` off with it (the
+`users_minor_no_strangers` CHECK holds the pair), and the log's row is kind `minor`, about the
+person, with `{ to: 'minor' }` or `{ to: 'adult' }`. A mark they already carry changes nothing,
+writes nothing and rings nobody. Marked an adult, they keep strangers off until they turn them on
+in Settings themselves.
+
+**What being under 18 takes away is what the product already refuses a minor** (D7): no messages
+from strangers either way and offline to strangers (`social/policy.ts`), never seated beside an adult
+stranger by quick play, and no playing for NURA (`paid-minor`). The mark makes the rest of that true
+at once, each step through `courtesy`: they are stood up from every table played for NURA that waits
+(`walkAway`, no forfeit, since nothing has begun there), and every paid game they are playing ends
+as no contest with every stake given back (`voidPaid` in `play.ts`, through the same `voided` as
+End game, one `void` row a game with the mark's reason). The others in such a game are asked no
+rank, because giving every stake back costs nobody anything. A free table and a free game are left as
+they are, as sitting down by a link always was. Then a team-up with a stranger ends
+(`party.revalidate`), and the hub (`edgesChanged`), their vault page and their profile are rung.
+
+**A lock already on its way refunds rather than deals.** A table whose stakes are being locked cannot
+be left (`paid-locking`), so a player sitting there stays; when the lock lands, `match.begin` deals
+the game only if nobody it locked for has since been marked under 18 or suspended, and otherwise the
+escrow is `refunding` (`.claude/rules/stakes.md`, *The worker*). A suspension meets the same moment
+and is answered the same way.
+
+`admin-minor.db.spec.ts` holds the mark both ways, a mark that changes nothing, the rank rule, who is
+answered as nothing, a team-up with a stranger ending and a free table and game left alone;
+`stake.db.spec.ts` (*a player marked under 18, or suspended*) the paid game ended, the paid table
+stood up from, and a lock that lands after a mark or a suspension.
 
 ## Reports
 
@@ -380,6 +415,15 @@ while they are signed in somewhere, and tells the staff that a guest cannot come
 the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
 what it said ("It said: …", in its own direction).
 
+Between the two (`PersonAge`) a panel says what being under 18 means here and offers one press with a
+reason: "Mark as under 18" for an adult, asked as a destructive question that says what stops and
+what ends (messages from strangers, playing for NURA, the paid tables they wait at and the paid games
+they play, with every stake given back), and "Mark as an adult" for a minor, asked as one that loses
+nothing. Said yes to, the Minor badge, the strangers line and the history's row change at the press,
+the toast says so once the server has, and a refusal takes it back in the refusal's words and keeps
+the reason. The log says "mina marked reza.t as under 18." and "alex marked reza.t as an adult.",
+under the chip "Age".
+
 **Reports** is the queue, waiting first: a filter in the address (`status`: Waiting, the default and
 never written, Reviewed, Acted on, All), the waiting count on its chip, and a row for each report as
 who reported whom (both handles set apart, `handleParts`), what for, when, whether a message came
@@ -456,7 +500,7 @@ from here, because the server would refuse the call.
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out, a mark under 18, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three, the reports' two, the games being played's
 three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

@@ -735,3 +735,156 @@ describe('a suspension, from the person\'s page', () =>
         expect(asked().props).toMatchObject({ title: 'Mina Sadeghi برای یه هفته معلق بشه؟', confirm: 'تعلیقش کن' });
     });
 });
+
+describe('marking somebody under 18, from the person\'s page', () =>
+{
+    const field = (root: ParentNode) => root.querySelector<HTMLTextAreaElement>('#admin-age-why')!;
+
+    const press = (root: ParentNode, to: 'minor' | 'adult') => root.querySelector<HTMLButtonElement>(`[data-mark="${ to }"] button`)!.click();
+
+    it('asks before it marks somebody under 18, as a question that loses something, then shows it at the press and says so once the server has', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'minor');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.minor(request);
+        });
+        server.accounts.about['sara.k'] = { strangers: true };
+        const container = await opened();
+
+        expect(said(container, '[data-age-lead]')).toBe('Somebody under 18 gets no messages from strangers and cannot play for NURA. Marked as under 18, they are stood up from any table played for NURA that waits, and any such game they are playing ends as no contest with every stake given back.');
+        expect(container.querySelector('[data-mark="adult"]')).toBeNull();
+
+        typeInto(field(container), 'Said in a report that she is fifteen.');
+        press(container, 'minor');
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Mark Sara Kamali as under 18?',
+            lead: 'Messages from strangers go off for them and they cannot play for NURA. They are stood up from any table played for NURA that waits, and any such game they are playing ends as no contest, with every stake given back.',
+            confirm: 'Mark as under 18',
+            destructive: true
+        });
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { minor: true, reason: 'Said in a report that she is fifteen.' } });
+        expect(said(container, '[data-flags]')).toBe('Minor');
+        expect(said(container, '[data-strangers]')).toBe('Strangers may not message them.');
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex marked sara.k as under 18.']);
+        expect(said(container, '[data-age-lead]')).toBe('Marked as under 18. Marked as an adult, they can turn messages from strangers back on themselves, and play for NURA once they accept its terms.');
+        expect(container.querySelector('[data-mark="adult"] button')?.textContent?.trim()).toBe('Mark as an adult');
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['Sara Kamali is marked as under 18.']);
+        expect(field(container).value).toBe('');
+        expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.to }`)).toEqual(['minor minor']);
+    });
+
+    it('marks somebody under 18 an adult, as a question that loses nothing', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'minor');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.minor(request);
+        });
+        server.accounts.about['sara.k'] = { minor: true, strangers: false };
+        const container = await opened();
+
+        expect(said(container, '[data-flags]')).toBe('Minor');
+        expect(container.querySelector('[data-mark="minor"]')).toBeNull();
+
+        typeInto(field(container), 'Showed an ID that says she is nineteen.');
+        press(container, 'adult');
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Mark Sara Kamali as an adult?',
+            lead: 'They can turn messages from strangers on themselves, and play for NURA once they accept its terms.',
+            confirm: 'Mark as an adult',
+            destructive: false
+        });
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { minor: false, reason: 'Showed an ID that says she is nineteen.' } });
+        expect(said(container, '[data-flags]')).toBe('');
+        expect(said(container, '[data-strangers]')).toBe('Strangers may not message them.');
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex marked sara.k as an adult.']);
+        expect(container.querySelector('[data-mark="minor"] button')?.textContent?.trim()).toBe('Mark as under 18');
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['Sara Kamali is marked as an adult.']);
+        expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.to }`)).toEqual(['minor adult']);
+    });
+
+    it('takes a refused mark back in the refusal\'s words, keeping the reason, and asks for one first', async () =>
+    {
+        vi.spyOn(client.admin, 'minor').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
+        const container = await opened();
+        const before = server.calls.length;
+
+        press(container, 'minor');
+        await settle();
+
+        expect(said(container, '#admin-age-why-error')).toBe('Say why, in three characters or more.');
+        expect(useOverlay().items()).toHaveLength(0);
+        expect(server.calls.slice(before)).toEqual([]);
+
+        typeInto(field(container), 'Said in a report that she is fifteen.');
+        press(container, 'minor');
+        await settle();
+        await answered(true);
+
+        expect(said(container, '[data-flags]')).toBe('');
+        expect(container.querySelector('[data-mark="minor"] button')).not.toBeNull();
+        expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
+        expect(toasts()).toEqual(['That is above what your role may do.']);
+        expect(field(container).value).toBe('Said in a report that she is fifteen.');
+    });
+
+    it('sends nothing when the question is answered no', async () =>
+    {
+        const sent = vi.spyOn(client.admin, 'minor');
+        const container = await opened();
+
+        typeInto(field(container), 'Said in a report that she is fifteen.');
+        press(container, 'minor');
+        await settle();
+        await answered(false);
+
+        expect(sent).not.toHaveBeenCalled();
+        expect(said(container, '[data-flags]')).toBe('');
+        expect(field(container).value).toBe('Said in a report that she is fifteen.');
+    });
+
+    it('says it in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        const container = await opened();
+
+        expect(said(container, '#person-age')).toBe('سن');
+        expect(container.querySelector('[data-mark="minor"] button')?.textContent?.trim()).toBe('ثبت زیر ۱۸');
+
+        typeInto(field(container), 'توی یه گزارش گفته پونزده سالشه.');
+        press(container, 'minor');
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'Sara Kamali زیر ۱۸ ثبت بشه؟', confirm: 'ثبت زیر ۱۸', destructive: true });
+
+        await answered(true);
+
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex، sara.k رو زیر ۱۸ ثبت کرد.']);
+        expect(toasts()).toEqual(['Sara Kamali زیر ۱۸ ثبت شد.']);
+    });
+});

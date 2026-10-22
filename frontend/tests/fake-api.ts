@@ -1373,6 +1373,22 @@ export const client =
             return accountView(params.handle);
         },
 
+        async minor({ params, input }: { params: { handle: string }; input: { minor: boolean; reason: string } })
+        {
+            server.calls.push(`admin.minor ${ params.handle } ${ input.minor } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+
+            if (accountView(params.handle).minor !== input.minor)
+            {
+                server.accounts.about[params.handle] = { ...server.accounts.about[params.handle], minor: input.minor, ...(input.minor ? { strangers: false } : {}) };
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'minor', person: params.handle, reason: input.reason, details: { to: input.minor ? 'minor' : 'adult' } });
+            }
+
+            return accountView(params.handle);
+        },
+
         async reports({ query }: { query: { status?: ReportList; cursor?: string } })
         {
             server.calls.push(`admin.reports ${ JSON.stringify(query) }`);

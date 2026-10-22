@@ -48,7 +48,8 @@ const KIND_WORDS: Record<ActionKind | 'all', MessageKey> = {
     report: 'admin.log.kind.report',
     game: 'admin.log.kind.game',
     void: 'admin.log.kind.void',
-    close: 'admin.log.kind.close'
+    close: 'admin.log.kind.close',
+    minor: 'admin.log.kind.minor'
 };
 
 const queryOf = (asked: Asked) => ({

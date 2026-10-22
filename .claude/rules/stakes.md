@@ -113,7 +113,8 @@ logs a fault once for as long as it is the same one.
   waiting to be mined after that, because no block can take it then. Otherwise `open` with every
   seat in seat order, and the hash is written down. Mined, `match.begin` deals the game under the
   table's lock, from the chairs the escrow names, and the escrow is `open` with its match; a table
-  that is not as it was locked (closed by hand, a chair that changed) is `refunding` instead.
+  that is not as it was locked (closed by hand, a chair that changed, or a player it locked for who
+  has since been marked under 18 or suspended) is `refunding` instead.
 - **A lock the vault refused.** Named a player (a signature, a balance, a nonce they cancelled,
   their stake run out): that player alone is un-readied, the escrow keeps their seat as
   `failed_seat`, and everybody else's signature goes back to being a consent, so the next lock

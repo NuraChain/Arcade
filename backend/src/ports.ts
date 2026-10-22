@@ -58,7 +58,7 @@ import type {
     StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { adminClearInput, adminGameInput, adminLiftInput, adminMatchesQuery, adminTablesQuery, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminSuspendInput, adminVoidInput, adminCloseInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
+import type { adminClearInput, adminGameInput, adminLiftInput, adminMatchesQuery, adminTablesQuery, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminMinorInput, adminSuspendInput, adminVoidInput, adminCloseInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
 import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
@@ -598,6 +598,8 @@ export interface AdminPort
     clear(me: string, handle: string, input: Infer<typeof adminClearInput>): Promise<AdminPerson | null>;
 
     signOut(me: string, handle: string, input: Infer<typeof adminSignOutInput>): Promise<AdminPerson | null>;
+
+    minor(me: string, handle: string, input: Infer<typeof adminMinorInput>): Promise<AdminPerson | null>;
 
     reports(me: string, query: Infer<typeof adminReportsQuery>): Promise<AdminReports | null>;
 

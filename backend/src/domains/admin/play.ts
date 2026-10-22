@@ -1,6 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { Game, Match, MatchPlayer, Table, TableSeat, User } from '../../entities/index.ts';
+import { Escrow, Game, Match, MatchPlayer, Table, TableSeat, User } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { AdminMatches, AdminPlay, AdminTables } from '../../schemas.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
@@ -27,6 +27,8 @@ export interface Ended
     game: string;
     before: number;
 }
+
+type Ender = (tx: EntityManager, matchId: string) => Promise<Ended | 'over' | null>;
 
 export interface Shut
 {
@@ -125,6 +127,22 @@ export function createPlayService(db: DataSource, ownerWallet: string)
         .addSelect(STAFF_OF, 'staff')
         .where('s.table_id = :tableId', { tableId, owner: owner() })
         .getRawMany<Seated>();
+
+    const voided = async (tx: EntityManager, actor: Actor, matchId: string, reason: string, end: Ender) =>
+    {
+        const ended = await end(tx, matchId);
+
+        if (ended === null || ended === 'over')
+        {
+            return ended;
+        }
+
+        const table = await tx.getRepository(Table).findOneOrFail({ select: { code: true }, where: { id: ended.tableId } });
+
+        await record(tx, actor, { kind: 'void', reason, details: { match: matchId, game: ended.game, table: table.code } });
+
+        return ended;
+    };
 
     return {
         async games(): Promise<Shown[]>
@@ -325,7 +343,7 @@ export function createPlayService(db: DataSource, ownerWallet: string)
             });
         },
 
-        async voidMatch(actor: Actor, matchId: string, reason: string, end: (tx: EntityManager, matchId: string) => Promise<Ended | 'over' | null>)
+        async voidMatch(actor: Actor, matchId: string, reason: string, end: Ender)
         {
             if (!UUID.test(matchId))
             {
@@ -346,24 +364,39 @@ export function createPlayService(db: DataSource, ownerWallet: string)
                     throw staffRefusal('staff-rank', 'That is above what your role may do.');
                 }
 
-                const ended = await end(tx, matchId);
+                const ended = await voided(tx, actor, matchId, reason, end);
 
                 if (ended === 'over')
                 {
                     throw staffRefusal('staff-match-over', 'That game has already ended.');
                 }
 
-                if (ended === null)
-                {
-                    return null;
-                }
-
-                const table = await tx.getRepository(Table).findOneOrFail({ select: { code: true }, where: { id: ended.tableId } });
-
-                await record(tx, actor, { kind: 'void', reason, details: { match: matchId, game: ended.game, table: table.code } });
-
                 return ended;
             });
+        },
+
+        async voidPaid(actor: Actor, userId: string, reason: string, end: Ender)
+        {
+            const games = await db.getRepository(Match).createQueryBuilder('m')
+                .innerJoin(MatchPlayer, 'p', 'p.match_id = m.id')
+                .innerJoin(Escrow, 'e', 'e.match_id = m.id')
+                .select('m.id', 'id')
+                .where('p.user_id = :userId', { userId })
+                .andWhere(`e.state = 'open'`)
+                .getRawMany<{ id: string }>();
+            const done: { matchId: string; ended: Ended }[] = [];
+
+            for (const game of games)
+            {
+                const ended = await db.transaction((tx) => voided(tx, actor, game.id, reason, end));
+
+                if (ended !== null && ended !== 'over')
+                {
+                    done.push({ matchId: game.id, ended });
+                }
+            }
+
+            return done;
         },
 
         async closeTable(actor: Actor, tableId: string, reason: string, shut: (tx: EntityManager, tableId: string) => Promise<Shut | 'closed' | 'playing' | null>)

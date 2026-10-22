@@ -95,6 +95,12 @@ const shut = () =>
     staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'close', reason: 'Left open by a fault.', details: { id: 't-1', game: 'poker', table: 'p3qa' } });
 };
 
+const marked = () =>
+{
+    staffLogged({ at: hoursAgo(2), staff: 'mina', staffRole: 'moderator', kind: 'minor', person: 'reza.t', reason: 'Said in a report that he is fifteen.', details: { to: 'minor' } });
+    staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'minor', person: 'reza.t', reason: 'Showed an ID that says he is nineteen.', details: { to: 'adult' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -245,6 +251,21 @@ describe('the log', () =>
         expect(lines(container)).toEqual(['mina، میز پوکر با کد P3QA رو بست.']);
     });
 
+    it('says who marked somebody under 18 and who marked them an adult again, each handle set apart', async () =>
+    {
+        marked();
+        const { container } = await opened('/admin/log?kind=minor');
+
+        expect(lines(container)).toEqual(['alex marked reza.t as an adult.', 'mina marked reza.t as under 18.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Age');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(lines(container)).toEqual(['alex، reza.t رو بزرگ‌سال ثبت کرد.', 'mina، reza.t رو زیر ۱۸ ثبت کرد.']);
+    });
+
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
     {
         story();
@@ -383,7 +404,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده', 'سن']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 

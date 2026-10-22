@@ -1084,6 +1084,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         live?.tableChanged(before.id, people);
     };
 
+    const afterVoid = async (matchId: string, ended: { tableId: string; before: number }) =>
+    {
+        await courtesy('game push', () => pushMatch(matchId, ended.before));
+
+        const load = await match.peek(matchId);
+
+        if (load !== null)
+        {
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+        }
+
+        await courtesy('result line', () => declareResult(matchId));
+        live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
+        stakes.kick();
+    };
+
     const reportOf = async (id: string) =>
     {
         const found = await desk.find(id);
@@ -1791,6 +1807,44 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return await personOf(handle);
             },
 
+            async minor(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, changed } = await accounts.minor(actor, handle, input.minor, input.reason);
+
+                if (input.minor)
+                {
+                    for (const seat of await table.mine(id))
+                    {
+                        if (seat.stake !== null && seat.match_id === null)
+                        {
+                            await courtesy('paid table left', () => walkAway(id, seat.id, false));
+                        }
+                    }
+
+                    for (const { matchId, ended } of await plays.voidPaid(actor, id, input.reason, match.voidIn))
+                    {
+                        await afterVoid(matchId, ended);
+                    }
+                }
+
+                if (changed)
+                {
+                    await courtesy('party revalidate', () => party.revalidate(id));
+                    live?.edgesChanged(id);
+                    live?.selfChanged(id, 'vault');
+                    await courtesy('profile changed', () => ringProfile(id));
+                }
+
+                return await personOf(handle);
+            },
+
             async reports(me, query)
             {
                 return await ableTo(me, 'reports') === null ? null : await desk.queue(query.status ?? 'received', query.cursor ?? null);
@@ -1871,18 +1925,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                await courtesy('game push', () => pushMatch(id, ended.before));
-
-                const load = await match.peek(id);
-
-                if (load !== null)
-                {
-                    await courtesy('turn notice', () => nudgeTurn(load, null));
-                }
-
-                await courtesy('result line', () => declareResult(id));
-                live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
-                stakes.kick();
+                await afterVoid(id, ended);
 
                 return await playNow();
             },

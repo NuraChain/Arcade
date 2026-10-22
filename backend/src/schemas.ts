@@ -644,6 +644,8 @@ export const adminClearInput = object({ part: enumOf(CLEAR_PARTS), reason: said(
 
 export const adminSignOutInput = object({ reason: said() });
 
+export const adminMinorInput = object({ minor: boolean(), reason: said() });
+
 export const adminHistoryQuery = object({ cursor: string({ max: 80 }).optional() });
 
 export const reclaimInput = object({ id: string({ max: 36 }) });

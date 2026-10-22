@@ -9,6 +9,7 @@ import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import { maskOf } from '../stake/policy.ts';
 import { gameOff, gameOn, lockTable, stillLocking, tableRefusal } from '../table/service.ts';
 import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
@@ -693,7 +694,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 const same = table !== null
                     && table.status !== 'closed'
                     && chairs.length === staked.length
-                    && chairs.every((chair, index) => chair.seat === staked[index].seat && chair.userId === staked[index].userId && chair.ready);
+                    && chairs.every((chair, index) => chair.seat === staked[index].seat && chair.userId === staked[index].userId && chair.ready)
+                    && !await tx.getRepository(User).createQueryBuilder('u')
+                        .where('u.id in (:...ids)', { ids: staked.map((one) => one.userId) })
+                        .andWhere('(u.is_minor or u.is_suspended)')
+                        .getExists();
                 const matchId = same ? await deal(tx, table, chairs, drawsAt(seeded(staked), OPENING)) : null;
 
                 await tx.getRepository(Escrow).update(

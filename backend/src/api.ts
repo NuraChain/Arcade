@@ -45,6 +45,7 @@ import {
     adminVoidInput,
     adminCloseInput,
     adminSignOutInput,
+    adminMinorInput,
     adminSuspendInput,
     adminVault,
     adminFeeInput,
@@ -433,6 +434,9 @@ export function buildApi(ports: Ports)
 
             signOut: routes.post('/people/:handle/sign-out', { input: adminSignOutInput, output: adminPerson },
                 async (context) => onlyAdmin(await ports.admin.signOut(context.principal.userId, context.params.handle, context.input))),
+
+            minor: routes.post('/people/:handle/minor', { input: adminMinorInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.minor(context.principal.userId, context.params.handle, context.input))),
 
             reports: routes.get('/reports', { query: adminReportsQuery, output: adminReports },
                 async (context) => onlyAdmin(await ports.admin.reports(context.principal.userId, context.query))),

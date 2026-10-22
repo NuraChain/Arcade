@@ -7,7 +7,7 @@ import { getAddress, keccak256, encodeAbiParameters, type Hex } from 'viem';
 import { errorResponse } from '@azerothjs/http';
 
 import { vaultIdOf } from '../src/chain/vault.ts';
-import { Conversation, Escrow, EscrowSeat, Game, Match, MatchAction, MatchPlayer, Message, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
+import { Conversation, Escrow, EscrowSeat, Game, Match, MatchAction, MatchPlayer, Message, PaidAccount, StaffAction, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { endingOf } from '../src/domains/match/declare.ts';
@@ -1024,6 +1024,94 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(next.id).not.toBe(escrowId);
             expect(next.state).toBe('locking');
             expect((await db.getRepository(Escrow).findOneByOrFail({ id: escrowId })).state).toBe('settled');
+        });
+    });
+
+    describe('a player marked under 18, or suspended', () =>
+    {
+        const REASON = 'Said in a report that they are fifteen';
+
+        const staffed = async () =>
+        {
+            ports = buildPorts(db, { ...CONFIG, adminWallet: WALLETS[5] }, listener, undefined, undefined, fake.vault);
+            await db.getRepository(StaffAction).createQueryBuilder().delete().execute();
+
+            return await makeUser(5);
+        };
+
+        const landed = async (escrow: Escrow) =>
+        {
+            fake.receipts.set(escrow.openTx as Hex, 'success');
+            fake.games.set(vaultIdOf(escrow.id), 'open');
+            fake.state.mine = 'success';
+            await sweep();
+        };
+
+        it('ends their paid game under way as no contest, every stake back, and logs the end beside the mark', async () =>
+        {
+            const owner = await staffed();
+            const { guest, tableId, matchId, escrowId } = await playing();
+
+            await ports.admin.minor(owner.id, guest.handle, { minor: true, reason: REASON });
+
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunding', winners: null });
+            expect((await db.getRepository(Match).findOneByOrFail({ id: matchId })).outcome).toBe('abandoned');
+            expect(await resultLines(tableId)).toEqual([{ key: 'chat.line.result.void', params: { game: 'ludo' } }]);
+            expect((await db.getRepository(StaffAction).find({ order: { createdAt: 'ASC' } })).map((row) => [row.kind, row.reason, row.personHandle])).toEqual([
+                ['minor', REASON, guest.handle],
+                ['void', REASON, null]
+            ]);
+
+            await sweep();
+            await sweep();
+
+            expect(fake.refunded).toEqual([vaultIdOf(escrowId)]);
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunded' });
+        });
+
+        it('stands them up from a paid table that waits, and their signed stake goes with them', async () =>
+        {
+            const owner = await staffed();
+            const { host, guest, tableId } = await seated();
+
+            await ready(guest, tableId);
+
+            expect(await consents(tableId)).toBe(1);
+
+            await ports.admin.minor(owner.id, guest.handle, { minor: true, reason: REASON });
+
+            expect((await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } })).map((chair) => chair.userId)).toEqual([host.id, null]);
+            expect(await consents(tableId)).toBe(0);
+            expect(await word(ports.table.claim(guest.id, tableId))).toBe('409 paid-minor');
+        });
+
+        it('gives the stakes back from a lock that lands after a player at it was marked under 18, and deals nothing', async () =>
+        {
+            const owner = await staffed();
+            const { guest, tableId, escrow } = await locked();
+
+            await ports.admin.minor(owner.id, guest.handle, { minor: true, reason: REASON });
+            await landed(escrow);
+
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunding', matchId: null });
+            expect(await db.getRepository(Match).countBy({ tableId })).toBe(0);
+
+            await sweep();
+            await sweep();
+
+            expect(fake.refunded).toEqual([vaultIdOf(escrow.id)]);
+        });
+
+        it('gives the stakes back from a lock that lands after a player at it was suspended, and deals nothing', async () =>
+        {
+            const owner = await staffed();
+            const { guest, tableId, escrow } = await locked();
+
+            await ports.admin.suspend(owner.id, guest.handle, { category: 'cheating', reason: 'Played this table from two accounts' });
+            await landed(escrow);
+
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunding', matchId: null });
+            expect(await db.getRepository(Match).countBy({ tableId })).toBe(0);
         });
     });
 

@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'minor', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch', 'closeTable'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1017,6 +1017,7 @@ describe('the owner\'s view of the vault', () =>
         const lifting = { reason: 'Said sorry to the table' };
         const clearing = { part: 'name', reason: 'A name meant to insult' };
         const ending = { reason: 'Their wallet was taken' };
+        const marking = { minor: true, reason: 'Said they are fifteen in a report' };
         const answers = [
             await sent(app, '/people?list=minors&q=mina'),
             await sent(app, '/people/mina'),
@@ -1025,7 +1026,8 @@ describe('the owner\'s view of the vault', () =>
             await sent(app, '/people/mina/suspend', suspension),
             await sent(app, '/people/mina/lift', lifting),
             await sent(app, '/people/mina/clear', clearing),
-            await sent(app, '/people/mina/sign-out', ending)
+            await sent(app, '/people/mina/sign-out', ending),
+            await sent(app, '/people/mina/minor', marking)
         ];
 
         for (const response of answers)
@@ -1043,7 +1045,8 @@ describe('the owner\'s view of the vault', () =>
             ['suspend', 'somebody', 'mina', suspension],
             ['lift', 'somebody', 'mina', lifting],
             ['clear', 'somebody', 'mina', clearing],
-            ['signOut', 'somebody', 'mina', ending]
+            ['signOut', 'somebody', 'mina', ending],
+            ['minor', 'somebody', 'mina', marking]
         ]);
     });
 
@@ -1135,6 +1138,9 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/people/mina/clear', { part: 'avatar', reason: 'An old picture' })).status).toBe(422);
         expect((await sent(app, '/people/mina/clear', { part: 'bio', reason: '  ' })).status).toBe(422);
         expect((await sent(app, '/people/mina/sign-out', {})).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { reason: 'Said they are fifteen' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { minor: 'yes', reason: 'Said they are fifteen' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/minor', { minor: true, reason: 'ok' })).status).toBe(422);
         expect((await sent(app, `/people/mina/history?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
@@ -1158,6 +1164,7 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/people/:handle/lift': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/clear': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/sign-out': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/minor': (bad) => [`);
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
