@@ -1,0 +1,23 @@
+import { logParts, ROLE_WORDS, type LogRow } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Said from './said.component.azeroth';
+
+export default component LogEntry(props: { row: LogRow })
+{
+    const locale = useLocale();
+
+    derived parts = logParts(props.row, locale);
+
+    derived when = locale.relative(Date.parse(props.row.at));
+
+    derived role = locale.t(ROLE_WORDS[props.row.staffRole]);
+
+    <div class="flex flex-col gap-1.5 px-4 py-3">
+        <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
+        <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ props.row.reason }</p>
+        <p class="facts text-ui-xs text-faint">
+            <span>{ when }</span>
+            <span>{ role }</span>
+        </p>
+    </div>
+}

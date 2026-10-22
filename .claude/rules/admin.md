@@ -128,6 +128,19 @@ handle. The kind, by whom and about whom are in the address
 entries come a page at a time and are dropped whenever the first page is read again, so a new filter
 never shows the old one's tail.
 
+**People** is the first section, and the one a moderator has. The list searches once the typing
+pauses or at Enter, keeps its words and its list in the address (`q`, `list`), and pages like the
+log. A row leads to `/admin/people/:handle`, which keeps People lit in the nav and draws the person
+from one read: who they are and their flags, their account and paid play, their wallets, where they
+are signed in now ("Chrome on Windows", or "An unknown browser" for an agent `agentOf` does not
+know), the browsers holding their keys, the reports both ways (each a sentence with the other
+person's handle set apart, `handleParts`), their record (`PersonRecord`: the level, and the ratings once they have
+played, because its empty state speaks to the reader as the player),
+their recent games and paid games, and what the staff did about them, drawn by the log's own
+`LogEntry`. The note form is drawn only for somebody the reader outranks and never on their own
+page; a note is shown at the press, said once kept, and taken back with the refusal's words. A
+handle nobody holds is "No one by that name." (a 404 read as missing, never as a failure).
+
 **Money** is the vault panel, and its calls are drawn for the owner alone (`may(role, 'wallet')`):
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.

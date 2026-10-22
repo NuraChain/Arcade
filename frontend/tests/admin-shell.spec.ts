@@ -85,33 +85,43 @@ describe('the admin', () =>
 {
     it('answers anybody whose role opens no section of it as a page that is not there, at every address', async () =>
     {
-        for (const staff of [undefined, 'moderator'] as const)
+        const refused: [StaffRole | undefined, string][] = [
+            ...['/admin', '/admin/people', '/admin/people/mina', '/admin/money', '/admin/staff', '/admin/log'].map((at) => [undefined, at] as [undefined, string]),
+            ...['/admin/money', '/admin/staff', '/admin/log'].map((at) => ['moderator', at] as [StaffRole, string])
+        ];
+
+        for (const [staff, at] of refused)
         {
             signIn(staff);
+            const { container } = await opened(at);
 
-            for (const at of ['/admin', '/admin/money', '/admin/staff', '/admin/log'])
-            {
-                const { container } = await opened(at);
-
-                expect(container.querySelector('[data-lost]'), `${ staff ?? 'a player' } at ${ at }`).not.toBeNull();
-                expect(container.querySelector('#admin-shell')).toBeNull();
-                cleanup();
-            }
+            expect(container.querySelector('[data-lost]'), `${ staff ?? 'a player' } at ${ at }`).not.toBeNull();
+            expect(container.querySelector('#admin-shell')).toBeNull();
+            cleanup();
         }
     });
 
-    it('takes an admin and the owner from /admin to the first section their role opens', async () =>
+    it('takes every role on the staff from /admin to the first section it opens, the people', async () =>
     {
-        for (const staff of ['admin', 'owner'] as const)
+        for (const staff of ['moderator', 'admin', 'owner'] as const)
         {
             signIn(staff);
             const { router, container } = await opened('/admin');
 
-            expect(router.location().pathname, staff).toBe('/admin/money');
+            expect(router.location().pathname, staff).toBe('/admin/people');
             expect(container.querySelector('#admin-shell')).not.toBeNull();
-            expect(container.querySelector('#admin-main h1')?.textContent).toBe('Money');
+            expect(container.querySelector('#admin-main h1')?.textContent).toBe('People');
             cleanup();
         }
+    });
+
+    it('lists a moderator the one section a moderator opens', async () =>
+    {
+        signIn('moderator');
+        const { container } = await opened('/admin/people');
+
+        expect(hrefs(container.querySelector('header nav')!, 'a')).toEqual(['/admin/people']);
+        expect(hrefs(container.querySelector('#admin-shell > div > nav')!, 'a')).toEqual(['/admin/people']);
     });
 
     it('lists the sections the role opens, on a phone as a rail and on a wide screen down the side, and marks the one on screen', async () =>
@@ -123,8 +133,8 @@ describe('the admin', () =>
 
         expect(rail.className).toContain('lg:hidden');
         expect(side.className).toContain('lg:block');
-        expect(hrefs(rail, 'a')).toEqual(['/admin/money', '/admin/staff', '/admin/log']);
-        expect(hrefs(side, 'a')).toEqual(['/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(rail, 'a')).toEqual(['/admin/people', '/admin/money', '/admin/staff', '/admin/log']);
+        expect(hrefs(side, 'a')).toEqual(['/admin/people', '/admin/money', '/admin/staff', '/admin/log']);
         expect(hrefs(container, '[aria-current="page"]')).toEqual(['/admin/staff', '/admin/staff']);
         expect(rail.getAttribute('aria-label')).toBe('The admin');
 
@@ -162,7 +172,7 @@ describe('the admin', () =>
 
         expect(header.querySelector('h1')?.textContent).toBe('مدیریت');
         expect(header.textContent).toContain('مالک');
-        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['پول', 'تیم', 'گزارش کارها']);
+        expect([...header.querySelectorAll('nav a')].map((link) => link.textContent?.trim())).toEqual(['کاربرها', 'پول', 'تیم', 'گزارش کارها']);
         expect(container.querySelector('#admin-main h1')?.textContent).toBe('پول');
     });
 });

@@ -3,6 +3,7 @@ import { createResource, untrack, useHead } from 'azerothjs';
 import { ACTION_KINDS, type ActionKind } from '../../../../backend/src/domains/admin/roles.ts';
 import type { StaffLog } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
+import LogEntry from '../../components/admin/log-entry.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
@@ -14,7 +15,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
 import { useAddress } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { foldHandle, logParts, ROLE_WORDS, type LogRow } from '../../lib/staff-words.ts';
+import { foldHandle, type LogRow } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { SEARCH_PAUSE_MS } from '../../services/search.service.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -106,15 +107,6 @@ export default component LogPage()
     derived blank = locale.t(filtered ? 'admin.log.noneFiltered' : 'admin.log.none');
 
     derived kinds = (['all', ...ACTION_KINDS] as const).map((one) => ({ id: one, label: locale.t(KIND_WORDS[one]) }));
-
-    derived lines = rows.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        parts: logParts(row, locale),
-        reason: row.reason,
-        when: locale.relative(Date.parse(row.at)),
-        role: locale.t(ROLE_WORDS[row.staffRole])
-    }));
 
     const apply = () =>
     {
@@ -219,18 +211,9 @@ export default component LogPage()
         <Show when={ listed }>
             <div class="flex flex-col">
                 <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-log>
-                    <For each={ lines } key={ (one) => one.id } let={ entry }>
-                        <li class="flex flex-col gap-1.5 px-4 py-3" data-entry={ entry.id } data-kind={ entry.kind }>
-                            <p class="text-ui-sm font-semibold text-text" data-line>
-                                <For each={ entry.parts } key={ (part) => part.at } let={ part }>
-                                    <span dir={ part.handle ? 'ltr' : undefined }>{ part.text }</span>
-                                </For>
-                            </p>
-                            <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ entry.reason }</p>
-                            <p class="facts text-ui-xs text-faint">
-                                <span>{ entry.when }</span>
-                                <span>{ entry.role }</span>
-                            </p>
+                    <For each={ rows } key={ (one) => one.id } let={ row }>
+                        <li data-entry={ row.id } data-kind={ row.kind }>
+                            <LogEntry row={ row } />
                         </li>
                     </For>
                 </ol>

@@ -14,6 +14,8 @@ import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
 import type { VoiceScope } from '../../backend/src/domains/table/voices.ts';
 import type {
     Account,
+    AdminPeople,
+    AdminPerson,
     AdminVault,
     ChainProfile,
     ChatMessage,
@@ -36,7 +38,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, type ActionKind, type GrantedRole, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type GrantedRole, type PeopleList, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -405,7 +407,7 @@ const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner'
 
 const staffRefused = (word: StaffRefusal, message: string) => new ApiError(STAFF_REFUSALS[word], word, message, undefined);
 
-const staffGate = (ability: 'staff' | 'log') =>
+const staffGate = (ability: Ability) =>
 {
     if (!may(staffRoleOf(server.me), ability))
     {
@@ -425,6 +427,65 @@ export const staffLogged = (row: Omit<StaffLogRow, 'id'>) =>
 {
     server.staff.logged += 1;
     server.staff.log.unshift({ id: `log-${ server.staff.logged }`, ...row });
+};
+
+type AdminRow = AdminPeople['rows'][number];
+
+const accountsFresh = () => ({
+    crowd: [] as string[],
+    suspended: [] as string[],
+    reported: {} as Record<string, number>,
+    about: {} as Record<string, Partial<AdminPerson>>
+});
+
+const accountHandles = () => [server.me, ...PEOPLE_FIXTURES.map((one) => one.handle).filter((handle) => handle !== server.me), ...server.accounts.crowd];
+
+const accountRow = (handle: string, at: number): AdminRow =>
+{
+    const person = personWire(handle);
+    const role = staffRoleOf(handle);
+    const reports = server.accounts.reported[handle] ?? 0;
+
+    return {
+        handle,
+        displayName: person.displayName,
+        hue: person.hue,
+        createdAt: new Date(Date.parse('2026-10-20T09:00:00.000Z') - at * 3_600_000).toISOString(),
+        minor: person.isMinor,
+        suspended: server.accounts.suspended.includes(handle),
+        ...(role === null ? {} : { staff: role }),
+        reports
+    };
+};
+
+const ACCOUNT_LISTS: Record<PeopleList, (row: AdminRow) => boolean> = {
+    newest: () => true,
+    suspended: (row) => row.suspended,
+    minors: (row) => row.minor,
+    staff: (row) => row.staff !== undefined,
+    reported: (row) => row.reports > 0
+};
+
+const accountView = (handle: string): AdminPerson =>
+{
+    const at = accountHandles().indexOf(handle);
+
+    return {
+        ...accountRow(handle, at),
+        bio: '',
+        strangers: true,
+        shown: true,
+        wallets: [],
+        filed: 0,
+        sessions: [],
+        devices: [],
+        reportsAbout: [],
+        paid: {},
+        history: structuredClone(server.staff.log.filter((row) => row.person === handle)),
+        games: [],
+        paidGames: [],
+        ...structuredClone(server.accounts.about[handle] ?? {})
+    };
 };
 
 const nuraRefusal = () =>
@@ -544,6 +605,7 @@ export const server =
     nura: nuraFresh(),
     admin: adminFresh(),
     staff: staffFresh(),
+    accounts: accountsFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -707,6 +769,7 @@ export const server =
         server.nura = nuraFresh();
         server.admin = adminFresh();
         server.staff = staffFresh();
+        server.accounts = accountsFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -1029,6 +1092,63 @@ export const client =
                 rows: structuredClone(page),
                 ...(matching.length > from + LOG_PAGE && last !== undefined ? { cursor: last.id } : {})
             };
+        },
+        async people({ query }: { query: { q?: string; list?: PeopleList; cursor?: string } })
+        {
+            server.calls.push(`admin.people ${ JSON.stringify(query) }`);
+            staffGate('people');
+
+            const asked = (query.q ?? '').trim().toLowerCase();
+            const rows = accountHandles()
+                .map((handle, at) => accountRow(handle, at))
+                .filter(ACCOUNT_LISTS[query.list ?? 'newest'])
+                .filter((row) => asked.length < 2 || row.handle.toLowerCase().includes(asked) || row.displayName.toLowerCase().includes(asked));
+            const from = query.cursor === undefined ? 0 : rows.findIndex((row) => row.handle === query.cursor) + 1;
+            const page = rows.slice(from, from + PEOPLE_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: page,
+                ...(rows.length > from + PEOPLE_PAGE && last !== undefined ? { cursor: last.handle } : {})
+            };
+        },
+        async person({ params }: { params: { handle: string } })
+        {
+            server.calls.push(`admin.person ${ params.handle }`);
+            staffGate('people');
+
+            if (!accountHandles().includes(params.handle))
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            return accountView(params.handle);
+        },
+        async note({ params, input }: { params: { handle: string }; input: { text: string } })
+        {
+            server.calls.push(`admin.note ${ params.handle } ${ input.text }`);
+            staffGate('people');
+
+            const actor = staffRoleOf(server.me);
+
+            if (!accountHandles().includes(params.handle))
+            {
+                throw staffRefused('staff-nobody', 'No one by that name.');
+            }
+
+            if (params.handle === server.me)
+            {
+                throw staffRefused('staff-self', 'Nobody writes a note on themselves.');
+            }
+
+            if (!outranks(actor, staffRoleOf(params.handle)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor ?? 'moderator', kind: 'note', person: params.handle, reason: input.text, details: {} });
+
+            return accountView(params.handle);
         }
     },
 

@@ -1,0 +1,59 @@
+import { Link } from 'azerothjs';
+
+import type { AdminPeople } from '../../../../backend/src/schemas.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { ROLE_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+
+export type AdminPersonRow = AdminPeople['rows'][number];
+
+export default component PersonRow(props: { person: AdminPersonRow })
+{
+    const locale = useLocale();
+
+    derived role = props.person.staff ?? null;
+
+    derived ranked = role !== null;
+
+    derived roleWord = role === null ? '' : locale.t(ROLE_WORDS[role]);
+
+    derived suspended = props.person.suspended;
+
+    derived minor = props.person.minor;
+
+    derived reported = props.person.reports > 0;
+
+    derived reports = locale.plural('admin.people.reports', props.person.reports);
+
+    derived joined = locale.t('admin.people.joined', { when: locale.relative(Date.parse(props.person.createdAt)) });
+
+    <Link
+        to={ `/admin/people/${ encodeURIComponent(props.person.handle) }` }
+        class="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-raised"
+        data-person={ props.person.handle }
+    >
+        <Avatar person={ props.person } size="md" />
+        <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ props.person.displayName }</span>
+            <span class="truncate text-ui-xs text-muted" dir="ltr">@{ props.person.handle }</span>
+            <span class="truncate text-ui-xs text-faint">{ joined }</span>
+        </span>
+        <span class="flex max-w-[45%] flex-wrap items-center justify-end gap-1.5">
+            <Show when={ ranked }>
+                <Badge text={ roleWord } tone="accent" />
+            </Show>
+            <Show when={ suspended }>
+                <Badge text={ locale.t('admin.people.suspended') } tone="danger" />
+            </Show>
+            <Show when={ minor }>
+                <Badge text={ locale.t('admin.people.minor') } tone="gold" />
+            </Show>
+            <Show when={ reported }>
+                <Badge text={ reports } tone="neutral" />
+            </Show>
+        </span>
+        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+    </Link>
+}

@@ -131,7 +131,7 @@ describe('my profile page', () =>
     {
         signIn();
 
-        for (const [staff, shown] of [[undefined, false], ['moderator', false], ['admin', true], ['owner', true]] as const)
+        for (const [staff, shown] of [[undefined, false], ['moderator', true], ['admin', true], ['owner', true]] as const)
         {
             useSession().establish({ ...server.account!, ...(staff === undefined ? {} : { staff }) });
             const container = await page();

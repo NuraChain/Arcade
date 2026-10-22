@@ -26,9 +26,23 @@ export const foldHandle = (typed: string) => normalizeName(typed.trim().replace(
 
 export const whyStaffRefused = (error: unknown) => (error instanceof ApiError && isStaffRefusal(error.code) ? `admin.refused.${ error.code }` as const : 'common.actionFailed');
 
-const SLOT = /(\{staff\}|\{person\})/;
+const SLOT = /(\{[a-z]+\})/;
 
-const slotOf = (part: string) => (part === '{staff}' ? 'staff' : part === '{person}' ? 'person' : null);
+const slotOf = (part: string) => /^\{([a-z]+)\}$/.exec(part)?.[1] ?? null;
+
+export function handleParts(said: string, handles: Readonly<Record<string, string>>)
+{
+    return said
+        .split(SLOT)
+        .filter((part) => part !== '')
+        .map((part, at) =>
+        {
+            const slot = slotOf(part);
+            const handle = slot !== null && Object.hasOwn(handles, slot) ? handles[slot] : undefined;
+
+            return handle === undefined ? { at, text: part, handle: false } : { at, text: handle, handle: true };
+        });
+}
 
 const said = (row: LogRow, locale: LocaleApi) =>
 {
@@ -53,17 +67,4 @@ const said = (row: LogRow, locale: LocaleApi) =>
     return locale.t('admin.log.line.revoke', slots);
 };
 
-export function logParts(row: LogRow, locale: LocaleApi)
-{
-    const handles = { staff: row.staff, person: row.person ?? '' };
-
-    return said(row, locale)
-        .split(SLOT)
-        .filter((part) => part !== '')
-        .map((part, at) =>
-        {
-            const slot = slotOf(part);
-
-            return slot === null ? { at, text: part, handle: false } : { at, text: handles[slot], handle: true };
-        });
-}
+export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff, person: row.person ?? '' });

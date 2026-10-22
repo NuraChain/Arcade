@@ -577,16 +577,12 @@ describe('guards', () =>
 
         const staff = { id: 'u-staff', handle: 'staff.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' };
 
-        useSession().establish({ ...staff, staff: 'moderator' });
-        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
-
-        useSession().establish({ ...staff, staff: 'admin' });
-        expect(await requireStaff()).toBe(true);
-        expect(await firstSection()).toMatchObject({ to: '/admin/money', replace: true });
-
-        useSession().establish({ ...staff, staff: 'owner' });
-        expect(await requireStaff()).toBe(true);
-        expect(await firstSection()).toMatchObject({ to: '/admin/money', replace: true });
+        for (const role of ['moderator', 'admin', 'owner'] as const)
+        {
+            useSession().establish({ ...staff, staff: role });
+            expect(await requireStaff(), role).toBe(true);
+            expect(await firstSection(), role).toMatchObject({ to: '/admin/people', replace: true });
+        }
     });
 
     it('never follows a next that leaves the app', () =>
