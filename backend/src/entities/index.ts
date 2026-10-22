@@ -33,6 +33,8 @@ import { RecoveryVault } from './recovery-vault.entity.ts';
 import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
+import { StaffAction } from './staff-action.entity.ts';
+import { StaffMember } from './staff-member.entity.ts';
 import { StakeConsent } from './stake-consent.entity.ts';
 import { TableStake } from './table-stake.entity.ts';
 import { User } from './user.entity.ts';
@@ -44,8 +46,8 @@ export {
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
     Notification, PaidAccount, PlayerStats, PushSubscription,
-    QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, StakeConsent, Table, TableRemoval, TableSeat, TableStake, User, UserAchievement,
-    Wallet
+    QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, StaffAction, StaffMember, StakeConsent, Table, TableRemoval, TableSeat, TableStake, User,
+    UserAchievement, Wallet
 };
 
 /**
@@ -68,5 +70,6 @@ export const entities: Function[] = [
     Table, TableSeat, TableRemoval, QuickTable,
     Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
     Notification, PushSubscription,
-    PaidAccount, TableStake, StakeConsent, Escrow, EscrowSeat
+    PaidAccount, TableStake, StakeConsent, Escrow, EscrowSeat,
+    StaffMember, StaffAction
 ];
