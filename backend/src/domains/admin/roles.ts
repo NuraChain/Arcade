@@ -12,6 +12,10 @@ export type ActionKind = (typeof ACTION_KINDS)[number];
 
 export const LOG_PAGE = 50;
 
+export const SUSPEND_CATEGORIES = ['harassment', 'spam', 'cheating', 'inappropriate', 'other'] as const;
+
+export type SuspendCategory = (typeof SUSPEND_CATEGORIES)[number];
+
 export const PEOPLE_LISTS = ['newest', 'suspended', 'minors', 'staff', 'reported'] as const;
 
 export type PeopleList = (typeof PEOPLE_LISTS)[number];
