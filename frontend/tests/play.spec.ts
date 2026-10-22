@@ -2006,6 +2006,7 @@ describe('PlayPage', () =>
             const titled = () => [...container.querySelectorAll('span')].find((one) => one.textContent === useLocale().t('watch.title'));
 
             await vi.waitFor(() => expect(titled()).toBeDefined(), { timeout: 4000 });
+            await vi.waitFor(() => expect(titled()!.parentElement!.parentElement!.querySelector('.animate-pulse'), 'the board was still on its way').toBeNull(), { timeout: 4000 });
             await settle();
 
             const watch = useWatch();
@@ -3018,6 +3019,14 @@ describe('PlayPage', () =>
 
             return { container, held };
         };
+
+        beforeEach(async () =>
+        {
+            server.nura.state = nuraState();
+            useToasts().reset();
+            useVault().reset();
+            await useVault().refresh();
+        });
 
         afterEach(() =>
         {
