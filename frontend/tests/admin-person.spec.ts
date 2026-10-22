@@ -284,6 +284,211 @@ describe('a person, as the staff read them', () =>
     });
 });
 
+describe('a profile cleared and every session ended, from the person\'s page', () =>
+{
+    it('offers only what their profile has, and says so when it has nothing of its own', async () =>
+    {
+        server.accounts.about['sara.k'] = { avatar: 'http://localhost:1/avatars/abc.webp', bio: 'DM me for seats' };
+        const container = await opened();
+
+        expect(all(container, '[data-clear] button')).toEqual(['Remove the picture', 'Reset the name', 'Clear the bio']);
+        cleanup();
+
+        server.accounts.about['sara.k'] = { displayName: 'sara.k' };
+        const bare = await opened();
+
+        expect(said(bare, '[data-content="none"]')).toBe('Their profile has no picture, name or bio of their own.');
+        expect(bare.querySelector('#admin-content-why')).toBeNull();
+        expect(said(bare, '[data-sign-out="none"]')).toBe('They are not signed in anywhere.');
+    });
+
+    it('resets a name at the press after asking, keeps what it said in the history, and says so once the server has', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'clear');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.clear(request);
+        });
+        const container = await opened();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, '  A name meant to insult.  ');
+        button(container, 'Reset the name')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Reset Sara Kamali’s name to their handle?',
+            lead: 'Their name becomes their handle until they choose another.',
+            confirm: 'Take it off',
+            destructive: true
+        });
+        expect(sent).not.toHaveBeenCalled();
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { part: 'name', reason: 'A name meant to insult.' } });
+        expect(said(container, '[data-person] h1')).toBe('sara.k');
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex reset sara.k’s name.']);
+        expect(said(container, '[data-history] [data-was]')).toBe('It said: Sara Kamali');
+        expect(button(container, 'Reset the name')).toBeUndefined();
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['Sara Kamali’s name is now their handle.']);
+        expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.part } ${ row.details.from }`)).toEqual(['clear name Sara Kamali']);
+    });
+
+    it('removes a picture at the press after asking', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'clear');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.clear(request);
+        });
+        server.accounts.about['sara.k'] = { avatar: 'http://localhost:1/avatars/abc.webp' };
+        const container = await opened();
+
+        expect(container.querySelector('[data-person] header img')).not.toBeNull();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'A picture nobody should see.');
+        button(container, 'Remove the picture')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'Remove Sara Kamali’s picture?', lead: 'It goes from their profile, and from this server when no other account shows it.' });
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { part: 'picture', reason: 'A picture nobody should see.' } });
+        expect(container.querySelector('[data-person] header img')).toBeNull();
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex removed sara.k’s picture.']);
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(container.querySelector('[data-person] header img')).toBeNull();
+        expect(toasts()).toEqual(['Sara Kamali’s picture is gone.']);
+    });
+
+    it('takes a refused clear back in the refusal\'s words, keeping the reason, and asks for one first', async () =>
+    {
+        vi.spyOn(client.admin, 'clear').mockRejectedValueOnce(new ApiError(409, 'staff-rank', 'That is above what your role may do.', undefined));
+        server.accounts.about['sara.k'] = { bio: 'DM me for seats' };
+        const container = await opened();
+        const before = server.calls.length;
+
+        button(container, 'Clear the bio')!.click();
+        await settle();
+
+        expect(said(container, '#admin-content-why-error')).toBe('Say why, in three characters or more.');
+        expect(useOverlay().items()).toHaveLength(0);
+        expect(server.calls.slice(before)).toEqual([]);
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'Selling seats in the bio.');
+        button(container, 'Clear the bio')!.click();
+        await settle();
+        await answered(true);
+
+        expect(button(container, 'Clear the bio')).toBeDefined();
+        expect(said(container, '[data-history="none"]')).toBe('Nothing yet.');
+        expect(toasts()).toEqual(['That is above what your role may do.']);
+        expect(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!.value).toBe('Selling seats in the bio.');
+    });
+
+    it('sends nothing when a clear or a sign-out is answered no', async () =>
+    {
+        const clear = vi.spyOn(client.admin, 'clear');
+        const signOut = vi.spyOn(client.admin, 'signOut');
+        told();
+        const container = await opened();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'A name meant to insult.');
+        button(container, 'Reset the name')!.click();
+        await settle();
+        await answered(false);
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their wallet was taken.');
+        button(container, 'Sign them out')!.click();
+        await settle();
+        await answered(false);
+
+        expect([clear, signOut].map((one) => one.mock.calls.length)).toEqual([0, 0]);
+        expect(said(container, '[data-person] h1')).toBe('Sara Kamali');
+        expect(all(container, '[data-session] [data-agent]')).toHaveLength(2);
+    });
+
+    it('signs them out everywhere at the press after asking, and says nothing is left to end', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'signOut');
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.signOut(request);
+        });
+        told();
+        const container = await opened();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their wallet was taken.');
+        button(container, 'Sign them out')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'Sign Sara Kamali out everywhere?',
+            lead: 'Every browser they use is signed out at once. They can sign in again with their wallet.',
+            confirm: 'Sign them out',
+            destructive: true
+        });
+
+        await answered(true);
+
+        expect(sent).toHaveBeenCalledWith({ params: { handle: 'sara.k' }, input: { reason: 'Their wallet was taken.' } });
+        expect(said(container, '[data-sessions="none"]')).toBe('Not signed in anywhere.');
+        expect(said(container, '[data-sign-out="none"]')).toBe('They are not signed in anywhere.');
+        expect(all(container, '[data-history] [data-line]')).toEqual(['alex signed sara.k out everywhere.']);
+        expect(toasts()).toEqual([]);
+
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['Sara Kamali is signed out everywhere.']);
+        expect(server.staff.log.map((row) => `${ row.kind } ${ row.details.sessions }`)).toEqual(['sign-out 2']);
+    });
+
+    it('tells the staff a guest signed out cannot come back', async () =>
+    {
+        server.accounts.about['sara.k'] = { sessions: [{ openedAt: hoursAgo(1), device: false }] };
+        const container = await opened();
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-sign-out-why')!, 'Their device was stolen.');
+        button(container, 'Sign them out')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ lead: 'Every browser they use is signed out at once. They are a guest, so they cannot sign back in.' });
+    });
+
+    it('says it in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        server.accounts.about['sara.k'] = { bio: 'DM me for seats', sessions: [{ openedAt: hoursAgo(1), device: false }] };
+        const container = await opened();
+
+        expect(all(container, '[data-clear] button')).toEqual(['برگردوندن اسم', 'پاک کردن بیو']);
+        expect(said(container, '#person-sign-out')).toBe('خارج کردنش از همه‌جا');
+
+        typeInto(container.querySelector<HTMLTextAreaElement>('#admin-content-why')!, 'توی بیوش صندلی می‌فروشه.');
+        button(container, 'پاک کردن بیو')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'بیوی Sara Kamali پاک بشه؟', confirm: 'برش دار' });
+    });
+});
+
 describe('a suspension, from the person\'s page', () =>
 {
     it('asks before it suspends, then shows it at the press and says so once the server has', async () =>

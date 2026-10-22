@@ -16,11 +16,16 @@ export default component LogEntry(props: { row: LogRow })
 
     derived reason = props.row.reason;
 
+    derived was = props.row.kind === 'clear' ? props.row.details.from ?? '' : '';
+
+    derived recalled = was !== '';
+
     <div class="flex flex-col gap-1.5 px-4 py-3">
         <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
         <Show when={ reasoned }>
             <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ reason }</p>
         </Show>
+        <p class="text-ui-xs text-faint" hidden={ !recalled } data-was><span>{ locale.t('admin.log.was') }</span> <span class="text-muted" dir="auto">{ was }</span></p>
         <p class="facts text-ui-xs text-faint">
             <span>{ when }</span>
             <span class="empty:hidden">{ role }</span>

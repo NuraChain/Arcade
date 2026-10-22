@@ -1,14 +1,16 @@
 import 'reflect-metadata';
 
+import { createHash } from 'node:crypto';
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DataSource } from 'typeorm';
+import { DataSource, In, IsNull } from 'typeorm';
 
 import { errorResponse } from '@azerothjs/http';
 
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { PEOPLE_PAGE } from '../src/domains/admin/roles.ts';
-import { Match, PushSubscription, Session, StaffAction, Suspension, TableSeat, User, entities } from '../src/entities/index.ts';
+import { Avatar, Match, PushSubscription, Session, StaffAction, Suspension, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
@@ -33,7 +35,10 @@ const listener: WriteListener = {
     chatSeen: () => undefined,
     socialChanged: () => undefined,
     edgesChanged: () => undefined,
-    selfChanged: () => undefined,
+    selfChanged: (userId, what) =>
+    {
+        rung.push(`${ userId } ${ what }`);
+    },
     gamePushed: () => undefined,
     gameWatched: () => undefined,
     tableChanged: () => undefined,
@@ -46,6 +51,8 @@ const listener: WriteListener = {
 };
 
 const revoked: string[] = [];
+
+const rung: string[] = [];
 
 const CONFIG = {
     secret: 'a-test-secret-that-is-long-enough-to-use',
@@ -121,6 +128,16 @@ const grant = (owner: Person, target: Person, role: 'moderator' | 'admin') =>
 
 const handles = (rows: { handle: string }[] | undefined) => (rows ?? []).map((row) => row.handle);
 
+const sessionOf = async (person: Person, mark: number, expired = false) =>
+{
+    const [made] = await db.query(
+        `insert into sessions (user_id, token_hash, expires_at, user_agent) values ($1, $2, now() + make_interval(mins => $3), 'test') returning id`,
+        [person.id, `${ person.id.replaceAll('-', '') }${ mark }`.padEnd(64, '0'), expired ? -1 : 1440]
+    );
+
+    return (made as { id: string }).id;
+};
+
 describe.skipIf(!active)('the people, against a real database', () =>
 {
     beforeAll(async () =>
@@ -135,7 +152,7 @@ describe.skipIf(!active)('the people, against a real database', () =>
     {
         if (db?.isInitialized)
         {
-            await db.query('truncate table users cascade');
+            await db.query('truncate table users, avatars cascade');
             await db.destroy();
         }
     });
@@ -144,7 +161,8 @@ describe.skipIf(!active)('the people, against a real database', () =>
     {
         ports = buildPorts(db, CONFIG, listener);
         revoked.length = 0;
-        await db.query('truncate table users cascade');
+        rung.length = 0;
+        await db.query('truncate table users, avatars cascade');
     });
 
     it('opens the people to a moderator and above, and answers a player and a suspended moderator as nothing', async () =>
@@ -332,16 +350,6 @@ describe.skipIf(!active)('the people, against a real database', () =>
             return await ports.match.start(one.id, table.id);
         };
 
-        const signedIn = async (person: Person) =>
-        {
-            const [made] = await db.query(
-                `insert into sessions (user_id, token_hash, expires_at, user_agent) values ($1, $2, now() + interval '1 day', 'test') returning id`,
-                [person.id, `${ person.id.replaceAll('-', '') }`.padEnd(64, '0').slice(0, 64)]
-            );
-
-            return (made as { id: string }).id;
-        };
-
         const suspend = (actor: Person, target: Person, days?: 1 | 7 | 30) =>
             ports.admin.suspend(actor.id, target.handle, { ...(days === undefined ? {} : { days }), category: 'harassment', reason: 'Rude at every table this week' });
 
@@ -361,7 +369,7 @@ describe.skipIf(!active)('the people, against a real database', () =>
             await ports.table.claim(target.id, waiting.id);
             await db.getRepository(PushSubscription).insert({ userId: target.id, endpoint: `https://push.example/${ target.id }`, p256dh: 'key', auth: 'auth' });
             await db.getRepository(PushSubscription).insert({ userId: opponent.id, endpoint: `https://push.example/${ opponent.id }`, p256dh: 'key', auth: 'auth' });
-            const session = await signedIn(target);
+            const session = await sessionOf(target, 0);
             const seen = await suspend(moderator, target, 7);
 
             const finished = await db.getRepository(Match).findOneByOrFail({ id: game.id });
@@ -490,6 +498,116 @@ describe.skipIf(!active)('the people, against a real database', () =>
             await ports.admin.suspend(owner.id, person.handle, { category: 'spam', reason: 'Sold seats in the chat' });
 
             expect(await refusal()).toEqual({ status: 403, code: 'suspended', details: { category: 'spam', vault: VAULT } });
+        });
+    });
+
+    describe('what the staff take off a profile, and every session ended', () =>
+    {
+        const picture = async (person: Person, seed: number) =>
+        {
+            const hash = createHash('sha256').update(String(seed)).digest('hex');
+            const url = `${ CONFIG.origin }/avatars/${ hash }.webp`;
+
+            await db.getRepository(Avatar).insert({ hash, type: 'image/webp', bytes: Buffer.from([seed]) });
+            await db.getRepository(User).update({ id: person.id }, { avatar: url });
+
+            return { hash, url };
+        };
+
+        it('takes a picture off, and keeps the file while another account still shows it', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const one = await makeUser(null);
+            const two = await makeUser(null);
+            const shared = await picture(one, 7);
+
+            await db.getRepository(User).update({ id: two.id }, { avatar: shared.url });
+
+            const seen = await ports.admin.clear(owner.id, one.handle, { part: 'picture', reason: 'A picture nobody should see' });
+
+            expect((await db.getRepository(User).findOneByOrFail({ id: one.id })).avatar).toBeNull();
+            expect(seen?.avatar).toBeUndefined();
+            expect(await db.getRepository(Avatar).countBy({ hash: shared.hash })).toBe(1);
+
+            await ports.admin.clear(owner.id, two.handle, { part: 'picture', reason: 'The same picture again' });
+
+            expect(await db.getRepository(Avatar).countBy({ hash: shared.hash })).toBe(0);
+            expect((await db.getRepository(StaffAction).find({ order: { createdAt: 'ASC' } })).map((row) => [row.kind, row.personHandle, row.details])).toEqual([
+                ['clear', one.handle, { part: 'picture' }],
+                ['clear', two.handle, { part: 'picture' }]
+            ]);
+        });
+
+        it('resets a name to the handle and clears a bio, keeping what they said, and writes nothing for what is already clear', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const moderator = await makeUser(1);
+            const target = await makeUser(null, 'A name meant to insult');
+
+            await grant(owner, moderator, 'moderator');
+            await db.getRepository(User).update({ id: target.id }, { bio: 'Selling seats, message me' });
+
+            const named = await ports.admin.clear(moderator.id, target.handle, { part: 'name', reason: 'A name meant to insult' });
+            const cleared = await ports.admin.clear(moderator.id, target.handle, { part: 'bio', reason: 'Selling seats in the bio' });
+
+            await ports.admin.clear(moderator.id, target.handle, { part: 'bio', reason: 'Again, for luck' });
+            await ports.admin.clear(moderator.id, target.handle, { part: 'name', reason: 'Again, for luck' });
+            await ports.admin.clear(moderator.id, target.handle, { part: 'picture', reason: 'There is none' });
+
+            const user = await db.getRepository(User).findOneByOrFail({ id: target.id });
+
+            expect([user.displayName, user.bio]).toEqual([target.handle, '']);
+            expect(rung.filter((one) => one === `${ target.id } profile`)).toHaveLength(2);
+            expect([named?.displayName, cleared?.bio]).toEqual([target.handle, '']);
+            expect((await db.getRepository(StaffAction).find({ where: { kind: 'clear' }, order: { createdAt: 'ASC' } })).map((row) => [row.staffHandle, row.details.part, row.details.from])).toEqual([
+                [moderator.handle, 'name', 'A name meant to insult'],
+                [moderator.handle, 'bio', 'Selling seats, message me']
+            ]);
+        });
+
+        it('refuses a clear or a sign-out at or above the actor, on themselves or on nobody, and changes nothing', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const admin = await makeUser(1, 'Admin Nasim');
+            const moderator = await makeUser(2);
+
+            await grant(owner, admin, 'admin');
+            await grant(owner, moderator, 'moderator');
+            await sessionOf(admin, 1);
+
+            expect(await word(ports.admin.clear(moderator.id, admin.handle, { part: 'name', reason: 'Above me' }))).toBe('409 staff-rank');
+            expect(await word(ports.admin.signOut(moderator.id, admin.handle, { reason: 'Above me' }))).toBe('409 staff-rank');
+            expect(await word(ports.admin.clear(moderator.id, moderator.handle, { part: 'bio', reason: 'On myself' }))).toBe('409 staff-self');
+            expect(await word(ports.admin.signOut(owner.id, 'nobody-here', { reason: 'About nobody' }))).toBe('404 staff-nobody');
+            expect((await db.getRepository(User).findOneByOrFail({ id: admin.id })).displayName).toBe('Admin Nasim');
+            expect(await db.getRepository(Session).countBy({ userId: admin.id, revokedAt: IsNull() })).toBe(1);
+            expect(await db.getRepository(StaffAction).countBy({ kind: In(['clear', 'sign-out']) })).toBe(0);
+        });
+
+        it('ends every live session, closes their sockets and lets go of their push, counts them in one row, and writes nothing when none is left', async () =>
+        {
+            const owner = await makeUser(OWNER);
+            const target = await makeUser(null);
+            const first = await sessionOf(target, 1);
+            const second = await sessionOf(target, 2);
+            const lapsed = await sessionOf(target, 3, true);
+            const gone = await sessionOf(target, 4);
+
+            await db.query('update sessions set revoked_at = now() where id = $1', [gone]);
+            await db.getRepository(PushSubscription).insert({ userId: target.id, endpoint: `https://push.example/${ target.id }`, p256dh: 'key', auth: 'auth' });
+
+            const seen = await ports.admin.signOut(owner.id, target.handle, { reason: 'Their wallet was taken' });
+
+            expect([...revoked].sort()).toEqual([first, second].sort());
+            expect((await db.getRepository(Session).find({ where: { userId: target.id, revokedAt: IsNull() } })).map((one) => one.id)).toEqual([lapsed]);
+            expect(seen?.sessions).toEqual([]);
+            expect(await db.getRepository(PushSubscription).countBy({ userId: target.id })).toBe(0);
+            expect((await db.getRepository(StaffAction).find()).map((row) => [row.kind, row.personHandle, row.details])).toEqual([['sign-out', target.handle, { sessions: '2' }]]);
+
+            await ports.admin.signOut(owner.id, target.handle, { reason: 'Again, for luck' });
+
+            expect(await db.getRepository(StaffAction).count()).toBe(1);
+            expect(revoked).toHaveLength(2);
         });
     });
 });

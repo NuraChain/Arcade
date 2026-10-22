@@ -971,7 +971,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const team = createStaffService(db, config.adminWallet);
 
-    const accounts = createPeopleService(db, config.adminWallet);
+    const accounts = createPeopleService(db, config.adminWallet, config.origin);
 
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
@@ -1678,6 +1678,45 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 await accounts.lift(actor, handle, input.reason);
+                return await personOf(handle);
+            },
+
+            async clear(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, changed } = await accounts.clear(actor, handle, input.part, input.reason);
+
+                if (changed)
+                {
+                    await courtesy('profile cleared', () => ringProfile(id));
+                }
+
+                return await personOf(handle);
+            },
+
+            async signOut(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, sessions } = await accounts.signOut(actor, handle, input.reason);
+
+                if (sessions.length > 0)
+                {
+                    live?.sessionsRevoked(sessions);
+                    await courtesy('letting go of push subscriptions', () => notify.forgetReach(id));
+                }
+
                 return await personOf(handle);
             }
         },

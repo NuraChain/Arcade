@@ -1,9 +1,10 @@
 import { createResource, Link, useHead, useParams } from 'azerothjs';
 
-import { outranks } from '../../../../backend/src/domains/admin/roles.ts';
+import { outranks, type ClearPart } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminPerson } from '../../../../backend/src/schemas.ts';
 import { ApiError, client } from '../../api.ts';
 import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import PersonContent from '../../components/admin/person-content.component.azeroth';
 import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
 import Said from '../../components/admin/said.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
@@ -57,6 +58,12 @@ const STATE_WORDS: Record<AdminPerson['paidGames'][number]['state'], MessageKey>
 const NOTE_MIN = 3;
 
 const DAY_MS = 86_400_000;
+
+const CLEARED: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.done.picture',
+    name: 'admin.content.done.name',
+    bio: 'admin.content.done.bio'
+};
 
 const PLAYED: RecordPart[] = ['level', 'record'];
 
@@ -152,6 +159,12 @@ export default component PersonPage()
     derived walleted = wallets.length > 0;
 
     derived guest = person !== null && !walleted;
+
+    derived pictured = person?.avatar !== undefined;
+
+    derived named = person !== null && person.displayName !== person.handle;
+
+    derived described = person !== null && person.bio !== '';
 
     derived strangers = locale.t(person?.strangers === false ? 'admin.person.strangers.off' : 'admin.person.strangers.on');
 
@@ -315,6 +328,56 @@ export default component PersonPage()
         const sent = guesses.during(liftedFor(reason, runtime().clock.now()), () => client.admin.lift({ params: { handle: about }, input: { reason } }), reread);
 
         return await attempt(sent, locale.t('admin.lift.done', { name: called }), whyStaffRefused);
+    };
+
+    const clearedFor = (part: ClearPart, reason: string, at: number): Guess<AdminPerson> => (from) =>
+    {
+        const was = part === 'name' ? from.displayName : part === 'bio' ? from.bio : '';
+        const row = {
+            id: `clear-${ at }`,
+            at: new Date(at).toISOString(),
+            staff: me?.handle ?? '',
+            staffRole: me?.staff ?? 'moderator',
+            kind: 'clear' as const,
+            person: from.handle,
+            reason,
+            details: { part, ...(part === 'picture' ? {} : { from: was }) }
+        };
+        const history = [row, ...from.history];
+
+        if (part === 'picture')
+        {
+            return { ...from, avatar: undefined, history };
+        }
+
+        return part === 'name' ? { ...from, displayName: from.handle, history } : { ...from, bio: '', history };
+    };
+
+    const signedOutFor = (reason: string, at: number): Guess<AdminPerson> => (from) => ({
+        ...from,
+        sessions: [],
+        history: [
+            { id: `sign-out-${ at }`, at: new Date(at).toISOString(), staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'sign-out', person: from.handle, reason, details: { sessions: String(from.sessions.length) } },
+            ...from.history
+        ]
+    });
+
+    const clearNow = async (part: ClearPart, reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(clearedFor(part, reason, runtime().clock.now()), () => client.admin.clear({ params: { handle: about }, input: { part, reason } }), reread);
+
+        return await attempt(sent, locale.t(CLEARED[part], { name: called }), whyStaffRefused);
+    };
+
+    const signOutNow = async (reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(signedOutFor(reason, runtime().clock.now()), () => client.admin.signOut({ params: { handle: about }, input: { reason } }), reread);
+
+        return await attempt(sent, locale.t('admin.signOut.done', { name: called }), whyStaffRefused);
     };
 
     const typedNote = (value: string) =>
@@ -563,6 +626,16 @@ export default component PersonPage()
                             <p class="text-ui-sm text-muted">{ locale.t('admin.person.actionsLead') }</p>
                         </div>
                         <PersonSuspension name={ calledBy } suspended={ suspended } guest={ guest } onSuspend={ suspendNow } onLift={ liftNow } />
+                        <PersonContent
+                            name={ calledBy }
+                            pictured={ pictured }
+                            named={ named }
+                            described={ described }
+                            signedIn={ signedIn }
+                            guest={ guest }
+                            onClear={ clearNow }
+                            onSignOut={ signOutNow }
+                        />
                     </section>
                 </Show>
             </div>

@@ -34,6 +34,12 @@ export const TERM_WORDS: Readonly<Record<string, MessageKey>> = {
     30: 'admin.suspend.term.30'
 };
 
+const CLEAR_LINES: Readonly<Record<string, MessageKey>> = {
+    picture: 'admin.log.line.clear.picture',
+    name: 'admin.log.line.clear.name',
+    bio: 'admin.log.line.clear.bio'
+};
+
 const isRole = (value: string | undefined): value is StaffRole => STAFF_ROLES.some((role) => role === value);
 
 export const foldHandle = (typed: string) => normalizeName(typed.trim().replace(/^@/, ''));
@@ -95,6 +101,16 @@ const said = (row: LogRow, locale: LocaleApi) =>
     if (row.kind === 'expire')
     {
         return locale.t('admin.log.line.expire', slots);
+    }
+
+    if (row.kind === 'clear')
+    {
+        return locale.t(CLEAR_LINES[row.details.part ?? ''] ?? 'admin.log.line.clear.picture', slots);
+    }
+
+    if (row.kind === 'sign-out')
+    {
+        return locale.t('admin.log.line.sign-out', slots);
     }
 
     return locale.t('admin.log.line.revoke', slots);

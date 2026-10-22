@@ -42,7 +42,9 @@ const KIND_WORDS: Record<ActionKind | 'all', MessageKey> = {
     note: 'admin.log.kind.note',
     suspend: 'admin.log.kind.suspend',
     lift: 'admin.log.kind.lift',
-    expire: 'admin.log.kind.expire'
+    expire: 'admin.log.kind.expire',
+    clear: 'admin.log.kind.clear',
+    'sign-out': 'admin.log.kind.sign-out'
 };
 
 const queryOf = (asked: Asked) => ({

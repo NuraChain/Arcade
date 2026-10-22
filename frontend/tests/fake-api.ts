@@ -38,7 +38,7 @@ import type {
 } from '../../backend/src/schemas.ts';
 import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
-import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type GrantedRole, type PeopleList, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -1206,6 +1206,53 @@ export const client =
             server.accounts.suspended = server.accounts.suspended.filter((one) => one !== params.handle);
             server.accounts.about[params.handle] = kept;
             staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'lift', person: params.handle, reason: input.reason, details: {} });
+
+            return accountView(params.handle);
+        },
+
+        async clear({ params, input }: { params: { handle: string }; input: { part: ClearPart; reason: string } })
+        {
+            server.calls.push(`admin.clear ${ params.handle } ${ input.part } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const shown = accountView(params.handle);
+            const was = input.part === 'name' ? shown.displayName : input.part === 'bio' ? shown.bio : shown.avatar ?? '';
+            const empty = input.part === 'name' ? was === params.handle : was === '';
+
+            if (!empty)
+            {
+                const kept = { ...server.accounts.about[params.handle] };
+
+                if (input.part === 'picture')
+                {
+                    delete kept.avatar;
+                }
+                else
+                {
+                    Object.assign(kept, input.part === 'name' ? { displayName: params.handle } : { bio: '' });
+                }
+
+                server.accounts.about[params.handle] = kept;
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'clear', person: params.handle, reason: input.reason, details: { part: input.part, ...(input.part === 'picture' ? {} : { from: was }) } });
+            }
+
+            return accountView(params.handle);
+        },
+
+        async signOut({ params, input }: { params: { handle: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.signOut ${ params.handle } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const live = accountView(params.handle).sessions.length;
+
+            if (live > 0)
+            {
+                server.accounts.about[params.handle] = { ...server.accounts.about[params.handle], sessions: [] };
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'sign-out', person: params.handle, reason: input.reason, details: { sessions: String(live) } });
+            }
 
             return accountView(params.handle);
         }

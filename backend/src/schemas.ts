@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
+import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -637,6 +637,10 @@ export const adminSuspendInput = object({
 });
 
 export const adminLiftInput = object({ reason: said() });
+
+export const adminClearInput = object({ part: enumOf(CLEAR_PARTS), reason: said() });
+
+export const adminSignOutInput = object({ reason: said() });
 
 export const reclaimInput = object({ id: string({ max: 36 }) });
 

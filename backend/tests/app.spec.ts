@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note', 'suspend', 'lift'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'note', 'suspend', 'lift', 'clear', 'signOut'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1008,19 +1008,23 @@ describe('the owner\'s view of the vault', () =>
         expect(told).toEqual([['staff', 'somebody'], ['setStaff', 'somebody', change], ['log', 'somebody', { kind: 'grant', person: 'mina' }]]);
     });
 
-    it('answers anybody who may not read the people as a page that is not there, on the list, a person and a note', async () =>
+    it('answers anybody who may not read the people as a page that is not there, on the list, a person and every action on one', async () =>
     {
         const told: unknown[][] = [];
         const app = owned(told, null);
         const note = { text: 'Watches the Friday tables' };
         const suspension = { days: 7, category: 'harassment', reason: 'Rude at a Ludo table' };
         const lifting = { reason: 'Said sorry to the table' };
+        const clearing = { part: 'name', reason: 'A name meant to insult' };
+        const ending = { reason: 'Their wallet was taken' };
         const answers = [
             await sent(app, '/people?list=minors&q=mina'),
             await sent(app, '/people/mina'),
             await sent(app, '/people/mina/notes', note),
             await sent(app, '/people/mina/suspend', suspension),
-            await sent(app, '/people/mina/lift', lifting)
+            await sent(app, '/people/mina/lift', lifting),
+            await sent(app, '/people/mina/clear', clearing),
+            await sent(app, '/people/mina/sign-out', ending)
         ];
 
         for (const response of answers)
@@ -1035,7 +1039,9 @@ describe('the owner\'s view of the vault', () =>
             ['person', 'somebody', 'mina'],
             ['note', 'somebody', 'mina', note],
             ['suspend', 'somebody', 'mina', suspension],
-            ['lift', 'somebody', 'mina', lifting]
+            ['lift', 'somebody', 'mina', lifting],
+            ['clear', 'somebody', 'mina', clearing],
+            ['signOut', 'somebody', 'mina', ending]
         ]);
     });
 
@@ -1054,6 +1060,9 @@ describe('the owner\'s view of the vault', () =>
         expect((await sent(app, '/people/mina/suspend', { days: 7, category: 'rude', reason: 'Rude all week' })).status).toBe(422);
         expect((await sent(app, '/people/mina/suspend', { category: 'spam', reason: '   ' })).status).toBe(422);
         expect((await sent(app, '/people/mina/lift', { reason: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/clear', { part: 'avatar', reason: 'An old picture' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/clear', { part: 'bio', reason: '  ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/sign-out', {})).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
         expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
         expect((await sent(app, '/log?kind=delete')).status).toBe(422);
@@ -1074,6 +1083,8 @@ describe('the owner\'s view of the vault', () =>
         expect(bodies).toContain(`'/admin/people/:handle/notes': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/suspend': (bad) => [`);
         expect(bodies).toContain(`'/admin/people/:handle/lift': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/clear': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/sign-out': (bad) => [`);
         expect(spared).toContain(`'/admin/vault/pause'`);
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);

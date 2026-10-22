@@ -1,0 +1,173 @@
+import type { ClearPart } from '../../../../backend/src/domains/admin/roles.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
+
+const PRESS: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.picture',
+    name: 'admin.content.name',
+    bio: 'admin.content.bio'
+};
+
+const ASK: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.ask.picture',
+    name: 'admin.content.ask.name',
+    bio: 'admin.content.ask.bio'
+};
+
+const ASK_LEAD: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.askLead.picture',
+    name: 'admin.content.askLead.name',
+    bio: 'admin.content.askLead.bio'
+};
+
+const REASON_MIN = 3;
+
+export default component PersonContent(props: {
+    name: string;
+    pictured: boolean;
+    named: boolean;
+    described: boolean;
+    signedIn: boolean;
+    guest: boolean;
+    onClear: (part: ClearPart, reason: string) => Promise<boolean>;
+    onSignOut: (reason: string) => Promise<boolean>;
+})
+{
+    const locale = useLocale();
+    const overlay = useOverlay();
+
+    state why = '';
+
+    state whyTold = null as string | null;
+
+    state endWhy = '';
+
+    state endTold = null as string | null;
+
+    derived parts = [
+        ...(props.pictured ? ['picture' as const] : []),
+        ...(props.named ? ['name' as const] : []),
+        ...(props.described ? ['bio' as const] : [])
+    ];
+
+    derived presses = parts.map((part) => ({ part, label: locale.t(PRESS[part]) }));
+
+    derived clearable = parts.length > 0;
+
+    derived ending = props.signedIn;
+
+    const typedWhy = (value: string) =>
+    {
+        why = value;
+        whyTold = null;
+    };
+
+    const typedEnd = (value: string) =>
+    {
+        endWhy = value;
+        endTold = null;
+    };
+
+    const asked = async (title: string, lead: string, confirm: string, label: string) => await overlay.open(
+        ConfirmSheet,
+        { title, lead, confirm, destructive: true },
+        { label }
+    ).closed === true;
+
+    const clear = async (part: ClearPart) =>
+    {
+        const reason = why.trim();
+
+        whyTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (whyTold !== null)
+        {
+            return;
+        }
+
+        const yes = await asked(locale.t(ASK[part], { name: props.name }), locale.t(ASK_LEAD[part]), locale.t('admin.content.confirm'), locale.t('admin.content.title'));
+
+        if (yes && await props.onClear(part, reason))
+        {
+            why = '';
+        }
+    };
+
+    const signOut = async () =>
+    {
+        const reason = endWhy.trim();
+
+        endTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (endTold !== null)
+        {
+            return;
+        }
+
+        const yes = await asked(
+            locale.t('admin.signOut.ask', { name: props.name }),
+            locale.t(props.guest ? 'admin.signOut.askGuest' : 'admin.signOut.askLead'),
+            locale.t('admin.signOut.confirm'),
+            locale.t('admin.signOut.title')
+        );
+
+        if (yes && await props.onSignOut(reason))
+        {
+            endWhy = '';
+        }
+    };
+
+    <div class="flex flex-col gap-4">
+        <Panel pad="md" stack="md" labelledBy="person-content">
+            <div class="flex flex-col gap-1">
+                <h3 id="person-content" class="text-ui-md font-semibold text-text">{ locale.t('admin.content.title') }</h3>
+                <p class="text-ui-sm text-muted">{ locale.t('admin.content.lead') }</p>
+            </div>
+            <Show when={ clearable } fallback={ <p class="text-ui-sm text-text" data-content="none">{ locale.t('admin.content.none') }</p> }>
+                <Field id="admin-content-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
+                    <TextArea
+                        id="admin-content-why"
+                        class="max-w-xl"
+                        value={ why }
+                        maxlength={ 500 }
+                        describedBy={ whyTold !== null ? 'admin-content-why-error' : 'admin-content-why-hint' }
+                        onInput={ typedWhy }
+                    />
+                </Field>
+                <div class="flex flex-wrap gap-2" data-clear>
+                    <For each={ presses } key={ (one) => one.part } let={ press }>
+                        <span class="flex">
+                            <Button variant="destructive" onClick={ () => void clear(press.part) }>{ press.label }</Button>
+                        </span>
+                    </For>
+                </div>
+            </Show>
+        </Panel>
+
+        <Panel pad="md" stack="md" labelledBy="person-sign-out">
+            <div class="flex flex-col gap-1">
+                <h3 id="person-sign-out" class="text-ui-md font-semibold text-text">{ locale.t('admin.signOut.title') }</h3>
+                <p class="text-ui-sm text-muted">{ locale.t('admin.signOut.lead') }</p>
+            </div>
+            <Show when={ ending } fallback={ <p class="text-ui-sm text-text" data-sign-out="none">{ locale.t('admin.signOut.none') }</p> }>
+                <Field id="admin-sign-out-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ endTold }>
+                    <TextArea
+                        id="admin-sign-out-why"
+                        class="max-w-xl"
+                        value={ endWhy }
+                        maxlength={ 500 }
+                        describedBy={ endTold !== null ? 'admin-sign-out-why-error' : 'admin-sign-out-why-hint' }
+                        onInput={ typedEnd }
+                    />
+                </Field>
+                <Button variant="destructive" class="self-start" onClick={ () => void signOut() }>{ locale.t('admin.signOut.send') }</Button>
+            </Show>
+        </Panel>
+    </div>
+}

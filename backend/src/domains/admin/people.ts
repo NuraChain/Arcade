@@ -1,12 +1,13 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { Device, PaidAccount, Report, Session, Suspension, User, Wallet } from '../../entities/index.ts';
+import { Avatar, Device, PaidAccount, Report, Session, Suspension, User, Wallet } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { AdminPeople } from '../../schemas.ts';
+import { avatarHashOf } from '../identity/avatar.ts';
 import { folded, likeLiteral, SEARCH_FROM, searchNeedle } from '../social/names.ts';
 import { agentOf } from './agent.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
-import { outranks, PEOPLE_PAGE, type GrantedRole, type PeopleList, type SuspendCategory, type SuspendDays } from './roles.ts';
+import { outranks, PEOPLE_PAGE, type ClearPart, type GrantedRole, type PeopleList, type SuspendCategory, type SuspendDays } from './roles.ts';
 import { record, staffRefusal, type Actor } from './staff.ts';
 
 export interface PeopleAsk
@@ -101,7 +102,7 @@ const face = (row: PersonRow) =>
     };
 };
 
-export function createPeopleService(db: DataSource, ownerWallet: string)
+export function createPeopleService(db: DataSource, ownerWallet: string, origin: string)
 {
     const owner = () => (ownerWallet === '' ? '' : normalizeAddress(ownerWallet));
 
@@ -361,6 +362,75 @@ export function createPeopleService(db: DataSource, ownerWallet: string)
                 await tx.getRepository(User).update({ id: target.id }, { isSuspended: false });
                 await tx.getRepository(Suspension).delete({ userId: target.id });
                 await record(tx, actor, { kind: 'lift', person: { id: target.id, handle: target.handle }, reason });
+            });
+        },
+
+        async clear(actor: Actor, handle: string, part: ClearPart, reason: string)
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await locked(tx, handle);
+                const target = await reachable(tx, actor, handle);
+                const user = await tx.getRepository(User).findOneByOrFail({ id: target.id });
+                const person = { id: target.id, handle: target.handle };
+                const changed = (part === 'picture' && user.avatar !== null)
+                    || (part === 'name' && user.displayName !== user.handle)
+                    || (part === 'bio' && user.bio !== '');
+
+                if (part === 'picture' && user.avatar !== null)
+                {
+                    const hash = avatarHashOf(origin, user.avatar);
+
+                    await tx.getRepository(User).update({ id: user.id }, { avatar: null });
+
+                    if (hash !== null)
+                    {
+                        await tx.getRepository(Avatar).createQueryBuilder()
+                            .delete()
+                            .where('hash = :hash', { hash })
+                            .andWhere('not exists (select 1 from users u where u.avatar = :link)', { link: user.avatar })
+                            .execute();
+                    }
+
+                    await record(tx, actor, { kind: 'clear', person, reason, details: { part } });
+                }
+
+                if (part === 'name' && user.displayName !== user.handle)
+                {
+                    await tx.getRepository(User).update({ id: user.id }, { displayName: user.handle });
+                    await record(tx, actor, { kind: 'clear', person, reason, details: { part, from: user.displayName } });
+                }
+
+                if (part === 'bio' && user.bio !== '')
+                {
+                    await tx.getRepository(User).update({ id: user.id }, { bio: '' });
+                    await record(tx, actor, { kind: 'clear', person, reason, details: { part, from: user.bio } });
+                }
+
+                return { id: target.id, changed };
+            });
+        },
+
+        async signOut(actor: Actor, handle: string, reason: string)
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await locked(tx, handle);
+                const target = await reachable(tx, actor, handle);
+                const ended = await tx.getRepository(Session).createQueryBuilder()
+                    .update()
+                    .set({ revokedAt: () => 'now()' })
+                    .where('user_id = :id and revoked_at is null and expires_at > now()', { id: target.id })
+                    .returning('id')
+                    .execute();
+                const sessions: { id: string }[] = ended.raw;
+
+                if (sessions.length > 0)
+                {
+                    await record(tx, actor, { kind: 'sign-out', person: { id: target.id, handle: target.handle }, reason, details: { sessions: String(sessions.length) } });
+                }
+
+                return { id: target.id, sessions: sessions.map((session) => session.id) };
             });
         },
 

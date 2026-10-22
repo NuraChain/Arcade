@@ -6,7 +6,7 @@ export const GRANTED_ROLES = ['moderator', 'admin'] as const;
 
 export type GrantedRole = (typeof GRANTED_ROLES)[number];
 
-export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire'] as const;
+export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -19,6 +19,10 @@ export type SuspendCategory = (typeof SUSPEND_CATEGORIES)[number];
 export const SUSPEND_DAYS = [1, 7, 30] as const;
 
 export type SuspendDays = (typeof SUSPEND_DAYS)[number];
+
+export const CLEAR_PARTS = ['picture', 'name', 'bio'] as const;
+
+export type ClearPart = (typeof CLEAR_PARTS)[number];
 
 export const PEOPLE_LISTS = ['newest', 'suspended', 'minors', 'staff', 'reported'] as const;
 

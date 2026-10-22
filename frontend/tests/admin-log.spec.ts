@@ -65,6 +65,16 @@ const suspensions = () =>
     staffLogged({ at: hoursAgo(1), kind: 'expire', person: 'reza.t', reason: 'The suspension ran its time.', details: {} });
 };
 
+const cleared = () =>
+{
+    staffLogged({ at: hoursAgo(3), staff: 'mina', staffRole: 'moderator', kind: 'clear', person: 'reza.t', reason: 'A name meant to insult.', details: { part: 'name', from: 'Reza the Cheat' } });
+    staffLogged({ at: hoursAgo(2), staff: 'mina', staffRole: 'moderator', kind: 'clear', person: 'reza.t', reason: 'Selling seats in the bio.', details: { part: 'bio', from: 'DM me for seats' } });
+    staffLogged({ at: hoursAgo(1.5), staff: 'alex', staffRole: 'owner', kind: 'clear', person: 'reza.t', reason: 'A picture nobody should see.', details: { part: 'picture' } });
+    staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'sign-out', person: 'reza.t', reason: 'Their wallet was taken.', details: { sessions: '2' } });
+};
+
+const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
+
 const story = () =>
 {
     staffLogged({ at: hoursAgo(48), staff: 'alex', staffRole: 'owner', kind: 'grant', person: 'mina', reason: 'Runs the Friday tables.', details: { to: 'moderator' } });
@@ -137,6 +147,22 @@ describe('the log', () =>
         expect(facts(container, '[data-entry]:first-child')).toEqual(['1 hour ago', '']);
         expect(said(container, '[data-entry]:nth-child(2) [data-reason]')).toBe('Said sorry to the table.');
         expect(facts(container, '[data-entry]:last-child')[1]).toBe('Moderator');
+    });
+
+    it('says what was taken off a profile, with what a name or a bio said, and every session ended', async () =>
+    {
+        cleared();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'alex signed reza.t out everywhere.',
+            'alex removed reza.t’s picture.',
+            'mina cleared reza.t’s bio.',
+            'mina reset reza.t’s name.'
+        ]);
+        expect(was(container)).toEqual([null, null, 'It said: DM me for seats', 'It said: Reza the Cheat']);
+        expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'reza.t']);
+        expect(said(container, '[data-entry]:first-child [data-reason]')).toBe('Their wallet was taken.');
     });
 
     it('keeps its filters in the address: the kind at a press, a handle after a pause or at Enter', async () =>
@@ -245,8 +271,24 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
+    });
+
+    it('says what was taken off a profile, and every session ended, in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        cleared();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'alex، reza.t رو از همه‌جا خارج کرد.',
+            'alex، عکس reza.t رو برداشت.',
+            'mina، بیوی reza.t رو پاک کرد.',
+            'mina، اسم reza.t رو برگردوند.'
+        ]);
+        expect(was(container)).toEqual([null, null, 'نوشته بود: DM me for seats', 'نوشته بود: Reza the Cheat']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
     });
 
     it('says a suspension, a lift and one that ran its time in Persian, each handle a run of its own', async () =>

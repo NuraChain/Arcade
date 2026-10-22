@@ -132,6 +132,25 @@ half is in `identity-and-profile.md` (*A suspended account is told why*).
 `admin-people.db.spec.ts` (*a suspension*) holds each step against a real database and
 `suspension-sweep.spec.ts` the sweep's place in `main.ts`.
 
+## A profile cleared, and every session ended
+
+**What the staff take off a profile** (`POST /api/admin/people/:handle/clear`, `{ part, reason }`,
+`part` being `picture`, `name` or `bio`, `CLEAR_PARTS` in `roles.ts`): a picture is taken off the
+account, and its file (`avatars`, by hash) goes with it once no account shows it, which also ends the
+link the chain's profile holds; a name becomes the handle; a bio is emptied. The row keeps what a
+name or a bio said (`from`), so the staff can still read what was taken down; a picture keeps only
+the part, its file being gone. Taking off what is not there changes nothing and writes nothing. The
+person is not told (D8): their own pages and the lists they are in change, rung as any change to a
+profile is (`ringProfile`). Who may do it to whom is the note's rule.
+
+**Every session ended** (`POST .../sign-out`, `{ reason }`): every live session of the account ends
+in one transaction, the row counts them (`sessions`), and then their sockets are closed and their
+push subscriptions forgotten, as signing out everywhere does. A session that has already run out is
+left as it is, and with none live nothing is written. A wallet account can sign in again; a guest,
+whose session is the whole account, cannot.
+
+`admin-people.db.spec.ts` (*what the staff take off a profile, and every session ended*) holds both.
+
 ## Money
 
 The vault section (`.claude/rules/stakes.md`, *The owner's view of the vault*) is `money`: an admin
@@ -198,6 +217,13 @@ Cheating.", since when), signed in nowhere, the row in the history and the lift 
 takes it all back in the refusal's words and keeps what was typed. A suspended person's page offers
 the lift, with its own reason, shown and taken back the same way.
 
+Under it (`PersonContent`) the profile's panel offers only what the profile has of its own (a
+picture, a name other than the handle, a bio) with one reason for whichever is pressed, each asked
+as a destructive question that says what happens to it; the sign-out panel offers the sign-out only
+while they are signed in somewhere, and tells the staff that a guest cannot come back. Both show at
+the press and are taken back in the refusal's words. A cleared name or bio is drawn in the log with
+what it said ("It said: …", in its own direction).
+
 **Money** is the vault panel, and its calls are drawn for the owner alone (`may(role, 'wallet')`):
 an admin whose wallet happens to hold a role on the vault is told that only the owner changes it
 from here, because the server would refuse the call.
@@ -209,6 +235,6 @@ from here, because the server would refuse the call.
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words and the people's three. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

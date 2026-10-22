@@ -107,7 +107,9 @@ const BODIES = {
     '/admin/staff': (bad) => [{ handle: bad.slice(0, 32), role: 'moderator', reason: bad.slice(0, 500).padEnd(3, 'x') }, { handle: bad.slice(0, 32), role: 'none', reason: 'garbage' }],
     '/admin/people/:handle/notes': (bad) => [{ text: bad.slice(0, 500).padEnd(3, 'x') }],
     '/admin/people/:handle/suspend': (bad) => [{ days: 7, category: 'spam', reason: bad.slice(0, 500).padEnd(3, 'x') }, { days: bad.length, category: bad.slice(0, 16), reason: 'garbage' }],
-    '/admin/people/:handle/lift': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }]
+    '/admin/people/:handle/lift': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
+    '/admin/people/:handle/clear': (bad) => [{ part: 'name', reason: bad.slice(0, 500).padEnd(3, 'x') }, { part: bad.slice(0, 16), reason: 'garbage' }],
+    '/admin/people/:handle/sign-out': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);
