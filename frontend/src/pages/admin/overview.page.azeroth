@@ -330,9 +330,11 @@ export default component OverviewPage()
                                         <span class="text-ui-base font-semibold text-text">{ game.name }</span>
                                         <Badge dot text={ game.status } tone={ game.tone } />
                                     </span>
-                                    <span class="facts w-full ps-12 text-ui-xs text-muted sm:w-auto sm:ps-0">
-                                        <span data-matches><span class="tally">{ game.matches.count }</span> { game.matches.label }</span>
-                                        <span data-tables><span class="tally">{ game.tables.count }</span> { game.tables.label }</span>
+                                    <span class="w-full ps-12 sm:w-auto sm:ps-0">
+                                        <span class="facts text-ui-xs text-muted">
+                                            <span data-matches><span class="tally">{ game.matches.count }</span> { game.matches.label }</span>
+                                            <span data-tables><span class="tally">{ game.tables.count }</span> { game.tables.label }</span>
+                                        </span>
                                     </span>
                                 </li>
                             </For>

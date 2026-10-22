@@ -142,6 +142,7 @@ describe('the overview', () =>
         expect([container.querySelector('[data-game="poker"] .bg-gold'), container.querySelector('[data-game="ludo"] .bg-live')].every((dot) => dot !== null)).toBe(true);
         expect(container.querySelector('[data-game="poker"] .bg-live')).toBeNull();
         expect(href(container, '[data-open-play]')).toBe('/admin/play');
+        expect([...container.querySelectorAll('.facts')].flatMap((one) => one.className.split(' ').filter((name) => /^(?:[a-z]+:)?(?:p|px|ps|pe)-/.test(name)))).toEqual([]);
     });
 
     it('says a payment stuck on the way needs the reader, though nothing else does', async () =>
