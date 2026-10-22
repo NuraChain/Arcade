@@ -261,7 +261,10 @@ describe('Panel', () =>
     it('takes a new tone where it stands when it is a button', async () =>
     {
         const [tone, setTone] = createSignal<'field' | 'danger'>('field');
-        const { container } = renderTest(() => Panel({ children: 'Press', onClick: vi.fn(), get tone() { return tone(); } }) as Rendered);
+        const { container } = renderTest(() => Panel({ children: 'Press', onClick: vi.fn(), get tone()
+        {
+            return tone();
+        } }) as Rendered);
         const button = container.querySelector('button')!;
 
         expect(button.className).toContain('bg-field');

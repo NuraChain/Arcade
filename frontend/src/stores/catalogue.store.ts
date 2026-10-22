@@ -106,7 +106,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
 
     const rulesFor = (id: GameId) => published().get(id)?.rules ?? TABLE_RULES[id];
 
-    const statusOf = (id: GameId): GameStatus => rows().find((row) => row.game === id)?.status ?? published().get(id)?.status ?? 'available';
+    const statusOf = (id: GameId) => rows().find((row) => row.game === id)?.status ?? published().get(id)?.status ?? 'available';
 
     const counts = (): Map<string, LiveStats> => new Map(
         rows().map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])

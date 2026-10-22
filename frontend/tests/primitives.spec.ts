@@ -304,9 +304,30 @@ describe('Badge', () =>
                 await Promise.resolve();
             }
         };
-        const pill = renderTest(() => Badge({ dot: true, get text() { return label(); }, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
-        const dot = renderTest(() => Badge({ dot: true, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
-        const count = renderTest(() => Badge({ count: 3, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
+        const pill = renderTest(() => Badge({ dot: true, get text()
+        {
+            return label();
+        }, get tone()
+        {
+            return tone();
+        }, get label()
+        {
+            return label();
+        } }) as Rendered).container;
+        const dot = renderTest(() => Badge({ dot: true, get tone()
+        {
+            return tone();
+        }, get label()
+        {
+            return label();
+        } }) as Rendered).container;
+        const count = renderTest(() => Badge({ count: 3, get tone()
+        {
+            return tone();
+        }, get label()
+        {
+            return label();
+        } }) as Rendered).container;
         const pillNode = pill.querySelector('span.rounded-full.h-6')!;
         const dotNode = dot.querySelector('[role="status"]')!;
         const countNode = count.querySelector('[role="status"]')!;
