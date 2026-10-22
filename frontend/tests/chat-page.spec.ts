@@ -19,6 +19,7 @@ import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import { PEOPLE_FIXTURES } from './fixtures.ts';
@@ -69,6 +70,7 @@ beforeEach(() =>
     useGroups().reset();
     useChat().reset();
     useSettings().reset();
+    useToasts().reset();
 });
 
 afterEach(() =>
@@ -384,5 +386,76 @@ describe('the ticks on the reader’s own lines', () =>
         await settle();
 
         await vi.waitFor(() => expect(lined()?.getAttribute('data-status')).toBe('read'), { timeout: 4000 });
+    });
+});
+
+describe('a line sent from the page', () =>
+{
+    it('is in the thread at the press, says when it did not go, and goes when the reader tries again', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const container = opened(thread.id, 'sidebar');
+        const field = () => container.querySelector<HTMLTextAreaElement>('#chat-thread textarea');
+        const line = () => [...container.querySelectorAll('[data-message]')].find((row) => row.textContent?.includes('are you there'));
+        const status = () => line()?.querySelector('time [data-status]')?.getAttribute('data-status');
+
+        await vi.waitFor(() => expect(field()?.disabled).toBe(false), { timeout: 4000 });
+
+        server.refuseSend = 'no';
+        useChat().setDraft(thread.id, 'are you there');
+        await settle();
+
+        fire(container.querySelector<HTMLButtonElement>(`#chat-thread button[aria-label="${ useLocale().t('chat.send') }"]`)!, 'click');
+
+        expect(line(), 'in the thread at the press').toBeDefined();
+
+        await vi.waitFor(() => expect(status()).toBe('failed'), { timeout: 4000 });
+
+        server.refuseSend = null;
+        fire([...line()!.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('common.retry'))!, 'click');
+
+        await vi.waitFor(() => expect(status()).toMatch(/^(sent|read)$/), { timeout: 4000 });
+
+        expect(server.calls.filter((one) => one === 'chat.send'), 'refused once, then sent').toHaveLength(2);
+    });
+});
+
+describe('the toasts beside a thread', () =>
+{
+    it('are held at the top while a thread is open, clear of the composer and the newest line, and let go after', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+
+        expect(useToasts().lifted()).toBe(false);
+
+        const container = opened(thread.id, 'phone');
+
+        await vi.waitFor(() => expect(container.querySelector('#chat-thread')).not.toBeNull(), { timeout: 4000 });
+
+        expect(useToasts().lifted()).toBe(true);
+
+        cleanup();
+
+        expect(useToasts().lifted()).toBe(false);
+    });
+
+    it('says why a line did not go in a toast that leaves, because the line itself keeps saying it', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector<HTMLTextAreaElement>('#chat-thread textarea')?.disabled).toBe(false), { timeout: 4000 });
+
+        server.refuseSend = 'no';
+        useChat().setDraft(thread.id, 'lost on the way');
+        await settle();
+        fire(container.querySelector<HTMLButtonElement>(`#chat-thread button[aria-label="${ useLocale().t('chat.send') }"]`)!, 'click');
+
+        await vi.waitFor(() => expect(useToasts().items().length).toBeGreaterThan(0), { timeout: 4000 });
+
+        const toast = useToasts().items().at(-1)!;
+
+        expect(toast.kind).toBe('warning');
+        expect(Number.isFinite(toast.duration), 'it leaves by itself').toBe(true);
     });
 });

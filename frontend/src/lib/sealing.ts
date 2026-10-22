@@ -385,9 +385,10 @@ export interface SealedSend
 /**
  * Seals one message for sending.
  *
- * The message id is chosen HERE rather than by the server, because it is bound into the AAD and an
- * id assigned after the fact could not be. Nothing about the id authorises anything - the primary
- * key refuses a collision and the envelope is what carries the claims.
+ * The message id is the CLIENT's rather than the server's, because it is bound into the AAD and an
+ * id assigned after the fact could not be. The chat store picks it when the line is pressed, so the
+ * line on screen and the line that lands are one; here when nobody has. Nothing about the id
+ * authorises anything - the primary key refuses a collision and the envelope carries the claims.
  */
 export async function sealForSend(
     open: OpenEpoch,
@@ -396,10 +397,11 @@ export async function sealForSend(
     text: string,
     at: number,
     expiresAt: number,
-    kind: 'text' | 'reaction' = 'text'
+    kind: 'text' | 'reaction' = 'text',
+    chosen?: string
 ): Promise<SealedSend>
 {
-    const id = crypto.randomUUID();
+    const id = chosen ?? crypto.randomUUID();
 
     const frankingKey = mintFrankingKey();
     const commitment = await commitmentOf(frankingKey, text);

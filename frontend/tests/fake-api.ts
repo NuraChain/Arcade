@@ -697,6 +697,12 @@ export const server =
     messages: [] as ChatMessage[],
     refuseSend: null as string | null,
 
+    /** Refuses a deletion with this sentence. */
+    refuseRemove: null as string | null,
+
+    /** Holds every send and deletion at the door until it settles, so a test can look in between. */
+    holdChat: null as Promise<void> | null,
+
     /** How many conversations one page of the list holds; unset, the whole list is one page. */
     listPage: null as number | null,
 
@@ -958,6 +964,8 @@ export const server =
         server.refuseMute = false;
         server.me = 'alex';
         server.refuseSend = null;
+        server.refuseRemove = null;
+        server.holdChat = null;
         server.listPage = null;
         loadFixtures();
         loadGraph();
@@ -1991,6 +1999,10 @@ export const client =
         async send({ params, input }: { params: { id: string }; input: FakeSend })
         {
             server.calls.push('chat.send');
+            if (server.holdChat !== null)
+            {
+                await server.holdChat;
+            }
             if (server.refuseSend !== null)
             {
                 throw new ApiError(403, 'forbidden', server.refuseSend, undefined);
@@ -2045,6 +2057,14 @@ export const client =
         async remove({ params }: { params: { id: string; messageId: string } })
         {
             server.calls.push('chat.remove');
+            if (server.holdChat !== null)
+            {
+                await server.holdChat;
+            }
+            if (server.refuseRemove !== null)
+            {
+                throw new ApiError(403, 'forbidden', server.refuseRemove, undefined);
+            }
 
             for (const one of server.messages)
             {

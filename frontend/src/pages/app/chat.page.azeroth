@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { Link, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
+import { Link, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -60,6 +60,9 @@ export default component ChatPage()
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
+
+    onCleanup(toasts.lift());
+
     const device = useDevice();
     const params = useParams();
     const route = useRoute();
@@ -266,13 +269,29 @@ export default component ChatPage()
 
     const send = () =>
     {
+        near = true;
+
         void chat.send(id, chat.draft(id))
             .then(() => haptic('tick'))
             .catch((error) =>
             {
-                toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: `chat-send-${ id }` });
+                toasts.show({ kind: 'warning', text: sealSentenceOf(error, locale.t), dedupe: `chat-send-${ id }` });
             });
     };
+
+    const retry = (message: Message) =>
+    {
+        near = true;
+
+        void chat.retry(message)
+            .then(() => haptic('tick'))
+            .catch((error) =>
+            {
+                toasts.show({ kind: 'warning', text: sealSentenceOf(error, locale.t), dedupe: `chat-send-${ id }` });
+            });
+    };
+
+    const discard = (message: Message) => chat.discard(message);
 
     const warn = (error: unknown) =>
     {
@@ -353,7 +372,7 @@ export default component ChatPage()
 
         if (yes === true)
         {
-            await chat.remove(message).then(() => toasts.show({ kind: 'info', text: locale.t('chat.deleted'), dedupe: 'chat-delete' })).catch(warn);
+            await chat.remove(message).catch(warn);
         }
     };
 
@@ -511,6 +530,8 @@ export default component ChatPage()
                                                         onActions={ actions }
                                                         onReply={ quiet ? undefined : reply }
                                                         onReact={ quiet ? undefined : react }
+                                                        onRetry={ retry }
+                                                        onDiscard={ discard }
                                                         quoteOf={ quoteOf }
                                                         onJump={ jump }
                                                         replying={ chat.replyTo(id)?.id === row.message.id }

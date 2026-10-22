@@ -184,17 +184,19 @@ export default component TableChat(props: {
         pending: seal.loading()
     });
 
-    const post = (text: string, restore: boolean) =>
+    const said = (sending: Promise<void>) =>
     {
-        void chat.send(props.conversationId, text).then(() => haptic('tick')).catch((error) =>
+        void sending.then(() => haptic('tick')).catch((error) =>
         {
-            if (restore && draft === '')
-            {
-                draft = text;
-            }
-            toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
+            toasts.show({ kind: 'warning', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
         });
     };
+
+    const post = (text: string) => said(chat.send(props.conversationId, text));
+
+    const retry = (message: Message) => said(chat.retry(message));
+
+    const discard = (message: Message) => chat.discard(message);
 
     const send = () =>
     {
@@ -204,14 +206,14 @@ export default component TableChat(props: {
             return;
         }
         draft = '';
-        post(text, true);
+        post(text);
     };
 
     const quick = (key: MessageKey) =>
     {
         if (stop === null)
         {
-            post(locale.t(key), false);
+            post(locale.t(key));
         }
     };
 
@@ -421,6 +423,8 @@ export default component TableChat(props: {
                                     onActions={ quiet ? undefined : actions }
                                     onReply={ quiet ? undefined : reply }
                                     onReact={ quiet ? undefined : react }
+                                    onRetry={ retry }
+                                    onDiscard={ discard }
                                     quoteOf={ quoteOf }
                                     onJump={ jump }
                                     replying={ replying?.id === row.message.id }

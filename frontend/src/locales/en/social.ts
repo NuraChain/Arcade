@@ -133,7 +133,9 @@ export const social = {
 
     'chat.composer': 'Message',
     'chat.send': 'Send',
+    'chat.sending': 'Sending',
     'chat.sent': 'Sent',
+    'chat.unsent': 'Not sent',
     'chat.read': 'Read',
     'chat.gameMenu': 'Start a game',
     'chat.invite.title': '{name} opened a {game} table',
@@ -173,7 +175,6 @@ export const social = {
     'chat.delete': 'Delete message',
     'chat.deleteConfirm': 'Delete this message?',
     'chat.deleteLead': 'It goes for everybody in the conversation, along with its reactions. Anybody who already read it may still remember it.',
-    'chat.deleted': 'Message deleted.',
     'chat.mutedDone': 'Conversation muted. It stays in your list without notifications.',
     'chat.unmutedDone': 'Conversation unmuted.',
     'chat.aboutSender': 'About the sender',

@@ -23,6 +23,7 @@ import { plainOf } from '../../lib/markdown.ts';
 import ReactionRow from './reaction-row.component.azeroth';
 import RichText from './rich-text.component.azeroth';
 import { jumboOf } from '../../lib/markdown-dom.ts';
+import { STATUS_ICON, STATUS_WORDS } from './status.ts';
 
 const LOCKED: Record<MessageLock, MessageKey> = {
     'unknown-sender': 'locked.unknownSender',
@@ -49,6 +50,8 @@ export default component MessageBubble(props: {
     onActions?: (message: Message, pick?: boolean) => void;
     onReply?: (message: Message) => void;
     onReact?: (message: Message, emoji: string) => void;
+    onRetry?: (message: Message) => void;
+    onDiscard?: (message: Message) => void;
     quoteOf?: (id: string) => Message | undefined;
     onJump?: (id: string) => void;
     replying?: boolean;
@@ -97,7 +100,13 @@ export default component MessageBubble(props: {
     const holds = (element: HTMLElement) =>
     {
         unhold?.();
-        unhold = props.onActions === undefined ? null : attachHold(element, () => props.onActions?.(props.message));
+        unhold = props.onActions === undefined ? null : attachHold(element, () =>
+        {
+            if (props.message.outgoing === undefined)
+            {
+                props.onActions?.(props.message);
+            }
+        });
     };
 
     const device = useDevice();
@@ -123,7 +132,13 @@ export default component MessageBubble(props: {
     {
         if (row !== null && props.onReply !== undefined)
         {
-            unswipe = attachSwipeReply(row, cue, () => locale.dir() === 'rtl', () => props.onReply?.(props.message));
+            unswipe = attachSwipeReply(row, cue, () => locale.dir() === 'rtl', () =>
+            {
+                if (props.message.outgoing === undefined)
+                {
+                    props.onReply?.(props.message);
+                }
+            });
         }
 
         return () =>
@@ -204,6 +219,12 @@ export default component MessageBubble(props: {
     derived ticked = mine && typed && locked === null;
 
     derived seen = props.message.read === true;
+
+    derived settled = props.message.outgoing === undefined;
+
+    derived failed = props.message.outgoing === 'failed';
+
+    derived status = props.message.outgoing ?? (seen ? 'read' : 'sent');
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
@@ -376,9 +397,9 @@ export default component MessageBubble(props: {
                                         { time }
                                         <Show when={ ticked }>
                                             { () =>
-                                                <span class={ () => seen ? (jumbo ? 'flex text-accent' : 'flex text-accent-ink') : 'flex' } data-status={ seen ? 'read' : 'sent' }>
-                                                    <Icon name={ seen ? 'read' : 'sent' } size={ 14 } />
-                                                    <span class="sr-only">{ locale.t(seen ? 'chat.read' : 'chat.sent') }</span>
+                                                <span class={ () => seen ? (jumbo ? 'flex text-accent' : 'flex text-accent-ink') : 'flex' } data-status={ status }>
+                                                    <Icon name={ STATUS_ICON[status] } size={ 14 } />
+                                                    <span class="sr-only">{ locale.t(STATUS_WORDS[status]) }</span>
                                                 </span>
                                             }
                                         </Show>
@@ -387,7 +408,7 @@ export default component MessageBubble(props: {
                             </span>
                         }
                     </Show>
-                    <Show when={ props.onActions !== undefined && locked === null && !device.coarse() }>
+                    <Show when={ props.onActions !== undefined && locked === null && settled && !device.coarse() }>
                         { () =>
                             <div
                                 ref={ (element) => toolbar = element }
@@ -422,6 +443,16 @@ export default component MessageBubble(props: {
                                 </Show>
                                 <IconButton icon="more" label={ locale.t('chat.more') } variant="ghost" size="sm" class="rounded-full!" onClick={ () => props.onActions?.(props.message) } />
                             </div>
+                        }
+                    </Show>
+                    <Show when={ failed }>
+                        { () =>
+                            <span class="mt-1 flex flex-wrap items-center justify-end gap-x-2 text-ui-xs text-danger" role="status">
+                                <Icon name="alert" size={ 14 } class="shrink-0" />
+                                { locale.t('chat.unsent') }
+                                <button type="button" class="cursor-pointer font-semibold hover:underline coarse:min-h-11 coarse:px-1.5" onClick={ () => props.onRetry?.(props.message) }>{ locale.t('common.retry') }</button>
+                                <button type="button" class="cursor-pointer font-semibold text-muted hover:underline coarse:min-h-11 coarse:px-1.5" onClick={ () => props.onDiscard?.(props.message) }>{ locale.t('chat.delete') }</button>
+                            </span>
                         }
                     </Show>
                     <Show when={ reacted }>

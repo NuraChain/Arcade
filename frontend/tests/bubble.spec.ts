@@ -402,3 +402,56 @@ describe('what became of a line of the reader’s', () =>
         expect(useLocale().t('chat.sent')).not.toBe('Sent');
     });
 });
+
+describe('a line of the reader’s on its way', () =>
+{
+    it('wears a clock while it goes, and offers nothing to do with it yet', () =>
+    {
+        const container = show(text('mine', 'on its way', { from: 'alex', outgoing: 'sending' }));
+        const status = container.querySelector('time [data-status]');
+
+        expect(status?.getAttribute('data-status')).toBe('sending');
+        expect(status?.textContent).toContain(useLocale().t('chat.sending'));
+        expect(container.querySelector(`button[aria-label="${ useLocale().t('chat.more') }"]`), 'no actions on a line the server has not got').toBeNull();
+    });
+
+    it('says a line was not sent, and offers to send it again or take it away', () =>
+    {
+        const retried: string[] = [];
+        const dropped: string[] = [];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
+        const message = text('mine', 'did not go', { from: 'alex', outgoing: 'failed' });
+        const container = renderTest(() => RouterProvider({
+            router,
+            children: () => MessageBubble({
+                message,
+                me: 'alex',
+                onActions: () => undefined,
+                onRetry: (one) => retried.push(one.id),
+                onDiscard: (one) => dropped.push(one.id)
+            })
+        }) as Rendered).container;
+        const button = (words: string) => [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === words);
+
+        expect(container.querySelector('time [data-status]')?.getAttribute('data-status')).toBe('failed');
+        expect(container.querySelector('[role="status"]')?.textContent).toContain(useLocale().t('chat.unsent'));
+
+        fire(button(useLocale().t('common.retry'))!, 'click');
+        fire(button(useLocale().t('chat.delete'))!, 'click');
+
+        expect(retried).toEqual(['mine']);
+        expect(dropped).toEqual(['mine']);
+    });
+
+    it('is the same line once the server has it, and only then offers its actions', async () =>
+    {
+        const first = text('mine', 'landing', { from: 'alex', outgoing: 'sending' });
+        const { container, read } = await held(first);
+        const row = container.querySelector('[data-message]');
+
+        await read(text('mine', 'landing', { from: 'alex' }));
+
+        expect(container.querySelector('[data-message]'), 'drawn again as it landed').toBe(row);
+        expect(container.querySelector('time [data-status]')?.getAttribute('data-status')).toBe('sent');
+    });
+});

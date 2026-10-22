@@ -245,9 +245,26 @@ knows who is in the room, and the server already kept the watermark to count unr
 `chat-read.db.spec.ts` holds it against Postgres, `bubble.spec.ts` and `chat-page.spec.ts` the
 marks, and the reserve after a line keeps room for the mark (`trail` in `markdown-dom.ts`).
 
-**Sending is not optimistic.** `send` seals, posts and revalidates, so the message appears when the
-server has acknowledged it. That is a round trip plus a signature rather than a microtask now, which
-is why `chat.listLoading()` is what a test waits on rather than one macrotask.
+**A line is in the thread at the press** (the owner: the chat should feel like Telegram's; D41: every
+action shows at the press). It used to appear only once it was sealed, posted and the list and the
+thread read back: three or four round trips on a phone's network, with nothing on screen between.
+Now `send` puts it in the store's outbox at once, under the id it will be sealed with (the store
+picks it, `sealForSend` takes it, so the line on screen and the line that lands are one node of the
+keyed list), and the thread and the list's last line show it with a clock. Lines leave one after
+another, each after the one before has had its answer whichever way (`posting`): two sealed at once
+would claim one sequence number. Once the server has it the mark is ✓, and the read that follows
+hands it back and the copy goes; any later read lets go of one it hands back (`tidy`). A refusal
+leaves the line where it is, marked "Not sent" with Try again (the same id, sealed again) and
+Delete, and the toast says why; the box is not filled again, because the line has somewhere to
+wait now. Nothing can be done to a line the server has not got: no actions, no reply, no reaction.
+A reaction and a deletion are guesses over the thread (`createGuesses`), taken back with the
+refusal's sentence, and a deletion says nothing once done. `social.spec.ts` (*a line on its way*),
+`bubble.spec.ts` and `chat-page.spec.ts` hold it, the fake server holding a send at its door
+(`holdChat`) so a test can look in between. Nothing waits for the read after a send, so a spec could
+end with one still queued, and the specs' `reset` cut the queue loose without stopping it: the read
+ran in the next spec and cut that spec's own read short, in a shuffled run under load. `reset` moves
+the store on an era now, and nothing queued or sent before it reads after it (*leaves nothing ticking
+after reset* and the two specs after it).
 
 **The composer is a `TextArea`, and the limit is 500.** It was an `<input>`, so a message ran off
 the right-hand edge at about sixty characters and the only way to read back what you had written was

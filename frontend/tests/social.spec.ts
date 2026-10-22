@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createEffect, createRoot } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -367,7 +367,7 @@ describe('chat store', () =>
         expect(last.from).toBe('alex');
         expect(last.text).toBe('One more tonight?');
 
-        // The id and the time are the SERVER's. The client asked with neither.
+        // The id is the one the line was sealed with, which the sender chose at the press.
         expect(last.id).not.toBe('');
         expect(chat.lastOf('c-reza')?.id).toBe(last.id);
     });
@@ -442,7 +442,7 @@ describe('chat store', () =>
         expect(chat.messages().length).toBe(before);
     });
 
-    it('says so when the server refuses a message', async () =>
+    it('keeps a line the server refused in the thread, marked as not sent, with its words', async () =>
     {
         const chat = useChat();
         chat.openThread('c-reza');
@@ -450,10 +450,11 @@ describe('chat store', () =>
         const before = chat.messages().length;
 
         server.refuseSend = 'They are not taking messages from people they have not added.';
-        await chat.send('c-reza', 'hello?').catch(() => undefined);
+        await expect(chat.send('c-reza', 'hello?')).rejects.toBeTruthy();
         await chat.refresh();
 
-        expect(chat.messages().length).toBe(before);
+        expect(chat.messages()).toHaveLength(before + 1);
+        expect(chat.messages().at(-1)).toMatchObject({ text: 'hello?', from: 'alex', outgoing: 'failed' });
     });
 
     it('loads itself: no page has to ask for the list or for a thread', async () =>
@@ -680,6 +681,100 @@ describe('chat store', () =>
         chat.reset();
         expect(clock.pending()).toBe(0);
     });
+
+    /** The api's own source, counting the reads of a thread and holding those begun while a gate stands. */
+    const counted = () =>
+    {
+        const live = createApiSource();
+        const seen = { reads: 0, gate: null as Promise<void> | null };
+
+        setChatSource({
+            conversations: (scope, signal, pages) => live.conversations(scope, signal, pages),
+            thread: async (id, scope, signal, wanted) =>
+            {
+                const held = seen.gate;
+
+                seen.reads += 1;
+
+                const page = await live.thread(id, scope, signal, wanted);
+
+                await held;
+                return page;
+            },
+            post: (message, expiresAt) => live.post(message, expiresAt),
+            react: (...args) => live.react(...args),
+            remove: (...args) => live.remove(...args),
+            openDirect: (scope, personId, at) => live.openDirect(scope, personId, at),
+            archive: (scope) => live.archive(scope),
+            reset: () => live.reset()
+        });
+
+        return seen;
+    };
+
+    it('lets no read queued before a reset run after it', async () =>
+    {
+        const seen = counted();
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+
+        let release: () => void = () => undefined;
+
+        seen.gate = new Promise<void>((resolve) =>
+        {
+            release = resolve;
+        });
+
+        const held = chat.refresh();
+
+        await chat.send('c-reza', 'before the reset');
+        chat.reset();
+        seen.gate = null;
+
+        const before = seen.reads;
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        release();
+        await held;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        expect(seen.reads - before, 'the thread opened after the reset, and not the read its send queued before it').toBe(2);
+    });
+
+    it('lets a line that lands after a reset read nothing', async () =>
+    {
+        const seen = counted();
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+
+        let release: () => void = () => undefined;
+
+        server.holdChat = new Promise<void>((resolve) =>
+        {
+            release = resolve;
+        });
+
+        const sending = chat.send('c-reza', 'across the reset');
+
+        await vi.waitFor(() => expect(server.calls).toContain('chat.send'));
+        chat.reset();
+        server.holdChat = null;
+        chat.openThread('c-reza');
+        await chat.refresh();
+
+        const before = seen.reads;
+
+        release();
+        await sending;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        expect(seen.reads, 'no read for a line sent before the reset').toBe(before);
+    });
 });
 
 describe('search store', () =>
@@ -735,13 +830,11 @@ describe('search store', () =>
 describe('what survives a refused send', () =>
 {
     /**
-     * `send` used to clear the draft before the post resolved, so a refusal destroyed what somebody
-     * had typed. An empty box is how this product says a message went; showing one for a message
-     * that did not is the worst possible answer, because there is nothing left to retry from.
-     *
-     * The table panel already restored on failure. The chat store did not, and nothing measured it.
+     * A refusal used to destroy what somebody had typed, and then put it back in the box: there was
+     * nowhere else for it. The line is in the thread from the press now, so a refusal leaves it
+     * there, marked as not sent, to be sent again or taken away, and the box is the reader's again.
      */
-    it('puts the words back in the box when the server refuses', async () =>
+    it('leaves the line waiting in the thread, not back in the box', async () =>
     {
         const chat = useChat();
         await chat.refresh();
@@ -752,7 +845,8 @@ describe('what survives a refused send', () =>
         chat.setDraft(id, 'the thing I typed');
         await expect(chat.send(id, 'the thing I typed')).rejects.toBeTruthy();
 
-        expect(chat.draft(id)).toBe('the thing I typed');
+        expect(chat.draft(id)).toBe('');
+        expect(chat.lastOf(id)).toMatchObject({ text: 'the thing I typed', outgoing: 'failed' });
     });
 
     it('leaves the box empty when the send succeeds', async () =>
@@ -1286,5 +1380,151 @@ describe('what the reader did about somebody, shown before the server has said s
             await expect(saved).rejects.toBe(refusal);
             expect(social.privacy().showOnline).toBe(true);
         });
+    });
+});
+
+describe('a line on its way', () =>
+{
+    const holding = () =>
+    {
+        let release: () => void = () => undefined;
+
+        server.holdChat = new Promise<void>((resolve) =>
+        {
+            release = resolve;
+        });
+
+        return () =>
+        {
+            server.holdChat = null;
+            release();
+        };
+    };
+
+    it('is in the thread and on the list at the press, and is the same line once the server has it', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        const release = holding();
+
+        const sending = chat.send('c-reza', 'on its way');
+        const shown = chat.messages().at(-1)!;
+
+        expect(shown).toMatchObject({ text: 'on its way', from: 'alex', outgoing: 'sending' });
+        expect(chat.lastOf('c-reza')?.id, 'the list shows it as the last line').toBe(shown.id);
+
+        release();
+        await sending;
+        await chat.refresh();
+
+        expect(chat.messages().filter((one) => one.text === 'on its way'), 'once, as the line the server stored').toHaveLength(1);
+        expect(chat.messages().at(-1)?.id, 'under the id it was shown with').toBe(shown.id);
+        expect(chat.messages().at(-1)?.outgoing).toBeUndefined();
+    });
+
+    it('leaves after the one before it has had its answer, so two never race for one number', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        const release = holding();
+
+        const first = chat.send('c-reza', 'one');
+        const second = chat.send('c-reza', 'two');
+
+        await vi.waitFor(() => expect(server.calls.filter((one) => one === 'chat.send')).toHaveLength(1));
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        expect(server.calls.filter((one) => one === 'chat.send'), 'the second waits for the first').toHaveLength(1);
+        expect(chat.messages().slice(-2).map((one) => one.text), 'both are on screen meanwhile, in order').toEqual(['one', 'two']);
+
+        release();
+        await Promise.all([first, second]);
+
+        const stored = server.messages.filter((one) => one.conversationId === 'c-reza').slice(-2).map((one) => one.id);
+
+        expect(stored).toEqual(chat.messages().slice(-2).map((one) => one.id));
+    });
+
+    it('is sent again under its id when the reader tries again, and taken away when they delete it', async () =>
+    {
+        const chat = useChat();
+        await chat.refresh();
+        const id = 'c-reza';
+
+        server.refuseSend = 'no';
+        await chat.send(id, 'second time lucky').catch(() => undefined);
+
+        const failed = chat.lastOf(id)!;
+
+        expect(failed.outgoing).toBe('failed');
+
+        server.refuseSend = null;
+        await chat.retry(failed);
+        await chat.refresh();
+
+        expect(server.messages.some((one) => one.id === failed.id), 'stored under the id it was shown with').toBe(true);
+
+        server.refuseSend = 'no';
+        await chat.send(id, 'never mind').catch(() => undefined);
+
+        const dropped = chat.lastOf(id)!;
+
+        chat.discard(dropped);
+
+        expect(chat.lastOf(id)?.id).not.toBe(dropped.id);
+    });
+
+    it('shows a reaction at the press, and takes it back when the server refuses it', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        const target = chat.messages().find((one) => one.kind === 'text' && one.from !== 'alex')!;
+        const mine = (emoji: string) => (chat.messages().find((one) => one.id === target.id)?.reactions ?? []).some((one) => one.from === 'alex' && one.emoji === emoji);
+        const release = holding();
+
+        const reacting = chat.react(target, '🔥');
+
+        expect(mine('🔥'), 'at the press').toBe(true);
+
+        release();
+        await reacting;
+        await chat.refresh();
+
+        expect(mine('🔥'), 'and still, once the server has it').toBe(true);
+
+        server.refuseSend = 'no';
+        const refused = chat.react(chat.messages().find((one) => one.id === target.id)!, '😮');
+
+        expect(mine('😮')).toBe(true);
+        await expect(refused).rejects.toBeTruthy();
+        expect(mine('😮'), 'taken back').toBe(false);
+    });
+
+    it('takes a line away at the press when it is deleted, and puts it back when that is refused', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        await chat.send('c-reza', 'oops');
+        await chat.refresh();
+
+        const line = chat.messages().find((one) => one.text === 'oops')!;
+        const there = () => chat.messages().some((one) => one.id === line.id && one.kind !== 'deleted');
+
+        server.refuseRemove = 'no';
+        const refused = chat.remove(line);
+
+        expect(there(), 'gone at the press').toBe(false);
+        await expect(refused).rejects.toBeTruthy();
+        expect(there(), 'back with the refusal').toBe(true);
+
+        server.refuseRemove = null;
+        await chat.remove(line);
+        await chat.refresh();
+
+        expect(there()).toBe(false);
     });
 });

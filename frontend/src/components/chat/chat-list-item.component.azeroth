@@ -16,6 +16,7 @@ import Tooltip from '../ui/tooltip.component.azeroth';
 import ChatFace from './chat-face.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
 import { plainOf } from '../../lib/markdown.ts';
+import { STATUS_ICON, STATUS_WORDS } from './status.ts';
 
 export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; folded?: boolean; onHold?: () => void })
 {
@@ -63,6 +64,8 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     derived said = last !== undefined && last.kind === 'text' && last.from === props.me && last.locked === undefined;
 
     derived seen = last?.read === true;
+
+    derived status = last?.outgoing ?? (seen ? 'read' : 'sent');
 
     derived preview = (() =>
     {
@@ -131,9 +134,9 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     <span class={ () => folded ? 'hidden' : 'flex items-center gap-1 text-ui-2xs text-faint' }>
                         <Show when={ said }>
                             { () =>
-                                <span class={ () => seen ? 'flex text-accent' : 'flex' } data-status={ seen ? 'read' : 'sent' }>
-                                    <Icon name={ seen ? 'read' : 'sent' } size={ 14 } />
-                                    <span class="sr-only">{ locale.t(seen ? 'chat.read' : 'chat.sent') }</span>
+                                <span class={ () => seen ? 'flex text-accent' : (status === 'failed' ? 'flex text-danger' : 'flex') } data-status={ status }>
+                                    <Icon name={ STATUS_ICON[status] } size={ 14 } />
+                                    <span class="sr-only">{ locale.t(STATUS_WORDS[status]) }</span>
                                 </span>
                             }
                         </Show>

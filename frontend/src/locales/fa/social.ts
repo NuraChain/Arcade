@@ -136,7 +136,9 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
 
     'chat.composer': 'پیام',
     'chat.send': 'فرستادن',
+    'chat.sending': 'داره فرستاده می‌شه',
     'chat.sent': 'فرستاده شد',
+    'chat.unsent': 'فرستاده نشد',
     'chat.read': 'خونده شد',
     'chat.gameMenu': 'شروع یه بازی',
     'chat.invite.title': '{name} یه میز {game} باز کرد',
@@ -176,7 +178,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.delete': 'حذف پیام',
     'chat.deleteConfirm': 'این پیام رو حذف کنی؟',
     'chat.deleteLead': 'واسه همه‌ی کسایی که توی این چت هستن، با واکنش‌هاش پاک می‌شه. کسی که قبلاً خوندتش ممکنه هنوز یادش باشه.',
-    'chat.deleted': 'پیام حذف شد.',
     'chat.mutedDone': 'چت بی‌صدا شد. توی لیستت می‌مونه، فقط اعلان نمی‌ده.',
     'chat.unmutedDone': 'چت دوباره صدادار شد.',
     'chat.aboutSender': 'درباره‌ی فرستنده',

@@ -415,7 +415,8 @@ export function createApiSource()
         at: number,
         expiresAt: number,
         kind: 'text' | 'reaction',
-        target?: string
+        target?: string,
+        id?: string
     ) =>
     {
         const secrets = await keyStore().secrets();
@@ -434,7 +435,7 @@ export function createApiSource()
                 throw new SealFailure(epoch.failure, epoch.blocked);
             }
 
-            const sealed = await sealForSend(epoch, secrets, conversationId, plain, at, expiresAt, kind);
+            const sealed = await sealForSend(epoch, secrets, conversationId, plain, at, expiresAt, kind, id);
             forget(epoch.key);
 
             try
@@ -586,7 +587,7 @@ export function createApiSource()
                 ...(message.forwarded === true ? { fwd: true as const } : {})
             });
 
-            await deliver(message.conversationId, message.from, plain, message.at, expiresAt, 'text');
+            await deliver(message.conversationId, message.from, plain, message.at, expiresAt, 'text', undefined, message.id === '' ? undefined : message.id);
         },
 
         async react(conversationId, from, target, emoji, at, expiresAt)

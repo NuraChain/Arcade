@@ -130,6 +130,12 @@ export interface Message
     /** The reader's own line, and somebody else in the room has read up to it. */
     read?: boolean;
 
+    /**
+     * A line of the reader's that this browser is still sending, has sent and not yet read back, or
+     * could not send. Absent on every line the server handed over.
+     */
+    outgoing?: 'sending' | 'sent' | 'failed';
+
     ref: MessageRef | null;
 }
 

@@ -102,8 +102,9 @@ export function titleOf(
  * one of those states already has its own honest sentence in the locales - the same sentences the
  * `SealNotice` above the composer shows. This maps one to the other, so a room that holds somebody
  * without a device says who is why, instead of the one generic line that blamed nobody. Anything
- * the sealing layer did not type - a network fault, a refused envelope - stays on
- * `chat.sealedOnly`, which is the truthful answer for a cause nobody diagnosed.
+ * the sealing layer did not type - a request that never arrived, an envelope the server refused - is
+ * the plain `common.actionFailed`: the line waits in the thread with Try again, and "it could not
+ * be sealed" blamed the sealing for a request that never left the building.
  */
 export function sealSentenceOf(
     error: unknown,
@@ -112,7 +113,7 @@ export function sealSentenceOf(
 {
     if (!(error instanceof SealFailure))
     {
-        return translate('chat.sealedOnly');
+        return translate('common.actionFailed');
     }
 
     if (error.failure === 'no-keys')

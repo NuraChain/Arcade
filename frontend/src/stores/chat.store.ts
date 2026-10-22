@@ -2,6 +2,7 @@ import { createMemo, createStore, createResource, createSignal, untrack, type Ge
 
 import { client } from '../api.ts';
 import type { Conversation, Message } from '../data/chat.ts';
+import { createGuesses } from '../lib/guess.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { THREAD_PAGE } from '../../../backend/src/domains/chat/pages.ts';
@@ -28,6 +29,17 @@ interface Typist
     who: string;
     until: number;
     after: string | null;
+}
+
+/**
+ * A line on its way: in the thread and the list from the press, under the id it is sealed with,
+ * until a read of the room carries it. `sent` is the server's yes before that read.
+ */
+interface Outgoing
+{
+    message: Message;
+    expiresAt: number;
+    state: 'sending' | 'sent' | 'failed';
 }
 
 let active: ChatSource = createApiSource();
@@ -67,6 +79,12 @@ export interface ChatApi
     draft(id: string): string;
     setDraft(id: string, text: string): void;
     send(id: string, text: string): Promise<void>;
+
+    /** Sends again a line the server did not take, under the id it was sealed with. */
+    retry(message: Message): Promise<void>;
+
+    /** Takes a line that was not sent out of the thread. */
+    discard(message: Message): void;
     replyTo(id: string): Message | null;
     setReplyTo(id: string, message: Message | null): void;
     react(message: Message, emoji: string): Promise<void>;
@@ -137,6 +155,9 @@ export const useChat = createStore((): ChatApi =>
     const [typists, setTypists] = createSignal<Record<string, Typist[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
     const [pins, setPins] = createSignal<Record<string, boolean>>({});
+    const [outbox, setOutbox] = createSignal<readonly Outgoing[]>([]);
+
+    const guesses = createGuesses<Message[]>();
 
     const [pages, setPages] = createSignal(1);
 
@@ -161,6 +182,9 @@ export const useChat = createStore((): ChatApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
+    /** Moved on by `reset`: a read queued, or a send begun, before it never reads after it. */
+    let era = 0;
+
     /**
      * Re-reads are queued behind one another and split by what actually changed.
      *
@@ -171,11 +195,19 @@ export const useChat = createStore((): ChatApi =>
      */
     const queue = (work: () => Promise<unknown>) =>
     {
+        const queued = era;
+
         inFlight = inFlight
             .catch(() => undefined)
             .then(async () =>
             {
+                if (queued !== era)
+                {
+                    return;
+                }
+
                 await work();
+                tidy();
             });
         return inFlight;
     };
@@ -241,13 +273,32 @@ export const useChat = createStore((): ChatApi =>
 
     const conversations = (): Conversation[] => rows().map((row) => row.conversation);
 
-    const messages = (): Message[] => thread.data()?.messages ?? [];
+    const shown = (one: Outgoing): Message => ({ ...one.message, outgoing: one.state });
+
+    /**
+     * The thread as it was read, with the reader's lines on their way after it and every action
+     * still in flight laid over it. The read itself while there is neither.
+     */
+    const messages = () =>
+    {
+        const read = thread.data()?.messages ?? [];
+        const open = openId();
+        const waiting = outbox().filter((one) => one.message.conversationId === open && !read.some((line) => line.id === one.message.id));
+
+        return guesses.over(waiting.length === 0 ? read : [...read, ...waiting.map(shown)]);
+    };
 
     const hasEarlier = () => thread.data()?.earlier === true;
 
     const threadLoading = createMemo(() => thread.loading() && thread.data()?.id !== openId());
 
-    const lastOf = (id: string) => rowOf(id)?.last ?? undefined;
+    const lastOf = (id: string) =>
+    {
+        const row = rowOf(id)?.last ?? undefined;
+        const waiting = outbox().filter((one) => one.message.conversationId === id).at(-1);
+
+        return waiting === undefined || row?.id === waiting.message.id ? row : shown(waiting);
+    };
 
     const unread = (id: string) =>
     {
@@ -259,8 +310,73 @@ export const useChat = createStore((): ChatApi =>
         return (seen()[id] ?? 0) >= (row.last?.at ?? 0) ? 0 : row.unread;
     };
 
-    const publish = (message: Message, expiresAt: number): Promise<void> =>
-        active.post(message, expiresAt).then(revalidate);
+    let posting: Promise<unknown> = Promise.resolve();
+
+    const restate = (id: string, state: Outgoing['state']) =>
+        setOutbox((current) => current.map((one) => (one.message.id === id ? { ...one, state } : one)));
+
+    const landed = (message: Message) =>
+        (thread.data()?.id === message.conversationId && (thread.data()?.messages ?? []).some((one) => one.id === message.id))
+        || rowOf(message.conversationId)?.last?.id === message.id;
+
+    /** Lets go of every line a read has handed back, and of any guess a read was owed. */
+    function tidy()
+    {
+        guesses.landed();
+        setOutbox((current) => (current.some((one) => one.state === 'sent' && landed(one.message))
+            ? current.filter((one) => one.state !== 'sent' || !landed(one.message))
+            : current));
+    }
+
+    /** A read that says when it failed: a resource's refetch resolves either way. */
+    const reread = async () =>
+    {
+        await revalidate();
+
+        const failed = thread.error() ?? list.error();
+
+        if (failed !== null)
+        {
+            throw failed;
+        }
+    };
+
+    /**
+     * Sends one line in its turn: after every line pressed before it has had its answer, whichever
+     * way it went. Two lines sealed at once would claim one sequence number. Once the server has
+     * it, the read that follows hands it back and the copy on its way goes.
+     */
+    const deliver = (one: Outgoing) =>
+    {
+        const begun = era;
+        const turn = posting.catch(() => undefined).then(async () =>
+        {
+            try
+            {
+                await active.post(one.message, one.expiresAt);
+            }
+            catch (error)
+            {
+                restate(one.message.id, 'failed');
+                throw error;
+            }
+
+            restate(one.message.id, 'sent');
+
+            if (begun !== era)
+            {
+                return;
+            }
+
+            void reread().then(
+                () => setOutbox((current) => current.filter((held) => held.message.id !== one.message.id)),
+                () => undefined
+            );
+        });
+
+        posting = turn;
+        return turn;
+    };
 
     const [replies, setReplies] = createSignal<Record<string, Message>>({});
 
@@ -349,12 +465,12 @@ export const useChat = createStore((): ChatApi =>
     const announced = new Map<string, number>();
 
     /**
-     * The message this client is ASKING for. The server decides its id, its time and its author -
-     * this shape exists only to carry the words to `post`, and what comes back on the next
-     * revalidation is the real thing.
+     * The message this client is ASKING for, shown until the next read of the room hands back the
+     * real thing. Its id is chosen here because the sealing binds it into what is signed, so the
+     * line on screen and the line that lands are one.
      */
     const asked = (id: string, text: string): Message => ({
-        id: '',
+        id: crypto.randomUUID(),
         conversationId: id,
         from: untrack(meId),
         kind: 'text',
@@ -452,21 +568,29 @@ export const useChat = createStore((): ChatApi =>
             // Computed HERE from the room's setting, at the moment of sending. A source that read
             // the setting itself would be a second place for the two to disagree about how long a
             // message lasts, and the value is signed - so a disagreement would be permanent.
-            const message = { ...asked(id, clean), ...(quoted === undefined ? {} : { reply: quoted.id }) };
+            const message: Message = { ...asked(id, clean), ...(quoted === undefined ? {} : { reply: quoted.id }) };
+            const one: Outgoing = { message, expiresAt: lifetimeOf(id, message.at), state: 'sending' };
 
-            try
+            setOutbox((current) => [...current, one]);
+            await deliver(one);
+        },
+
+        async retry(message)
+        {
+            const one = untrack(outbox).find((held) => held.message.id === message.id && held.state === 'failed');
+
+            if (one === undefined)
             {
-                await publish(message, lifetimeOf(id, message.at));
+                return;
             }
-            catch (error)
-            {
-                setDrafts((current) => (current[id] === undefined || current[id] === '' ? { ...current, [id]: clean } : current));
-                if (quoted !== undefined)
-                {
-                    setReplies((current) => (current[id] === undefined ? { ...current, [id]: quoted } : current));
-                }
-                throw error;
-            }
+
+            restate(one.message.id, 'sending');
+            await deliver(one);
+        },
+
+        discard(message)
+        {
+            setOutbox((current) => current.filter((one) => one.message.id !== message.id));
         },
 
         replyTo: (id) => replies()[id] ?? null,
@@ -483,32 +607,47 @@ export const useChat = createStore((): ChatApi =>
             const me = untrack(meId);
             const mine = (message.reactions ?? []).filter((one) => one.from === me && one.emoji === emoji);
 
-            if (mine.length > 0)
-            {
-                for (const one of mine)
-                {
-                    await active.remove(message.conversationId, one.id);
-                }
-                await revalidate();
-                return;
-            }
+            const toggled = (list: Message[]) => list.map((one) => (one.id !== message.id
+                ? one
+                : {
+                    ...one,
+                    reactions: mine.length > 0
+                        ? (one.reactions ?? []).filter((held) => !(held.from === me && held.emoji === emoji))
+                        : [...(one.reactions ?? []), { id: `guess-${ emoji }`, from: me, emoji }]
+                }));
 
-            const at = runtime().clock.now();
-            await active.react(message.conversationId, me, message.id, emoji, at, lifetimeOf(message.conversationId, at));
-            await revalidate();
+            await guesses.during(toggled, async () =>
+            {
+                if (mine.length > 0)
+                {
+                    for (const one of mine)
+                    {
+                        await active.remove(message.conversationId, one.id);
+                    }
+                    return;
+                }
+
+                const at = runtime().clock.now();
+                await active.react(message.conversationId, me, message.id, emoji, at, lifetimeOf(message.conversationId, at));
+            }, reread);
         },
 
         async remove(message)
         {
-            await active.remove(message.conversationId, message.id);
-            await Promise.all([revalidate(), revalidateList()]);
+            await guesses.during(
+                (list) => list.filter((one) => one.id !== message.id),
+                () => active.remove(message.conversationId, message.id),
+                reread
+            );
         },
 
         async forward(message, to)
         {
-            const outgoing = { ...asked(to, message.text), forwarded: true };
-            await active.post(outgoing, lifetimeOf(to, outgoing.at));
-            await revalidateList();
+            const outgoing: Message = { ...asked(to, message.text), forwarded: true };
+            const one: Outgoing = { message: outgoing, expiresAt: lifetimeOf(to, outgoing.at), state: 'sending' };
+
+            setOutbox((current) => [...current, one]);
+            await deliver(one);
         },
 
         /**
@@ -629,7 +768,11 @@ export const useChat = createStore((): ChatApi =>
             setTypists({});
             setDrafts({});
             setPins({});
+            setOutbox([]);
+            guesses.clear();
+            era += 1;
             inFlight = Promise.resolve();
+            posting = Promise.resolve();
             void list.refetch();
         }
     };
