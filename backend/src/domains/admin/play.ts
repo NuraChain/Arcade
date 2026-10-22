@@ -1,10 +1,13 @@
-import type { DataSource } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
 
-import { Game, Match, Table, User } from '../../entities/index.ts';
+import { Game, Match, MatchPlayer, Table, User } from '../../entities/index.ts';
+import { normalizeAddress } from '../../lib/crypto.ts';
 import type { AdminMatches, AdminPlay, AdminTables } from '../../schemas.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
-import { PLAY_PAGE, STUCK_KINDS, type MatchList, type StuckKind } from './roles.ts';
-import { record, type Actor } from './staff.ts';
+import { PLAY_PAGE, STUCK_KINDS, outranks, type MatchList, type StaffRole, type StuckKind } from './roles.ts';
+import { record, staffRefusal, type Actor } from './staff.ts';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Shown = AdminPlay['games'][number];
 
@@ -16,6 +19,19 @@ export interface Stuck
 {
     since: Date;
     kind: StuckKind;
+}
+
+export interface Ended
+{
+    tableId: string;
+    game: string;
+    before: number;
+}
+
+interface Seated
+{
+    id: string;
+    staff: StaffRole | null;
 }
 
 interface GameRow
@@ -33,6 +49,7 @@ interface PlayerRow
     displayName: string;
     hue: number;
     avatar: string | null;
+    staff: StaffRole | null;
 }
 
 interface MatchRow extends Keyed
@@ -65,6 +82,10 @@ interface TableRow extends Keyed
 
 const isKind = (value: string): value is StuckKind => STUCK_KINDS.some((kind) => kind === value);
 
+const STAFF_OF = `case when u.is_suspended then null
+                      when exists (select 1 from wallets o where o.user_id = u.id and o.address = :owner) then 'owner'
+                      else (select s.role from staff_members s where s.user_id = u.id) end`;
+
 export const stuckKindOf = (reason: string): StuckKind =>
 {
     const head = reason.split(':')[0] ?? '';
@@ -79,8 +100,17 @@ const face = (handle: string, displayName: string, hue: number, avatar: string |
     ...(avatar === null ? {} : { avatar })
 });
 
-export function createPlayService(db: DataSource)
+export function createPlayService(db: DataSource, ownerWallet: string)
 {
+    const owner = () => (ownerWallet === '' ? '' : normalizeAddress(ownerWallet));
+
+    const seatedIn = (tx: EntityManager, matchId: string) => tx.getRepository(MatchPlayer).createQueryBuilder('p')
+        .innerJoin(User, 'u', 'u.id = p.user_id')
+        .select('u.id', 'id')
+        .addSelect(STAFF_OF, 'staff')
+        .where('p.match_id = :matchId', { matchId, owner: owner() })
+        .getRawMany<Seated>();
+
     return {
         async games(): Promise<Shown[]>
         {
@@ -137,12 +167,13 @@ export function createPlayService(db: DataSource)
                 .addSelect('m.deadline_at', 'deadline_at')
                 .addSelect('(select k.amount::text from table_stakes k where k.table_id = m.table_id)', 'stake')
                 .addSelect(
-                    `(select coalesce(jsonb_agg(jsonb_build_object('seat', p.seat, 'handle', u.handle, 'displayName', u.display_name, 'hue', u.hue, 'avatar', u.avatar) order by p.seat), '[]'::jsonb)
+                    `(select coalesce(jsonb_agg(jsonb_build_object('seat', p.seat, 'handle', u.handle, 'displayName', u.display_name, 'hue', u.hue, 'avatar', u.avatar, 'staff', ${ STAFF_OF }) order by p.seat), '[]'::jsonb)
                         from match_players p join users u on u.id = p.user_id
                        where p.match_id = m.id)`,
                     'players'
                 )
-                .where('m.finished_at is null');
+                .where('m.finished_at is null')
+                .setParameter('owner', owner());
 
             if (list === 'stuck')
             {
@@ -178,7 +209,7 @@ export function createPlayService(db: DataSource)
                         startedAt: row.started_at.toISOString(),
                         ...(row.deadline_at === null ? {} : { deadline: row.deadline_at.toISOString() }),
                         ...(row.stake === null ? {} : { stake: row.stake }),
-                        players: row.players.map((one) => ({ seat: one.seat, ...face(one.handle, one.displayName, one.hue, one.avatar) })),
+                        players: row.players.map((one) => ({ seat: one.seat, ...face(one.handle, one.displayName, one.hue, one.avatar), ...(one.staff === null ? {} : { staff: one.staff }) })),
                         ...(held === undefined ? {} : { stuck: { since: held.since.toISOString(), kind: held.kind } })
                     };
                 }),
@@ -268,6 +299,47 @@ export function createPlayService(db: DataSource)
                 await record(tx, actor, { kind: 'game', reason, details: { game, from: held.status, to } });
 
                 return true;
+            });
+        },
+
+        async voidMatch(actor: Actor, matchId: string, reason: string, end: (tx: EntityManager, matchId: string) => Promise<Ended | 'over' | null>)
+        {
+            if (!UUID.test(matchId))
+            {
+                return null;
+            }
+
+            return await db.transaction(async (tx) =>
+            {
+                const seated = await seatedIn(tx, matchId);
+
+                if (seated.some((one) => one.id === actor.id))
+                {
+                    throw staffRefusal('staff-in-game', 'Nobody ends a game they are playing in.');
+                }
+
+                if (seated.some((one) => !outranks(actor.role, one.staff)))
+                {
+                    throw staffRefusal('staff-rank', 'That is above what your role may do.');
+                }
+
+                const ended = await end(tx, matchId);
+
+                if (ended === 'over')
+                {
+                    throw staffRefusal('staff-match-over', 'That game has already ended.');
+                }
+
+                if (ended === null)
+                {
+                    return null;
+                }
+
+                const table = await tx.getRepository(Table).findOneOrFail({ select: { code: true }, where: { id: ended.tableId } });
+
+                await record(tx, actor, { kind: 'void', reason, details: { match: matchId, game: ended.game, table: table.code } });
+
+                return ended;
             });
         }
     };

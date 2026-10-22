@@ -1213,6 +1213,8 @@ export type AdminPlay = Infer<typeof adminPlay>;
 
 export const adminGameInput = object({ on: boolean(), reason: said() });
 
+export const adminVoidInput = object({ reason: said() });
+
 /**
  * The two switches an account controls, and the one it does not.
  *
@@ -1806,6 +1808,7 @@ export const matchView = object({
     remainingMs: number({ int: true, min: 0 }).optional(),
     winner: number().optional(),
     outcome: enumOf(['won', 'abandoned']).optional(),
+    voided: literal(true).optional(),
     startedAt: string(),
     finishedAt: string().optional()
 });
@@ -2506,7 +2509,7 @@ export const adminMatchRow = object({
     startedAt: string(),
     deadline: string().optional(),
     stake: string().optional(),
-    players: array(object({ seat: number(), handle: string(), displayName: string(), hue: number(), avatar: string().optional() })),
+    players: array(object({ seat: number(), handle: string(), displayName: string(), hue: number(), avatar: string().optional(), staff: enumOf(STAFF_ROLES).optional() })),
     stuck: object({ since: string(), kind: enumOf(STUCK_KINDS) }).optional()
 });
 

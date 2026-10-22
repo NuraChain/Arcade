@@ -886,6 +886,30 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await escrowOf(tableId)).toMatchObject({ state: 'refunded', winners: null });
         });
 
+        it('refunds every stake of a game the staff end as no contest, and its proof leaves the ending out', async () =>
+        {
+            ports = buildPorts(db, { ...CONFIG, adminWallet: WALLETS[5] }, listener, undefined, undefined, fake.vault);
+
+            const owner = await makeUser(5);
+            const { guest, tableId, matchId, escrowId } = await playing();
+
+            await ports.admin.voidMatch(owner.id, matchId, { reason: 'A fault dealt this game wrong' });
+
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunding', winners: null });
+
+            await sweep();
+            await sweep();
+
+            const ledger = await db.getRepository(MatchAction).find({ where: { matchId }, order: { rev: 'ASC' } });
+
+            expect(fake.refunded).toEqual([vaultIdOf(escrowId)]);
+            expect(fake.settled).toEqual([]);
+            expect(await escrowOf(tableId)).toMatchObject({ state: 'refunded', winners: null });
+            expect(await resultLines(tableId)).toEqual([{ key: 'chat.line.result.void', params: { game: 'ludo' } }]);
+            expect(ledger.at(-1)).toMatchObject({ seat: -1, kind: 'forfeit', payload: { verb: 'void' } });
+            expect((await ports.match.proof(guest.id, matchId))?.actions.map((action) => action.rev)).toEqual(ledger.slice(0, -1).map((action) => action.rev));
+        });
+
         it('records a payment the chain already made, and never sends it twice', async () =>
         {
             const { host, tableId, matchId, escrowId } = await playing();

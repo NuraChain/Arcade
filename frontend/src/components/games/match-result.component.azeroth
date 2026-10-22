@@ -69,6 +69,10 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived voided = props.match.outcome !== 'won' && payees.length === 0 && !awaiting;
 
+    derived staffed = props.match.voided === true;
+
+    derived tooEarly = voided && !staffed;
+
     derived uncounted = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'void');
 
     derived mineWon = props.mine !== undefined && (payees.length > 0
@@ -90,6 +94,11 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived headline = (() =>
     {
+        if (staffed)
+        {
+            return locale.t('match.over.staff');
+        }
+
         if (voided)
         {
             return locale.t('match.over.void');
@@ -259,11 +268,15 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             </Link>
         </Show>
 
-        <Show when={ voided }>
+        <Show when={ staffed }>
+            { () => <p class="text-ui-xs text-muted" data-staffed>{ locale.t('match.over.staffLead') }</p> }
+        </Show>
+
+        <Show when={ tooEarly }>
             { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidLead') }</p> }
         </Show>
 
-        <Show when={ !voided && !awaiting && uncounted }>
+        <Show when={ !voided && !awaiting && uncounted && !staffed }>
             { () => <p class="text-ui-xs text-muted">{ uncountedLine }</p> }
         </Show>
 

@@ -122,7 +122,9 @@ logs a fault once for as long as it is the same one.
 - **Paying.** `commit` marks the escrow `settling` with the engine's winners (`maskOf`) in the
   transaction that finishes the match, or `refunding` when the engine named nobody. So leaving,
   giving up and three missed turns lose the stake, as the game scores them (D5); at a team table a
-  walkout loses the team's stakes, because the side left standing is the engine's winner. The chain
+  walkout loses the team's stakes, because the side left standing is the engine's winner. A game the
+  staff end as no contest is `refunding` in the transaction that ends it, every stake back in full
+  (`voidIn`, `.claude/rules/admin.md`, *Play*). The chain
   is asked first: a game already paid, refunded or reclaimed there is written down and not paid
   again. `settle` reveals every seat's secret in seat order. A payment the chain reverted is sent
   again thirty seconds later (`RETRY_AFTER_S`), and so is one the vault refused.
@@ -175,7 +177,8 @@ up (variant, seats, target, cube, blinds), the vault and its chain, the stake, t
 escrow's state, each
 seat's address, commit, secret, nonce, deadline and signature, and every row of the ledger from
 the opening on, its payload and its events as JSON text because the wire has no shape for an
-engine's own events. It is the players' alone because it publishes every card dealt, the hands
+engine's own events, but the row that ends a game the staff ended (seat -1, `{ verb: 'void' }`),
+which no engine plays. It is the players' alone because it publishes every card dealt, the hands
 nobody showed included, even though once the game is paid the chain holds the same secrets and
 signatures. The match half is `match.proof` and the money half `stake.proofOf`; `services.ts` puts
 them together, so the match domain still reads no vault.

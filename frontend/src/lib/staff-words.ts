@@ -139,7 +139,14 @@ const said = (row: LogRow, locale: LocaleApi) =>
         return locale.t(row.details.to === 'available' ? 'admin.log.line.game.on' : 'admin.log.line.game.off', { ...slots, game: game === undefined ? row.details.game ?? '' : locale.t(game.nameKey) });
     }
 
+    if (row.kind === 'void')
+    {
+        const game = GAMES.find((one) => one.id === row.details.game);
+
+        return locale.t('admin.log.line.void', { ...slots, table: '{table}', game: game === undefined ? row.details.game ?? '' : locale.t(game.nameKey) });
+    }
+
     return locale.t('admin.log.line.revoke', slots);
 };
 
-export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '', reporter: row.details.reporter ?? '' });
+export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '', reporter: row.details.reporter ?? '', table: (row.details.table ?? '').toUpperCase() });

@@ -247,6 +247,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.over.voidLead': 'فقط برای کسی حساب می‌شه که بازی رو ول کرد.',
     'match.over.voidMine': 'این یکی برای تو حساب نشد: ریتینگ و بردهای پشت سر همت دست نخورده.',
     'match.over.voidPaid': 'بازی زودتر از اون تموم شد که ریتینگ یا بردهای پشت سر همت عوض بشه.',
+    'match.over.staff': 'تیم نورا این بازی رو تموم کرد.',
+    'match.over.staffLead': 'برای هیچ‌کس حساب نمی‌شه: ریتینگ کسی عوض نشد و کسی هم چیزی ازش نگرفت.',
     'match.check': 'بررسی این بازی',
     'match.rematch': 'یه دست دیگه',
     'match.money.won': '{amount} NURA بردی.',

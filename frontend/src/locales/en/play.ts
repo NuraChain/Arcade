@@ -265,6 +265,8 @@ export const play = {
     'match.over.voidLead': 'It counts only against whoever stopped playing.',
     'match.over.voidMine': 'This one did not count for you: your rating and streak are as they were.',
     'match.over.voidPaid': 'The game ended too early to move your rating or your streak.',
+    'match.over.staff': 'Nura’s team ended this game.',
+    'match.over.staffLead': 'It counts for nobody: no rating moved and nobody earned anything from it.',
     'match.check': 'Check this game',
     'match.rematch': 'Play again',
     'match.money.won': 'You won {amount} NURA.',

@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame', 'liveMatches', 'waitingTables', 'voidMatch'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1047,16 +1047,18 @@ describe('the owner\'s view of the vault', () =>
         ]);
     });
 
-    it('answers anybody who may not run the games as a page that is not there, on the games and on a switch', async () =>
+    it('answers anybody who may not run the games as a page that is not there, on the games, a switch and a game ended', async () =>
     {
         const told: unknown[][] = [];
         const app = owned(told, null);
         const off = { on: false, reason: 'A bug in the deal, off until it is fixed' };
+        const ending = { reason: 'Stuck after a fault in the sweep' };
         const answers = [
             await sent(app, '/play'),
             await sent(app, '/play/games/ludo', off),
             await sent(app, '/play/matches?list=stuck&game=ludo&cursor=abc'),
-            await sent(app, '/play/tables?game=hokm')
+            await sent(app, '/play/tables?game=hokm'),
+            await sent(app, '/play/matches/m1/void', ending)
         ];
 
         for (const response of answers)
@@ -1070,9 +1072,12 @@ describe('the owner\'s view of the vault', () =>
             ['play', 'somebody'],
             ['switchGame', 'somebody', 'ludo', off],
             ['liveMatches', 'somebody', { list: 'stuck', game: 'ludo', cursor: 'abc' }],
-            ['waitingTables', 'somebody', { game: 'hokm' }]
+            ['waitingTables', 'somebody', { game: 'hokm' }],
+            ['voidMatch', 'somebody', 'm1', ending]
         ]);
         expect((await sent(app, '/play/matches?list=open')).status).toBe(422);
+        expect((await sent(app, '/play/matches/m1/void', { reason: 'no' })).status).toBe(422);
+        expect((await sent(app, '/play/matches/m1/void', {})).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: 'no', reason: 'A bug in the deal' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false, reason: 'no' })).status).toBe(422);
         expect((await sent(app, '/play/games/ludo', { on: false })).status).toBe(422);
@@ -1158,6 +1163,7 @@ describe('the owner\'s view of the vault', () =>
         expect(queries).toContain(`'/admin/play/tables': ['game', 'cursor']`);
         expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
         expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
+        expect(bodies).toContain(`'/admin/play/matches/:id/void': (bad) => [`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

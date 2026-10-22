@@ -2500,7 +2500,9 @@ nothing had read it since. `tests/engine-seam.spec.ts` covers the whole shared p
 over, and `asMatch` sent that null as `turn: 0`: seat 0 on turn in every finished game - in the
 answer to the play that ended it, in every read after, in the last `game` push and on a watcher's
 board - a fact the server made up. `matchView.turn` is optional now and absent then, the way `mine`
-is absent for somebody with no chair and `yourTurn` for a table with no go to be had. Nothing on
+is absent for somebody with no chair and `yourTurn` for a table with no go to be had. A game the
+staff ended is finished with its engine's state still in the middle of a turn, so `asMatch` asks
+`finishedAt` before it asks `turnOf`. Nothing on
 screen ever showed the zero, which is how it lasted: every reader asks `finishedAt` first, and the
 ludo canvas, which was handed seat 0's colour, only tints a die a finished board does not have. What
 a reader must not do is compare `mine` with `turn` before asking whether `mine` is there: somebody
@@ -7028,7 +7030,9 @@ suffix and never appear whole in the source.
 `declareResult` writes the result line into the table's own thread, and it lives in a module of
 its own (`endingOf` in `match/declare.ts`) because a game ends three ways - somebody plays the last
 move or gives up, the sweep forfeits the last player holding a turn, or somebody walks out - and all
-three have to say it identically. A game somebody won names them; a game nobody won
+three have to say it identically. A fourth says something else: a game the staff ended as no
+contest (`voided` in its state, `.claude/rules/admin.md`, *Play*) says so
+(`chat.line.result.void`) and names nobody, whatever its seats or its escrow say. A game somebody won names them; a game nobody won
 (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and must not, because the engine
 calls the last player standing a winner so the board can stop. A table played for NURA is the one
 exception, and only once its stakes are being paid: the line names whoever they were paid to, read

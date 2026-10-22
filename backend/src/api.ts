@@ -42,6 +42,7 @@ import {
     adminMatchesQuery,
     adminTables,
     adminTablesQuery,
+    adminVoidInput,
     adminSignOutInput,
     adminSuspendInput,
     adminVault,
@@ -454,7 +455,10 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.liveMatches(context.principal.userId, context.query))),
 
             waitingTables: routes.get('/play/tables', { query: adminTablesQuery, output: adminTables },
-                async (context) => onlyAdmin(await ports.admin.waitingTables(context.principal.userId, context.query)))
+                async (context) => onlyAdmin(await ports.admin.waitingTables(context.principal.userId, context.query))),
+
+            voidMatch: routes.post('/play/matches/:id/void', { input: adminVoidInput, output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.voidMatch(context.principal.userId, context.params.id, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

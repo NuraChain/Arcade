@@ -14,7 +14,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { AdminMatches, AdminTables } from '../../backend/src/schemas.ts';
 import { PLAY_PAGE } from '../../backend/src/domains/admin/roles.ts';
-import { ApiError, client, server } from './fake-api.ts';
+import { ApiError, client, server, staffMember } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -54,7 +54,7 @@ const face = (handle: string, hue: number) => ({ handle, displayName: handle.toU
 const matchOf = (id: string, game: string, extra: Partial<AdminMatches['rows'][number]> = {}): AdminMatches['rows'][number] => ({
     id,
     game,
-    code: `C${ id.toUpperCase() }`,
+    code: `c${ id }`,
     mode: 'live',
     startedAt: minutesAgo(3),
     deadline: new Date(NOW + 20_000).toISOString(),
@@ -290,7 +290,7 @@ describe('the games, on and off', () =>
 
         expect(router.location().query.view).toBe('matches');
         expect([...container.querySelectorAll('[data-match]')].map((one) => one.getAttribute('data-match'))).toEqual(['m2', 'm1']);
-        expect([said(first, '[data-name]'), said(first, '[data-code]'), said(first, '[data-stake]')]).toEqual(['Hokm', 'CM2', '10 NURA']);
+        expect([said(first, '[data-name]'), said(first, '[data-code]'), said(first, '[data-stake]')]).toEqual(['Hokm', 'cm2', '10 NURA']);
         expect([...first.querySelectorAll('[data-when]')].map((one) => one.textContent)).toEqual(['Started 3 minutes ago', 'Turn runs out in 20 seconds']);
         expect(said(first, '[data-pace]')).toBe('Live');
         expect([...first.querySelectorAll('[data-players] li [dir="ltr"]')].map((one) => one.textContent?.trim())).toEqual(['sara.k', 'reza.t']);
@@ -425,5 +425,167 @@ describe('the games, on and off', () =>
         await answered('یه مشکل توی تاس');
 
         expect(toasts()).toEqual(['منچ متوقف شد.']);
+    });
+});
+
+describe('ending a game being played', () =>
+{
+    const end = (root: ParentNode, id: string) => root.querySelector<HTMLButtonElement>(`[data-match="${ id }"] [data-end] button`);
+
+    const listed = (root: ParentNode) => [...root.querySelectorAll('[data-match]')].map((one) => one.getAttribute('data-match'));
+
+    const admin = () =>
+    {
+        server.staff.members = [staffMember('sara.k', 'admin', 'alex', minutesAgo(60)), staffMember('mina', 'admin', 'alex', minutesAgo(30))];
+        server.me = 'sara.k';
+        useSession().reset();
+        useSession().establish({ ...ALEX, id: 'u-sara', handle: 'sara.k', displayName: 'Sara', staff: 'admin' });
+    };
+
+    it('offers End on a game the reader outranks everybody in, and says why on the others', async () =>
+    {
+        admin();
+        server.playing.matches = [
+            matchOf('m1', 'ludo', { players: [{ seat: 0, ...face('reza.t', 1) }, { seat: 1, ...face('leila.a', 2), staff: 'moderator' }] }),
+            matchOf('m2', 'hokm', { players: [{ seat: 0, ...face('sara.k', 1), staff: 'admin' }, { seat: 1, ...face('reza.t', 2) }] }),
+            matchOf('m3', 'poker', { players: [{ seat: 0, ...face('mina', 1), staff: 'admin' }, { seat: 1, ...face('reza.t', 2) }] }),
+            matchOf('m4', 'ludo', { players: [{ seat: 0, ...face('alex', 1), staff: 'owner' }, { seat: 1, ...face('reza.t', 2) }] })
+        ];
+
+        const container = await opened('/admin/play?view=matches');
+
+        expect([end(container, 'm1')?.textContent?.trim(), end(container, 'm1')?.getAttribute('aria-label')]).toEqual(['End game', 'End the Ludo game at CM1']);
+        expect(container.querySelector('[data-match="m1"] [data-end-barred]')).toBeNull();
+
+        for (const id of ['m2', 'm3', 'm4'])
+        {
+            expect(end(container, id), id).toBeNull();
+        }
+
+        expect(said(container, '[data-match="m2"] [data-end-barred]')).toBe('You are playing in this game.');
+        expect(said(container, '[data-match="m3"] [data-end-barred]')).toBe('Somebody in it holds a role at or above yours.');
+        expect(said(container, '[data-match="m4"] [data-end-barred]')).toBe('Somebody in it holds a role at or above yours.');
+    });
+
+    it('asks why before it ends a game, as a question that loses something, saying the stakes go back at a table played for NURA, and does nothing when it is put away', async () =>
+    {
+        server.playing.matches = [matchOf('m1', 'ludo'), matchOf('m2', 'hokm', { stake: '10000000000000000000' })];
+
+        const container = await opened('/admin/play?view=matches');
+
+        end(container, 'm1')!.click();
+        await settle();
+
+        expect(asked().component).toBe(ReasonSheet);
+        expect(asked().props).toMatchObject({
+            title: 'End this game of Ludo?',
+            lead: 'It ends now as no contest: nobody is rated and nobody earns anything from it. Everybody stays at the table and can start again.',
+            confirm: 'End it',
+            destructive: true
+        });
+
+        await answered(null);
+
+        expect(listed(container)).toEqual(['m1', 'm2']);
+        expect(server.calls.filter((call) => call.startsWith('admin.voidMatch'))).toEqual([]);
+
+        end(container, 'm2')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({
+            title: 'End this game of Hokm?',
+            lead: 'It ends now as no contest: nobody is rated and nobody earns anything from it, and every stake goes back to its player. Everybody stays at the table and can start again.'
+        });
+
+        await answered(null);
+    });
+
+    it('takes the game off the list at the press once the reason is given, says so once the server has, and reads the counts again', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'voidMatch');
+
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.voidMatch(request);
+        });
+
+        server.play.games = server.play.games.map((one) => (one.game === 'ludo' ? { ...one, matches: 1 } : one));
+        server.playing.matches = [matchOf('m1', 'ludo'), matchOf('m2', 'hokm')];
+
+        const container = await opened('/admin/play?view=matches');
+        const kept = container.querySelector('[data-match="m2"]');
+
+        expect(chips(container).find((one) => one[0]?.startsWith('Being played'))?.[0]).toBe('Being played4');
+
+        end(container, 'm1')!.click();
+        await settle();
+        await answered('Stuck after a fault in the sweep');
+
+        expect(sent).toHaveBeenCalledWith({ params: { id: 'm1' }, input: { reason: 'Stuck after a fault in the sweep' } });
+        expect(listed(container)).toEqual(['m2']);
+        expect(toasts()).toEqual([]);
+
+        server.calls = [];
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['The Ludo game at CM1 is over and counts for nobody.']);
+        expect(listed(container)).toEqual(['m2']);
+        expect(container.querySelector('[data-match="m2"]'), 'a row the end did not touch is the row it was').toBe(kept);
+        expect(server.calls).toEqual(expect.arrayContaining(['admin.play', 'admin.liveMatches {}']));
+        expect(chips(container).find((one) => one[0]?.startsWith('Being played'))?.[0]).toBe('Being played3');
+        expect(server.staff.log.map((one) => [one.kind, one.reason, one.details])).toEqual([['void', 'Stuck after a fault in the sweep', { match: 'm1', game: 'ludo', table: 'cm1' }]]);
+    });
+
+    it('puts a refused game back and says why in the reader\'s words', async () =>
+    {
+        server.playing.matches = [matchOf('m1', 'ludo'), matchOf('m2', 'hokm')];
+
+        const container = await opened('/admin/play?view=matches');
+
+        server.playing.matches = server.playing.matches.filter((one) => one.id !== 'm1');
+        server.playing.over = ['m1'];
+        end(container, 'm1')!.click();
+        await settle();
+        await answered('Stuck after a fault in the sweep');
+
+        expect(toasts()).toEqual(['That game has already ended.']);
+        expect(listed(container), 'the list is read again either way').toEqual(['m2']);
+        expect(server.staff.log).toEqual([]);
+
+        vi.spyOn(client.admin, 'voidMatch').mockRejectedValueOnce(new ApiError(409, 'staff-in-game', 'Nobody ends a game they are playing in.', undefined));
+        useToasts().dismissAll();
+        end(container, 'm2')!.click();
+        await settle();
+        await answered('Stuck after a fault in the sweep');
+
+        expect(listed(container)).toEqual(['m2']);
+        expect(toasts()).toEqual(['Nobody ends a game they are playing in.']);
+    });
+
+    it('says it in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        admin();
+        server.playing.matches = [
+            matchOf('m1', 'ludo', { players: [{ seat: 0, ...face('reza.t', 1) }, { seat: 1, ...face('leila.a', 2) }] }),
+            matchOf('m2', 'hokm', { players: [{ seat: 0, ...face('sara.k', 1), staff: 'admin' }, { seat: 1, ...face('reza.t', 2) }] })
+        ];
+
+        const container = await opened('/admin/play?view=matches');
+
+        expect([end(container, 'm1')?.textContent?.trim(), end(container, 'm1')?.getAttribute('aria-label')]).toEqual(['تموم کردن بازی', 'تموم کردن بازی منچ سر میز CM1']);
+        expect(said(container, '[data-match="m2"] [data-end-barred]')).toBe('خودت توی این بازی هستی.');
+
+        end(container, 'm1')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'این بازی منچ تموم بشه؟', confirm: 'تمومش کن' });
+
+        await answered('یه مشکل توی نوبت‌ها');
+
+        expect(toasts()).toEqual(['بازی منچ سر میز CM1 تموم شد و برای هیچ‌کس حساب نمی‌شه.']);
     });
 });

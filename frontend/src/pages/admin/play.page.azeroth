@@ -17,6 +17,7 @@ import { useAddress } from '../../lib/page-param.ts';
 import { whyStaffRefused } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+import { useSession } from '../../stores/session.store.ts';
 
 const VIEWS = ['games', 'matches', 'tables', 'stuck'] as const;
 
@@ -25,6 +26,7 @@ export default component PlayPage()
     const locale = useLocale();
     const overlay = useOverlay();
     const address = useAddress();
+    const session = useSession();
 
     useHead({ title: () => locale.t('admin.section.play') });
 
@@ -55,6 +57,10 @@ export default component PlayPage()
     derived matchList = shown === 'stuck' ? 'stuck' as const : 'all' as const;
 
     derived stuck = held?.stuck ?? 0;
+
+    derived me = session.account();
+
+    derived reader = me === null ? undefined : { handle: me.handle, role: me.staff ?? null };
 
     derived views = [
         { id: 'games', label: locale.t('admin.play.view.games') },
@@ -140,7 +146,7 @@ export default component PlayPage()
         </Show>
 
         <Show when={ onMatches }>
-            <PlayMatches list={ matchList } />
+            <PlayMatches list={ matchList } reader={ reader } onEnded={ () => read.refetch() } />
         </Show>
 
         <Show when={ onTables }>

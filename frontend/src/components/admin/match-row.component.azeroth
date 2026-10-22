@@ -1,4 +1,4 @@
-import type { StuckKind } from '../../../../backend/src/domains/admin/roles.ts';
+import { outranks, type StaffRole, type StuckKind } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminMatches } from '../../../../backend/src/schemas.ts';
 import { GAMES } from '../../data/games.ts';
 import { nuraOf } from '../../lib/nura.ts';
@@ -7,9 +7,16 @@ import { useLocale } from '../../stores/locale.store.ts';
 import GameIcon from '../games/game-icon.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
 import When from './when.component.azeroth';
 
 export type AdminMatchRow = AdminMatches['rows'][number];
+
+export interface PlayReader
+{
+    handle: string;
+    role: StaffRole | null;
+}
 
 const STUCK_WORDS: Record<StuckKind, MessageKey> = {
     'no-engine': 'admin.play.stuck.no-engine',
@@ -19,7 +26,7 @@ const STUCK_WORDS: Record<StuckKind, MessageKey> = {
     threw: 'admin.play.stuck.threw'
 };
 
-export default component MatchRow(props: { match: AdminMatchRow })
+export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayReader; onEnd?: () => void })
 {
     const locale = useLocale();
 
@@ -51,6 +58,20 @@ export default component MatchRow(props: { match: AdminMatchRow })
 
     derived sinceSaid = stuck === null ? '' : locale.t('admin.play.match.since', { when: locale.relative(Date.parse(stuck.since)) });
 
+    derived reader = props.reader ?? null;
+
+    derived playing = reader !== null && props.match.players.some((one) => one.handle === reader.handle);
+
+    derived above = reader !== null && props.match.players.some((one) => !outranks(reader.role, one.staff ?? null));
+
+    derived endable = reader !== null && props.onEnd !== undefined && !playing && !above;
+
+    derived barred = reader !== null && (playing || above);
+
+    derived barredWhy = locale.t(playing ? 'admin.play.end.yours' : 'admin.play.end.above');
+
+    derived endLabel = locale.t('admin.play.endLabel', { game: name, code: props.match.code.toUpperCase() });
+
     <div class="flex flex-col gap-2 px-4 py-3" data-match={ props.match.id }>
         <div class="flex items-center gap-3">
             <Show when={ known } let={ shown } fallback={ <span class="h-10 w-10 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
@@ -75,6 +96,11 @@ export default component MatchRow(props: { match: AdminMatchRow })
                     </Show>
                 </span>
             </div>
+            <Show when={ endable }>
+                <div class="ms-auto flex shrink-0 items-center" data-end>
+                    <Button variant="destructive" size="sm" label={ endLabel } onClick={ () => props.onEnd?.() }>{ locale.t('admin.play.end') }</Button>
+                </div>
+            </Show>
         </div>
         <ul class="flex flex-wrap gap-x-3 gap-y-1.5" data-players>
             <For each={ props.match.players } key={ (one) => one.seat } let={ one }>
@@ -89,6 +115,9 @@ export default component MatchRow(props: { match: AdminMatchRow })
                 <span>{ why }</span>
                 <When at={ since } said={ sinceSaid } />
             </p>
+        </Show>
+        <Show when={ barred }>
+            <p class="text-ui-xs text-faint" data-end-barred>{ barredWhy }</p>
         </Show>
     </div>
 }

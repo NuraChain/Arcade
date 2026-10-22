@@ -234,9 +234,44 @@ ones still live, and Play counts them (`stuck` on its answer); one the sweep pla
 that finishes, is forgotten. It is memory for the reason the table sweep's strikes are: a restart
 forgets it, and the sweep meets a stuck game again at its next deadline, a turn after its last.
 
+**A game being played can be ended as no contest** (`POST /api/admin/play/matches/:id/void`,
+`{ reason }`, D10). `voidIn` in the match service is the finish, in one transaction with the
+match row locked (`pessimistic_write`, and never the table's lock, which a finish never takes): the
+match is finished `abandoned` with no winner and no deadline; its revision moves on by one, with
+`voided: true` written into the state beside `rev`, and one ledger row at that revision (seat -1,
+nobody's id, kind `forfeit`, `{ verb: 'void' }`, no events, `VOIDED`), so every catch-up and every
+push reaches the end; every seat is `void` with no XP and no rating pair, a seat that had walked
+out as well, so the recorder never runs and nothing reaches `player_stats` or the achievements;
+the chairs stop being ready; and an escrow that is `open` becomes `refunding`, every stake going
+back in full. The admin's half (`voidMatch` in `play.ts`) writes the log's row in the same
+transaction, kind `void`, no person, `{ match, game, table }` with the table's code. Then each seat
+is pushed the end, a turn notice is taken back, the table's chat says
+`chat.line.result.void` ("Nura's team ended it as no contest"), the table is
+rung, the stake worker is nudged, and the answer is Play as it now stands (a stuck game it ended
+is forgotten by the next read, as one that finishes is).
+
+**It is held to the rank rule against everybody in the game**, asked before anything is written:
+nobody ends a game they play in (`staff-in-game`, 409) or one with anybody at or above their
+role in it (`staff-rank`), so an admin ends the games of players and moderators and the owner
+any game but their own. The owner is known by the wallet the server names and a suspended account
+holds no role (`STAFF_OF` in `play.ts`, one expression for the rank and for the list). A game
+already over is `staff-match-over` (409), asked under the row's lock, so two of the staff ending
+one game write one end; a game that is not there, and an id that is no uuid, are the page that is
+not there. The list of games being played names each player's role on the staff (`staff`), as a
+report names its two people's, so the page offers the end only where it would be taken.
+
+**A game ended this way says so wherever it is read.** A match view of it carries `voided: true`
+and names nobody on turn: the engine's state was not finished by the engine, so `asMatch` asks
+`finishedAt` before it asks `turnOf`. A play in it is `game-over`. The player's history lists it
+as `void`. The proof of a paid one leaves the end's ledger row out (`isVoided`), so every move
+still checks in the browser.
+
 `admin-play.db.spec.ts` holds the list, the switch, the refusals, the row lock (two switches parked
-on a held row) and everything new refused while a live game plays on; `stake.db.spec.ts` the paid
-table; `realtime-hub.spec.ts` the pulse.
+on a held row) and everything new refused while a live game plays on; `admin-void.db.spec.ts` the
+end of a game: what is written and what is not, who is told, a seat that had walked out, the
+escrow, a stuck game, every refusal, a suspended member of the staff, a move holding the row, two
+ends at once and no table lock; `stake.db.spec.ts` the paid table and a paid game ended, refunded
+by the worker with its proof whole; `realtime-hub.spec.ts` the pulse.
 
 ## Money
 
@@ -353,6 +388,17 @@ in madder and its players by handle in seat order; a stuck one wears a danger ba
 and since when. A table waiting is its game, code, pace, who may sit, the chairs taken, quick play,
 when it opened, its stake and its host. Both lists page with "Show older".
 
+A game being played offers "End game" to a reader who outranks everybody in it, and says why in
+its place where the reader plays in it or somebody there is at or above their role. The press
+asks why in the same sheet, as a destructive question that says the game counts for nobody and
+everybody stays at the table, and at a table played for NURA that every stake goes back. Said yes
+to, the game leaves the list at the press, is said once the server has ("The Ludo game at K7QX is
+over and counts for nobody."), and a refusal brings it back in the refusal's words; the list and
+the counts are read again either way. The log says "mina ended a game of Hokm at K7QX as no
+contest.", the code set apart as a handle is. A player's result card says "Nura's team ended this
+game." and that it counts for nobody (`match.over.staff`), in place of the words for a game that
+ended too early.
+
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
 `Tooltip` says the date and the minute in the reader's own calendar, with the moment in `datetime`.
@@ -367,13 +413,13 @@ from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
-`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists as well),
+`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists and the end of a game as well, `match-result.spec.ts` the card),
 and `paused-game.spec.ts` what a player sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch, a game's end and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three, the reports' two, the games being played's
 three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

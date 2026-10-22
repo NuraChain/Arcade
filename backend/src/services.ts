@@ -20,7 +20,7 @@ import { isNotice, NOTICE_OF, type Notice } from './domains/notify/notices.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
-import { createMatchService, type MatchLoad } from './domains/match/service.ts';
+import { createMatchService, voidedOf, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, WATCH_TAIL } from './domains/match/turns.ts';
 import { createWatchService } from './domains/match/watch.ts';
 import { createParties, type PartyWhy } from './domains/party/parties.ts';
@@ -698,7 +698,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const asMatch = (load: MatchLoad) =>
     {
         const state = load.state;
-        const turn = match.turnOf(load.match.game, state);
+        const turn = load.match.finishedAt === null ? match.turnOf(load.match.game, state) : null;
 
         /**
          * The seats come from `match_players`, not from the engine's state.
@@ -752,6 +752,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         if (load.match.outcome !== null)
         {
             view.outcome = load.match.outcome;
+        }
+        if (voidedOf(state))
+        {
+            view.voided = true;
         }
         if (load.match.finishedAt !== null)
         {
@@ -978,7 +982,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const desk = createReportsService(db, config.adminWallet);
 
-    const plays = createPlayService(db);
+    const plays = createPlayService(db, config.adminWallet);
 
     const stuckNow = async () =>
     {
@@ -1851,6 +1855,32 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async waitingTables(me, query)
             {
                 return await ableTo(me, 'play') === null ? null : await plays.tables(query.game ?? null, query.cursor ?? null);
+            },
+
+            async voidMatch(me, id, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const ended = actor === null ? null : await plays.voidMatch(actor, id, input.reason, match.voidIn);
+
+                if (ended === null)
+                {
+                    return null;
+                }
+
+                await courtesy('game push', () => pushMatch(id, ended.before));
+
+                const load = await match.peek(id);
+
+                if (load !== null)
+                {
+                    await courtesy('turn notice', () => nudgeTurn(load, null));
+                }
+
+                await courtesy('result line', () => declareResult(id));
+                live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
+                stakes.kick();
+
+                return await playNow();
             }
         },
 

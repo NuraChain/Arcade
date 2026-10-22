@@ -412,7 +412,7 @@ type PlayStatus = AdminPlay['games'][number]['status'];
 
 const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })), stuck: 0 });
 
-const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'] });
+const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'], over: [] as string[] });
 
 const pageOf = <T extends { id: string }>(rows: readonly T[], cursor: string | undefined) =>
 {
@@ -1473,6 +1473,43 @@ export const client =
             staffGate('play');
 
             return pageOf(server.playing.tables.filter((one) => query.game === undefined || one.game === query.game), query.cursor);
+        },
+
+        async voidMatch({ params, input }: { params: { id: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.voidMatch ${ params.id } ${ input.reason }`);
+            staffGate('play');
+
+            const actor = staffRoleOf(server.me);
+            const held = server.playing.matches.find((one) => one.id === params.id);
+
+            if (held === undefined && server.playing.over.includes(params.id))
+            {
+                throw staffRefused('staff-match-over', 'That game has already ended.');
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            if (held.players.some((one) => one.handle === server.me))
+            {
+                throw staffRefused('staff-in-game', 'Nobody ends a game they are playing in.');
+            }
+
+            if (held.players.some((one) => !outranks(actor, one.staff ?? null)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            server.playing.matches = server.playing.matches.filter((one) => one.id !== held.id);
+            server.playing.over.push(held.id);
+            server.play.games = server.play.games.map((one) => (one.game === held.game ? { ...one, matches: Math.max(0, one.matches - 1) } : one));
+            server.play.stuck = Math.max(0, server.play.stuck - (held.stuck === undefined ? 0 : 1));
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'void', reason: input.reason, details: { match: held.id, game: held.game, table: held.code } });
+
+            return structuredClone(server.play);
         }
     },
 

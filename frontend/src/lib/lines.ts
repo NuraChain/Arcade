@@ -20,6 +20,7 @@ export const LINE_KEYS = [
     'chat.line.table',
     'chat.line.result',
     'chat.line.result.none',
+    'chat.line.result.void',
 
     // The group domain writes all six, and `groups.db.spec.ts` walks the producers.
     'chat.line.group.created',
