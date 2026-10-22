@@ -257,41 +257,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return item;
     };
 
-    /**
-     * The cursor, as one opaque string.
-     *
-     * The client never takes it apart - it hands back the last one it was given - which is what
-     * lets the keyset change shape later without a client release.
-     */
-    const encodeCursor = (at: Date, id: string) =>
-        Buffer.from(`${ at.toISOString() }|${ id }`, 'utf8').toString('base64url');
-
-    const LIST_CURSOR = /^([0-9T:.\-Z]*)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
-    const listCursorOf = (row: { last_at: Date | null; id: string }) =>
-        Buffer.from(`${ row.last_at?.toISOString() ?? '' }|${ row.id }`, 'utf8').toString('base64url');
-
-    const listAfter = (cursor: string | undefined): { at: Date | null; id: string } | null =>
-    {
-        const found = cursor === undefined ? null : LIST_CURSOR.exec(Buffer.from(cursor, 'base64url').toString('utf8'));
-
-        if (found === null)
-        {
-            return null;
-        }
-
-        const at = found[1] === '' ? null : new Date(found[1]);
-
-        return at !== null && Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
-    };
-
-    const decodeCursor = (cursor: string | undefined) =>
-    {
-        const found = listAfter(cursor);
-
-        return found === null || found.at === null ? null : { at: found.at, id: found.id };
-    };
-
     const asMessage = (row: MessageRow) =>
     {
         const message: ChatMessage = {
@@ -3141,16 +3106,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const kinds = notice !== undefined && isNotice(notice)
                     ? Object.keys(NOTICE_OF).filter((kind) => NOTICE_OF[kind] === notice)
                     : null;
-                const page = await notify.page(me, decodeCursor(cursor), kinds);
-                const oldest = page.items[page.items.length - 1];
+                const page = await notify.page(me, cursor, kinds);
 
                 return {
                     items: page.items.map(asNotification),
                     hasMore: page.hasMore,
                     unread: await notify.unread(me),
-                    ...(page.hasMore && oldest !== undefined
-                        ? { cursor: encodeCursor(oldest.created_at, oldest.id) }
-                        : {})
+                    ...(page.cursor === undefined ? {} : { cursor: page.cursor })
                 };
             },
 
@@ -3291,13 +3253,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         chat: {
             async list(me, cursor)
             {
-                const page = await chat.list(me, listAfter(cursor));
-                const unpinned = page.rows.filter((row) => !row.pinned);
-                const oldest = unpinned[unpinned.length - 1];
+                const page = await chat.list(me, cursor);
 
                 return {
                     conversations: page.rows.map(asConversation),
-                    ...(page.more && oldest !== undefined ? { cursor: listCursorOf(oldest) } : {})
+                    ...(page.cursor === undefined ? {} : { cursor: page.cursor })
                 };
             },
 
@@ -3419,8 +3379,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async messages(me, conversationId, cursor, limit)
             {
-                const page = await chat.messages(me, conversationId, decodeCursor(cursor), threadSize(limit));
-                const oldest = page.messages[0];
+                const page = await chat.messages(me, conversationId, cursor, threadSize(limit));
                 const reactions = asReactions(page.reactions);
                 return {
                     messages: page.messages.map((row) =>
@@ -3430,9 +3389,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                         return on === undefined ? message : { ...message, reactions: on };
                     }),
                     hasMore: page.hasMore,
-                    ...(page.hasMore && oldest !== undefined
-                        ? { cursor: encodeCursor(oldest.created_at, oldest.id) }
-                        : {})
+                    ...(page.cursor === undefined ? {} : { cursor: page.cursor })
                 };
             },
 

@@ -1,6 +1,7 @@
 import { IsNull, type DataSource } from 'typeorm';
 
 import type { NotificationKind } from '../../entities/notification.entity.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import { rowsOf } from '../../lib/rows.ts';
 import { Mute } from '../../entities/mute.entity.ts';
 import { NOTICE_OF } from './notices.ts';
@@ -23,6 +24,7 @@ export interface NotificationPage
 {
     items: NotificationRow[];
     hasMore: boolean;
+    cursor?: string;
 }
 
 /** How many notifications one page carries. */
@@ -185,22 +187,37 @@ export function createNotifyService(db: DataSource, social: SocialService)
          * `(created_at, id)` descending, the same shape chat history uses. An OFFSET page repeats
          * or skips a row every time something arrives at the other end while somebody is reading.
          */
-        async page(me: string, cursor: { at: Date; id: string } | null, kinds: readonly string[] | null = null): Promise<NotificationPage>
+        async page(me: string, cursor: string | null | undefined, kinds: readonly string[] | null = null): Promise<NotificationPage>
         {
-            const rows = await db.query(
-                `select n.id, n.kind, n.ref, n.count, n.created_at, n.read_at,
-                        (select u.handle::text from users u where u.id = n.actor_id) as actor
-                 from notifications n
-                 where n.user_id = $1
-                   and ($2::timestamptz is null or (n.created_at, n.id) < ($2, $3::uuid))
-                   and ($5::text[] is null or n.kind = any($5::text[]))
-                 order by n.created_at desc, n.id desc
-                 limit $4`,
-                [me, cursor?.at ?? null, cursor?.id ?? null, PAGE + 1, kinds === null ? null : [...kinds]]
-            );
+            const after = keysetAfter(cursor);
+            const query = db.getRepository(Notification).createQueryBuilder('n')
+                .select('n.id', 'id')
+                .addSelect('n.kind', 'kind')
+                .addSelect('n.ref', 'ref')
+                .addSelect('n.count', 'count')
+                .addSelect('n.created_at', 'created_at')
+                .addSelect('n.read_at', 'read_at')
+                .addSelect(keyOf('n.created_at'), 'at_key')
+                .addSelect('(select u.handle::text from users u where u.id = n.actor_id)', 'actor')
+                .where('n.user_id = :me', { me });
 
-            const page = rowsOf<NotificationRow>(rows);
-            return { items: page.slice(0, PAGE), hasMore: page.length > PAGE };
+            if (after !== null)
+            {
+                query.andWhere(olderThan('n.created_at', 'n.id'), after);
+            }
+
+            if (kinds !== null)
+            {
+                query.andWhere('n.kind = any(cast(:kinds as text[]))', { kinds: [...kinds] });
+            }
+
+            const rows = await query
+                .orderBy('n.created_at', 'DESC')
+                .addOrderBy('n.id', 'DESC')
+                .limit(PAGE + 1)
+                .getRawMany<NotificationRow & Keyed>();
+
+            return { items: rows.slice(0, PAGE), hasMore: rows.length > PAGE, ...cursorOf(rows, PAGE) };
         },
 
         async unread(me: string): Promise<number>

@@ -2,11 +2,11 @@ import type { DataSource, EntityManager } from 'typeorm';
 
 import { Avatar, Device, PaidAccount, Report, Session, Suspension, User, Wallet } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { AdminPeople } from '../../schemas.ts';
 import { avatarHashOf } from '../identity/avatar.ts';
 import { folded, likeLiteral, SEARCH_FROM, searchNeedle } from '../social/names.ts';
 import { agentOf } from './agent.ts';
-import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
 import { outranks, PEOPLE_PAGE, type ClearPart, type GrantedRole, type PeopleList, type ReportStatus, type SuspendCategory, type SuspendDays } from './roles.ts';
 import { record, staffRefusal, type Actor } from './staff.ts';
 

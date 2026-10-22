@@ -12,6 +12,7 @@ import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { User } from '../../entities/user.entity.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { VaultState } from '../../schemas.ts';
 import { gameOff, gameOn, lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
 import { CONSENT_MS, eligibilityOf, onLadder, potOf, seatsOfMask, shareOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
@@ -104,9 +105,7 @@ const SIGNATURE = /^0x(?:[0-9a-fA-F]{2})+$/;
 
 const GAMES_PAGE = 20;
 
-const GAMES_CURSOR = /^([0-9T:.\-Z]+)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
-interface PlayedRow
+interface PlayedRow extends Keyed
 {
     id: string;
     game: string;
@@ -122,13 +121,6 @@ interface PlayedRow
     seats: number;
 }
 
-const gamesAfter = (cursor: string | null) =>
-{
-    const found = cursor === null ? null : GAMES_CURSOR.exec(cursor);
-    const at = found === null ? null : new Date(found[1]);
-
-    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
-};
 
 export const wireCall = (from: Address, call: VaultCall) => ({
     from,
@@ -876,7 +868,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 throw notOpen();
             }
 
-            const after = gamesAfter(cursor);
+            const after = keysetAfter(cursor);
             const query = db.getRepository(Escrow).createQueryBuilder('e')
                 .innerJoin(EscrowSeat, 'mine', 'mine.escrow_id = e.id and mine.user_id = :me', { me })
                 .select('e.id', 'id')
@@ -888,6 +880,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 .addSelect('e.open_tx', 'open_tx')
                 .addSelect('e.close_tx', 'close_tx')
                 .addSelect('e.created_at', 'created_at')
+                .addSelect(keyOf('e.created_at'), 'at_key')
                 .addSelect('e.match_id', 'match_id')
                 .addSelect('mine.seat', 'seat')
                 .addSelect('(select count(*)::int from escrow_seats s where s.escrow_id = e.id)', 'seats')
@@ -895,7 +888,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
 
             if (after !== null)
             {
-                query.andWhere('(e.created_at, e.id) < (:at, :id)', { at: after.at, id: after.id });
+                query.andWhere(olderThan('e.created_at', 'e.id'), after);
             }
 
             const rows = await query
@@ -904,7 +897,6 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 .limit(GAMES_PAGE + 1)
                 .getRawMany<PlayedRow>();
             const page = rows.slice(0, GAMES_PAGE);
-            const last = page.at(-1);
 
             return {
                 games: page.map((row) =>
@@ -929,7 +921,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                         at: row.created_at.toISOString()
                     };
                 }),
-                ...(rows.length > GAMES_PAGE && last !== undefined ? { cursor: `${ last.created_at.toISOString() }|${ last.id }` } : {})
+                ...cursorOf(rows, GAMES_PAGE)
             };
         },
 

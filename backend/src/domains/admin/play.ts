@@ -2,8 +2,8 @@ import type { DataSource, EntityManager } from 'typeorm';
 
 import { Escrow, Game, Match, MatchPlayer, Table, TableSeat, User } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { AdminMatches, AdminPlay, AdminTables } from '../../schemas.ts';
-import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
 import { PLAY_PAGE, STUCK_KINDS, outranks, type MatchList, type StaffRole, type StuckKind } from './roles.ts';
 import { record, staffRefusal, type Actor } from './staff.ts';
 

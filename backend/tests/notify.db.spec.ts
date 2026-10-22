@@ -333,8 +333,7 @@ describe.skipIf(!active)('notifications, against a real database', () =>
             expect(first.items.length).toBe(PAGE);
             expect(first.hasMore).toBe(true);
 
-            const oldest = first.items[first.items.length - 1];
-            const second = await notify.page(reader, { at: oldest.created_at, id: oldest.id });
+            const second = await notify.page(reader, first.cursor);
 
             expect(second.items.length).toBe(12);
             expect(second.hasMore).toBe(false);

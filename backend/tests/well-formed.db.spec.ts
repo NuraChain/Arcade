@@ -36,15 +36,20 @@ const NOT_CURSORS = [
     '2026-10-08T00:00:00.000Z|not-a-uuid',
     `never|${ ZERO }`,
     `2026-13-45T99:99:99.000Z|${ ZERO }`,
-    `2026-10-08T00:00:00.000Z|${ ZERO }|${ ZERO }`
+    `2026-10-08T00:00:00.000Z|${ ZERO }|${ ZERO }`,
+    `2026-02-30T00:00:00.000Z|${ ZERO }`,
+    sealed(`2026-04-31T24:00:00.000Z|${ ZERO }`),
+    `|${ ZERO }`,
+    `${ '9'.repeat(19) }|${ ZERO }`,
+    `-1|${ ZERO }`,
+    `1.5|${ ZERO }`,
+    `1|${ ZERO }x`,
+    `1|${ NOWHERE.toUpperCase() }`,
+    `1|${ ZERO }|${ ZERO }`,
+    sealed(`1|${ ZERO }`)
 ];
 
-const DAYS_THAT_NEVER_WERE = [
-    sealed(`2026-02-30T00:00:00.000Z|${ ZERO }`),
-    sealed(`2026-04-31T24:00:00.000Z|${ ZERO }`),
-    `2026-02-30T00:00:00.000Z|${ ZERO }`,
-    `2026-04-31T24:00:00.000Z|${ ZERO }`
-];
+const FAR_ENDS = [`0|${ ZERO }`, `${ '9'.repeat(17) }|${ ZERO }`];
 
 interface Person
 {
@@ -272,12 +277,12 @@ describe.skipIf(!active)('a request that is not well formed, against Postgres', 
             }
         });
 
-        it('is answered, never thrown, when it names a day the calendar does not have', async () =>
+        it('is answered, never thrown, at either end of the clock', async () =>
         {
             const host = await makeUser();
             const table = await ports.table.create(host.id, { game: 'ludo', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: [] });
 
-            for (const cursor of DAYS_THAT_NEVER_WERE)
+            for (const cursor of FAR_ENDS)
             {
                 expect(await said(() => ports.notify.page(host.id, cursor)), cursor).toBe('answered');
                 expect(await said(() => ports.chat.list(host.id, cursor)), cursor).toBe('answered');

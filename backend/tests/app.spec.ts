@@ -811,7 +811,7 @@ describe('the vault', () =>
             closeTx: `0x${ 'b'.repeat(64) }`,
             at: '2026-10-21T00:00:00.000Z'
         }],
-        cursor: '2026-10-21T00:00:00.000Z|00000000-0000-4000-8000-000000000001'
+        cursor: '1792540800000000|00000000-0000-4000-8000-000000000001'
     };
 
     const vaultAs = (told: unknown[][], who: unknown = { userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' }, state: unknown = open) => buildApp({

@@ -4,6 +4,7 @@ import { IsNull, type DataSource } from 'typeorm';
 import type { Franking } from './franking.ts';
 import { THREAD_PAGE } from './pages.ts';
 
+import { cursorFor, cursorOf, instantOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { Conversation } from '../../entities/conversation.entity.ts';
@@ -43,6 +44,9 @@ export interface ConversationRow
     last_commitment: string | null;
     last_frank: string | null;
     last_expires_at: Date | null;
+
+    /** When the room last moved, in microseconds since 1970, and 0 for a room nothing was said in. */
+    last_key: string;
 
     /** How long a message in this room lasts, in seconds. Null is off. */
     expire_after: number | null;
@@ -101,6 +105,8 @@ export const PAGE = THREAD_PAGE;
 
 export const LIST_PAGE = 60;
 
+const ACTIVITY = `coalesce(last.created_at, timestamptz 'epoch')`;
+
 /**
  * How far a message's signed expiry may sit from the room's rule.
  *
@@ -133,6 +139,28 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createChatService(db: DataSource, social: SocialService, franking: Franking)
 {
+    const envelope = () => db.getRepository(Message)
+        .createQueryBuilder('x')
+        .leftJoin(User, 'su', 'su.id = x.sender_id')
+        .select('x.id', 'id')
+        .addSelect('x.conversation_id', 'conversation_id')
+        .addSelect('x.kind', 'kind')
+        .addSelect('x.body', 'body')
+        .addSelect('x.payload', 'payload')
+        .addSelect('x.created_at', 'created_at')
+        .addSelect('su.handle', 'sender')
+        .addSelect('x.sender_id', 'sender_account_id')
+        .addSelect('x.epoch', 'epoch')
+        .addSelect('x.seq', 'seq')
+        .addSelect('x.iv', 'iv')
+        .addSelect('x.sender_device_id', 'sender_device_id')
+        .addSelect('x.signature', 'signature')
+        .addSelect('x.client_at', 'client_at')
+        .addSelect('x.commitment', 'commitment')
+        .addSelect('x.frank', 'frank')
+        .addSelect('x.expires_at', 'expires_at')
+        .addSelect('x.target_id', 'target_id');
+
     /**
      * The membership row, which IS the authorisation.
      *
@@ -255,8 +283,9 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * to read a message to count it, which is why unread is a comparison against my own
          * watermark rather than anything about the content.
          */
-        async list(me: string, after: { at: Date | null; id: string } | null = null, size = LIST_PAGE): Promise<{ rows: ConversationRow[]; more: boolean }>
+        async list(me: string, cursor: string | null | undefined = null, size = LIST_PAGE): Promise<{ rows: ConversationRow[]; more: boolean; cursor?: string }>
         {
+            const after = keysetAfter(cursor);
             const rows = await db.query(
                 `select c.id, c.kind, c.table_id, c.game, c.title, c.expire_after,
                         (select g.slug::text from groups g where g.id = c.group_id)      as group_slug,
@@ -292,7 +321,8 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         last.client_at                                                   as last_client_at,
                         last.commitment                                                  as last_commitment,
                         last.frank                                                       as last_frank,
-                        last.expires_at                                                  as last_expires_at
+                        last.expires_at                                                  as last_expires_at,
+                        ${ keyOf(ACTIVITY) }                                             as last_key
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
                  left join lateral (
@@ -316,7 +346,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                  ) last on true
                  where m.user_id = $1
                    and ($2::uuid is null
-                        or (not m.pinned and (coalesce(last.created_at, '-infinity'::timestamptz), c.id) < (coalesce($3::timestamptz, '-infinity'::timestamptz), $2::uuid)))
+                        or (not m.pinned and (${ ACTIVITY }, c.id) < (${ instantOf('$3') }, $2::uuid)))
                    -- A block hides the thread, not just the person. Leaving a direct conversation
                    -- listed after a block means a row in the inbox with somebody you have said
                    -- you do not want to hear from.
@@ -324,11 +354,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                                     join blocks b on (b.user_id = $1 and b.blocked_id = other.user_id)
                                                   or (b.user_id = other.user_id and b.blocked_id = $1)
                                    where other.conversation_id = c.id and other.user_id <> $1)
-                 order by m.pinned desc, coalesce(last.created_at, '-infinity'::timestamptz) desc, c.id desc
+                 order by m.pinned desc, ${ ACTIVITY } desc, c.id desc
                  limit $4::int + (case when $2::uuid is null
                                        then (select count(*)::int from conversation_members p where p.user_id = $1 and p.pinned)
                                        else 0 end)`,
-                [me, after?.id ?? null, after?.at ?? null, size + 1]
+                [me, after?.id ?? null, after?.micros ?? null, size + 1]
             );
             const found = rowsOf<ConversationRow>(rows);
             const unpinned = found.filter((row) => !row.pinned);
@@ -339,7 +369,13 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             }
 
             const dropped = unpinned[unpinned.length - 1];
-            return { rows: found.filter((row) => row !== dropped), more: true };
+            const oldest = unpinned.at(-2);
+
+            return {
+                rows: found.filter((row) => row !== dropped),
+                more: true,
+                ...(oldest === undefined ? {} : { cursor: cursorFor(oldest.last_key, oldest.id) })
+            };
         },
 
         /**
@@ -349,54 +385,32 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * other end while somebody scrolls up, and an OFFSET page silently repeats or skips a
          * message every time one arrives. The cursor is the last row of the previous page.
          */
-        async messages(me: string, conversationId: string, cursor: { at: Date; id: string } | null, size: number = PAGE): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[] }>
+        async messages(me: string, conversationId: string, cursor: string | null | undefined, size: number = PAGE): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[]; cursor?: string }>
         {
             await mustBeMember(me, conversationId);
 
-            const rows = await db.query(
-                `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
-                        su.handle as sender, x.sender_id as sender_account_id,
-                        x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
-                        x.commitment, x.frank, x.expires_at, x.target_id
-                 from messages x
-                 left join users su on su.id = x.sender_id
-                 where x.conversation_id = $1
-                   and x.kind <> 'reaction'
-                   -- Gone is gone. The sweep deletes these on a timer, and a reader must not see
-                   -- one in the window between its moment and the next pass.
-                   and (x.expires_at is null or x.expires_at > now())
-                   and ($2::timestamptz is null or (x.created_at, x.id) < ($2::timestamptz, $3::uuid))
-                 order by x.created_at desc, x.id desc
-                 limit $4`,
-                [conversationId, cursor?.at ?? null, cursor?.id ?? null, size + 1]
-            );
+            const after = keysetAfter(cursor);
+            const query = envelope()
+                .addSelect(keyOf('x.created_at'), 'at_key')
+                .where('x.conversation_id = :conversationId', { conversationId })
+                .andWhere(`x.kind <> 'reaction'`)
+                .andWhere('(x.expires_at is null or x.expires_at > now())');
 
-            const page = rowsOf<MessageRow>(rows);
+            if (after !== null)
+            {
+                query.andWhere(olderThan('x.created_at', 'x.id'), after);
+            }
+
+            const page = await query
+                .orderBy('x.created_at', 'DESC')
+                .addOrderBy('x.id', 'DESC')
+                .limit(size + 1)
+                .getRawMany<MessageRow & Keyed>();
             const hasMore = page.length > size;
             const shown = page.slice(0, size).reverse();
             const texts = shown.filter((row) => row.kind === 'text').map((row) => row.id);
 
-            const reactions = texts.length === 0 ? [] : await db.getRepository(Message)
-                .createQueryBuilder('x')
-                .leftJoin(User, 'su', 'su.id = x.sender_id')
-                .select('x.id', 'id')
-                .addSelect('x.conversation_id', 'conversation_id')
-                .addSelect('x.kind', 'kind')
-                .addSelect('x.body', 'body')
-                .addSelect('x.payload', 'payload')
-                .addSelect('x.created_at', 'created_at')
-                .addSelect('su.handle', 'sender')
-                .addSelect('x.sender_id', 'sender_account_id')
-                .addSelect('x.epoch', 'epoch')
-                .addSelect('x.seq', 'seq')
-                .addSelect('x.iv', 'iv')
-                .addSelect('x.sender_device_id', 'sender_device_id')
-                .addSelect('x.signature', 'signature')
-                .addSelect('x.client_at', 'client_at')
-                .addSelect('x.commitment', 'commitment')
-                .addSelect('x.frank', 'frank')
-                .addSelect('x.expires_at', 'expires_at')
-                .addSelect('x.target_id', 'target_id')
+            const reactions = texts.length === 0 ? [] : await envelope()
                 .where('x.target_id in (:...texts)', { texts })
                 .andWhere('x.kind = :kind', { kind: 'reaction' })
                 .andWhere('(x.expires_at is null or x.expires_at > now())')
@@ -404,7 +418,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 .addOrderBy('x.id', 'ASC')
                 .getRawMany<MessageRow>();
 
-            return { messages: shown, hasMore, reactions };
+            return { messages: shown, hasMore, reactions, ...cursorOf(page, size) };
         },
 
         /**

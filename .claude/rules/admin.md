@@ -86,10 +86,8 @@ space. The writer must outrank the person, as for any action on an account (a mo
 players, an admin on players and moderators, the owner on anybody), and nobody writes one on
 themselves (`staff-self`). It answers with the person as they now read.
 
-**A cursor here carries microseconds** (`domains/admin/keyset.ts`): the time of the page's last row
-in whole microseconds since the epoch and its id, compared in SQL. A JavaScript date has
-milliseconds, and a cursor built from one skipped a row written in the same millisecond as the
-page's last row and a few microseconds before it. The log uses the same cursor.
+**A cursor here carries microseconds** (`lib/keyset.ts`, *A page cut by time* in
+`backend/CLAUDE.md`), as every list paged by time does. The log uses the same cursor.
 
 ## A suspension
 

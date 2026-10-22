@@ -198,10 +198,9 @@ was written half of them answered one that way: forty-nine of its ninety-eight c
   WRITE whose port-level read checked and whose own UPDATE did not, so a handle sent where a
   request's id belongs was a 500. It answers in the bytes of a request that is not there.
 - **A cursor that does not parse is no cursor**: the first page, as the leaderboard's always was.
-  `decodeCursor` took the id half on trust, so base64url of a date and anything at all reached
-  Postgres as a uuid; it reads through `listAfter`'s shape now. The match history took both halves
-  on trust and sent them as text; `historyAfter` parses them and hands Postgres a `Date`. A day the
-  calendar does not have is whatever JavaScript makes of it, which is a day.
+  Every list paged by time reads its cursor through one function, `keysetAfter` in
+  `lib/keyset.ts`: up to seventeen digits and a uuid in lower case, or nothing. The far ends are
+  answered too: nought is 1970, and seventeen nines a year Postgres still holds.
 - **`since` clamps the revision it is asked from** to what the game has reached. A number past the
   column's range reads as nothing new and one before the beginning as the whole game. The watch
   read clamps the same way, through the same reader (`match.told`), and reads a revision that is
@@ -217,6 +216,24 @@ to be given garbage there or named as spared, or the pass fails saying which.
 One thing it does not hold: the realtime gateway reads its own frames by hand. A `play` goes
 through `matchPlayInput`, so its text is this text; a table or a match is named by an id every
 reader of it checks; nothing else a frame carries is stored.
+
+## A page cut by time
+
+**A cursor is the page's last row as Postgres keeps it: its time in whole microseconds, and its
+id.** Notifications, a chat thread, the chat list, match history, a player's paid games, and the
+admin's people, reports, log, games being played and tables waiting all page newest first by
+keyset over a time and an id (who is online pages by handle). The first five built their cursor
+from a JavaScript `Date`, which holds milliseconds, so a row written in the same millisecond as a
+page's last row and a few microseconds before it was on neither page. `lib/keyset.ts` is the one
+way now: `keyOf` selects the key as text beside the row, `cursorOf` (or `cursorFor`) writes
+`micros|id`, `keysetAfter` reads it back, and `olderThan` compares in SQL against
+`timestamptz 'epoch'` plus that many microseconds, so the comparison never passes through
+JavaScript. The chat list's raw query uses `instantOf` for the same instant, and counts a room
+nothing was said in as 1970 (`ACTIVITY`), which is still after every room that has a line.
+`keyset.db.spec.ts` writes rows two to a millisecond and reads each of the first four lists
+through the ports, a page at a time, wanting every row once and in order; `stake.db.spec.ts` does
+the paid games and `admin-people.db.spec.ts` the people. Each of the first five failed by exactly
+one row against the millisecond cursors.
 
 ## The schema, and reference data
 

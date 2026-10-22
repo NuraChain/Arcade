@@ -204,8 +204,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         expect(first.rows[0].id).toBe(rooms[0]);
         expect(unpinned[0].id).toBe(rooms[5]);
 
-        const last = unpinned[unpinned.length - 1];
-        const second = await chat.list(me, { at: last.last_at, id: last.id }, 60);
+        const second = await chat.list(me, first.cursor, 60);
         const seen = new Set([...first.rows, ...second.rows].map((row) => row.id));
 
         expect(second.more).toBe(false);
@@ -304,8 +303,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         expect(first.messages.length).toBe(PAGE);
         expect(first.hasMore).toBe(true);
 
-        const oldest = first.messages[0];
-        const second = await chat.messages(a, conversation, { at: oldest.created_at, id: oldest.id });
+        const second = await chat.messages(a, conversation, first.cursor);
         expect(second.messages.length).toBe(15);
         expect(second.hasMore).toBe(false);
 
@@ -348,13 +346,12 @@ describe.skipIf(!active)('chat, against a real database', () =>
         }
 
         const first = await chat.messages(a, conversation, null);
-        const oldest = first.messages[0];
 
         // Somebody says something while the reader is scrolling up. An OFFSET page would shift
         // by one and repeat a line; the keyset does not move.
         await say(b, conversation, 'arriving now');
 
-        const second = await chat.messages(a, conversation, { at: oldest.created_at, id: oldest.id });
+        const second = await chat.messages(a, conversation, first.cursor);
         expect(second.messages.map((message) => message.body)).toEqual(['old 0', 'old 1', 'old 2', 'old 3', 'old 4']);
     });
 

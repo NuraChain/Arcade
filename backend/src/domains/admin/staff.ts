@@ -3,8 +3,8 @@ import { HttpError } from '@azerothjs/http';
 
 import { StaffAction, StaffMember, User, Wallet } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { StaffList, StaffLog } from '../../schemas.ts';
-import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
 import { STAFF_REFUSALS, type StaffRefusal } from './refusals.ts';
 import { LOG_PAGE, outranks, type ActionKind, type GrantedRole, type StaffRole } from './roles.ts';
 

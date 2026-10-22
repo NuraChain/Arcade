@@ -1201,6 +1201,45 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect((await ports.vault.games(guest.id, 'not a cursor')).games[0].id).toBe(escrowId);
         });
 
+        it('pages through games locked two to a millisecond, each once', async () =>
+        {
+            const { guest, tableId, escrowId } = await playing();
+            const locked: string[] = [];
+
+            for (let index = 0; index < 24; index += 1)
+            {
+                const made = await db.getRepository(Escrow).insert({ tableId, game: 'ludo', amount: TEN, feeBps: 500, state: 'refunded' });
+                const id = made.identifiers[0].id as string;
+
+                await db.getRepository(EscrowSeat).insert({
+                    escrowId: id,
+                    seat: 1,
+                    userId: guest.id,
+                    address: guest.address,
+                    nonce: `0x${ (index + 1).toString(16).padStart(64, '0') }`,
+                    commitment: `0x${ 'c'.repeat(64) }`,
+                    secret: `0x${ 'd'.repeat(64) }`,
+                    deadline: new Date(),
+                    signature: '0x00'
+                });
+                locked.push(id);
+            }
+
+            locked.push(escrowId);
+
+            for (const [index, id] of locked.entries())
+            {
+                await db.query('update escrows set created_at = $1::timestamptz where id = $2', [`2026-10-20 09:00:00.${ String(Math.floor(index / 2)).padStart(3, '0') }${ index % 2 === 0 ? '100' : '900' }+00`, id]);
+            }
+
+            const page = await ports.vault.games(guest.id, null);
+            const next = await ports.vault.games(guest.id, page.cursor ?? null);
+
+            expect(page.games).toHaveLength(20);
+            expect(next).not.toHaveProperty('cursor');
+            expect([...page.games, ...next.games].map((one) => one.id)).toEqual([...locked].reverse());
+        });
+
         it('hands a player the call that takes their stakes back once the vault\'s wait has passed, and nobody else', async () =>
         {
             const { host, guest, escrowId } = await playing();

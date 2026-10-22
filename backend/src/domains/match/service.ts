@@ -13,6 +13,7 @@ import { User } from '../../entities/user.entity.ts';
 import { maskOf } from '../stake/policy.ts';
 import { gameOff, gameOn, lockTable, stillLocking, tableRefusal } from '../table/service.ts';
 import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { createRecorder } from './record.ts';
@@ -34,7 +35,7 @@ import type { MatchPlay } from '../../schemas.ts';
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
 const HISTORY_PAGE = 20;
 
-interface HistoryRow
+interface HistoryRow extends Keyed
 {
     id: string;
     game: string;
@@ -48,16 +49,6 @@ interface HistoryRow
 const UNIQUE_VIOLATION = '23505';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const HISTORY_CURSOR = /^([0-9T:.\-Z]+)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-
-const historyAfter = (cursor: string | null) =>
-{
-    const found = cursor === null ? null : HISTORY_CURSOR.exec(cursor);
-    const at = found === null ? null : new Date(found[1]);
-
-    return found === null || at === null || Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
-};
 
 export type Applied = 'now' | 'already' | 'stale';
 
@@ -474,31 +465,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         }
     };
 
-    /**
-     * A person's own finished games, newest first, by keyset over `(finished_at, id)`.
-     *
-     * Keyset rather than OFFSET for the reason `chat.db.spec.ts` already pins: a game finishing
-     * while somebody is paging back repeats or skips a row every time. The cursor is the pair it
-     * pages on, encoded as text, because an opaque token nobody can read is one nobody can debug
-     * and there is nothing secret in a timestamp the row already carries.
-     */
-    const HISTORY_SQL = `
-        select m.id, m.game, m.finished_at,
-               p.result, p.rating_before, p.rating_after,
-               (select array_agg(u.handle::text order by o.seat)
-                  from match_players o
-                  join users u on u.id = o.user_id
-                 where o.match_id = m.id)                                       as players
-          from match_players p
-          join matches m on m.id = p.match_id
-         where p.user_id = $1
-           and m.finished_at is not null
-           and p.result is not null
-           and ($2::timestamptz is null or (m.finished_at, m.id) < ($2::timestamptz, $3::uuid))
-         order by m.finished_at desc, m.id desc
-         limit $4
-    `;
-
     return {
         async view(me: string, matchId: string)
         {
@@ -509,12 +475,40 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         shownTo,
 
+        /**
+         * A person's own finished games, newest first, by keyset over `(finished_at, id)`.
+         *
+         * Keyset rather than OFFSET for the reason `chat.db.spec.ts` already pins: a game finishing
+         * while somebody is paging back repeats or skips a row every time.
+         */
         async history(me: string, cursor: string | null): Promise<MatchHistory>
         {
-            const after = historyAfter(cursor);
-            const rows = await db.query(HISTORY_SQL, [me, after?.at ?? null, after?.id ?? null, HISTORY_PAGE + 1]) as HistoryRow[];
+            const after = keysetAfter(cursor);
+            const query = db.getRepository(MatchPlayer).createQueryBuilder('p')
+                .innerJoin(Match, 'm', 'm.id = p.match_id')
+                .select('m.id', 'id')
+                .addSelect('m.game', 'game')
+                .addSelect('m.finished_at', 'finished_at')
+                .addSelect(keyOf('m.finished_at'), 'at_key')
+                .addSelect('p.result', 'result')
+                .addSelect('p.rating_before', 'rating_before')
+                .addSelect('p.rating_after', 'rating_after')
+                .addSelect('(select array_agg(u.handle::text order by o.seat) from match_players o join users u on u.id = o.user_id where o.match_id = m.id)', 'players')
+                .where('p.user_id = :me', { me })
+                .andWhere('m.finished_at is not null')
+                .andWhere('p.result is not null');
+
+            if (after !== null)
+            {
+                query.andWhere(olderThan('m.finished_at', 'm.id'), after);
+            }
+
+            const rows = await query
+                .orderBy('m.finished_at', 'DESC')
+                .addOrderBy('m.id', 'DESC')
+                .limit(HISTORY_PAGE + 1)
+                .getRawMany<HistoryRow>();
             const page = rows.slice(0, HISTORY_PAGE);
-            const last = page[page.length - 1];
 
             return {
                 matches: page.map((row) => ({
@@ -526,9 +520,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     ...(row.rating_before === null ? {} : { ratingBefore: row.rating_before }),
                     ...(row.rating_after === null ? {} : { ratingAfter: row.rating_after })
                 })),
-                ...(rows.length > HISTORY_PAGE && last !== undefined
-                    ? { cursor: `${ new Date(last.finished_at).toISOString() }|${ last.id }` }
-                    : {})
+                ...cursorOf(rows, HISTORY_PAGE)
             };
         },
 

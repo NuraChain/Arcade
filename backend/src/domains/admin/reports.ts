@@ -2,8 +2,8 @@ import type { DataSource, EntityManager } from 'typeorm';
 
 import { Match, MatchPlayer, Report, User } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
+import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { AdminReports } from '../../schemas.ts';
-import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
 import { REPORTS_PAGE, type GrantedRole, type ReportList, type ReportOutcome, type ReportStatus } from './roles.ts';
 import { record, type Actor } from './staff.ts';
 
