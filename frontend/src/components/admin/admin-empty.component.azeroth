@@ -1,0 +1,21 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/all.ts';
+
+export default component AdminEmpty(props: { icon: IconName; title: string; lead?: string })
+{
+    derived lead = props.lead ?? '';
+
+    derived led = lead !== '';
+
+    <div class="flex items-center gap-3 rounded-panel border border-line bg-field px-4 py-5" data-empty>
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted" aria-hidden="true">
+            <Icon name={ props.icon } size={ 18 } />
+        </span>
+        <div class="flex min-w-0 flex-col gap-0.5">
+            <p class="text-ui-sm font-semibold text-text">{ props.title }</p>
+            <Show when={ led }>
+                <p class="text-ui-sm text-muted">{ lead }</p>
+            </Show>
+        </div>
+    </div>
+}

@@ -170,3 +170,38 @@ const said = (row: LogRow, locale: LocaleApi) =>
 };
 
 export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '', reporter: row.details.reporter ?? '', table: (row.details.table ?? '').toUpperCase() });
+
+const DAY_MS = 86_400_000;
+
+const dayKey = (at: number) =>
+{
+    const day = new Date(at);
+
+    return `${ day.getFullYear() }-${ day.getMonth() + 1 }-${ day.getDate() }`;
+};
+
+export const dayGroups = (rows: readonly LogRow[], now: number, locale: LocaleApi) =>
+{
+    const today = dayKey(now);
+    const yesterday = dayKey(now - DAY_MS);
+    const days: { key: string; label: string; rows: LogRow[] }[] = [];
+
+    for (const row of rows)
+    {
+        const at = Date.parse(row.at);
+        const key = dayKey(at);
+        const last = days.at(-1);
+
+        if (last !== undefined && last.key === key)
+        {
+            last.rows.push(row);
+            continue;
+        }
+
+        const label = key === today ? locale.t('admin.log.today') : (key === yesterday ? locale.t('admin.log.yesterday') : locale.date(at, { dateStyle: 'full' }));
+
+        days.push({ key, label, rows: [row] });
+    }
+
+    return days;
+};

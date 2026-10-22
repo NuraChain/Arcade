@@ -106,11 +106,29 @@ describe('the staff', () =>
         expect(said(container, '[data-member="mina"]')).toContain('Moderator');
     });
 
+    it('puts the team and the form side by side once there is room, the form held in view while the team scrolls', async () =>
+    {
+        server.staff.members = [staffMember('mina', 'moderator', 'alex', ago(1))];
+        const container = await shown();
+        const split = container.querySelector<HTMLElement>('[data-split]')!;
+        const [team, form] = [...split.children] as HTMLElement[];
+
+        expect(split.className).toContain('@4xl:grid-cols-[minmax(0,1fr)_22rem]');
+        expect(split.closest('.\\@container')).not.toBeNull();
+        expect(split.children).toHaveLength(2);
+        expect(team?.querySelector('[data-team] [data-member="mina"]')).not.toBeNull();
+        expect(form?.tagName).toBe('SECTION');
+        expect(form?.getAttribute('aria-labelledby')).toBe('admin-staff-form');
+        expect(form?.className).toContain('@4xl:sticky');
+    });
+
     it('says when nobody else is on the staff, and when the staff could not be read', async () =>
     {
         const lonely = await shown();
 
         expect(lonely.textContent).toContain('Nobody else is on the staff yet.');
+        expect(lonely.querySelector('[data-empty]')).not.toBeNull();
+        expect(lonely.querySelector('.empty-art')).toBeNull();
         cleanup();
 
         server.staff.owner = 'sara.k';

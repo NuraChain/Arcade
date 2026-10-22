@@ -460,7 +460,18 @@ below the reader's own, and a reason. A change is shown at the press (`createGue
 the server has (`attempt`), and a refusal takes it back and says why in the reader's words
 (`whyStaffRefused`, `admin.refused.<word>`), keeping what was typed. Change on a row fills the form
 with that person and puts the keyboard on their role; it is drawn only on somebody the reader
-outranks.
+outranks. From 56rem of the page the team and the form stand side by side (`data-split`), the form
+held in view while the team scrolls; narrower, the form follows the team.
+
+**A list in the admin is one card of rows, and a wide one is a table the eye reads.** People,
+Reports and Online now lay each row out as columns once their page is wide enough (42rem for People
+and Online now, 48rem for Reports, container queries on the page), under a row of headings that is
+`aria-hidden`: each row is still one link a screen reader reads as a sentence, and the headings
+would only be read again before every row. Under that width a row is the phone's: two or three lines
+beside the picture. The cells are the same elements at both widths, placed by the grid (a wrapper
+that is `contents` at the wide width lets its children take their columns), so nothing is drawn twice and a spec
+that reads a cell reads it at either width. An empty list is an icon and a sentence in a card
+(`AdminEmpty`), never the app's illustration.
 
 **Log** draws each row as a sentence, the reason as written, when, and the role the change was made
 with. `logParts` in `lib/staff-words.ts` hands the sentence over in parts, each handle a part of its
@@ -473,6 +484,15 @@ report about reza.t: nothing to do."). The kind, by whom and about whom are in t
 (`kind`, `staff`, `person`); a handle is written there once the typing pauses, or at Enter. Older
 entries come a page at a time and are dropped whenever the first page is read again, so a new filter
 never shows the old one's tail.
+
+The log is grouped under the reader's own days ("Today", "Yesterday", then the date in full:
+`dayGroups` in `lib/staff-words.ts`, by the browser's clock and calendar), each day a section named
+by its heading, and the heading is held at the top of the screen while its day is read. An older
+page joins the day it carries on, which keeps its place. Each entry begins with a mark for its kind
+in a tinted circle (`MARKS` in `log-entry`): a suspension, a clear and a game ended in danger, a lift
+in green, a report, a sign-out, a closed table and an age in gold, a note, a role, a game switched
+and an announcement in blue, and a suspension that ran out and somebody taken off the staff plain.
+The mark is hidden from a screen reader, because the sentence beside it says the same.
 
 **Overview** is the first section, open to every role on the staff, and it is a dashboard. It
 opens with what needs the reader ("Needs you", with when it was read): the reports waiting in
@@ -502,11 +522,15 @@ handle, their role on the staff, "Away" when no tab of theirs is looked at, when
 under a pointer), and what they are doing in sentences with the code set apart ("Playing Ludo at
 K7QX", "Waiting at a Hokm table, H2AB", "In the call at K7QX", or "Not at a table"). How many are
 online stands beside "Read again"; fifty come a page at a time under "Show more", the older pages
-dropped whenever the first page is read again; and it is read again as the overview is.
+dropped whenever the first page is read again; and it is read again as the overview is. Wide, a row
+is the person, what they are doing and since when, ending in the way to their page.
 
 **People** is open to a moderator, as the two before it are. The list searches once the typing
 pauses or at Enter, keeps its words and its list in the address (`q`, `list`), and pages like the
-log. A row leads to `/admin/people/:handle`, which keeps People lit in the nav and draws the person
+log; the search and the lists share one toolbar when there is room. On a phone a row is the name,
+then the handle and when they joined in the short form ("Joined 3 hr. ago"); wide, it is the person,
+their first wallet shortened (or "Guest" for an account with none), when they joined (exact under a
+pointer) and how they stand (their role, suspended, under 18, how many reports). A row leads to `/admin/people/:handle`, which keeps People lit in the nav and draws the person
 from one read: who they are and their flags, their account and paid play, their wallets, where they
 are signed in now ("Chrome on Windows", or "An unknown browser" for an agent `agentOf` does not
 know), the browsers holding their keys, the reports both ways (each a sentence with the other
@@ -546,9 +570,9 @@ under the chip "Age".
 
 **Reports** is the queue, waiting first: a filter in the address (`status`: Waiting, the default and
 never written, Reviewed, Acted on, All), the waiting count on its chip, and a row for each report as
-who reported whom (both handles set apart, `handleParts`), what for, when, whether a message came
-with it, its status as a badge, and the accused's role when they are on the staff; older ones under
-"Show older". A row leads to `/admin/reports/:id`, which keeps Reports lit and draws the report from
+who reported whom (both handles set apart, `handleParts`) with the accused's role beside it when
+they are on the staff, what for, when, whether a message came with it, and its status as a badge;
+wide, those are the columns Report, Reason, Filed and Status. Older ones come under "Show older". A row leads to `/admin/reports/:id`, which keeps Reports lit and draws the report from
 one read: what it is for as the title, who reported whom, the status and when it was filed, both
 people as cards leading to their pages (the accused first: acting on their account is done there),
 the message as the reporter showed it (the document decoded by `decodeText`, plain text in its own

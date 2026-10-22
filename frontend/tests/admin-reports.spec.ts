@@ -100,6 +100,29 @@ describe('the reports', () =>
         expect(useReports().waiting()).toBe(2);
     });
 
+    it('lays a report out as columns under a heading the eye reads, each cell where its heading is', async () =>
+    {
+        filed();
+        const { container } = await opened();
+        const head = container.querySelector<HTMLElement>('[data-columns]')!;
+        const first = container.querySelector<HTMLElement>('[data-reports] li:first-child [data-report]')!;
+        const placed = (selector: string) => first.querySelector(selector)?.closest('[class*="@3xl:col-start-"]')?.className.match(/@3xl:col-start-(\d)/)?.[1];
+
+        expect(head.getAttribute('aria-hidden')).toBe('true');
+        expect(head.classList.contains('@3xl:grid')).toBe(true);
+        expect(head.closest('.\\@container')).not.toBeNull();
+        expect([...head.children].map((one) => one.textContent)).toEqual(['Report', 'Reason', 'Filed', 'Status']);
+        expect(head.firstElementChild?.className).toContain('col-start-2');
+        expect([placed('[data-said]'), placed('[data-category]'), placed('[data-when]'), placed('[data-status]')]).toEqual(['2', '3', '4', '5']);
+        expect(first.querySelector('[data-marks]')?.className).toContain('@3xl:contents');
+        cleanup();
+
+        useLocale().setLocale('fa');
+        const persian = await opened();
+
+        expect([...persian.container.querySelectorAll('[data-columns] > *')].map((one) => one.textContent)).toEqual(['گزارش', 'دلیل', 'زمان ثبت', 'وضعیت']);
+    });
+
     it('keeps the list in the address: waiting, reviewed, acted on or all', async () =>
     {
         filed();
@@ -142,9 +165,14 @@ describe('the reports', () =>
         const { container } = await opened();
         const marks = (row: string) => [...container.querySelectorAll(`[data-reports] li:${ row } [data-marks] > *`)].map((one) => one.textContent?.trim());
 
+        const role = (row: string) => container.querySelector<HTMLElement>(`[data-reports] li:${ row } [data-role]`);
+
         expect(rows(container)).toEqual(['mina reported reza.t', 'sara.k reported mina']);
         expect(marks('first-child')).toEqual(['Waiting', 'Harassment or abuse']);
-        expect(marks('last-child')).toEqual(['Waiting', 'Moderator', 'Harassment or abuse']);
+        expect(marks('last-child')).toEqual(['Waiting', 'Harassment or abuse']);
+        expect(role('first-child')?.hidden).toBe(true);
+        expect(role('last-child')?.hidden).toBe(false);
+        expect(role('last-child')?.textContent?.trim()).toBe('Moderator');
     });
 
     it('shows older reports a page at a time, each once, and offers no more past the last', async () =>
@@ -174,6 +202,8 @@ describe('the reports', () =>
         const quiet = await opened();
 
         expect(quiet.container.textContent).toContain('Nothing is waiting.');
+        expect(quiet.container.querySelector('[data-empty]')).not.toBeNull();
+        expect(quiet.container.querySelector('.empty-art')).toBeNull();
         expect(quiet.container.textContent).toContain('Every report has been looked at.');
         expect(chip(quiet.container, 'Waiting').textContent?.trim()).toBe('Waiting0');
         cleanup();

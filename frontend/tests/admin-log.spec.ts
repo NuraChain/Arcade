@@ -49,6 +49,8 @@ const isolated = (root: ParentNode, entry: string) => [...root.querySelectorAll(
 
 const said = (root: ParentNode, selector: string) => root.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 
+const entry = (root: ParentNode, at: number) => [...root.querySelectorAll<HTMLElement>('[data-entry]')].at(at) ?? document.createElement('div');
+
 const typeInto = (field: HTMLInputElement, value: string) =>
 {
     field.value = value;
@@ -148,10 +150,10 @@ describe('the log', () =>
             'alex changed mina from a moderator to an admin.',
             'alex made mina a moderator.'
         ]);
-        expect(said(container, '[data-entry]:first-child [data-reason]')).toBe('Asked to step down.');
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'sara.k']);
-        expect(facts(container, '[data-entry]:first-child')).toEqual(['1 hour ago', 'Admin']);
-        expect(facts(container, '[data-entry]:last-child')).toEqual(['2 days ago', 'Owner']);
+        expect(said(entry(container, 0), '[data-reason]')).toBe('Asked to step down.');
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['mina', 'sara.k']);
+        expect(facts(entry(container, 0), ':scope')).toEqual(['1 hour ago', 'Admin']);
+        expect(facts(entry(container, -1), ':scope')).toEqual(['2 days ago', 'Owner']);
         expect(container.querySelectorAll('[data-entry] [data-open-report]')).toHaveLength(0);
     });
 
@@ -176,12 +178,12 @@ describe('the log', () =>
             'alex suspended omid for good: Cheating.',
             'mina suspended reza.t for a week: Harassment or abuse.'
         ]);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['reza.t']);
-        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'reza.t']);
-        expect(container.querySelector('[data-entry]:first-child [data-reason]')).toBeNull();
-        expect(facts(container, '[data-entry]:first-child')).toEqual(['1 hour ago', '']);
-        expect(said(container, '[data-entry]:nth-child(2) [data-reason]')).toBe('Said sorry to the table.');
-        expect(facts(container, '[data-entry]:last-child')[1]).toBe('Moderator');
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['reza.t']);
+        expect(isolated(entry(container, -1), ':scope')).toEqual(['mina', 'reza.t']);
+        expect(entry(container, 0).querySelector('[data-reason]')).toBeNull();
+        expect(facts(entry(container, 0), ':scope')).toEqual(['1 hour ago', '']);
+        expect(said(entry(container, 1), '[data-reason]')).toBe('Said sorry to the table.');
+        expect(facts(entry(container, -1), ':scope')[1]).toBe('Moderator');
     });
 
     it('says what was taken off a profile, with what a name or a bio said, and every session ended', async () =>
@@ -196,8 +198,8 @@ describe('the log', () =>
             'mina reset reza.t’s name.'
         ]);
         expect(was(container)).toEqual([null, null, 'It said: DM me for seats', 'It said: Reza the Cheat']);
-        expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'reza.t']);
-        expect(said(container, '[data-entry]:first-child [data-reason]')).toBe('Their wallet was taken.');
+        expect(isolated(entry(container, 1), ':scope')).toEqual(['alex', 'reza.t']);
+        expect(said(entry(container, 0), '[data-reason]')).toBe('Their wallet was taken.');
     });
 
     it('says a report the staff handled, with who filed it and about whom, each handle a run of its own', async () =>
@@ -209,11 +211,11 @@ describe('the log', () =>
             'alex acted on sara.k’s report about omid.',
             'mina reviewed sara.k’s report about reza.t: nothing to do.'
         ]);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'sara.k', 'omid']);
-        expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('Nothing rude in the chat.');
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['alex', 'sara.k', 'omid']);
+        expect(said(entry(container, -1), '[data-reason]')).toBe('Nothing rude in the chat.');
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Reports');
-        expect(container.querySelector('[data-entry]:first-child [data-open-report]')?.getAttribute('href')).toBe('/admin/reports/r-2');
-        expect(said(container, '[data-entry]:last-child [data-open-report]')).toBe('Open the report');
+        expect(entry(container, 0).querySelector('[data-open-report]')?.getAttribute('href')).toBe('/admin/reports/r-2');
+        expect(said(entry(container, -1), '[data-open-report]')).toBe('Open the report');
     });
 
     it('says a game paused and turned back on, naming the game in the reader\'s words and nobody else', async () =>
@@ -225,8 +227,8 @@ describe('the log', () =>
             'alex turned Ludo back on.',
             'mina paused Ludo.'
         ]);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex']);
-        expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('A bug in the dice.');
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['alex']);
+        expect(said(entry(container, -1), '[data-reason]')).toBe('A bug in the dice.');
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games');
         expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"game"');
     });
@@ -237,7 +239,7 @@ describe('the log', () =>
         const { container } = await opened('/admin/log?kind=void');
 
         expect(lines(container)).toEqual(['mina ended a game of Hokm at K7QX as no contest.']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'K7QX']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['mina', 'K7QX']);
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games ended');
         expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"void"');
     });
@@ -248,7 +250,7 @@ describe('the log', () =>
         const { container } = await opened('/admin/log?kind=close');
 
         expect(lines(container)).toEqual(['mina closed the Poker table P3QA.']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'P3QA']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['mina', 'P3QA']);
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Tables closed');
 
         useLocale().setLocale('fa');
@@ -263,7 +265,7 @@ describe('the log', () =>
         const { container } = await opened('/admin/log?kind=notice');
 
         expect(lines(container)).toEqual(['mina took the announcement down.', 'alex put up an announcement for a day.']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['mina']);
         expect(was(container)).toEqual(['It said: Nura restarts at 22:00.', 'It said: Nura restarts at 22:00.']);
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Announcements');
 
@@ -280,7 +282,7 @@ describe('the log', () =>
         const { container } = await opened('/admin/log?kind=minor');
 
         expect(lines(container)).toEqual(['alex marked reza.t as an adult.', 'mina marked reza.t as under 18.']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['alex', 'reza.t']);
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Age');
 
         useLocale().setLocale('fa');
@@ -293,7 +295,7 @@ describe('the log', () =>
     {
         story();
         const { container } = await opened();
-        const time = container.querySelector<HTMLTimeElement>('[data-entry]:first-child [data-when]')!;
+        const time = entry(container, 0).querySelector<HTMLTimeElement>('[data-when]')!;
         const hover = () =>
         {
             const enter = new Event('pointerenter', { bubbles: true });
@@ -396,11 +398,89 @@ describe('the log', () =>
         expect(container.textContent).toContain('Nothing in the log matches.');
     });
 
+    it('groups the entries under the reader\'s own day, newest first, each heading held at the top while its day is read', async () =>
+    {
+        const midnight = new Date(NOW).setHours(0, 0, 0, 0);
+        const at = (hours: number) => new Date(midnight + hours * 3_600_000).toISOString();
+
+        staffLogged({ at: at(-30), staff: 'alex', staffRole: 'owner', kind: 'grant', person: 'mina', reason: 'Runs the Friday tables.', details: { to: 'moderator' } });
+        staffLogged({ at: at(-26), staff: 'alex', staffRole: 'owner', kind: 'grant', person: 'omid', reason: 'Runs the Monday tables.', details: { to: 'moderator' } });
+        staffLogged({ at: at(-2), staff: 'alex', staffRole: 'owner', kind: 'change', person: 'mina', reason: 'Steps up for the season.', details: { from: 'moderator', to: 'admin' } });
+        staffLogged({ at: at(1), staff: 'mina', staffRole: 'admin', kind: 'revoke', person: 'omid', reason: 'Asked to step down.', details: { from: 'moderator' } });
+        const { container } = await opened();
+        const days = () => [...container.querySelectorAll<HTMLElement>('[data-day]')].map((day) => ({
+            label: day.querySelector('[data-day-label]')?.textContent,
+            named: day.getAttribute('aria-label'),
+            lines: lines(day)
+        }));
+
+        expect(days()).toEqual([
+            { label: 'Today', named: 'Today', lines: ['mina took omid off the staff.'] },
+            { label: 'Yesterday', named: 'Yesterday', lines: ['alex changed mina from a moderator to an admin.'] },
+            {
+                label: useLocale().date(midnight - 26 * 3_600_000, { dateStyle: 'full' }),
+                named: useLocale().date(midnight - 26 * 3_600_000, { dateStyle: 'full' }),
+                lines: ['alex made omid a moderator.', 'alex made mina a moderator.']
+            }
+        ]);
+        expect(container.querySelector('[data-day-label]')?.tagName).toBe('H2');
+        expect(container.querySelector('[data-day-label]')?.classList.contains('sticky')).toBe(true);
+        cleanup();
+
+        useLocale().setLocale('fa');
+        const persian = await opened();
+
+        expect([...persian.container.querySelectorAll('[data-day-label]')].map((one) => one.textContent)).toEqual(['امروز', 'دیروز', useLocale().date(midnight - 26 * 3_600_000, { dateStyle: 'full' })]);
+    });
+
+    it('marks each entry with its kind, a suspension in danger, a lift in green and a note in blue, and hides the mark from a screen reader', async () =>
+    {
+        suspensions();
+        staffLogged({ at: hoursAgo(0.5), staff: 'mina', staffRole: 'moderator', kind: 'note', person: 'reza.t', reason: 'Rude at a Hokm table, twice.', details: {} });
+        const { container } = await opened();
+        const marks = [...container.querySelectorAll<HTMLElement>('[data-entry] [data-mark]')];
+
+        expect(marks.map((mark) => mark.dataset.mark)).toEqual(['note', 'expire', 'lift', 'suspend', 'suspend']);
+        expect(marks.every((mark) => mark.getAttribute('aria-hidden') === 'true' && mark.querySelector('svg') !== null)).toBe(true);
+        expect(marks[0]!.className).toContain('text-accent');
+        expect(marks[1]!.className).toContain('text-muted');
+        expect(marks[2]!.className).toContain('text-live');
+        expect(marks[3]!.className).toContain('text-danger');
+    });
+
+    it('joins an older page to the day it carries on and keeps that day where it stood', async () =>
+    {
+        const midnight = new Date(NOW).setHours(0, 0, 0, 0);
+
+        for (let one = 0; one < LOG_PAGE + 5; one += 1)
+        {
+            staffLogged({ at: new Date(midnight - (LOG_PAGE + 5 - one) * 3_600_000).toISOString(), staff: 'alex', staffRole: 'owner', kind: 'grant', person: `p${ one }`, reason: `Entry ${ one }.`, details: { to: 'moderator' } });
+        }
+        const { container } = await opened();
+        const sections = () => [...container.querySelectorAll<HTMLElement>('[data-day]')];
+        const before = sections();
+        const last = before.at(-1)!;
+        const held = last.querySelectorAll('[data-entry]').length;
+
+        expect(before.map((day) => day.querySelectorAll('[data-entry]').length).reduce((sum, count) => sum + count, 0)).toBe(LOG_PAGE);
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Show older')!.click();
+        await settle();
+
+        const after = sections();
+
+        expect(after.length).toBe(before.length);
+        after.forEach((day, at) => expect(day).toBe(before[at]));
+        expect(last.querySelectorAll('[data-entry]').length).toBe(held + 5);
+        expect(lines(last).at(-1)).toBe('alex made p0 a moderator.');
+    });
+
     it('says when nothing has been logged, when nothing matches, and when the log could not be read', async () =>
     {
         const { container } = await opened();
 
         expect(container.textContent).toContain('Nothing has been logged yet.');
+        expect(container.querySelector('[data-empty]')).not.toBeNull();
+        expect(container.querySelector('.empty-art')).toBeNull();
         cleanup();
 
         story();
@@ -428,7 +508,7 @@ describe('the log', () =>
             'alex، mina رو ناظر کرد.'
         ]);
         expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده', 'سن', 'اطلاعیه‌ها']);
-        expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
+        expect(isolated(entry(container, 1), ':scope')).toEqual(['alex', 'mina']);
     });
 
     it('says what was taken off a profile, and every session ended, in Persian', async () =>
@@ -444,7 +524,7 @@ describe('the log', () =>
             'mina، اسم reza.t رو برگردوند.'
         ]);
         expect(was(container)).toEqual([null, null, 'نوشته بود: DM me for seats', 'نوشته بود: Reza the Cheat']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['alex', 'reza.t']);
     });
 
     it('says a game paused and turned back on in Persian', async () =>
@@ -466,7 +546,7 @@ describe('the log', () =>
         const { container } = await opened();
 
         expect(lines(container)).toEqual(['mina، بازی حکم سر میز K7QX رو بدون نتیجه تموم کرد.']);
-        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'K7QX']);
+        expect(isolated(entry(container, 0), ':scope')).toEqual(['mina', 'K7QX']);
     });
 
     it('says a report the staff handled in Persian', async () =>
@@ -479,8 +559,8 @@ describe('the log', () =>
             'alex، به گزارش sara.k درباره‌ی omid رسیدگی کرد.',
             'mina، گزارش sara.k درباره‌ی reza.t رو بررسی کرد: کاری لازم نبود.'
         ]);
-        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'sara.k', 'reza.t']);
-        expect(said(container, '[data-entry]:last-child [data-open-report]')).toBe('دیدن گزارش');
+        expect(isolated(entry(container, -1), ':scope')).toEqual(['mina', 'sara.k', 'reza.t']);
+        expect(said(entry(container, -1), '[data-open-report]')).toBe('دیدن گزارش');
     });
 
     it('says a suspension, a lift and one that ran its time in Persian, each handle a run of its own', async () =>
@@ -495,7 +575,7 @@ describe('the log', () =>
             'alex، omid رو برای همیشه معلق کرد: تقلب.',
             'mina، reza.t رو برای یه هفته معلق کرد: آزار یا توهین.'
         ]);
-        expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'omid']);
-        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'reza.t']);
+        expect(isolated(entry(container, 1), ':scope')).toEqual(['alex', 'omid']);
+        expect(isolated(entry(container, -1), ':scope')).toEqual(['mina', 'reza.t']);
     });
 });

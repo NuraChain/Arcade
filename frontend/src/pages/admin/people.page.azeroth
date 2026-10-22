@@ -3,9 +3,9 @@ import { createResource, untrack, useHead } from 'azerothjs';
 import { PEOPLE_LISTS, type PeopleList } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminPeople } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
-import PersonRow, { type AdminPersonRow } from '../../components/admin/person-row.component.azeroth';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
+import PersonRow, { PEOPLE_COLUMNS, type AdminPersonRow } from '../../components/admin/person-row.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import LoadMore from '../../components/ui/load-more.component.azeroth';
@@ -143,19 +143,19 @@ export default component PeoplePage()
         paging = false;
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.people') } lead={ locale.t('admin.people.lead') } />
 
-        <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:gap-4" data-toolbar>
             <SearchInput
-                class="max-w-xl"
+                class="@2xl:w-80 @2xl:shrink-0"
                 value={ typed }
                 label={ locale.t('admin.people.search') }
                 placeholder={ locale.t('admin.people.search') }
                 onInput={ search }
                 onEnter={ apply }
             />
-            <FilterBar items={ lists } value={ list } label={ locale.t('admin.people.lists') } onChange={ choose } />
+            <FilterBar class="min-w-0 @2xl:flex-1" items={ lists } value={ list } label={ locale.t('admin.people.lists') } onChange={ choose } />
         </div>
 
         <Show when={ waiting }>
@@ -167,18 +167,26 @@ export default component PeoplePage()
         </Show>
 
         <Show when={ empty }>
-            { () => <EmptyState icon="people" title={ blank } /> }
+            { () => <AdminEmpty icon="people" title={ blank } /> }
         </Show>
 
         <Show when={ listed }>
             <div class="flex flex-col">
-                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-people>
-                    <For each={ rows } key={ (one) => one.handle } let={ row }>
-                        <li>
-                            <PersonRow person={ row } />
-                        </li>
-                    </For>
-                </ul>
+                <div class="overflow-hidden rounded-panel border border-line bg-field">
+                    <div class={ `hidden gap-4 border-b border-line px-4 py-2.5 text-ui-xs font-semibold text-faint @2xl:grid ${ PEOPLE_COLUMNS }` } aria-hidden="true" data-columns>
+                        <span>{ locale.t('admin.people.column.person') }</span>
+                        <span>{ locale.t('admin.people.column.wallet') }</span>
+                        <span>{ locale.t('admin.people.column.joined') }</span>
+                        <span>{ locale.t('admin.people.column.status') }</span>
+                    </div>
+                    <ul class="divide-y divide-line" data-people>
+                        <For each={ rows } key={ (one) => one.handle } let={ row }>
+                            <li>
+                                <PersonRow person={ row } />
+                            </li>
+                        </For>
+                    </ul>
+                </div>
                 <Show when={ more }>
                     <LoadMore label={ locale.t('admin.people.more') } loading={ paging } onMore={ () => void older() } />
                 </Show>

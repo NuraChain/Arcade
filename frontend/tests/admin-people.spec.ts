@@ -90,6 +90,44 @@ describe('the people', () =>
         expect(container.querySelector('[data-person="sara.k"]')?.getAttribute('href')).toBe('/admin/people/sara.k');
     });
 
+    it('lays a person out as columns under a heading the eye reads: who, their wallet or that they are a guest, when they joined, and how they stand', async () =>
+    {
+        server.accounts.wallets = { 'sara.k': '0x71c7656ec7ab88b098defb751b7401b5f6d8976f' };
+        server.accounts.suspended = ['reza.t'];
+        const { container } = await opened();
+        const head = container.querySelector<HTMLElement>('[data-columns]')!;
+        const shown = (handle: string, cell: string) => [...container.querySelectorAll<HTMLElement>(`[data-person="${ handle }"] ${ cell } > *`)].filter((one) => !one.hidden).map((one) => one.textContent?.trim());
+
+        expect(head.getAttribute('aria-hidden')).toBe('true');
+        expect(head.classList.contains('@2xl:grid')).toBe(true);
+        expect(head.closest('.\\@container')).not.toBeNull();
+        expect([...head.children].map((one) => one.textContent)).toEqual(['Person', 'Wallet', 'Joined', 'Status']);
+        expect(head.parentElement?.querySelector('[data-people]')).not.toBeNull();
+        expect(shown('sara.k', '[data-wallet]')).toEqual(['0x71c7…976f']);
+        expect(shown('reza.t', '[data-wallet]')).toEqual(['Guest']);
+        expect(container.querySelector('[data-person="sara.k"] [data-joined]')?.textContent).toBe('Joined 2 days ago');
+        expect(container.querySelector('[data-person="sara.k"] [data-since] time')?.textContent).toBe('2 days ago');
+        expect(container.querySelector('[data-person="sara.k"] [data-since] time')?.getAttribute('datetime')).toBe('2026-10-20T08:00:00.000Z');
+        expect(container.querySelector('[data-person="reza.t"] [data-marks]')?.textContent?.trim()).toBe('Suspended');
+        expect(container.querySelector('[data-toolbar] [role="search"]')).not.toBeNull();
+        expect(container.querySelector('[data-person="sara.k"] [data-joined]')?.className).toContain('@2xl:hidden');
+        expect(['[data-since]', '[data-wallet]'].map((cell) => container.querySelector(`[data-person="sara.k"] ${ cell }`)?.className.split(' ').filter((one) => one === 'hidden' || one === '@2xl:block'))).toEqual([['hidden', '@2xl:block'], ['hidden', '@2xl:block']]);
+        cleanup();
+
+        setRuntime({ clock: manualClock(Date.parse('2026-10-20T12:00:00.000Z')) });
+        const early = await opened();
+
+        expect(early.container.querySelector('[data-person="alex"] [data-joined]')?.textContent).toBe('Joined 3 hr. ago');
+        expect(early.container.querySelector('[data-person="alex"] [data-since] time')?.textContent).toBe('3 hours ago');
+        cleanup();
+
+        useLocale().setLocale('fa');
+        const persian = await opened();
+
+        expect([...persian.container.querySelectorAll('[data-columns] > *')].map((one) => one.textContent)).toEqual(['کاربر', 'کیف پول', 'عضویت', 'وضعیت']);
+        expect([...persian.container.querySelectorAll<HTMLElement>('[data-person="reza.t"] [data-wallet] > *')].filter((one) => !one.hidden).map((one) => one.textContent)).toEqual(['مهمان']);
+    });
+
     it('searches once the typing pauses, or at Enter, and keeps the words and the list in the address', async () =>
     {
         const { router, container } = await opened();
@@ -111,6 +149,8 @@ describe('the people', () =>
 
         expect(router.location().query.list).toBe('minors');
         expect(container.textContent).toContain('Nobody matches.');
+        expect(container.querySelector('[data-empty]')).not.toBeNull();
+        expect(container.querySelector('.empty-art')).toBeNull();
 
         typeInto(field, '');
         field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));

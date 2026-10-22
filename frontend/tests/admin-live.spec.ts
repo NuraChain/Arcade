@@ -122,6 +122,28 @@ describe('who is online now', () =>
         expect(all(row(container, 'reza.t'), '[data-doing] li')).toEqual(['Not at a table']);
     });
 
+    it('lays each person out as columns under a heading the eye reads: who, what they are doing and since when, ending in the way to their page', async () =>
+    {
+        crowd();
+        const container = await opened();
+        const head = container.querySelector<HTMLElement>('[data-columns]')!;
+        const link = row(container, 'sara.k').querySelector('a')!;
+        const placed = (selector: string) => link.querySelector(selector)?.closest('[class*="@2xl:col-start-"]')?.className.match(/@2xl:col-start-(\d)/)?.[1];
+
+        expect(head.getAttribute('aria-hidden')).toBe('true');
+        expect(head.classList.contains('@2xl:grid')).toBe(true);
+        expect(head.closest('.\\@container')).not.toBeNull();
+        expect([...head.children].map((one) => one.textContent)).toEqual(['Person', 'Activity', 'Online since']);
+        expect([placed('[data-name]'), placed('[data-doing]'), placed('[data-came]')]).toEqual(['2', '3', '4']);
+        expect(link.lastElementChild?.tagName.toLowerCase()).toBe('svg');
+        cleanup();
+
+        useLocale().setLocale('fa');
+        const persian = await opened();
+
+        expect([...persian.querySelectorAll('[data-columns] > *')].map((one) => one.textContent)).toEqual(['کاربر', 'فعالیت', 'آنلاین از']);
+    });
+
     it('pages fifty at a time with Show more, and starts again from the top when it is read again', async () =>
     {
         server.lookout.online = Array.from({ length: LIVE_PAGE + 3 }, (_, at) => person(`p${ String(at).padStart(2, '0') }`));
@@ -179,6 +201,8 @@ describe('who is online now', () =>
         const container = await opened();
 
         expect(container.textContent).toContain('Nobody is online right now.');
+        expect(container.querySelector('[data-empty]')).not.toBeNull();
+        expect(container.querySelector('.empty-art')).toBeNull();
         expect(said(container, '[data-count]')).toBe('0 online');
         cleanup();
 

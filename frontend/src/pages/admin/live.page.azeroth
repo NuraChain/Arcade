@@ -2,10 +2,10 @@ import { createResource, useHead } from 'azerothjs';
 
 import type { AdminLive } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
-import LiveRow, { type AdminLiveRow } from '../../components/admin/live-row.component.azeroth';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
+import LiveRow, { LIVE_COLUMNS, type AdminLiveRow } from '../../components/admin/live-row.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import LoadMore from '../../components/ui/load-more.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
@@ -89,7 +89,7 @@ export default component LivePage()
         paging = false;
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.live') } lead={ locale.t('admin.live.lead') } how={ locale.t('admin.live.how') } />
 
         <div class="flex flex-wrap items-center gap-3">
@@ -106,18 +106,25 @@ export default component LivePage()
         </Show>
 
         <Show when={ empty }>
-            { () => <EmptyState icon="signal" title={ locale.t('admin.live.none') } /> }
+            { () => <AdminEmpty icon="signal" title={ locale.t('admin.live.none') } /> }
         </Show>
 
         <Show when={ listed }>
             <div class="flex flex-col">
-                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-live>
-                    <For each={ rows } key={ (one) => one.handle } let={ row }>
-                        <li data-person={ row.handle }>
-                            <LiveRow row={ row } />
-                        </li>
-                    </For>
-                </ul>
+                <div class="overflow-hidden rounded-panel border border-line bg-field">
+                    <div class={ `hidden gap-x-4 border-b border-line px-4 py-2.5 text-ui-xs font-semibold text-faint @2xl:grid ${ LIVE_COLUMNS }` } aria-hidden="true" data-columns>
+                        <span class="col-start-2">{ locale.t('admin.live.column.person') }</span>
+                        <span>{ locale.t('admin.live.column.doing') }</span>
+                        <span>{ locale.t('admin.live.column.since') }</span>
+                    </div>
+                    <ul class="divide-y divide-line" data-live>
+                        <For each={ rows } key={ (one) => one.handle } let={ row }>
+                            <li data-person={ row.handle }>
+                                <LiveRow row={ row } />
+                            </li>
+                        </For>
+                    </ul>
+                </div>
                 <Show when={ more }>
                     <LoadMore label={ locale.t('admin.live.more') } loading={ paging } onMore={ () => void older() } />
                 </Show>

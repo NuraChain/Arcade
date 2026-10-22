@@ -1,15 +1,38 @@
 import { Link } from 'azerothjs';
 
+import type { ActionKind } from '../../../../backend/src/domains/admin/roles.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/all.ts';
 import { logParts, ROLE_WORDS, type LogRow } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Said from './said.component.azeroth';
 import When from './when.component.azeroth';
+
+const MARKS: Record<ActionKind, { icon: IconName; tone: string }> = {
+    grant: { icon: 'shield', tone: 'bg-accent/15 text-accent' },
+    change: { icon: 'shield', tone: 'bg-accent/15 text-accent' },
+    revoke: { icon: 'shield', tone: 'bg-raised text-muted' },
+    note: { icon: 'edit', tone: 'bg-accent/15 text-accent' },
+    suspend: { icon: 'block', tone: 'bg-danger/15 text-danger' },
+    lift: { icon: 'check-circle', tone: 'bg-live/15 text-live' },
+    expire: { icon: 'clock', tone: 'bg-raised text-muted' },
+    clear: { icon: 'trash', tone: 'bg-danger/15 text-danger' },
+    'sign-out': { icon: 'sign-out', tone: 'bg-gold/15 text-gold' },
+    report: { icon: 'flag', tone: 'bg-gold/15 text-gold' },
+    game: { icon: 'games', tone: 'bg-accent/15 text-accent' },
+    void: { icon: 'close', tone: 'bg-danger/15 text-danger' },
+    close: { icon: 'lock', tone: 'bg-gold/15 text-gold' },
+    minor: { icon: 'calendar', tone: 'bg-gold/15 text-gold' },
+    notice: { icon: 'megaphone', tone: 'bg-accent/15 text-accent' }
+};
 
 export default component LogEntry(props: { row: LogRow; report?: string })
 {
     const locale = useLocale();
 
     derived parts = logParts(props.row, locale);
+
+    derived mark = MARKS[props.row.kind];
 
     derived role = props.row.staffRole === undefined ? '' : locale.t(ROLE_WORDS[props.row.staffRole]);
 
@@ -27,22 +50,27 @@ export default component LogEntry(props: { row: LogRow; report?: string })
 
     derived opens = opened !== '' && opened !== props.report;
 
-    <div class="flex flex-col gap-1.5 px-4 py-3">
-        <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
-        <Show when={ reasoned }>
-            <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ reason }</p>
-        </Show>
-        <p class="text-ui-xs text-faint" hidden={ !recalled } data-was><span>{ locale.t('admin.log.was') }</span> <span class="text-muted" dir="auto">{ was }</span></p>
-        <p class="facts text-ui-xs text-faint">
-            <When at={ props.row.at } />
-            <span class="empty:hidden">{ role }</span>
-            <Show when={ opens }>
-                <Link
-                    to={ () => `/admin/reports/${ encodeURIComponent(opened) }` }
-                    class="font-semibold text-accent hover:underline coarse:inline-flex coarse:min-h-11 coarse:items-center"
-                    data-open-report
-                >{ locale.t('admin.log.openReport') }</Link>
+    <div class="flex gap-3 px-4 py-3">
+        <span class={ () => `mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${ mark.tone }` } aria-hidden="true" data-mark={ props.row.kind }>
+            <Icon name={ mark.icon } size={ 16 } />
+        </span>
+        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <p class="text-ui-sm font-semibold text-text" data-line><Said parts={ parts } /></p>
+            <Show when={ reasoned }>
+                <p class="border-s-2 border-line-strong ps-3 text-ui-sm text-muted" dir="auto" data-reason>{ reason }</p>
             </Show>
-        </p>
+            <p class="text-ui-xs text-faint" hidden={ !recalled } data-was><span>{ locale.t('admin.log.was') }</span> <span class="text-muted" dir="auto">{ was }</span></p>
+            <p class="facts text-ui-xs text-faint">
+                <When at={ props.row.at } />
+                <span class="empty:hidden">{ role }</span>
+                <Show when={ opens }>
+                    <Link
+                        to={ () => `/admin/reports/${ encodeURIComponent(opened) }` }
+                        class="font-semibold text-accent hover:underline coarse:inline-flex coarse:min-h-11 coarse:items-center"
+                        data-open-report
+                    >{ locale.t('admin.log.openReport') }</Link>
+                </Show>
+            </p>
+        </div>
     </div>
 }

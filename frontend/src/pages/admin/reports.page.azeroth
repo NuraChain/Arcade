@@ -3,9 +3,9 @@ import { createResource, untrack, useHead } from 'azerothjs';
 import { REPORT_LISTS, type ReportList } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminReports } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
-import ReportRow, { type AdminReportRow } from '../../components/admin/report-row.component.azeroth';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
+import ReportRow, { REPORT_COLUMNS, type AdminReportRow } from '../../components/admin/report-row.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import LoadMore from '../../components/ui/load-more.component.azeroth';
@@ -122,7 +122,7 @@ export default component ReportsPage()
         paging = false;
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.reports') } lead={ locale.t('admin.reports.lead') } how={ locale.t('admin.reports.how') } />
 
         <FilterBar items={ lists } value={ list } label={ locale.t('admin.reports.lists') } onChange={ choose } />
@@ -136,18 +136,26 @@ export default component ReportsPage()
         </Show>
 
         <Show when={ empty }>
-            { () => <EmptyState icon="flag" title={ blank } lead={ blankLead } /> }
+            { () => <AdminEmpty icon="flag" title={ blank } lead={ blankLead } /> }
         </Show>
 
         <Show when={ listed }>
             <div class="flex flex-col">
-                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-reports>
-                    <For each={ rows } key={ (one) => one.id } let={ row }>
-                        <li>
-                            <ReportRow report={ row } />
-                        </li>
-                    </For>
-                </ul>
+                <div class="overflow-hidden rounded-panel border border-line bg-field">
+                    <div class={ `hidden gap-x-4 border-b border-line px-4 py-2.5 text-ui-xs font-semibold text-faint @3xl:grid ${ REPORT_COLUMNS }` } aria-hidden="true" data-columns>
+                        <span class="col-start-2">{ locale.t('admin.reports.column.report') }</span>
+                        <span>{ locale.t('admin.reports.column.reason') }</span>
+                        <span>{ locale.t('admin.reports.column.filed') }</span>
+                        <span>{ locale.t('admin.reports.column.status') }</span>
+                    </div>
+                    <ul class="divide-y divide-line" data-reports>
+                        <For each={ rows } key={ (one) => one.id } let={ row }>
+                            <li>
+                                <ReportRow report={ row } />
+                            </li>
+                        </For>
+                    </ul>
+                </div>
                 <Show when={ more }>
                     <LoadMore label={ locale.t('admin.reports.more') } loading={ paging } onMore={ () => void older() } />
                 </Show>

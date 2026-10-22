@@ -3,10 +3,10 @@ import { createResource, useHead } from 'azerothjs';
 import { GRANTED_ROLES, outranks, type GrantedRole } from '../../../../backend/src/domains/admin/roles.ts';
 import type { StaffList } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
 import StaffRow, { type StaffMember } from '../../components/admin/staff-row.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Field from '../../components/ui/field.component.azeroth';
 import Input from '../../components/ui/input.component.azeroth';
@@ -178,82 +178,86 @@ export default component StaffPage()
         reasonTold = null;
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.staff') } lead={ locale.t('admin.staff.lead') } />
 
-        <Show when={ waiting }>
-            { () => <Skeleton lines={ 4 } avatar /> }
-        </Show>
+        <div class="grid items-start gap-6 @4xl:grid-cols-[minmax(0,1fr)_22rem]" data-split>
+            <div class="flex min-w-0 flex-col gap-6">
+                <Show when={ waiting }>
+                    { () => <Skeleton lines={ 4 } avatar /> }
+                </Show>
 
-        <Show when={ failed }>
-            { () => <ErrorState title={ locale.t('admin.staff.failed') } onRetry={ retry } /> }
-        </Show>
+                <Show when={ failed }>
+                    { () => <ErrorState title={ locale.t('admin.staff.failed') } onRetry={ retry } /> }
+                </Show>
 
-        <Show when={ listed }>
-            <div class="flex flex-col gap-6">
-                <section class="flex flex-col gap-2" aria-labelledby="admin-owner">
-                    <h2 id="admin-owner" class="text-ui-lg font-semibold text-text">{ locale.t('admin.role.owner') }</h2>
-                    <p class="text-ui-sm text-muted">{ locale.t('admin.staff.owner') }</p>
-                    <Show when={ owner } let={ head }>
-                        <div class="rounded-panel border border-line bg-field" data-owner>
-                            <StaffRow member={ head } changeable={ false } onChange={ change } />
-                        </div>
-                    </Show>
-                </section>
+                <Show when={ listed }>
+                    <div class="flex flex-col gap-6">
+                        <section class="flex flex-col gap-2" aria-labelledby="admin-owner">
+                            <h2 id="admin-owner" class="text-ui-lg font-semibold text-text">{ locale.t('admin.role.owner') }</h2>
+                            <p class="text-ui-sm text-muted">{ locale.t('admin.staff.owner') }</p>
+                            <Show when={ owner } let={ head }>
+                                <div class="rounded-panel border border-line bg-field" data-owner>
+                                    <StaffRow member={ head } changeable={ false } onChange={ change } />
+                                </div>
+                            </Show>
+                        </section>
 
-                <section class="flex flex-col gap-2" aria-labelledby="admin-team">
-                    <h2 id="admin-team" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.team') }</h2>
-                    <Show when={ peopled }>
-                        <ul class="divide-y divide-line rounded-panel border border-line bg-field" data-team>
-                            <For each={ members } key={ (one) => one.handle } let={ member }>
-                                <li>
-                                    <StaffRow member={ member } changeable={ outranks(role, member.role) } onChange={ change } />
-                                </li>
-                            </For>
-                        </ul>
-                    </Show>
-                    <Show when={ lonely }>
-                        { () => <EmptyState icon="people" title={ locale.t('admin.staff.none') } /> }
-                    </Show>
-                </section>
+                        <section class="flex flex-col gap-2" aria-labelledby="admin-team">
+                            <h2 id="admin-team" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.team') }</h2>
+                            <Show when={ peopled }>
+                                <ul class="divide-y divide-line rounded-panel border border-line bg-field" data-team>
+                                    <For each={ members } key={ (one) => one.handle } let={ member }>
+                                        <li>
+                                            <StaffRow member={ member } changeable={ outranks(role, member.role) } onChange={ change } />
+                                        </li>
+                                    </For>
+                                </ul>
+                            </Show>
+                            <Show when={ lonely }>
+                                { () => <AdminEmpty icon="people" title={ locale.t('admin.staff.none') } /> }
+                            </Show>
+                        </section>
+                    </div>
+                </Show>
             </div>
-        </Show>
 
-        <section ref={ (element) => form = element } class="scroll-mt-28" aria-labelledby="admin-staff-form">
-            <Panel pad="md" stack="md">
-                <div class="flex flex-col gap-1">
-                    <h2 id="admin-staff-form" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.form') }</h2>
-                    <p class="text-ui-sm text-muted">{ locale.t('admin.staff.formLead') }</p>
-                </div>
-                <Field id="admin-staff-handle" label={ locale.t('admin.staff.handle') } error={ handleTold }>
-                    <Input
-                        id="admin-staff-handle"
-                        class="max-w-md"
-                        value={ handleText }
-                        autocomplete="off"
-                        enterkeyhint="next"
-                        maxlength={ 33 }
-                        invalid={ handleTold !== null }
-                        describedBy={ handleTold !== null ? 'admin-staff-handle-error' : undefined }
-                        onInput={ typedHandle }
-                    />
-                </Field>
-                <div class="flex flex-col gap-1.5">
-                    <span class="text-ui-sm font-semibold text-text" aria-hidden="true">{ locale.t('admin.staff.role') }</span>
-                    <Segmented block class="max-w-md" items={ choices } value={ choice } label={ locale.t('admin.staff.role') } onChange={ (id) => choice = id as Choice } />
-                </div>
-                <Field id="admin-staff-reason" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ reasonTold }>
-                    <TextArea
-                        id="admin-staff-reason"
-                        class="max-w-xl"
-                        value={ reasonText }
-                        maxlength={ 500 }
-                        describedBy={ reasonTold !== null ? 'admin-staff-reason-error' : 'admin-staff-reason-hint' }
-                        onInput={ typedReason }
-                    />
-                </Field>
-                <Button variant="primary" class="self-start" onClick={ () => void save() }>{ locale.t('admin.staff.save') }</Button>
-            </Panel>
-        </section>
+            <section ref={ (element) => form = element } class="scroll-mt-28 @4xl:sticky @4xl:top-8" aria-labelledby="admin-staff-form">
+                <Panel pad="md" stack="md">
+                    <div class="flex flex-col gap-1">
+                        <h2 id="admin-staff-form" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.form') }</h2>
+                        <p class="text-ui-sm text-muted">{ locale.t('admin.staff.formLead') }</p>
+                    </div>
+                    <Field id="admin-staff-handle" label={ locale.t('admin.staff.handle') } error={ handleTold }>
+                        <Input
+                            id="admin-staff-handle"
+                            class="max-w-md"
+                            value={ handleText }
+                            autocomplete="off"
+                            enterkeyhint="next"
+                            maxlength={ 33 }
+                            invalid={ handleTold !== null }
+                            describedBy={ handleTold !== null ? 'admin-staff-handle-error' : undefined }
+                            onInput={ typedHandle }
+                        />
+                    </Field>
+                    <div class="flex flex-col gap-1.5">
+                        <span class="text-ui-sm font-semibold text-text" aria-hidden="true">{ locale.t('admin.staff.role') }</span>
+                        <Segmented block class="max-w-md" items={ choices } value={ choice } label={ locale.t('admin.staff.role') } onChange={ (id) => choice = id as Choice } />
+                    </div>
+                    <Field id="admin-staff-reason" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ reasonTold }>
+                        <TextArea
+                            id="admin-staff-reason"
+                            class="max-w-xl"
+                            value={ reasonText }
+                            maxlength={ 500 }
+                            describedBy={ reasonTold !== null ? 'admin-staff-reason-error' : 'admin-staff-reason-hint' }
+                            onInput={ typedReason }
+                        />
+                    </Field>
+                    <Button variant="primary" class="self-start" onClick={ () => void save() }>{ locale.t('admin.staff.save') }</Button>
+                </Panel>
+            </section>
+        </div>
     </div>
 }

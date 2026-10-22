@@ -3,9 +3,9 @@ import { createResource, untrack, useHead } from 'azerothjs';
 import { ACTION_KINDS, type ActionKind } from '../../../../backend/src/domains/admin/roles.ts';
 import type { StaffLog } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
 import LogEntry from '../../components/admin/log-entry.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Field from '../../components/ui/field.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
@@ -15,7 +15,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
 import { useAddress } from '../../lib/page-param.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { foldHandle, type LogRow } from '../../lib/staff-words.ts';
+import { dayGroups, foldHandle, type LogRow } from '../../lib/staff-words.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { SEARCH_PAUSE_MS } from '../../services/search.service.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -104,6 +104,8 @@ export default component LogPage()
     derived continued = tail !== null && tail.from === page ? tail : null;
 
     derived rows = page === null ? [] : [...page.rows, ...(continued?.rows ?? [])];
+
+    derived days = dayGroups(rows, runtime().clock.now(), locale);
 
     derived cursor = continued === null ? page?.cursor : continued.cursor;
 
@@ -216,18 +218,25 @@ export default component LogPage()
         </Show>
 
         <Show when={ empty }>
-            { () => <EmptyState icon="history" title={ blank } /> }
+            { () => <AdminEmpty icon="history" title={ blank } /> }
         </Show>
 
         <Show when={ listed }>
             <div class="flex flex-col">
-                <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-log>
-                    <For each={ rows } key={ (one) => one.id } let={ row }>
-                        <li data-entry={ row.id } data-kind={ row.kind }>
-                            <LogEntry row={ row } />
-                        </li>
+                <div class="flex flex-col gap-5" data-log>
+                    <For each={ days } key={ (day) => day.key } let={ day }>
+                        <section class="flex flex-col gap-2" aria-label={ day.label } data-day={ day.key }>
+                            <h2 class="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-10 bg-void/95 py-1.5 text-ui-xs font-semibold text-muted backdrop-blur md:top-0" data-day-label>{ day.label }</h2>
+                            <ol class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field">
+                                <For each={ day.rows } key={ (one) => one.id } let={ row }>
+                                    <li data-entry={ row.id } data-kind={ row.kind }>
+                                        <LogEntry row={ row } />
+                                    </li>
+                                </For>
+                            </ol>
+                        </section>
                     </For>
-                </ol>
+                </div>
                 <Show when={ more }>
                     <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void older() } />
                 </Show>

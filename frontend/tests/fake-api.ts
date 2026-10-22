@@ -468,6 +468,7 @@ const accountsFresh = () => ({
     crowd: [] as string[],
     suspended: [] as string[],
     reported: {} as Record<string, number>,
+    wallets: {} as Record<string, string>,
     about: {} as Record<string, Partial<AdminPerson>>
 });
 
@@ -478,11 +479,13 @@ const accountRow = (handle: string, at: number): AdminRow =>
     const person = personWire(handle);
     const role = staffRoleOf(handle);
     const reports = server.accounts.reported[handle] ?? 0;
+    const wallet = server.accounts.wallets[handle];
 
     return {
         handle,
         displayName: person.displayName,
         hue: person.hue,
+        ...(wallet === undefined ? {} : { address: wallet }),
         createdAt: new Date(Date.parse('2026-10-20T09:00:00.000Z') - at * 3_600_000).toISOString(),
         minor: person.isMinor,
         suspended: server.accounts.suspended.includes(handle),
