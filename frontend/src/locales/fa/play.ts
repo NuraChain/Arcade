@@ -205,6 +205,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.notFoundLead': 'این لینک مال میزیه که هیچ‌وقت باز نشده، یا از اون موقع بسته شده.',
     'play.closed': 'این میز بسته شده.',
     'play.closedLead': 'هر کی بازش کرده بود، بستش. هر وقت خواستی یه میز دیگه باز کن.',
+    'play.closedLead.staff': 'تیم نورا این میز رو بست. هر وقت خواستی یه میز دیگه باز کن.',
     'play.table.chat': 'چت میز',
     'watch.title': 'داری تماشا می‌کنی',
     'watch.gone': 'از این بازی اومدی بیرون.',

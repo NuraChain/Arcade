@@ -150,7 +150,7 @@ export default component PlayPage()
         </Show>
 
         <Show when={ onTables }>
-            <PlayTables />
+            <PlayTables reader={ reader } onClosed={ () => read.refetch() } />
         </Show>
     </div>
 }

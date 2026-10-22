@@ -116,7 +116,8 @@ const BODIES = {
     '/admin/people/:handle/sign-out': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
     '/admin/reports/:id/review': (bad) => [{ outcome: 'reviewed', reason: bad.slice(0, 500).padEnd(3, 'x') }, { outcome: bad.slice(0, 16), reason: 'garbage' }],
     '/admin/play/games/:game': (bad) => [{ on: false, reason: bad.slice(0, 500).padEnd(3, 'x') }, { on: bad.slice(0, 8), reason: 'garbage' }],
-    '/admin/play/matches/:id/void': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }, { reason: bad }]
+    '/admin/play/matches/:id/void': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }, { reason: bad }],
+    '/admin/play/tables/:id/close': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }, { reason: bad }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);

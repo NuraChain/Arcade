@@ -1215,6 +1215,8 @@ export const adminGameInput = object({ on: boolean(), reason: said() });
 
 export const adminVoidInput = object({ reason: said() });
 
+export const adminCloseInput = object({ reason: said() });
+
 /**
  * The two switches an account controls, and the one it does not.
  *
@@ -1428,6 +1430,8 @@ export const tableSummary = object({
     roomId: string().optional(),
 
     removed: boolean().optional(),
+
+    closedBy: literal('staff').optional(),
 
     quick: boolean().optional(),
 
@@ -2501,6 +2505,8 @@ export const threadQuery = object({ cursor: string().optional(), limit: string({
 
 const playFace = object({ handle: string(), displayName: string(), hue: number(), avatar: string().optional() });
 
+const playSeat = object({ seat: number(), handle: string(), displayName: string(), hue: number(), avatar: string().optional(), staff: enumOf(STAFF_ROLES).optional() });
+
 export const adminMatchRow = object({
     id: string(),
     game: string(),
@@ -2509,7 +2515,7 @@ export const adminMatchRow = object({
     startedAt: string(),
     deadline: string().optional(),
     stake: string().optional(),
-    players: array(object({ seat: number(), handle: string(), displayName: string(), hue: number(), avatar: string().optional(), staff: enumOf(STAFF_ROLES).optional() })),
+    players: array(playSeat),
     stuck: object({ since: string(), kind: enumOf(STUCK_KINDS) }).optional()
 });
 
@@ -2528,6 +2534,7 @@ export const adminTableRow = object({
     seats: number(),
     taken: number(),
     host: playFace.optional(),
+    people: array(playSeat),
     at: string(),
     quick: boolean(),
     stake: string().optional()

@@ -304,7 +304,8 @@ raw, because no repository can say it - and it is the first statement of the tra
 in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
 tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*), and so
 does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*),
-and so do a host's removal and an invitation (*The host can take somebody out of a chair*).
+and so do a host's removal and an invitation (*The host can take somebody out of a chair*), and the
+staff's close of a table waiting (`shutIn`, *Play* in `.claude/rules/admin.md`).
 It is the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person
 never meets it. Under it the start reads the table and the chairs again and asks every question of THAT
 read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -

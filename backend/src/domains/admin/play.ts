@@ -1,6 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { Game, Match, MatchPlayer, Table, User } from '../../entities/index.ts';
+import { Game, Match, MatchPlayer, Table, TableSeat, User } from '../../entities/index.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import type { AdminMatches, AdminPlay, AdminTables } from '../../schemas.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from './keyset.ts';
@@ -26,6 +26,13 @@ export interface Ended
     tableId: string;
     game: string;
     before: number;
+}
+
+export interface Shut
+{
+    code: string;
+    game: string;
+    conversationId: string | null;
 }
 
 interface Seated
@@ -78,6 +85,7 @@ interface TableRow extends Keyed
     host_name: string | null;
     host_hue: number | null;
     host_avatar: string | null;
+    people: PlayerRow[];
 }
 
 const isKind = (value: string): value is StuckKind => STUCK_KINDS.some((kind) => kind === value);
@@ -109,6 +117,13 @@ export function createPlayService(db: DataSource, ownerWallet: string)
         .select('u.id', 'id')
         .addSelect(STAFF_OF, 'staff')
         .where('p.match_id = :matchId', { matchId, owner: owner() })
+        .getRawMany<Seated>();
+
+    const seatedAt = (tx: EntityManager, tableId: string) => tx.getRepository(TableSeat).createQueryBuilder('s')
+        .innerJoin(User, 'u', 'u.id = s.user_id')
+        .select('u.id', 'id')
+        .addSelect(STAFF_OF, 'staff')
+        .where('s.table_id = :tableId', { tableId, owner: owner() })
         .getRawMany<Seated>();
 
     return {
@@ -237,6 +252,13 @@ export function createPlayService(db: DataSource, ownerWallet: string)
                 .addSelect('h.display_name', 'host_name')
                 .addSelect('h.hue', 'host_hue')
                 .addSelect('h.avatar', 'host_avatar')
+                .addSelect(
+                    `(select coalesce(jsonb_agg(jsonb_build_object('seat', s.seat, 'handle', u.handle, 'displayName', u.display_name, 'hue', u.hue, 'avatar', u.avatar, 'staff', ${ STAFF_OF }) order by s.seat), '[]'::jsonb)
+                        from table_seats s join users u on u.id = s.user_id
+                       where s.table_id = t.id)`,
+                    'people'
+                )
+                .setParameter('owner', owner())
                 .where(`t.status = 'open'`)
                 .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)');
 
@@ -266,6 +288,7 @@ export function createPlayService(db: DataSource, ownerWallet: string)
                     seats: row.seats,
                     taken: row.taken,
                     ...(row.host_handle === null ? {} : { host: face(row.host_handle, row.host_name ?? row.host_handle, row.host_hue ?? 0, row.host_avatar) }),
+                    people: row.people.map((one) => ({ seat: one.seat, ...face(one.handle, one.displayName, one.hue, one.avatar), ...(one.staff === null ? {} : { staff: one.staff }) })),
                     at: row.created_at.toISOString(),
                     quick: row.quick,
                     ...(row.stake === null ? {} : { stake: row.stake })
@@ -340,6 +363,50 @@ export function createPlayService(db: DataSource, ownerWallet: string)
                 await record(tx, actor, { kind: 'void', reason, details: { match: matchId, game: ended.game, table: table.code } });
 
                 return ended;
+            });
+        },
+
+        async closeTable(actor: Actor, tableId: string, reason: string, shut: (tx: EntityManager, tableId: string) => Promise<Shut | 'closed' | 'playing' | null>)
+        {
+            if (!UUID.test(tableId))
+            {
+                return null;
+            }
+
+            return await db.transaction(async (tx) =>
+            {
+                const seated = await seatedAt(tx, tableId);
+
+                if (seated.some((one) => one.id === actor.id))
+                {
+                    throw staffRefusal('staff-seated', 'Nobody closes a table they sit at.');
+                }
+
+                if (seated.some((one) => !outranks(actor.role, one.staff)))
+                {
+                    throw staffRefusal('staff-rank', 'That is above what your role may do.');
+                }
+
+                const closed = await shut(tx, tableId);
+
+                if (closed === 'closed')
+                {
+                    throw staffRefusal('staff-table-closed', 'That table has already closed.');
+                }
+
+                if (closed === 'playing')
+                {
+                    throw staffRefusal('staff-table-playing', 'A game is being played or starting at that table.');
+                }
+
+                if (closed === null)
+                {
+                    return null;
+                }
+
+                await record(tx, actor, { kind: 'close', reason, details: { id: tableId, table: closed.code, game: closed.game } });
+
+                return closed;
             });
         }
     };

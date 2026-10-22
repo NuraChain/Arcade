@@ -213,6 +213,7 @@ export const play = {
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',
     'play.closed': 'This table has closed.',
     'play.closedLead': 'Whoever opened it ended it. Open another whenever you like.',
+    'play.closedLead.staff': 'Nura’s team closed it. Open another whenever you like.',
 
     'play.table.chat': 'Table chat',
     'watch.title': 'You are watching',

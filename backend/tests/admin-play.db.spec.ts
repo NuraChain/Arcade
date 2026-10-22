@@ -399,6 +399,7 @@ describe.skipIf(!active)('turning a game on and off, against a real database', (
             seats: 2,
             taken: 1,
             host: { handle: host.handle, displayName: expect.any(String), hue: expect.any(Number) },
+            people: [{ seat: 0, handle: host.handle, displayName: expect.any(String), hue: expect.any(Number) }],
             at: expect.any(String),
             quick: false,
             stake: '10000000000000000000'

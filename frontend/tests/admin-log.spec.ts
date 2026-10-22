@@ -90,6 +90,11 @@ const ended = () =>
     staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'void', reason: 'Stuck after a fault in the sweep.', details: { match: 'm-1', game: 'hokm', table: 'k7qx' } });
 };
 
+const shut = () =>
+{
+    staffLogged({ at: hoursAgo(1), staff: 'mina', staffRole: 'admin', kind: 'close', reason: 'Left open by a fault.', details: { id: 't-1', game: 'poker', table: 'p3qa' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -223,6 +228,21 @@ describe('the log', () =>
         expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'K7QX']);
         expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Games ended');
         expect(server.calls.filter((call) => call.startsWith('admin.log')).at(-1)).toContain('"kind":"void"');
+    });
+
+    it('says a table the staff closed, naming the game in the reader\'s words and the table\'s code set apart', async () =>
+    {
+        shut();
+        const { container } = await opened('/admin/log?kind=close');
+
+        expect(lines(container)).toEqual(['mina closed the Poker table P3QA.']);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['mina', 'P3QA']);
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Tables closed');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(lines(container)).toEqual(['mina، میز پوکر با کد P3QA رو بست.']);
     });
 
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
@@ -363,7 +383,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها', 'بازی‌ها', 'بازی‌های تموم‌شده', 'میزهای بسته‌شده']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 

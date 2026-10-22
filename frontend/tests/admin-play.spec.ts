@@ -13,7 +13,7 @@ import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { AdminMatches, AdminTables } from '../../backend/src/schemas.ts';
-import { PLAY_PAGE } from '../../backend/src/domains/admin/roles.ts';
+import { PLAY_PAGE, type StaffRole } from '../../backend/src/domains/admin/roles.ts';
 import { ApiError, client, server, staffMember } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -64,13 +64,14 @@ const matchOf = (id: string, game: string, extra: Partial<AdminMatches['rows'][n
 
 const tableOf = (id: string, game: string, extra: Partial<AdminTables['rows'][number]> = {}): AdminTables['rows'][number] => ({
     id,
-    code: `T${ id.toUpperCase() }`,
+    code: `t${ id }`,
     game,
     mode: 'live',
     privacy: 'public',
     seats: 4,
     taken: 1,
     host: face('mina', 120),
+    people: [{ seat: 0, ...face('mina', 120) }],
     at: minutesAgo(10),
     quick: false,
     ...extra
@@ -332,7 +333,7 @@ describe('the games, on and off', () =>
 
         expect(router.location().query.view).toBe('tables');
         expect([...container.querySelectorAll('[data-table]')].map((one) => one.getAttribute('data-table'))).toEqual(['t2', 't1', 't0']);
-        expect([said(quick, '[data-name]'), said(quick, '[data-code]'), said(quick, '[data-stake]'), said(quick, '[data-quick]')]).toEqual(['Backgammon', 'TT2', '5 NURA', 'Quick play']);
+        expect([said(quick, '[data-name]'), said(quick, '[data-code]'), said(quick, '[data-stake]'), said(quick, '[data-quick]')]).toEqual(['Backgammon', 'tt2', '5 NURA', 'Quick play']);
         expect([said(quick, '[data-pace]'), said(quick, '[data-privacy]'), said(quick, '[data-seated]'), said(quick, '[data-when]')]).toEqual(['Live', 'Anyone', '1 of 2 seated', 'Opened 10 minutes ago']);
         expect(said(quick, '[data-host] [dir="ltr"]')).toBe('mina');
         expect([said(room, '[data-pace]'), said(room, '[data-privacy]'), said(room, '[data-seated]')]).toEqual(['Turn-based', 'In a chat', '3 of 4 seated']);
@@ -587,5 +588,161 @@ describe('ending a game being played', () =>
         await answered('یه مشکل توی نوبت‌ها');
 
         expect(toasts()).toEqual(['بازی منچ سر میز CM1 تموم شد و برای هیچ‌کس حساب نمی‌شه.']);
+    });
+});
+
+describe('closing a table waiting', () =>
+{
+    const close = (root: ParentNode, id: string) => root.querySelector<HTMLButtonElement>(`[data-table="${ id }"] [data-close] button`);
+
+    const listed = (root: ParentNode) => [...root.querySelectorAll('[data-table]')].map((one) => one.getAttribute('data-table'));
+
+    const admin = () =>
+    {
+        server.staff.members = [staffMember('sara.k', 'admin', 'alex', minutesAgo(60)), staffMember('mina', 'admin', 'alex', minutesAgo(30))];
+        server.me = 'sara.k';
+        useSession().reset();
+        useSession().establish({ ...ALEX, id: 'u-sara', handle: 'sara.k', displayName: 'Sara', staff: 'admin' });
+    };
+
+    const seated = (...people: [string, StaffRole?][]) => people.map(([handle, staff], seat) => ({ seat, ...face(handle, seat * 40), ...(staff === undefined ? {} : { staff }) }));
+
+    it('offers Close on a table the reader outranks everybody at, says why on the others, and crowns the host among the people at it', async () =>
+    {
+        admin();
+        server.playing.tables = [
+            tableOf('t1', 'ludo', { host: face('reza.t', 0), people: seated(['reza.t'], ['leila.a', 'moderator']), taken: 2 }),
+            tableOf('t2', 'hokm', { people: seated(['sara.k', 'admin']) }),
+            tableOf('t3', 'poker', { people: seated(['mina', 'admin']) }),
+            tableOf('t4', 'ludo', { people: seated(['alex', 'owner']) })
+        ];
+
+        const container = await opened('/admin/play?view=tables');
+
+        expect([close(container, 't1')?.textContent?.trim(), close(container, 't1')?.getAttribute('aria-label')]).toEqual(['Close table', 'Close the Ludo table TT1']);
+        expect(container.querySelector('[data-table="t1"] [data-close-barred]')).toBeNull();
+        expect([...container.querySelectorAll('[data-table="t1"] [data-people] li')].map((one) => [one.querySelector('[dir="ltr"]')?.textContent, one.hasAttribute('data-host')])).toEqual([['reza.t', true], ['leila.a', false]]);
+        expect(said(container, '[data-table="t1"] [data-host] .sr-only')).toBe('Host');
+
+        for (const id of ['t2', 't3', 't4'])
+        {
+            expect(close(container, id), id).toBeNull();
+        }
+
+        expect(said(container, '[data-table="t2"] [data-close-barred]')).toBe('You are sitting at this table.');
+        expect(said(container, '[data-table="t3"] [data-close-barred]')).toBe('Somebody at it holds a role at or above yours.');
+        expect(said(container, '[data-table="t4"] [data-close-barred]')).toBe('Somebody at it holds a role at or above yours.');
+    });
+
+    it('asks why before it closes a table, as a question that loses something, and does nothing when it is put away', async () =>
+    {
+        server.playing.tables = [tableOf('t1', 'ludo')];
+
+        const container = await opened('/admin/play?view=tables');
+
+        close(container, 't1')!.click();
+        await settle();
+
+        expect(asked().component).toBe(ReasonSheet);
+        expect(asked().props).toMatchObject({
+            title: 'Close the Ludo table TT1?',
+            lead: 'Nobody can sit at it or start a game at it any more, and it leaves every list. Whoever is sitting there is told Nura’s team closed it.',
+            confirm: 'Close it',
+            destructive: true
+        });
+
+        await answered(null);
+
+        expect(listed(container)).toEqual(['t1']);
+        expect(server.calls.filter((call) => call.startsWith('admin.closeTable'))).toEqual([]);
+    });
+
+    it('takes the table off the list at the press once the reason is given, says so once the server has, and reads the counts again', async () =>
+    {
+        let answer: () => void = () => undefined;
+        const sent = vi.spyOn(client.admin, 'closeTable');
+
+        sent.mockImplementationOnce(async (request) =>
+        {
+            await new Promise<void>((resolve) => answer = resolve);
+            return await client.admin.closeTable(request);
+        });
+
+        server.playing.tables = [tableOf('t1', 'ludo'), tableOf('t2', 'hokm')];
+
+        const container = await opened('/admin/play?view=tables');
+        const kept = container.querySelector('[data-table="t2"]');
+
+        expect(chips(container).find((one) => one[0]?.startsWith('Waiting'))?.[0]).toBe('Waiting4');
+
+        close(container, 't1')!.click();
+        await settle();
+        await answered('Left open by a fault');
+
+        expect(sent).toHaveBeenCalledWith({ params: { id: 't1' }, input: { reason: 'Left open by a fault' } });
+        expect(listed(container)).toEqual(['t2']);
+        expect(toasts()).toEqual([]);
+
+        server.calls = [];
+        answer();
+        await settle();
+
+        expect(toasts()).toEqual(['The Ludo table TT1 is closed.']);
+        expect(listed(container)).toEqual(['t2']);
+        expect(container.querySelector('[data-table="t2"]'), 'a row the close did not touch is the row it was').toBe(kept);
+        expect(server.calls).toEqual(expect.arrayContaining(['admin.play', 'admin.waitingTables {}']));
+        expect(chips(container).find((one) => one[0]?.startsWith('Waiting'))?.[0]).toBe('Waiting3');
+        expect(server.staff.log.map((one) => [one.kind, one.reason, one.details])).toEqual([['close', 'Left open by a fault', { id: 't1', table: 'tt1', game: 'ludo' }]]);
+    });
+
+    it('puts a refused table back in the reader\'s words, and reads the list again either way', async () =>
+    {
+        server.playing.tables = [tableOf('t1', 'ludo'), tableOf('t2', 'hokm')];
+
+        const container = await opened('/admin/play?view=tables');
+
+        server.playing.tables = server.playing.tables.filter((one) => one.id !== 't1');
+        server.playing.shut = ['t1'];
+        close(container, 't1')!.click();
+        await settle();
+        await answered('Left open by a fault');
+
+        expect(toasts()).toEqual(['That table has already closed.']);
+        expect(listed(container), 'the list is read again either way').toEqual(['t2']);
+        expect(server.staff.log).toEqual([]);
+
+        vi.spyOn(client.admin, 'closeTable').mockRejectedValueOnce(new ApiError(409, 'staff-table-playing', 'A game is being played or starting at that table.', undefined));
+        useToasts().dismissAll();
+        close(container, 't2')!.click();
+        await settle();
+        await answered('Left open by a fault');
+
+        expect(listed(container)).toEqual(['t2']);
+        expect(toasts()).toEqual(['A game is being played or starting at that table.']);
+    });
+
+    it('says it in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        admin();
+        server.playing.tables = [
+            tableOf('t1', 'ludo', { host: face('reza.t', 0), people: seated(['reza.t']) }),
+            tableOf('t2', 'hokm', { people: seated(['sara.k', 'admin']) })
+        ];
+
+        const container = await opened('/admin/play?view=tables');
+
+        expect([close(container, 't1')?.textContent?.trim(), close(container, 't1')?.getAttribute('aria-label')]).toEqual(['بستن میز', 'بستن میز منچ با کد TT1']);
+        expect(said(container, '[data-table="t1"] [data-host] .sr-only')).toBe('میزبان');
+        expect(said(container, '[data-table="t2"] [data-close-barred]')).toBe('خودت پشت این میز نشستی.');
+
+        close(container, 't1')!.click();
+        await settle();
+
+        expect(asked().props).toMatchObject({ title: 'میز منچ با کد TT1 بسته بشه؟', confirm: 'ببندش' });
+
+        await answered('یه خطا بازش گذاشته بود');
+
+        expect(toasts()).toEqual(['میز منچ با کد TT1 بسته شد.']);
     });
 });

@@ -121,6 +121,7 @@ interface TableWire
     matchId?: string;
     yourTurn?: boolean;
     removed?: boolean;
+    closedBy?: 'staff';
     keptOut?: string[];
     quick?: boolean;
     stake?: string;
@@ -412,7 +413,7 @@ type PlayStatus = AdminPlay['games'][number]['status'];
 
 const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })), stuck: 0 });
 
-const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'], over: [] as string[] });
+const playingFresh = () => ({ matches: [] as AdminMatches['rows'], tables: [] as AdminTables['rows'], over: [] as string[], shut: [] as string[] });
 
 const pageOf = <T extends { id: string }>(rows: readonly T[], cursor: string | undefined) =>
 {
@@ -1508,6 +1509,42 @@ export const client =
             server.play.games = server.play.games.map((one) => (one.game === held.game ? { ...one, matches: Math.max(0, one.matches - 1) } : one));
             server.play.stuck = Math.max(0, server.play.stuck - (held.stuck === undefined ? 0 : 1));
             staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'void', reason: input.reason, details: { match: held.id, game: held.game, table: held.code } });
+
+            return structuredClone(server.play);
+        },
+
+        async closeTable({ params, input }: { params: { id: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.closeTable ${ params.id } ${ input.reason }`);
+            staffGate('play');
+
+            const actor = staffRoleOf(server.me);
+            const held = server.playing.tables.find((one) => one.id === params.id);
+
+            if (held === undefined && server.playing.shut.includes(params.id))
+            {
+                throw staffRefused('staff-table-closed', 'That table has already closed.');
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            if (held.people.some((one) => one.handle === server.me))
+            {
+                throw staffRefused('staff-seated', 'Nobody closes a table they sit at.');
+            }
+
+            if (held.people.some((one) => !outranks(actor, one.staff ?? null)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            server.playing.tables = server.playing.tables.filter((one) => one.id !== held.id);
+            server.playing.shut.push(held.id);
+            server.play.games = server.play.games.map((one) => (one.game === held.game ? { ...one, tables: Math.max(0, one.tables - 1) } : one));
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'close', reason: input.reason, details: { id: held.id, table: held.code, game: held.game } });
 
             return structuredClone(server.play);
         }

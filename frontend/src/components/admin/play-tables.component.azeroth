@@ -2,12 +2,18 @@ import { createResource } from 'azerothjs';
 
 import type { AdminTables } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
+import { GAMES } from '../../data/games.ts';
 import { attempt } from '../../lib/attempt.ts';
+import { createGuesses } from '../../lib/guess.ts';
+import { whyStaffRefused } from '../../lib/staff-words.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import ErrorState from '../ui/error-state.component.azeroth';
 import LoadMore from '../ui/load-more.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
+import type { PlayReader } from './match-row.component.azeroth';
+import ReasonSheet from './reason-sheet.component.azeroth';
 import WaitingRow, { type AdminTableRow } from './waiting-row.component.azeroth';
 
 interface Tail
@@ -17,15 +23,18 @@ interface Tail
     cursor: string | undefined;
 }
 
-export default component PlayTables()
+export default component PlayTables(props: { reader?: PlayReader; onClosed?: () => Promise<unknown> })
 {
     const locale = useLocale();
+    const overlay = useOverlay();
 
     state tail = null as Tail | null;
 
     state paging = false;
 
     const first = createResource(() => client.admin.waitingTables({ query: {} }), { name: 'admin.play.tables' });
+
+    const guesses = createGuesses<AdminTableRow[]>();
 
     derived page = first.data() ?? null;
 
@@ -37,7 +46,7 @@ export default component PlayTables()
 
     derived continued = tail !== null && tail.from === page ? tail : null;
 
-    derived rows = page === null ? [] : [...page.rows, ...(continued?.rows ?? [])];
+    derived rows = page === null ? [] : guesses.over([...page.rows, ...(continued?.rows ?? [])]);
 
     derived cursor = continued === null ? page?.cursor : continued.cursor;
 
@@ -73,6 +82,56 @@ export default component PlayTables()
         paging = false;
     };
 
+    const nameOf = (game: string) =>
+    {
+        const known = GAMES.find((one) => one.id === game);
+
+        return known === undefined ? game : locale.t(known.nameKey);
+    };
+
+    const reread = async () =>
+    {
+        await Promise.all([first.refetch(), props.onClosed?.()]);
+
+        if (first.error() !== null)
+        {
+            throw first.error();
+        }
+
+        guesses.landed();
+    };
+
+    const close = async (row: AdminTableRow) =>
+    {
+        const game = nameOf(row.game);
+        const reason = await overlay.open(
+            ReasonSheet,
+            {
+                title: locale.t('admin.play.close.ask', { game, code: row.code.toUpperCase() }),
+                lead: locale.t('admin.play.close.askLead'),
+                confirm: locale.t('admin.play.close.confirm'),
+                destructive: true
+            },
+            { label: locale.t('admin.section.play') }
+        ).closed;
+
+        if (typeof reason !== 'string')
+        {
+            return;
+        }
+
+        const sent = guesses.during(
+            (held) => held.filter((one) => one.id !== row.id),
+            () => client.admin.closeTable({ params: { id: row.id }, input: { reason } }),
+            reread
+        );
+
+        if (!await attempt(sent, locale.t('admin.play.close.done', { game, code: row.code.toUpperCase() }), whyStaffRefused))
+        {
+            await Promise.all([first.refetch(), props.onClosed?.()]);
+        }
+    };
+
     <div class="flex flex-col" data-tables>
         <Show when={ waiting }>
             { () => <Skeleton lines={ 4 } avatar /> }
@@ -91,7 +150,7 @@ export default component PlayTables()
                 <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-table-list>
                     <For each={ rows } key={ (one) => one.id } let={ row }>
                         <li>
-                            <WaitingRow table={ row } />
+                            <WaitingRow table={ row } reader={ props.reader } onClose={ () => void close(row) } />
                         </li>
                     </For>
                 </ul>

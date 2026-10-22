@@ -1060,6 +1060,33 @@ describe('PlayPage', () =>
             await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.table-closed')]]), { timeout: 4000 });
         });
 
+        it('says Nura\'s team closed a table the staff closed, where it would say its host did', async () =>
+        {
+            const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.status = 'closed';
+            held.closedBy = 'staff';
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(container.textContent).toContain('Nura’s team closed it. Open another whenever you like.'), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('play.closedLead'));
+        });
+
+        it('says its host closed a table the host closed', async () =>
+        {
+            const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.status = 'closed';
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(container.textContent).toContain('Whoever opened it ended it. Open another whenever you like.'), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('play.closedLead.staff'));
+        });
+
         it('says the table has closed to a host who switches voice too late, and otherwise only that voice could not be changed', async () =>
         {
             const { container, held } = await hosting(false);

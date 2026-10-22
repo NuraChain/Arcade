@@ -222,7 +222,8 @@ the games being played newest first, fifty a page by the log's keyset over `(sta
 game, the table's code and pace, when it started, when the turn runs out (`deadline`), its stake,
 and who plays in which seat. `GET /api/admin/play/tables?game=&cursor=` lists the tables waiting
 for a game the same way over `(created_at, id)`: open with no game on, the host (none once the host
-has left), the chairs taken of the seats, who may sit, whether quick play opened it, and its stake.
+has left), who sits in which chair, the chairs taken of the seats, who may sit, whether quick play
+opened it, and its stake.
 A table a finished game left behind waits again; a closed one is gone.
 
 **A game the sweep cannot play is stuck, and says why.** The turn sweep postpones a match it cannot
@@ -266,12 +267,39 @@ and names nobody on turn: the engine's state was not finished by the engine, so 
 as `void`. The proof of a paid one leaves the end's ledger row out (`isVoided`), so every move
 still checks in the browser.
 
+**A table waiting can be closed by the staff** (`POST /api/admin/play/tables/:id/close`,
+`{ reason }`, D10). `shutIn` in the table service is the close, under the table's lock as the
+host's own close is (`lockTable`): a table that is not there is the page that is not there, one
+already closed is `staff-table-closed` (409), and one with a game on or whose stakes are being
+locked on the chain is `staff-table-playing` (409), because a game under way is ended as no contest
+first and a lock already sent is the chain's to finish. Otherwise the table is closed (`status`,
+`closedAt`), and the admin's half (`closeTable` in `play.ts`) writes the log's row in the same
+transaction: kind `close`, no person, `{ id, table, game }` with the table's code. Then the table's
+chat and the table are rung, and the answer is Play as it now stands. Nothing is locked at a table
+played for NURA while it waits, so nothing is refunded; the Readies its chairs signed are never used.
+
+**It is held to the rank rule against everybody in a chair**, asked before the table is touched:
+nobody closes a table they sit at (`staff-seated`, 409) or one where anybody sits at or above their
+role (`staff-rank`), so an admin closes the tables of players and moderators and the owner any table
+they do not sit at. The list of tables waiting names who sits in which chair with their role on the
+staff (`people`, by `STAFF_OF`, a suspended account holding none), so the page offers the close only
+where it would be taken. Two of the staff closing one table at once close it once: the second waits
+on the table's lock and finds it closed.
+
+**Whoever sits there is told who closed it.** A closed table that a `close` row of the log names
+reads `closedBy: 'staff'` (`closed_by_staff` in the table query, so `tables` takes no column, D16),
+and its page says "Nura’s team closed it. Open another whenever you like." where a table its host
+closed says whoever opened it ended it. Nobody is sent a notification (D8).
+
 `admin-play.db.spec.ts` holds the list, the switch, the refusals, the row lock (two switches parked
 on a held row) and everything new refused while a live game plays on; `admin-void.db.spec.ts` the
 end of a game: what is written and what is not, who is told, a seat that had walked out, the
 escrow, a stuck game, every refusal, a suspended member of the staff, a move holding the row, two
-ends at once and no table lock; `stake.db.spec.ts` the paid table and a paid game ended, refunded
-by the worker with its proof whole; `realtime-hub.spec.ts` the pulse.
+ends at once and no table lock; `admin-close.db.spec.ts` the close of a table waiting: what is
+written, a host's own close saying nothing of the staff, the refusals, the people at each table with
+their roles, a close waiting on the table's lock and two closes at once; `stake.db.spec.ts` the paid
+table and a paid game ended, refunded by the worker with its proof whole; `realtime-hub.spec.ts` the
+pulse.
 
 ## Money
 
@@ -386,7 +414,7 @@ last offered only while one is stuck; each chip counts its list. A game being pl
 code, pace, when it started and when its turn runs out (exact under a pointer, `When`), its stake
 in madder and its players by handle in seat order; a stuck one wears a danger badge and says why
 and since when. A table waiting is its game, code, pace, who may sit, the chairs taken, quick play,
-when it opened, its stake and its host. Both lists page with "Show older".
+when it opened and its stake. Both lists page with "Show older".
 
 A game being played offers "End game" to a reader who outranks everybody in it, and says why in
 its place where the reader plays in it or somebody there is at or above their role. The press
@@ -398,6 +426,15 @@ the counts are read again either way. The log says "mina ended a game of Hokm at
 contest.", the code set apart as a handle is. A player's result card says "Nura's team ended this
 game." and that it counts for nobody (`match.over.staff`), in place of the words for a game that
 ended too early.
+
+A table waiting lists the people in its chairs by handle, the host with a crown, and offers "Close
+table" to a reader who outranks everybody at it, saying why in its place where the reader sits there
+or somebody there is at or above their role. The press asks why in the same sheet, as a destructive
+question that says nobody can sit or start a game there again and that whoever sits there is told
+Nura's team closed it. Said yes to, the table leaves the list at the press, is said once the server
+has ("The Ludo table K7QX is closed."), and a refusal brings it back in the refusal's words; the
+list and the counts are read again either way. The log says "mina closed the Ludo table K7QX.", the
+code set apart as a handle is.
 
 **A time in the admin gives its exact moment under a pointer or a held finger** (`When`, in
 `components/admin/`): the words stay what they were ("2 days ago", "Signed in 3 hours ago") and the
@@ -413,13 +450,13 @@ from here, because the server would refuse the call.
 
 `admin-shell.spec.ts`, `admin-staff.spec.ts`, `admin-log.spec.ts`, `admin-people.spec.ts`,
 `admin-person.spec.ts`, `admin-reports.spec.ts`, `admin-report.spec.ts`, `admin-play.spec.ts`,
-`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists and the end of a game as well, `match-result.spec.ts` the card),
-and `paused-game.spec.ts` what a player sees of a paused game; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
+`reason-sheet.spec.ts` and `admin-vault.spec.ts` hold the page (`admin-play.spec.ts` its lists, the end of a game and the close of a table as well, `match-result.spec.ts` the card),
+`paused-game.spec.ts` what a player sees of a paused game and `play.spec.ts` of a table the staff closed; `app-stores.spec.ts` the guards and `profile-page.spec.ts` the shield.
 
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch, a game's end and the vault's amounts as bodies, the pause as spared (its body is a
+note, a suspension, a lift, a clear, a sign-out, a report's outcome, a game's switch, a game's end, a table's close and the vault's amounts as bodies, the pause as spared (its body is a
 switch), the log's four query words, the people's three, the reports' two, the games being played's
 three and the tables waiting's two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

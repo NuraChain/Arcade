@@ -638,6 +638,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.removed = true;
         }
+        if (row.closed_by_staff)
+        {
+            summary.closedBy = 'staff';
+        }
         if (row.quick)
         {
             summary.quick = true;
@@ -1879,6 +1883,25 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 await courtesy('result line', () => declareResult(id));
                 live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
                 stakes.kick();
+
+                return await playNow();
+            },
+
+            async closeTable(me, id, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const closed = actor === null ? null : await plays.closeTable(actor, id, input.reason, table.shutIn);
+
+                if (closed === null)
+                {
+                    return null;
+                }
+
+                if (closed.conversationId !== null)
+                {
+                    live?.chatChanged(closed.conversationId);
+                }
+                live?.tableChanged(id, await table.peopleAt(id));
 
                 return await playNow();
             }
