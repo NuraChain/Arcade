@@ -103,8 +103,8 @@ the third so nobody re-investigates it.
   values are real there (the Nurachain id, rpc and contract addresses). A personal value - an admin
   wallet included - goes in `.env` only.
 - No absolute path naming a machine. `~` is fine; `/c/Users/<somebody>` is a person's name.
-- The `0x…` keys in tests, `seed-wallets.ts` and `tools/qa/vault-deploy.mjs` are hardhat's published
-  accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).
+- The `0x…` keys in tests, `seed-wallets.ts`, `tools/qa/vault-deploy.mjs` and `tools/qa/admin-pass.mjs`
+  are hardhat's published accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).
 
 **Comment only when the code cannot say it** (the rule is in `AGENTS.md`). Names and structure
 carry the meaning; never a comment that restates the code or narrates a change.
@@ -166,7 +166,7 @@ which binds the account uuid because a signature must name something a rename ca
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa`, then the
 hand-run passes in `tools/qa/` against the built server: `regression`, `ludo`, `hokm`, `play`,
 `hokm-play`, `voice`, `backgammon`, `poker`, `backgammon-play`, `poker-play`, `realtime`, `notify`, `chat`,
-`keep`, `tour` (development server, disposable database), `latency`, and `chain` (local chain). Then a browser pass:
+`keep`, `admin`, `tour` (development server, disposable database), `latency`, and `chain` (local chain). Then a browser pass:
 every route at 390, 1280 and 1440 in both languages against `design.jpg`, a clean console, and the
 WebGL disposal check (no "Too many active WebGL contexts" after repeated create and dispose).
 

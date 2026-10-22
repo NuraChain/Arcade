@@ -887,3 +887,43 @@ passes every read to the node, and counts what the page asked of it.
 in the vault, and a result card that never says the pot was paid, failed the four figures and the
 winner's line and nothing else; a Ready that sends no signature failed the lock and everything after
 it.
+
+## The admin pass
+
+`tools/qa/admin-pass.mjs` runs the admin over the api of the built server: `QA_BASE=http://localhost:5310
+node tools/qa/admin-pass.mjs`, against a server started with `ADMIN_WALLET_ADDRESS` set to hardhat's
+published account #6 (the walk's owner) and a database nobody else uses; `QA_OWNER_KEY` names the key
+of another owner. It refuses to run, saying so, when the server names somebody else.
+
+Everybody else is a wallet made for the run: an admin, a moderator and four players, one of them
+holding a real socket for the pulse. In order:
+
+- **The staff**: the owner is the wallet the server names; a player is answered every admin read
+  in the bytes of a page that is not there; the owner makes an admin and a moderator; an admin may
+  not make an admin, makes a moderator, and the owner raises and lowers them; nobody changes their
+  own role or the owner's; a moderator opens the overview, who is online, People and Reports and
+  nothing else.
+- **People**: found by handle, read with wallet and sessions, a note on a player and none on an
+  admin.
+- **A suspension**: a game being played between two players (a turn-based one, so no sweep stands an
+  account with no socket up while the pass works), the suspension, the game lost as a walkout,
+  the session over, sign-in refused with `suspended` and the category, the lift, and signing in
+  again.
+- **Reports**: a report filed, waiting in the queue with who reported whom, closed as reviewed, and
+  the reporter's own list saying so.
+- **Play**: backgammon paused and a table of it refused, turned on again; a game being played
+  listed and ended as no contest, every seat `void`, ending it again refused; a table waiting
+  listed and closed.
+- **Under 18**: marked, strangers turned off with it, marked an adult again.
+- **The overview**: the accounts counted, this server's health for an admin and not for a
+  moderator, the player with a socket listed online.
+- **The notice**: put up for an hour with its lines trimmed, the player's socket told by the
+  pulse, the live counts carrying it to anybody with nothing about who put it up, a moderator
+  refused, taken down by the owner, the socket told, taken down again refused.
+- **The log**: a row of each kind the pass caused, and the log read by who acted.
+
+Seventy checks. Built with four faults at once (a suspension that leaves the person's games alone,
+a pulse that carries no notice, an admin let make an admin, a game ended twice), it failed six
+lines and no other: the two about making an admin, the walkout, ending the game again, and the two
+the socket is told by the pulse. The live counts, which carry the notice by another road, stayed
+green. The garbage pass sends every admin route garbage as well (`.claude/rules/admin.md`).
