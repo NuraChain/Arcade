@@ -38,6 +38,7 @@ import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
+import { createReportsService } from './domains/admin/reports.ts';
 import { createStaffService } from './domains/admin/staff.ts';
 import { createVaultAdmin } from './domains/stake/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
@@ -973,6 +974,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const accounts = createPeopleService(db, config.adminWallet, config.origin);
 
+    const desk = createReportsService(db, config.adminWallet);
+
     const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
         isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
 
@@ -1050,6 +1053,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             live?.chatChanged(before.conversation_id, me);
         }
         live?.tableChanged(before.id, people);
+    };
+
+    const reportOf = async (id: string) =>
+    {
+        const found = await desk.find(id);
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        const [together, history] = await Promise.all([
+            desk.together(found.row.by_id, found.row.about_id),
+            team.ofReport(id)
+        ]);
+
+        return { ...found.report, together, history };
     };
 
     const personOf = async (handle: string) =>
@@ -1731,6 +1751,41 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
 
                 return await personOf(handle);
+            },
+
+            async reports(me, query)
+            {
+                return await ableTo(me, 'reports') === null ? null : await desk.queue(query.status ?? 'received', query.cursor ?? null);
+            },
+
+            async reportsWaiting(me)
+            {
+                return await ableTo(me, 'reports') === null ? null : { count: await desk.waiting() };
+            },
+
+            async report(me, id)
+            {
+                return await ableTo(me, 'reports') === null ? null : await reportOf(id);
+            },
+
+            async review(me, id, input)
+            {
+                const actor = await ableTo(me, 'reports');
+                const found = actor === null ? null : await desk.find(id);
+
+                if (actor === null || found === null)
+                {
+                    return null;
+                }
+
+                await accounts.reachable(actor, found.row.about_handle);
+
+                if (await desk.review(actor, id, input.outcome, input.reason))
+                {
+                    live?.socialChanged(found.row.by_id);
+                }
+
+                return await reportOf(id);
             }
         },
 

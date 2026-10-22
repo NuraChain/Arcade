@@ -6,7 +6,7 @@ export const GRANTED_ROLES = ['moderator', 'admin'] as const;
 
 export type GrantedRole = (typeof GRANTED_ROLES)[number];
 
-export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out'] as const;
+export const ACTION_KINDS = ['grant', 'change', 'revoke', 'note', 'suspend', 'lift', 'expire', 'clear', 'sign-out', 'report'] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -30,8 +30,23 @@ export type PeopleList = (typeof PEOPLE_LISTS)[number];
 
 export const PEOPLE_PAGE = 50;
 
+export const REPORT_STATUSES = ['received', 'reviewed', 'actioned'] as const;
+
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
+export const REPORT_OUTCOMES = ['reviewed', 'actioned'] as const;
+
+export type ReportOutcome = (typeof REPORT_OUTCOMES)[number];
+
+export const REPORT_LISTS = ['received', 'reviewed', 'actioned', 'all'] as const;
+
+export type ReportList = (typeof REPORT_LISTS)[number];
+
+export const REPORTS_PAGE = 50;
+
 export const ABILITIES = {
     people: 'moderator',
+    reports: 'moderator',
     money: 'admin',
     staff: 'admin',
     log: 'admin',

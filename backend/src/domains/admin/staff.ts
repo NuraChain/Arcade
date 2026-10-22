@@ -235,6 +235,15 @@ export function createStaffService(db: DataSource, ownerWallet: string)
             return { rows: rows.slice(0, LOG_PAGE).map(wire), ...cursorOf(rows, LOG_PAGE) };
         },
 
+        async ofReport(reportId: string)
+        {
+            const rows = await newestFirst(actions().where("a.kind = 'report' and a.details ->> 'report' = :reportId", { reportId }))
+                .limit(LOG_PAGE)
+                .getRawMany<LogRow>();
+
+            return rows.map(wire);
+        },
+
         async about(personId: string, cursor: string | null): Promise<StaffLog>
         {
             const after = keysetAfter(cursor);

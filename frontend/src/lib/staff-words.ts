@@ -113,7 +113,12 @@ const said = (row: LogRow, locale: LocaleApi) =>
         return locale.t('admin.log.line.sign-out', slots);
     }
 
+    if (row.kind === 'report')
+    {
+        return locale.t(row.details.outcome === 'actioned' ? 'admin.log.line.report.actioned' : 'admin.log.line.report.reviewed', { ...slots, reporter: '{reporter}' });
+    }
+
     return locale.t('admin.log.line.revoke', slots);
 };
 
-export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '' });
+export const logParts = (row: LogRow, locale: LocaleApi) => handleParts(said(row, locale), { staff: row.staff ?? '', person: row.person ?? '', reporter: row.details.reporter ?? '' });

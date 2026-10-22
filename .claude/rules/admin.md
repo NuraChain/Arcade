@@ -7,8 +7,8 @@ design, with the decisions and what was not chosen, is
 ## The staff
 
 **Three roles, each above the last: moderator, admin, owner.** `domains/admin/roles.ts` imports
-nothing and both halves read it: `ABILITIES` says which role a section needs (`people` a moderator,
-`money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
+nothing and both halves read it: `ABILITIES` says which role a section needs (`people` and `reports`
+a moderator, `money`, `staff` and `log` an admin, `wallet` the owner), `may(role, ability)` answers, and `outranks(actor, other)` is
 the one rule about rank. Nobody outranks their own role, and every role outranks somebody who holds
 none. The browser draws a section only where `may` says so; the server asks the same function on
 every route, because the drawing is a courtesy.
@@ -156,6 +156,32 @@ whose session is the whole account, cannot.
 
 `admin-people.db.spec.ts` (*what the staff take off a profile, and every session ended*) holds both.
 
+## Reports
+
+**What players report is worked by the staff, a moderator included** (`reports`, `domains/admin/
+reports.ts`). `GET /api/admin/reports?status=&cursor=` lists them newest first, fifty a page, keyset
+over `(created_at, id)` with the microsecond cursor: `received` (the default, "waiting"),
+`reviewed`, `actioned` or `all`. A row is the report's id, category, status, when, whether a message
+came with it, and the two people (face, handle, and their role on the staff when they hold one, the
+owner by the wallet the server names), and every page carries how many are waiting, which is also
+`GET /api/admin/reports/waiting` (`{ count }`) for the count in the nav.
+
+**One report** (`GET /api/admin/reports/:id`, an id that is not a uuid answered as missing before
+Postgres sees it) adds the disclosed message as the reporter showed it (the sealed document,
+`{"text", "reply"?, "fwd"?}`, which franking verified at filing; nothing else of the conversation is
+ever read), up to five of their most recent games together (each with both seats' results, or live),
+and every staff action on that report (`ofReport`, by `details ->> 'report'`).
+
+**Closing a report** (`POST /api/admin/reports/:id/review`, `{ outcome, reason }`, `outcome` being
+`reviewed` or `actioned`) is held to the rank rule of any action on the person reported: nobody
+closes a report about themselves (`staff-self`) or about somebody at or above them (`staff-rank`), so
+a report about a moderator goes to an admin and one about an admin to the owner. The report's row is
+locked, the status moves, and one row of kind `report` is written about the person reported, with the
+report, the outcome and the reporter's handle in its details, in that transaction. An outcome it
+already has changes nothing and writes nothing; a later outcome is a row of its own. The reporter's
+`social` scope is rung, so their own list of reports shows the new status; nobody is notified (D9).
+`admin-reports.db.spec.ts` holds the queue, one report, the outcomes and the refusals.
+
 ## Money
 
 The vault section (`.claude/rules/stakes.md`, *The owner's view of the vault*) is `money`: an admin
@@ -194,7 +220,8 @@ own that the page draws with `dir="ltr"`: a handle runs left to right, and two o
 a Persian sentence ("{staff}، {person} رو … کرد") were one run, which put the person before whoever
 acted for a reader going from the right. The same goes for "by whom" on a member of the staff, which
 is the word and the handle beside the time as a line of facts, not one string with a number after a
-handle. The kind, by whom and about whom are in the address
+handle. A closed report's row names whoever filed it as a third handle ("mina reviewed sara.k’s
+report about reza.t: nothing to do."). The kind, by whom and about whom are in the address
 (`kind`, `staff`, `person`); a handle is written there once the typing pauses, or at Enter. Older
 entries come a page at a time and are dropped whenever the first page is read again, so a new filter
 never shows the old one's tail.
@@ -249,6 +276,6 @@ from here, because the server would refuse the call.
 ## The garbage pass
 
 `tools/qa/garbage-pass.mjs` sends the admin's routes garbage like every other: the staff change, a
-note, a suspension, a lift, a clear, a sign-out and the vault's amounts as bodies, the pause as spared (its body is a
-switch), the log's four query words and the people's three. Its garbage accounts are not staff, so every one of them is answered as missing; what it
+note, a suspension, a lift, a clear, a sign-out, a report's outcome and the vault's amounts as bodies, the pause as spared (its body is a
+switch), the log's four query words, the people's three and the reports' two. Its garbage accounts are not staff, so every one of them is answered as missing; what it
 proves is that none is a 5xx.

@@ -3,6 +3,8 @@ import type {
     AchievementLadder,
     AdminPeople,
     AdminPerson,
+    AdminReport,
+    AdminReports,
     AdminVault,
     VoiceIce,
     Leaderboard,
@@ -53,7 +55,7 @@ import type {
     StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { adminClearInput, adminLiftInput, adminNoteInput, adminPeopleQuery, adminSignOutInput, adminSuspendInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
+import type { adminClearInput, adminLiftInput, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminSuspendInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
 import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
@@ -593,6 +595,14 @@ export interface AdminPort
     clear(me: string, handle: string, input: Infer<typeof adminClearInput>): Promise<AdminPerson | null>;
 
     signOut(me: string, handle: string, input: Infer<typeof adminSignOutInput>): Promise<AdminPerson | null>;
+
+    reports(me: string, query: Infer<typeof adminReportsQuery>): Promise<AdminReports | null>;
+
+    reportsWaiting(me: string): Promise<{ count: number } | null>;
+
+    report(me: string, id: string): Promise<AdminReport | null>;
+
+    review(me: string, id: string, input: Infer<typeof adminReviewInput>): Promise<AdminReport | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

@@ -73,6 +73,12 @@ const cleared = () =>
     staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'sign-out', person: 'reza.t', reason: 'Their wallet was taken.', details: { sessions: '2' } });
 };
 
+const handled = () =>
+{
+    staffLogged({ at: hoursAgo(2), staff: 'mina', staffRole: 'moderator', kind: 'report', person: 'reza.t', reason: 'Nothing rude in the chat.', details: { report: 'r-1', outcome: 'reviewed', reporter: 'sara.k' } });
+    staffLogged({ at: hoursAgo(1), staff: 'alex', staffRole: 'owner', kind: 'report', person: 'omid', reason: 'Suspended them for a week.', details: { report: 'r-2', outcome: 'actioned', reporter: 'sara.k' } });
+};
+
 const was = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-entry] [data-was]')].map((one) => (one.hidden ? null : one.textContent?.replace(/\s+/g, ' ').trim()));
 
 const story = () =>
@@ -163,6 +169,20 @@ describe('the log', () =>
         expect(was(container)).toEqual([null, null, 'It said: DM me for seats', 'It said: Reza the Cheat']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'reza.t']);
         expect(said(container, '[data-entry]:first-child [data-reason]')).toBe('Their wallet was taken.');
+    });
+
+    it('says a report the staff handled, with who filed it and about whom, each handle a run of its own', async () =>
+    {
+        handled();
+        const { container } = await opened('/admin/log?kind=report');
+
+        expect(lines(container)).toEqual([
+            'alex acted on sara.k’s report about omid.',
+            'mina reviewed sara.k’s report about reza.t: nothing to do.'
+        ]);
+        expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'sara.k', 'omid']);
+        expect(said(container, '[data-entry]:last-child [data-reason]')).toBe('Nothing rude in the chat.');
+        expect(container.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('Reports');
     });
 
     it('gives the exact moment of each change under a pointer, in the reader\'s own calendar', async () =>
@@ -303,7 +323,7 @@ describe('the log', () =>
             'alex، mina رو از ناظر کرد ادمین.',
             'alex، mina رو ناظر کرد.'
         ]);
-        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده']);
+        expect([...container.querySelectorAll('[aria-pressed]')].map((one) => one.textContent?.trim())).toEqual(['همه', 'اضافه شده', 'عوض شده', 'برداشته شده', 'یادداشت‌ها', 'تعلیق‌ها', 'رفع تعلیق', 'پایان تعلیق', 'پاک شده', 'خارج شده', 'گزارش‌ها']);
         expect(isolated(container, '[data-entry]:nth-child(2)')).toEqual(['alex', 'mina']);
     });
 
@@ -321,6 +341,19 @@ describe('the log', () =>
         ]);
         expect(was(container)).toEqual([null, null, 'نوشته بود: DM me for seats', 'نوشته بود: Reza the Cheat']);
         expect(isolated(container, '[data-entry]:first-child')).toEqual(['alex', 'reza.t']);
+    });
+
+    it('says a report the staff handled in Persian', async () =>
+    {
+        useLocale().setLocale('fa');
+        handled();
+        const { container } = await opened();
+
+        expect(lines(container)).toEqual([
+            'alex، به گزارش sara.k درباره‌ی omid رسیدگی کرد.',
+            'mina، گزارش sara.k درباره‌ی reza.t رو بررسی کرد: کاری لازم نبود.'
+        ]);
+        expect(isolated(container, '[data-entry]:last-child')).toEqual(['mina', 'sara.k', 'reza.t']);
     });
 
     it('says a suspension, a lift and one that ran its time in Persian, each handle a run of its own', async () =>

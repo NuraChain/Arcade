@@ -1,5 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
-import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, PEOPLE_LISTS, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
+import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
@@ -1169,6 +1169,39 @@ export const reportEntry = object({
 });
 
 export const reportList = object({ reports: array(reportEntry) });
+
+const reportFace = object({ handle: string(), displayName: string(), hue: number(), avatar: string().optional(), staff: enumOf(STAFF_ROLES).optional() });
+
+const adminReportFields = {
+    id: string(),
+    category: reportCategory,
+    status: enumOf(REPORT_STATUSES),
+    at: string(),
+    disclosed: boolean(),
+    by: reportFace,
+    about: reportFace
+};
+
+export const adminReportRow = object(adminReportFields);
+
+export const adminReports = object({ rows: array(adminReportRow), cursor: string().optional(), waiting: number() });
+
+export type AdminReports = Infer<typeof adminReports>;
+
+export const adminReport = object({
+    ...adminReportFields,
+    message: string().optional(),
+    together: array(object({ id: string(), game: string(), at: string(), live: boolean(), by: string().optional(), about: string().optional() })),
+    history: array(staffLogRow)
+});
+
+export type AdminReport = Infer<typeof adminReport>;
+
+export const adminReportsQuery = object({ status: enumOf(REPORT_LISTS).optional(), cursor: string({ max: 80 }).optional() });
+
+export const adminReviewInput = object({ outcome: enumOf(REPORT_OUTCOMES), reason: said() });
+
+export const reportsWaiting = object({ count: number() });
 
 /**
  * The two switches an account controls, and the one it does not.

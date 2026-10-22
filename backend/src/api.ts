@@ -31,6 +31,11 @@ import {
     adminPeople,
     adminPeopleQuery,
     adminPerson,
+    adminReport,
+    adminReports,
+    adminReportsQuery,
+    adminReviewInput,
+    reportsWaiting,
     adminSignOutInput,
     adminSuspendInput,
     adminVault,
@@ -419,7 +424,19 @@ export function buildApi(ports: Ports)
                 async (context) => onlyAdmin(await ports.admin.clear(context.principal.userId, context.params.handle, context.input))),
 
             signOut: routes.post('/people/:handle/sign-out', { input: adminSignOutInput, output: adminPerson },
-                async (context) => onlyAdmin(await ports.admin.signOut(context.principal.userId, context.params.handle, context.input)))
+                async (context) => onlyAdmin(await ports.admin.signOut(context.principal.userId, context.params.handle, context.input))),
+
+            reports: routes.get('/reports', { query: adminReportsQuery, output: adminReports },
+                async (context) => onlyAdmin(await ports.admin.reports(context.principal.userId, context.query))),
+
+            reportsWaiting: routes.get('/reports/waiting', { output: reportsWaiting },
+                async (context) => onlyAdmin(await ports.admin.reportsWaiting(context.principal.userId))),
+
+            report: routes.get('/reports/:id', { output: adminReport },
+                async (context) => onlyAdmin(await ports.admin.report(context.principal.userId, context.params.id))),
+
+            review: routes.post('/reports/:id/review', { input: adminReviewInput, output: adminReport },
+                async (context) => onlyAdmin(await ports.admin.review(context.principal.userId, context.params.id, context.input)))
         })),
 
         vault: feature('/vault', [session], (routes) => ({

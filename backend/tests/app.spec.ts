@@ -938,7 +938,7 @@ describe('the owner\'s view of the vault', () =>
             identity: {
                 principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
             },
-            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut'].map((verb) => [verb, (...said: unknown[]) =>
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review'].map((verb) => [verb, (...said: unknown[]) =>
             {
                 told.push([verb, ...said]);
 
@@ -1047,6 +1047,36 @@ describe('the owner\'s view of the vault', () =>
         ]);
     });
 
+    it('answers anybody who may not work the reports as a page that is not there, on the queue, the count, a report and an outcome', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const outcome = { outcome: 'reviewed', reason: 'Read it, nothing to do' };
+        const answers = [
+            await sent(app, '/reports?status=all&cursor=abc'),
+            await sent(app, '/reports/waiting'),
+            await sent(app, '/reports/r1'),
+            await sent(app, '/reports/r1/review', outcome)
+        ];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([
+            ['reports', 'somebody', { status: 'all', cursor: 'abc' }],
+            ['reportsWaiting', 'somebody'],
+            ['report', 'somebody', 'r1'],
+            ['review', 'somebody', 'r1', outcome]
+        ]);
+        expect((await sent(app, '/reports?status=open')).status).toBe(422);
+        expect((await sent(app, '/reports/r1/review', { outcome: 'closed', reason: 'Closed it for good' })).status).toBe(422);
+        expect((await sent(app, '/reports/r1/review', { outcome: 'actioned', reason: 'ok' })).status).toBe(422);
+    });
+
     it('refuses a change with no real reason, a role the page cannot grant, and a kind the log does not have, before any port is asked', async () =>
     {
         const told: unknown[][] = [];
@@ -1092,6 +1122,8 @@ describe('the owner\'s view of the vault', () =>
         expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
         expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
         expect(queries).toContain(`'/admin/people/:handle/history': ['cursor']`);
+        expect(queries).toContain(`'/admin/reports': ['status', 'cursor']`);
+        expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
     });
 
     it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>

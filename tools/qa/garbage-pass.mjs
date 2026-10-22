@@ -54,7 +54,8 @@ const QUERIES = {
     '/vault/games': ['cursor'],
     '/admin/log': ['cursor', 'staff', 'person', 'kind'],
     '/admin/people': ['q', 'list', 'cursor'],
-    '/admin/people/:handle/history': ['cursor']
+    '/admin/people/:handle/history': ['cursor'],
+    '/admin/reports': ['status', 'cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });
@@ -110,7 +111,8 @@ const BODIES = {
     '/admin/people/:handle/suspend': (bad) => [{ days: 7, category: 'spam', reason: bad.slice(0, 500).padEnd(3, 'x') }, { days: bad.length, category: bad.slice(0, 16), reason: 'garbage' }],
     '/admin/people/:handle/lift': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
     '/admin/people/:handle/clear': (bad) => [{ part: 'name', reason: bad.slice(0, 500).padEnd(3, 'x') }, { part: bad.slice(0, 16), reason: 'garbage' }],
-    '/admin/people/:handle/sign-out': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }]
+    '/admin/people/:handle/sign-out': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
+    '/admin/reports/:id/review': (bad) => [{ outcome: 'reviewed', reason: bad.slice(0, 500).padEnd(3, 'x') }, { outcome: bad.slice(0, 16), reason: 'garbage' }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);

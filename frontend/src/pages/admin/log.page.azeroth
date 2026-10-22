@@ -44,7 +44,8 @@ const KIND_WORDS: Record<ActionKind | 'all', MessageKey> = {
     lift: 'admin.log.kind.lift',
     expire: 'admin.log.kind.expire',
     clear: 'admin.log.kind.clear',
-    'sign-out': 'admin.log.kind.sign-out'
+    'sign-out': 'admin.log.kind.sign-out',
+    report: 'admin.log.kind.report'
 };
 
 const queryOf = (asked: Asked) => ({
