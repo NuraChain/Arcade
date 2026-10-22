@@ -2,7 +2,7 @@ import { createResource, useHead } from 'azerothjs';
 
 import type { AdminPlay } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
-import GameSwitch from '../../components/admin/game-switch.component.azeroth';
+import GameSwitch, { GAME_COLUMNS } from '../../components/admin/game-switch.component.azeroth';
 import PlayMatches from '../../components/admin/play-matches.component.azeroth';
 import PlayTables from '../../components/admin/play-tables.component.azeroth';
 import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
@@ -117,7 +117,7 @@ export default component PlayPage()
         await attempt(sent, locale.t(on ? 'admin.play.done.on' : 'admin.play.done.off', { game: name }), whyStaffRefused);
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.play') } lead={ locale.t('admin.play.lead') } how={ locale.t('admin.play.how') } />
 
         <FilterBar items={ views } value={ shown } label={ locale.t('admin.play.views') } onChange={ (id) => address.write({ view: id === 'games' ? '' : id }) } />
@@ -134,13 +134,20 @@ export default component PlayPage()
             <Show when={ listed }>
                 <section aria-labelledby="admin-play-games" class="flex flex-col gap-3">
                     <h2 id="admin-play-games" class="text-ui-lg font-semibold text-text">{ locale.t('admin.play.games') }</h2>
-                    <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-games>
-                        <For each={ games } key={ (one) => one.game } let={ row }>
-                            <li>
-                                <GameSwitch row={ row } onSwitch={ (on) => void flip(row.game, on) } />
-                            </li>
-                        </For>
-                    </ul>
+                    <div class="overflow-hidden rounded-panel border border-line bg-field">
+                        <div class={ `hidden gap-x-4 border-b border-line px-4 py-2.5 text-ui-xs font-semibold text-faint @2xl:grid ${ GAME_COLUMNS }` } aria-hidden="true" data-columns>
+                            <span class="col-start-2">{ locale.t('admin.play.column.game') }</span>
+                            <span>{ locale.t('admin.play.column.playing') }</span>
+                            <span>{ locale.t('admin.play.column.waiting') }</span>
+                        </div>
+                        <ul class="divide-y divide-line" data-games>
+                            <For each={ games } key={ (one) => one.game } let={ row }>
+                                <li>
+                                    <GameSwitch row={ row } onSwitch={ (on) => void flip(row.game, on) } />
+                                </li>
+                            </For>
+                        </ul>
+                    </div>
                 </section>
             </Show>
         </Show>

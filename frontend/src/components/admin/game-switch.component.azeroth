@@ -9,6 +9,8 @@ import type { Tone } from '../ui/variants.ts';
 
 export type PlayRow = AdminPlay['games'][number];
 
+export const GAME_COLUMNS = '@2xl:grid-cols-[2.75rem_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_10rem]';
+
 type PlayStatus = PlayRow['status'];
 
 const WORDS: Record<PlayStatus, MessageKey> = {
@@ -49,21 +51,21 @@ export default component GameSwitch(props: { row: PlayRow; onSwitch: (on: boolea
 
     derived onLabel = locale.t('admin.play.onLabel', { game: name });
 
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:p-4" data-game={ props.row.game } data-status={ props.row.status }>
+    <div class={ `flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:p-4 @2xl:grid @2xl:gap-x-4 ${ GAME_COLUMNS }` } data-game={ props.row.game } data-status={ props.row.status }>
         <Show when={ known } let={ shown } fallback={ <span class="h-11 w-11 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
             <GameIcon game={ shown.id } class="h-11 w-11 shrink-0" />
         </Show>
-        <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <div class="flex min-w-0 flex-1 flex-col gap-1 @2xl:contents">
             <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="title truncate text-ui-md text-text" data-name>{ name }</span>
                 <Badge dot text={ word } tone={ tone } />
             </div>
-            <p class="facts text-ui-xs text-muted" data-counts>
-                <span><span class="tally">{ locale.n(matches) }</span> { locale.plural('admin.play.matches', matches) }</span>
-                <span><span class="tally">{ locale.n(tables) }</span> { locale.plural('admin.play.tables', tables) }</span>
+            <p class="flex flex-wrap items-center gap-x-1.5 text-ui-xs text-muted @2xl:contents" data-counts>
+                <span class="@2xl:text-ui-sm @2xl:text-text"><span class="tally">{ locale.n(matches) }</span> <span class="@2xl:sr-only">{ locale.plural('admin.play.matches', matches) }</span></span>
+                <span class="relative ps-3 before:absolute before:start-1 before:top-[calc(50%-0.125rem)] before:h-1 before:w-1 before:rounded-full before:bg-current before:opacity-50 @2xl:ps-0 @2xl:text-ui-sm @2xl:text-text @2xl:before:hidden"><span class="tally">{ locale.n(tables) }</span> <span class="@2xl:sr-only">{ locale.plural('admin.play.tables', tables) }</span></span>
             </p>
         </div>
-        <div class="ms-auto flex shrink-0 items-center">
+        <div class="ms-auto flex shrink-0 items-center @2xl:justify-end">
             <Show when={ on }>
                 <Button variant="destructive" size="sm" label={ offLabel } onClick={ () => props.onSwitch(false) }>{ locale.t('admin.play.off') }</Button>
             </Show>

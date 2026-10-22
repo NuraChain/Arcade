@@ -149,6 +149,46 @@ describe('the games, on and off', () =>
         expect(said(row(container, 'backgammon'), '[data-soon]')).toBe('Not ready to be played yet');
     });
 
+    it('lays the games, the games being played and the tables waiting out as columns under headings the eye reads, the words of a count kept for a screen reader', async () =>
+    {
+        server.playing.matches = [matchOf('m2', 'hokm')];
+        server.playing.tables = [tableOf('t1', 'hokm')];
+        const { router, container } = await mounted();
+        const heads = () => [...container.querySelectorAll<HTMLElement>('[data-columns]')];
+        const words = () => heads().map((head) => [...head.children].map((one) => one.textContent));
+        const placed = (root: Element, selector: string) => root.querySelector(selector)?.className.match(/@3xl:col-start-(\d)/)?.[1];
+
+        expect(container.querySelector('[data-columns]')?.closest('.\\@container')).not.toBeNull();
+        expect(heads().map((head) => [head.getAttribute('aria-hidden'), head.classList.contains('@2xl:grid')])).toEqual([['true', true]]);
+        expect(words()).toEqual([['Game', 'Being played', 'Tables waiting']]);
+        expect(row(container, 'hokm').querySelector('[data-counts]')?.classList.contains('@2xl:contents')).toBe(true);
+        expect([...row(container, 'hokm').querySelectorAll('[data-counts] > span > span:last-child')].map((one) => [one.textContent, one.classList.contains('@2xl:sr-only')])).toEqual([['games being played', true], ['table waiting', true]]);
+
+        await router.navigate('/admin/play?view=matches');
+        await settle();
+
+        const match = container.querySelector('[data-match="m2"]')!;
+
+        expect(heads().map((head) => [head.getAttribute('aria-hidden'), head.classList.contains('@3xl:grid')])).toEqual([['true', true]]);
+        expect(words()).toEqual([['Game', 'Players']]);
+        expect([placed(match, '[data-players]'), placed(match, '[data-end]')]).toEqual(['3', '4']);
+        expect(match.firstElementChild?.classList.contains('@3xl:contents')).toBe(true);
+
+        await router.navigate('/admin/play?view=tables');
+        await settle();
+
+        const table = container.querySelector('[data-table="t1"]')!;
+
+        expect(words()).toEqual([['Table', 'In the chairs']]);
+        expect([placed(table, '[data-people]'), placed(table, '[data-close]')]).toEqual(['3', '4']);
+        cleanup();
+
+        useLocale().setLocale('fa');
+        const persian = await opened('/admin/play?view=tables');
+
+        expect([...persian.querySelectorAll('[data-columns] > *')].map((one) => one.textContent)).toEqual(['میز', 'پشت میز']);
+    });
+
     it('asks why before it pauses a game, as a question that loses something, and does nothing when it is put away', async () =>
     {
         const container = await opened();
@@ -371,6 +411,8 @@ describe('the games, on and off', () =>
         let container = await opened('/admin/play?view=matches');
 
         expect(container.textContent).toContain('No game is being played right now.');
+        expect(container.querySelector('[data-empty]')).not.toBeNull();
+        expect(container.querySelector('.empty-art')).toBeNull();
 
         cleanup();
         container = await opened('/admin/play?view=stuck');

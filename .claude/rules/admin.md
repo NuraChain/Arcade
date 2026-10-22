@@ -604,6 +604,14 @@ in madder and its players by handle in seat order; a stuck one wears a danger ba
 and since when. A table waiting is its game, code, pace, who may sit, the chairs taken, quick play,
 when it opened and its stake. Both lists page with "Show older".
 
+Wide, Play reads as tables too. The games are the game with its status, how many are being played
+and how many tables wait as bare numbers under their headings (the words of each count stay for a
+screen reader, `sr-only` at that width), and the switch at the end; a game being played and a table
+waiting put their players, or the people in the chairs, in a column of their own, with End or Close
+at the end of the row and the sentence that says why it is not offered under it. Every column but
+the free ones has a fixed width, because each row is a grid of its own and a column sized by its
+content would line up with nothing above or below it.
+
 A game being played offers "End game" to a reader who outranks everybody in it, and says why in
 its place where the reader plays in it or somebody there is at or above their role. The press
 asks why in the same sheet, as a destructive question that says the game counts for nobody and

@@ -26,6 +26,8 @@ const STUCK_WORDS: Record<StuckKind, MessageKey> = {
     threw: 'admin.play.stuck.threw'
 };
 
+export const MATCH_COLUMNS = '@3xl:grid-cols-[2.5rem_minmax(0,1.5fr)_minmax(0,1.3fr)_9rem]';
+
 export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayReader; onEnd?: () => void })
 {
     const locale = useLocale();
@@ -72,12 +74,12 @@ export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayRe
 
     derived endLabel = locale.t('admin.play.endLabel', { game: name, code: props.match.code.toUpperCase() });
 
-    <div class="flex flex-col gap-2 px-4 py-3" data-match={ props.match.id }>
-        <div class="flex items-center gap-3">
-            <Show when={ known } let={ shown } fallback={ <span class="h-10 w-10 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
-                <GameIcon game={ shown.id } class="h-10 w-10 shrink-0" />
+    <div class={ `flex flex-col gap-2 px-4 py-3 @3xl:grid @3xl:items-center @3xl:gap-x-4 @3xl:gap-y-1.5 ${ MATCH_COLUMNS }` } data-match={ props.match.id }>
+        <div class="flex items-center gap-3 @3xl:contents">
+            <Show when={ known } let={ shown } fallback={ <span class="h-10 w-10 shrink-0 rounded-tile bg-raised @3xl:col-start-1 @3xl:row-start-1" aria-hidden="true"></span> }>
+                <GameIcon game={ shown.id } class="h-10 w-10 shrink-0 @3xl:col-start-1 @3xl:row-start-1" />
             </Show>
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <div class="flex min-w-0 flex-1 flex-col gap-1 @3xl:col-start-2 @3xl:row-start-1">
                 <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <span class="truncate text-ui-sm font-semibold text-text" data-name>{ name }</span>
                     <span class="tally text-ui-xs font-semibold uppercase tracking-wide text-muted" data-code>{ props.match.code }</span>
@@ -97,12 +99,12 @@ export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayRe
                 </span>
             </div>
             <Show when={ endable }>
-                <div class="ms-auto flex shrink-0 items-center" data-end>
+                <div class="ms-auto flex shrink-0 items-center @3xl:col-start-4 @3xl:row-start-1 @3xl:justify-end" data-end>
                     <Button variant="destructive" size="sm" label={ endLabel } onClick={ () => props.onEnd?.() }>{ locale.t('admin.play.end') }</Button>
                 </div>
             </Show>
         </div>
-        <ul class="flex flex-wrap gap-x-3 gap-y-1.5" data-players>
+        <ul class="flex flex-wrap gap-x-3 gap-y-1.5 @3xl:col-start-3 @3xl:row-start-1" data-players>
             <For each={ props.match.players } key={ (one) => one.seat } let={ one }>
                 <li class="flex min-w-0 items-center gap-1.5">
                     <Avatar person={ one } size="xs" />
@@ -111,13 +113,13 @@ export default component MatchRow(props: { match: AdminMatchRow; reader?: PlayRe
             </For>
         </ul>
         <Show when={ stranded }>
-            <p class="flex flex-wrap items-center gap-x-2 text-ui-xs text-danger" data-stuck>
+            <p class="flex flex-wrap items-center gap-x-2 text-ui-xs text-danger @3xl:col-span-3 @3xl:col-start-2" data-stuck>
                 <span>{ why }</span>
                 <When at={ since } said={ sinceSaid } />
             </p>
         </Show>
         <Show when={ barred }>
-            <p class="text-ui-xs text-faint" data-end-barred>{ barredWhy }</p>
+            <p class="text-ui-xs text-faint @3xl:col-span-3 @3xl:col-start-2" data-end-barred>{ barredWhy }</p>
         </Show>
     </div>
 }
