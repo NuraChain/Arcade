@@ -30,7 +30,7 @@ export const admin = {
     'admin.notice.now': 'Showing now',
     'admin.notice.live': 'Live',
     'admin.notice.none': 'Nothing is announced right now.',
-    'admin.notice.noneLead': 'Write one below, and everybody sees it at once.',
+    'admin.notice.noneLead': 'Write one, and everybody sees it at once.',
     'admin.notice.english': 'In English',
     'admin.notice.persian': 'In Persian',
     'admin.notice.ends': 'Ends',

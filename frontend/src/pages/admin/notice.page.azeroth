@@ -6,11 +6,11 @@ import { client } from '../../api.ts';
 import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
 import When from '../../components/admin/when.component.azeroth';
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
+import AdminEmpty from '../../components/admin/admin-empty.component.azeroth';
 import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Field from '../../components/ui/field.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
@@ -222,7 +222,7 @@ export default component NoticePage()
         }
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <AdminHead title={ locale.t('admin.section.notice') } lead={ locale.t('admin.notice.lead') } how={ locale.t('admin.notice.how') } />
 
         <Show when={ waiting }>
@@ -233,100 +233,103 @@ export default component NoticePage()
             { () => <ErrorState title={ locale.t('admin.notice.failed') } onRetry={ () => void read.refetch() } /> }
         </Show>
 
-        <Show when={ up }>
-            <Panel pad="md" stack="md" labelledBy="admin-notice-now">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <h2 id="admin-notice-now" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.now') }</h2>
-                    <Badge dot text={ locale.t('admin.notice.live') } tone="live" />
-                </div>
-                <div class="flex items-start gap-2 rounded-tile bg-accent/15 px-3 py-2 text-ui-sm text-text" data-preview>
-                    <Icon name="megaphone" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
-                    <p class="min-w-0 flex-1 font-semibold">
-                        <span dir="auto">{ seen }</span>
-                    </p>
-                </div>
-                <dl class="grid gap-3 sm:grid-cols-2">
-                    <div class="flex min-w-0 flex-col gap-1">
-                        <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.english') }</dt>
-                        <dd class="text-ui-sm text-text" dir="ltr" lang="en" data-english>{ english }</dd>
-                    </div>
-                    <div class="flex min-w-0 flex-col gap-1">
-                        <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.persian') }</dt>
-                        <dd class="text-ui-sm text-text" dir="rtl" lang="fa" data-persian>{ persian }</dd>
-                    </div>
-                </dl>
-                <p class="facts text-ui-xs text-faint" data-facts>
-                    <span><span>{ locale.t('admin.notice.ends') }</span> <When at={ until } /></span>
-                    <span hidden={ !named }><span>{ locale.t('admin.notice.by') }</span> <bdi class="font-semibold text-muted" dir="ltr">{ by }</bdi></span>
-                    <When at={ at } />
-                </p>
-                <Show when={ settled }>
-                    <Button variant="secondary" class="self-start" onClick={ () => void end() }>{ locale.t('admin.notice.end') }</Button>
+        <div class="grid items-start gap-6 @4xl:grid-cols-2" data-split>
+            <div class="flex min-w-0 flex-col gap-4">
+                <Show when={ up }>
+                    <Panel pad="md" stack="md" labelledBy="admin-notice-now">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h2 id="admin-notice-now" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.now') }</h2>
+                            <Badge dot text={ locale.t('admin.notice.live') } tone="live" />
+                        </div>
+                        <div class="flex items-start gap-2 rounded-tile bg-accent/15 px-3 py-2 text-ui-sm text-text" data-preview>
+                            <Icon name="megaphone" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
+                            <p class="min-w-0 flex-1 font-semibold">
+                                <span dir="auto">{ seen }</span>
+                            </p>
+                        </div>
+                        <dl class="grid gap-3 @2xl:grid-cols-2">
+                            <div class="flex min-w-0 flex-col gap-1">
+                                <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.english') }</dt>
+                                <dd class="text-ui-sm text-text" dir="ltr" lang="en" data-english>{ english }</dd>
+                            </div>
+                            <div class="flex min-w-0 flex-col gap-1">
+                                <dt class="text-ui-xs font-semibold text-faint">{ locale.t('admin.notice.persian') }</dt>
+                                <dd class="text-ui-sm text-text" dir="rtl" lang="fa" data-persian>{ persian }</dd>
+                            </div>
+                        </dl>
+                        <p class="facts text-ui-xs text-faint" data-facts>
+                            <span><span>{ locale.t('admin.notice.ends') }</span> <When at={ until } /></span>
+                            <span hidden={ !named }><span>{ locale.t('admin.notice.by') }</span> <bdi class="font-semibold text-muted" dir="ltr">{ by }</bdi></span>
+                            <When at={ at } />
+                        </p>
+                        <Show when={ settled }>
+                            <Button variant="secondary" class="self-start" onClick={ () => void end() }>{ locale.t('admin.notice.end') }</Button>
+                        </Show>
+                    </Panel>
                 </Show>
-            </Panel>
-        </Show>
 
-        <Show when={ empty }>
-            { () => <EmptyState icon="megaphone" title={ locale.t('admin.notice.none') } lead={ locale.t('admin.notice.noneLead') } class="rounded-panel border border-line bg-field" /> }
-        </Show>
+                <Show when={ empty }>
+                    { () => <AdminEmpty icon="megaphone" title={ locale.t('admin.notice.none') } lead={ locale.t('admin.notice.noneLead') } /> }
+                </Show>
 
-        <Show when={ known }>
-            <Panel pad="md" stack="md" labelledBy="admin-notice-new">
-                <div class="flex flex-col gap-1">
-                    <h2 id="admin-notice-new" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.form') }</h2>
-                    <p class="text-ui-sm text-muted">{ locale.t('admin.notice.formLead') }</p>
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
+                    <span>{ locale.t('admin.notice.history') }</span>
+                    <Link to="/admin/log?kind=notice" class={ LINK } data-history>{ locale.t('admin.notice.historyLink') }</Link>
+                </p>
+            </div>
+
+            <Show when={ known }>
+                <div class="@4xl:sticky @4xl:top-8" data-form>
+                    <Panel pad="md" stack="md" labelledBy="admin-notice-new">
+                        <div class="flex flex-col gap-1">
+                            <h2 id="admin-notice-new" class="text-ui-md font-semibold text-text">{ locale.t('admin.notice.form') }</h2>
+                            <p class="text-ui-sm text-muted">{ locale.t('admin.notice.formLead') }</p>
+                        </div>
+                        <Field id="admin-notice-en" label={ locale.t('admin.notice.english') } hint={ locale.t('admin.notice.lineHint') } error={ enTold }>
+                            <TextArea
+                                id="admin-notice-en"
+                                value={ en }
+                                maxlength={ NOTICE_MAX }
+                                describedBy={ enTold !== null ? 'admin-notice-en-error' : 'admin-notice-en-hint' }
+                                onInput={ typedEn }
+                                onEnter={ () => undefined }
+                            />
+                        </Field>
+                        <Field id="admin-notice-fa" label={ locale.t('admin.notice.persian') } hint={ locale.t('admin.notice.lineHint') } error={ faTold }>
+                            <TextArea
+                                id="admin-notice-fa"
+                                value={ fa }
+                                maxlength={ NOTICE_MAX }
+                                describedBy={ faTold !== null ? 'admin-notice-fa-error' : 'admin-notice-fa-hint' }
+                                onInput={ typedFa }
+                                onEnter={ () => undefined }
+                            />
+                        </Field>
+                        <fieldset class="flex flex-col gap-1.5" data-hours>
+                            <legend class="mb-1.5 text-ui-sm font-semibold text-text">{ locale.t('admin.notice.howLong') }</legend>
+                            <ul class="flex flex-wrap gap-2">
+                                <For each={ terms } key={ (term) => term.id } let={ term }>
+                                    <li>
+                                        <Chip selected={ hours === term.id } onClick={ () => hours = term.id }>
+                                            <span>{ term.label }</span>
+                                        </Chip>
+                                    </li>
+                                </For>
+                            </ul>
+                        </fieldset>
+                        <Field id="admin-notice-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
+                            <TextArea
+                                id="admin-notice-why"
+                                value={ why }
+                                maxlength={ 500 }
+                                describedBy={ whyTold !== null ? 'admin-notice-why-error' : 'admin-notice-why-hint' }
+                                onInput={ typedWhy }
+                            />
+                        </Field>
+                        <Button variant="primary" class="self-start" onClick={ () => void put() }>{ sendWords }</Button>
+                    </Panel>
                 </div>
-                <Field id="admin-notice-en" label={ locale.t('admin.notice.english') } hint={ locale.t('admin.notice.lineHint') } error={ enTold }>
-                    <TextArea
-                        id="admin-notice-en"
-                        class="max-w-xl"
-                        value={ en }
-                        maxlength={ NOTICE_MAX }
-                        describedBy={ enTold !== null ? 'admin-notice-en-error' : 'admin-notice-en-hint' }
-                        onInput={ typedEn }
-                        onEnter={ () => undefined }
-                    />
-                </Field>
-                <Field id="admin-notice-fa" label={ locale.t('admin.notice.persian') } hint={ locale.t('admin.notice.lineHint') } error={ faTold }>
-                    <TextArea
-                        id="admin-notice-fa"
-                        class="max-w-xl"
-                        value={ fa }
-                        maxlength={ NOTICE_MAX }
-                        describedBy={ faTold !== null ? 'admin-notice-fa-error' : 'admin-notice-fa-hint' }
-                        onInput={ typedFa }
-                        onEnter={ () => undefined }
-                    />
-                </Field>
-                <fieldset class="flex flex-col gap-1.5" data-hours>
-                    <legend class="mb-1.5 text-ui-sm font-semibold text-text">{ locale.t('admin.notice.howLong') }</legend>
-                    <ul class="flex flex-wrap gap-2">
-                        <For each={ terms } key={ (term) => term.id } let={ term }>
-                            <li>
-                                <Chip selected={ hours === term.id } onClick={ () => hours = term.id }>
-                                    <span>{ term.label }</span>
-                                </Chip>
-                            </li>
-                        </For>
-                    </ul>
-                </fieldset>
-                <Field id="admin-notice-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
-                    <TextArea
-                        id="admin-notice-why"
-                        class="max-w-xl"
-                        value={ why }
-                        maxlength={ 500 }
-                        describedBy={ whyTold !== null ? 'admin-notice-why-error' : 'admin-notice-why-hint' }
-                        onInput={ typedWhy }
-                    />
-                </Field>
-                <Button variant="primary" class="self-start" onClick={ () => void put() }>{ sendWords }</Button>
-            </Panel>
-        </Show>
-
-        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
-            <span>{ locale.t('admin.notice.history') }</span>
-            <Link to="/admin/log?kind=notice" class={ LINK } data-history>{ locale.t('admin.notice.historyLink') }</Link>
-        </p>
+            </Show>
+        </div>
     </div>
 }

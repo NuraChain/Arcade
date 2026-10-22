@@ -15,12 +15,12 @@ import { useVault } from '../../stores/vault.store.ts';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
-import EmptyState from '../ui/empty-state.component.azeroth';
 import ErrorState from '../ui/error-state.component.azeroth';
 import Field from '../ui/field.component.azeroth';
 import Input from '../ui/input.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
+import AdminEmpty from './admin-empty.component.azeroth';
 import When from './when.component.azeroth';
 
 const STATE_WORDS = {
@@ -270,7 +270,7 @@ export default component AdminVault()
         </Show>
 
         <Show when={ off }>
-            { () => <EmptyState icon="coins" title={ locale.t('admin.vault.off') } lead={ locale.t('admin.vault.offLead') } /> }
+            { () => <AdminEmpty icon="coins" title={ locale.t('admin.vault.off') } lead={ locale.t('admin.vault.offLead') } /> }
         </Show>
 
         <Show when={ shown }>

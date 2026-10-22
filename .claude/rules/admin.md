@@ -595,6 +595,11 @@ again either way. A row of the log about a report offers "Open the report", exce
 own page, and a report on a person's page leads to it. In Persian the log is «تاریخچه», so that it
 is never read as «گزارش‌ها» beside it.
 
+A report's page opens on a summary card (its status and when it was filed, what it is for as the
+title, who reported whom), and the close form, or the sentence that says why there is none, stands
+beside the report from 56rem of the page, held in view while the report scrolls (an `aside` named
+"Close the report"), and after it on a phone.
+
 **Play** lists the games in the server's order, each as its picture, its name, its status as a
 badge (on in green, paused in gold, coming soon plain) and how many games are being played and
 tables wait, with one button: Pause for a game that is on, Turn on for one that is paused, and
@@ -643,8 +648,9 @@ code set apart as a handle is.
 **Announcement** (`notice`, for an admin and the owner) shows the notice standing as everybody
 sees it, in the reader's language, with both lines under it (the English left to right and the
 Persian right to left, whatever the page), when it ends and who put it up, each time exact under a
-pointer, and a way to take it down that asks why in the sheet; with nothing standing it says so.
-Under it is the form: the line in English and the line in Persian (each folded to one line as it is
+pointer, and a way to take it down that asks why in the sheet; with nothing standing it says so,
+as an icon and a sentence in a card. Beside it from 56rem of the page, held in view, and under it on
+a phone, is the form: the line in English and the line in Persian (each folded to one line as it is
 sent, two hundred characters at most), how long it stands, and why. Putting one up while one stands
 asks first. Both are shown at the press, said once the server has, and taken back with the
 refusal's words, and the page reads the server again after a refusal, so a notice somebody else put

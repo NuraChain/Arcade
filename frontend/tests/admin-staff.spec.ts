@@ -122,6 +122,21 @@ describe('the staff', () =>
         expect(form?.className).toContain('@4xl:sticky');
     });
 
+    it('lets a row put its role and its change on a line of their own before it cuts a name short', async () =>
+    {
+        server.staff.members = [staffMember('mina', 'moderator', 'alex', ago(1))];
+        const container = await shown();
+        const row = container.querySelector<HTMLElement>('[data-member="mina"]')!;
+        const acts = row.querySelector<HTMLElement>('[data-acts]')!;
+
+        expect(row.classList.contains('flex-wrap')).toBe(true);
+        expect(acts.parentElement).toBe(row);
+        expect(acts.classList.contains('ms-auto')).toBe(true);
+        expect(acts.textContent?.trim()).toBe('ModeratorChange');
+        expect(row.firstElementChild?.classList.contains('min-w-48')).toBe(true);
+        expect(row.firstElementChild?.querySelector('[dir="auto"]')?.textContent).toBe('Mina Sadeghi');
+    });
+
     it('says when nobody else is on the staff, and when the staff could not be read', async () =>
     {
         const lonely = await shown();

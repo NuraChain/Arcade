@@ -190,7 +190,7 @@ export default component ReportPage()
         return done;
     };
 
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6 @container">
         <Link to="/admin/reports" class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline">
             <Icon name="back" size={ 16 } class="icon-flip" />
             <span>{ locale.t('admin.report.back') }</span>
@@ -210,80 +210,84 @@ export default component ReportPage()
 
         <Show when={ report } let={ shown }>
             <div class="flex flex-col gap-6" data-report={ id }>
-                <header class="flex flex-col gap-2">
-                    <h1 class="title text-ui-2xl" data-category>{ category }</h1>
-                    <p class="text-ui-md text-text" data-said><Said parts={ sentence } /></p>
+                <header class="flex flex-col gap-2 rounded-panel border border-line bg-field p-4 @2xl:p-5" data-summary>
                     <p class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
                         <span class="flex" data-status={ marked }><Badge dot text={ status } tone={ tone } /></span>
                         <When at={ filedAt } said={ filed } />
                     </p>
+                    <h1 class="title text-ui-2xl" data-category>{ category }</h1>
+                    <p class="text-ui-md text-text" data-said><Said parts={ sentence } /></p>
                 </header>
 
-                <div class="grid gap-3 sm:grid-cols-2">
-                    <ReportPerson label={ locale.t('admin.report.about') } person={ shown.about } side="about" />
-                    <ReportPerson label={ locale.t('admin.report.by') } person={ shown.by } side="by" />
-                </div>
+                <div class="grid items-start gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]" data-layout>
+                    <div class="flex min-w-0 flex-col gap-4">
+                        <div class="grid gap-3 @2xl:grid-cols-2">
+                            <ReportPerson label={ locale.t('admin.report.about') } person={ shown.about } side="about" />
+                            <ReportPerson label={ locale.t('admin.report.by') } person={ shown.by } side="by" />
+                        </div>
 
-                <div class="grid gap-4 xl:grid-cols-2">
-                    <Panel pad="md" stack="sm" labelledBy="report-message">
-                        <h2 id="report-message" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.message') }</h2>
-                        <Show when={ readable } fallback={ <p class="text-ui-sm text-muted" data-message="none">{ unsaid }</p> }>
-                            <p class="text-ui-sm text-muted">{ locale.t('admin.report.messageLead') }</p>
-                            <blockquote class="whitespace-pre-wrap break-words rounded-tile border-s-2 border-accent bg-sunk px-3 py-2 text-ui-md text-text" dir="auto" data-message>{ words }</blockquote>
-                            <span class="flex" hidden={ !forwarded } data-forwarded>
-                                <Badge text={ locale.t('admin.report.forwarded') } tone="neutral" />
-                            </span>
+                        <Panel pad="md" stack="sm" labelledBy="report-message">
+                            <h2 id="report-message" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.message') }</h2>
+                            <Show when={ readable } fallback={ <p class="text-ui-sm text-muted" data-message="none">{ unsaid }</p> }>
+                                <p class="text-ui-sm text-muted">{ locale.t('admin.report.messageLead') }</p>
+                                <blockquote class="whitespace-pre-wrap break-words rounded-tile border-s-2 border-accent bg-sunk px-3 py-2 text-ui-md text-text" dir="auto" data-message>{ words }</blockquote>
+                                <span class="flex" hidden={ !forwarded } data-forwarded>
+                                    <Badge text={ locale.t('admin.report.forwarded') } tone="neutral" />
+                                </span>
+                            </Show>
+                        </Panel>
+
+                        <Panel pad="md" stack="sm" labelledBy="report-together">
+                            <h2 id="report-together" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.together') }</h2>
+                            <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-together="none">{ locale.t('admin.report.togetherNone') }</p> }>
+                                <ul class="divide-y divide-line" data-together>
+                                    <For each={ together } key={ (one) => one.id } let={ game }>
+                                        <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
+                                            <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                                <span class="font-semibold text-text" data-name>{ game.name }</span>
+                                                <span class="flex" hidden={ !game.live } data-live>
+                                                    <Badge dot text={ locale.t('admin.report.live') } tone="live" />
+                                                </span>
+                                            </p>
+                                            <p class="facts text-ui-xs text-faint">
+                                                <span hidden={ game.live } data-seat="by"><span dir="ltr">{ game.by }</span>: { game.byResult }</span>
+                                                <span hidden={ game.live } data-seat="about"><span dir="ltr">{ game.about }</span>: { game.aboutResult }</span>
+                                                <When at={ game.at } />
+                                            </p>
+                                        </li>
+                                    </For>
+                                </ul>
+                            </Show>
+                        </Panel>
+
+                        <section class="flex flex-col gap-3" aria-labelledby="report-history">
+                            <h2 id="report-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.report.history') }</h2>
+                            <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.report.historyNone') }</p> }>
+                                <ol class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-history>
+                                    <For each={ history } key={ (row) => row.id } let={ row }>
+                                        <li data-entry={ row.id } data-kind={ row.kind }>
+                                            <LogEntry row={ row } report={ id } />
+                                        </li>
+                                    </For>
+                                </ol>
+                            </Show>
+                        </section>
+                    </div>
+
+                    <aside class="flex flex-col gap-3 @4xl:sticky @4xl:top-8" aria-label={ locale.t('admin.report.close') } data-closing>
+                        <Show
+                            when={ mayClose }
+                            fallback={
+                                <p class="flex items-start gap-2 rounded-tile border border-line bg-field px-3 py-2.5 text-ui-sm text-muted">
+                                    <Icon name="shield" size={ 16 } class="mt-0.5 shrink-0 text-faint" />
+                                    <span data-why-not>{ whyNot }</span>
+                                </p>
+                            }
+                        >
+                            <ReportClose status={ marked } onClose={ closeNow } />
                         </Show>
-                    </Panel>
-
-                    <Panel pad="md" stack="sm" labelledBy="report-together">
-                        <h2 id="report-together" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.together') }</h2>
-                        <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-together="none">{ locale.t('admin.report.togetherNone') }</p> }>
-                            <ul class="divide-y divide-line" data-together>
-                                <For each={ together } key={ (one) => one.id } let={ game }>
-                                    <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
-                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
-                                            <span class="font-semibold text-text" data-name>{ game.name }</span>
-                                            <span class="flex" hidden={ !game.live } data-live>
-                                                <Badge dot text={ locale.t('admin.report.live') } tone="live" />
-                                            </span>
-                                        </p>
-                                        <p class="facts text-ui-xs text-faint">
-                                            <span hidden={ game.live } data-seat="by"><span dir="ltr">{ game.by }</span>: { game.byResult }</span>
-                                            <span hidden={ game.live } data-seat="about"><span dir="ltr">{ game.about }</span>: { game.aboutResult }</span>
-                                            <When at={ game.at } />
-                                        </p>
-                                    </li>
-                                </For>
-                            </ul>
-                        </Show>
-                    </Panel>
+                    </aside>
                 </div>
-
-                <section class="flex flex-col gap-3" aria-labelledby="report-history">
-                    <h2 id="report-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.report.history') }</h2>
-                    <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.report.historyNone') }</p> }>
-                        <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-history>
-                            <For each={ history } key={ (row) => row.id } let={ row }>
-                                <li data-entry={ row.id } data-kind={ row.kind }>
-                                    <LogEntry row={ row } report={ id } />
-                                </li>
-                            </For>
-                        </ol>
-                    </Show>
-
-                    <Show
-                        when={ mayClose }
-                        fallback={
-                            <p class="flex items-start gap-2 rounded-tile border border-line bg-field px-3 py-2.5 text-ui-sm text-muted">
-                                <Icon name="shield" size={ 16 } class="mt-0.5 shrink-0 text-faint" />
-                                <span data-why-not>{ whyNot }</span>
-                            </p>
-                        }
-                    >
-                        <ReportClose status={ marked } onClose={ closeNow } />
-                    </Show>
-                </section>
             </div>
         </Show>
     </div>

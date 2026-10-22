@@ -398,6 +398,8 @@ describe('the vault, as its owner sees it', () =>
         const container = await shown();
 
         expect(container.textContent).toContain('This server keeps no vault.');
+        expect(container.querySelector('[data-empty]')).not.toBeNull();
+        expect(container.querySelector('.empty-art')).toBeNull();
         expect(container.querySelector('#admin-fee')).toBeNull();
     });
 

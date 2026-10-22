@@ -140,9 +140,18 @@ describe('the announcement, as the staff see it', () =>
         const container = await opened();
 
         expect(container.querySelector('#admin-notice-now')).toBeNull();
-        expect(said(container, '.empty-art + p')).toBe('Nothing is announced right now.');
+        expect(said(container, '[data-empty] p')).toBe('Nothing is announced right now.');
+        expect(container.querySelector('.empty-art')).toBeNull();
         expect(button(container, 'Put it up')).not.toBeNull();
         expect(container.querySelector('[data-history]')?.getAttribute('href')).toBe('/admin/log?kind=notice');
+
+        const split = container.querySelector<HTMLElement>('[data-split]')!;
+
+        expect(split.classList.contains('@4xl:grid-cols-2')).toBe(true);
+        expect(split.closest('.\\@container')).not.toBeNull();
+        expect([...split.children].map((one) => one.querySelector('[data-empty]') !== null || one.hasAttribute('data-form'))).toEqual([true, true]);
+        expect(split.querySelector('[data-form]')?.classList.contains('@4xl:sticky')).toBe(true);
+        expect(split.querySelector('[data-form] #admin-notice-new')).not.toBeNull();
     });
 
     it('leaves out who put it up when their account is gone, and shows nothing once it has run out', async () =>
@@ -160,7 +169,7 @@ describe('the announcement, as the staff see it', () =>
         const later = await opened();
 
         expect(later.querySelector('#admin-notice-now')).toBeNull();
-        expect(said(later, '.empty-art + p')).toBe('Nothing is announced right now.');
+        expect(said(later, '[data-empty] p')).toBe('Nothing is announced right now.');
     });
 
     it('says the announcement could not be read when it could not', async () =>
@@ -243,7 +252,7 @@ describe('putting an announcement up', () =>
         await settle();
 
         expect(container.querySelector('#admin-notice-now')).toBeNull();
-        expect(said(container, '.empty-art + p')).toBe('Nothing is announced right now.');
+        expect(said(container, '[data-empty] p')).toBe('Nothing is announced right now.');
         expect(toasts()).toEqual(['That did not go through. Try again.']);
         expect(field(container, 'admin-notice-en').value).toBe(EN);
         expect(field(container, 'admin-notice-why').value).toBe('Maintenance tonight');
@@ -309,7 +318,7 @@ describe('taking an announcement down', () =>
 
         expect(sent).toHaveBeenCalledWith({ input: { id: 'notice-7', reason: 'The restart is done' } });
         expect(container.querySelector('#admin-notice-now')).toBeNull();
-        expect(said(container, '.empty-art + p')).toBe('Nothing is announced right now.');
+        expect(said(container, '[data-empty] p')).toBe('Nothing is announced right now.');
         expect(toasts()).toEqual([]);
 
         answer();

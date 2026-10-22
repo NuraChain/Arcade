@@ -126,6 +126,26 @@ describe('one report', () =>
         expect(button(container, 'Acted on it')).toBeDefined();
     });
 
+    it('opens on a summary card and keeps the close beside the report once there is room, held in view, and after it on a phone', async () =>
+    {
+        const id = reportFiled({ at: hoursAgo(3), by: 'sara.k', about: 'reza.t' });
+        const container = await opened(id);
+        const layout = container.querySelector<HTMLElement>('[data-layout]')!;
+        const [main, aside] = [...layout.children] as HTMLElement[];
+
+        expect(container.querySelector('header[data-summary] h1')?.textContent).toBe('Harassment or abuse');
+        expect(container.querySelector('header[data-summary] [data-status]')).not.toBeNull();
+        expect(layout.classList.contains('@4xl:grid-cols-[minmax(0,1fr)_20rem]')).toBe(true);
+        expect(layout.closest('.\\@container')).not.toBeNull();
+        expect(layout.children).toHaveLength(2);
+        expect(main?.querySelector('[data-side="about"]')).not.toBeNull();
+        expect(main?.querySelector('[data-history], [data-history="none"]')).not.toBeNull();
+        expect(aside?.tagName).toBe('ASIDE');
+        expect(aside?.getAttribute('aria-label')).toBe('Close the report');
+        expect(aside?.classList.contains('@4xl:sticky')).toBe(true);
+        expect(aside?.querySelector('[data-outcomes]')).not.toBeNull();
+    });
+
     it('says a message that was forwarded, one that could not be read, and a report that came with none', async () =>
     {
         const forwarded = reportFiled({ at: hoursAgo(3), by: 'sara.k', about: 'reza.t', message: '{"text":"Pass it on","fwd":true}' });

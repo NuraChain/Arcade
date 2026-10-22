@@ -33,7 +33,7 @@ export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.notice.now': 'الان این نشون داده می‌شه',
     'admin.notice.live': 'فعال',
     'admin.notice.none': 'الان اطلاعیه‌ای نیست.',
-    'admin.notice.noneLead': 'یکی پایین بنویس، همه همون لحظه می‌بیننش.',
+    'admin.notice.noneLead': 'یکی بنویس، همه همون لحظه می‌بیننش.',
     'admin.notice.english': 'انگلیسی',
     'admin.notice.persian': 'فارسی',
     'admin.notice.ends': 'تموم می‌شه',
