@@ -1,0 +1,709 @@
+import { createResource, Link, useHead, useParams } from 'azerothjs';
+
+import { outranks, type ClearPart } from '../../../../backend/src/domains/admin/roles.ts';
+import type { AdminPerson } from '../../../../backend/src/schemas.ts';
+import { ApiError, client } from '../../api.ts';
+import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import PersonContent from '../../components/admin/person-content.component.azeroth';
+import PersonSuspension, { type SuspendAsk } from '../../components/admin/person-suspension.component.azeroth';
+import Said from '../../components/admin/said.component.azeroth';
+import When from '../../components/admin/when.component.azeroth';
+import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
+import Avatar from '../../components/ui/avatar.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Field from '../../components/ui/field.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import TextArea from '../../components/ui/text-area.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { createGuesses, type Guess } from '../../lib/guess.ts';
+import { nuraOf } from '../../lib/nura.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { CATEGORY_WORDS, handleParts, ROLE_WORDS, STATUS_TONES, STATUS_WORDS, TERM_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSession } from '../../stores/session.store.ts';
+
+type Seen = AdminPerson['sessions'][number];
+
+interface Older
+{
+    from: string;
+    rows: AdminPerson['history'];
+    cursor: string | undefined;
+}
+
+const RESULT_WORDS: Record<AdminPerson['games'][number]['result'], MessageKey> = {
+    won: 'history.result.won',
+    lost: 'history.result.lost',
+    abandoned: 'history.result.abandoned',
+    void: 'history.result.void'
+};
+
+const STATE_WORDS: Record<AdminPerson['paidGames'][number]['state'], MessageKey> = {
+    locking: 'admin.vault.state.locking',
+    open: 'admin.vault.state.open',
+    settling: 'admin.vault.state.settling',
+    settled: 'admin.vault.state.settled',
+    refunding: 'admin.vault.state.refunding',
+    refunded: 'admin.vault.state.refunded',
+    reclaimed: 'admin.vault.state.reclaimed',
+    failed: 'admin.vault.state.failed'
+};
+
+const NOTE_MIN = 3;
+
+const DAY_MS = 86_400_000;
+
+const CLEARED: Readonly<Record<ClearPart, MessageKey>> = {
+    picture: 'admin.content.done.picture',
+    name: 'admin.content.done.name',
+    bio: 'admin.content.done.bio'
+};
+
+const PLAYED: RecordPart[] = ['level', 'record'];
+
+const UNPLAYED: RecordPart[] = ['level'];
+
+export default component PersonPage()
+{
+    const locale = useLocale();
+    const session = useSession();
+    const catalogue = useCatalogue();
+    const params = useParams();
+
+    const view = createResource(
+        () => params().handle ?? null,
+        async (handle) =>
+        {
+            try
+            {
+                return await client.admin.person({ params: { handle } });
+            }
+            catch (error)
+            {
+                if (error instanceof ApiError && error.status === 404)
+                {
+                    return null;
+                }
+
+                throw error;
+            }
+        },
+        { name: 'admin.person' }
+    );
+
+    const guesses = createGuesses<AdminPerson>();
+
+    state older = null as Older | null;
+
+    state paging = false;
+
+    state noteText = '';
+
+    state noteTold = null as string | null;
+
+    derived held = view.data();
+
+    derived trouble = view.error();
+
+    derived missing = held === null;
+
+    derived waiting = held === undefined && trouble === null;
+
+    derived failed = held === undefined && trouble !== null;
+
+    derived person = held === undefined || held === null ? null : guesses.over(held);
+
+    derived me = session.account();
+
+    derived handle = person?.handle ?? params().handle ?? '';
+
+    derived name = person?.displayName ?? '';
+
+    derived calledBy = name === '' ? handle : name;
+
+    useHead({ title: () => person?.displayName ?? handle });
+
+    derived role = person?.staff ?? null;
+
+    derived ranked = role !== null;
+
+    derived roleWord = role === null ? '' : locale.t(ROLE_WORDS[role]);
+
+    derived suspended = person?.suspended ?? false;
+
+    derived minor = person?.minor ?? false;
+
+    derived suspension = person?.suspension ?? null;
+
+    derived told = suspension !== null;
+
+    derived standing = suspension === null
+        ? ''
+        : locale.t(suspension.until === undefined ? 'admin.person.suspendedForGood' : 'admin.person.suspendedUntil', {
+            ...(suspension.until === undefined ? {} : { when: locale.date(Date.parse(suspension.until), { dateStyle: 'long', timeStyle: 'short' }) }),
+            category: locale.t(CATEGORY_WORDS[suspension.category] ?? 'report.category.other')
+        });
+
+    derived sinceAt = suspension?.since ?? '';
+
+    derived standingSince = suspension === null ? '' : locale.t('admin.person.suspendedSince', { when: locale.relative(Date.parse(suspension.since)) });
+
+    derived joinedAt = person?.createdAt ?? '';
+
+    derived seenAt = person?.lastSeenAt ?? '';
+
+    derived joined = person === null ? '' : locale.t('admin.people.joined', { when: locale.relative(Date.parse(person.createdAt)) });
+
+    derived wasSeen = person?.lastSeenAt !== undefined;
+
+    derived seen = person?.lastSeenAt === undefined ? '' : locale.t('admin.person.seen', { when: locale.relative(Date.parse(person.lastSeenAt)) });
+
+    derived wallets = person?.wallets ?? [];
+
+    derived walleted = wallets.length > 0;
+
+    derived guest = person !== null && !walleted;
+
+    derived pictured = person?.avatar !== undefined;
+
+    derived named = person !== null && person.displayName !== person.handle;
+
+    derived described = person !== null && person.bio !== '';
+
+    derived strangers = locale.t(person?.strangers === false ? 'admin.person.strangers.off' : 'admin.person.strangers.on');
+
+    derived shown = locale.t(person?.shown === false ? 'admin.person.shown.off' : 'admin.person.shown.on');
+
+    derived accepted = person?.paid.acceptedAt === undefined
+        ? locale.t('admin.person.paid.none')
+        : locale.t('admin.person.paid.accepted', { when: locale.relative(Date.parse(person.paid.acceptedAt)) });
+
+    derived resting = person?.paid.breakUntil !== undefined;
+
+    derived rest = person?.paid.breakUntil === undefined ? '' : locale.t('admin.person.paid.break', { when: locale.date(Date.parse(person.paid.breakUntil), { dateStyle: 'medium' }) });
+
+    const agentOf = (seen: Pick<Seen, 'browser' | 'system'>) =>
+    {
+        if (seen.browser !== undefined && seen.system !== undefined)
+        {
+            return locale.t('admin.person.agent', { browser: seen.browser, system: seen.system });
+        }
+
+        return seen.browser ?? seen.system ?? locale.t('admin.person.agent.unknown');
+    };
+
+    derived sessions = (person?.sessions ?? []).map((one, at) => ({
+        key: `${ one.openedAt }-${ at }`,
+        agent: agentOf(one),
+        opened: locale.t('admin.person.session.opened', { when: locale.relative(Date.parse(one.openedAt)) }),
+        used: one.usedAt === undefined ? '' : locale.t('admin.person.session.used', { when: locale.relative(Date.parse(one.usedAt)) }),
+        keys: one.device,
+        openedAt: one.openedAt,
+        usedAt: one.usedAt ?? '',
+        wasUsed: one.usedAt !== undefined
+    }));
+
+    derived signedIn = sessions.length > 0;
+
+    derived devices = (person?.devices ?? []).map((one, at) => ({
+        key: `${ one.createdAt }-${ at }`,
+        label: one.label,
+        agent: agentOf(one),
+        added: locale.t('admin.person.device.added', { when: locale.relative(Date.parse(one.createdAt)) }),
+        seen: one.seenAt === undefined ? '' : locale.t('admin.person.device.seen', { when: locale.relative(Date.parse(one.seenAt)) }),
+        revoked: one.revoked,
+        createdAt: one.createdAt,
+        seenAt: one.seenAt ?? '',
+        wasSeen: one.seenAt !== undefined
+    }));
+
+    derived keyed = devices.length > 0;
+
+    derived reports = (person?.reportsAbout ?? []).map((one) => ({
+        id: one.id,
+        against: one.against,
+        parts: handleParts(
+            locale.t(one.against ? 'admin.person.report.against' : 'admin.person.report.by', { other: '{other}', category: locale.t(CATEGORY_WORDS[one.category] ?? 'report.category.other') }),
+            { other: one.other }
+        ),
+        status: locale.t(STATUS_WORDS[one.status]),
+        state: one.status,
+        tone: STATUS_TONES[one.status],
+        at: one.at
+    }));
+
+    derived reported = reports.length > 0;
+
+    derived filed = locale.plural('admin.person.reports.filed', person?.filed ?? 0);
+
+    derived games = (person?.games ?? []).map((one) => ({
+        id: one.id,
+        game: locale.t(catalogue.byId(one.game as GameId).nameKey),
+        result: locale.t(RESULT_WORDS[one.result]),
+        won: one.result === 'won',
+        with: one.players.filter((player) => player !== handle).join(', '),
+        when: locale.relative(Date.parse(one.finishedAt))
+    }));
+
+    derived played = games.length > 0;
+
+    derived recordParts = played ? PLAYED : UNPLAYED;
+
+    derived paidGames = (person?.paidGames ?? []).map((one) => ({
+        id: one.id,
+        game: locale.t(catalogue.byId(one.game as GameId).nameKey),
+        stake: locale.t('admin.vault.stake', { amount: locale.n(nuraOf(one.amount), { maximumFractionDigits: 4 }), seats: locale.n(one.seats) }),
+        outcome: one.state === 'settled' ? locale.t(one.won === true ? 'history.result.won' : 'history.result.lost') : locale.t(STATE_WORDS[one.state]),
+        won: one.state === 'settled' && one.won === true,
+        when: locale.relative(Date.parse(one.at))
+    }));
+
+    derived paidPlayed = paidGames.length > 0;
+
+    derived firstCursor = person?.historyCursor ?? null;
+
+    derived continued = older !== null && older.from === firstCursor ? older : null;
+
+    derived history = [...(person?.history ?? []), ...(continued?.rows ?? [])];
+
+    derived moreCursor = continued === null ? firstCursor : continued.cursor ?? null;
+
+    derived hasMore = moreCursor !== null;
+
+    derived acted = history.length > 0;
+
+    derived mayAct = person !== null && me !== null && person.handle !== me.handle && outranks(me.staff ?? null, person.staff ?? null);
+
+    const reread = async () =>
+    {
+        await view.refetch();
+
+        if (view.error() !== null)
+        {
+            throw view.error();
+        }
+
+        guesses.landed();
+    };
+
+    const noted = (text: string, at: string): Guess<AdminPerson> => (from) => ({
+        ...from,
+        history: [
+            { id: `note-${ at }`, at, staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'note', person: from.handle, reason: text, details: {} },
+            ...from.history
+        ]
+    });
+
+    const suspendedFor = (ask: SuspendAsk, at: number): Guess<AdminPerson> => (from) =>
+    {
+        const until = ask.days === null ? null : new Date(at + ask.days * DAY_MS).toISOString();
+
+        return {
+            ...from,
+            suspended: true,
+            suspension: { category: ask.category, ...(until === null ? {} : { until }), since: new Date(at).toISOString() },
+            sessions: [],
+            history: [
+                {
+                    id: `suspend-${ at }`,
+                    at: new Date(at).toISOString(),
+                    staff: me?.handle ?? '',
+                    staffRole: me?.staff ?? 'moderator',
+                    kind: 'suspend',
+                    person: from.handle,
+                    reason: ask.reason,
+                    details: { category: ask.category, ...(until === null ? {} : { until }), ...(ask.days === null ? {} : { days: String(ask.days) }) }
+                },
+                ...from.history
+            ]
+        };
+    };
+
+    const liftedFor = (reason: string, at: number): Guess<AdminPerson> => (from) => ({
+        ...from,
+        suspended: false,
+        suspension: undefined,
+        history: [
+            { id: `lift-${ at }`, at: new Date(at).toISOString(), staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'lift', person: from.handle, reason, details: {} },
+            ...from.history
+        ]
+    });
+
+    const suspendNow = async (ask: SuspendAsk) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const input = { ...(ask.days === null ? {} : { days: ask.days }), category: ask.category, reason: ask.reason };
+        const term = locale.t(ask.days === null ? 'admin.suspend.term.good' : TERM_WORDS[String(ask.days)] ?? 'admin.suspend.term.good');
+        const sent = guesses.during(suspendedFor(ask, runtime().clock.now()), () => client.admin.suspend({ params: { handle: about }, input }), reread);
+
+        return await attempt(sent, locale.t('admin.suspend.done', { name: called, term }), whyStaffRefused);
+    };
+
+    const liftNow = async (reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(liftedFor(reason, runtime().clock.now()), () => client.admin.lift({ params: { handle: about }, input: { reason } }), reread);
+
+        return await attempt(sent, locale.t('admin.lift.done', { name: called }), whyStaffRefused);
+    };
+
+    const clearedFor = (part: ClearPart, reason: string, at: number): Guess<AdminPerson> => (from) =>
+    {
+        const was = part === 'name' ? from.displayName : part === 'bio' ? from.bio : '';
+        const row = {
+            id: `clear-${ at }`,
+            at: new Date(at).toISOString(),
+            staff: me?.handle ?? '',
+            staffRole: me?.staff ?? 'moderator',
+            kind: 'clear' as const,
+            person: from.handle,
+            reason,
+            details: { part, ...(part === 'picture' ? {} : { from: was }) }
+        };
+        const history = [row, ...from.history];
+
+        if (part === 'picture')
+        {
+            return { ...from, avatar: undefined, history };
+        }
+
+        return part === 'name' ? { ...from, displayName: from.handle, history } : { ...from, bio: '', history };
+    };
+
+    const signedOutFor = (reason: string, at: number): Guess<AdminPerson> => (from) => ({
+        ...from,
+        sessions: [],
+        history: [
+            { id: `sign-out-${ at }`, at: new Date(at).toISOString(), staff: me?.handle ?? '', staffRole: me?.staff ?? 'moderator', kind: 'sign-out', person: from.handle, reason, details: { sessions: String(from.sessions.length) } },
+            ...from.history
+        ]
+    });
+
+    const clearNow = async (part: ClearPart, reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(clearedFor(part, reason, runtime().clock.now()), () => client.admin.clear({ params: { handle: about }, input: { part, reason } }), reread);
+
+        return await attempt(sent, locale.t(CLEARED[part], { name: called }), whyStaffRefused);
+    };
+
+    const signOutNow = async (reason: string) =>
+    {
+        const about = handle;
+        const called = calledBy;
+        const sent = guesses.during(signedOutFor(reason, runtime().clock.now()), () => client.admin.signOut({ params: { handle: about }, input: { reason } }), reread);
+
+        return await attempt(sent, locale.t('admin.signOut.done', { name: called }), whyStaffRefused);
+    };
+
+    const olderHistory = async () =>
+    {
+        const from = firstCursor;
+        const after = moreCursor;
+        const about = handle;
+        const kept = continued?.rows ?? [];
+
+        if (from === null || after === null || paging)
+        {
+            return;
+        }
+
+        paging = true;
+
+        await attempt((async () =>
+        {
+            const next = await client.admin.history({ params: { handle: about }, query: { cursor: after } });
+
+            if (firstCursor === from)
+            {
+                older = { from, rows: [...kept, ...next.rows], cursor: next.cursor };
+            }
+        })());
+
+        paging = false;
+    };
+
+    const typedNote = (value: string) =>
+    {
+        noteText = value;
+        noteTold = null;
+    };
+
+    const keep = async () =>
+    {
+        const text = noteText.trim();
+        const about = handle;
+
+        noteTold = text.length < NOTE_MIN ? locale.t('admin.person.noteShort') : null;
+
+        if (noteTold !== null)
+        {
+            return;
+        }
+
+        const at = new Date(runtime().clock.now()).toISOString();
+        const sent = guesses.during(noted(text, at), () => client.admin.note({ params: { handle: about }, input: { text } }), reread);
+
+        if (await attempt(sent, locale.t('admin.person.noteDone'), whyStaffRefused))
+        {
+            noteText = '';
+        }
+    };
+
+    <div class="flex flex-col gap-6">
+        <Link to="/admin/people" class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline">
+            <Icon name="back" size={ 16 } class="icon-flip" />
+            <span>{ locale.t('admin.person.back') }</span>
+        </Link>
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 6 } avatar /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.person.failed') } onRetry={ () => void view.refetch() } /> }
+        </Show>
+
+        <Show when={ missing }>
+            { () => <EmptyState icon="people" title={ locale.t('admin.person.missing') } lead={ locale.t('admin.person.missingLead') } /> }
+        </Show>
+
+        <Show when={ person } let={ shownPerson }>
+            <div class="flex flex-col gap-6" data-person={ handle }>
+                <header class="flex flex-col gap-3">
+                    <div class="flex items-center gap-4">
+                        <Avatar person={ shownPerson } size="xl" />
+                        <div class="flex min-w-0 flex-col gap-1">
+                            <h1 class="title truncate text-ui-2xl" dir="auto">{ name }</h1>
+                            <span class="truncate text-ui-sm text-muted" dir="ltr">@{ handle }</span>
+                            <div class="flex flex-wrap gap-1.5 empty:hidden" data-flags>
+                                <Show when={ ranked }>
+                                    <Badge text={ roleWord } tone="accent" />
+                                </Show>
+                                <Show when={ suspended }>
+                                    <Badge text={ locale.t('admin.people.suspended') } tone="danger" />
+                                </Show>
+                                <Show when={ minor }>
+                                    <Badge text={ locale.t('admin.people.minor') } tone="gold" />
+                                </Show>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="facts text-ui-xs text-faint">
+                        <When at={ joinedAt } said={ joined } />
+                        <Show when={ wasSeen }>
+                            <When at={ seenAt } said={ seen } />
+                        </Show>
+                    </p>
+                    <div class="flex flex-col gap-0.5" hidden={ !told } data-suspension>
+                        <p class="text-ui-sm font-semibold text-danger" data-standing>{ standing }</p>
+                        <p class="text-ui-xs text-faint" data-since><When at={ sinceAt } said={ standingSince } /></p>
+                    </div>
+                </header>
+
+                <div class="grid gap-4 xl:grid-cols-2">
+                    <Panel pad="md" stack="sm" labelledBy="person-account">
+                        <h2 id="person-account" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.about') }</h2>
+                        <p class="text-ui-sm text-text" data-strangers>{ strangers }</p>
+                        <p class="text-ui-sm text-text" data-shown>{ shown }</p>
+                        <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.paid') }</h3>
+                        <p class="text-ui-sm text-muted" data-paid>{ accepted }</p>
+                        <Show when={ resting }>
+                            <p class="text-ui-sm text-gold" data-break>{ rest }</p>
+                        </Show>
+                        <Show when={ walleted }>
+                            <h3 class="pt-2 text-ui-sm font-semibold text-text">{ locale.t('admin.person.wallets') }</h3>
+                            <ul class="flex flex-col gap-1" data-wallets>
+                                <For each={ wallets } key={ (one) => one } let={ wallet }>
+                                    <li class="break-all font-mono text-ui-xs text-muted" dir="ltr">{ wallet }</li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="person-reports">
+                        <h2 id="person-reports" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.reports') }</h2>
+                        <p class="text-ui-sm text-muted" data-filed>{ filed }</p>
+                        <Show when={ reported } fallback={ <p class="text-ui-sm text-muted" data-reports="none">{ locale.t('admin.person.reports.none') }</p> }>
+                            <ul class="divide-y divide-line" data-reports>
+                                <For each={ reports } key={ (one) => one.id } let={ report }>
+                                    <li data-report={ report.id } data-against={ report.against ? 'yes' : 'no' }>
+                                        <Link
+                                            to={ `/admin/reports/${ encodeURIComponent(report.id) }` }
+                                            class="-mx-2 flex flex-col gap-1.5 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised"
+                                            data-open
+                                        >
+                                            <span class="text-ui-sm text-text" data-said><Said parts={ report.parts } /></span>
+                                            <span class="flex flex-wrap items-center gap-2 text-ui-xs text-faint">
+                                                <span class="flex" data-status={ report.state }><Badge dot text={ report.status } tone={ report.tone } /></span>
+                                                <When at={ report.at } />
+                                            </span>
+                                        </Link>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="person-sessions">
+                        <h2 id="person-sessions" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.sessions') }</h2>
+                        <Show when={ signedIn } fallback={ <p class="text-ui-sm text-muted" data-sessions="none">{ locale.t('admin.person.sessions.none') }</p> }>
+                            <ul class="divide-y divide-line" data-sessions>
+                                <For each={ sessions } key={ (one) => one.key } let={ one }>
+                                    <li class="flex flex-col gap-1 py-2" data-session>
+                                        <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
+                                            <span data-agent>{ one.agent }</span>
+                                            <span hidden={ !one.keys } data-keys>
+                                                <Badge text={ locale.t('admin.person.session.keys') } tone="neutral" />
+                                            </span>
+                                        </p>
+                                        <p class="facts text-ui-xs text-faint">
+                                            <When at={ one.openedAt } said={ one.opened } />
+                                            <span hidden={ !one.wasUsed }><When at={ one.usedAt } said={ one.used } /></span>
+                                        </p>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="person-devices">
+                        <h2 id="person-devices" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.devices') }</h2>
+                        <Show when={ keyed } fallback={ <p class="text-ui-sm text-muted" data-devices="none">{ locale.t('admin.person.devices.none') }</p> }>
+                            <ul class="divide-y divide-line" data-devices>
+                                <For each={ devices } key={ (one) => one.key } let={ device }>
+                                    <li class="flex flex-col gap-1 py-2" data-device>
+                                        <p class="flex flex-wrap items-center gap-2 text-ui-sm text-text">
+                                            <span dir="auto">{ device.label }</span>
+                                            <span class="text-muted">{ device.agent }</span>
+                                            <span hidden={ !device.revoked } data-revoked>
+                                                <Badge text={ locale.t('admin.person.device.revoked') } tone="neutral" />
+                                            </span>
+                                        </p>
+                                        <p class="facts text-ui-xs text-faint">
+                                            <When at={ device.createdAt } said={ device.added } />
+                                            <span hidden={ !device.wasSeen }><When at={ device.seenAt } said={ device.seen } /></span>
+                                        </p>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm">
+                        <PersonRecord handle={ handle } show={ recordParts } />
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="person-games">
+                        <h2 id="person-games" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.games') }</h2>
+                        <Show when={ played } fallback={ <p class="text-ui-sm text-muted" data-games="none">{ locale.t('admin.person.games.none') }</p> }>
+                            <ul class="divide-y divide-line" data-games>
+                                <For each={ games } key={ (one) => one.id } let={ game }>
+                                    <li class="flex flex-col gap-1 py-2" data-game={ game.id }>
+                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                            <span class="font-semibold text-text">{ game.game }</span>
+                                            <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.result }</span>
+                                        </p>
+                                        <p class="facts text-ui-xs text-faint">
+                                            <span class="empty:hidden" dir="ltr">{ game.with }</span>
+                                            <span>{ game.when }</span>
+                                        </p>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+
+                    <Panel pad="md" stack="sm" labelledBy="person-paid">
+                        <h2 id="person-paid" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.paidGames') }</h2>
+                        <Show when={ paidPlayed } fallback={ <p class="text-ui-sm text-muted" data-paid-games="none">{ locale.t('admin.person.paidGames.none') }</p> }>
+                            <ul class="divide-y divide-line" data-paid-games>
+                                <For each={ paidGames } key={ (one) => one.id } let={ game }>
+                                    <li class="flex flex-col gap-1 py-2" data-paid-game={ game.id }>
+                                        <p class="flex flex-wrap items-center justify-between gap-2 text-ui-sm">
+                                            <span class="font-semibold text-text">{ game.game }</span>
+                                            <span class={ () => (game.won ? 'font-semibold text-win' : 'text-muted') }>{ game.outcome }</span>
+                                        </p>
+                                        <p class="facts text-ui-xs text-faint">
+                                            <span>{ game.stake }</span>
+                                            <span>{ game.when }</span>
+                                        </p>
+                                    </li>
+                                </For>
+                            </ul>
+                        </Show>
+                    </Panel>
+                </div>
+
+                <section class="flex flex-col gap-3" aria-labelledby="person-history">
+                    <h2 id="person-history" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.history') }</h2>
+                    <Show when={ acted } fallback={ <p class="text-ui-sm text-muted" data-history="none">{ locale.t('admin.person.history.none') }</p> }>
+                        <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-history>
+                            <For each={ history } key={ (row) => row.id } let={ row }>
+                                <li data-entry={ row.id } data-kind={ row.kind }>
+                                    <LogEntry row={ row } />
+                                </li>
+                            </For>
+                        </ol>
+                    </Show>
+
+                    <Show when={ hasMore }>
+                        <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void olderHistory() } />
+                    </Show>
+
+                    <Show when={ mayAct }>
+                        <Panel pad="md" stack="md" labelledBy="person-note">
+                            <div class="flex flex-col gap-1">
+                                <h3 id="person-note" class="text-ui-md font-semibold text-text">{ locale.t('admin.person.note') }</h3>
+                                <p class="text-ui-sm text-muted">{ locale.t('admin.person.noteLead') }</p>
+                            </div>
+                            <Field id="admin-person-note" label={ locale.t('admin.person.noteLabel') } error={ noteTold }>
+                                <TextArea
+                                    id="admin-person-note"
+                                    class="max-w-xl"
+                                    value={ noteText }
+                                    maxlength={ 500 }
+                                    describedBy={ noteTold !== null ? 'admin-person-note-error' : undefined }
+                                    onInput={ typedNote }
+                                />
+                            </Field>
+                            <Button variant="primary" class="self-start" onClick={ () => void keep() }>{ locale.t('admin.person.noteSave') }</Button>
+                        </Panel>
+                    </Show>
+                </section>
+
+                <Show when={ mayAct }>
+                    <section class="flex flex-col gap-3" aria-labelledby="person-actions" data-actions>
+                        <div class="flex flex-col gap-1">
+                            <h2 id="person-actions" class="text-ui-lg font-semibold text-text">{ locale.t('admin.person.actions') }</h2>
+                            <p class="text-ui-sm text-muted">{ locale.t('admin.person.actionsLead') }</p>
+                        </div>
+                        <PersonSuspension name={ calledBy } suspended={ suspended } guest={ guest } onSuspend={ suspendNow } onLift={ liftNow } />
+                        <PersonContent
+                            name={ calledBy }
+                            pictured={ pictured }
+                            named={ named }
+                            described={ described }
+                            signedIn={ signedIn }
+                            guest={ guest }
+                            onClear={ clearNow }
+                            onSignOut={ signOutNow }
+                        />
+                    </section>
+                </Show>
+            </div>
+        </Show>
+    </div>
+}

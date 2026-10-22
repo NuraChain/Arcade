@@ -1,0 +1,58 @@
+import { Link } from 'azerothjs';
+
+import type { AdminReports } from '../../../../backend/src/schemas.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { CATEGORY_WORDS, handleParts, ROLE_WORDS, STATUS_TONES, STATUS_WORDS } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Said from './said.component.azeroth';
+import When from './when.component.azeroth';
+
+export type AdminReportRow = AdminReports['rows'][number];
+
+export default component ReportRow(props: { report: AdminReportRow })
+{
+    const locale = useLocale();
+
+    derived parts = handleParts(locale.t('admin.reports.row', { by: '{by}', about: '{about}' }), { by: props.report.by.handle, about: props.report.about.handle });
+
+    derived category = locale.t(CATEGORY_WORDS[props.report.category] ?? 'report.category.other');
+
+    derived marked = props.report.status;
+
+    derived status = locale.t(STATUS_WORDS[props.report.status]);
+
+    derived tone = STATUS_TONES[props.report.status];
+
+    derived role = props.report.about.staff ?? null;
+
+    derived ranked = role !== null;
+
+    derived roleWord = role === null ? '' : locale.t(ROLE_WORDS[role]);
+
+    derived disclosed = props.report.disclosed;
+
+    <Link
+        to={ `/admin/reports/${ encodeURIComponent(props.report.id) }` }
+        class="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-raised"
+        data-report={ props.report.id }
+    >
+        <Avatar person={ props.report.about } size="md" />
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="text-ui-sm font-semibold text-text" data-said><Said parts={ parts } /></span>
+            <span class="flex flex-wrap items-center gap-1.5" data-marks>
+                <span class="flex" data-status={ marked }><Badge dot text={ status } tone={ tone } /></span>
+                <Show when={ ranked }>
+                    <Badge text={ roleWord } tone="accent" />
+                </Show>
+                <span class="text-ui-xs text-muted" data-category>{ category }</span>
+            </span>
+            <span class="facts text-ui-xs text-faint">
+                <When at={ props.report.at } />
+                <span hidden={ !disclosed } data-disclosed>{ locale.t('admin.reports.withMessage') }</span>
+            </span>
+        </span>
+        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+    </Link>
+}

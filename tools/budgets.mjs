@@ -19,6 +19,10 @@
  * moved correctly, so the markup was right and only the paint was wrong. Nothing could see it:
  * `npm run qa` reads overflow, hit targets, a landmark and the console, and an accessibility check
  * reads the aria. This reads the emitted bundle, which is the only place the difference exists.
+ * It reads each binding whole: the bundle prints a class array over several lines, and a check that
+ * read the line holding `setProp(` saw only its opening bracket. And it reads the class handed to an
+ * element built inside a branch (`h("span", { class: [ ... ] })`), which is bound once the same way:
+ * Badge's status pill kept the colour of its first status after the status changed in place.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -314,6 +318,132 @@ else if (chunkModules !== null)
 // ---------------------------------------------------------------- class bindings that never update
 let classBindsRead = 0;
 
+const codeOf = (expression) => expression
+    .replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, (literal) => [...literal.matchAll(/\$\{([^}]*)\}/g)].map((part) => part[1]).join(' '));
+
+const readsIn = (expression) => [...codeOf(expression).matchAll(/(\w+(?:\.\w+)*)\(\)/g)]
+    .map((match) => match[1])
+    .filter((read) => !/(join|filter|trim)$/.test(read));
+
+const scanned = (source, from, stop) =>
+{
+    let depth = 0;
+    let quote = null;
+
+    for (let at = from; at < source.length; at += 1)
+    {
+        const ch = source[at];
+
+        if (quote !== null)
+        {
+            if (ch === '\\')
+            {
+                at += 1;
+            }
+            else if (ch === quote)
+            {
+                quote = null;
+            }
+
+            continue;
+        }
+
+        if (ch === '"' || ch === "'" || ch === '`')
+        {
+            quote = ch;
+            continue;
+        }
+
+        if ('([{'.includes(ch))
+        {
+            depth += 1;
+        }
+        else if (')]}'.includes(ch))
+        {
+            if (depth === 0)
+            {
+                return at;
+            }
+
+            depth -= 1;
+        }
+        else if (depth === 0 && stop(ch, at))
+        {
+            return at;
+        }
+    }
+
+    return source.length;
+};
+
+const valueAt = (source, from) => source.slice(from, scanned(source, from, (ch) => ch === ','));
+
+const regionAt = (source, index) =>
+{
+    const marked = source.lastIndexOf('//#region ', index);
+
+    return marked === -1 ? null : source.slice(marked + 10, source.indexOf('\n', marked));
+};
+
+const classesOf = (source) =>
+{
+    const found = [];
+
+    for (const match of source.matchAll(/setProp\([\w$]+, "class", /g))
+    {
+        found.push({ at: match.index, wrapped: source.slice(Math.max(0, match.index - 20), match.index).endsWith('createEffect(() => '), value: valueAt(source, match.index + match[0].length) });
+    }
+
+    for (const match of source.matchAll(/\bh\("[\w-]+", \{/g))
+    {
+        const open = match.index + match[0].length;
+        const close = scanned(source, open, () => false);
+        let depth = 0;
+        let quote = null;
+
+        for (let at = open; at < close; at += 1)
+        {
+            const ch = source[at];
+
+            if (quote !== null)
+            {
+                if (ch === '\\')
+                {
+                    at += 1;
+                }
+                else if (ch === quote)
+                {
+                    quote = null;
+                }
+
+                continue;
+            }
+
+            if (ch === '"' || ch === "'" || ch === '`')
+            {
+                quote = ch;
+            }
+            else if ('([{'.includes(ch))
+            {
+                depth += 1;
+            }
+            else if (')]}'.includes(ch))
+            {
+                depth -= 1;
+            }
+            else if (depth === 0 && /^class: /.test(source.slice(at, at + 7)) && /[\s{,]/.test(source[at - 1]))
+            {
+                const value = valueAt(source, at + 7);
+
+                found.push({ at, wrapped: /^\(\) =>/.test(value.trim()), value });
+            }
+        }
+    }
+
+    return found;
+};
+
 if (!existsSync(SSR_ASSETS))
 {
     problems.push(`${ SSR_ASSETS } is missing, so no class binding was read - this check cannot pass by finding nothing`);
@@ -322,36 +452,17 @@ else
 {
     for (const name of readdirSync(SSR_ASSETS).filter((file) => file.endsWith('.js')))
     {
-        let region = name;
+        const source = readFileSync(join(SSR_ASSETS, name), 'utf8');
 
-        for (const line of readFileSync(join(SSR_ASSETS, name), 'utf8').split('\n'))
+        for (const bind of classesOf(source))
         {
-            const marked = /^\/\/#region (.+)$/.exec(line);
-
-            if (marked !== null)
-            {
-                region = marked[1];
-            }
-
-            if (!line.includes('setProp(') || !line.includes('"class"'))
-            {
-                continue;
-            }
-
             classBindsRead += 1;
 
-            if (line.includes('createEffect'))
-            {
-                continue;
-            }
-
-            const reads = [...line.slice(line.indexOf('"class",') + 8).matchAll(/(\w+(?:\.\w+)*)\(\)/g)]
-                .map((match) => match[1])
-                .filter((read) => !/(join|filter|trim)$/.test(read));
+            const reads = bind.wrapped ? [] : readsIn(bind.value);
 
             if (reads.length > 0)
             {
-                problems.push(`${ region } binds class once from ${ reads.join(', ') } - write it as class={ () => [ ... ] }`);
+                problems.push(`${ regionAt(source, bind.at) ?? name } binds class once from ${ reads.join(', ') } - write it as class={ () => [ ... ] }`);
             }
         }
     }

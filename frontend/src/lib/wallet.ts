@@ -13,7 +13,7 @@ export interface Eip1193Provider
     providers?: Eip1193Provider[];
 }
 
-export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'busy' | 'unknown';
+export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'busy' | 'suspended' | 'unknown';
 
 export interface AnnouncedWallet
 {
@@ -251,10 +251,21 @@ export async function personalSign(provider: Eip1193Provider, address: string, m
  * signed on that one: the wallet shows the person what they are about to send, which is the only
  * place that decision belongs.
  */
-export async function sendTransaction(provider: Eip1193Provider, from: string, to: string, data: string)
+export async function sendTransaction(provider: Eip1193Provider, from: string, to: string, data: string, extra: { value?: string; gasPrice?: string } = {})
 {
-    const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from, to, data }] });
+    const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from, to, data, ...extra }] });
     return typeof hash === 'string' ? hash : '';
+}
+
+export async function signTypedData(provider: Eip1193Provider, address: string, typedData: string)
+{
+    const signature = await provider.request({ method: 'eth_signTypedData_v4', params: [address, typedData] });
+    return typeof signature === 'string' ? signature : '';
+}
+
+export function chainHex(chainId: number)
+{
+    return `0x${ chainId.toString(16) }`;
 }
 
 /**

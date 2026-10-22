@@ -1,0 +1,15 @@
+export interface SaidPart
+{
+    at: number;
+    text: string;
+    handle: boolean;
+}
+
+export default component Said(props: { parts: SaidPart[] })
+{
+    <span>
+        <For each={ props.parts } key={ (part) => part.at } let={ part }>
+            <span dir={ part.handle ? 'ltr' : undefined }>{ part.text }</span>
+        </For>
+    </span>
+}

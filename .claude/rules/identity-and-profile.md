@@ -274,12 +274,14 @@ short.
 
 ## The admin
 
-`/admin` opens for one wallet: `ADMIN_WALLET_ADDRESS` in the root `.env`, compared without regard to
-case by `isAdminAddress`, and empty means nobody. The server decides it - the account payload carries
-`admin: true` for that wallet and omits the field for everybody else - and `requireAdmin` only reads
-the answer. Anybody else, signed in or not, is refused by the guard and shown the ordinary not-found
-page, never a "forbidden" one. The page holds nothing yet; whatever an admin can DO has to be a
-server route that checks `isAdminAddress` itself, because the guard is a courtesy like every other.
+`/admin` opens for the staff: the owner, whose wallet is `ADMIN_WALLET_ADDRESS` in the root `.env`,
+and the admins and moderators the owner makes. The server decides it - the account payload carries
+`staff` with the role and omits the field for everybody else - and the guards (`requireStaff`, each
+section's `requireAbility`) only read the answer, asking the same `may` the server asks. Anybody else, signed in or not, is refused by the
+guard and shown the ordinary not-found page, never a "forbidden" one. Whatever the staff can DO is
+a server route that asks `staffOf` in `services.ts` itself and answers anybody whose role does not
+reach it as a page that is not there, because the guard is a courtesy like every other. The roles,
+who may change whom and the log every change writes are in `.claude/rules/admin.md`.
 
 ## Signing in
 
@@ -463,6 +465,16 @@ makes two requests, three when it has to make fresh keys. A 429 at either step i
 wallet store, "Too many sign-ins from this network. Try again in a minute." on the sign-in page and
 in the chooser, where it used to be `unavailable` and said the server could not be reached.
 `wallet.spec.ts` and `connect.spec.ts` hold both steps, both places and the Persian sentence.
+
+**A suspended account is told why.** The server refuses its wallet with 403 `suspended`, the
+category, the end when there is one and the vault where there is one (`.claude/rules/admin.md`, *A
+suspension*). The wallet store keeps that as `suspension()` beside the failure `suspended`, and
+forgets it at the next try, and `SuspendedNotice` says it under "This account is suspended." in the
+chooser and on the sign-in page: when it ends or that it is permanent, the reason in the page's own
+words (the wallet catalogue carries the five, because the chooser loads no other), and, where the
+server named a vault, that the NURA in it is still theirs and their wallet can take it out without
+this site, with the vault's page on the explorer. A refusal from the server is never shown in its
+own English. `connect.spec.ts` holds both places, both languages and the next try.
 
 **A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
 `candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.

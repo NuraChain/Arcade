@@ -137,6 +137,8 @@ export const social = {
     'chat.invite.join': 'Sit down',
     'chat.invite.closed': 'That table has closed.',
     'chat.result.title': { one: '{winners} won {game}', other: '{winners} won {game}' },
+    'chat.result.you': 'You won {game}',
+    'chat.result.youAnd': 'You and {others} won {game}',
     'groups.membersLabel': { one: 'member', other: 'members' },
     'groups.onlineLabel': { one: 'online', other: 'online' },
     'chat.members': { one: '{count} member', other: '{count} members' },

@@ -372,7 +372,8 @@ describe('a table that would not open', () =>
         'seated-max': 'play.seatedMax',
         'no-invitee': 'tables.refused.no-invitee',
         'quick-game': 'tables.refused.quick-game',
-        'quick-options': 'tables.refused.quick-options'
+        'quick-options': 'tables.refused.quick-options',
+        ...Object.fromEntries(WORDS.filter((word) => word.startsWith('paid-')).map((word) => [word, `tables.refused.${ word }`])) as Record<string, MessageKey>
     };
 
     it('says the reader holds too many chairs, that nobody by that name can be invited, or what was wrong with a quick search', async () =>

@@ -1,12 +1,21 @@
 import { array, boolean, enumOf, literal, number, object, record, string as text, union, type Infer, type StringOptions } from '@azerothjs/schema';
+import { ACTION_KINDS, CLEAR_PARTS, GRANTED_ROLES, PEOPLE_LISTS, REPORT_LISTS, REPORT_OUTCOMES, REPORT_STATUSES, STAFF_ROLES, SUSPEND_CATEGORIES, SUSPEND_DAYS } from './domains/admin/roles.ts';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
+import { VARIANTS } from './domains/match/sides.ts';
+import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
-const NUL_FREE = new RegExp(`^[^${ String.fromCharCode(0) }]*$`);
+const NUL = String.fromCharCode(0);
+
+const NUL_FREE = new RegExp(`^[^${ NUL }]*$`);
+
+const SAYS_SOMETHING = new RegExp(`^[^${ NUL }]*[^\\s${ NUL }][^${ NUL }]*$`);
 
 const string = (options: StringOptions = {}) => text({ pattern: NUL_FREE, ...options });
+
+const said = () => string({ min: 3, max: 500, pattern: SAYS_SOMETHING });
 
 /**
  * The wire shape, declared once.
@@ -244,6 +253,7 @@ export type MatchHistory = Infer<typeof matchHistory>;
 
 export const gameLive = object({
     game: string(),
+    status: gameStatus,
     playing: number(),
     tables: number()
 });
@@ -280,7 +290,7 @@ export const account = object({
      * UI renders it as "no wallet linked" rather than assuming.
      */
     address: string().optional(),
-    admin: boolean().optional()
+    staff: enumOf(STAFF_ROLES).optional()
 });
 
 export type Account = Infer<typeof account>;
@@ -399,6 +409,248 @@ export const chainCall = object({
 export type ChainCall = Infer<typeof chainCall>;
 
 export const chainPublish = object({ calls: array(chainCall) });
+
+const vaultBalances = object({
+    address: string(),
+    free: string(),
+    locked: string(),
+    wallet: string()
+});
+
+export const vaultState = union([
+    object({ configured: literal(false) }),
+    object({
+        configured: literal(true),
+        vault: string(),
+        chainId: number(),
+        fee: number(),
+        maxStake: string(),
+        reclaimAfter: number(),
+        paused: boolean(),
+        ladder: array(string()),
+        may: enumOf(ELIGIBILITIES),
+        breakUntil: string().optional(),
+        balances: vaultBalances.optional()
+    })
+]);
+
+export type VaultState = Infer<typeof vaultState>;
+
+export const walletCall = object({
+    from: string(),
+    to: string(),
+    data: string(),
+    value: string(),
+    chainId: number(),
+    gasPrice: string().optional()
+});
+
+export type WalletCall = Infer<typeof walletCall>;
+
+const adminEscrow = object({
+    id: string(),
+    game: string(),
+    state: enumOf(ESCROW_STATES),
+    amount: string(),
+    seats: number(),
+    since: string(),
+    table: string(),
+    match: string().optional(),
+    error: string().optional(),
+    openTx: string().optional(),
+    closeTx: string().optional()
+});
+
+export const adminVault = union([
+    object({ configured: literal(false) }),
+    object({
+        configured: literal(true),
+        vault: string(),
+        chainId: number(),
+        fee: number(),
+        maxFee: number(),
+        maxStake: string(),
+        reclaimAfter: number(),
+        paused: boolean(),
+        held: string(),
+        free: string(),
+        locked: string(),
+        fees: string(),
+        solvent: boolean(),
+        referee: object({
+            address: string(),
+            gas: string(),
+            games: string().optional(),
+            low: boolean(),
+            allowed: boolean()
+        }),
+        roles: object({ admin: boolean(), pauser: boolean() }),
+        playing: number(),
+        states: array(object({ state: enumOf(ESCROW_STATES), count: number() })),
+        stuck: array(adminEscrow)
+    })
+]);
+
+export type AdminVault = Infer<typeof adminVault>;
+
+export const adminFeeInput = object({ bps: number({ int: true, min: 0, max: 10_000 }) });
+
+export const staffMember = object({
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    avatar: string().optional(),
+    role: enumOf(STAFF_ROLES),
+    grantedBy: string().optional(),
+    grantedAt: string().optional()
+});
+
+export const staffList = object({ owner: staffMember.optional(), members: array(staffMember) });
+
+export type StaffList = Infer<typeof staffList>;
+
+export const staffInput = object({
+    handle: string({ min: 1, max: 32 }),
+    role: enumOf([...GRANTED_ROLES, 'none']),
+    reason: said()
+});
+
+export const staffLogQuery = object({
+    cursor: string({ max: 80 }).optional(),
+    staff: string({ max: 32 }).optional(),
+    person: string({ max: 32 }).optional(),
+    kind: enumOf(ACTION_KINDS).optional()
+});
+
+export const staffLogRow = object({
+    id: string(),
+    at: string(),
+    staff: string().optional(),
+    staffRole: enumOf(STAFF_ROLES).optional(),
+    kind: enumOf(ACTION_KINDS),
+    person: string().optional(),
+    reason: string(),
+    details: record(string())
+});
+
+export const staffLog = object({ rows: array(staffLogRow), cursor: string().optional() });
+
+export type StaffLog = Infer<typeof staffLog>;
+
+export const adminPauseInput = object({ paused: boolean() });
+
+export const vaultAmountInput = object({ amount: string({ max: 40 }) });
+
+export const vaultGame = object({
+    id: string(),
+    game: string(),
+    amount: string(),
+    feeBps: number(),
+    seats: number(),
+    seat: number(),
+    state: enumOf(ESCROW_STATES),
+    won: boolean().optional(),
+    share: string().optional(),
+    openTx: string().optional(),
+    closeTx: string().optional(),
+    match: string().optional(),
+    at: string()
+});
+
+export type VaultGame = Infer<typeof vaultGame>;
+
+export const vaultGames = object({ games: array(vaultGame), cursor: string().optional() });
+
+export type VaultGames = Infer<typeof vaultGames>;
+
+export const vaultGamesQuery = object({ cursor: string({ max: 80 }).optional() });
+
+export const adminPeopleQuery = object({
+    q: string({ max: 80 }).optional(),
+    list: enumOf(PEOPLE_LISTS).optional(),
+    cursor: string({ max: 80 }).optional()
+});
+
+const adminFace = {
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    avatar: string().optional(),
+    address: string().optional(),
+    createdAt: string(),
+    minor: boolean(),
+    suspended: boolean(),
+    staff: enumOf(STAFF_ROLES).optional(),
+    reports: number()
+};
+
+export const adminPeople = object({ rows: array(object(adminFace)), cursor: string().optional() });
+
+export type AdminPeople = Infer<typeof adminPeople>;
+
+export const adminPerson = object({
+    ...adminFace,
+    bio: string(),
+    lastSeenAt: string().optional(),
+    strangers: boolean(),
+    shown: boolean(),
+    wallets: array(string()),
+    filed: number(),
+    sessions: array(object({
+        browser: string().optional(),
+        system: string().optional(),
+        openedAt: string(),
+        usedAt: string().optional(),
+        device: boolean()
+    })),
+    devices: array(object({
+        label: string(),
+        browser: string().optional(),
+        system: string().optional(),
+        attested: string(),
+        createdAt: string(),
+        seenAt: string().optional(),
+        revoked: boolean()
+    })),
+    reportsAbout: array(object({
+        id: string(),
+        against: boolean(),
+        other: string(),
+        category: string(),
+        status: enumOf(REPORT_STATUSES),
+        at: string()
+    })),
+    paid: object({ acceptedAt: string().optional(), breakUntil: string().optional() }),
+    suspension: object({ category: enumOf(SUSPEND_CATEGORIES), until: string().optional(), since: string() }).optional(),
+    history: array(staffLogRow),
+    historyCursor: string().optional(),
+    games: array(matchHistoryEntry),
+    paidGames: array(vaultGame)
+});
+
+export type AdminPerson = Infer<typeof adminPerson>;
+
+export const adminNoteInput = object({ text: said() });
+
+export const adminSuspendInput = object({
+    days: union(SUSPEND_DAYS.map((days) => literal(days))).optional(),
+    category: enumOf(SUSPEND_CATEGORIES),
+    reason: said()
+});
+
+export const adminLiftInput = object({ reason: said() });
+
+export const adminClearInput = object({ part: enumOf(CLEAR_PARTS), reason: said() });
+
+export const adminSignOutInput = object({ reason: said() });
+
+export const adminHistoryQuery = object({ cursor: string({ max: 80 }).optional() });
+
+export const reclaimInput = object({ id: string({ max: 36 }) });
+
+export const vaultBreakInput = object({ days: union(BREAK_DAYS.map((days) => literal(days))) });
+
+export const vaultTermsInput = object({ adult: literal(true) });
 
 export const nftItem = object({
     contract: string(),
@@ -919,6 +1171,47 @@ export const reportEntry = object({
 
 export const reportList = object({ reports: array(reportEntry) });
 
+const reportFace = object({ handle: string(), displayName: string(), hue: number(), avatar: string().optional(), staff: enumOf(STAFF_ROLES).optional() });
+
+const adminReportFields = {
+    id: string(),
+    category: reportCategory,
+    status: enumOf(REPORT_STATUSES),
+    at: string(),
+    disclosed: boolean(),
+    by: reportFace,
+    about: reportFace
+};
+
+export const adminReportRow = object(adminReportFields);
+
+export const adminReports = object({ rows: array(adminReportRow), cursor: string().optional(), waiting: number() });
+
+export type AdminReports = Infer<typeof adminReports>;
+
+export const adminReport = object({
+    ...adminReportFields,
+    message: string().optional(),
+    together: array(object({ id: string(), game: string(), at: string(), live: boolean(), by: string().optional(), about: string().optional() })),
+    history: array(staffLogRow)
+});
+
+export type AdminReport = Infer<typeof adminReport>;
+
+export const adminReportsQuery = object({ status: enumOf(REPORT_LISTS).optional(), cursor: string({ max: 80 }).optional() });
+
+export const adminReviewInput = object({ outcome: enumOf(REPORT_OUTCOMES), reason: said() });
+
+export const reportsWaiting = object({ count: number() });
+
+export const adminPlay = object({
+    games: array(object({ game: string(), status: gameStatus, matches: number(), tables: number() }))
+});
+
+export type AdminPlay = Infer<typeof adminPlay>;
+
+export const adminGameInput = object({ on: boolean(), reason: said() });
+
 /**
  * The two switches an account controls, and the one it does not.
  *
@@ -1062,6 +1355,18 @@ export const tableStatus = enumOf(['open', 'ready', 'playing', 'closed']);
 
 export type TableStatus = Infer<typeof tableStatus>;
 
+export const tableMoney = object({
+    state: enumOf(ESCROW_STATES),
+    feeBps: number(),
+    openTx: string().optional(),
+    closeTx: string().optional(),
+    winners: array(number()).optional(),
+    failed: string().optional(),
+    blame: string().optional()
+});
+
+export type TableMoney = Infer<typeof tableMoney>;
+
 /** One chair. `who` and `invited` are handles, because that is how the wire names a person. */
 export const tableSeat = object({
     seat: number(),
@@ -1125,6 +1430,10 @@ export const tableSummary = object({
 
     keptOut: array(string()).optional(),
 
+    stake: string().optional(),
+
+    money: tableMoney.optional(),
+
     createdAt: string()
 });
 
@@ -1155,7 +1464,9 @@ export const tableCreateInput = object({
      * join and nobody else can see - and it DECIDES the privacy rather than travelling beside it,
      * so `privacy` is ignored when this is here.
      */
-    roomId: string({ max: 64 }).optional()
+    roomId: string({ max: 64 }).optional(),
+
+    stake: string({ max: 40 }).optional()
 });
 
 export const tableQuickInput = object({
@@ -1166,10 +1477,18 @@ export const tableQuickInput = object({
     blinds: tableBlinds.optional(),
     cube: boolean().optional(),
     teams: boolean().optional(),
-    voice: voiceScope
+    voice: voiceScope,
+    stake: string({ max: 40 }).optional(),
+    signature: string({ max: 4096 }).optional()
 });
 
-export const readyInput = object({ ready: boolean() });
+export const quickStakeInput = object({ game: string({ max: 32 }), stake: string({ max: 40 }) });
+
+export const readyInput = object({ ready: boolean(), signature: string({ max: 4096 }).optional() });
+
+export const stakeTerms = object({ typedData: string(), deadline: string() });
+
+export type StakeTerms = Infer<typeof stakeTerms>;
 
 export const leaveInput = object({ forfeit: boolean() });
 
@@ -1748,6 +2067,45 @@ export const matchWatch = object({
 });
 
 export type MatchWatch = Infer<typeof matchWatch>;
+
+const proofSeat = object({
+    seat: number(),
+    who: string(),
+    address: string(),
+    commit: string(),
+    secret: string(),
+    nonce: string(),
+    deadline: number(),
+    signature: string()
+});
+
+const proofAction = object({
+    rev: number(),
+    seat: number(),
+    kind: enumOf(['open', 'play', 'forfeit']),
+    payload: string(),
+    events: string()
+});
+
+export const matchProof = object({
+    game: string(),
+    variant: enumOf(VARIANTS),
+    seats: array(number()),
+    target: number(),
+    cube: boolean(),
+    blinds: tableBlinds,
+    chainId: number(),
+    vault: string(),
+    amount: string(),
+    feeBps: number(),
+    state: enumOf(ESCROW_STATES),
+    players: array(proofSeat),
+    actions: array(proofAction),
+    openTx: string().optional(),
+    closeTx: string().optional()
+});
+
+export type MatchProof = Infer<typeof matchProof>;
 
 /** One table with a game running on it, as somebody looking for something to watch sees it. */
 export const watchableTable = object({

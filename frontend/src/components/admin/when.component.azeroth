@@ -1,0 +1,15 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import Tooltip from '../ui/tooltip.component.azeroth';
+
+export default component When(props: { at: string; said?: string })
+{
+    const locale = useLocale();
+
+    derived exact = props.at === '' ? '' : locale.date(Date.parse(props.at), { dateStyle: 'long', timeStyle: 'short' });
+
+    derived shown = props.said ?? (props.at === '' ? '' : locale.relative(Date.parse(props.at)));
+
+    <Tooltip label={ exact }>
+        <time datetime={ props.at } data-when>{ shown }</time>
+    </Tooltip>
+}

@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { requireAdmin, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff, safeNext } from '../src/lib/guards.ts';
 import { heldUp } from '../src/lib/held-up.ts';
 import NotFoundPage from '../src/pages/not-found.page.azeroth';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -549,16 +549,40 @@ describe('guards', () =>
         }
     });
 
-    it('opens /admin only for the account the server calls the admin', async () =>
+    it('opens a section of /admin only for the staff whose role the server names and whose rank it asks for', async () =>
     {
-        expect(await requireAdmin()).toBe(false);
+        expect(await requireAbility('money')()).toBe(false);
 
         useSession().establish(DARYA);
-        expect(await requireAdmin()).toBe(false);
+        expect([await requireAbility('money')(), await requireAbility('reports')()]).toEqual([false, false]);
 
-        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
-        useSession().establish(admin);
-        expect(await requireAdmin()).toBe(true);
+        const staff = { id: 'u-staff', handle: 'staff.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' };
+
+        useSession().establish({ ...staff, staff: 'moderator' });
+        expect([await requireAbility('money')(), await requireAbility('people')(), await requireAbility('reports')()]).toEqual([false, true, true]);
+
+        useSession().establish({ ...staff, staff: 'admin' });
+        expect([await requireAbility('money')(), await requireAbility('staff')(), await requireAbility('wallet')()]).toEqual([true, true, false]);
+
+        useSession().establish({ ...staff, staff: 'owner' });
+        expect(await requireAbility('wallet')()).toBe(true);
+    });
+
+    it('lets into /admin only somebody whose role opens a section of it, and opens the first section it does', async () =>
+    {
+        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
+
+        useSession().establish(DARYA);
+        expect([await requireStaff(), await firstSection()]).toEqual([false, false]);
+
+        const staff = { id: 'u-staff', handle: 'staff.w', displayName: '', bio: '', hue: 1, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' };
+
+        for (const role of ['moderator', 'admin', 'owner'] as const)
+        {
+            useSession().establish({ ...staff, staff: role });
+            expect(await requireStaff(), role).toBe(true);
+            expect(await firstSection(), role).toMatchObject({ to: '/admin/people', replace: true });
+        }
     });
 
     it('never follows a next that leaves the app', () =>

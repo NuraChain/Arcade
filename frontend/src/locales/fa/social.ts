@@ -140,6 +140,8 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.invite.join': 'بشین',
     'chat.invite.closed': 'اون میز بسته شده.',
     'chat.result.title': { one: '{winners} توی {game} برد', other: '{winners} توی {game} بردن' },
+    'chat.result.you': 'توی {game} بردی',
+    'chat.result.youAnd': 'تو و {others} توی {game} بردین',
     'groups.membersLabel': { one: 'عضو', other: 'عضو' },
     'groups.onlineLabel': { one: 'آنلاین', other: 'آنلاین' },
     'chat.members': { one: '{count} عضو', other: '{count} عضو' },

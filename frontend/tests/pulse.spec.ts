@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { useCatalogue } from '../src/stores/catalogue.store.ts';
+import { useCatalogue, type GameStatus } from '../src/stores/catalogue.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -19,8 +19,8 @@ const settle = async () =>
 
 const asked = () => server.calls.filter((call) => call === 'catalogue.live').length;
 
-const pulse = (n: number, playing: number, tables: number, watching = 'nothing-on') =>
-    socket.deliver({ v: 1, t: 'pulse', n, games: [{ game: 'ludo', playing, tables }], watching });
+const pulse = (n: number, playing: number, tables: number, watching = 'nothing-on', status: GameStatus = 'available') =>
+    socket.deliver({ v: 1, t: 'pulse', n, games: [{ game: 'ludo', status, playing, tables }], watching });
 
 const connected = async () =>
 {
@@ -159,7 +159,7 @@ describe('how busy the games are, in the browser', () =>
         catalogue.start();
         await connected();
 
-        let answer: (value: { games: { game: string; playing: number; tables: number }[] }) => void = () => undefined;
+        let answer: (value: { games: { game: string; status: GameStatus; playing: number; tables: number }[] }) => void = () => undefined;
 
         vi.spyOn(client.catalogue, 'live').mockImplementationOnce(() => new Promise((resolve) =>
         {
@@ -169,7 +169,7 @@ describe('how busy the games are, in the browser', () =>
         catalogue.refresh();
         await settle();
         pulse(3, 7, 1);
-        answer({ games: [{ game: 'ludo', playing: 1, tables: 1 }] });
+        answer({ games: [{ game: 'ludo', status: 'available', playing: 1, tables: 1 }] });
         await settle();
 
         expect(catalogue.stats('ludo')).toEqual({ tablesOpen: 1, playersOnline: 7 });
@@ -192,6 +192,51 @@ describe('how busy the games are, in the browser', () =>
         pulse(4, 5, 0);
 
         expect(catalogue.stats('ludo')).toEqual({ tablesOpen: 0, playersOnline: 5 });
+    });
+
+    it('takes a game turned off or on from the frame: it cannot be played while it is off, and an answer asked before does not turn it back on', async () =>
+    {
+        const catalogue = useCatalogue();
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: 'games.ludo.name',
+            blurbKey: 'games.ludo.blurb',
+            categoryKey: 'games.category.board',
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+        }];
+        server.live = [{ game: 'ludo', playing: 1, tables: 1 }];
+        catalogue.reset();
+        catalogue.start();
+        await connected();
+        await settle();
+
+        expect([catalogue.status('ludo'), catalogue.playable('ludo')]).toEqual(['available', true]);
+
+        let answer: (value: { games: { game: string; status: GameStatus; playing: number; tables: number }[] }) => void = () => undefined;
+
+        vi.spyOn(client.catalogue, 'live').mockImplementationOnce(() => new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
+
+        catalogue.refresh();
+        await settle();
+        pulse(3, 1, 0, 'nothing-on', 'disabled');
+        answer({ games: [{ game: 'ludo', status: 'available', playing: 1, tables: 1 }] });
+        await settle();
+
+        expect([catalogue.status('ludo'), catalogue.playable('ludo')]).toEqual(['disabled', false]);
+        expect(catalogue.featured()).not.toBe('ludo');
+
+        pulse(4, 1, 0, 'nothing-on', 'available');
+
+        expect([catalogue.status('ludo'), catalogue.playable('ludo')]).toEqual(['available', true]);
     });
 
     it('says which list of games to watch the numbers belong to, and nothing before it is told', async () =>

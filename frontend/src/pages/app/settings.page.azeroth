@@ -30,6 +30,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
@@ -57,6 +58,7 @@ export default component SettingsPage()
     const people = usePeople();
     const toasts = useToasts();
     const voice = useVoice();
+    const vaults = useVault();
 
     useHead({ title: () => locale.t('settings.title') });
 
@@ -73,6 +75,8 @@ export default component SettingsPage()
     };
 
     derived current = settings.settings();
+
+    derived vaulted = vaults.open();
 
     const hear = async (notice: Notice) =>
     {
@@ -247,6 +251,11 @@ export default component SettingsPage()
                                 <Button variant="outline" leading="key" to="/app/me/devices" class="w-full @2xl:w-auto">
                                     { locale.t('devices.title') }
                                 </Button>
+                                <Show when={ vaulted }>
+                                    <Button variant="outline" leading="coins" to="/app/me/wallet" class="w-full @2xl:w-auto">
+                                        { locale.t('vault.title') }
+                                    </Button>
+                                </Show>
                                 <Button variant="outline" leading="sign-out" loading={ leaving } class="w-full @2xl:w-auto" onClick={ () => void leave() }>
                                     { locale.t('settings.account.disconnect') }
                                 </Button>

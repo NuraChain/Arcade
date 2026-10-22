@@ -2,6 +2,7 @@ import { ConflictError, ForbiddenError, HttpError, NotFoundError, ValidationErro
 import { IsNull, Not, type DataSource, type EntityManager } from 'typeorm';
 
 import { Conversation } from '../../entities/conversation.entity.ts';
+import { Escrow } from '../../entities/escrow.entity.ts';
 import { Game } from '../../entities/game.entity.ts';
 import { GameRule } from '../../entities/game-rule.entity.ts';
 import { Match } from '../../entities/match.entity.ts';
@@ -12,11 +13,14 @@ import { keyedQueue } from '../../lib/keyed-queue.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { QuickTable } from '../../entities/quick-table.entity.ts';
+import { StakeConsent } from '../../entities/stake-consent.entity.ts';
+import { TableStake } from '../../entities/table-stake.entity.ts';
 import { TableRemoval } from '../../entities/table-removal.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
+import type { EscrowState } from '../stake/policy.ts';
 import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
@@ -59,6 +63,17 @@ export interface SeatRow
 
     ready: boolean;
     host: boolean;
+}
+
+export interface MoneyRow
+{
+    state: EscrowState;
+    feeBps: number;
+    openTx: string | null;
+    closeTx: string | null;
+    winners: number | null;
+    error: string | null;
+    blame: string | null;
 }
 
 export interface TableRow
@@ -105,6 +120,10 @@ export interface TableRow
     removed: boolean;
 
     kept_out: string[];
+
+    stake: string | null;
+
+    money: MoneyRow | null;
 }
 
 /** The alphabet a table code is drawn from: no 0/O, no 1/I/l, so it survives being read aloud. */
@@ -224,6 +243,21 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
                                  or (b.user_id = u.id and b.blocked_id = :me)))`,
         'kept_out'
     )
+    .addSelect('(select k.amount::text from table_stakes k where k.table_id = t.id)', 'stake')
+    .addSelect(
+        `(select jsonb_build_object(
+                   'state',   e.state,
+                   'feeBps',  e.fee_bps,
+                   'openTx',  e.open_tx,
+                   'closeTx', e.close_tx,
+                   'winners', e.winners,
+                   'error',   e.error,
+                   'blame',   (select u.handle::text from escrow_seats es join users u on u.id = es.user_id
+                                where es.escrow_id = e.id and es.seat = e.failed_seat))
+            from escrows e where e.table_id = t.id
+           order by e.created_at desc limit 1)`,
+        'money'
+    )
     .addSelect(
         `(select coalesce(
                    jsonb_agg(jsonb_build_object(
@@ -284,6 +318,21 @@ export const lockTable = async (tx: EntityManager, tableId: string) =>
     await tx.query('select pg_advisory_xact_lock(hashtext($1::uuid::text))', [tableId]);
 };
 
+export const stillLocking = () => tableRefusal('paid-locking', 'The stakes are being locked on NuraChain. Wait a moment.');
+
+export const gameOff = () => tableRefusal('game-off', 'That game is paused, so no game can start here for now.');
+
+export const gameOn = (tx: EntityManager, tableId: string) =>
+    tx.getRepository(Table).createQueryBuilder('t')
+        .innerJoin(Game, 'g', `g.id = t.game and g.status = 'available'`)
+        .where('t.id = :tableId', { tableId })
+        .getExists();
+
+export const lockingAt = (tx: EntityManager, tableId: string) =>
+    tx.getRepository(Escrow).existsBy({ tableId, state: 'locking' });
+
+const NOT_LOCKING = `not exists (select 1 from escrows e where e.table_id = t.id and e.state = 'locking')`;
+
 const standUp = async (tx: EntityManager, tableId: string, userId: string) =>
 {
     const freed = await tx.getRepository(TableSeat)
@@ -293,6 +342,8 @@ const standUp = async (tx: EntityManager, tableId: string, userId: string) =>
     {
         return { left: false, closed: false };
     }
+
+    await tx.getRepository(StakeConsent).delete({ tableId, userId });
 
     await tx.createQueryBuilder()
         .delete()
@@ -376,7 +427,7 @@ const OCCUPANTS = 'select s.user_id from table_seats s where s.table_id = t.id a
 
 const passedOver = (away: number, missed: number) => away + missed === 0 ? {} : { passed: { away, missed } };
 
-const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter) => tx.getRepository(Table)
+const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter, stake: string | null) => tx.getRepository(Table)
     .createQueryBuilder('t')
     .where(`t.game = :game and t.status = 'open' and t.mode = :mode`, { game, mode: filter.mode })
     .andWhere(
@@ -391,6 +442,13 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
     .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
     .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
     .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+    .andWhere(
+        `(case when cast(:stake as numeric) is null
+               then not exists (select 1 from table_stakes k where k.table_id = t.id)
+               else exists (select 1 from table_stakes k where k.table_id = t.id and k.amount = cast(:stake as numeric))
+          end)`,
+        { stake }
+    )
     .andWhere('not exists (select 1 from table_removals r where r.table_id = t.id and r.user_id = :lead)')
     .andWhere(
         `not exists (select 1 from blocks b
@@ -402,7 +460,8 @@ const waitingChairs = (from: DataSource | EntityManager) => from.getRepository(T
     .createQueryBuilder('s')
     .innerJoin(Table, 't', `t.id = s.table_id and t.status = 'open' and t.mode = 'live' and t.privacy in ('public', 'friends')`)
     .where('s.user_id is not null')
-    .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)');
+    .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+    .andWhere(NOT_LOCKING);
 
 const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: string) =>
 {
@@ -472,6 +531,7 @@ const letGo = async (tx: EntityManager, lead: string) =>
             .createQueryBuilder('s')
             .where('s.table_id = :id and s.user_id = :lead and s.ready', { id, lead })
             .andWhere('not exists (select 1 from matches m where m.table_id = s.table_id and m.finished_at is null)')
+            .andWhere(`not exists (select 1 from escrows e where e.table_id = s.table_id and e.state = 'locking')`)
             .getExists();
 
         if (!still)
@@ -596,11 +656,13 @@ export function createTableService(db: DataSource, social: SocialService)
 
         async quick(
             lead: string,
-            ask: QuickAsk & { game: string; voice: VoiceScope },
+            ask: QuickAsk & { game: string; voice: VoiceScope; stake?: string },
             present: (userIds: readonly string[]) => ReadonlySet<string>,
-            playing: (tx: EntityManager) => Promise<string | null> = async () => null
+            playing: (tx: EntityManager) => Promise<string | null> = async () => null,
+            attach: (tx: EntityManager, tableId: string) => Promise<void> = async () => undefined
         )
         {
+            const stake = ask.stake ?? null;
             const rules = await rulesOf(ask.game);
 
             if (rules === null)
@@ -628,7 +690,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
 
-                const waiting = await compatible(tx, lead, ask.game, want.filter)
+                const waiting = await compatible(tx, lead, ask.game, want.filter, stake)
                     .innerJoin(TableSeat, 'mine', 'mine.table_id = t.id and mine.user_id = :lead and mine.ready')
                     .select('t.id', 'id')
                     .orderBy('mine.joined_at', 'DESC')
@@ -645,7 +707,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 const left = want.filter.mode === 'live' ? await letGo(tx, lead) : [];
                 const gone = left.length === 0 ? {} : { left };
 
-                const candidates = await compatible(tx, lead, ask.game, want.filter)
+                const candidates = await compatible(tx, lead, ask.game, want.filter, stake)
                     .select('t.id', 'id')
                     .addSelect('t.teams', 'teams')
                     .addSelect(`(select coalesce(array_agg(s.user_id::text), '{}') from table_seats s where s.table_id = t.id and s.user_id is not null)`, 'occupants')
@@ -681,6 +743,8 @@ export function createTableService(db: DataSource, social: SocialService)
                     }
                     else if (await sit(tx, candidate.id, candidate.teams, lead))
                     {
+                        await attach(tx, candidate.id);
+
                         return { id: candidate.id, seated: true, ...gone, ...passedOver(away, missed) };
                     }
                     else
@@ -699,6 +763,13 @@ export function createTableService(db: DataSource, social: SocialService)
                 }, [], true);
 
                 await tx.getRepository(QuickTable).insert({ tableId: opened });
+
+                if (stake !== null)
+                {
+                    await tx.getRepository(TableStake).insert({ tableId: opened, amount: stake });
+                }
+
+                await attach(tx, opened);
 
                 return { id: opened, seated: true, ...gone, ...passedOver(away, missed) };
             };
@@ -852,11 +923,13 @@ export function createTableService(db: DataSource, social: SocialService)
             teams: boolean;
             invitees: string[];
             roomId?: string | null;
+            stake?: string | null;
         })
         {
             await mustHaveRoom(me);
 
             const guests = [...new Set(input.invitees)];
+            const stake = input.stake ?? null;
 
             const rules = await rulesOf(input.game);
 
@@ -997,19 +1070,29 @@ export function createTableService(db: DataSource, social: SocialService)
             {
                 try
                 {
-                    const tableId = await db.transaction((tx) => openRow(tx, me, {
-                        game: input.game,
-                        seats: input.seats,
-                        mode: input.mode,
-                        privacy,
-                        target: input.target,
-                        cube,
-                        blinds,
-                        chat: input.chat,
-                        voice: input.voice,
-                        teams,
-                        roomId
-                    }, guests, false));
+                    const tableId = await db.transaction(async (tx) =>
+                    {
+                        const opened = await openRow(tx, me, {
+                            game: input.game,
+                            seats: input.seats,
+                            mode: input.mode,
+                            privacy,
+                            target: input.target,
+                            cube,
+                            blinds,
+                            chat: input.chat,
+                            voice: input.voice,
+                            teams,
+                            roomId
+                        }, guests, false);
+
+                        if (stake !== null)
+                        {
+                            await tx.getRepository(TableStake).insert({ tableId: opened, amount: stake });
+                        }
+
+                        return opened;
+                    });
 
                     return await mustSee(me, tableId);
                 }
@@ -1178,6 +1261,11 @@ export function createTableService(db: DataSource, social: SocialService)
             {
                 await lockTable(tx, tableId);
 
+                if (await lockingAt(tx, tableId))
+                {
+                    throw stillLocking();
+                }
+
                 const walked = await forfeit(tx);
 
                 return { ...await standUp(tx, tableId, me), walked };
@@ -1327,6 +1415,11 @@ export function createTableService(db: DataSource, social: SocialService)
                     throw tableRefusal('playing', 'A game is being played at that table.');
                 }
 
+                if (await lockingAt(tx, tableId))
+                {
+                    throw stillLocking();
+                }
+
                 const occupant = await chairs
                     .createQueryBuilder('s')
                     .innerJoin(User, 'u', 'u.id = s.user_id')
@@ -1361,6 +1454,11 @@ export function createTableService(db: DataSource, social: SocialService)
             await db.transaction(async (tx) =>
             {
                 await lockTable(tx, tableId);
+
+                if (await lockingAt(tx, tableId))
+                {
+                    throw stillLocking();
+                }
 
                 const closed = await tx.getRepository(Table)
                     .createQueryBuilder()
@@ -1411,11 +1509,17 @@ export function createTableService(db: DataSource, social: SocialService)
                     throw tableRefusal('playing', 'The call a game began under stays until it ends.');
                 }
 
+                if ((held.voice === 'team' || voice === 'team') && await lockingAt(tx, held.id))
+                {
+                    throw stillLocking();
+                }
+
                 await tx.getRepository(Table).update({ id: held.id }, { voice });
 
                 if (held.voice === 'team' || voice === 'team')
                 {
                     await tx.getRepository(TableSeat).update({ tableId: held.id }, { ready: false });
+                    await tx.getRepository(StakeConsent).delete({ tableId: held.id });
                 }
             });
         },

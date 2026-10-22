@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
+import { getAddress } from 'viem';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
@@ -30,8 +31,17 @@ import { strikes } from './domains/table/sweep.ts';
 import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
+import { createVault, type Vault } from './chain/vault.ts';
+import { seatsOfMask } from './domains/stake/policy.ts';
+import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
+import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
+import { createPeopleService } from './domains/admin/people.ts';
+import { createPlayService } from './domains/admin/play.ts';
+import { createReportsService } from './domains/admin/reports.ts';
+import { createStaffService } from './domains/admin/staff.ts';
+import { createVaultAdmin } from './domains/stake/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -50,6 +60,7 @@ import type {
     Notification,
     PersonSummary,
     MatchPlay,
+    MatchProof,
     MatchView,
     Pulse,
     TableSummary
@@ -74,11 +85,12 @@ export interface WriteListener
     chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
-    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party'): void;
+    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile' | 'party' | 'vault'): void;
     gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
     gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
+    catalogueChanged(): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
     seen(userId: string): void;
 }
@@ -115,9 +127,11 @@ export interface Services extends Ports
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
         sweepTables(): Promise<TableSweep>;
+        sweepStakes(forMs: number): Promise<StakeSweep>;
         waiting(): Promise<{ game: string; mode: string; players: number; tables: number; oldest: number }[]>;
         otherServers(): Promise<number>;
         tidy(): Promise<Record<string, number>>;
+        liftSuspensions(): Promise<number>;
     };
 
     pulse(): Promise<Pulse>;
@@ -131,7 +145,7 @@ const WATCHABLE_MAX = 48;
 
 const WAITING_SEATS = 500;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note): Services
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader, note?: Note, vault?: Vault): Services
 {
     const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
 
@@ -632,6 +646,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.keptOut = row.kept_out;
         }
+        if (row.stake !== null)
+        {
+            summary.stake = row.stake;
+        }
+        if (row.money !== null)
+        {
+            summary.money = {
+                state: row.money.state,
+                feeBps: row.money.feeBps,
+                ...(row.money.openTx === null ? {} : { openTx: row.money.openTx }),
+                ...(row.money.closeTx === null ? {} : { closeTx: row.money.closeTx }),
+                ...(row.money.winners === null ? {} : { winners: seatsOfMask(row.money.winners) }),
+                ...(row.money.error === null ? {} : { failed: row.money.error }),
+                ...(row.money.blame === null ? {} : { blame: row.money.blame })
+            };
+        }
         return summary;
     };
 
@@ -933,6 +963,143 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         });
     };
 
+    const vaults = vault ?? createVault({
+        rpcUrl: config.rpcUrl,
+        chainId: config.chainId,
+        vault: config.vaultAddress,
+        refereeKey: config.refereeKey
+    });
+
+    const vaultAdmin = createVaultAdmin(db, vaults);
+
+    const team = createStaffService(db, config.adminWallet);
+
+    const accounts = createPeopleService(db, config.adminWallet, config.origin);
+
+    const desk = createReportsService(db, config.adminWallet);
+
+    const plays = createPlayService(db);
+
+    const roleOf = (row: { address: string | null; staff_role: GrantedRole | null }) =>
+        isAdminAddress(row.address, config.adminWallet) ? 'owner' as const : row.staff_role;
+
+    const staffOf = async (me: string) =>
+    {
+        const row = await identity.profileFor(me);
+        const role = row === null || row.is_suspended ? null : roleOf(row);
+
+        return row === null || role === null
+            ? null
+            : { id: row.id, handle: row.handle, role, address: row.address === null ? null : getAddress(row.address) };
+    };
+
+    const ableTo = async (me: string, ability: Ability) =>
+    {
+        const actor = await staffOf(me);
+
+        return actor !== null && may(actor.role, ability) ? actor : null;
+    };
+
+    const stakes = createStakeService(db, vaults, {
+        begin: (escrowId) => match.begin(escrowId),
+
+        async began(matchId)
+        {
+            const load = await match.peek(matchId);
+
+            if (load === null)
+            {
+                return;
+            }
+
+            await courtesy('game push', () => pushMatch(matchId, load.match.rev - 1));
+            await courtesy('turn notice', () => nudgeTurn(load, null));
+        },
+
+        changed: (tableId, players) => courtesy('table ring', async () =>
+        {
+            live?.tableChanged(tableId, await table.peopleAt(tableId));
+
+            for (const player of players)
+            {
+                live?.selfChanged(player, 'vault');
+            }
+        })
+    });
+
+    const walkAway = async (me: string, tableId: string, forfeit: boolean) =>
+    {
+        const before = await mustTable(me, tableId);
+        const people = await table.peopleAt(before.id);
+
+        const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id, forfeit));
+
+        if (walked !== null)
+        {
+            await courtesy('game push', () => pushMatch(walked.matchId, walked.before));
+
+            const load = await match.peek(walked.matchId);
+
+            if (load !== null)
+            {
+                await courtesy('turn notice', () => nudgeTurn(load, me));
+            }
+
+            if (load !== null && load.match.finishedAt !== null)
+            {
+                await courtesy('result line', () => declareResult(walked.matchId));
+                stakes.kick();
+            }
+        }
+
+        if (before.conversation_id !== null)
+        {
+            live?.chatChanged(before.conversation_id, me);
+        }
+        live?.tableChanged(before.id, people);
+    };
+
+    const reportOf = async (id: string) =>
+    {
+        const found = await desk.find(id);
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        const [together, history] = await Promise.all([
+            desk.together(found.row.by_id, found.row.about_id),
+            team.ofReport(id)
+        ]);
+
+        return { ...found.report, together, history };
+    };
+
+    const personOf = async (handle: string) =>
+    {
+        const found = await accounts.view(handle);
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        const [history, games, paid] = await Promise.all([
+            team.about(found.id, null),
+            match.history(found.id, null),
+            vaults.configured ? stakes.games(found.id, null) : { games: [] }
+        ]);
+
+        return {
+            ...found.person,
+            history: history.rows,
+            ...(history.cursor === undefined ? {} : { historyCursor: history.cursor }),
+            games: games.matches,
+            paidGames: paid.games
+        };
+    };
+
     const logged = (events: { rev: number; seat: number; at: Date; log: MatchEventLog['log'] }[]): MatchEventLog[] =>
         events.map((entry) => ({ rev: entry.rev, seat: entry.seat, at: entry.at.toISOString(), log: entry.log }));
 
@@ -953,6 +1120,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 await courtesy('result line', () => declareResult(matchId));
                 live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
+                stakes.kick();
             }
         }
 
@@ -1028,6 +1196,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 await courtesy('result line', () => declareResult(expired.matchId));
                 live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
+                stakes.kick();
             }
         }
 
@@ -1229,11 +1398,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const nfts = createNftReader({ rpcUrl: config.rpcUrl, explorerApi: config.explorerApi });
 
+
     const identity = createIdentityService(db, {
         origin: config.origin,
         chainId: config.chainId,
         rpcUrl: config.rpcUrl,
-        sessionTtlSeconds: SESSION_TTL_SECONDS
+        sessionTtlSeconds: SESSION_TTL_SECONDS,
+        vault: config.vaultAddress
     });
 
     const present = (row: {
@@ -1246,18 +1417,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         is_minor: boolean;
         address: string | null;
         created_at: Date;
-    }): Account => ({
-        id: row.id,
-        handle: row.handle,
-        displayName: row.display_name,
-        bio: row.bio,
-        ...(row.avatar === null ? {} : { avatar: row.avatar }),
-        hue: row.hue,
-        isMinor: row.is_minor,
-        joinedAt: row.created_at.toISOString(),
-        address: row.address ?? undefined,
-        ...(isAdminAddress(row.address, config.adminWallet) ? { admin: true } : {})
-    });
+        staff_role: GrantedRole | null;
+    }): Account =>
+    {
+        const role = roleOf(row);
+
+        return {
+            id: row.id,
+            handle: row.handle,
+            displayName: row.display_name,
+            bio: row.bio,
+            ...(row.avatar === null ? {} : { avatar: row.avatar }),
+            hue: row.hue,
+            isMinor: row.is_minor,
+            joinedAt: row.created_at.toISOString(),
+            address: row.address ?? undefined,
+            ...(role === null ? {} : { staff: role })
+        };
+    };
 
     /**
      * A person, with what the viewer may not know REMOVED rather than flagged.
@@ -1290,7 +1467,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, sweepTables, waiting: () => table.waitingByGame(), otherServers, tidy },
+        jobs: { sweepTurns, sweepTables, sweepStakes: (forMs) => stakes.sweep(forMs), waiting: () => table.waitingByGame(), otherServers, tidy, liftSuspensions: () => accounts.expireDue() },
 
         async pulse()
         {
@@ -1397,6 +1574,246 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             },
 
             avatar: (hash) => identity.avatar(hash)
+        },
+
+        vault: {
+            state: (me) => stakes.state(me),
+            accept: (me) => stakes.accept(me),
+            rest: (me, days) => stakes.rest(me, days),
+            deposit: (me, amount) => stakes.deposit(me, amount),
+            withdraw: (me, amount) => stakes.withdraw(me, amount),
+            games: (me, cursor) => stakes.games(me, cursor),
+            reclaim: (me, escrowId) => stakes.reclaim(me, escrowId)
+        },
+
+        admin: {
+            async vault(me)
+            {
+                const actor = await ableTo(me, 'money');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.standing(actor.address);
+            },
+
+            async fee(me, feeBps)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.fee(actor.address, feeBps);
+            },
+
+            async ceiling(me, amount)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.ceiling(actor.address, amount);
+            },
+
+            async fees(me, amount)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.fees(actor.address, amount);
+            },
+
+            async pause(me, paused)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.pause(actor.address, paused);
+            },
+
+            async staff(me)
+            {
+                return await ableTo(me, 'staff') === null ? null : await team.list();
+            },
+
+            async setStaff(me, input)
+            {
+                const actor = await ableTo(me, 'staff');
+
+                return actor === null ? null : await team.set(actor, input.handle, input.role, input.reason);
+            },
+
+            async log(me, query)
+            {
+                return await ableTo(me, 'log') === null
+                    ? null
+                    : await team.log({
+                        ...(query.staff === undefined ? {} : { staff: query.staff }),
+                        ...(query.person === undefined ? {} : { person: query.person }),
+                        ...(query.kind === undefined ? {} : { kind: query.kind })
+                    }, query.cursor ?? null);
+            },
+
+            async people(me, query)
+            {
+                return await ableTo(me, 'people') === null
+                    ? null
+                    : await accounts.find({
+                        ...(query.q === undefined ? {} : { q: query.q }),
+                        ...(query.list === undefined ? {} : { list: query.list }),
+                        ...(query.cursor === undefined ? {} : { cursor: query.cursor })
+                    });
+            },
+
+            async person(me, handle)
+            {
+                return await ableTo(me, 'people') === null ? null : await personOf(handle);
+            },
+
+            async history(me, handle, cursor)
+            {
+                const id = await ableTo(me, 'people') === null ? null : await accounts.idOf(handle);
+
+                return id === null ? null : await team.about(id, cursor);
+            },
+
+            async note(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                await accounts.note(actor, handle, input.text);
+                return await personOf(handle);
+            },
+
+            async suspend(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const target = await accounts.reachable(actor, handle);
+
+                for (const seat of await table.mine(target.id))
+                {
+                    await courtesy('suspension forfeit', () => walkAway(target.id, seat.id, true));
+                }
+
+                const { id, sessions } = await accounts.suspend(actor, handle, { days: input.days ?? null, category: input.category, reason: input.reason });
+
+                live?.sessionsRevoked(sessions);
+                await courtesy('letting go of push subscriptions', () => notify.forgetReach(id));
+
+                return await personOf(handle);
+            },
+
+            async lift(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                await accounts.lift(actor, handle, input.reason);
+                return await personOf(handle);
+            },
+
+            async clear(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, changed } = await accounts.clear(actor, handle, input.part, input.reason);
+
+                if (changed)
+                {
+                    await courtesy('profile cleared', () => ringProfile(id));
+                }
+
+                return await personOf(handle);
+            },
+
+            async signOut(me, handle, input)
+            {
+                const actor = await ableTo(me, 'people');
+
+                if (actor === null)
+                {
+                    return null;
+                }
+
+                const { id, sessions } = await accounts.signOut(actor, handle, input.reason);
+
+                if (sessions.length > 0)
+                {
+                    live?.sessionsRevoked(sessions);
+                    await courtesy('letting go of push subscriptions', () => notify.forgetReach(id));
+                }
+
+                return await personOf(handle);
+            },
+
+            async reports(me, query)
+            {
+                return await ableTo(me, 'reports') === null ? null : await desk.queue(query.status ?? 'received', query.cursor ?? null);
+            },
+
+            async reportsWaiting(me)
+            {
+                return await ableTo(me, 'reports') === null ? null : { count: await desk.waiting() };
+            },
+
+            async report(me, id)
+            {
+                return await ableTo(me, 'reports') === null ? null : await reportOf(id);
+            },
+
+            async review(me, id, input)
+            {
+                const actor = await ableTo(me, 'reports');
+                const found = actor === null ? null : await desk.find(id);
+
+                if (actor === null || found === null)
+                {
+                    return null;
+                }
+
+                await accounts.reachable(actor, found.row.about_handle);
+
+                if (await desk.review(actor, id, input.outcome, input.reason))
+                {
+                    live?.socialChanged(found.row.by_id);
+                }
+
+                return await reportOf(id);
+            },
+
+            async play(me)
+            {
+                return await ableTo(me, 'play') === null ? null : { games: await plays.games() };
+            },
+
+            async switchGame(me, game, input)
+            {
+                const actor = await ableTo(me, 'play');
+                const changed = actor === null ? null : await plays.switchGame(actor, game, input.on, input.reason);
+
+                if (changed === null)
+                {
+                    return null;
+                }
+
+                if (changed)
+                {
+                    live?.catalogueChanged();
+                }
+
+                return { games: await plays.games() };
+            }
         },
 
         voice: {
@@ -2026,19 +2443,33 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async quick(me, input)
             {
                 const began = performance.now();
-                const found = await table.quick(me, input, here, (tx) => match.playingAt(tx, me)).catch((error: unknown) =>
+                const refused = (error: unknown) =>
                 {
                     note?.('quick play refused', { game: input.game, who: me, code: (error as { code?: string }).code ?? 'error' });
 
                     throw error;
-                });
+                };
+                const nonce = await stakes.signedSearch(me, input).catch(refused);
+                const found = await table.quick(
+                    me,
+                    input,
+                    here,
+                    (tx) => match.playingAt(tx, me),
+                    nonce === null ? undefined : (tx, tableId) => stakes.attach(tx, nonce, tableId)
+                ).catch(refused);
                 let after = await mustTable(me, found.id);
                 const outcome = found.seated ? (after.is_host ? 'opened' : 'joined') : after.match_id === null ? 'already waiting' : 'already playing';
 
                 if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
                 {
-                    await courtesy('quick start', async () =>
+                    await courtesy(after.stake === null ? 'quick start' : 'stake lock', async () =>
                     {
+                        if (after.stake !== null)
+                        {
+                            await stakes.lockIfReady(found.id);
+                            return;
+                        }
+
                         const load = await startPushed(me, found.id);
 
                         await courtesy('turn notice', () => nudgeTurn(load, me));
@@ -2054,7 +2485,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 note?.('quick play', {
                     game: after.game,
                     who: me,
-                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams },
+                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams, stake: input.stake },
                     outcome,
                     table: after.id,
                     match: after.match_id,
@@ -2114,10 +2545,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async create(me, input)
             {
+                const stake = await stakes.mayOpen(me, input.stake, input.mode);
                 const guests = await Promise.all(input.invitees.map((handle) => social.personByHandle(handle)));
                 const known = guests.filter((person): person is NonNullable<typeof person> => person !== null);
 
-                const made = await table.create(me, { ...input, invitees: known.map((person) => person.id) });
+                const made = await table.create(me, { ...input, invitees: known.map((person) => person.id), stake });
                 live?.tableChanged(made.id, [me, ...known.map((person) => person.id)]);
 
                 for (const person of known)
@@ -2162,6 +2594,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async claim(me, tableId)
             {
+                const seen = await table.byId(me, tableId);
+
+                if (seen !== null && seen.stake !== null && seen.mine === null)
+                {
+                    await stakes.playerOf(me);
+                }
+
                 const seat = await table.claimSeat(me, tableId);
                 const after = await mustTable(me, tableId);
 
@@ -2172,43 +2611,41 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { table: asTable(after), seat };
             },
 
-            async leave(me, tableId, forfeit)
+            leave: (me, tableId, forfeit) => walkAway(me, tableId, forfeit),
+
+            async setReady(me, tableId, ready, signature)
             {
-                const before = await mustTable(me, tableId);
-                const people = await table.peopleAt(before.id);
+                const seen = await mustTable(me, tableId);
 
-                const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id, forfeit));
-
-                if (walked !== null)
+                if (seen.stake === null)
                 {
-                    await courtesy('game push', () => pushMatch(walked.matchId, walked.before));
-
-                    const load = await match.peek(walked.matchId);
-
-                    if (load !== null)
+                    await table.setReady(me, seen.id, ready);
+                }
+                else if (ready)
+                {
+                    await stakes.consent(me, seen.id, signature);
+                    await courtesy('stake lock', async () =>
                     {
-                        await courtesy('turn notice', () => nudgeTurn(load, me));
-                    }
-
-                    if (load !== null && load.match.finishedAt !== null)
-                    {
-                        await courtesy('result line', () => declareResult(walked.matchId));
-                    }
+                        await stakes.lockIfReady(seen.id);
+                    });
+                }
+                else
+                {
+                    await stakes.unready(me, seen.id);
                 }
 
-                if (before.conversation_id !== null)
-                {
-                    live?.chatChanged(before.conversation_id, me);
-                }
-                live?.tableChanged(before.id, people);
-            },
-
-            async setReady(me, tableId, ready)
-            {
-                await table.setReady(me, tableId, ready);
                 const after = await mustTable(me, tableId);
                 await ringTable(after);
                 return asTable(after);
+            },
+
+            quickStake: (me, game, stake) => stakes.prepareSearch(me, game, stake),
+
+            async stake(me, tableId)
+            {
+                const seen = await mustTable(me, tableId);
+
+                return await stakes.prepare(me, seen.id);
             },
 
             async invite(me, tableId, handle)
@@ -2402,6 +2839,52 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const events = shown - from > WATCH_TAIL ? [] : await match.told(found.load, from);
 
                 return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live, events: logged(events) };
+            },
+
+            async proof(me, matchId)
+            {
+                const played = await match.proof(me, matchId);
+                const paid = played === null ? null : await stakes.proofOf(matchId);
+
+                if (played === null || paid === null)
+                {
+                    return null;
+                }
+
+                const who = new Map(played.players.map((player) => [player.seat, player.who]));
+
+                return {
+                    game: played.match.game,
+                    variant: played.match.variant,
+                    seats: played.players.map((player) => player.seat),
+                    target: played.table.target,
+                    cube: played.table.cube,
+                    blinds: played.table.blinds as MatchProof['blinds'],
+                    chainId: paid.chainId,
+                    vault: paid.vault,
+                    amount: paid.escrow.amount,
+                    feeBps: paid.escrow.feeBps,
+                    state: paid.escrow.state,
+                    players: paid.seats.map((seat) => ({
+                        seat: seat.seat,
+                        who: who.get(seat.seat) ?? '',
+                        address: seat.address,
+                        commit: seat.commitment,
+                        secret: seat.secret,
+                        nonce: seat.nonce,
+                        deadline: Math.floor(seat.deadline.getTime() / 1000),
+                        signature: seat.signature
+                    })),
+                    actions: played.actions.map((action) => ({
+                        rev: action.rev,
+                        seat: action.seat,
+                        kind: action.kind,
+                        payload: JSON.stringify(action.payload),
+                        events: JSON.stringify(action.events)
+                    })),
+                    ...(paid.escrow.openTx === null ? {} : { openTx: paid.escrow.openTx }),
+                    ...(paid.escrow.closeTx === null ? {} : { closeTx: paid.escrow.closeTx })
+                };
             },
 
             async watchable(me, game)

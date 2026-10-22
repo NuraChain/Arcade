@@ -1,0 +1,259 @@
+import { createResource, useHead } from 'azerothjs';
+
+import { GRANTED_ROLES, outranks, type GrantedRole } from '../../../../backend/src/domains/admin/roles.ts';
+import type { StaffList } from '../../../../backend/src/schemas.ts';
+import { client } from '../../api.ts';
+import StaffRow, { type StaffMember } from '../../components/admin/staff-row.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Field from '../../components/ui/field.component.azeroth';
+import Input from '../../components/ui/input.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
+import Segmented from '../../components/ui/segmented.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import TextArea from '../../components/ui/text-area.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { createGuesses, type Guess } from '../../lib/guess.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { foldHandle, ROLE_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useSession } from '../../stores/session.store.ts';
+
+type Choice = GrantedRole | 'none';
+
+const DONE: Record<Choice, MessageKey> = {
+    moderator: 'admin.staff.done.moderator',
+    admin: 'admin.staff.done.admin',
+    none: 'admin.staff.done.none'
+};
+
+const REASON_MIN = 3;
+
+const placed = (members: readonly StaffMember[], member: StaffMember) =>
+{
+    const rest = members.filter((one) => one.handle !== member.handle);
+    const at = member.role === 'admin' ? rest.filter((one) => one.role === 'admin').length : rest.length;
+
+    return [...rest.slice(0, at), member, ...rest.slice(at)];
+};
+
+export default component StaffPage()
+{
+    const locale = useLocale();
+    const session = useSession();
+    const people = usePeople();
+    const device = useDevice();
+
+    useHead({ title: () => locale.t('admin.section.staff') });
+
+    const team = createResource(() => true, () => client.admin.staff(), { name: 'admin.staff' });
+
+    const guesses = createGuesses<StaffList>();
+
+    state handleText = '';
+
+    state handleTold = null as string | null;
+
+    state choice = 'moderator' as Choice;
+
+    state reasonText = '';
+
+    state reasonTold = null as string | null;
+
+    let form: HTMLElement | null = null;
+
+    derived me = session.account();
+
+    derived role = me?.staff ?? null;
+
+    derived held = team.data() ?? null;
+
+    derived trouble = team.error();
+
+    derived waiting = held === null && trouble === null;
+
+    derived failed = held === null && trouble !== null;
+
+    derived shown = held === null ? null : guesses.over(held);
+
+    derived listed = shown !== null;
+
+    derived owner = shown?.owner ?? null;
+
+    derived members = shown?.members ?? [];
+
+    derived lonely = listed && members.length === 0;
+
+    derived peopled = members.length > 0;
+
+    derived choices = [
+        ...GRANTED_ROLES.filter((one) => outranks(role, one)).map((one) => ({ id: one, label: locale.t(ROLE_WORDS[one]) })),
+        { id: 'none', label: locale.t('admin.staff.roleNone') }
+    ];
+
+    const guessed = (handle: string, to: Choice, at: string): Guess<StaffList> => (list) =>
+    {
+        const current = list.members.find((one) => one.handle === handle);
+
+        if (to === 'none')
+        {
+            return current === undefined ? list : { ...list, members: list.members.filter((one) => one !== current) };
+        }
+
+        if (current?.role === to)
+        {
+            return list;
+        }
+
+        const known = people.byHandle(handle);
+        const person = current ?? { handle, displayName: known?.displayName ?? handle, hue: known?.hue ?? 0 };
+
+        return { ...list, members: placed(list.members, { ...person, role: to, grantedBy: me?.handle ?? '', grantedAt: at }) };
+    };
+
+    const reread = async () =>
+    {
+        await team.refetch();
+
+        if (team.error() !== null)
+        {
+            throw team.error();
+        }
+
+        guesses.landed();
+    };
+
+    const retry = () =>
+    {
+        void reread().catch(() => undefined);
+    };
+
+    const save = async () =>
+    {
+        const handle = foldHandle(handleText);
+        const reason = reasonText.trim();
+        const to = choice;
+
+        handleTold = handle === '' ? locale.t('admin.staff.handleMissing') : null;
+        reasonTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (handleTold !== null || reasonTold !== null)
+        {
+            return;
+        }
+
+        const at = new Date(runtime().clock.now()).toISOString();
+        const sent = guesses.during(guessed(handle, to, at), () => client.admin.setStaff({ input: { handle, role: to, reason } }), reread);
+
+        if (await attempt(sent, locale.t(DONE[to], { handle }), whyStaffRefused))
+        {
+            handleText = '';
+            reasonText = '';
+        }
+    };
+
+    const change = (member: StaffMember) =>
+    {
+        handleText = member.handle;
+        handleTold = null;
+        choice = member.role === 'admin' ? 'admin' : 'moderator';
+        form?.scrollIntoView({ block: 'start', behavior: device.reducedMotion() ? 'auto' : 'smooth' });
+        form?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus();
+    };
+
+    const typedHandle = (value: string) =>
+    {
+        handleText = value;
+        handleTold = null;
+    };
+
+    const typedReason = (value: string) =>
+    {
+        reasonText = value;
+        reasonTold = null;
+    };
+
+    <div class="flex flex-col gap-6">
+        <PageHeader title={ locale.t('admin.section.staff') } lead={ locale.t('admin.staff.lead') } flush />
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 4 } avatar /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.staff.failed') } onRetry={ retry } /> }
+        </Show>
+
+        <Show when={ listed }>
+            <div class="flex flex-col gap-6">
+                <section class="flex flex-col gap-2" aria-labelledby="admin-owner">
+                    <h2 id="admin-owner" class="text-ui-lg font-semibold text-text">{ locale.t('admin.role.owner') }</h2>
+                    <p class="text-ui-sm text-muted">{ locale.t('admin.staff.owner') }</p>
+                    <Show when={ owner } let={ head }>
+                        <div class="rounded-panel border border-line bg-field" data-owner>
+                            <StaffRow member={ head } changeable={ false } onChange={ change } />
+                        </div>
+                    </Show>
+                </section>
+
+                <section class="flex flex-col gap-2" aria-labelledby="admin-team">
+                    <h2 id="admin-team" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.team') }</h2>
+                    <Show when={ peopled }>
+                        <ul class="divide-y divide-line rounded-panel border border-line bg-field" data-team>
+                            <For each={ members } key={ (one) => one.handle } let={ member }>
+                                <li>
+                                    <StaffRow member={ member } changeable={ outranks(role, member.role) } onChange={ change } />
+                                </li>
+                            </For>
+                        </ul>
+                    </Show>
+                    <Show when={ lonely }>
+                        { () => <EmptyState icon="people" title={ locale.t('admin.staff.none') } /> }
+                    </Show>
+                </section>
+            </div>
+        </Show>
+
+        <section ref={ (element) => form = element } class="scroll-mt-28" aria-labelledby="admin-staff-form">
+            <Panel pad="md" stack="md">
+                <div class="flex flex-col gap-1">
+                    <h2 id="admin-staff-form" class="text-ui-lg font-semibold text-text">{ locale.t('admin.staff.form') }</h2>
+                    <p class="text-ui-sm text-muted">{ locale.t('admin.staff.formLead') }</p>
+                </div>
+                <Field id="admin-staff-handle" label={ locale.t('admin.staff.handle') } error={ handleTold }>
+                    <Input
+                        id="admin-staff-handle"
+                        class="max-w-md"
+                        value={ handleText }
+                        autocomplete="off"
+                        enterkeyhint="next"
+                        maxlength={ 33 }
+                        invalid={ handleTold !== null }
+                        describedBy={ handleTold !== null ? 'admin-staff-handle-error' : undefined }
+                        onInput={ typedHandle }
+                    />
+                </Field>
+                <div class="flex flex-col gap-1.5">
+                    <span class="text-ui-sm font-semibold text-text" aria-hidden="true">{ locale.t('admin.staff.role') }</span>
+                    <Segmented block class="max-w-md" items={ choices } value={ choice } label={ locale.t('admin.staff.role') } onChange={ (id) => choice = id as Choice } />
+                </div>
+                <Field id="admin-staff-reason" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ reasonTold }>
+                    <TextArea
+                        id="admin-staff-reason"
+                        class="max-w-xl"
+                        value={ reasonText }
+                        maxlength={ 500 }
+                        describedBy={ reasonTold !== null ? 'admin-staff-reason-error' : 'admin-staff-reason-hint' }
+                        onInput={ typedReason }
+                    />
+                </Field>
+                <Button variant="primary" class="self-start" onClick={ () => void save() }>{ locale.t('admin.staff.save') }</Button>
+            </Panel>
+        </section>
+    </div>
+}

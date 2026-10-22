@@ -19,20 +19,25 @@ const CHAIN_DEADLINE_MS = 2 * CHAIN_CALL_TIMEOUT_MS;
 
 export const ONE_USE = { connection: 'close' } as const;
 
-export function boundedClient(rpcUrl: string)
+export function boundedTransport(rpcUrl: string)
 {
     const deadline = AbortSignal.timeout(CHAIN_DEADLINE_MS);
+    return http(rpcUrl, {
+        timeout: CHAIN_CALL_TIMEOUT_MS,
+        retryCount: 0,
+        fetchFn: (input, init) => fetch(input, {
+            ...init,
+            headers: { ...Object.fromEntries(new Headers(init?.headers)), ...ONE_USE },
+            signal: AbortSignal.any([deadline, AbortSignal.timeout(CHAIN_CALL_TIMEOUT_MS), ...(init?.signal ? [init.signal] : [])])
+        })
+    });
+}
+
+export function boundedClient(rpcUrl: string)
+{
     return createPublicClient({
         ccipRead: false,
-        transport: http(rpcUrl, {
-            timeout: CHAIN_CALL_TIMEOUT_MS,
-            retryCount: 0,
-            fetchFn: (input, init) => fetch(input, {
-                ...init,
-                headers: { ...Object.fromEntries(new Headers(init?.headers)), ...ONE_USE },
-                signal: AbortSignal.any([deadline, AbortSignal.timeout(CHAIN_CALL_TIMEOUT_MS), ...(init?.signal ? [init.signal] : [])])
-            })
-        })
+        transport: boundedTransport(rpcUrl)
     });
 }
 

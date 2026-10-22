@@ -1,0 +1,64 @@
+import type { ReportOutcome, ReportStatus } from '../../../../backend/src/domains/admin/roles.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
+
+const REASON_MIN = 3;
+
+export default component ReportClose(props: { status: ReportStatus; onClose: (outcome: ReportOutcome, reason: string) => Promise<boolean> })
+{
+    const locale = useLocale();
+
+    state why = '';
+
+    state whyTold = null as string | null;
+
+    derived reviewable = props.status !== 'reviewed';
+
+    derived actionable = props.status !== 'actioned';
+
+    const typed = (value: string) =>
+    {
+        why = value;
+        whyTold = null;
+    };
+
+    const close = async (outcome: ReportOutcome) =>
+    {
+        const reason = why.trim();
+
+        whyTold = reason.length < REASON_MIN ? locale.t('admin.staff.reasonShort') : null;
+
+        if (whyTold === null && await props.onClose(outcome, reason))
+        {
+            why = '';
+        }
+    };
+
+    <Panel pad="md" stack="md" labelledBy="report-close">
+        <div class="flex flex-col gap-1">
+            <h2 id="report-close" class="text-ui-md font-semibold text-text">{ locale.t('admin.report.close') }</h2>
+            <p class="text-ui-sm text-muted">{ locale.t('admin.report.closeLead') }</p>
+        </div>
+        <Field id="admin-report-why" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ whyTold }>
+            <TextArea
+                id="admin-report-why"
+                class="max-w-xl"
+                value={ why }
+                maxlength={ 500 }
+                describedBy={ whyTold !== null ? 'admin-report-why-error' : 'admin-report-why-hint' }
+                onInput={ typed }
+            />
+        </Field>
+        <div class="flex flex-wrap gap-2" data-outcomes>
+            <Show when={ reviewable }>
+                <Button variant="outline" onClick={ () => void close('reviewed') }>{ locale.t('admin.report.reviewed') }</Button>
+            </Show>
+            <Show when={ actionable }>
+                <Button variant="primary" onClick={ () => void close('actioned') }>{ locale.t('admin.report.actioned') }</Button>
+            </Show>
+        </div>
+    </Panel>
+}

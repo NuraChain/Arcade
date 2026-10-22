@@ -50,6 +50,7 @@ const GAMES_SQL = `
 interface LiveRow
 {
     game: string;
+    status: 'available' | 'coming-soon' | 'disabled';
     tables: number;
     playing: number;
 }
@@ -92,14 +93,16 @@ export function createCatalogueService(db: DataSource): CataloguePort
                 .leftJoin(Match, 'm', 'm.table_id = t.id and m.finished_at is null')
                 .leftJoin(TableSeat, 's', 's.table_id = t.id')
                 .select('g.id', 'game')
+                .addSelect('g.status', 'status')
                 .addSelect('count(distinct t.id) filter (where m.id is null and s.user_id is null and s.invited_id is null)::int', 'tables')
                 .addSelect('count(s.user_id)::int', 'playing')
                 .groupBy('g.id')
+                .addGroupBy('g.status')
                 .addGroupBy('g.sort_order')
                 .orderBy('g.sort_order', 'ASC')
                 .getRawMany<LiveRow>();
 
-            return { games: rows.map((row) => ({ game: row.game, playing: row.playing, tables: row.tables })) };
+            return { games: rows.map((row) => ({ game: row.game, status: row.status, playing: row.playing, tables: row.tables })) };
         }
     };
 }

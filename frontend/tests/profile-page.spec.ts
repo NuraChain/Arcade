@@ -127,6 +127,24 @@ describe('my profile page', () =>
         expect(container.querySelectorAll('[role=progressbar]')).toHaveLength(1);
     });
 
+    it('leads somebody whose role opens the admin to it from the corner, before Settings, and nobody else', async () =>
+    {
+        signIn();
+
+        for (const [staff, shown] of [[undefined, false], ['moderator', true], ['admin', true], ['owner', true]] as const)
+        {
+            useSession().establish({ ...server.account!, ...(staff === undefined ? {} : { staff }) });
+            const container = await page();
+            const corner = [...container.querySelectorAll('section [aria-label]')]
+                .map((one) => one.getAttribute('aria-label'))
+                .filter((label) => ['Admin', 'Settings'].includes(label ?? ''));
+
+            expect(corner, staff).toEqual(shown ? ['Admin', 'Settings'] : ['Settings']);
+            expect(container.querySelector('[aria-label="Admin"]')?.getAttribute('href') ?? null, staff).toBe(shown ? '/admin' : null);
+            cleanup();
+        }
+    });
+
     it('shows the name, bio and picture the Nura Profile holds, never the server copy', async () =>
     {
         signIn();

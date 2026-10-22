@@ -131,8 +131,8 @@ export const GAME_SEEDS: GameSeed[] = [
  *
  * The consequence is worth stating plainly, because it will surprise someone: the `status` in the
  * array below is an INITIAL value only. It applies the first time a row is written and never
- * again. Changing a game's status on a database that already has it is a deliberate act -
- * `update games set status = ... where id = ...` - not a redeploy.
+ * again. Changing a game's status on a database that already has it is a deliberate act - a
+ * switch in the admin's Play section, written to the staff's log with its reason - not a redeploy.
  *
  * Every other column is definition and is brought back in line on every boot.
  */

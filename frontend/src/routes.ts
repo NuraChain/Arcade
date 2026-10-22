@@ -2,7 +2,7 @@ import type { PageRoute } from '@azerothjs/kit';
 
 import PublicShell from './components/layout/public-shell.component.azeroth';
 import { chunk } from './lib/chunks.ts';
-import { requireAdmin, requireAnonymous, requireSession } from './lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff } from './lib/guards.ts';
 import { defineMeta } from './lib/route-meta.ts';
 import Landing from './pages/landing.page.azeroth';
 
@@ -23,9 +23,20 @@ export const routes: PageRoute[] = [
     },
     {
         path: '/admin',
-        lazy: chunk(() => import('./pages/admin.page.azeroth')),
+        lazy: chunk(() => import('./components/admin/admin-shell.component.azeroth')),
         render: 'client',
-        guard: requireAdmin
+        guard: requireStaff,
+        children: [
+            { path: '', lazy: chunk(() => import('./pages/admin/people.page.azeroth')), guard: firstSection },
+            { path: 'people', lazy: chunk(() => import('./pages/admin/people.page.azeroth')), guard: requireAbility('people') },
+            { path: 'people/:handle', lazy: chunk(() => import('./pages/admin/person.page.azeroth')), guard: requireAbility('people') },
+            { path: 'reports', lazy: chunk(() => import('./pages/admin/reports.page.azeroth')), guard: requireAbility('reports') },
+            { path: 'reports/:id', lazy: chunk(() => import('./pages/admin/report.page.azeroth')), guard: requireAbility('reports') },
+            { path: 'play', lazy: chunk(() => import('./pages/admin/play.page.azeroth')), guard: requireAbility('play') },
+            { path: 'money', lazy: chunk(() => import('./pages/admin/money.page.azeroth')), guard: requireAbility('money') },
+            { path: 'staff', lazy: chunk(() => import('./pages/admin/staff.page.azeroth')), guard: requireAbility('staff') },
+            { path: 'log', lazy: chunk(() => import('./pages/admin/log.page.azeroth')), guard: requireAbility('log') }
+        ]
     },
     {
         path: '/app',
@@ -50,6 +61,8 @@ export const routes: PageRoute[] = [
             { path: 'notifications', lazy: chunk(() => import('./pages/app/notifications.page.azeroth')), meta: defineMeta({ title: 'app.nav.notifications', tab: 'notifications', parent: '/app' }) },
             { path: 'me', lazy: chunk(() => import('./pages/app/me.page.azeroth')), meta: defineMeta({ title: 'app.nav.profile', tab: 'me' }) },
             { path: 'me/nfts', lazy: chunk(() => import('./pages/app/nfts.page.azeroth')), meta: defineMeta({ title: 'nfts.title', tab: 'me', parent: '/app/me' }) },
+            { path: 'me/wallet', lazy: chunk(() => import('./pages/app/wallet.page.azeroth')), meta: defineMeta({ title: 'vault.title', tab: 'me', parent: '/app/me' }) },
+            { path: 'me/wallet/check/:id', lazy: chunk(() => import('./pages/app/check.page.azeroth')), meta: defineMeta({ title: 'fair.title', tab: 'me', parent: '/app/me/wallet' }) },
             { path: 'me/settings', lazy: chunk(() => import('./pages/app/settings.page.azeroth')), meta: defineMeta({ title: 'app.nav.settings', tab: 'settings', parent: '/app/me' }) },
             { path: 'me/devices', lazy: chunk(() => import('./pages/app/devices.page.azeroth')), meta: defineMeta({ title: 'devices.title', tab: 'settings', parent: '/app/me/settings' }) }
         ]

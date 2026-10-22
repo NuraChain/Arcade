@@ -1,0 +1,33 @@
+import { NURA_CHAIN } from '../../data/chain.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { Suspended } from '../../stores/wallet.store.ts';
+
+const WHY: Readonly<Record<string, MessageKey>> = {
+    harassment: 'wallet.suspended.harassment',
+    spam: 'wallet.suspended.spam',
+    cheating: 'wallet.suspended.cheating',
+    inappropriate: 'wallet.suspended.inappropriate',
+    other: 'wallet.suspended.other'
+};
+
+export default component SuspendedNotice(props: { held: Suspended })
+{
+    const locale = useLocale();
+
+    derived term = props.held.until === undefined
+        ? locale.t('wallet.suspended.forGood')
+        : locale.t('wallet.suspended.until', { when: locale.date(Date.parse(props.held.until), { dateStyle: 'long', timeStyle: 'short' }) });
+
+    derived why = locale.t('wallet.suspended.why', { category: locale.t(WHY[props.held.category] ?? 'wallet.suspended.other') });
+
+    derived banked = props.held.vault !== undefined && NURA_CHAIN.explorerUrls.length > 0;
+
+    derived explorer = `${ NURA_CHAIN.explorerUrls[0] ?? '' }/address/${ props.held.vault ?? '' }`;
+
+    <div class="flex flex-col gap-1" data-suspended>
+        <p data-term>{ term }</p>
+        <p data-why>{ why }</p>
+        <p hidden={ !banked } data-nura><span>{ locale.t('wallet.suspended.nura') }</span> <a href={ explorer } target="_blank" rel="noopener noreferrer" class="font-semibold underline">{ locale.t('wallet.suspended.vault') }</a></p>
+    </div>
+}

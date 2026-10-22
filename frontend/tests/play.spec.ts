@@ -39,11 +39,12 @@ import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import { useVault } from '../src/stores/vault.store.ts';
 import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { useWatch, type Watched } from '../src/stores/watch.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { inPlay } from '../src/data/match.ts';
-import { ApiError, client, server } from './fake-api.ts';
+import { ApiError, client, nuraState, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -175,7 +176,7 @@ describe('GameCard', () =>
         await new Promise((resolve) => setTimeout(resolve, 30));
     };
 
-    const summary = (id: string, status: 'available' | 'coming-soon'): unknown => ({
+    const summary = (id: string, status: 'available' | 'coming-soon' | 'disabled'): unknown => ({
         id,
         slug: id,
         nameKey: `game.${ id }.name`,
@@ -252,6 +253,29 @@ describe('GameCard', () =>
         expect(button.disabled).toBe(true);
         expect(button.textContent).toContain('Coming soon');
         expect(container.textContent, 'a game that cannot be played yet says Play now').not.toContain('Play now');
+    });
+
+    it('says a game the staff paused is paused, on its picture and on its button, and offers no play', async () =>
+    {
+        server.games = [summary('poker', 'disabled')];
+        server.live = [{ game: 'poker', playing: 5, tables: 1 }];
+        useCatalogue().reset();
+        const container = mount('poker');
+        await settle();
+
+        const button = container.querySelector('button')!;
+
+        expect(button.disabled).toBe(true);
+        expect(button.textContent?.trim()).toBe('Paused');
+        expect(container.querySelector('a')?.textContent?.trim()).toBe('Paused');
+        expect(container.textContent).not.toContain('Coming soon');
+        expect(container.textContent).not.toContain('Live');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(button.textContent?.trim()).toBe('متوقف');
+        useLocale().setLocale('en');
     });
 
     it('holds its call to action until the catalogue has answered', () =>
@@ -927,6 +951,7 @@ describe('PlayPage', () =>
         {
             useOverlay().reset();
             useLocale().setLocale('en');
+            server.live = [];
 
             for (const one of server.tables)
             {
@@ -947,6 +972,47 @@ describe('PlayPage', () =>
 
             expect(server.calls).toContain('tables.start');
             expect(said()[0][1]).not.toBe(useLocale().t('state.errorLead'));
+        });
+
+        it('offers no Start at a table played for NURA once everybody is ready, because the lock starts its game', async () =>
+        {
+            const id = await useLobby().host('backgammon', { ...defaultTable('backgammon'), stake: (10n * 10n ** 18n).toString() }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[0].ready = true;
+            held.chairs[1].who = 'sara.k';
+            held.chairs[1].ready = true;
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(pressable(container, 'play.lobby.readyTag')).toBeDefined(), { timeout: 4000 });
+
+            expect(pressable(container, 'match.start')).toBeUndefined();
+        });
+
+        it('offers no Start at a table whose game the staff paused, says so where it would say go, and offers it again once the game is back', async () =>
+        {
+            const id = await useLobby().host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[0].ready = true;
+            held.chairs[1].who = 'sara.k';
+            held.chairs[1].ready = true;
+            server.live = [{ game: 'backgammon', status: 'disabled', playing: 2, tables: 0 }];
+            useCatalogue().refresh();
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('play.lobby.paused')), { timeout: 4000 });
+
+            expect(pressable(container, 'match.start')).toBeUndefined();
+            expect(pressable(container, 'play.lobby.readyTag')).toBeDefined();
+
+            server.live = [{ game: 'backgammon', status: 'available', playing: 2, tables: 0 }];
+            useCatalogue().refresh();
+
+            await vi.waitFor(() => expect(pressable(container, 'match.start')).toBeDefined(), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('play.lobby.paused'));
         });
 
         it('says a chair is empty when somebody stood up before the start arrived', async () =>
@@ -1989,6 +2055,7 @@ describe('PlayPage', () =>
             const titled = () => [...container.querySelectorAll('span')].find((one) => one.textContent === useLocale().t('watch.title'));
 
             await vi.waitFor(() => expect(titled()).toBeDefined(), { timeout: 4000 });
+            await vi.waitFor(() => expect(titled()!.parentElement!.parentElement!.querySelector('.animate-pulse'), 'the board was still on its way').toBeNull(), { timeout: 4000 });
             await settle();
 
             const watch = useWatch();
@@ -3002,9 +3069,121 @@ describe('PlayPage', () =>
             return { container, held };
         };
 
+        beforeEach(async () =>
+        {
+            server.nura.state = nuraState();
+            useToasts().reset();
+            useVault().reset();
+            await useVault().refresh();
+        });
+
         afterEach(() =>
         {
             delete (client.matches as unknown as Record<string, unknown>).view;
+        });
+
+        it('asks the wallet to sign the next game\'s stake at a table played for NURA, and says ready with the signature', async () =>
+        {
+            const signature = `0x${ 'cd'.repeat(65) }`;
+            const { container, held } = await finishedAt(true);
+            const sign = vi.spyOn(useVault(), 'signStake').mockResolvedValue({ signature });
+
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+
+            fire(pressable(container, 'Play again')!, 'click');
+
+            await vi.waitFor(() => expect(held.chairs[0].ready).toBe(true), { timeout: 4000 });
+
+            expect(sign).toHaveBeenCalledWith(held.id);
+            expect(server.nura.signatures).toContain(signature);
+            expect(server.calls, 'a table played for NURA is started by its lock, never by a press').not.toContain('tables.start');
+            vi.restoreAllMocks();
+        });
+
+        it('says nothing ready for the next game when the wallet would not sign its stake, and says why', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+
+            vi.spyOn(useVault(), 'signStake').mockResolvedValue({ said: 'vault.rejected' });
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+
+            fire(pressable(container, 'Play again')!, 'click');
+            await settle();
+
+            expect(server.calls).not.toContain('tables.ready');
+            expect(held.chairs[0].ready).toBe(false);
+            expect(useToasts().items().map((toast) => toast.text)).toContain('You declined it in your wallet, so nothing changed.');
+            vi.restoreAllMocks();
+        });
+
+        it('asks the wallet nothing for the next game when the vault holds less than the stake, and says so on the card', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+            const sign = vi.spyOn(useVault(), 'signStake');
+
+            server.nura.state = { ...nuraState(), balances: { address: '0x71c7656ec7ab88b098defb751b7401b5f6d8976f', free: (4n * 10n ** 18n).toString(), locked: '0', wallet: '0' } } as typeof server.nura.state;
+            held.stake = (10n * 10n ** 18n).toString();
+            await useVault().refresh();
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-short] p')?.textContent).toBe('You have 4 NURA free in your vault, less than the stake.'), { timeout: 4000 });
+            expect(container.querySelector('[data-short] a')?.getAttribute('href')).toBe('/app/me/wallet');
+
+            server.calls = [];
+            fire(pressable(container, 'Play again')!, 'click');
+            await settle();
+
+            expect(sign).not.toHaveBeenCalled();
+            expect(server.calls).not.toContain('tables.ready');
+            expect(held.chairs[0].ready).toBe(false);
+            expect(useToasts().items().map((toast) => toast.text)).toContain('There is not that much NURA free in your vault balance.');
+            vi.restoreAllMocks();
+        });
+
+        it('reads the vault again when it moves while the reader sits at a table played for NURA, and not at a free one', async () =>
+        {
+            const { held } = await finishedAt(true);
+            const reads = () => server.calls.filter((call) => call === 'vault.state').length;
+            const moved = async () =>
+            {
+                socket.deliver({ v: 1, t: 'nudge', n: 2, at: 0, scope: 'me', id: 'vault' });
+                clock.advance(NUDGE_WINDOW_MS);
+                await settle();
+            };
+
+            await moved();
+
+            expect(reads(), 'a free table listened to the vault').toBe(0);
+
+            held.stake = (10n * 10n ** 18n).toString();
+            await useLobby().refresh();
+            await settle();
+            server.calls = [];
+
+            await moved();
+
+            expect(reads()).toBe(1);
+        });
+
+        it('says what the reader won at a table played for NURA, on the card of the game it was won in', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+
+            held.stake = (10n * 10n ** 18n).toString();
+            held.money = { state: 'settling', feeBps: 500, winners: [0] };
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-money]')?.textContent).toContain('You won 19 NURA. Paying it out…'), { timeout: 4000 });
+
+            held.money = { state: 'settled', feeBps: 500, winners: [0], closeTx: `0x${ 'cd'.repeat(32) }` };
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-money]')?.textContent).toContain('You won 19 NURA.'), { timeout: 4000 });
+            expect(container.querySelector('[data-money]')?.textContent).not.toContain('Paying it out');
         });
 
         it('says ready when Play again is pressed, starts nothing while somebody has not, and says who', async () =>

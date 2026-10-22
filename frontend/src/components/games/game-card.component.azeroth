@@ -31,6 +31,10 @@ export default component GameCard(props: {
 
     derived live = playable && stats.playersOnline > 0;
 
+    derived paused = known && catalogue.status(props.game.id) === 'disabled';
+
+    derived shut = locale.t(paused ? 'games.paused' : 'games.soon');
+
     <article class={ `group relative flex flex-col overflow-hidden rounded-panel border border-line bg-field transition duration-200 ease-[var(--ease-ui)] hover:-translate-y-0.5 hover:border-line-strong hover:shadow-2 ${ props.class ?? '' }` }>
         <Link to={ href } class="relative block" aria-label={ name } prefetch="hover">
             <GameArt game={ props.game.id } ratio={ props.compact === true ? 'wide' : 'card' } class="transition-transform duration-500 ease-[var(--ease-reveal)] group-hover:scale-[1.03]" />
@@ -39,7 +43,7 @@ export default component GameCard(props: {
                     <Badge dot text={ locale.t('games.livePill') } tone="live" />
                 </Show>
                 <Show when={ known && !playable }>
-                    <Badge dot text={ locale.t('games.soon') } tone="neutral" />
+                    <Badge dot text={ shut } tone={ paused ? 'gold' : 'neutral' } />
                 </Show>
             </span>
         </Link>
@@ -67,7 +71,7 @@ export default component GameCard(props: {
                     { () =>
                         <Show
                             when={ playable }
-                            fallback={ <Button variant="outline" size="md" block disabled>{ locale.t('games.soon') }</Button> }
+                            fallback={ <Button variant="outline" size="md" block disabled>{ shut }</Button> }
                         >
                             { () => <Button variant="primary" size="md" block icon="forward" to={ href } label={ locale.t('games.playGame', { game: name }) }>{ locale.t('games.play') }</Button> }
                         </Show>

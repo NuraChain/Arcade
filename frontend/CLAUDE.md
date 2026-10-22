@@ -212,7 +212,8 @@ overlapping it, then the name, the badges, a level row (the XP bar, with the "a 
 nothing" sentence as its tooltip and in the accessibility tree) and the counts. On a phone the level
 is a row of its own and the counts are equal columns, because four counts beside a level wrapped one
 onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts four icon buttons there - Settings,
-Edit profile, Share and Sign out, in that order, so nothing wraps at 390. Sign out is the one in
+Edit profile, Share and Sign out, in that order, so nothing wraps at 390 - and a fifth before them,
+the shield to `/admin`, for somebody whose role opens a section of it (`sectionsFor`). Sign out is the one in
 `components/app/sign-out.ts` that Settings uses too, and a guest is asked first, because nothing
 signs back into a guest seat. Top to bottom it reads the owner's order: the wallet
 chip (`eyebrow`, `/app/me` only), the @handle chip, the join date, the name, the bio - both chips
@@ -1577,6 +1578,18 @@ an accessibility check reads the aria, which was correct. `tools/budgets.mjs` re
 bundle and refuses the build on a bare `setProp(..., 'class', ...)` whose value calls anything,
 because the difference exists nowhere else. It is BUG-009 in the framework register.
 
+The check read only the line holding `setProp(`, and the bundle prints a class array over several
+lines, so for most bindings it saw an opening bracket and nothing else; and it never read a class
+handed to an element built inside a branch (`h("span", { class: [ ... ] })`). Inside an explicit
+arrow branch (`{ () => <span class={ [ ... ].join(' ') }> }`) the array is bound once even when what
+it reads is a `derived`, while a template literal beside it is wrapped (framework register, entry
+40). `Badge`'s status pill was that shape, so a report's status changed from Waiting to Reviewed in
+place kept the gold border and ground with a grey dot; `Panel`'s clickable shell was the same. The
+check now reads every binding whole in both forms, setting strings aside so a class that only
+mentions `scroll()` as CSS is not taken for a read, and refused exactly those five on the build
+before the fix. `primitives.spec.ts` (*takes a new tone and a new label where it stands*) and
+`components.spec.ts` (*takes a new tone where it stands when it is a button*) hold the two.
+
 **A component cannot be held in a signal by plain assignment.** A setter treats a bare function
 argument as an updater, so `Dialog = module.default` CALLS the component with the previous value
 — null — instead of storing it, and the symptom is a component whose `props` are null at
@@ -1784,6 +1797,11 @@ string the product shows was rewritten that way, the server's achievement ladder
   imperative where that is how people would say it (`برو سر میز`, `دیگه نگرد`). A plate's tag stays a
   word or two (`وقت تمام`, `ترک کرد`, `نوبتته`): the plates are measured.
 - No suffix is glued to a placeholder (`{name}ه`, `{game}ت`): the sentence is built round it.
+- The reader is never a name in somebody else's sentence. Where a line names whoever did something
+  and the reader may be one of them, the reader has a sentence of their own in the second person:
+  «تو» put into "{winners} توی {game} برد" made a game the reader won read «تو توی منچ برد». The
+  chat's result card says «توی منچ بردی», and «تو و سارا توی حکم بردین» beside a partner
+  (`bubble.spec.ts`). «تو» as a label with no verb after it (a chip, a quoted author) is fine.
 - One word for one thing: «چت» for a conversation, «نام کاربری» for a handle, «بلاک» and «آنبلاک»,
   «بلاکچین» and «رجیستری», «رمزگذاری» for sealing, «کپی»، «فوروارد»، «اسپویلر»، «مدیر گروه», «اکسپلور»
   for Discover. A rating is «ریتینگ», experience «تجربه», a backgammon point «امتیاز».

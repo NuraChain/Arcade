@@ -726,6 +726,27 @@ describe('the lobby as the table about to be played', () =>
         expect(pressed(drawn({}, ready())), 'a table nobody may start offered its start').not.toContain(useLocale().t('match.start'));
     });
 
+    it('says a game the staff paused where it would say go, and offers no start', () =>
+    {
+        const container = drawn({ paused: true }, ready());
+
+        expect(status(container)).toBe('This game is paused for now. A game can start here again once it is back.');
+        expect(pressed(container)).not.toContain(useLocale().t('match.start'));
+        expect(pressed(container)).toContain(useLocale().t('play.lobby.readyTag'));
+        expect(container.querySelector('.lobby [aria-live="polite"] .live-dot'), 'a paused game wore the dot of a table about to start').toBeNull();
+        expect(container.querySelector('.lobby [aria-live="polite"] svg')).not.toBeNull();
+
+        cleanup();
+
+        expect(drawn({}, ready()).querySelector('.lobby [aria-live="polite"] .live-dot')).not.toBeNull();
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        expect(status(drawn({ paused: true }, ready()))).toBe('این بازی فعلاً متوقفه. وقتی برگرده، دوباره می‌شه این‌جا شروعش کرد.');
+        useLocale().setLocale('en');
+    });
+
     it('shows somebody standing the table as it stands, says they are only looking, and offers a seat while there is one', () =>
     {
         const sat = vi.fn();

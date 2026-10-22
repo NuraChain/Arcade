@@ -14,6 +14,39 @@ import {
     ack,
     answerInput,
     voiceSwitch,
+    vaultAmountInput,
+    vaultGames,
+    vaultGamesQuery,
+    reclaimInput,
+    stakeTerms,
+    quickStakeInput,
+    vaultBreakInput,
+    vaultState,
+    vaultTermsInput,
+    walletCall,
+    adminClearInput,
+    adminHistoryQuery,
+    adminLiftInput,
+    adminNoteInput,
+    adminPeople,
+    adminPeopleQuery,
+    adminPerson,
+    adminReport,
+    adminReports,
+    adminReportsQuery,
+    adminReviewInput,
+    reportsWaiting,
+    adminPlay,
+    adminGameInput,
+    adminSignOutInput,
+    adminSuspendInput,
+    adminVault,
+    adminFeeInput,
+    adminPauseInput,
+    staffInput,
+    staffList,
+    staffLog,
+    staffLogQuery,
     chatMessage,
     archiveInput,
     archiveList,
@@ -96,6 +129,7 @@ import {
     walletSignIn,
     matchView,
     matchWatch,
+    matchProof,
     watchableTables,
     matchDelta,
     matchAck,
@@ -141,6 +175,16 @@ function rankAfter(raw: string | undefined): number | undefined
 export function buildApi(ports: Ports)
 {
     const session = requireSession((request) => ports.identity.principal(request));
+
+    const onlyAdmin = <T>(answer: T | null) =>
+    {
+        if (answer === null)
+        {
+            throw new NotFoundError('Nothing there.');
+        }
+
+        return answer;
+    };
 
     return {
         meta: feature('/meta', (routes) => ({
@@ -335,6 +379,94 @@ export function buildApi(ports: Ports)
                     Math.max(0, Number.parseInt(context.query.offset ?? '0', 10) || 0),
                     Math.min(48, Math.max(0, Number.parseInt(context.query.limit ?? '24', 10) || 0))
                 ))
+        })),
+
+        admin: feature('/admin', [session], (routes) => ({
+            vault: routes.get('/vault', { output: adminVault }, async (context) => onlyAdmin(await ports.admin.vault(context.principal.userId))),
+
+            fee: routes.post('/vault/fee', { input: adminFeeInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.fee(context.principal.userId, context.input.bps))),
+
+            ceiling: routes.post('/vault/ceiling', { input: vaultAmountInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.ceiling(context.principal.userId, context.input.amount))),
+
+            fees: routes.post('/vault/fees', { input: vaultAmountInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.fees(context.principal.userId, context.input.amount))),
+
+            pause: routes.post('/vault/pause', { input: adminPauseInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.pause(context.principal.userId, context.input.paused))),
+
+            staff: routes.get('/staff', { output: staffList }, async (context) => onlyAdmin(await ports.admin.staff(context.principal.userId))),
+
+            setStaff: routes.post('/staff', { input: staffInput, output: staffList },
+                async (context) => onlyAdmin(await ports.admin.setStaff(context.principal.userId, context.input))),
+
+            log: routes.get('/log', { query: staffLogQuery, output: staffLog },
+                async (context) => onlyAdmin(await ports.admin.log(context.principal.userId, context.query))),
+
+            people: routes.get('/people', { query: adminPeopleQuery, output: adminPeople },
+                async (context) => onlyAdmin(await ports.admin.people(context.principal.userId, context.query))),
+
+            person: routes.get('/people/:handle', { output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.person(context.principal.userId, context.params.handle))),
+
+            history: routes.get('/people/:handle/history', { query: adminHistoryQuery, output: staffLog },
+                async (context) => onlyAdmin(await ports.admin.history(context.principal.userId, context.params.handle, context.query.cursor ?? null))),
+
+            note: routes.post('/people/:handle/notes', { input: adminNoteInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.note(context.principal.userId, context.params.handle, context.input))),
+
+            suspend: routes.post('/people/:handle/suspend', { input: adminSuspendInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.suspend(context.principal.userId, context.params.handle, context.input))),
+
+            lift: routes.post('/people/:handle/lift', { input: adminLiftInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.lift(context.principal.userId, context.params.handle, context.input))),
+
+            clear: routes.post('/people/:handle/clear', { input: adminClearInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.clear(context.principal.userId, context.params.handle, context.input))),
+
+            signOut: routes.post('/people/:handle/sign-out', { input: adminSignOutInput, output: adminPerson },
+                async (context) => onlyAdmin(await ports.admin.signOut(context.principal.userId, context.params.handle, context.input))),
+
+            reports: routes.get('/reports', { query: adminReportsQuery, output: adminReports },
+                async (context) => onlyAdmin(await ports.admin.reports(context.principal.userId, context.query))),
+
+            reportsWaiting: routes.get('/reports/waiting', { output: reportsWaiting },
+                async (context) => onlyAdmin(await ports.admin.reportsWaiting(context.principal.userId))),
+
+            report: routes.get('/reports/:id', { output: adminReport },
+                async (context) => onlyAdmin(await ports.admin.report(context.principal.userId, context.params.id))),
+
+            review: routes.post('/reports/:id/review', { input: adminReviewInput, output: adminReport },
+                async (context) => onlyAdmin(await ports.admin.review(context.principal.userId, context.params.id, context.input))),
+
+            play: routes.get('/play', { output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.play(context.principal.userId))),
+
+            switchGame: routes.post('/play/games/:game', { input: adminGameInput, output: adminPlay },
+                async (context) => onlyAdmin(await ports.admin.switchGame(context.principal.userId, context.params.game, context.input)))
+        })),
+
+        vault: feature('/vault', [session], (routes) => ({
+            state: routes.get('/', { output: vaultState }, (context) => ports.vault.state(context.principal.userId)),
+
+            accept: routes.post('/terms', { input: vaultTermsInput, output: vaultState },
+                (context) => ports.vault.accept(context.principal.userId)),
+
+            rest: routes.post('/break', { input: vaultBreakInput, output: vaultState },
+                (context) => ports.vault.rest(context.principal.userId, context.input.days)),
+
+            deposit: routes.post('/deposit', { input: vaultAmountInput, output: walletCall },
+                (context) => ports.vault.deposit(context.principal.userId, context.input.amount)),
+
+            withdraw: routes.post('/withdraw', { input: vaultAmountInput, output: walletCall },
+                (context) => ports.vault.withdraw(context.principal.userId, context.input.amount)),
+
+            games: routes.get('/games', { query: vaultGamesQuery, output: vaultGames },
+                (context) => ports.vault.games(context.principal.userId, context.query.cursor ?? null)),
+
+            reclaim: routes.post('/reclaim', { input: reclaimInput, output: walletCall },
+                (context) => ports.vault.reclaim(context.principal.userId, context.input.id))
         })),
 
         voice: feature('/voice', [session], (routes) => ({
@@ -574,6 +706,9 @@ export function buildApi(ports: Ports)
             quick: routes.post('/quick', { input: tableQuickInput, output: tableSummary },
                 (context) => ports.table.quick(context.principal.userId, context.input)),
 
+            quickStake: routes.post('/quick/stake', { input: quickStakeInput, output: stakeTerms },
+                (context) => ports.table.quickStake(context.principal.userId, context.input.game, context.input.stake)),
+
             /** Resolves the short code somebody pasted into a chat. */
             byCode: routes.get('/code/:code', { output: tableSummary }, async (context) =>
             {
@@ -617,7 +752,10 @@ export function buildApi(ports: Ports)
             }),
 
             ready: routes.post('/:id/ready', { input: readyInput, output: tableSummary },
-                (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready)),
+                (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready, context.input.signature)),
+
+            stake: routes.post('/:id/stake', { output: stakeTerms },
+                (context) => ports.table.stake(context.principal.userId, context.params.id)),
 
             /**
              * Tables with a game running on them, declared BEFORE `/:id` so the literal is not
@@ -728,6 +866,18 @@ export function buildApi(ports: Ports)
                 if (found === null)
                 {
                     throw new NotFoundError('No game to watch there.');
+                }
+
+                return found;
+            }),
+
+            proof: routes.get('/:id/proof', { output: matchProof }, async (context) =>
+            {
+                const found = await ports.match.proof(context.principal.userId, context.params.id);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No game there.');
                 }
 
                 return found;

@@ -1,0 +1,78 @@
+import type { AdminPlay } from '../../../../backend/src/schemas.ts';
+import { GAMES } from '../../data/games.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import type { Tone } from '../ui/variants.ts';
+
+export type PlayRow = AdminPlay['games'][number];
+
+type PlayStatus = PlayRow['status'];
+
+const WORDS: Record<PlayStatus, MessageKey> = {
+    available: 'admin.play.status.available',
+    disabled: 'admin.play.status.disabled',
+    'coming-soon': 'admin.play.status.coming-soon'
+};
+
+const TONES: Record<PlayStatus, Tone> = {
+    available: 'live',
+    disabled: 'gold',
+    'coming-soon': 'neutral'
+};
+
+export default component GameSwitch(props: { row: PlayRow; onSwitch: (on: boolean) => void })
+{
+    const locale = useLocale();
+
+    derived known = GAMES.find((one) => one.id === props.row.game) ?? null;
+
+    derived name = known === null ? props.row.game : locale.t(known.nameKey);
+
+    derived on = props.row.status === 'available';
+
+    derived off = props.row.status === 'disabled';
+
+    derived soon = props.row.status === 'coming-soon';
+
+    derived word = locale.t(WORDS[props.row.status]);
+
+    derived tone = TONES[props.row.status];
+
+    derived matches = props.row.matches;
+
+    derived tables = props.row.tables;
+
+    derived offLabel = locale.t('admin.play.offLabel', { game: name });
+
+    derived onLabel = locale.t('admin.play.onLabel', { game: name });
+
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:p-4" data-game={ props.row.game } data-status={ props.row.status }>
+        <Show when={ known } let={ shown } fallback={ <span class="h-11 w-11 shrink-0 rounded-tile bg-raised" aria-hidden="true"></span> }>
+            <GameIcon game={ shown.id } class="h-11 w-11 shrink-0" />
+        </Show>
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="title truncate text-ui-md text-text" data-name>{ name }</span>
+                <Badge dot text={ word } tone={ tone } />
+            </div>
+            <p class="facts text-ui-xs text-muted" data-counts>
+                <span><span class="tally">{ locale.n(matches) }</span> { locale.plural('admin.play.matches', matches) }</span>
+                <span><span class="tally">{ locale.n(tables) }</span> { locale.plural('admin.play.tables', tables) }</span>
+            </p>
+        </div>
+        <div class="ms-auto flex shrink-0 items-center">
+            <Show when={ on }>
+                <Button variant="destructive" size="sm" label={ offLabel } onClick={ () => props.onSwitch(false) }>{ locale.t('admin.play.off') }</Button>
+            </Show>
+            <Show when={ off }>
+                <Button variant="primary" size="sm" label={ onLabel } onClick={ () => props.onSwitch(true) }>{ locale.t('admin.play.on') }</Button>
+            </Show>
+            <Show when={ soon }>
+                <span class="text-ui-xs text-muted" data-soon>{ locale.t('admin.play.soon') }</span>
+            </Show>
+        </div>
+    </div>
+}

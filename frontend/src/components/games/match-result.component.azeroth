@@ -1,14 +1,19 @@
+import { Link, untrack } from 'azerothjs';
 import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { explorerTx, nuraOf } from '../../lib/nura.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { playersOf, scoreOf, type MatchPlayer } from '../../data/match.ts';
-import type { MatchView } from '../../api.ts';
-import type { Rematch } from './boards.ts';
+import type { MatchView, TableMoney } from '../../api.ts';
+import type { Rematch, Staked } from './boards.ts';
+import { potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import { resultWord } from './plate-tag.ts';
 
-export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch })
+const PAYING = new Set(['settling', 'settled', 'refunding', 'refunded', 'reclaimed']);
+
+export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked })
 {
     const locale = useLocale();
     const people = usePeople();
@@ -41,13 +46,40 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived ranked = props.match.view.kind === 'poker';
 
-    derived voided = props.match.outcome !== 'won';
+    state kept = null as { id: string; money: TableMoney } | null;
+
+    effect
+    {
+        const now = props.stake?.money;
+        const id = props.match.id;
+
+        if (now !== undefined && PAYING.has(now.state))
+        {
+            untrack(() => kept = { id, money: now });
+        }
+    }
+
+    derived money = props.stake?.money !== undefined && PAYING.has(props.stake.money.state)
+        ? props.stake.money
+        : (kept !== null && kept.id === props.match.id ? kept.money : undefined);
+
+    derived payees = money?.winners ?? [];
+
+    derived awaiting = money === undefined && props.stake?.money?.state === 'open';
+
+    derived voided = props.match.outcome !== 'won' && payees.length === 0 && !awaiting;
 
     derived uncounted = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'void');
 
-    derived mineWon = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'won');
+    derived mineWon = props.mine !== undefined && (payees.length > 0
+        ? payees.includes(props.mine)
+        : props.match.players.some((player) => player.seat === props.mine && player.result === 'won'));
 
-    derived winners = props.match.players.filter((player) => player.result === 'won');
+    derived winners = payees.length > 0
+        ? props.match.players.filter((player) => payees.includes(player.seat))
+        : props.match.players.filter((player) => player.result === 'won');
+
+    derived uncountedLine = locale.t(payees.length > 0 ? 'match.over.voidPaid' : 'match.over.voidMine');
 
     const nameOf = (handle: string) =>
     {
@@ -84,7 +116,52 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived free = props.rematch?.empty ?? 0;
 
-    derived startable = ready && waiting.length === 0 && free === 0;
+    derived paid = props.stake !== undefined;
+
+    derived startable = ready && waiting.length === 0 && free === 0 && !paid;
+
+    derived locking = paid && ready && waiting.length === 0 && free === 0;
+
+    derived short = paid && !ready && props.stake?.short !== undefined;
+
+    derived shortLine = locale.t('play.stake.short', { free: locale.n(nuraOf(props.stake?.short ?? '0'), { maximumFractionDigits: 4 }) });
+
+    derived moneyLine = (() =>
+    {
+        const stake = props.stake;
+
+        if (stake === undefined || props.mine === undefined || money === undefined)
+        {
+            return '';
+        }
+
+        if (money.state === 'reclaimed')
+        {
+            return locale.t('match.money.reclaimed');
+        }
+
+        if (payees.length === 0)
+        {
+            return locale.t(money.state === 'refunded' ? 'match.money.refunded' : 'match.money.refunding');
+        }
+
+        const amount = BigInt(stake.amount);
+
+        if (!payees.includes(props.mine))
+        {
+            return locale.t('match.money.lost', { amount: locale.n(nuraOf(amount), { maximumFractionDigits: 4 }) });
+        }
+
+        const share = shareOf(potOf(amount, props.match.players.length), money.feeBps, payees.length);
+
+        return locale.t(money.state === 'settled' ? 'match.money.won' : 'match.money.winning', { amount: locale.n(nuraOf(share), { maximumFractionDigits: 4 }) });
+    })();
+
+    derived moneyShown = moneyLine !== '';
+
+    derived checkTo = `/app/me/wallet/check/${ props.match.id }`;
+
+    derived moneyLink = money?.closeTx === undefined || props.stake === undefined ? null : explorerTx(props.stake.chainId, money.closeTx);
 
     const moved = (player: MatchPlayer) =>
         player.ratingAfter === undefined || player.ratingBefore === undefined
@@ -165,12 +242,29 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             </div>
         </For>
 
+        <Show when={ moneyShown }>
+            <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm font-semibold text-madder" data-money>
+                <Icon name="coins" size={ 15 } class="shrink-0" />
+                <span class="min-w-0">{ moneyLine }</span>
+                <Show when={ moneyLink } let={ href }>
+                    <a class="font-semibold text-accent hover:underline" href={ href } target="_blank" rel="noopener noreferrer">{ locale.t('vault.tx') }</a>
+                </Show>
+            </p>
+        </Show>
+
+        <Show when={ moneyShown }>
+            <Link to={ () => checkTo } class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline" data-check>
+                <Icon name="shield" size={ 15 } class="shrink-0" />
+                <span>{ locale.t('match.check') }</span>
+            </Link>
+        </Show>
+
         <Show when={ voided }>
             { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidLead') }</p> }
         </Show>
 
-        <Show when={ !voided && uncounted }>
-            { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidMine') }</p> }
+        <Show when={ !voided && !awaiting && uncounted }>
+            { () => <p class="text-ui-xs text-muted">{ uncountedLine }</p> }
         </Show>
 
         <Show when={ asking }>
@@ -183,6 +277,14 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                             </Button>
                         }
                     </Show>
+                    <Show when={ short }>
+                        { () =>
+                            <div class="flex flex-col" data-short>
+                                <p class="text-ui-sm font-semibold text-gold">{ shortLine }</p>
+                                <Link to="/app/me/wallet" class="inline-flex min-h-11 items-center self-start text-ui-sm font-semibold text-accent hover:underline">{ locale.t('vault.title') }</Link>
+                            </div>
+                        }
+                    </Show>
                     <Show when={ startable }>
                         { () =>
                             <Button variant="primary" size="lg" leading="play" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
@@ -191,6 +293,14 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                         }
                     </Show>
                     <div class="flex flex-col gap-1" aria-live="polite">
+                        <Show when={ locking }>
+                            { () =>
+                                <p class="flex items-center gap-2 text-ui-sm text-muted">
+                                    <Icon name="lock" size={ 15 } class="shrink-0" />
+                                    <span class="min-w-0">{ locale.t('play.stake.locking') }</span>
+                                </p>
+                            }
+                        </Show>
                         <Show when={ ready && waiting.length > 0 }>
                             { () =>
                                 <p class="flex items-center gap-2 text-ui-sm text-muted">

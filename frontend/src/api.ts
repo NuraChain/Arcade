@@ -4,6 +4,7 @@ import type { Api } from '../../backend/src/api.ts';
 
 export type {
     Account,
+    AdminVault,
     AchievementFamily,
     AchievementLadder,
     AchievementRarity,
@@ -35,6 +36,7 @@ export type {
     MatchHistory,
     MatchHistoryEntry,
     MatchPlay,
+    MatchProof,
     MatchView,
     MatchWatch,
     WatchableTables,
@@ -59,7 +61,13 @@ export type {
     SocialGraph,
     TableSeat,
     TableStatus,
-    TableSummary
+    TableSummary,
+    TableMoney,
+    StakeTerms,
+    VaultGame,
+    VaultGames,
+    VaultState,
+    WalletCall
 } from '../../backend/src/schemas.ts';
 
 export type {

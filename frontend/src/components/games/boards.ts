@@ -1,6 +1,6 @@
 import type { MountNode } from 'azerothjs';
 
-import type { MatchView, TableSummary } from '../../api.ts';
+import type { MatchView, TableMoney, TableSummary } from '../../api.ts';
 import { chunk } from '../../lib/chunks.ts';
 import type { EventBatch } from '../../stores/match.store.ts';
 
@@ -25,6 +25,36 @@ export function rematchOf(table: TableSummary): Rematch
     };
 }
 
+export interface Staked
+{
+    amount: string;
+    fee: number;
+    chainId: number;
+    money?: TableMoney;
+    short?: string;
+}
+
+const IN_FLIGHT = new Set(['locking', 'settling', 'refunding']);
+
+export function stakedOf(table: TableSummary, fee: number, chainId: number, free?: string): Staked | undefined
+{
+    if (table.stake === undefined)
+    {
+        return undefined;
+    }
+
+    const still = table.money === undefined || !IN_FLIGHT.has(table.money.state);
+    const short = still && free !== undefined && BigInt(free) < BigInt(table.stake);
+
+    return {
+        amount: table.stake,
+        fee: table.money?.feeBps ?? fee,
+        chainId,
+        ...(table.money === undefined ? {} : { money: table.money }),
+        ...(short ? { short: free } : {})
+    };
+}
+
 export interface BoardProps
 {
     match: MatchView;
@@ -32,6 +62,7 @@ export interface BoardProps
     starting?: boolean;
     onAgain?: () => void;
     rematch?: Rematch;
+    stake?: Staked;
     speech?: Record<string, string>;
     turnMs?: number;
     onPresenting?: (busy: boolean) => void;

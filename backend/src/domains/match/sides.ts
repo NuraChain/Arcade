@@ -1,4 +1,6 @@
-export type Variant = 'standard' | 'teams';
+export const VARIANTS = ['standard', 'teams'] as const;
+
+export type Variant = typeof VARIANTS[number];
 
 export interface Format
 {
@@ -6,7 +8,7 @@ export interface Format
     variant: Variant;
 }
 
-export const variantOf = (teams: boolean): Variant => (teams ? 'teams' : 'standard');
+export const variantOf = (teams: boolean) => (teams ? 'teams' : 'standard');
 
 export const sideOf = (seat: number, format: Format) => (format.variant === 'teams' ? seat % 2 : seat);
 

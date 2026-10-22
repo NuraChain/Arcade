@@ -282,7 +282,8 @@ holds the lock itself to see a seed wait for it; before the lock the first faile
 One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
 conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
 That makes the `status` in the seed an INITIAL value only — changing it on a database that already
-has the row is `update games set status = …`, not a redeploy.
+has the row is a switch in the admin's Play section (`.claude/rules/admin.md`, *Play*), written to
+the staff's log with its reason, not a redeploy. A game still `coming-soon` is not switched there.
 
 **The catalogue is split, and the split is the point.** The server owns what a game IS — seats,
 modes, targets, fairness, whether it can be opened. `frontend/src/data/games.ts` keeps where its

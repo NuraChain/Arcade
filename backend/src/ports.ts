@@ -1,9 +1,16 @@
 import type { Principal } from './http/auth.ts';
 import type {
     AchievementLadder,
+    AdminPeople,
+    AdminPerson,
+    AdminPlay,
+    AdminReport,
+    AdminReports,
+    AdminVault,
     VoiceIce,
     Leaderboard,
     MatchWatch,
+    MatchProof,
     LiveCounts,
     MatchHistory,
     PersonRecord,
@@ -11,6 +18,10 @@ import type {
     Account,
     Challenge,
     ChainCall,
+    StakeTerms,
+    VaultGames,
+    VaultState,
+    WalletCall,
     ChainFace,
     ChainProfile,
     GameList,
@@ -40,10 +51,13 @@ import type {
     MatchPlay,
     MatchView,
     NftPage,
-    PartyState
+    PartyState,
+    StaffList,
+    StaffLog
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
-import type { matchEvent } from './schemas.ts';
+import type { adminClearInput, adminGameInput, adminLiftInput, adminNoteInput, adminPeopleQuery, adminReportsQuery, adminReviewInput, adminSignOutInput, adminSuspendInput, matchEvent, staffInput, staffLogQuery } from './schemas.ts';
+import type { BreakDays } from './domains/stake/policy.ts';
 import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
 
@@ -211,7 +225,9 @@ export interface GroupPort
  */
 export interface TablePort
 {
-    quick(me: string, input: QuickAsk & { game: string; voice: VoiceScope }): Promise<TableSummary>;
+    quick(me: string, input: QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string }): Promise<TableSummary>;
+
+    quickStake(me: string, game: string, stake: string): Promise<StakeTerms>;
 
     /** The tables this account is sitting at. */
     mine(me: string): Promise<TableSummary[]>;
@@ -239,6 +255,7 @@ export interface TablePort
         teams: boolean;
         invitees: string[];
         roomId?: string;
+        stake?: string;
     }): Promise<TableSummary>;
 
     /**
@@ -250,7 +267,9 @@ export interface TablePort
     claim(me: string, tableId: string): Promise<{ table: TableSummary; seat: number | null }>;
 
     leave(me: string, tableId: string, forfeit: boolean): Promise<void>;
-    setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
+    setReady(me: string, tableId: string, ready: boolean, signature?: string): Promise<TableSummary>;
+
+    stake(me: string, tableId: string): Promise<StakeTerms>;
     invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
     remove(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;
@@ -502,6 +521,8 @@ export interface MatchPort
 
     watch(me: string, matchId: string, rev: number | null): Promise<MatchWatch | null>;
 
+    proof(me: string, matchId: string): Promise<MatchProof | null>;
+
     /** Public tables with a game running on them, for somebody looking for one to watch. */
     watchable(me: string, game: string | null): Promise<WatchableTables>;
 }
@@ -525,6 +546,70 @@ export interface ChainPort
     nftImage(userId: string, contract: string, tokenId: string): Promise<{ type: string; bytes: Uint8Array } | null>;
 }
 
+export interface VaultPort
+{
+    state(me: string): Promise<VaultState>;
+
+    accept(me: string): Promise<VaultState>;
+
+    rest(me: string, days: BreakDays): Promise<VaultState>;
+
+    deposit(me: string, amount: string): Promise<WalletCall>;
+
+    withdraw(me: string, amount: string): Promise<WalletCall>;
+
+    games(me: string, cursor: string | null): Promise<VaultGames>;
+
+    reclaim(me: string, escrowId: string): Promise<WalletCall>;
+}
+
+export interface AdminPort
+{
+    vault(me: string): Promise<AdminVault | null>;
+
+    fee(me: string, feeBps: number): Promise<WalletCall | null>;
+
+    ceiling(me: string, amount: string): Promise<WalletCall | null>;
+
+    fees(me: string, amount: string): Promise<WalletCall | null>;
+
+    pause(me: string, paused: boolean): Promise<WalletCall | null>;
+
+    staff(me: string): Promise<StaffList | null>;
+
+    setStaff(me: string, input: Infer<typeof staffInput>): Promise<StaffList | null>;
+
+    log(me: string, query: Infer<typeof staffLogQuery>): Promise<StaffLog | null>;
+
+    people(me: string, query: Infer<typeof adminPeopleQuery>): Promise<AdminPeople | null>;
+
+    person(me: string, handle: string): Promise<AdminPerson | null>;
+
+    history(me: string, handle: string, cursor: string | null): Promise<StaffLog | null>;
+
+    note(me: string, handle: string, input: Infer<typeof adminNoteInput>): Promise<AdminPerson | null>;
+
+    suspend(me: string, handle: string, input: Infer<typeof adminSuspendInput>): Promise<AdminPerson | null>;
+
+    lift(me: string, handle: string, input: Infer<typeof adminLiftInput>): Promise<AdminPerson | null>;
+
+    clear(me: string, handle: string, input: Infer<typeof adminClearInput>): Promise<AdminPerson | null>;
+
+    signOut(me: string, handle: string, input: Infer<typeof adminSignOutInput>): Promise<AdminPerson | null>;
+
+    reports(me: string, query: Infer<typeof adminReportsQuery>): Promise<AdminReports | null>;
+
+    reportsWaiting(me: string): Promise<{ count: number } | null>;
+
+    report(me: string, id: string): Promise<AdminReport | null>;
+
+    review(me: string, id: string, input: Infer<typeof adminReviewInput>): Promise<AdminReport | null>;
+
+    play(me: string): Promise<AdminPlay | null>;
+
+    switchGame(me: string, game: string, input: Infer<typeof adminGameInput>): Promise<AdminPlay | null>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface VoicePort
 {
@@ -545,5 +630,7 @@ export interface Ports
     device: DevicePort;
     chat: ChatPort;
     chain: ChainPort;
+    vault: VaultPort;
+    admin: AdminPort;
     voice: VoicePort;
 }

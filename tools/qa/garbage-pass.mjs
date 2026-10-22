@@ -50,7 +50,12 @@ const QUERIES = {
     '/notifications': ['cursor', 'notice'],
     '/chat': ['cursor'],
     '/chat/:id/epoch': ['epoch', 'device'],
-    '/chat/:id/messages': ['cursor', 'limit']
+    '/chat/:id/messages': ['cursor', 'limit'],
+    '/vault/games': ['cursor'],
+    '/admin/log': ['cursor', 'staff', 'person', 'kind'],
+    '/admin/people': ['q', 'list', 'cursor'],
+    '/admin/people/:handle/history': ['cursor'],
+    '/admin/reports': ['status', 'cursor']
 };
 
 const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', body: 'x', senderDeviceId: bad, signature: 'x', clientAt: bad, commitment: 'x', expiresAt: 0 });
@@ -75,7 +80,8 @@ const BODIES = {
     '/groups/:slug/members/remove': (bad) => [{ id: bad }],
     '/groups/:slug/owner': (bad) => [{ id: bad }],
     '/tables': (bad) => [tableBody({ privacy: 'invite', invitees: [bad] }), tableBody({ privacy: 'room', roomId: bad }), tableBody({ game: bad.slice(0, 32) })],
-    '/tables/quick': (bad) => [{ game: bad.slice(0, 32), voice: 'off' }],
+    '/tables/quick': (bad) => [{ game: bad.slice(0, 32), voice: 'off' }, { game: 'ludo', voice: 'off', stake: bad.slice(0, 40), signature: bad.slice(0, 4096) }],
+    '/tables/quick/stake': (bad) => [{ game: bad.slice(0, 32), stake: bad.slice(0, 40) }, { game: 'ludo', stake: bad.slice(0, 40) }],
     '/tables/:id/invite': (bad) => [{ id: bad }],
     '/tables/:id/remove': (bad) => [{ id: bad }],
     '/parties': (bad) => [{ id: bad.slice(0, 32), game: 'hokm' }, { id: bad.slice(0, 32), game: bad.slice(0, 32) }],
@@ -92,17 +98,32 @@ const BODIES = {
     '/devices/recovery/restore': (bad) => [{ deviceId: bad, nonce: bad, signature: bad }],
     '/chat/direct': (bad) => [{ id: bad }],
     '/chat/:id/epoch': (bad) => [{ epoch: 0, mintedBy: bad.slice(0, 22), recipients: [bad], signature: bad, confirmation: bad, keys: [] }],
-    '/chat/:id/messages': (bad) => [message(bad), { ...message(bad), kind: 'reaction', target: bad }]
+    '/chat/:id/messages': (bad) => [message(bad), { ...message(bad), kind: 'reaction', target: bad }],
+    '/tables/:id/ready': (bad) => [{ ready: true, signature: bad.slice(0, 4096) }, { ready: false, signature: bad.slice(0, 4096) }],
+    '/vault/deposit': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/vault/withdraw': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/vault/reclaim': (bad) => [{ id: bad.slice(0, 36) }],
+    '/admin/vault/fee': (bad) => [{ bps: bad.length }],
+    '/admin/vault/ceiling': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/admin/vault/fees': (bad) => [{ amount: bad.slice(0, 40) }],
+    '/admin/staff': (bad) => [{ handle: bad.slice(0, 32), role: 'moderator', reason: bad.slice(0, 500).padEnd(3, 'x') }, { handle: bad.slice(0, 32), role: 'none', reason: 'garbage' }],
+    '/admin/people/:handle/notes': (bad) => [{ text: bad.slice(0, 500).padEnd(3, 'x') }],
+    '/admin/people/:handle/suspend': (bad) => [{ days: 7, category: 'spam', reason: bad.slice(0, 500).padEnd(3, 'x') }, { days: bad.length, category: bad.slice(0, 16), reason: 'garbage' }],
+    '/admin/people/:handle/lift': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
+    '/admin/people/:handle/clear': (bad) => [{ part: 'name', reason: bad.slice(0, 500).padEnd(3, 'x') }, { part: bad.slice(0, 16), reason: 'garbage' }],
+    '/admin/people/:handle/sign-out': (bad) => [{ reason: bad.slice(0, 500).padEnd(3, 'x') }],
+    '/admin/reports/:id/review': (bad) => [{ outcome: 'reviewed', reason: bad.slice(0, 500).padEnd(3, 'x') }, { outcome: bad.slice(0, 16), reason: 'garbage' }],
+    '/admin/play/games/:game': (bad) => [{ on: false, reason: bad.slice(0, 500).padEnd(3, 'x') }, { on: bad.slice(0, 8), reason: 'garbage' }]
 };
 
 const WOULD_ACT = new Set(['/auth/handle']);
 
 const SPARED = new Set([
     '/auth/sign-out', '/auth/sign-out-everywhere', '/chain/profile/publish', '/social/privacy', '/groups/:slug/join', '/groups/:slug/leave',
-    '/tables/:id/seat', '/tables/:id/leave', '/tables/:id/ready', '/tables/:id/close', '/tables/:id/voice', '/tables/:id/start',
+    '/tables/:id/seat', '/tables/:id/leave', '/tables/:id/close', '/tables/:id/voice', '/tables/:id/start', '/tables/:id/stake',
     '/parties/:id/accept', '/parties/:id/decline', '/parties/:id/leave',
     '/notifications/:id/read', '/notifications/read-all', '/notifications/:id/dismiss', '/devices/:id/revoke', '/devices/recovery/off',
-    '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin'
+    '/chat/:id/read', '/chat/:id/expiry', '/chat/:id/pin', '/vault/terms', '/vault/break', '/admin/vault/pause'
 ]);
 
 const SIGNED_OUT = new Set(['/auth/challenge', '/auth/wallet']);

@@ -48,7 +48,7 @@ import {
     type Patch
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
-import type { Rematch } from './boards.ts';
+import type { Rematch, Staked } from './boards.ts';
 
 type Tone = 'light' | 'dark';
 
@@ -115,7 +115,7 @@ const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
 const covered = (moves: readonly Told[], mine: readonly Hop[]) =>
     (mine.every((hop, index) => moves[index]?.e === 'move' && moves[index].from === hop.from && moves[index].to === hop.to) ? mine.length : null);
 
-export default component BackgammonBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
+export default component BackgammonBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -1443,6 +1443,6 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
             </Show>
         </div>
 
-        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } onStand={ (stands) => resultStands = stands } />
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
     </div>
 }

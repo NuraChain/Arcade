@@ -92,7 +92,7 @@ the third so nobody re-investigates it.
   of useless things on env that can handle automaticly"). Three names are needed: `DATABASE_URL`,
   `SESSION_SECRET` and, in production, `PUBLIC_ORIGIN`; `loadServerConfig` refuses to start without
   any of them and names every one missing. The optional features (push, STUN and TURN, the chain,
-  the admin) are off while their names are left out or empty. Everything else has a value in the
+  paid tables, the admin) are off while their names are left out or empty. Everything else has a value in the
   code: what differs between development and production follows from the mode, the paths of the
   build follow from where the server lives, the socket limits are constants (`realtime/limits.ts`),
   and `PORT` (3200), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
@@ -103,8 +103,8 @@ the third so nobody re-investigates it.
   values are real there (the Nurachain id, rpc and contract addresses). A personal value - an admin
   wallet included - goes in `.env` only.
 - No absolute path naming a machine. `~` is fine; `/c/Users/<somebody>` is a person's name.
-- The `0x…` keys in tests and `seed-wallets.ts` are hardhat's published accounts; nothing else here is
-  key material (`recovery.ts`'s look-alike is the P-256 curve order).
+- The `0x…` keys in tests, `seed-wallets.ts` and `tools/qa/vault-deploy.mjs` are hardhat's published
+  accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).
 
 **Comment only when the code cannot say it** (the rule is in `AGENTS.md`). Names and structure
 carry the meaning; never a comment that restates the code or narrates a change.
@@ -180,5 +180,9 @@ Loaded only when a session touches the matching code:
 - `.claude/rules/games.md` - tables, voice, the engines, the boards, records, and the second audit.
 - `.claude/rules/chat-and-keys.md` - chat, `nura-e2ee/v1`, devices, sealing, recovery, franking,
   notifications, realtime, and the first audit.
-- `.claude/rules/identity-and-profile.md` - signing in, the Nura Profile, NFTs, the admin.
+- `.claude/rules/identity-and-profile.md` - signing in, the Nura Profile, NFTs.
+- `.claude/rules/stakes.md` - playing for NURA: the vault, who may play, the signed Ready, the lock
+  and the payout.
+- `.claude/rules/admin.md` - running the platform: the staff and their roles, and the log every
+  change writes.
 - `tools/blender/CLAUDE.md` and `tools/qa/CLAUDE.md` - the 3D asset kit and the browser passes.

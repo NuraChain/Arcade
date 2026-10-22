@@ -1,0 +1,35 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { nuraOf } from '../../lib/nura.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
+import Panel from '../ui/panel.component.azeroth';
+
+export default component VaultChip()
+{
+    const locale = useLocale();
+    const vaults = useVault();
+
+    derived held = vaults.state();
+
+    derived free = held !== null && held.configured ? held.balances?.free ?? null : null;
+
+    derived shown = free !== null;
+
+    derived figure = locale.n(nuraOf(free ?? '0'), { maximumFractionDigits: 4 });
+
+    <Show when={ shown }>
+        <Panel to="/app/me/wallet" pad="sm" class="flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent" aria-hidden="true">
+                <Icon name="coins" size={ 18 } />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col">
+                <span class="text-ui-md font-semibold text-text">{ locale.t('vault.title') }</span>
+                <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-ui-sm text-muted">
+                    <span>{ locale.t('vault.free') }</span>
+                    <span class="font-semibold text-text"><span class="tally">{ figure }</span> NURA</span>
+                </span>
+            </span>
+            <Icon name="chevron-right" size={ 18 } class="icon-flip shrink-0 text-faint" />
+        </Panel>
+    </Show>
+}

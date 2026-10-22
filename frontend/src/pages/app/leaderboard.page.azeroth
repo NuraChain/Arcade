@@ -19,7 +19,7 @@ export default component LeaderboardPage()
 
     const address = useAddress();
 
-    derived games = catalogue.games.filter((game) => catalogue.status(game.id) === 'available');
+    derived games = catalogue.games.filter((game) => catalogue.status(game.id) !== 'coming-soon');
 
     derived chosen = (games.find((game) => game.id === address.text('game')) ?? games[0])?.id ?? null;
 

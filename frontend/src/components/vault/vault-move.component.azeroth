@@ -1,0 +1,134 @@
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
+import { parseNura, typedNura } from '../../lib/nura.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
+
+export type Deposits = 'open' | 'paused' | 'none';
+
+const RESERVE = 10n ** 16n;
+
+export default component VaultMove(props: { free: string; wallet: string; deposits: Deposits })
+{
+    const locale = useLocale();
+    const vaults = useVault();
+    const toasts = useToasts();
+
+    state mode = 'in';
+
+    state amount = '';
+
+    state said = null as MessageKey | null;
+
+    derived choosing = props.deposits !== 'none';
+
+    derived inward = choosing && mode === 'in';
+
+    derived shut = inward && props.deposits === 'paused';
+
+    derived wrong = said !== null;
+
+    derived told = said === null ? null : locale.t(said);
+
+    const most = () =>
+    {
+        if (!inward)
+        {
+            return BigInt(props.free);
+        }
+
+        const held = BigInt(props.wallet);
+
+        return held > RESERVE ? held - RESERVE : 0n;
+    };
+
+    const fill = () =>
+    {
+        const all = most();
+
+        amount = all > 0n ? typedNura(all) : '';
+        said = null;
+    };
+
+    const send = async () =>
+    {
+        if (shut)
+        {
+            return;
+        }
+
+        const wei = parseNura(amount);
+
+        if (wei === null)
+        {
+            said = 'vault.amountBad';
+            return;
+        }
+
+        said = null;
+
+        const answer = inward ? await vaults.deposit(wei) : await vaults.withdraw(wei);
+
+        if (answer === null)
+        {
+            toasts.show({ kind: 'success', text: locale.t(inward ? 'vault.deposited' : 'vault.withdrawn') });
+            amount = '';
+            return;
+        }
+
+        said = answer;
+    };
+
+    const turn = (id: string) =>
+    {
+        mode = id;
+        said = null;
+    };
+
+    const typed = (value: string) =>
+    {
+        amount = value;
+        said = null;
+    };
+
+    <Panel section stack="md" labelledBy="vault-move">
+        <h2 id="vault-move" class="text-ui-lg font-semibold text-text">{ locale.t('vault.move') }</h2>
+        <Show when={ choosing }>
+            <Segmented
+                block
+                label={ locale.t('vault.move') }
+                value={ mode }
+                items={ [{ id: 'in', label: locale.t('vault.in') }, { id: 'out', label: locale.t('vault.out') }] }
+                onChange={ turn }
+            />
+        </Show>
+        <Field id="vault-amount" label={ locale.t('vault.amount') } hint={ locale.t('vault.amountHint') } error={ told }>
+            <div class="flex items-center gap-2">
+                <Input
+                    id="vault-amount"
+                    class="min-w-0 flex-1"
+                    value={ amount }
+                    inputmode="decimal"
+                    autocomplete="off"
+                    enterkeyhint="send"
+                    invalid={ wrong }
+                    describedBy={ wrong ? 'vault-amount-error' : 'vault-amount-hint' }
+                    onInput={ typed }
+                    onEnter={ () => void send() }
+                />
+                <Button variant="outline" onClick={ fill }>{ locale.t('vault.max') }</Button>
+            </div>
+        </Field>
+        <Show when={ shut }>
+            <p class="text-ui-sm text-muted">{ locale.t('vault.depositsShut') }</p>
+        </Show>
+        <Button variant="primary" block loading={ vaults.busy() } disabled={ shut } onClick={ () => void send() }>
+            { inward ? locale.t('vault.send.in') : locale.t('vault.send.out') }
+        </Button>
+    </Panel>
+}

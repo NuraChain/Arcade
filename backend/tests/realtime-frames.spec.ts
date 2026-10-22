@@ -225,7 +225,7 @@ describe('server frames', () =>
 
     it('says how busy the games are in numbers, and names nobody and no table', () =>
     {
-        const games = [{ game: 'ludo', playing: 3, tables: 1 }];
+        const games = [{ game: 'ludo', status: 'available' as const, playing: 3, tables: 1 }];
         const frame = pulse(5, { games, watching: 'a-mark' });
 
         expect(frame).toEqual({ v: 1, t: 'pulse', n: 5, games, watching: 'a-mark' });
@@ -238,7 +238,7 @@ describe('server frames', () =>
             presence(2, true, [{ who: 'sara.k', state: 'online', since: 0 }]),
             nudge(3, 'chat', 0, 'c-1'),
             typing(4, 'sara.k', 'c-1'),
-            pulse(5, { games: [{ game: 'ludo', playing: 3, tables: 1 }], watching: 'a-mark' })
+            pulse(5, { games: [{ game: 'ludo', status: 'available', playing: 3, tables: 1 }], watching: 'a-mark' })
         ];
 
         // `n` is a per-connection delivery ordinal for gap detection. It is NOT the e2ee `seq`,

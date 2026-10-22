@@ -16,6 +16,7 @@ import { clampPage, pageCount, pagingFor, slice, visible, windowOf } from '../sr
 import { createDrag } from '../src/lib/swipe.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { TONE_DOT, TONE_FILL, TONE_PILL, type Tone } from '../src/components/ui/variants.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
@@ -290,6 +291,44 @@ describe('Badge', () =>
         const host = container.querySelector('span')!;
 
         expect(host.className, 'an untipped badge still costs a box').toContain('contents');
+    });
+
+    it('takes a new tone and a new label where it stands, as a pill, a dot and a count', async () =>
+    {
+        const [tone, setTone] = createSignal<Tone>('gold');
+        const [label, setLabel] = createSignal('Waiting');
+        const flushed = async () =>
+        {
+            for (let step = 0; step < 8; step += 1)
+            {
+                await Promise.resolve();
+            }
+        };
+        const pill = renderTest(() => Badge({ dot: true, get text() { return label(); }, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
+        const dot = renderTest(() => Badge({ dot: true, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
+        const count = renderTest(() => Badge({ count: 3, get tone() { return tone(); }, get label() { return label(); } }) as Rendered).container;
+        const pillNode = pill.querySelector('span.rounded-full.h-6')!;
+        const dotNode = dot.querySelector('[role="status"]')!;
+        const countNode = count.querySelector('[role="status"]')!;
+
+        expect(pillNode.className).toContain(TONE_PILL.gold);
+
+        setTone('neutral');
+        setLabel('Reviewed');
+        await flushed();
+
+        expect(pill.querySelector('span.rounded-full.h-6'), 'the pill was drawn again').toBe(pillNode);
+        expect(pillNode.className).toContain(TONE_PILL.neutral);
+        expect(pillNode.className).not.toContain(TONE_PILL.gold);
+        expect(pillNode.textContent).toBe('Reviewed');
+        expect(pillNode.getAttribute('aria-label')).toBe('Reviewed');
+        expect(pillNode.querySelector(`.${ TONE_DOT.neutral }`), 'the dot carries the new colour').not.toBeNull();
+        expect(dotNode.className).toContain(TONE_DOT.neutral);
+        expect(dotNode.className).not.toContain(TONE_DOT.gold);
+        expect(dotNode.getAttribute('aria-label')).toBe('Reviewed');
+        expect(countNode.className).toContain(TONE_FILL.neutral);
+        expect(countNode.className).not.toContain(TONE_FILL.gold);
+        expect(countNode.getAttribute('aria-label')).toBe('Reviewed');
     });
 });
 

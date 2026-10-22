@@ -14,6 +14,12 @@ import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
 import type { VoiceScope } from '../../backend/src/domains/table/voices.ts';
 import type {
     Account,
+    AdminPeople,
+    AdminPerson,
+    AdminPlay,
+    AdminReport,
+    AdminReports,
+    AdminVault,
     ChainProfile,
     ChatMessage,
     ConversationDevices,
@@ -24,8 +30,18 @@ import type {
     NftItem,
     PersonSummary,
     Privacy,
-    Standing
+    Standing,
+    StaffList,
+    StaffLog,
+    StakeTerms,
+    TableMoney,
+    VaultGames,
+    VaultState,
+    WalletCall
 } from '../../backend/src/schemas.ts';
+import { ESCROW_STATES, STAKE_LADDER } from '../../backend/src/domains/stake/policy.ts';
+import { STAFF_REFUSALS, type StaffRefusal } from '../../backend/src/domains/admin/refusals.ts';
+import { LOG_PAGE, may, outranks, PEOPLE_PAGE, REPORTS_PAGE, type Ability, type ActionKind, type ClearPart, type GrantedRole, type PeopleList, type ReportList, type ReportOutcome, type ReportStatus, type StaffRole, type SuspendCategory, type SuspendDays } from '../../backend/src/domains/admin/roles.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -37,7 +53,7 @@ import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 import { TABLE_RULES } from '../src/data/tables.ts';
 import { runtime } from '../src/lib/runtime.ts';
 
-export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'chain-unreachable';
+export type Refusal = 'challenge-unreachable' | 'challenge-busy' | 'bad-signature' | 'wallet-unreachable' | 'wallet-busy' | 'wallet-suspended' | 'chain-unreachable';
 
 interface GroupWire
 {
@@ -105,6 +121,8 @@ interface TableWire
     removed?: boolean;
     keptOut?: string[];
     quick?: boolean;
+    stake?: string;
+    money?: TableMoney;
     createdAt: string;
 }
 
@@ -228,6 +246,7 @@ interface OpeningWire
     voice: VoiceScope;
     teams: boolean;
     invitees: string[];
+    stake?: string;
 }
 
 function newTable(input: OpeningWire)
@@ -250,6 +269,7 @@ function newTable(input: OpeningWire)
         chat: input.chat,
         voice: input.voice,
         teams,
+        ...(input.stake === undefined ? {} : { stake: input.stake }),
         status: 'open',
         host: server.me,
         chairs: Array.from({ length: input.seats }, (_, seat) => ({
@@ -290,12 +310,306 @@ function mustDevice(id: string)
 
 const CHAIN_REGISTRY = '0x8CFbcEf737BE3C67A52A20Ae3DCC685ACF759460';
 
+export const NURA_VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+
+export const nuraState = (): VaultState => ({
+    configured: true,
+    vault: NURA_VAULT,
+    chainId: 31337,
+    fee: 500,
+    maxStake: '1000000000000000000000',
+    reclaimAfter: 259_200,
+    paused: false,
+    ladder: [...STAKE_LADDER],
+    may: 'yes',
+    balances: {
+        address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        free: '50000000000000000000',
+        locked: '0',
+        wallet: '20000000000000000000'
+    }
+});
+
+const nuraFresh = () => ({
+    state: nuraState() as VaultState,
+    call: { from: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', to: NURA_VAULT, data: '0xd0e30db0', value: '0x0', chainId: 31337 } as WalletCall,
+    terms: { typedData: '{"primaryType":"Stake","message":{"nonce":"0x01"}}', deadline: '2026-10-21T00:30:00.000Z' } as StakeTerms,
+    games: { games: [] } as VaultGames,
+    refuse: null as { status: number; code: string } | null,
+    signatures: [] as (string | undefined)[]
+});
+
+export const adminState = (): AdminVault => ({
+    configured: true,
+    vault: NURA_VAULT,
+    chainId: 31337,
+    fee: 500,
+    maxFee: 1000,
+    maxStake: '1000000000000000000000',
+    reclaimAfter: 259_200,
+    paused: false,
+    held: '81000000000000000000',
+    free: '50000000000000000000',
+    locked: '30000000000000000000',
+    fees: '1000000000000000000',
+    solvent: true,
+    referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '5000000000000000000', games: '96', low: false, allowed: true },
+    roles: { admin: true, pauser: true },
+    playing: 3,
+    states: ESCROW_STATES.map((state) => ({ state, count: state === 'open' ? 3 : state === 'settled' ? 12 : 0 })),
+    stuck: []
+});
+
+const adminFresh = () => ({
+    state: adminState(),
+    owner: true,
+    refuse: null as { status: number; code: string } | null
+});
+
+const adminRefusal = () =>
+{
+    if (!server.admin.owner)
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+
+    const refused = server.admin.refuse;
+
+    if (refused !== null)
+    {
+        throw new ApiError(refused.status, refused.code, refused.code, undefined);
+    }
+};
+
+type StaffMember = StaffList['members'][number];
+
+type StaffLogRow = StaffLog['rows'][number];
+
+export const staffMember = (handle: string, role: StaffRole, grantedBy?: string, grantedAt?: string): StaffMember =>
+{
+    const person = personWire(handle);
+
+    return {
+        handle,
+        displayName: person.displayName,
+        hue: person.hue,
+        role,
+        ...(grantedBy === undefined ? {} : { grantedBy }),
+        ...(grantedAt === undefined ? {} : { grantedAt })
+    };
+};
+
+const staffFresh = () => ({
+    owner: 'alex' as string | null,
+    members: [] as StaffMember[],
+    log: [] as StaffLogRow[],
+    logged: 0
+});
+
+type PlayStatus = AdminPlay['games'][number]['status'];
+
+const playFresh = (): AdminPlay => ({ games: ['hokm', 'poker', 'backgammon', 'ludo'].map((game) => ({ game, status: 'available' as PlayStatus, matches: 0, tables: 0 })) });
+
+const staffRoleOf = (handle: string) => (server.staff.owner === handle ? 'owner' : server.staff.members.find((one) => one.handle === handle)?.role ?? null);
+
+const staffRefused = (word: StaffRefusal, message: string) => new ApiError(STAFF_REFUSALS[word], word, message, undefined);
+
+const staffGate = (ability: Ability) =>
+{
+    if (!may(staffRoleOf(server.me), ability))
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+};
+
+const staffListed = (): StaffList => ({
+    ...(server.staff.owner === null ? {} : { owner: staffMember(server.staff.owner, 'owner') }),
+    members: structuredClone(server.staff.members).sort((a, b) =>
+        Number(a.role !== 'admin') - Number(b.role !== 'admin')
+        || (a.grantedAt ?? '').localeCompare(b.grantedAt ?? '')
+        || a.handle.localeCompare(b.handle))
+});
+
+export const staffLogged = (row: Omit<StaffLogRow, 'id'>) =>
+{
+    server.staff.logged += 1;
+    server.staff.log.unshift({ id: `log-${ server.staff.logged }`, ...row });
+};
+
+type AdminRow = AdminPeople['rows'][number];
+
+const accountsFresh = () => ({
+    crowd: [] as string[],
+    suspended: [] as string[],
+    reported: {} as Record<string, number>,
+    about: {} as Record<string, Partial<AdminPerson>>
+});
+
+const accountHandles = () => [server.me, ...PEOPLE_FIXTURES.map((one) => one.handle).filter((handle) => handle !== server.me), ...server.accounts.crowd];
+
+const accountRow = (handle: string, at: number): AdminRow =>
+{
+    const person = personWire(handle);
+    const role = staffRoleOf(handle);
+    const reports = server.accounts.reported[handle] ?? 0;
+
+    return {
+        handle,
+        displayName: person.displayName,
+        hue: person.hue,
+        createdAt: new Date(Date.parse('2026-10-20T09:00:00.000Z') - at * 3_600_000).toISOString(),
+        minor: person.isMinor,
+        suspended: server.accounts.suspended.includes(handle),
+        ...(role === null ? {} : { staff: role }),
+        reports
+    };
+};
+
+const ACCOUNT_LISTS: Record<PeopleList, (row: AdminRow) => boolean> = {
+    newest: () => true,
+    suspended: (row) => row.suspended,
+    minors: (row) => row.minor,
+    staff: (row) => row.staff !== undefined,
+    reported: (row) => row.reports > 0
+};
+
+const historyOf = (handle: string, cursor: string | null) =>
+{
+    const rows = server.staff.log.filter((row) => row.person === handle);
+    const from = cursor === null ? 0 : rows.findIndex((row) => row.id === cursor) + 1;
+    const page = rows.slice(from, from + LOG_PAGE);
+    const last = page[page.length - 1];
+
+    return { rows: structuredClone(page), ...(rows.length > from + LOG_PAGE && last !== undefined ? { cursor: last.id } : {}) };
+};
+
+const accountView = (handle: string): AdminPerson =>
+{
+    const at = accountHandles().indexOf(handle);
+    const first = historyOf(handle, null);
+
+    return {
+        ...accountRow(handle, at),
+        bio: '',
+        strangers: true,
+        shown: true,
+        wallets: [],
+        filed: 0,
+        sessions: [],
+        devices: [],
+        reportsAbout: [],
+        paid: {},
+        history: first.rows,
+        ...(first.cursor === undefined ? {} : { historyCursor: first.cursor }),
+        games: [],
+        paidGames: [],
+        ...structuredClone(server.accounts.about[handle] ?? {})
+    };
+};
+
+const reachedBy = (handle: string) =>
+{
+    const actor = staffRoleOf(server.me);
+
+    if (!accountHandles().includes(handle))
+    {
+        throw staffRefused('staff-nobody', 'No one by that name.');
+    }
+
+    if (handle === server.me)
+    {
+        throw staffRefused('staff-self', 'Nobody does this to their own account.');
+    }
+
+    if (!outranks(actor, staffRoleOf(handle)))
+    {
+        throw staffRefused('staff-rank', 'That is above what your role may do.');
+    }
+
+    return actor ?? 'moderator';
+};
+
+interface FiledReport
+{
+    id: string;
+    category: AdminReport['category'];
+    status: ReportStatus;
+    at: string;
+    by: string;
+    about: string;
+    message?: string;
+    together: AdminReport['together'];
+}
+
+const reportsFresh = () => ({ filed: [] as FiledReport[], count: 0 });
+
+export const reportFiled = (report: Pick<FiledReport, 'at' | 'by' | 'about'> & Partial<Omit<FiledReport, 'id'>>) =>
+{
+    server.desk.count += 1;
+
+    const id = `report-${ server.desk.count }`;
+
+    server.desk.filed.push({ category: 'harassment', status: 'received', together: [], ...report, id });
+
+    return id;
+};
+
+const reportFace = (handle: string) =>
+{
+    const person = personWire(handle);
+    const role = staffRoleOf(handle);
+
+    return { handle, displayName: person.displayName, hue: person.hue, ...(role === null ? {} : { staff: role }) };
+};
+
+const reportRow = (report: FiledReport): AdminReports['rows'][number] => ({
+    id: report.id,
+    category: report.category,
+    status: report.status,
+    at: report.at,
+    disclosed: report.message !== undefined,
+    by: reportFace(report.by),
+    about: reportFace(report.about)
+});
+
+const reportView = (report: FiledReport): AdminReport => ({
+    ...reportRow(report),
+    ...(report.message === undefined ? {} : { message: report.message }),
+    together: structuredClone(report.together),
+    history: structuredClone(server.staff.log.filter((row) => row.kind === 'report' && row.details.report === report.id))
+});
+
+const waitingReports = () => server.desk.filed.filter((one) => one.status === 'received').length;
+
+const reportNamed = (id: string) =>
+{
+    const found = server.desk.filed.find((one) => one.id === id);
+
+    if (found === undefined)
+    {
+        throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+    }
+
+    return found;
+};
+
+const nuraRefusal = () =>
+{
+    const refused = server.nura.refuse;
+
+    if (refused !== null)
+    {
+        throw new ApiError(refused.status, refused.code, refused.code, undefined);
+    }
+};
+
 export const server =
 {
     account: null as Account | null,
     issued: null as { nonce: string; message: string; address: string; device?: string } | null,
     received: null as { address: string; nonce: string; signature: string; providerRdns?: string; device?: { id: string; exchangeKey: string; signingKey: string; label: string } } | null,
     refuse: null as Refusal | null,
+    suspension: {} as Record<string, string>,
     uploaded: null as string | null,
     chain: { configured: false, profile: null as ChainProfile | null },
     nfts: { configured: false, items: [] as NftItem[] },
@@ -311,7 +625,7 @@ export const server =
      * store that used to invent these numbers should not have a fake inventing them either, and a
      * spec that cares about a count says so by putting one here.
      */
-    live: [] as { game: string; playing: number; tables: number }[],
+    live: [] as { game: string; status?: PlayStatus; playing: number; tables: number }[],
     games: [] as unknown[],
     achievements: { scopes: [], families: [], recent: [] } as unknown,
     progress: { xp: 0, level: 1, into: 0, span: 100 },
@@ -394,6 +708,12 @@ export const server =
      * Postgres. What it is for is letting a page mount the store without exploding.
      */
     vault: null as { salt: string; publicKey: string; wrapped: string; checkValue: string } | null,
+    nura: nuraFresh(),
+    admin: adminFresh(),
+    staff: staffFresh(),
+    accounts: accountsFresh(),
+    desk: reportsFresh(),
+    play: playFresh(),
 
     archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
 
@@ -485,7 +805,7 @@ export const server =
     refusals: {} as Record<string, 'blocked' | 'strangers-off' | 'minor-safety'>,
 
     asked: [] as { game: string; seats: number; teams: boolean }[],
-    sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
+    sought: [] as (QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string })[],
 
     searched: [] as string[],
     directoryMax: Infinity,
@@ -495,6 +815,8 @@ export const server =
     watches: {} as Record<string, unknown>,
     ledgers: {} as Record<string, { rev: number }[]>,
     watchedFrom: [] as string[],
+    proofs: {} as Record<string, unknown>,
+    proofRefused: null as { status: number; code: string } | null,
 
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
@@ -509,7 +831,10 @@ export const server =
         server.watches = {};
         server.ledgers = {};
         server.watchedFrom = [];
+        server.proofs = {};
+        server.proofRefused = null;
         server.games = [];
+        server.live = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
@@ -550,6 +875,12 @@ export const server =
         server.epochs = {};
         server.sealDevice = null;
         server.vault = null;
+        server.nura = nuraFresh();
+        server.admin = adminFresh();
+        server.staff = staffFresh();
+        server.accounts = accountsFresh();
+        server.desk = reportsFresh();
+        server.play = playFresh();
         server.archive = [];
         server.devices = [];
         server.currentDevice = null;
@@ -560,6 +891,7 @@ export const server =
         server.issued = null;
         server.received = null;
         server.refuse = null;
+        server.suspension = {};
         server.uploaded = null;
         server.chain = { configured: false, profile: null };
         server.nfts = { configured: false, items: [] };
@@ -766,6 +1098,405 @@ export function walletAccount(address: string): Account
 
 export const client =
 {
+    admin:
+    {
+        async vault()
+        {
+            server.calls.push('admin.vault');
+            adminRefusal();
+            return structuredClone(server.admin.state);
+        },
+        async fee({ input }: { input: { bps: number } })
+        {
+            server.calls.push(`admin.fee ${ input.bps }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xfee' };
+        },
+        async ceiling({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`admin.ceiling ${ input.amount }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xceiling' };
+        },
+        async fees({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`admin.fees ${ input.amount }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xfees' };
+        },
+        async pause({ input }: { input: { paused: boolean } })
+        {
+            server.calls.push(`admin.pause ${ input.paused }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xpause' };
+        },
+        async staff()
+        {
+            server.calls.push('admin.staff');
+            staffGate('staff');
+            return staffListed();
+        },
+        async setStaff({ input }: { input: { handle: string; role: GrantedRole | 'none'; reason: string } })
+        {
+            server.calls.push(`admin.setStaff ${ input.handle } ${ input.role }`);
+            staffGate('staff');
+
+            const actor = staffRoleOf(server.me);
+            const known = input.handle === server.me || input.handle === server.staff.owner || PEOPLE_FIXTURES.some((one) => one.handle === input.handle);
+
+            if (!known)
+            {
+                throw staffRefused('staff-nobody', 'No one by that name.');
+            }
+
+            if (input.handle === server.staff.owner)
+            {
+                throw staffRefused('staff-owner', 'The owner is the wallet the server’s .env names, and is changed there.');
+            }
+
+            if (input.handle === server.me)
+            {
+                throw staffRefused('staff-self', 'Nobody changes their own role.');
+            }
+
+            const current = server.staff.members.find((one) => one.handle === input.handle)?.role ?? null;
+
+            if ((current !== null && !outranks(actor, current)) || (input.role !== 'none' && !outranks(actor, input.role)))
+            {
+                throw staffRefused('staff-rank', 'That is above what your role may do.');
+            }
+
+            const at = new Date(runtime().clock.now()).toISOString();
+            const entry = { at, staff: server.me, staffRole: actor ?? 'moderator', person: input.handle, reason: input.reason };
+
+            if (input.role === 'none' && current !== null)
+            {
+                server.staff.members = server.staff.members.filter((one) => one.handle !== input.handle);
+                staffLogged({ ...entry, kind: 'revoke', details: { from: current } });
+            }
+            else if (input.role !== 'none' && current === null)
+            {
+                server.staff.members = [...server.staff.members, staffMember(input.handle, input.role, server.me, at)];
+                staffLogged({ ...entry, kind: 'grant', details: { to: input.role } });
+            }
+            else if (input.role !== 'none' && current !== input.role)
+            {
+                server.staff.members = server.staff.members.map((one) => (one.handle === input.handle ? staffMember(one.handle, input.role as GrantedRole, server.me, at) : one));
+                staffLogged({ ...entry, kind: 'change', details: { from: current ?? '', to: input.role } });
+            }
+
+            return staffListed();
+        },
+        async log({ query }: { query: { cursor?: string; staff?: string; person?: string; kind?: ActionKind } })
+        {
+            server.calls.push(`admin.log ${ JSON.stringify(query) }`);
+            staffGate('log');
+
+            const matching = server.staff.log.filter((row) =>
+                (query.staff === undefined || row.staff?.toLowerCase() === query.staff.toLowerCase())
+                && (query.person === undefined || row.person?.toLowerCase() === query.person.toLowerCase())
+                && (query.kind === undefined || row.kind === query.kind));
+            const from = query.cursor === undefined ? 0 : matching.findIndex((row) => row.id === query.cursor) + 1;
+            const page = matching.slice(from, from + LOG_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: structuredClone(page),
+                ...(matching.length > from + LOG_PAGE && last !== undefined ? { cursor: last.id } : {})
+            };
+        },
+        async people({ query }: { query: { q?: string; list?: PeopleList; cursor?: string } })
+        {
+            server.calls.push(`admin.people ${ JSON.stringify(query) }`);
+            staffGate('people');
+
+            const asked = (query.q ?? '').trim().toLowerCase();
+            const rows = accountHandles()
+                .map((handle, at) => accountRow(handle, at))
+                .filter(ACCOUNT_LISTS[query.list ?? 'newest'])
+                .filter((row) => asked.length < 2 || row.handle.toLowerCase().includes(asked) || row.displayName.toLowerCase().includes(asked));
+            const from = query.cursor === undefined ? 0 : rows.findIndex((row) => row.handle === query.cursor) + 1;
+            const page = rows.slice(from, from + PEOPLE_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: page,
+                ...(rows.length > from + PEOPLE_PAGE && last !== undefined ? { cursor: last.handle } : {})
+            };
+        },
+        async person({ params }: { params: { handle: string } })
+        {
+            server.calls.push(`admin.person ${ params.handle }`);
+            staffGate('people');
+
+            if (!accountHandles().includes(params.handle))
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            return accountView(params.handle);
+        },
+        async history({ params, query }: { params: { handle: string }; query: { cursor?: string } })
+        {
+            server.calls.push(`admin.history ${ params.handle } ${ query.cursor ?? '' }`);
+            staffGate('people');
+
+            if (!accountHandles().includes(params.handle))
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            return historyOf(params.handle, query.cursor ?? null);
+        },
+        async note({ params, input }: { params: { handle: string }; input: { text: string } })
+        {
+            server.calls.push(`admin.note ${ params.handle } ${ input.text }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'note', person: params.handle, reason: input.text, details: {} });
+
+            return accountView(params.handle);
+        },
+
+        async suspend({ params, input }: { params: { handle: string }; input: { days?: SuspendDays; category: SuspendCategory; reason: string } })
+        {
+            server.calls.push(`admin.suspend ${ params.handle } ${ JSON.stringify(input) }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const at = runtime().clock.now();
+            const until = input.days === undefined ? null : new Date(at + input.days * 86_400_000).toISOString();
+
+            server.accounts.suspended = [...server.accounts.suspended.filter((one) => one !== params.handle), params.handle];
+            server.accounts.about[params.handle] = {
+                ...server.accounts.about[params.handle],
+                sessions: [],
+                suspension: { category: input.category, ...(until === null ? {} : { until }), since: new Date(at).toISOString() }
+            };
+            staffLogged({
+                at: new Date(at).toISOString(),
+                staff: server.me,
+                staffRole: actor,
+                kind: 'suspend',
+                person: params.handle,
+                reason: input.reason,
+                details: { category: input.category, ...(until === null ? {} : { until }), ...(input.days === undefined ? {} : { days: String(input.days) }) }
+            });
+
+            return accountView(params.handle);
+        },
+
+        async lift({ params, input }: { params: { handle: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.lift ${ params.handle } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+
+            if (!server.accounts.suspended.includes(params.handle))
+            {
+                throw staffRefused('staff-not-suspended', 'They are not suspended.');
+            }
+
+            const kept = { ...server.accounts.about[params.handle] };
+
+            delete kept.suspension;
+            server.accounts.suspended = server.accounts.suspended.filter((one) => one !== params.handle);
+            server.accounts.about[params.handle] = kept;
+            staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'lift', person: params.handle, reason: input.reason, details: {} });
+
+            return accountView(params.handle);
+        },
+
+        async clear({ params, input }: { params: { handle: string }; input: { part: ClearPart; reason: string } })
+        {
+            server.calls.push(`admin.clear ${ params.handle } ${ input.part } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const shown = accountView(params.handle);
+            const was = input.part === 'name' ? shown.displayName : input.part === 'bio' ? shown.bio : shown.avatar ?? '';
+            const empty = input.part === 'name' ? was === params.handle : was === '';
+
+            if (!empty)
+            {
+                const kept = { ...server.accounts.about[params.handle] };
+
+                if (input.part === 'picture')
+                {
+                    delete kept.avatar;
+                }
+                else
+                {
+                    Object.assign(kept, input.part === 'name' ? { displayName: params.handle } : { bio: '' });
+                }
+
+                server.accounts.about[params.handle] = kept;
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'clear', person: params.handle, reason: input.reason, details: { part: input.part, ...(input.part === 'picture' ? {} : { from: was }) } });
+            }
+
+            return accountView(params.handle);
+        },
+
+        async signOut({ params, input }: { params: { handle: string }; input: { reason: string } })
+        {
+            server.calls.push(`admin.signOut ${ params.handle } ${ input.reason }`);
+            staffGate('people');
+
+            const actor = reachedBy(params.handle);
+            const live = accountView(params.handle).sessions.length;
+
+            if (live > 0)
+            {
+                server.accounts.about[params.handle] = { ...server.accounts.about[params.handle], sessions: [] };
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'sign-out', person: params.handle, reason: input.reason, details: { sessions: String(live) } });
+            }
+
+            return accountView(params.handle);
+        },
+
+        async reports({ query }: { query: { status?: ReportList; cursor?: string } })
+        {
+            server.calls.push(`admin.reports ${ JSON.stringify(query) }`);
+            staffGate('reports');
+
+            const list = query.status ?? 'received';
+            const rows = [...server.desk.filed]
+                .filter((one) => list === 'all' || one.status === list)
+                .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+            const from = query.cursor === undefined ? 0 : rows.findIndex((one) => one.id === query.cursor) + 1;
+            const page = rows.slice(from, from + REPORTS_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                rows: page.map(reportRow),
+                ...(rows.length > from + REPORTS_PAGE && last !== undefined ? { cursor: last.id } : {}),
+                waiting: waitingReports()
+            };
+        },
+
+        async reportsWaiting()
+        {
+            server.calls.push('admin.reportsWaiting');
+            staffGate('reports');
+
+            return { count: waitingReports() };
+        },
+
+        async report({ params }: { params: { id: string } })
+        {
+            server.calls.push(`admin.report ${ params.id }`);
+            staffGate('reports');
+
+            return reportView(reportNamed(params.id));
+        },
+
+        async review({ params, input }: { params: { id: string }; input: { outcome: ReportOutcome; reason: string } })
+        {
+            server.calls.push(`admin.review ${ params.id } ${ input.outcome } ${ input.reason }`);
+            staffGate('reports');
+
+            const report = reportNamed(params.id);
+            const actor = reachedBy(report.about);
+
+            if (report.status !== input.outcome)
+            {
+                report.status = input.outcome;
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, staffRole: actor, kind: 'report', person: report.about, reason: input.reason, details: { report: report.id, outcome: input.outcome, reporter: report.by } });
+            }
+
+            return reportView(report);
+        },
+
+        async play()
+        {
+            server.calls.push('admin.play');
+            staffGate('play');
+
+            return structuredClone(server.play);
+        },
+
+        async switchGame({ params, input }: { params: { game: string }; input: { on: boolean; reason: string } })
+        {
+            server.calls.push(`admin.switchGame ${ params.game } ${ input.on } ${ input.reason }`);
+            staffGate('play');
+
+            const held = server.play.games.find((one) => one.game === params.game);
+
+            if (held === undefined || held.status === 'coming-soon')
+            {
+                throw new ApiError(404, 'not-found', 'Nothing there.', undefined);
+            }
+
+            const to: PlayStatus = input.on ? 'available' : 'disabled';
+            const actor = staffRoleOf(server.me);
+
+            if (held.status !== to)
+            {
+                staffLogged({ at: new Date(runtime().clock.now()).toISOString(), staff: server.me, ...(actor === null ? {} : { staffRole: actor }), kind: 'game', reason: input.reason, details: { game: params.game, from: held.status, to } });
+                held.status = to;
+            }
+
+            return structuredClone(server.play);
+        }
+    },
+
+    vault:
+    {
+        async state()
+        {
+            server.calls.push('vault.state');
+            nuraRefusal();
+            return structuredClone(server.nura.state);
+        },
+        async accept()
+        {
+            server.calls.push('vault.accept');
+            nuraRefusal();
+            if (server.nura.state.configured)
+            {
+                server.nura.state = { ...server.nura.state, may: 'yes' };
+            }
+            return structuredClone(server.nura.state);
+        },
+        async rest({ input }: { input: { days: number } })
+        {
+            server.calls.push(`vault.rest ${ input.days }`);
+            nuraRefusal();
+            if (server.nura.state.configured)
+            {
+                server.nura.state = { ...server.nura.state, may: 'paid-break', breakUntil: '2026-10-28T00:00:00.000Z' };
+            }
+            return structuredClone(server.nura.state);
+        },
+        async deposit({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`vault.deposit ${ input.amount }`);
+            nuraRefusal();
+            return { ...server.nura.call, value: `0x${ BigInt(input.amount).toString(16) }` };
+        },
+        async withdraw({ input }: { input: { amount: string } })
+        {
+            server.calls.push(`vault.withdraw ${ input.amount }`);
+            nuraRefusal();
+            return { ...server.nura.call, data: '0x2e1a7d4d' };
+        },
+        async games(input?: { query?: { cursor?: string } })
+        {
+            server.calls.push(`vault.games ${ input?.query?.cursor ?? '' }`);
+            nuraRefusal();
+            return structuredClone(server.nura.games);
+        },
+        async reclaim({ input }: { input: { id: string } })
+        {
+            server.calls.push(`vault.reclaim ${ input.id }`);
+            nuraRefusal();
+            return { ...server.nura.call, data: '0xreclaim' };
+        }
+    },
+
     chain:
     {
         async profile()
@@ -847,7 +1578,9 @@ export const client =
         async live()
         {
             server.calls.push('catalogue.live');
-            return { games: server.live.map((row) => ({ ...row })) };
+            const statusOf = (game: string) => (server.games as { id?: string; status?: PlayStatus }[]).find((one) => one.id === game)?.status ?? 'available';
+
+            return { games: server.live.map((row) => ({ status: statusOf(row.game), ...row })) };
         },
         async leaderboard(input: { params: { game: string }; query?: { window?: string } })
         {
@@ -1544,6 +2277,7 @@ export const client =
             voice: VoiceScope;
             teams: boolean;
             invitees: string[];
+            stake?: string;
         } })
         {
             server.calls.push('tables.create');
@@ -1557,7 +2291,7 @@ export const client =
             return restate(newTable(input));
         },
 
-        async quick({ input }: { input: QuickAsk & { game: string; voice: VoiceScope } })
+        async quick({ input }: { input: QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string } })
         {
             server.calls.push('tables.quick');
             server.sought.push({ ...input });
@@ -1584,7 +2318,8 @@ export const client =
                 && (table.privacy === 'public' || (table.privacy === 'friends' && table.host !== undefined && server.friends.includes(table.host)))
                 && table.game === input.game
                 && table.mode === filter.mode
-                && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
+                && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option])
+                && table.stake === input.stake;
             const mine = (chair: SeatWire) => chair.who === server.me;
             const free = (table: TableWire) => table.chairs.filter((chair) => chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
             const playing = filter.mode === 'live'
@@ -1608,7 +2343,7 @@ export const client =
                 .filter((table) => fits(table) && !table.chairs.some(mine) && free(table).length > 0)
                 .sort((a, b) => free(a).length - free(b).length)[0];
 
-            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] }), { quick: true });
+            const table = joined ?? Object.assign(newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [], ...(input.stake === undefined ? {} : { stake: input.stake }) }), { quick: true });
             const seat = joined === undefined
                 ? 0
                 : chairFor(free(table).map((chair) => chair.seat), table.chairs.filter((chair) => chair.who !== undefined).map((chair) => chair.seat), table.teams);
@@ -1617,7 +2352,7 @@ export const client =
             chair.who = server.me;
             chair.ready = true;
 
-            if (table.chairs.every((one) => one.who !== undefined && one.ready))
+            if (table.stake === undefined && table.chairs.every((one) => one.who !== undefined && one.ready))
             {
                 table.matchId = `match-${ table.id }`;
             }
@@ -1691,10 +2426,31 @@ export const client =
             return { ok: true };
         },
 
-        async ready({ params, input }: { params: { id: string }; input: { ready: boolean } })
+        async stake({ params }: { params: { id: string } })
+        {
+            server.calls.push(`tables.stake ${ params.id }`);
+            nuraRefusal();
+            return { ...server.nura.terms };
+        },
+
+        async quickStake({ input }: { input: { game: string; stake: string } })
+        {
+            server.calls.push(`tables.quickStake ${ input.game } ${ input.stake }`);
+            nuraRefusal();
+            return { ...server.nura.terms };
+        },
+
+        async ready({ params, input }: { params: { id: string }; input: { ready: boolean; signature?: string } })
         {
             server.calls.push('tables.ready');
+            server.nura.signatures.push(input.signature);
             const table = mustTable(params.id);
+
+            if (table.stake !== undefined && input.ready && input.signature === undefined)
+            {
+                throw tableRefusal('paid-consent', 'Sign your stake for this game again.');
+            }
+
             const mine = table.chairs.find((chair) => chair.who === server.me);
             if (mine !== undefined)
             {
@@ -1899,6 +2655,26 @@ export const client =
         {
             server.calls.push('matches.history');
             return { matches: server.history.map((row) => ({ ...row })) };
+        },
+
+        async proof({ params }: { params: { id: string } })
+        {
+            server.calls.push('matches.proof');
+
+            const refused = server.proofRefused;
+            const held = server.proofs[params.id];
+
+            if (refused !== null)
+            {
+                throw new ApiError(refused.status, refused.code, refused.code, undefined);
+            }
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No game there.', undefined);
+            }
+
+            return structuredClone(held);
         },
 
         async watch({ params, query }: { params: { id: string }; query?: { rev?: string } })
@@ -2212,6 +2988,10 @@ export const client =
             if (server.refuse === 'wallet-busy')
             {
                 throw new ApiError(429, 'too-many-requests', 'Too many requests', undefined);
+            }
+            if (server.refuse === 'wallet-suspended')
+            {
+                throw new ApiError(403, 'suspended', 'This account is suspended.', server.suspension);
             }
             server.account = walletAccount(input.address);
             return { account: server.account };

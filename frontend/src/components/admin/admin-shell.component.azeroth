@@ -1,0 +1,157 @@
+import { Link, Outlet, untrack, useHead, useRoute, type MountNode } from 'azerothjs';
+
+import { may } from '../../../../backend/src/domains/admin/roles.ts';
+
+import '../../icons/all.ts';
+import '../../locales/app-catalogue.ts';
+import '../../locales/admin-catalogue.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/all.ts';
+import { sectionsFor, type AdminSection } from '../../lib/admin-sections.ts';
+import { ROLE_WORDS } from '../../lib/staff-words.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useReports } from '../../stores/reports.store.ts';
+import { useSession } from '../../stores/session.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { ACTIVE_ROW } from '../app/nav-items.ts';
+import OverlayHost from '../app/overlay-host.component.azeroth';
+import { watchSignedOut } from '../app/sign-out.ts';
+import ToastHost from '../app/toast-host.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Rail from '../ui/rail.component.azeroth';
+
+const LOOK: Record<AdminSection, { icon: IconName; label: MessageKey }> = {
+    people: { icon: 'people', label: 'admin.section.people' },
+    reports: { icon: 'flag', label: 'admin.section.reports' },
+    play: { icon: 'games', label: 'admin.section.play' },
+    money: { icon: 'coins', label: 'admin.section.money' },
+    staff: { icon: 'shield', label: 'admin.section.staff' },
+    log: { icon: 'history', label: 'admin.section.log' }
+};
+
+export default component AdminShell(props: { children?: MountNode })
+{
+    const locale = useLocale();
+    const session = useSession();
+    const overlay = useOverlay();
+    const route = useRoute();
+    const reports = useReports();
+
+    useHead({ titleTemplate: `%s · ${ locale.t('admin.title') }` });
+
+    mount
+    {
+        const stops = [useToasts().start(), session.start(), watchSignedOut(), reports.start()];
+
+        return () =>
+        {
+            for (const stop of [...stops].reverse())
+            {
+                try
+                {
+                    stop();
+                }
+                catch (error)
+                {
+                    reportError(error);
+                }
+            }
+        };
+    }
+
+    derived role = session.account()?.staff ?? null;
+
+    derived handle = session.account()?.handle ?? '';
+
+    derived ranked = role !== null;
+
+    derived roleWord = role === null ? '' : locale.t(ROLE_WORDS[role]);
+
+    derived here = route().pathname.split('/')[2] ?? '';
+
+    derived sections = sectionsFor(role).map((section) => ({ section, to: `/admin/${ section }`, icon: LOOK[section].icon, label: locale.t(LOOK[section].label) }));
+
+    derived watching = may(role, 'reports');
+
+    derived waiting = reports.waiting();
+
+    derived waitingLabel = locale.plural('admin.reports.waiting', waiting);
+
+    effect
+    {
+        if (here !== '' && watching)
+        {
+            untrack(() =>
+            {
+                void reports.read();
+            });
+        }
+    }
+
+    <div class="contents">
+        <div id="admin-shell" inert={ overlay.blocking() } class="min-h-dvh bg-void text-text">
+            <header class="safe-t sticky top-0 z-20 border-b border-line bg-void/95 backdrop-blur">
+                <div class="flex h-14 items-center gap-2 px-2 sm:px-4 lg:px-6">
+                    <IconButton icon="back" label={ locale.t('admin.back') } variant="ghost" size="md" flip to="/app" />
+                    <h1 class="title truncate text-ui-xl">{ locale.t('admin.title') }</h1>
+                    <div class="ms-auto flex min-w-0 items-center gap-2 pe-2" data-staff>
+                        <span class="min-w-0 truncate text-ui-sm text-muted" dir="ltr" data-staff-handle>@{ handle }</span>
+                        <Show when={ ranked }>
+                            <Badge text={ roleWord } tone="accent" />
+                        </Show>
+                    </div>
+                </div>
+                <nav class="pb-2 lg:hidden" aria-label={ locale.t('admin.sections') }>
+                    <Rail inner="px-4 sm:px-6">
+                        <For each={ sections } key={ (item) => item.section } let={ item }>
+                            <span class="flex shrink-0">
+                                <Link
+                                    to={ item.to }
+                                    aria-current={ here === item.section ? 'page' : undefined }
+                                    class={ () => [
+                                        'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-control border px-3 text-ui-sm font-semibold transition duration-150 coarse:h-11',
+                                        here === item.section ? 'border-accent/60 bg-accent/15 text-accent' : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
+                                    ].join(' ') }
+                                >
+                                    <Icon name={ item.icon } size={ 16 } />
+                                    <span>{ item.label }</span>
+                                    <Badge count={ item.section === 'reports' ? waiting : 0 } size="sm" tone="gold" label={ waitingLabel } />
+                                </Link>
+                            </span>
+                        </For>
+                    </Rail>
+                </nav>
+            </header>
+
+            <div class="lg:grid lg:min-h-[calc(100dvh-3.5rem)] lg:grid-cols-[15rem_minmax(0,1fr)]">
+                <nav class="hidden border-e border-line lg:block" aria-label={ locale.t('admin.sections') }>
+                    <ul class="sticky top-14 flex flex-col gap-1 p-3">
+                        <For each={ sections } key={ (item) => item.section } let={ item }>
+                            <li>
+                                <Link
+                                    to={ item.to }
+                                    aria-current={ here === item.section ? 'page' : undefined }
+                                    class={ () => [ 'nav-row', ACTIVE_ROW, 'flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text', here === item.section ? 'is-active' : '' ].join(' ') }
+                                >
+                                    <Icon name={ item.icon } size={ 20 } />
+                                    <span class="min-w-0 flex-1 truncate">{ item.label }</span>
+                                    <Badge count={ item.section === 'reports' ? waiting : 0 } tone="gold" label={ waitingLabel } />
+                                </Link>
+                            </li>
+                        </For>
+                    </ul>
+                </nav>
+                <main id="admin-main" class="min-w-0 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+                    <div class="max-w-[64rem]">
+                        <Outlet children={ props.children } />
+                    </div>
+                </main>
+            </div>
+        </div>
+        <OverlayHost />
+        <ToastHost />
+    </div>
+}

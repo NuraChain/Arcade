@@ -245,8 +245,8 @@ eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The
 any more* in `frontend/CLAUDE.md`.
 
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
-each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready` and
-`kept-out` at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
+each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty`, `not-ready`,
+`kept-out` and `game-off` (a game the staff paused, `.claude/rules/admin.md`, *Play*) at 409, `no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
 `table/service.ts` is the only way the
 table service, the start, the walkout and the invite port throw one: the word is checked where it is
 thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals
@@ -261,8 +261,9 @@ its caller says - `play.table.playing` for a chair, `play.leave.started` for a l
 `play.close.refused` for a close, the caller's own fallback anywhere else. A framework code, a match
 word and a request that never arrived are the fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
 says the four sentences that are about what was asked - too many chairs, nobody to invite, a game
-that cannot be played, a table the game does not make - and "That table would not open" for every
-other word. Quick play used to reach it with the rest, from a table the browser tried and the reader
+that cannot be played, a table the game does not make - and every `paid-` word, because a table
+asked for at a stake is refused for its money and the reader has to learn which way (too little in
+the vault, the terms, a break), and "That table would not open" for every other word. Quick play used to reach it with the rest, from a table the browser tried and the reader
 never chose; the server picks the table now and never answers with one of those.
 `table-refusals.spec.ts` on each side holds it: on the server every word's status and code, no word
 shared with a refused play or with a code the framework answers on its own, no code spelled by hand in
@@ -2510,12 +2511,15 @@ finished hokm or backgammon board, which those boards read only while the match 
 the ports - every answer, the watch and the push to each seat - and `ludo-table.spec.ts` draws the
 board from a finished match the wire's own parser let through.
 
-**The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
-Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a
-player cannot check that the server did not draw twice and keep the one it liked, because the process
-that draws is the process that records. That is exactly the claim `game_rules.fairness` was deleted
-for, so `ludo-dice.spec.ts` also fails on the words *provable* and *verifiable* anywhere near this
-domain. Commit-reveal is a mechanism to build before any copy changes, not a sentence to add.
+**At a free table the die is `randomInt` from `node:crypto`, and the product says only that the
+server rolls it.** Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be
+claimed there is fairness: a player cannot check that the server did not draw twice and keep the one
+it liked, because the process that draws is the process that records. That is exactly the claim
+`game_rules.fairness` was deleted for, so `ludo-dice.spec.ts` also fails on the words *provable* and
+*verifiable* anywhere in the server's wire, routes and match service. A table played for NURA is
+the one place the mechanism exists: its dice and cards come from a seed its players signed for and
+can work out again once the game is paid (*Dice and cards that can be checked* in
+`.claude/rules/stakes.md`), and nothing about a free table changed with it.
 
 **Every action is one transaction that opens with `for update` on the match row.** Deliberately NOT
 the `skip locked` the seat claim uses, and the contrast is the whole point: skipping is right when a
@@ -2541,7 +2545,8 @@ transaction, and a WHERE clause cannot see a chair somebody has not committed. T
 still what refuses a start somebody stops being ready under; the other two are belts, and a 23505 from
 `matches_one_live` is still read as "somebody else started it", which answers with their match. Any
 seated player may press it: the precondition is unanimous, so host-only would be ceremony that
-strands a table whose host closed the tab.
+strands a table whose host closed the tab. At a table played for NURA there is nothing to press: the last signed Ready locks the
+stakes on the chain, and the lock deals the game (`.claude/rules/stakes.md`).
 
 **Readiness is consent to the NEXT game, and a finish spends it.** The precondition is unanimous
 only because `commit` clears `table_seats.ready` for the table inside the transaction that finishes
@@ -7020,11 +7025,15 @@ only ever checked the `chat.line.group.*` keys, which is how two slipped past it
 checks every key now, and the group keys keep a shape of their own because they are composed from a
 suffix and never appear whole in the source.
 
-`declareResult` writes the result line into the table's own thread, and it lives in its own
-zero-import module because a game ends TWO ways - somebody plays the last move, or the sweep
-forfeits the last player holding a turn - and both have to say it identically. A game somebody won
-names them; a game nobody won (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and
-must not, because the engine calls the last player standing a winner so the board can stop.
+`declareResult` writes the result line into the table's own thread, and it lives in a module of
+its own (`endingOf` in `match/declare.ts`) because a game ends three ways - somebody plays the last
+move or gives up, the sweep forfeits the last player holding a turn, or somebody walks out - and all
+three have to say it identically. A game somebody won names them; a game nobody won
+(`matches.outcome = 'abandoned'`, every survivor `void`) does not, and must not, because the engine
+calls the last player standing a winner so the board can stop. A table played for NURA is the one
+exception, and only once its stakes are being paid: the line names whoever they were paid to, read
+off the escrow's mask of seats, because leaving loses the stake and the result card already names
+them (`.claude/rules/stakes.md`, *The winner on the card*).
 
 The invite line goes in the TABLE's thread rather than into a direct message. A line in a DM would
 create a conversation between two people as a side effect of an invitation, which is a thing nobody

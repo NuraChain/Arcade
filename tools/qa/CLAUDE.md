@@ -792,3 +792,98 @@ them, with the README.
 It found a fault on its first run, before it had asked anything: the two servers were started
 together on a new database and the second died at boot, both seeding the catalogue at once
 (`backend/CLAUDE.md`, *Two servers that start against one database*).
+
+## The paid pass
+
+**`tools/qa/paid-pass.mjs` plays for NURA over the api of the built server and a local chain**:
+`PGDATABASE=<the server's database> QA_BASE=http://localhost:5300 QA_RESTART="<starts the server>"
+node tools/qa/paid-pass.mjs`, about two minutes, 230 checks. It wants, in this order, a fresh hardhat
+node (`npx hardhat node --port 8645` in the SmartContract project), a vault deployed on it for this
+run alone (`node tools/qa/vault-deploy.mjs`, which prints the vault and the two accounts it is run by:
+hardhat's published #8 as its admin and #9 as the referee), a database nobody else uses given its
+schema by `sync-cli`, and the built server started on it in production with the limiter raised and
+`NURA_RPC_URL`, `NURA_CHAIN_ID=31337`, `NURA_VAULT_ADDRESS` and `NURA_REFEREE_KEY` set. PGDATABASE
+names that database because three checks write a row by hand; the pass refuses the one the root
+`.env` names and makes sure the one it is given is the server's. QA_RESTART is a command `cmd.exe`
+can run on Windows (the full path to `Git\bin\bash.exe` and a script); without it the part that
+stops the server is left out. A run moves the node's clock past the vault's wait at its end, so the
+next run wants a new node. `QA_ONLY` names parts: refuse, formats, consent, withdraw, quick,
+locking, refund, restart, reclaim.
+
+**Every player is a wallet the pass keeps in memory** (`signInWallet`'s third argument) with a real
+socket, given NURA by `hardhat_setBalance`. It puts NURA in the vault and takes it out through the
+calls the server composes, signs every stake as `eth_signTypedData_v4` would, and reads every lock
+and payout back from the vault itself.
+
+**A ledger is the oracle.** The pass keeps what each player should hold free and in play, and the
+fees, and moves it itself at each deposit, withdrawal, lock, payout and refund by the contract's own
+arithmetic (the pot less the fee split among the winners, any dust to the fee), and compares it with
+`balanceOf`, `lockedOf`, `fees` and `solvent` after every one. At the end no stake is left locked,
+and the vault's coin is exactly its players' balances, the stakes in play and the fees.
+
+- *formats*: the nine formats played to their ends for a stake (Ludo for two, four and two against
+  two; Hokm for two, three and two against two; poker for two and six; backgammon to one point). The
+  vault holds each game at the stake and fee signed with its players in seat order, the pot goes to
+  the seats the game named, each player's list of paid games says what came of it for them, and
+  every player's `me` scope is rung with `vault` when the stakes lock and when they are paid. For
+  the first game the proof: every secret in it is the one its commit was made from, the vault was
+  paid out on those secrets and the stakes were locked on the signatures it hands the players.
+- *refuse*: no terms, a minor (marked by hand: no route makes one), a break (a shorter one asked for
+  later never cuts it short, and NURA can still be taken out), a turn-based table, a stake off the
+  ladder, an amount that is not one. A wallet account is the only kind there is, so `paid-wallet`
+  is held by the specs alone.
+- *consent*: a Ready with no signature, another wallet's, one for a stake asked for again, one with
+  under two minutes left, beside the same stake with ten minutes left, which is taken (the deadline
+  is written by hand and the stake signed again with it, so freshness is all that differs), one
+  for more than the vault holds free, and the signature that locked a game used for the next.
+- *withdraw*: NURA taken out between a Ready and the lock. The lock fails naming that player, only
+  they are asked to sign again, no game is dealt and no NURA moves; with NURA put back they sign
+  again and the stakes lock with the other player's signature as they gave it.
+- *quick*: searches at five and at ten NURA never meet, a free search finds neither, both tables
+  lock with nobody pressing anything, and a walkout and a resignation each lose the stake.
+- *locking*: the node's automine is switched off so the lock waits for its block, and leaving,
+  taking a Ready back, asking for a new stake and closing are each `paid-locking`, with no game dealt
+  until the block is mined.
+- *refund*: a table closed under the lock, by hand as `stake.db.spec.ts` does it, because every
+  engine names a winner whenever a game finishes and nothing the product offers changes a table
+  while its stakes lock. No game is dealt, every stake goes back and no fee is taken.
+- *restart*: the server stopped (`taskkill /F`, a crash) while the lock waits for its block and
+  started again once it is mined: the game is dealt from that lock and the referee sent nothing more.
+  Stopped while the payout waits and started again before it is mined: no second payout while the
+  first waits, and it is recorded once it is mined.
+- *reclaim*: `paid-early` before the wait, a 404 to somebody who did not play and to an id that is no
+  game, the node's clock moved past the wait, the call sent by the player's wallet, `paid-done` after,
+  and when the game ends the server finds the stakes taken back and pays nothing.
+
+**It found one fault on its first run**, 222 of 224 on the build before the fix: the server judged the
+vault's wait by its own clock alone, so a chain whose clock was past it was answered `paid-early` for
+a reclaim the vault would take, and the game's stakes stayed locked (`.claude/rules/stakes.md`, *A
+player's paid games*).
+
+**`tools/qa/paid-play-pass.mjs` is the same in two real browsers**: `QA_BASE=http://localhost:5300
+node tools/qa/paid-play-pass.mjs`, about a minute, 31 checks, against the server and the node
+`paid-pass.mjs` wants, before that pass moves the node's clock or on a node of its own. One player
+is a desk in English and the other a phone in Persian, and every control is found by the
+catalogue's own words. Each is a wallet the pass keeps in memory and puts in its page as an
+EIP-1193 provider (`walletSeat` takes the wallet too, then `exposeFunction`), as an extension
+would be: it answers with the account and the chain, signs a stake and sends a transaction here,
+passes every read to the node, and counts what the page asked of it.
+
+- Each player accepts the terms and puts NURA in from the wallet page, and the page shows what the
+  vault holds.
+- The desk opens a table for anyone at ten NURA from the create form, which says what the pot, the
+  fee and the winner's share come to; the phone sits down, and both waiting rooms say what each
+  stakes and what the winner takes.
+- Each Ready asks its wallet for one signature and no transaction, the stakes lock on the chain,
+  and both pages show the board.
+- Eight moves are made by pressing the die and the pawns, and the server takes each one.
+- When the phone gives up, the desk's card says what it won once the pot is paid, with the way to
+  check the game, and the phone's says in Persian what it lost; the vault paid the pot less the fee.
+- The wallet page shows both balances as the vault holds them and lists the game as won and as
+  lost; the desk takes all of it out, and its wallet holds it, less the gas. That wallet was asked
+  to send two transactions and to sign one stake. No page logs anything or is refused anything.
+
+**Proved red on two broken builds.** A wallet page that shows what is in play where it says what is
+in the vault, and a result card that never says the pot was paid, failed the four figures and the
+winner's line and nothing else; a Ready that sends no signature failed the lock and everything after
+it.

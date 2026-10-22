@@ -1,0 +1,157 @@
+import { createResource, untrack, useHead } from 'azerothjs';
+
+import { REPORT_LISTS, type ReportList } from '../../../../backend/src/domains/admin/roles.ts';
+import type { AdminReports } from '../../../../backend/src/schemas.ts';
+import { client } from '../../api.ts';
+import ReportRow, { type AdminReportRow } from '../../components/admin/report-row.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { useAddress } from '../../lib/page-param.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useReports } from '../../stores/reports.store.ts';
+
+interface Tail
+{
+    from: AdminReports;
+    rows: AdminReportRow[];
+    cursor: string | undefined;
+}
+
+const LIST_WORDS: Record<ReportList, MessageKey> = {
+    received: 'admin.reports.list.received',
+    reviewed: 'admin.reports.list.reviewed',
+    actioned: 'admin.reports.list.actioned',
+    all: 'admin.reports.list.all'
+};
+
+const queryOf = (list: ReportList) => (list === 'received' ? {} : { status: list });
+
+export default component ReportsPage()
+{
+    const locale = useLocale();
+    const address = useAddress();
+    const desk = useReports();
+
+    useHead({ title: () => locale.t('admin.section.reports') });
+
+    derived list = REPORT_LISTS.find((one) => one === address.text('status')) ?? 'received';
+
+    state tail = null as Tail | null;
+
+    state paging = false;
+
+    const first = createResource(() => list, (asked) => client.admin.reports({ query: queryOf(asked) }), { name: 'admin.reports' });
+
+    derived page = first.data() ?? null;
+
+    effect
+    {
+        const answered = page;
+
+        if (answered !== null)
+        {
+            untrack(() => desk.told(answered.waiting));
+        }
+    }
+
+    derived trouble = first.error();
+
+    derived waiting = page === null && trouble === null;
+
+    derived failed = page === null && trouble !== null;
+
+    derived continued = tail !== null && tail.from === page ? tail : null;
+
+    derived rows = page === null ? [] : [...page.rows, ...(continued?.rows ?? [])];
+
+    derived cursor = continued === null ? page?.cursor : continued.cursor;
+
+    derived more = cursor !== undefined;
+
+    derived listed = rows.length > 0;
+
+    derived empty = page !== null && rows.length === 0;
+
+    derived quiet = list === 'received';
+
+    derived blank = locale.t(quiet ? 'admin.reports.none' : 'admin.reports.noneListed');
+
+    derived blankLead = quiet ? locale.t('admin.reports.noneLead') : undefined;
+
+    derived lists = REPORT_LISTS.map((one) => ({
+        id: one,
+        label: locale.t(LIST_WORDS[one]),
+        ...(one === 'received' && page !== null ? { count: page.waiting } : {})
+    }));
+
+    const choose = (id: string) =>
+    {
+        address.write({ status: id === 'received' ? '' : id });
+    };
+
+    const older = async () =>
+    {
+        const from = page;
+        const after = cursor;
+        const kept = continued?.rows ?? [];
+
+        if (from === null || after === undefined || paging)
+        {
+            return;
+        }
+
+        paging = true;
+
+        await attempt((async () =>
+        {
+            const next = await client.admin.reports({ query: { ...queryOf(list), cursor: after } });
+
+            if (first.data() === from)
+            {
+                tail = { from, rows: [...kept, ...next.rows], cursor: next.cursor };
+                desk.told(next.waiting);
+            }
+        })());
+
+        paging = false;
+    };
+
+    <div class="flex flex-col gap-6">
+        <PageHeader title={ locale.t('admin.section.reports') } lead={ locale.t('admin.reports.lead') } flush />
+
+        <FilterBar items={ lists } value={ list } label={ locale.t('admin.reports.lists') } onChange={ choose } />
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 5 } avatar /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.reports.failed') } onRetry={ () => void first.refetch() } /> }
+        </Show>
+
+        <Show when={ empty }>
+            { () => <EmptyState icon="flag" title={ blank } lead={ blankLead } /> }
+        </Show>
+
+        <Show when={ listed }>
+            <div class="flex flex-col">
+                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-reports>
+                    <For each={ rows } key={ (one) => one.id } let={ row }>
+                        <li>
+                            <ReportRow report={ row } />
+                        </li>
+                    </For>
+                </ul>
+                <Show when={ more }>
+                    <LoadMore label={ locale.t('admin.reports.more') } loading={ paging } onMore={ () => void older() } />
+                </Show>
+            </div>
+        </Show>
+    </div>
+}

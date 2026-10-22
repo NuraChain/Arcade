@@ -1,0 +1,72 @@
+import { haptic } from '../../lib/haptics.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
+
+const REASON_MIN = 3;
+
+export default component ReasonSheet(props: OverlayProps & {
+    title: string;
+    lead?: string;
+    confirm: string;
+    destructive?: boolean;
+})
+{
+    const locale = useLocale();
+
+    state why = '';
+
+    state told = null as string | null;
+
+    derived led = props.lead !== undefined;
+
+    derived lead = props.lead ?? '';
+
+    const typed = (value: string) =>
+    {
+        why = value;
+        told = null;
+    };
+
+    const send = () =>
+    {
+        const reason = why.trim();
+
+        if (reason.length < REASON_MIN)
+        {
+            told = locale.t('admin.staff.reasonShort');
+            return;
+        }
+
+        if (props.destructive === true)
+        {
+            haptic('warn');
+        }
+
+        props.close(reason);
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <div>
+            <h2 class="title text-ui-xl text-text">{ props.title }</h2>
+            <Show when={ led }>
+                <p class="mt-2 text-ui-base text-muted">{ lead }</p>
+            </Show>
+        </div>
+        <Field id="admin-reason" label={ locale.t('admin.staff.reason') } hint={ locale.t('admin.staff.reasonHint') } error={ told }>
+            <TextArea
+                id="admin-reason"
+                value={ why }
+                maxlength={ 500 }
+                describedBy={ told !== null ? 'admin-reason-error' : 'admin-reason-hint' }
+                onInput={ typed }
+            />
+        </Field>
+        <div class="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant={ props.destructive === true ? 'destructive' : 'primary' } block onClick={ send }>{ props.confirm }</Button>
+            <Button variant="ghost" block onClick={ () => props.close(null) }>{ locale.t('common.cancel') }</Button>
+        </div>
+    </div>
+}

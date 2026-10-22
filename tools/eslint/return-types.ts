@@ -35,7 +35,7 @@ const PLAIN = new Set([
 const READ = new Set(['Identifier', 'MemberExpression', 'CallExpression', 'NewExpression']);
 
 const UNIT = ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.BigIntLiteral | ts.TypeFlags.BooleanLiteral
-    | ts.TypeFlags.EnumLiteral | ts.TypeFlags.UniqueESSymbol | ts.TypeFlags.Null | ts.TypeFlags.Undefined;
+    | ts.TypeFlags.EnumLiteral | ts.TypeFlags.UniqueESSymbol | ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.TemplateLiteral;
 
 const PRINT = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseFullyQualifiedType;
 

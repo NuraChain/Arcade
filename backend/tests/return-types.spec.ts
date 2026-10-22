@@ -99,6 +99,7 @@ const SAMPLE = [
     'const keepArrow = (): ((id: string) => Row) => (id) => load(id);',
     'const keepChoice = (a: boolean): string => a ? "x" : "y";',
     'const keepNarrow = (): "a" | "b" => "a";',
+    'const keepTemplate = (id: string): `row ${ string }` => `row ${ id }`;',
     'const keepWider = (id: string): Row | undefined => load(id);',
     'const keepConstant = (): number => { const one = 1; return one; };',
     'const keepAny = (): string => loose.name;',
@@ -119,7 +120,7 @@ const SAMPLE = [
     'function keepOverload(value: string | number): string { return String(value); }',
     'function* keepGenerator(): Generator<number, string> { yield 1; return "done"; }',
     'export { dropCall, dropTemplate, dropCompare, dropLiteral, dropBooleans, dropAbsorbed, dropAsync, dropLookup, dropVoidCall, dropCast, Entity };',
-    'export { keepObject, keepArray, keepSet, keepGeneric, keepArrow, keepChoice, keepNarrow, keepWider, keepConstant, keepAny, keepVoidOperator, keepVoidBlock };',
+    'export { keepObject, keepArray, keepSet, keepGeneric, keepArrow, keepChoice, keepNarrow, keepTemplate, keepWider, keepConstant, keepAny, keepVoidOperator, keepVoidBlock };',
     'export { keepRecursive, keepMutualA, keepMutualB, keepPredicate, keepOverload, keepGenerator };',
     'export { dropTable, dropTyped, keepHeld, keepNested, keepLazy };'
 ].join('\n');

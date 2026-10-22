@@ -11,7 +11,7 @@ import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { Rematch } from './boards.ts';
+import type { Rematch, Staked } from './boards.ts';
 import { missesOf, withMisses } from './plate-tag.ts';
 import type { BoardGoal, BoardHandle, BoardOptions, Facts } from '../../game/bridge.ts';
 import { chairsOf, ludoOf, type LudoSeat, type MatchPlayer } from '../../data/match.ts';
@@ -44,7 +44,7 @@ const UPRIGHT: Tip = { key: 'match.upright' };
 
 const SPENT = { 'no-move': 'match.stuck', 'three-sixes': 'match.sixes', wasted: 'match.wasted' } as const;
 
-export default component MatchBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
+export default component MatchBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -576,6 +576,6 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
             </Show>
         </div>
 
-        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } />
     </div>
 }

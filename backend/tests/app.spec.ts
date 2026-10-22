@@ -294,6 +294,143 @@ describe('quick play', () =>
     });
 });
 
+describe('a table played for NURA', () =>
+{
+    const TABLE = '00000000-0000-4000-8000-00000000000a';
+    const shown = {
+        id: TABLE,
+        code: 'abc234',
+        game: 'ludo',
+        seats: 2,
+        mode: 'live',
+        privacy: 'public',
+        target: 0,
+        cube: false,
+        blinds: 'low',
+        chat: true,
+        voice: 'off',
+        teams: false,
+        status: 'playing',
+        chairs: [],
+        taken: 2,
+        stake: '10000000000000000000',
+        money: {
+            state: 'settled',
+            feeBps: 500,
+            openTx: `0x${ 'a'.repeat(64) }`,
+            closeTx: `0x${ 'b'.repeat(64) }`,
+            winners: [1],
+            failed: 'StakeUnfunded',
+            blame: 'omid.k'
+        },
+        createdAt: '2026-10-21T00:00:00.000Z'
+    };
+    const terms = { typedData: '{"primaryType":"Stake"}', deadline: '2026-10-21T00:30:00.000Z' };
+
+    const staking = (told: unknown[][]) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                view: (...said: unknown[]) =>
+                {
+                    told.push(['view', ...said]);
+                    return Promise.resolve(shown);
+                },
+                stake: (...said: unknown[]) =>
+                {
+                    told.push(['stake', ...said]);
+                    return Promise.resolve(terms);
+                },
+                quickStake: (...said: unknown[]) =>
+                {
+                    told.push(['quickStake', ...said]);
+                    return Promise.resolve(terms);
+                },
+                setReady: (...said: unknown[]) =>
+                {
+                    told.push(['ready', ...said]);
+                    return Promise.resolve(shown);
+                }
+            }
+        } as unknown as Ports
+    });
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body?: unknown) =>
+        app.handle(new Request(`http://local/api${ path }`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) })
+        }));
+
+    it('says the stake and what became of the money wherever the table is read', async () =>
+    {
+        const response = await call(staking([]), `/api/tables/${ TABLE }`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(shown);
+    });
+
+    it('hands the reader the stake to sign for the table they ask about', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await post(staking(told), `/tables/${ TABLE }/stake`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(terms);
+        expect(told).toEqual([['stake', 'somebody', TABLE]]);
+    });
+
+    it('hands a searcher the stake to sign for what they look for, never reading the search as a table', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = staking(told);
+        const response = await post(app, '/tables/quick/stake', { game: 'ludo', stake: '5000000000000000000' });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(terms);
+
+        for (const body of [{}, { game: 'ludo' }, { stake: '5' }, { game: 'ludo', stake: 5 }, { game: 'ludo', stake: '9'.repeat(41) }])
+        {
+            expect((await post(app, '/tables/quick/stake', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        expect(told).toEqual([['quickStake', 'somebody', 'ludo', '5000000000000000000']]);
+    });
+
+    it('passes a ready\'s signature on as it came, and refuses one that is not a bounded text', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = staking(told);
+
+        expect((await post(app, `/tables/${ TABLE }/ready`, { ready: true, signature: '0xab' })).status).toBe(200);
+        expect((await post(app, `/tables/${ TABLE }/ready`, { ready: false })).status).toBe(200);
+
+        for (const body of [{ ready: true, signature: 5 }, { ready: true, signature: `0x${ 'a'.repeat(4095) }` }, { signature: '0xab' }])
+        {
+            expect((await post(app, `/tables/${ TABLE }/ready`, body)).status, JSON.stringify(body).slice(0, 40)).toBe(422);
+        }
+
+        expect(told).toEqual([['ready', 'somebody', TABLE, true, '0xab'], ['ready', 'somebody', TABLE, false, undefined]]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+
+        expect(bodies).toContain(`'/tables/:id/ready': (bad) => [`);
+        expect(bodies).toContain(`'/tables/quick/stake': (bad) => [`);
+        expect(spared).not.toContain(`'/tables/:id/ready'`);
+        expect(spared).toContain(`'/tables/:id/stake'`);
+    });
+});
+
 describe('a write from a page on another site', () =>
 {
     const told: unknown[][] = [];
@@ -617,6 +754,475 @@ describe('teaming up', () =>
         {
             expect(spared, path).toContain(`'${ path }'`);
         }
+    });
+});
+
+describe('the vault', () =>
+{
+    const VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+    const open = {
+        configured: true,
+        vault: VAULT,
+        chainId: 31337,
+        fee: 500,
+        maxStake: '1000000000000000000000',
+        reclaimAfter: 259200,
+        paused: false,
+        ladder: ['1000000000000000000'],
+        may: 'yes',
+        balances: { address: VAULT, free: '1', locked: '0', wallet: '2' }
+    };
+    const call = { from: VAULT, to: VAULT, data: '0xd0e30db0', value: '0x5', chainId: 31337 };
+    const played = {
+        games: [{
+            id: '00000000-0000-4000-8000-000000000001',
+            game: 'ludo',
+            amount: '10000000000000000000',
+            feeBps: 500,
+            seats: 2,
+            seat: 1,
+            state: 'settled',
+            won: true,
+            share: '19000000000000000000',
+            openTx: `0x${ 'a'.repeat(64) }`,
+            closeTx: `0x${ 'b'.repeat(64) }`,
+            at: '2026-10-21T00:00:00.000Z'
+        }],
+        cursor: '2026-10-21T00:00:00.000Z|00000000-0000-4000-8000-000000000001'
+    };
+
+    const vaultAs = (told: unknown[][], who: unknown = { userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' }, state: unknown = open) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: { principal: () => Promise.resolve(who) },
+            vault: Object.fromEntries(['state', 'accept', 'rest', 'deposit', 'withdraw', 'games', 'reclaim'].map((verb) => [verb, (...said: unknown[]) =>
+            {
+                told.push([verb, ...said]);
+
+                return Promise.resolve(verb === 'games' ? played : verb === 'deposit' || verb === 'withdraw' || verb === 'reclaim' ? call : state);
+            }]))
+        } as unknown as Ports
+    });
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body: unknown) =>
+        app.handle(new Request(`http://local/api${ path }`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        }));
+
+    it('is seven routes, and every one of them is for somebody signed in', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told, null);
+        const manifest = await (await app.handle(new Request('http://local/api/_manifest'))).json() as Record<string, Record<string, { method: string; path: string }>>;
+
+        expect(Object.entries(manifest.vault).map(([name, route]) => `${ name } ${ route.method } ${ route.path }`).sort()).toEqual([
+            'accept POST /vault/terms',
+            'deposit POST /vault/deposit',
+            'games GET /vault/games',
+            'reclaim POST /vault/reclaim',
+            'rest POST /vault/break',
+            'state GET /vault',
+            'withdraw POST /vault/withdraw'
+        ]);
+
+        expect((await app.handle(new Request('http://local/api/vault'))).status).toBe(401);
+        expect((await post(app, '/vault/terms', { adult: true })).status).toBe(401);
+        expect((await post(app, '/vault/break', { days: 7 })).status).toBe(401);
+        expect((await post(app, '/vault/deposit', { amount: '5' })).status).toBe(401);
+        expect((await post(app, '/vault/withdraw', { amount: '5' })).status).toBe(401);
+        expect((await app.handle(new Request('http://local/api/vault/games'))).status).toBe(401);
+        expect((await post(app, '/vault/reclaim', { id: 'x' })).status).toBe(401);
+        expect(told).toEqual([]);
+    });
+
+    it('tells the port who asked and what, and answers with what it said', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        const state = await app.handle(new Request('http://local/api/vault'));
+        expect(state.status).toBe(200);
+        expect(await state.json()).toEqual(open);
+
+        expect(await (await post(app, '/vault/terms', { adult: true })).json()).toEqual(open);
+        expect(await (await post(app, '/vault/break', { days: 30 })).json()).toEqual(open);
+        expect(await (await post(app, '/vault/deposit', { amount: '5' })).json()).toEqual(call);
+        expect(await (await post(app, '/vault/withdraw', { amount: '7' })).json()).toEqual(call);
+
+        expect(told).toEqual([
+            ['state', 'somebody'],
+            ['accept', 'somebody'],
+            ['rest', 'somebody', 30],
+            ['deposit', 'somebody', '5'],
+            ['withdraw', 'somebody', '7']
+        ]);
+    });
+
+    it('reads the reader their paid games from where the last page ended, and hands them a reclaim to send', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        const first = await app.handle(new Request('http://local/api/vault/games'));
+        expect(first.status).toBe(200);
+        expect(await first.json()).toEqual(played);
+
+        await app.handle(new Request(`http://local/api/vault/games?cursor=${ encodeURIComponent(played.cursor) }`));
+        expect(await (await post(app, '/vault/reclaim', { id: played.games[0].id })).json()).toEqual(call);
+        expect((await post(app, '/vault/reclaim', { id: 'x'.repeat(37) })).status).toBe(422);
+
+        expect(told).toEqual([
+            ['games', 'somebody', null],
+            ['games', 'somebody', played.cursor],
+            ['reclaim', 'somebody', played.games[0].id]
+        ]);
+    });
+
+    it('answers a server with no vault in its own shape', async () =>
+    {
+        const response = await vaultAs([], undefined, { configured: false }).handle(new Request('http://local/api/vault'));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ configured: false });
+    });
+
+    it('takes only a day, a week or a month of break, terms an adult confirmed, and an amount written as text, before the port hears of it', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = vaultAs(told);
+
+        for (const days of [0, 2, 365, '7', 7.5, null])
+        {
+            expect((await post(app, '/vault/break', { days })).status, String(days)).toBe(422);
+        }
+
+        for (const body of [{}, { adult: false }, { adult: 'yes' }])
+        {
+            expect((await post(app, '/vault/terms', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        for (const body of [{}, { amount: 5 }, { amount: '9'.repeat(41) }, { amount: `1${ String.fromCharCode(0) }` }])
+        {
+            expect((await post(app, '/vault/deposit', body)).status, JSON.stringify(body)).toBe(422);
+            expect((await post(app, '/vault/withdraw', body)).status, JSON.stringify(body)).toBe(422);
+        }
+
+        expect(told).toEqual([]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+
+        expect(bodies).toContain(`'/vault/deposit': (bad) => [`);
+        expect(bodies).toContain(`'/vault/withdraw': (bad) => [`);
+        expect(bodies).toContain(`'/vault/reclaim': (bad) => [`);
+        expect(spared).toContain(`'/vault/terms'`);
+        expect(spared).toContain(`'/vault/break'`);
+    });
+});
+
+describe('the owner\'s view of the vault', () =>
+{
+    const owned = (told: unknown[][], answer: unknown) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            admin: Object.fromEntries(['vault', 'fee', 'ceiling', 'fees', 'pause', 'staff', 'setStaff', 'log', 'people', 'person', 'history', 'note', 'suspend', 'lift', 'clear', 'signOut', 'reports', 'reportsWaiting', 'report', 'review', 'play', 'switchGame'].map((verb) => [verb, (...said: unknown[]) =>
+            {
+                told.push([verb, ...said]);
+
+                return Promise.resolve(answer);
+            }]))
+        } as unknown as Ports
+    });
+
+    const sent = (app: ReturnType<typeof buildApp>, path: string, body?: unknown) => app.handle(new Request(`http://local/api/admin${ path }`, body === undefined
+        ? {}
+        : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+
+    it('answers anybody who is not the owner as a page that is not there, on every route', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const answers = [
+            await sent(app, '/vault'),
+            await sent(app, '/vault/fee', { bps: 400 }),
+            await sent(app, '/vault/ceiling', { amount: '9' }),
+            await sent(app, '/vault/fees', { amount: '2' }),
+            await sent(app, '/vault/pause', { paused: true })
+        ];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['vault', 'somebody'], ['fee', 'somebody', 400], ['ceiling', 'somebody', '9'], ['fees', 'somebody', '2'], ['pause', 'somebody', true]]);
+    });
+
+    it('hands the owner\'s wallet the call the port composed, and nothing the wire does not declare', async () =>
+    {
+        const call = { from: `0x${ 'ab'.repeat(20) }`, to: `0x${ '12'.repeat(20) }`, data: '0x1234', value: '0x0', chainId: 31337 };
+        const response = await sent(owned([], { ...call, secret: 'x' }), '/vault/fee', { bps: 400 });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(call);
+    });
+
+    it('refuses a fee the wire cannot hold before any port is asked', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await sent(owned(told, null), '/vault/fee', { bps: 10_001 });
+
+        expect(response.status).toBe(422);
+        expect(told).toEqual([]);
+    });
+
+    it('answers anybody who is not on the staff as a page that is not there, on the staff and the log as well', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const change = { handle: 'mina', role: 'moderator', reason: 'Reads the reports' };
+        const answers = [await sent(app, '/staff'), await sent(app, '/staff', change), await sent(app, '/log?kind=grant&person=mina')];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['staff', 'somebody'], ['setStaff', 'somebody', change], ['log', 'somebody', { kind: 'grant', person: 'mina' }]]);
+    });
+
+    it('answers anybody who may not read the people as a page that is not there, on the list, a person and every action on one', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const note = { text: 'Watches the Friday tables' };
+        const suspension = { days: 7, category: 'harassment', reason: 'Rude at a Ludo table' };
+        const lifting = { reason: 'Said sorry to the table' };
+        const clearing = { part: 'name', reason: 'A name meant to insult' };
+        const ending = { reason: 'Their wallet was taken' };
+        const answers = [
+            await sent(app, '/people?list=minors&q=mina'),
+            await sent(app, '/people/mina'),
+            await sent(app, '/people/mina/history?cursor=abc'),
+            await sent(app, '/people/mina/notes', note),
+            await sent(app, '/people/mina/suspend', suspension),
+            await sent(app, '/people/mina/lift', lifting),
+            await sent(app, '/people/mina/clear', clearing),
+            await sent(app, '/people/mina/sign-out', ending)
+        ];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([
+            ['people', 'somebody', { list: 'minors', q: 'mina' }],
+            ['person', 'somebody', 'mina'],
+            ['history', 'somebody', 'mina', 'abc'],
+            ['note', 'somebody', 'mina', note],
+            ['suspend', 'somebody', 'mina', suspension],
+            ['lift', 'somebody', 'mina', lifting],
+            ['clear', 'somebody', 'mina', clearing],
+            ['signOut', 'somebody', 'mina', ending]
+        ]);
+    });
+
+    it('answers anybody who may not run the games as a page that is not there, on the games and on a switch', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const off = { on: false, reason: 'A bug in the deal, off until it is fixed' };
+        const answers = [await sent(app, '/play'), await sent(app, '/play/games/ludo', off)];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([['play', 'somebody'], ['switchGame', 'somebody', 'ludo', off]]);
+        expect((await sent(app, '/play/games/ludo', { on: 'no', reason: 'A bug in the deal' })).status).toBe(422);
+        expect((await sent(app, '/play/games/ludo', { on: false, reason: 'no' })).status).toBe(422);
+        expect((await sent(app, '/play/games/ludo', { on: false })).status).toBe(422);
+    });
+
+    it('answers anybody who may not work the reports as a page that is not there, on the queue, the count, a report and an outcome', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+        const outcome = { outcome: 'reviewed', reason: 'Read it, nothing to do' };
+        const answers = [
+            await sent(app, '/reports?status=all&cursor=abc'),
+            await sent(app, '/reports/waiting'),
+            await sent(app, '/reports/r1'),
+            await sent(app, '/reports/r1/review', outcome)
+        ];
+
+        for (const response of answers)
+        {
+            const body = await response.json() as { error: { code: string; message: string } };
+
+            expect([response.status, body.error.code, body.error.message]).toEqual([404, 'not-found', 'Nothing there.']);
+        }
+
+        expect(told).toEqual([
+            ['reports', 'somebody', { status: 'all', cursor: 'abc' }],
+            ['reportsWaiting', 'somebody'],
+            ['report', 'somebody', 'r1'],
+            ['review', 'somebody', 'r1', outcome]
+        ]);
+        expect((await sent(app, '/reports?status=open')).status).toBe(422);
+        expect((await sent(app, '/reports/r1/review', { outcome: 'closed', reason: 'Closed it for good' })).status).toBe(422);
+        expect((await sent(app, '/reports/r1/review', { outcome: 'actioned', reason: 'ok' })).status).toBe(422);
+    });
+
+    it('refuses a change with no real reason, a role the page cannot grant, and a kind the log does not have, before any port is asked', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = owned(told, null);
+
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'moderator', reason: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'moderator', reason: '      ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: `\t${ ' '.repeat(40) }\n` })).status).toBe(422);
+        expect((await sent(app, '/people/mina/notes', { text: 'x'.repeat(501) })).status).toBe(422);
+        expect((await sent(app, '/people?list=everybody')).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { days: 2, category: 'spam', reason: 'Two days of it' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { days: 7, category: 'rude', reason: 'Rude all week' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/suspend', { category: 'spam', reason: '   ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/lift', { reason: 'ok' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/clear', { part: 'avatar', reason: 'An old picture' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/clear', { part: 'bio', reason: '  ' })).status).toBe(422);
+        expect((await sent(app, '/people/mina/sign-out', {})).status).toBe(422);
+        expect((await sent(app, `/people/mina/history?cursor=${ 'x'.repeat(81) }`)).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'owner', reason: 'Runs it all now' })).status).toBe(422);
+        expect((await sent(app, '/staff', { handle: 'mina', role: 'admin', reason: 'x'.repeat(501) })).status).toBe(422);
+        expect((await sent(app, '/log?kind=delete')).status).toBe(422);
+        expect(told).toEqual([]);
+    });
+
+    it('is sent garbage by the pass that sends every route garbage, or named there as spared', () =>
+    {
+        const pass = readFileSync(fileURLToPath(new URL('../../tools/qa/garbage-pass.mjs', import.meta.url)), 'utf8');
+        const bodies = pass.slice(pass.indexOf('const BODIES ='), pass.indexOf('const WOULD_ACT ='));
+        const spared = pass.slice(pass.indexOf('const SPARED ='), pass.indexOf('const SIGNED_OUT ='));
+        const queries = pass.slice(pass.indexOf('const QUERIES ='), pass.indexOf('const message ='));
+
+        expect(bodies).toContain(`'/admin/vault/fee': (bad) => [`);
+        expect(bodies).toContain(`'/admin/vault/ceiling': (bad) => [`);
+        expect(bodies).toContain(`'/admin/vault/fees': (bad) => [`);
+        expect(bodies).toContain(`'/admin/staff': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/notes': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/suspend': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/lift': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/clear': (bad) => [`);
+        expect(bodies).toContain(`'/admin/people/:handle/sign-out': (bad) => [`);
+        expect(spared).toContain(`'/admin/vault/pause'`);
+        expect(queries).toContain(`'/admin/log': ['cursor', 'staff', 'person', 'kind']`);
+        expect(queries).toContain(`'/admin/people': ['q', 'list', 'cursor']`);
+        expect(queries).toContain(`'/admin/people/:handle/history': ['cursor']`);
+        expect(queries).toContain(`'/admin/reports': ['status', 'cursor']`);
+        expect(bodies).toContain(`'/admin/reports/:id/review': (bad) => [`);
+        expect(bodies).toContain(`'/admin/play/games/:game': (bad) => [`);
+    });
+
+    it('sends the staff and the log as the wire declares them, and nothing the port added', async () =>
+    {
+        const member = { handle: 'mina', displayName: 'Mina', hue: 40, role: 'moderator', grantedBy: 'dana.w', grantedAt: '2026-10-22T09:00:00.000Z' };
+        const list = await sent(owned([], { members: [{ ...member, address: '0xsecret' }], secret: 'x' }), '/staff');
+        const row = { id: 'a-row', at: '2026-10-22T09:00:00.000Z', staff: 'dana.w', staffRole: 'owner', kind: 'grant', person: 'mina', reason: 'Reads the reports', details: { to: 'moderator' } };
+        const log = await sent(owned([], { rows: [{ ...row, staffId: 'a-uuid' }] }), '/log');
+
+        expect(await list.json()).toEqual({ members: [member] });
+        expect(await log.json()).toEqual({ rows: [row] });
+    });
+});
+
+describe('checking a game played for NURA', () =>
+{
+    const proof = {
+        game: 'ludo',
+        variant: 'standard',
+        seats: [0, 1],
+        target: 0,
+        cube: false,
+        blinds: 'low',
+        chainId: 31337,
+        vault: `0x${ '12'.repeat(20) }`,
+        amount: '10000000000000000000',
+        feeBps: 500,
+        state: 'settled',
+        players: [{
+            seat: 0,
+            who: 'dana',
+            address: `0x${ 'ab'.repeat(20) }`,
+            commit: `0x${ '01'.repeat(32) }`,
+            secret: `0x${ '02'.repeat(32) }`,
+            nonce: `0x${ '03'.repeat(32) }`,
+            deadline: 1_900_000_000,
+            signature: `0x${ '04'.repeat(65) }`
+        }],
+        actions: [{ rev: 1, seat: -1, kind: 'open', payload: '{}', events: '[]' }],
+        openTx: `0x${ 'ab'.repeat(32) }`
+    };
+
+    const checkedAs = (told: unknown[][], answer: unknown = proof) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', isMinor: false, sessionId: 'a-session' })
+            },
+            match: {
+                proof: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve(answer);
+                }
+            }
+        } as unknown as Ports
+    });
+
+    it('hands the read the reader and the id as it came, and sends what the wire declares and nothing else', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await call(checkedAs(told, { ...proof, secrets: 'x', players: [{ ...proof.players[0], key: 'y' }] }), '/api/matches/A-MATCH/proof');
+
+        expect(response.status).toBe(200);
+        expect(told).toEqual([['somebody', 'A-MATCH']]);
+        expect(await response.json()).toEqual(proof);
+    });
+
+    it('answers a game it will not prove in the bytes of a game that is not there', async () =>
+    {
+        const response = await call(checkedAs([], null), '/api/matches/a-match/proof');
+        const body = await response.json() as { error: { code: string; message: string } };
+
+        expect(response.status).toBe(404);
+        expect([body.error.code, body.error.message]).toEqual(['not-found', 'No game there.']);
     });
 });
 

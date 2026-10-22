@@ -93,7 +93,8 @@ const identity = createIdentityService(dataSource, {
     origin: config.origin,
     chainId: config.chainId,
     rpcUrl: config.rpcUrl,
-    sessionTtlSeconds: SESSION_TTL_SECONDS
+    sessionTtlSeconds: SESSION_TTL_SECONDS,
+    vault: config.vaultAddress
 });
 
 const hub = createHub({
@@ -247,6 +248,15 @@ const expiries = setInterval(() =>
 
 expiries.unref();
 
+const suspensions = setInterval(() =>
+{
+    void ports.jobs.liftSuspensions()
+        .then((lifted) => { if (lifted > 0) { log.info('suspensions ran out', { lifted }); } })
+        .catch((error: unknown) => log.error('suspension sweep failed', { error }));
+}, 60_000);
+
+suspensions.unref();
+
 const TIDY_MS = 24 * 60 * 60 * 1000;
 
 const tidyNow = () =>
@@ -349,6 +359,51 @@ const sweepTables = () =>
 tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
 tables.unref();
 
+const STAKE_SWEEP_MS = 2_000;
+
+const STAKE_SWEEP_BUDGET_MS = 4_000;
+
+let stakes: NodeJS.Timeout | null = null;
+
+const told = new Map<string, string>();
+
+const sweepStakes = () =>
+{
+    void ports.jobs.sweepStakes(STAKE_SWEEP_BUDGET_MS)
+        .then(({ begun, closed, failed, faults }) =>
+        {
+            if (begun + closed + failed > 0)
+            {
+                log.info('stakes moved', { begun, closed, failed });
+            }
+
+            const now = new Map(faults.map((one) => [one.escrow, one.error]));
+
+            for (const [escrow, error] of now)
+            {
+                if (told.get(escrow) !== error)
+                {
+                    log.warn('stake step failed', { escrow, error });
+                }
+            }
+
+            told.clear();
+            now.forEach((error, escrow) => told.set(escrow, error));
+        })
+        .catch((error: unknown) => log.error('stake sweep failed', { error }))
+        .finally(() =>
+        {
+            if (stakes !== null)
+            {
+                stakes = setTimeout(sweepStakes, STAKE_SWEEP_MS);
+                stakes.unref();
+            }
+        });
+};
+
+stakes = setTimeout(sweepStakes, STAKE_SWEEP_MS);
+stakes.unref();
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -364,6 +419,7 @@ handleShutdownSignals(served, {
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
         clearInterval(expiries);
+        clearInterval(suspensions);
         clearInterval(housekeeping);
         if (turns !== null)
         {
@@ -374,6 +430,11 @@ handleShutdownSignals(served, {
         {
             clearTimeout(tables);
             tables = null;
+        }
+        if (stakes !== null)
+        {
+            clearTimeout(stakes);
+            stakes = null;
         }
 
         goingDown = true;

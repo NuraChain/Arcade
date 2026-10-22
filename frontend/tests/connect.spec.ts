@@ -18,6 +18,8 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 const ADDRESS = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
 
+const VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+
 const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
@@ -358,6 +360,84 @@ describe('the wallet chooser', () =>
         await settle();
         expect(said()).toContain('Too many sign-ins from this network');
         expect(said()).not.toContain('Couldn’t reach the server');
+        warn.mockRestore();
+    });
+
+    it('tells a suspended account when it ends and why, and that the NURA in the vault is still theirs', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const until = '2026-10-29T14:30:00.000Z';
+        server.refuse = 'wallet-suspended';
+        server.suspension = { category: 'cheating', until, vault: VAULT };
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        const { navigate } = open();
+        await settle();
+
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        const alert = dialog().querySelector('[role="alert"]')!;
+
+        expect(alert.querySelector('p')!.textContent).toBe('This account is suspended.');
+        expect(alert.querySelector('[data-term]')!.textContent).toBe(`It ends on ${ useLocale().date(Date.parse(until), { dateStyle: 'long', timeStyle: 'short' }) }.`);
+        expect(alert.querySelector('[data-why]')!.textContent).toBe('The reason: Cheating.');
+        expect(alert.querySelector<HTMLElement>('[data-nura]')!.hidden).toBe(false);
+        expect(alert.querySelector<HTMLAnchorElement>('[data-nura] a')!.href).toBe(`https://explorer.nurachain.net/address/${ VAULT }`);
+        expect(navigate).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it('says a suspension for good in Persian, and nothing of a vault the server did not name', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        useLocale().setLocale('fa');
+        server.refuse = 'wallet-suspended';
+        server.suspension = { category: 'harassment' };
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        open();
+        await settle();
+
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        const alert = dialog().querySelector('[role="alert"]')!;
+
+        expect(alert.querySelector('p')!.textContent).toBe('این حساب معلق شده.');
+        expect(alert.querySelector('[data-term]')!.textContent).toBe('این تعلیق همیشگیه.');
+        expect(alert.querySelector('[data-why]')!.textContent).toBe('دلیلش: آزار یا توهین.');
+        expect(alert.querySelector<HTMLElement>('[data-nura]')!.hidden).toBe(true);
+        warn.mockRestore();
+    });
+
+    it('on the sign-in page, says the suspension, and forgets it at the next try', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        useWallet().adopt(fakeProvider());
+        renderTest(() => WalletPanel({ onConnected: vi.fn() }) as HTMLElement);
+        await settle();
+
+        const press = () => fire([...document.querySelectorAll('button')].find((one) => /Connect wallet|Try again/.test(one.textContent ?? ''))!, 'click');
+        const said = () => document.querySelector('[role="alert"]')?.textContent ?? '';
+
+        server.refuse = 'wallet-suspended';
+        server.suspension = { category: 'spam', until: '2026-10-23T09:00:00.000Z' };
+        press();
+        await settle();
+
+        expect(said()).toContain('This account is suspended.');
+        expect(said()).toContain(`It ends on ${ useLocale().date(Date.parse('2026-10-23T09:00:00.000Z'), { dateStyle: 'long', timeStyle: 'short' }) }.`);
+        expect(said()).toContain('The reason: Spam or scams.');
+        expect(useWallet().suspension()).toEqual({ category: 'spam', until: '2026-10-23T09:00:00.000Z' });
+
+        server.refuse = 'challenge-busy';
+        press();
+        await settle();
+
+        expect(said()).toContain('Too many sign-ins from this network');
+        expect(document.querySelector('[data-suspended]')).toBeNull();
+        expect(useWallet().suspension()).toBeNull();
         warn.mockRestore();
     });
 

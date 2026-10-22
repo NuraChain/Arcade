@@ -1,11 +1,15 @@
+import { Link } from 'azerothjs';
+
 import { ApiError } from '../../api.ts';
 import { whyRefused } from '../../lib/open-table.ts';
 import type { Game } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
 import { cubeLive } from '../../../../backend/src/domains/match/backgammon/cube.ts';
 import { teamsOf } from '../../../../backend/src/domains/table/teams.ts';
+import { cutOf, potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import { TEAMS_HINT, formatsOf, isValidTable, type Blinds, type TableConfig, type TableFormat, type TableMode, type TablePrivacy } from '../../data/tables.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { nuraOf } from '../../lib/nura.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -14,6 +18,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useVault } from '../../stores/vault.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Chip from '../ui/chip.component.azeroth';
@@ -32,6 +37,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     const presence = usePresence();
     const people = usePeople();
     const social = useSocial();
+    const vaults = useVault();
 
     derived rules = catalogue.rules(props.game.id);
     derived defaults = catalogue.defaults(props.game.id);
@@ -48,6 +54,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     state invitees = [] as string[];
     state query = '';
     state pending = false;
+    state stake = null as string | null;
 
     derived hasCube = rules.hasCube;
 
@@ -67,7 +74,43 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived teamsHint = teams ? TEAMS_HINT[props.game.id] ?? null : null;
 
-    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams } satisfies TableConfig;
+    derived held = vaults.state();
+
+    derived vault = held !== null && held.configured ? held : null;
+
+    derived paying = vault !== null && mode === 'live';
+
+    derived payable = vault?.may === 'yes';
+
+    derived ladder = vault?.ladder ?? [];
+
+    derived wager = paying && payable && stake !== null && ladder.includes(stake) ? stake : null;
+
+    derived staked = wager !== null;
+
+    derived fee = vault?.fee ?? 0;
+
+    derived pot = potOf(BigInt(wager ?? '0'), seats);
+
+    derived potLine = locale.t(teams ? 'create.stake.potTeams' : 'create.stake.pot', {
+        pot: locale.n(nuraOf(pot), { maximumFractionDigits: 4 }),
+        fee: locale.n(nuraOf(cutOf(pot, fee)), { maximumFractionDigits: 4 }),
+        share: locale.n(nuraOf(shareOf(pot, fee, teams ? 2 : 1)), { maximumFractionDigits: 4 })
+    });
+
+    derived free = vault?.balances?.free ?? '0';
+
+    derived short = staked && BigInt(free) < BigInt(wager ?? '0');
+
+    derived shortLine = locale.t('create.stake.short', { free: locale.n(nuraOf(free), { maximumFractionDigits: 4 }) });
+
+    derived barred = paying && !payable;
+
+    derived barredLine = vault === null || vault.may === 'yes' ? '' : locale.t(`tables.refused.${ vault.may }`);
+
+    derived pointed = short || barred;
+
+    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams, ...(wager === null ? {} : { stake: wager }) } satisfies TableConfig;
 
     derived tooMany = invitees.length > seats - 1;
 
@@ -168,6 +211,38 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             </fieldset>
         </Show>
 
+        <Show when={ paying }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.stake') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <li>
+                        <Chip selected={ !staked } onClick={ () => stake = null }>
+                            <span>{ locale.t('create.stake.free') }</span>
+                        </Chip>
+                    </li>
+                    <For each={ ladder } key={ (amount) => amount } let={ amount }>
+                        <li>
+                            <Chip icon="coins" selected={ wager === amount } disabled={ !payable } onClick={ () => stake = amount }>
+                                <span><span class="tally">{ locale.n(nuraOf(amount)) }</span> NURA</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+                <Show when={ staked }>
+                    <p class="text-ui-xs text-faint">{ potLine }</p>
+                </Show>
+                <Show when={ short }>
+                    <p class="text-ui-xs font-semibold text-gold">{ shortLine }</p>
+                </Show>
+                <Show when={ barred }>
+                    <p class="text-ui-xs text-muted">{ barredLine }</p>
+                </Show>
+                <Show when={ pointed }>
+                    <Link to="/app/me/wallet" class="inline-flex min-h-11 items-center self-start text-ui-xs font-semibold text-accent hover:underline">{ locale.t('vault.title') }</Link>
+                </Show>
+            </fieldset>
+        </Show>
+
         <fieldset class="flex flex-col gap-2">
             <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.privacy') }</legend>
             <Segmented
@@ -223,7 +298,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     ] }
                     onChange={ (id) => blinds = id as Blinds }
                 />
-                <p class="text-ui-xs text-faint">{ locale.t('games.stakes.playMoneyHint') }</p>
+                <p class="text-ui-xs text-faint">{ locale.t(staked ? 'create.stake.chips' : 'games.stakes.playMoneyHint') }</p>
             </fieldset>
         </Show>
 

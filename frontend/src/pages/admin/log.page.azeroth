@@ -1,0 +1,233 @@
+import { createResource, untrack, useHead } from 'azerothjs';
+
+import { ACTION_KINDS, type ActionKind } from '../../../../backend/src/domains/admin/roles.ts';
+import type { StaffLog } from '../../../../backend/src/schemas.ts';
+import { client } from '../../api.ts';
+import LogEntry from '../../components/admin/log-entry.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Field from '../../components/ui/field.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
+import Input from '../../components/ui/input.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
+import { useAddress } from '../../lib/page-param.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { foldHandle, type LogRow } from '../../lib/staff-words.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { SEARCH_PAUSE_MS } from '../../services/search.service.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+interface Asked
+{
+    kind: ActionKind | null;
+    staff: string;
+    person: string;
+}
+
+interface Tail
+{
+    from: StaffLog;
+    rows: LogRow[];
+    cursor: string | undefined;
+}
+
+const KIND_WORDS: Record<ActionKind | 'all', MessageKey> = {
+    all: 'admin.log.kind.all',
+    grant: 'admin.log.kind.grant',
+    change: 'admin.log.kind.change',
+    revoke: 'admin.log.kind.revoke',
+    note: 'admin.log.kind.note',
+    suspend: 'admin.log.kind.suspend',
+    lift: 'admin.log.kind.lift',
+    expire: 'admin.log.kind.expire',
+    clear: 'admin.log.kind.clear',
+    'sign-out': 'admin.log.kind.sign-out',
+    report: 'admin.log.kind.report',
+    game: 'admin.log.kind.game'
+};
+
+const queryOf = (asked: Asked) => ({
+    ...(asked.kind === null ? {} : { kind: asked.kind }),
+    ...(asked.staff === '' ? {} : { staff: asked.staff }),
+    ...(asked.person === '' ? {} : { person: asked.person })
+});
+
+export default component LogPage()
+{
+    const locale = useLocale();
+    const address = useAddress();
+
+    useHead({ title: () => locale.t('admin.section.log') });
+
+    derived kind = ACTION_KINDS.find((one) => one === address.text('kind')) ?? null;
+
+    derived staff = foldHandle(address.text('staff'));
+
+    derived person = foldHandle(address.text('person'));
+
+    state staffText = untrack(() => address.text('staff'));
+
+    state personText = untrack(() => address.text('person'));
+
+    state tail = null as Tail | null;
+
+    state paging = false;
+
+    let pending: (() => void) | null = null;
+
+    const first = createResource(() => ({ kind, staff, person }), (asked) => client.admin.log({ query: queryOf(asked) }), { name: 'admin.log' });
+
+    mount
+    {
+        return () =>
+        {
+            pending?.();
+            pending = null;
+        };
+    }
+
+    derived page = first.data() ?? null;
+
+    derived trouble = first.error();
+
+    derived waiting = page === null && trouble === null;
+
+    derived failed = page === null && trouble !== null;
+
+    derived continued = tail !== null && tail.from === page ? tail : null;
+
+    derived rows = page === null ? [] : [...page.rows, ...(continued?.rows ?? [])];
+
+    derived cursor = continued === null ? page?.cursor : continued.cursor;
+
+    derived more = cursor !== undefined;
+
+    derived filtered = kind !== null || staff !== '' || person !== '';
+
+    derived listed = rows.length > 0;
+
+    derived empty = page !== null && rows.length === 0;
+
+    derived blank = locale.t(filtered ? 'admin.log.noneFiltered' : 'admin.log.none');
+
+    derived kinds = (['all', ...ACTION_KINDS] as const).map((one) => ({ id: one, label: locale.t(KIND_WORDS[one]) }));
+
+    const apply = () =>
+    {
+        pending?.();
+        pending = null;
+        address.write({ staff: foldHandle(staffText), person: foldHandle(personText) });
+    };
+
+    const typed = (field: 'staff' | 'person', value: string) =>
+    {
+        if (field === 'staff')
+        {
+            staffText = value;
+        }
+        else
+        {
+            personText = value;
+        }
+
+        pending?.();
+        pending = runtime().clock.after(SEARCH_PAUSE_MS, apply);
+    };
+
+    const choose = (id: string) =>
+    {
+        address.write({ kind: id === 'all' ? '' : id });
+    };
+
+    const older = async () =>
+    {
+        const from = page;
+        const after = cursor;
+        const kept = continued?.rows ?? [];
+
+        if (from === null || after === undefined || paging)
+        {
+            return;
+        }
+
+        paging = true;
+
+        await attempt((async () =>
+        {
+            const next = await client.admin.log({ query: { ...queryOf({ kind, staff, person }), cursor: after } });
+
+            if (first.data() === from)
+            {
+                tail = { from, rows: [...kept, ...next.rows], cursor: next.cursor };
+            }
+        })());
+
+        paging = false;
+    };
+
+    <div class="flex flex-col gap-6">
+        <PageHeader title={ locale.t('admin.section.log') } lead={ locale.t('admin.log.lead') } flush />
+
+        <div class="flex flex-col gap-4">
+            <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('admin.log.kinds') } onChange={ choose } />
+            <div class="grid gap-3 sm:grid-cols-2">
+                <Field id="admin-log-staff" label={ locale.t('admin.log.staff') }>
+                    <Input
+                        id="admin-log-staff"
+                        value={ staffText }
+                        leading="search"
+                        clearable
+                        autocomplete="off"
+                        enterkeyhint="search"
+                        maxlength={ 33 }
+                        onInput={ (value) => typed('staff', value) }
+                        onEnter={ apply }
+                    />
+                </Field>
+                <Field id="admin-log-person" label={ locale.t('admin.log.person') }>
+                    <Input
+                        id="admin-log-person"
+                        value={ personText }
+                        leading="search"
+                        clearable
+                        autocomplete="off"
+                        enterkeyhint="search"
+                        maxlength={ 33 }
+                        onInput={ (value) => typed('person', value) }
+                        onEnter={ apply }
+                    />
+                </Field>
+            </div>
+        </div>
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 5 } /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.log.failed') } onRetry={ () => void first.refetch() } /> }
+        </Show>
+
+        <Show when={ empty }>
+            { () => <EmptyState icon="history" title={ blank } /> }
+        </Show>
+
+        <Show when={ listed }>
+            <div class="flex flex-col">
+                <ol class="divide-y divide-line rounded-panel border border-line bg-field" data-log>
+                    <For each={ rows } key={ (one) => one.id } let={ row }>
+                        <li data-entry={ row.id } data-kind={ row.kind }>
+                            <LogEntry row={ row } />
+                        </li>
+                    </For>
+                </ol>
+                <Show when={ more }>
+                    <LoadMore label={ locale.t('admin.log.more') } loading={ paging } onMore={ () => void older() } />
+                </Show>
+            </div>
+        </Show>
+    </div>
+}

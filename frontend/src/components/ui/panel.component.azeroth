@@ -66,7 +66,7 @@ export default component Panel(props: {
                 }
             >
                 { () =>
-                    <button type="button" class={ [ shell, 'w-full' ].join(' ') } aria-label={ props.label } onClick={ () => props.onClick?.() }>
+                    <button type="button" class={ () => [ shell, 'w-full' ].join(' ') } aria-label={ props.label } onClick={ () => props.onClick?.() }>
                         { props.children }
                     </button>
                 }

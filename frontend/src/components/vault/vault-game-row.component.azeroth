@@ -1,0 +1,102 @@
+import { Link } from 'azerothjs';
+
+import type { VaultGame } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { explorerTx, nuraOf } from '../../lib/nura.ts';
+import { runtime } from '../../lib/runtime.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+
+const WORD: Record<VaultGame['state'], MessageKey> = {
+    locking: 'vault.games.locking',
+    open: 'vault.games.playing',
+    settling: 'vault.games.paying',
+    settled: 'vault.games.won',
+    refunding: 'vault.games.paying',
+    refunded: 'vault.games.back',
+    reclaimed: 'vault.games.reclaimed',
+    failed: 'vault.games.back'
+};
+
+const STUCK = new Set<VaultGame['state']>(['open', 'settling', 'refunding']);
+
+const PAID = new Set<VaultGame['state']>(['settling', 'settled', 'refunding', 'refunded', 'reclaimed']);
+
+export default component VaultGameRow(props: {
+    game: VaultGame;
+    chainId: number;
+    reclaimAfter: number;
+    busy: boolean;
+    onReclaim: (id: string) => void;
+})
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived played = props.game;
+
+    derived won = played.state === 'settled' && played.won === true;
+
+    derived name = locale.t(catalogue.byId(played.game as GameId).nameKey);
+
+    derived when = locale.date(Date.parse(played.at), { dateStyle: 'medium', timeStyle: 'short' });
+
+    derived outcome = played.state === 'settled' && !won ? locale.t('vault.games.lost') : locale.t(WORD[played.state]);
+
+    derived sum = locale.n(nuraOf(won && played.share !== undefined ? played.share : played.amount), { maximumFractionDigits: 4 });
+
+    derived hash = played.closeTx ?? played.openTx ?? null;
+
+    derived link = hash === null ? null : explorerTx(props.chainId, hash);
+
+    derived stuck = STUCK.has(played.state) && Date.parse(played.at) + props.reclaimAfter * 1000 < runtime().clock.now();
+
+    derived checkable = played.match !== undefined && PAID.has(played.state);
+
+    derived checkTo = `/app/me/wallet/check/${ played.match ?? '' }`;
+
+    derived acted = link !== null || stuck || checkable;
+
+    <div class="flex flex-col gap-2 px-4 py-3" data-state={ played.state }>
+        <div class="flex min-w-0 items-center gap-3">
+            <GameIcon game={ played.game as GameId } class="size-9 shrink-0" />
+            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <p class="truncate text-ui-sm font-semibold text-text">{ name }</p>
+                <p class="truncate text-ui-xs text-muted">{ when }</p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-0.5 text-end">
+                <p class={ () => [ 'text-ui-xs font-semibold', won ? 'text-win' : 'text-muted' ].join(' ') }>{ outcome }</p>
+                <p class="text-ui-sm font-semibold text-text"><span class="tally">{ sum }</span> NURA</p>
+            </div>
+        </div>
+        <Show when={ acted }>
+            <div class="flex flex-wrap items-center gap-2 ps-12">
+                <Show when={ link } let={ href }>
+                    <a
+                        class="inline-flex min-h-11 items-center gap-1 text-ui-xs font-semibold text-accent hover:underline"
+                        href={ href }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        { locale.t('vault.tx') }
+                        <Icon name="forward" size={ 12 } class="icon-flip" />
+                    </a>
+                </Show>
+                <Show when={ checkable }>
+                    <Link to={ () => checkTo } class="inline-flex min-h-11 items-center gap-1 text-ui-xs font-semibold text-accent hover:underline" data-check>
+                        { locale.t('match.check') }
+                    </Link>
+                </Show>
+                <Show when={ stuck }>
+                    <Button variant="outline" size="sm" loading={ props.busy } onClick={ () => props.onReclaim(played.id) }>
+                        { locale.t('vault.games.reclaim') }
+                    </Button>
+                </Show>
+            </div>
+        </Show>
+    </div>
+}

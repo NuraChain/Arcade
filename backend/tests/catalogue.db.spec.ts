@@ -38,6 +38,7 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
+    catalogueChanged: () => undefined,
     sessionsRevoked: () => undefined,
     seen: () => undefined
 };
@@ -160,8 +161,8 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
 
             await sat(tableId);
 
-            expect(await busy('ludo')).toEqual({ game: 'ludo', playing: 2, tables: 1 });
-            expect(await busy('hokm')).toEqual({ game: 'hokm', playing: 0, tables: 0 });
+            expect(await busy('ludo')).toEqual({ game: 'ludo', status: 'available', playing: 2, tables: 1 });
+            expect(await busy('hokm')).toEqual({ game: 'hokm', status: 'available', playing: 0, tables: 0 });
         });
 
         it('goes on counting them while their game is played', async () =>
@@ -175,7 +176,7 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
         {
             await opened(await makeUser(), { privacy });
 
-            expect(await busy()).toEqual({ game: 'ludo', playing: 0, tables: 0 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 0, tables: 0 });
         });
 
         it('counts nobody at a table that has closed', async () =>
@@ -185,7 +186,7 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
 
             await tables.close(host, tableId);
 
-            expect(await busy()).toEqual({ game: 'ludo', playing: 0, tables: 0 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 0, tables: 0 });
         });
     });
 
@@ -205,7 +206,7 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
 
             await sat(tableId);
 
-            expect(await busy()).toEqual({ game: 'ludo', playing: 2, tables: 0 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 2, tables: 0 });
         });
 
         it('is not a table whose only empty chair is kept for somebody', async () =>
@@ -217,7 +218,7 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
             await opened(host, { seats: 2, invitees: [friend] });
 
             expect(await db.getRepository(TableSeat).countBy({ invitedId: friend })).toBe(1);
-            expect(await busy()).toEqual({ game: 'ludo', playing: 1, tables: 0 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 1, tables: 0 });
         });
 
         it('is a table with one chair kept and another free', async () =>
@@ -237,14 +238,14 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
 
             await db.getRepository(TableSeat).update({ tableId, userId: players[2] }, { userId: null, ready: false, joinedAt: null });
 
-            expect(await busy()).toEqual({ game: 'ludo', playing: 2, tables: 0 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 2, tables: 0 });
         });
 
         it('counts a table once however many of its chairs are free', async () =>
         {
             await opened(await makeUser(), { seats: 4 });
 
-            expect(await busy()).toEqual({ game: 'ludo', playing: 1, tables: 1 });
+            expect(await busy()).toEqual({ game: 'ludo', status: 'available', playing: 1, tables: 1 });
         });
     });
 
@@ -348,7 +349,7 @@ describe.skipIf(!active)('how busy each game is, against a real database', () =>
             const told = await door().pulse();
 
             expect(told).toEqual({ games: (await catalogue.live()).games, watching: await tables.watchingMark() });
-            expect(told.games.find((row) => row.game === 'ludo')).toEqual({ game: 'ludo', playing: 3, tables: 1 });
+            expect(told.games.find((row) => row.game === 'ludo')).toEqual({ game: 'ludo', status: 'available', playing: 3, tables: 1 });
         });
     });
 });

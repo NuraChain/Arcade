@@ -1,0 +1,111 @@
+import { createResource, useHead } from 'azerothjs';
+
+import type { AdminPlay } from '../../../../backend/src/schemas.ts';
+import { client } from '../../api.ts';
+import GameSwitch from '../../components/admin/game-switch.component.azeroth';
+import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import { GAMES } from '../../data/games.ts';
+import { attempt } from '../../lib/attempt.ts';
+import { createGuesses, type Guess } from '../../lib/guess.ts';
+import { whyStaffRefused } from '../../lib/staff-words.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+
+export default component PlayPage()
+{
+    const locale = useLocale();
+    const overlay = useOverlay();
+
+    useHead({ title: () => locale.t('admin.section.play') });
+
+    const view = createResource(() => client.admin.play(), { name: 'admin.play' });
+
+    const guesses = createGuesses<AdminPlay>();
+
+    derived held = view.data() ?? null;
+
+    derived trouble = view.error();
+
+    derived waiting = held === null && trouble === null;
+
+    derived failed = held === null && trouble !== null;
+
+    derived games = held === null ? [] : guesses.over(held).games;
+
+    derived listed = games.length > 0;
+
+    const nameOf = (game: string) =>
+    {
+        const known = GAMES.find((one) => one.id === game);
+
+        return known === undefined ? game : locale.t(known.nameKey);
+    };
+
+    const reread = async () =>
+    {
+        await view.refetch();
+
+        if (view.error() !== null)
+        {
+            throw view.error();
+        }
+
+        guesses.landed();
+    };
+
+    const switched = (game: string, on: boolean): Guess<AdminPlay> => (from) => ({
+        games: from.games.map((one) => (one.game === game ? { ...one, status: on ? 'available' : 'disabled' } : one))
+    });
+
+    const flip = async (game: string, on: boolean) =>
+    {
+        const name = nameOf(game);
+        const reason = await overlay.open(
+            ReasonSheet,
+            {
+                title: locale.t(on ? 'admin.play.ask.on' : 'admin.play.ask.off', { game: name }),
+                lead: locale.t(on ? 'admin.play.ask.onLead' : 'admin.play.ask.offLead', { game: name }),
+                confirm: locale.t(on ? 'admin.play.confirm.on' : 'admin.play.confirm.off'),
+                destructive: !on
+            },
+            { label: locale.t('admin.section.play') }
+        ).closed;
+
+        if (typeof reason !== 'string')
+        {
+            return;
+        }
+
+        const sent = guesses.during(switched(game, on), () => client.admin.switchGame({ params: { game }, input: { on, reason } }), reread);
+
+        await attempt(sent, locale.t(on ? 'admin.play.done.on' : 'admin.play.done.off', { game: name }), whyStaffRefused);
+    };
+
+    <div class="flex flex-col gap-6">
+        <PageHeader title={ locale.t('admin.section.play') } lead={ locale.t('admin.play.lead') } flush />
+
+        <Show when={ waiting }>
+            { () => <Skeleton lines={ 4 } avatar /> }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('admin.play.failed') } onRetry={ () => void view.refetch() } /> }
+        </Show>
+
+        <Show when={ listed }>
+            <section aria-labelledby="admin-play-games" class="flex flex-col gap-3">
+                <h2 id="admin-play-games" class="text-ui-lg font-semibold text-text">{ locale.t('admin.play.games') }</h2>
+                <ul class="divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" data-games>
+                    <For each={ games } key={ (one) => one.game } let={ row }>
+                        <li>
+                            <GameSwitch row={ row } onSwitch={ (on) => void flip(row.game, on) } />
+                        </li>
+                    </For>
+                </ul>
+            </section>
+        </Show>
+    </div>
+}
