@@ -702,6 +702,13 @@ export function createTableService(db: DataSource, social: SocialService)
                     return { id: waiting.id, seated: false };
                 }
 
+                const begun = want.filter.mode === 'live' ? await playing(tx) : null;
+
+                if (begun !== null)
+                {
+                    return { id: begun, seated: false };
+                }
+
                 await mustHaveRoom(lead, tx);
 
                 const left = want.filter.mode === 'live' ? await letGo(tx, lead) : [];

@@ -797,8 +797,15 @@ Under the lock, in order:
   put out of chips search as they always did while the game goes on without them. The table
   service is handed the question (`playing`), as a leave is handed its walkout, because a
   table knows no game. It is asked first, under the searcher's own lock (*One live search at a
-  time*) and before the game's, so two searches of one person that cross the start of the game
-  the first one filled meet one answer. A turn-based search asks nothing, and a turn-based game
+  time*) and before the game's, and asked again when no table the searcher waits at is found
+  (*Already waiting*), so two searches of one person that cross the start of the game the first
+  one filled meet one answer. Asked once, they did not: the game started after the second search
+  had found no game and before it looked for a wait, a table with a game on is not one anybody
+  waits at, and the second search opened a table of its own. A full run of the database specs
+  met it once; `quick.db.spec.ts` now parks a search at the game's lock while the game starts,
+  and with the second question taken out it opens a second table every time. The start takes
+  the table's lock and not the game's, which is why no lock closes the window and a second
+  question does. A turn-based search asks nothing, and a turn-based game
   is not one being played here: a game of a move a day is not one somebody sits at. The browser
   goes to the table it is given and, when that is another game than the one looked for, says
   "Your Backgammon game is still on" (`quickMatch.stillPlaying`). `quick.db.spec.ts`
