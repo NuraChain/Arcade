@@ -7025,11 +7025,15 @@ only ever checked the `chat.line.group.*` keys, which is how two slipped past it
 checks every key now, and the group keys keep a shape of their own because they are composed from a
 suffix and never appear whole in the source.
 
-`declareResult` writes the result line into the table's own thread, and it lives in its own
-zero-import module because a game ends TWO ways - somebody plays the last move, or the sweep
-forfeits the last player holding a turn - and both have to say it identically. A game somebody won
-names them; a game nobody won (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and
-must not, because the engine calls the last player standing a winner so the board can stop.
+`declareResult` writes the result line into the table's own thread, and it lives in a module of
+its own (`endingOf` in `match/declare.ts`) because a game ends three ways - somebody plays the last
+move or gives up, the sweep forfeits the last player holding a turn, or somebody walks out - and all
+three have to say it identically. A game somebody won names them; a game nobody won
+(`matches.outcome = 'abandoned'`, every survivor `void`) does not, and must not, because the engine
+calls the last player standing a winner so the board can stop. A table played for NURA is the one
+exception, and only once its stakes are being paid: the line names whoever they were paid to, read
+off the escrow's mask of seats, because leaving loses the stake and the result card already names
+them (`.claude/rules/stakes.md`, *The winner on the card*).
 
 The invite line goes in the TABLE's thread rather than into a direct message. A line in a DM would
 create a conversation between two people as a side effect of an invitation, which is a thing nobody

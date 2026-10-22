@@ -364,7 +364,15 @@ too ("You won.", "Sara Kamali won.") and the line under it says the rating and t
 move (`match.over.voidPaid`). The finished game reaches the page a moment before the table that
 says what its stakes came to, so while the table still says its stakes are `open` the card says
 only "That game is over." (`awaiting`): the walk saw "Ended too early to count." stand for twenty
-milliseconds before "You won.", and the headline is a live region, so a screen reader said both. A
+milliseconds before "You won.", and the headline is a live region, so a screen reader said both.
+The line the table's chat is told says the same (`endingOf` in `match/declare.ts`): it said "The
+game ended with nobody winning" under a card that named who had been paid, found in the walk with
+MetaMask. Where the judge and the payment name different seats (a three-handed Hokm game somebody
+walks out of once everybody has played a hand's worth, the other two level: the judge calls both
+winners, the engine names one side and the pot goes to it), the line names the payment, as the
+card does. `stake.db.spec.ts` (*paying for the game*) holds an early
+resignation, a pair paid in seat order, the two disagreeing, and a free game that still names
+nobody. A
 free table, a refund and a lock still read as they did.
 
 ## How it is held

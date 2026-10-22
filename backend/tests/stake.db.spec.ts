@@ -7,9 +7,10 @@ import { getAddress, keccak256, encodeAbiParameters, type Hex } from 'viem';
 import { errorResponse } from '@azerothjs/http';
 
 import { vaultIdOf } from '../src/chain/vault.ts';
-import { Escrow, EscrowSeat, Match, MatchAction, MatchPlayer, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
+import { Conversation, Escrow, EscrowSeat, Match, MatchAction, MatchPlayer, Message, PaidAccount, StakeConsent, Table, TableSeat, TableStake, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
+import { endingOf } from '../src/domains/match/declare.ts';
 import type { Engine, ForfeitReason } from '../src/domains/match/engine.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
@@ -155,6 +156,13 @@ const seated = async () =>
 const sweep = () => ports.jobs.sweepStakes(4000);
 
 const escrowOf = (tableId: string) => db.getRepository(Escrow).findOne({ where: { tableId }, order: { createdAt: 'DESC' } });
+
+const resultLines = async (tableId: string) =>
+{
+    const room = await db.getRepository(Conversation).findOneByOrFail({ tableId, kind: 'game' });
+
+    return (await db.getRepository(Message).findBy({ conversationId: room.id, kind: 'result' })).map((line) => line.payload);
+};
 
 const readiness = async (tableId: string) =>
     (await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } })).map((chair) => chair.ready);
@@ -751,6 +759,76 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             await ports.table.leave(guest.id, tableId, true);
 
             expect(await escrowOf(tableId)).toMatchObject({ state: 'settling', winners: 1 });
+        });
+
+        it('names whoever the stakes were paid to in the table\'s result line, however early the game ended', async () =>
+        {
+            const { host, guest, tableId, matchId } = await playing();
+
+            await ports.match.resign(host.id, matchId, { key: 'give-up' });
+
+            expect((await db.getRepository(Match).findOneByOrFail({ id: matchId })).outcome).toBe('abandoned');
+            expect(await resultLines(tableId)).toEqual([{ key: 'chat.line.result', params: { game: 'ludo', winners: [guest.handle] } }]);
+        });
+
+        it('names both of a pair the stakes were paid to, in seat order, when the other side walks out', async () =>
+        {
+            const people = [await makeUser(0), await makeUser(1), await makeUser(2), await makeUser(3)];
+            const table = await ports.table.create(people[0].id, { ...live(TEN), seats: 4, teams: true });
+
+            for (const person of people.slice(1))
+            {
+                await ports.table.claim(person.id, table.id);
+            }
+
+            fake.state.mine = 'pending';
+
+            for (const person of people)
+            {
+                await ready(person, table.id);
+            }
+
+            await sweep();
+
+            const escrow = (await escrowOf(table.id)) as Escrow;
+
+            fake.receipts.set(escrow.openTx as Hex, 'success');
+            fake.games.set(vaultIdOf(escrow.id), 'open');
+            fake.state.mine = 'success';
+            await sweep();
+
+            await ports.table.leave(people[0].id, table.id, true);
+
+            expect(await escrowOf(table.id)).toMatchObject({ state: 'settling', winners: 0b1010 });
+            expect(await resultLines(table.id)).toEqual([{ key: 'chat.line.result', params: { game: 'ludo', winners: [people[1].handle, people[3].handle] } }]);
+        });
+
+        it('tells a game the judge and the payment disagree about as it was paid, as the card does', async () =>
+        {
+            const { host, guest, matchId } = await playing();
+
+            await ports.match.resign(host.id, matchId, { key: 'give-up' });
+            await db.getRepository(MatchPlayer).update({ matchId, userId: host.id }, { result: 'won' });
+            await db.getRepository(Match).update({ id: matchId }, { outcome: 'won' });
+
+            expect(await endingOf(db, matchId)).toMatchObject({ key: 'chat.line.result', params: { winners: [guest.handle] } });
+        });
+
+        it('names nobody in the result line of a free game that ended as early', async () =>
+        {
+            const host = await makeUser(0);
+            const guest = await makeUser(1);
+            const table = await ports.table.create(host.id, live());
+
+            await ports.table.claim(guest.id, table.id);
+            await ports.table.setReady(host.id, table.id, true);
+            await ports.table.setReady(guest.id, table.id, true);
+
+            const started = await ports.match.start(host.id, table.id);
+
+            await ports.match.resign(host.id, started.id, { key: 'done' });
+
+            expect(await resultLines(table.id)).toEqual([{ key: 'chat.line.result.none', params: { game: 'ludo' } }]);
         });
 
         it('refunds every stake of a game that could not be dealt after the lock', async () =>
