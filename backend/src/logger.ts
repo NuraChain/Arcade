@@ -42,6 +42,6 @@ export function createServerLogger(config: ServerConfig)
         level: config.env === 'production' ? 'info' : 'debug',
         sink: teeSink(terminalSink(), fileSink(new URL('../.logs/', import.meta.url))),
         redact: REDACT,
-        fields: { service: 'nura-games-server', env: config.env }
+        fields: { service: 'baziche-server', env: config.env }
     });
 }

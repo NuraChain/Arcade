@@ -66,7 +66,7 @@ export const me = {
     'profile.name': 'Display name',
     'profile.nameHint': 'What people read first. It does not have to be unique.',
     'profile.handle': 'Handle',
-    'profile.handleHint': 'Your address on Nura. Changing it changes every link you have shared.',
+    'profile.handleHint': 'Your address on Baziche. Changing it changes every link you have shared.',
     'profile.handleTaken': 'That handle is taken. Try another.',
     'profile.bio': 'About you',
     'profile.bioLeft': { one: '1 character left.', other: '{count} characters left.' },

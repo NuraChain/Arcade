@@ -18,7 +18,7 @@ import { recallJson, rememberJson, remember } from './storage.ts';
  * must not add another.
  */
 
-export const RECENTS_KEY = 'nura-games.search.recent';
+export const RECENTS_KEY = 'baziche.search.recent';
 
 export const RECENTS_MAX = 6;
 

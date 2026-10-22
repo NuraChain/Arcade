@@ -198,7 +198,7 @@ describe('the admin', () =>
         expect(header.querySelector('h1')?.textContent).toBe('Admin');
         expect(header.querySelector('[data-staff-handle]')?.textContent).toBe('@alex');
         expect(header.querySelector('[data-staff]')?.textContent).toBe('@alexAdmin');
-        expect(header.querySelector('a[aria-label="Back to Nura Games"]')?.getAttribute('href')).toBe('/app');
+        expect(header.querySelector('a[aria-label="Back to Baziche"]')?.getAttribute('href')).toBe('/app');
 
         cleanup();
         signIn('owner');

@@ -30,8 +30,8 @@ export function signInText(site: string, nonce: string, deviceId?: string)
 {
     return body(
         deviceId === undefined
-            ? `Sign in to Nura Games (${ site }).`
-            : `Sign in to Nura Games (${ site }) and let this browser read and send your messages.`,
+            ? `Sign in to Baziche (${ site }).`
+            : `Sign in to Baziche (${ site }) and let this browser read and send your messages.`,
         nonce,
         deviceId
     );
@@ -39,7 +39,7 @@ export function signInText(site: string, nonce: string, deviceId?: string)
 
 export function deviceText(site: string, nonce: string, deviceId: string)
 {
-    return body(`Let this browser read and send your messages on Nura Games (${ site }).`, nonce, deviceId);
+    return body(`Let this browser read and send your messages on Baziche (${ site }).`, nonce, deviceId);
 }
 
 export interface VerifyInput

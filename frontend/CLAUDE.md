@@ -540,7 +540,7 @@ No gate could see it. `npm run qa` builds every context signed IN, so the one pa
 is the one page it never reads this way, and the four things it checks - overflow, hit targets, a
 landmark, a clean console - are none of them. `tools/qa/regression-pass.mjs` asserts it now, in both
 languages, and presses the control rather than reading its href: with `exact: true`, because
-Playwright matches an accessible name by SUBSTRING and the Persian brand mark `بازی‌های نورا`
+Playwright matches an accessible name by SUBSTRING and the Persian brand mark `بازیچه`
 contains `بازی`, so the brand link answered for the CTA and the check passed against an href of `/`.
 
 **A `<Show>` with a thunk child is rebuilt by anything its `when` READS, not only by a change of
@@ -1341,8 +1341,8 @@ and a form to one send, and the specs that asked a busy button for `.disabled` a
 
 **The tab's title has one writer, and the unread count stands in front of whatever it wrote.** Two
 things wrote `document.title`: each page's own `useHead` title, and the cues store's count, which
-REPLACED the title with "4 · Nura Games". Whichever wrote last won, so a profile read "name · Nura
-Games" until a count changed and "4 · Nura Games" after, and the count vanished on the next
+REPLACED the title with "4 · Baziche". Whichever wrote last won, so a profile read "name ·
+Baziche" until a count changed and "4 · Baziche" after, and the count vanished on the next
 navigation. The count cannot be composed through `useHead`: the shell's `titleTemplate` is a string
 fixed when the shell mounts, and a page's title wins over its layout's. So the head manager stays
 the writer and the cues store, which is lazy and already owns the count, only prefixes: it watches
@@ -1355,7 +1355,7 @@ everything, and stops the store.
 **The count takes up the page's title before it writes, not only when its observer hears of it.**
 A `MutationObserver` answers in a microtask, and the count's own effect answers at once. Opening a
 thread does both in one turn: the page writes the thread's name, and reading the thread changes the
-count, so the count wrote "7 · Loading… · Nura Games" over the name before the observer had heard
+count, so the count wrote "7 · Loading… · Baziche" over the name before the observer had heard
 of it, and the observer then found the title equal to what the count last wrote and left it. Every
 thread's tab said "Loading…" (in Persian too), and one opened from the list said "Chats". `write`
 now compares the title with the string it last wrote and takes up anything else as the page's own,

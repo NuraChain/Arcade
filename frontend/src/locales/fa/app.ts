@@ -2,7 +2,7 @@ import type { Dictionary } from '../en/index.ts';
 import type { app as reference } from '../en/app.ts';
 
 export const app: Pick<Dictionary, keyof typeof reference> = {
-    'app.title': 'بازی‌های نورا',
+    'app.title': 'بازیچه',
 
     'app.nav.home': 'خانه',
     'app.nav.games': 'بازی‌ها',

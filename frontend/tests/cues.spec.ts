@@ -1184,8 +1184,8 @@ describe('the cues store', () =>
         await useNotifications().refresh();
         await settle();
 
-        expect(document.title).toContain('Nura Games');
-        expect(document.title).not.toBe('Nura Games');
+        expect(document.title).toContain('Baziche');
+        expect(document.title).not.toBe('Baziche');
 
         const chat = useChat();
         for (const conversation of [...chat.conversations()])
@@ -1194,13 +1194,13 @@ describe('the cues store', () =>
         }
         await settle();
 
-        expect(document.title).toBe('Nura Games');
+        expect(document.title).toBe('Baziche');
     });
 
     it('counts in front of the page\'s own title, and goes on counting when the page changes it', async () =>
     {
         server.incoming = [];
-        document.title = 'Friends · Nura Games';
+        document.title = 'Friends · Baziche';
         useCues().start();
         await useChat().refresh();
         await useSocial().refresh();
@@ -1209,9 +1209,9 @@ describe('the cues store', () =>
 
         const counted = document.title;
 
-        expect(counted, 'the count took the place of the page\'s own title').toMatch(/^\d+ · Friends · Nura Games$/);
+        expect(counted, 'the count took the place of the page\'s own title').toMatch(/^\d+ · Friends · Baziche$/);
 
-        document.title = 'Chats · Nura Games';
+        document.title = 'Chats · Baziche';
         await settle();
 
         expect(document.title, 'the page changed its title and the count went with the old one').toBe(counted.replace('Friends', 'Chats'));
@@ -1225,13 +1225,13 @@ describe('the cues store', () =>
 
         await settle();
 
-        expect(document.title).toBe('Chats · Nura Games');
+        expect(document.title).toBe('Chats · Baziche');
     });
 
     it('keeps the title a page wrote in the same turn as the count changed, as a thread does when it opens', async () =>
     {
         server.incoming = [];
-        document.title = 'Loading… · Nura Games';
+        document.title = 'Loading… · Baziche';
         useCues().start();
         await useChat().refresh();
         await useSocial().refresh();
@@ -1242,18 +1242,18 @@ describe('the cues store', () =>
         const unread = chat.conversations().find((one) => chat.unread(one.id) > 0)!;
         const before = document.title;
 
-        document.title = 'Sara Kamali · Nura Games';
+        document.title = 'Sara Kamali · Baziche';
         void chat.markRead(unread.id);
         await settle();
 
-        expect(before, 'nothing was counted to begin with').toMatch(/^\d+ · Loading… · Nura Games$/);
-        expect(document.title, 'the count wrote the old title back over the one the page had just written').toMatch(/^(\d+ · )?Sara Kamali · Nura Games$/);
+        expect(before, 'nothing was counted to begin with').toMatch(/^\d+ · Loading… · Baziche$/);
+        expect(document.title, 'the count wrote the old title back over the one the page had just written').toMatch(/^(\d+ · )?Sara Kamali · Baziche$/);
     });
 
     it('leaves the title as the page wrote it when it stops', async () =>
     {
         server.incoming = [];
-        document.title = 'Friends · Nura Games';
+        document.title = 'Friends · Baziche';
 
         const stop = useCues().start();
 
@@ -1262,16 +1262,16 @@ describe('the cues store', () =>
         await useNotifications().refresh();
         await settle();
 
-        expect(document.title).not.toBe('Friends · Nura Games');
+        expect(document.title).not.toBe('Friends · Baziche');
 
         stop();
 
-        expect(document.title).toBe('Friends · Nura Games');
+        expect(document.title).toBe('Friends · Baziche');
 
-        document.title = 'Home · Nura Games';
+        document.title = 'Home · Baziche';
         await settle();
 
-        expect(document.title, 'a stopped store went on writing the title').toBe('Home · Nura Games');
+        expect(document.title, 'a stopped store went on writing the title').toBe('Home · Baziche');
     });
 
     it('owns the effects it makes, so arming it outside a component warns about nothing', () =>

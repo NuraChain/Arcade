@@ -1,5 +1,5 @@
 export const app = {
-    'app.title': 'Nura Games',
+    'app.title': 'Baziche',
 
     'app.nav.home': 'Home',
     'app.nav.games': 'Games',

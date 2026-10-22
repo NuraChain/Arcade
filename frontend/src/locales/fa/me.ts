@@ -69,7 +69,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'profile.name': 'اسم نمایشی',
     'profile.nameHint': 'اولین چیزیه که آدما می‌خونن. لازم نیست منحصربه‌فرد باشه.',
     'profile.handle': 'نام کاربری',
-    'profile.handleHint': 'آدرس تو توی نورا. اگه عوضش کنی، همه‌ی لینک‌هایی که فرستادی هم عوض می‌شن.',
+    'profile.handleHint': 'آدرس تو توی بازیچه. اگه عوضش کنی، همه‌ی لینک‌هایی که فرستادی هم عوض می‌شن.',
     'profile.handleTaken': 'این نام کاربری رو قبلاً یکی برداشته. یکی دیگه امتحان کن.',
     'profile.bio': 'درباره‌ی خودت',
     'profile.bioLeft': { one: 'یه حرف مونده.', other: '{count} حرف مونده.' },

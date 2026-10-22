@@ -133,7 +133,7 @@ describe('what runs the sweep of the waiting tables', () =>
         const sweep = main.slice(main.indexOf('const sweepTables ='), main.indexOf('handleShutdownSignals('));
 
         expect(main).toMatch(/^let crowded = false;$/m);
-        expect(readFileSync(new URL('../src/data-source.ts', import.meta.url), 'utf8')).toMatch(/^    applicationName: `nura-games \$\{ randomUUID\(\)\.slice\(0, 8\) \}`,$/m);
+        expect(readFileSync(new URL('../src/data-source.ts', import.meta.url), 'utf8')).toMatch(/^    applicationName: `baziche \$\{ randomUUID\(\)\.slice\(0, 8\) \}`,$/m);
         expect(sweep).toMatch(/const others = await ports\.jobs\.otherServers\(\);\s*if \(others > 0 && !crowded\)\s*\{\s*log\.warn\('another server is using this database[^']*', \{ others \}\);\s*\}\s*crowded = others > 0;/);
     });
 

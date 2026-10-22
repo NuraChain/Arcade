@@ -431,10 +431,10 @@ console.log('\n[9] the landing offers the way BACK to somebody already signed in
      * against a button that says Play and does nothing.
      *
      * `exact` is not decoration. Playwright matches an accessible name by SUBSTRING unless told
-     * otherwise, and the Persian brand mark is `بازی‌های نورا` - which contains `بازی`, the word
+     * otherwise, and the Persian brand mark is `بازیچه` - which contains `بازی`, the word
      * this check looks for. Without it the brand link answered for the CTA, so the signed-out cell
      * reported a link to the app that was not there and the returning cell passed on an href of
-     * `/`. English said nothing, because `Play` is not a substring of `Nura Games`.
+     * `/`. English said nothing, because `Play` is not a substring of `Baziche`.
      */
     for (const locale of ['en', 'fa'])
     {

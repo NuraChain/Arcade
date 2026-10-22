@@ -15,7 +15,7 @@ const SHARE = `<!doctype html><html><body style="margin:0">
     <div style="position:absolute;inset:0;background:radial-gradient(60% 80% at 18% 20%,rgba(37,99,235,0.45),transparent 70%),radial-gradient(50% 70% at 95% 100%,rgba(59,130,246,0.25),transparent 70%)"></div>
     <div style="position:absolute;left:72px;top:84px;display:flex;align-items:center;gap:20px">
         <img src="${ dataUrl(ICON) }" style="width:84px;height:84px;border-radius:20px;box-shadow:0 0 48px rgba(59,130,246,0.55)">
-        <span style="font-size:58px;font-weight:800;letter-spacing:-1.5px;color:#F8FAFC">Nura <span style="color:#3B82F6">Games</span></span>
+        <span style="font-size:58px;font-weight:800;letter-spacing:-1.5px;color:#F8FAFC">Baziche</span>
     </div>
     <p style="position:absolute;left:72px;top:210px;margin:0;width:520px;font-size:34px;line-height:1.25;font-weight:700;color:#F8FAFC">Sit down with the people you actually want to play with.</p>
     <p style="position:absolute;left:72px;top:340px;margin:0;width:500px;font-size:22px;line-height:1.45;color:#94A3B8">Hokm and Ludo at real tables, with friends, groups and chat that only the table can read.</p>
@@ -52,8 +52,8 @@ console.log('raster share.jpg');
 await browser.close();
 
 writeFileSync(join(PUBLIC, 'site.webmanifest'), `${ JSON.stringify({
-    name: 'Nura Games',
-    short_name: 'Nura Games',
+    name: 'Baziche',
+    short_name: 'Baziche',
     start_url: '/app',
     display: 'standalone',
     background_color: '#0B1220',

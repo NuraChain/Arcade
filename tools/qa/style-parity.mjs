@@ -101,7 +101,7 @@ const freeze = async (context, locale, at) =>
 {
     await context.addInitScript(({ locale: chosen, at: moment }) =>
     {
-        localStorage.setItem('nura-games.locale', chosen);
+        localStorage.setItem('baziche.locale', chosen);
         Date.now = () => moment;
     }, { locale, at });
 };

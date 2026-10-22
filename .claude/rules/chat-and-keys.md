@@ -399,7 +399,7 @@ authorise any device the caller chose to name.
 back. `wallet.store.connect()` takes this browser's keys (or mints them) before it asks for the
 challenge and sends the device id with it; `services.ts` asks `device.liveFor` whether that device
 is already a live device of the account the address signs in to. If it is, the text is the short
-`Sign in to Nura Games (<site>).`; if not, it is `Sign in to Nura Games (<site>) and let this
+`Sign in to Baziche (<site>).`; if not, it is `Sign in to Baziche (<site>) and let this
 browser read and send your messages.` with the `Browser key:` line. Either way the last line is
 `Nonce: <nonce>`, which is what makes the signature single-use. After the signature verifies and the
 session opens, the SAME verified proof records the device through `device.enrol`'s ordinary path -
@@ -412,7 +412,7 @@ are not a live device of this account, so the browser makes fresh ones and asks 
 again, and the one signature adds them. A browser whose keys are this account's is asked for the
 short text and keeps them. The standalone
 enrolment route stays for a signed-in browser that lost its keys, with its own sentence (`Let this
-browser read and send your messages on Nura Games (<site>).`).
+browser read and send your messages on Baziche (<site>).`).
 
 **The text is plain, not EIP-4361, and says nothing about Ethereum.** The owner asked for the site's
 name and nothing a person has to decode. The address is not in it (the signature recovers it) and
@@ -1102,8 +1102,8 @@ for a page that is open and not being looked at with no push service involved, s
 offers "Notifications on this device" everywhere a browser has them. Turning it on is the
 reader's own press, so that is when permission is asked: it registers the worker, keeps
 `settings.notify` in this browser the way the other device settings are kept, and subscribes
-as well when the server published a key. The panel then says which it is: "Also when Nura Games
-is closed." or "While Nura Games is open in a tab." A browser that says no is shown how to
+as well when the server published a key. The panel then says which it is: "Also when Baziche
+is closed." or "While Baziche is open in a tab." A browser that says no is shown how to
 change its mind and no button that cannot work. Nothing is asked before that press: a prompt
 nobody asked for is one somebody denies once and never sees again. What is shown, and when, is
 the cues store's (`frontend/CLAUDE.md`, *What a cue says is also told to the system*).
@@ -1113,7 +1113,7 @@ url is its identity, so a hashed filename would register a new worker on every d
 old one kept running.
 
 **The worker says what happened.** It used to show one sentence for every push, "Something
-happened. Open Nura Games to see.", in English. On a push it now reads `GET /api/notifications/`
+happened. Open Baziche to see.", in English. On a push it now reads `GET /api/notifications/`
 with the reader's own cookie and shows a notice for each unread row newer than the last it saw:
 the page's sentence for that kind, the actor's name (one `GET /api/social/names` for all of
 them, the handle when that fails), the page's tag and the page's target, so a push and a hidden
@@ -1123,7 +1123,7 @@ first. The words are not in the worker: the cues store keeps them in the same ca
 (`/notice-words.json`, `wordsOf` in `lib/notice-words.ts`: the language, its tag and direction,
 one message for each kind with its plural forms, the game names) while the device switch is on,
 at start and whenever the language changes, and the worker repeats `interpolate` and
-`selectForm` over them. With no words kept it says "Something new in Nura Games" in English;
+`selectForm` over them. With no words kept it says "Something new in Baziche" in English;
 when it cannot read the list (signed out, offline) it says that sentence in the kept language,
 aloud; when it can read it and nothing is new it says it quietly (`silent`, no `renotify`),
 because a push that shows nothing is answered by the browser's own "this site has been updated
@@ -1180,7 +1180,7 @@ call at start, and `housekeeping.db.spec.ts` the server's half.
 **The keyed path can be looked at without keys in `.env`.** Start the built server with a
 throwaway pair on the command line (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`;
 the one-liner that makes a pair is in `.env.example`) and a driven Chrome subscribes for real,
-to its own push service. Done once, 2026-10-12: the panel said "Also when Nura Games is
+to its own push service. Done once, 2026-10-12: the panel said "Also when Baziche is
 closed."; an invitation was pushed and the worker showed its sentence with nothing scripted;
 at the next start the app asked for the key and told the server again without making a new
 subscription; on a page that believed itself hidden the invitation was left to the push while

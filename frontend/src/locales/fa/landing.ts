@@ -2,10 +2,10 @@ import type { Dictionary } from '../en/index.ts';
 import type { landing as reference } from '../en/landing.ts';
 
 export const landing: Pick<Dictionary, keyof typeof reference> = {
-    'brand.name': 'بازی‌های نورا',
+    'brand.name': 'بازیچه',
     'brand.lead': '',
-    'brand.accent': 'بازی‌های',
-    'brand.trail': 'نورا',
+    'brand.accent': 'بازیچه',
+    'brand.trail': '',
 
     'nav.games': 'بازی‌ها',
     'nav.connect': 'وصل کردن کیف پول',

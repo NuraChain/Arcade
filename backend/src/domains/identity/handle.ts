@@ -19,7 +19,7 @@ const SHAPE = /^[\p{L}\p{N}][\p{L}\p{N}._-]{0,30}[\p{L}\p{N}]$/u;
  */
 const RESERVED = new Set([
     'admin', 'administrator', 'root', 'system', 'support', 'help', 'staff', 'moderator', 'mod',
-    'nura', 'nuragames', 'nurachain', 'official', 'team', 'security', 'abuse', 'billing',
+    'nura', 'baziche', 'nurachain', 'official', 'team', 'security', 'abuse', 'billing',
     'api', 'app', 'www', 'mail', 'ftp', 'me', 'you', 'null', 'undefined', 'anonymous',
     'settings', 'sign-in', 'signin', 'signout', 'login', 'logout', 'register', 'new', 'edit',
     'games', 'friends', 'chats', 'groups', 'search', 'discover', 'notifications', 'play', 'people'

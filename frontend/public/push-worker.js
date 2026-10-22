@@ -10,7 +10,7 @@ const MOST = 3;
 
 const PICTURES = { icon: '/apple-touch-icon.png', badge: '/favicon-32.png' };
 
-const PLAIN = { lang: 'en', tag: 'en-US', dir: 'ltr', general: 'Something new in Nura Games', says: {}, games: {} };
+const PLAIN = { lang: 'en', tag: 'en-US', dir: 'ltr', general: 'Something new in Baziche', says: {}, games: {} };
 
 const HOLE = /\{([a-zA-Z0-9_]+)\}/g;
 
@@ -150,7 +150,7 @@ const show = (title, words, more) =>
     self.registration.showNotification(title, { ...PICTURES, lang: words.lang, dir: words.dir, ...more });
 
 const general = (words, quiet) =>
-    show(fill(words.general, {}, words.tag), words, { tag: 'nura-games', renotify: !quiet, silent: quiet, data: { target: LIST } });
+    show(fill(words.general, {}, words.tag), words, { tag: 'baziche', renotify: !quiet, silent: quiet, data: { target: LIST } });
 
 const pushed = async () =>
 {

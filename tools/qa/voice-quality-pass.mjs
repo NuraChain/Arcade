@@ -190,9 +190,9 @@ async function seat(browser, handle, settings, carried)
     {
         try
         {
-            const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+            const stored = JSON.parse(localStorage.getItem('baziche.settings') ?? '{}');
 
-            localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, ...settings }));
+            localStorage.setItem('baziche.settings', JSON.stringify({ ...stored, ...settings }));
         }
         catch
         {

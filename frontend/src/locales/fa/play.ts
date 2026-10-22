@@ -515,7 +515,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.deadline.brief.minutes': '{minutes} دقیقه',
     'match.deadline.brief.hours': '{hours} ساعت',
     'match.cannotDraw': 'این بازی یه نسخه‌ی جدیدتر از صفحه می‌خواد',
-    'match.cannotDrawLead': 'این میز داره بازی‌ای رو اجرا می‌کنه که این نسخه از نورا هنوز نمی‌تونه نشونش بده. صفحه رو دوباره باز کن تا نسخه‌ی جدید بیاد.',
+    'match.cannotDrawLead': 'این میز داره بازی‌ای رو اجرا می‌کنه که این نسخه از بازیچه هنوز نمی‌تونه نشونش بده. صفحه رو دوباره باز کن تا نسخه‌ی جدید بیاد.',
     'match.cannotDrawAction': 'بارگذاری دوباره',
     'voice.title': 'تماس صوتی',
     'voice.join': 'ورود به تماس',

@@ -1030,7 +1030,7 @@ on one server is never told that a game the other one started is theirs. The des
 for each database (`README.md` says so where an operator will read it), and a deployment runs one.
 Two did run here by accident: two worktrees' development servers on one development database,
 each standing up the other's waiting players. So every connection of a server carries a name
-(`applicationName` in `data-source.ts`: `nura-games` and eight characters of a uuid), and after
+(`applicationName` in `data-source.ts`: `baziche` and eight characters of a uuid), and after
 each table sweep the server counts the other servers' names on its own database (`jobs.otherServers`,
 a read of `pg_stat_activity`, which no repository can say) and, when it first finds one, logs
 "another server is using this database". A server running code from before this carries no name

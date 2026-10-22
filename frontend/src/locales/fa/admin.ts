@@ -3,7 +3,7 @@ import type { admin as reference } from '../en/admin.ts';
 
 export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.title': 'مدیریت',
-    'admin.back': 'برگرد به بازی‌های نورا',
+    'admin.back': 'برگرد به بازیچه',
     'admin.sections': 'بخش‌های مدیریت',
     'admin.role.owner': 'مالک',
     'admin.role.admin': 'ادمین',
@@ -351,7 +351,7 @@ export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.age.askAdultLead': 'خودش می‌تونه پیام غریبه‌ها رو روشن کنه و وقتی شرایط بازی با NURA رو قبول کنه، می‌تونه با NURA بازی کنه.',
     'admin.age.doneMinor': '{name} زیر ۱۸ ثبت شد.',
     'admin.age.doneAdult': '{name} بزرگ‌سال ثبت شد.',
-    'admin.staff.lead': 'کسایی که بازی‌های نورا رو می‌چرخونن، و این‌که هر کدوم چی‌کار می‌تونن بکنن.',
+    'admin.staff.lead': 'کسایی که بازیچه رو می‌چرخونن، و این‌که هر کدوم چی‌کار می‌تونن بکنن.',
     'admin.staff.owner': 'توی فایل env سرور مشخص شده و فقط همون‌جا عوض می‌شه.',
     'admin.staff.team': 'اعضای تیم',
     'admin.staff.none': 'هنوز کس دیگه‌ای توی تیم نیست.',

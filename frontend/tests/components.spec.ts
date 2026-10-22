@@ -160,12 +160,12 @@ describe('BrandMark', () =>
         const locale = useLocale();
 
         const english = renderTest(() => BrandMark({}) as Rendered);
-        expect(english.container.textContent?.trim()).toBe('Nura Games');
+        expect(english.container.textContent?.trim()).toBe('Baziche');
         english.unmount();
 
         locale.setLocale('fa');
         const persian = renderTest(() => BrandMark({}) as Rendered);
-        expect(persian.container.textContent?.trim()).toBe('بازی‌های نورا');
+        expect(persian.container.textContent?.trim()).toBe('بازیچه');
     });
 
     it('leaves no stray space where a slot is empty', () =>
@@ -261,7 +261,10 @@ describe('Panel', () =>
     it('takes a new tone where it stands when it is a button', async () =>
     {
         const [tone, setTone] = createSignal<'field' | 'danger'>('field');
-        const { container } = renderTest(() => Panel({ children: 'Press', onClick: vi.fn(), get tone() { return tone(); } }) as Rendered);
+        const { container } = renderTest(() => Panel({ children: 'Press', onClick: vi.fn(), get tone()
+        {
+            return tone();
+        } }) as Rendered);
         const button = container.querySelector('button')!;
 
         expect(button.className).toContain('bg-field');

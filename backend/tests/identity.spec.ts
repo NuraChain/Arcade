@@ -22,7 +22,7 @@ describe('the sign-in text', () =>
     {
         const text = challenge();
 
-        expect(text.split('\n')[0]).toBe('Sign in to Nura Games (nura.games).');
+        expect(text.split('\n')[0]).toBe('Sign in to Baziche (nura.games).');
         expect(text).not.toMatch(/ethereum/i);
         expect(text).not.toContain('Chain ID');
         expect(text).not.toContain(signer.address.toLowerCase());
@@ -36,7 +36,7 @@ describe('the sign-in text', () =>
     it('names a browser that is new to the account, and asks for its messages in the same sentence', () =>
     {
         expect(challenge('nura.games', 'abcdefghijklmnopqrstuv').split('\n')).toEqual([
-            'Sign in to Nura Games (nura.games) and let this browser read and send your messages.',
+            'Sign in to Baziche (nura.games) and let this browser read and send your messages.',
             '',
             'Browser key: abcdefghijklmnopqrstuv',
             `Nonce: ${ 'a'.repeat(32) }`

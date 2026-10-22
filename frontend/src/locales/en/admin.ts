@@ -1,6 +1,6 @@
 export const admin = {
     'admin.title': 'Admin',
-    'admin.back': 'Back to Nura Games',
+    'admin.back': 'Back to Baziche',
     'admin.sections': 'The admin',
     'admin.role.owner': 'Owner',
     'admin.role.admin': 'Admin',
@@ -348,7 +348,7 @@ export const admin = {
     'admin.age.askAdultLead': 'They can turn messages from strangers on themselves, and play for NURA once they accept its terms.',
     'admin.age.doneMinor': '{name} is marked as under 18.',
     'admin.age.doneAdult': '{name} is marked as an adult.',
-    'admin.staff.lead': 'The people who run Nura Games, and what each of them may do.',
+    'admin.staff.lead': 'The people who run Baziche, and what each of them may do.',
     'admin.staff.owner': 'Named in the server’s .env, and changed only there.',
     'admin.staff.team': 'The team',
     'admin.staff.none': 'Nobody else is on the staff yet.',

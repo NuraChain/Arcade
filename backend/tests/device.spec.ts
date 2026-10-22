@@ -95,7 +95,7 @@ describe('the text a wallet signs to authorise a device', () =>
     it('names the device on a line of its own, so the signature cannot be moved to another one', () =>
     {
         expect(deviceText('nura.games', 'b'.repeat(32), ID).split('\n')).toEqual([
-            'Let this browser read and send your messages on Nura Games (nura.games).',
+            'Let this browser read and send your messages on Baziche (nura.games).',
             '',
             'Browser key: abcdefghijklmnopqrstuv',
             `Nonce: ${ 'b'.repeat(32) }`

@@ -1,4 +1,4 @@
-# Nura Games — working notes for Claude Code
+# Baziche — working notes for Claude Code
 
 A social gaming platform: a cinematic 3D landing page at `/` and the signed-in product at `/app/*`
 (matchmaking, tables, friends, chat, groups, search, notifications, profile, settings). Two npm
@@ -42,8 +42,8 @@ server's `mountPages` IS the preview. The backend COMPILES (`typeorm` in `depend
 emitting, and Node cannot run decorators), so always build before `npm start`.
 
 **The mode is the command's, never the file's.** `azeroth dev` (`npm run dev`) declares
-development, vitest declares test, and anything else is production: `npm start` and the systemd
-unit. `env-file.ts` takes the root `.env` in for every name but `NODE_ENV`, so a `.env` copied from
+development, vitest declares test, and anything else is production: `npm start`.
+`env-file.ts` takes the root `.env` in for every name but `NODE_ENV`, so a `.env` copied from
 a laptop cannot put a server into development, where the wallet fixtures, whose keys are public,
 are seeded. Production serves the pages and never syncs the schema; development is the other way
 round. **A production `.env` needs three things**: `DATABASE_URL`, a real `SESSION_SECRET`, and
@@ -60,18 +60,8 @@ only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Po
 `realtime/admit.ts` is not CORS and stays. vite's dev-server CORS is off and its proxy targets
 `127.0.0.1`, not `localhost`, which can resolve to `::1` where nothing listens.
 
-**On a VPS it runs under systemd** via `scripts/service-*.sh`, with `WorkingDirectory` = `backend/`;
-`main.ts` reads the root `.env` whatever the working directory. The install script refuses a missing
-build, SSR bundle, `.env`, `PUBLIC_ORIGIN` or `SESSION_SECRET` (it only warned, so a service could be
-installed that crash-looped or signed nothing). The steps from a
-clean clone to a running service are in `README.md`, where whoever runs the server will look.
-The unit runs as whoever owns the clone and the installer refuses a clone root owns (it ran as root,
-so any fault in the process was a fault with the whole machine), with `NoNewPrivileges`, `PrivateTmp`
-and `ProtectSystem=strict`. That last one holds because the server writes nothing to disk: its logs
-are files systemd opens, and the kit's page and image caches are in memory. A `FilePageCache` or
-anything else that writes would need a `ReadWritePaths=` in the unit. Checked under WSL's systemd: the
-unit passes `systemd-analyze verify`, and a transient service with the same settings reads `.env`,
-writes only its own `/tmp`, and its log files are written.
+**On a VPS** the steps from a clean clone to a running server are in `README.md`, where whoever runs
+the server will look. `main.ts` reads the root `.env` whatever the working directory.
 
 **The database** is Postgres and the ENTITIES are its only description: no migrations, `syncSchema()`
 at every start in development, never TypeORM's own `synchronize: true`. A schema change is: drop the
@@ -116,8 +106,8 @@ the third so nobody re-investigates it.
 - The `0x…` keys in tests, `seed-wallets.ts` and `tools/qa/vault-deploy.mjs` are hardhat's published
   accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).
 
-**No comments in code.** Names and structure carry the meaning; these notes and the tests hold the
-reasoning.
+**Comment only when the code cannot say it** (the rule is in `AGENTS.md`). Names and structure
+carry the meaning; never a comment that restates the code or narrates a change.
 
 **No type the compiler already has.** A function does not state a return type the compiler infers
 identically; `nura/prefer-inferred-return-type` (`tools/eslint/return-types.ts`) fails the check and

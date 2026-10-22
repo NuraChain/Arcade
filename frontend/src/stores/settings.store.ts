@@ -39,7 +39,7 @@ export type VoiceNoise = 'off' | 'standard' | 'strong';
 
 export type VoiceQuality = 'standard' | 'high' | 'best';
 
-const STORAGE_KEY = 'nura-games.settings';
+const STORAGE_KEY = 'baziche.settings';
 
 export function defaultSettings(): Settings
 {

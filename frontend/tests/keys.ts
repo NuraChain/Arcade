@@ -37,7 +37,7 @@ export const TEST_ACCOUNTS = {
 };
 
 const enrolMessage = (_address: string, id: string) => [
-    'Let this browser read and send your messages on Nura Games (nura.games).',
+    'Let this browser read and send your messages on Baziche (nura.games).',
     '',
     deviceLine(id),
     `Nonce: ${ 'a'.repeat(32) }`

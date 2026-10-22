@@ -1,7 +1,7 @@
 export const landing = {
-    'brand.name': 'Nura Games',
-    'brand.lead': 'Nura',
-    'brand.accent': 'Games',
+    'brand.name': 'Baziche',
+    'brand.lead': '',
+    'brand.accent': 'Baziche',
     'brand.trail': '',
 
     'nav.games': 'Games',

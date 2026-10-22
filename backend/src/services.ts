@@ -1198,7 +1198,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             `select count(distinct application_name)::int as others
                from pg_stat_activity
               where datname = current_database()
-                and application_name like 'nura-games %'
+                and application_name like 'baziche %'
                 and application_name <> current_setting('application_name')`
         ))[0].others;
 

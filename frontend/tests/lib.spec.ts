@@ -193,7 +193,7 @@ describe('json storage', () =>
     {
         memory.clear();
         Object.defineProperty(window, 'localStorage', { configurable: true, value: stub });
-        forget('nura-games.test');
+        forget('baziche.test');
     });
 
     afterEach(() =>
@@ -206,16 +206,16 @@ describe('json storage', () =>
 
     it('round-trips a value that passes the acceptor', () =>
     {
-        rememberJson('nura-games.test', { id: 'sara' });
-        const value = recallJson('nura-games.test', (raw): raw is { id: string } =>
+        rememberJson('baziche.test', { id: 'sara' });
+        const value = recallJson('baziche.test', (raw): raw is { id: string } =>
             typeof raw === 'object' && raw !== null && typeof (raw as { id?: unknown }).id === 'string');
         expect(value).toEqual({ id: 'sara' });
     });
 
     it('refuses a stored value the acceptor rejects', () =>
     {
-        rememberJson('nura-games.test', 'garbage');
-        expect(recallJson('nura-games.test', (raw): raw is number => typeof raw === 'number')).toBeNull();
+        rememberJson('baziche.test', 'garbage');
+        expect(recallJson('baziche.test', (raw): raw is number => typeof raw === 'number')).toBeNull();
     });
 });
 

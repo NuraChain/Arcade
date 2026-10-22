@@ -38,7 +38,7 @@ async function device(signer: typeof alice, overrides: Partial<PeerDevice> = {})
     const id = await deviceIdFrom(keys.exchangeKey, keys.signingKey);
 
     const message = [
-        'Let this browser read and send your messages on Nura Games (nura.games).',
+        'Let this browser read and send your messages on Baziche (nura.games).',
         '',
         deviceLine(id),
         `Nonce: ${ 'a'.repeat(32) }`
