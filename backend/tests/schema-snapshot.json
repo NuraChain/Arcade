@@ -454,7 +454,7 @@
         "reports_status_known :: CHECK (((status)::text = ANY ((ARRAY['received'::character varying, 'reviewed'::character varying, 'actioned'::character varying])::text[])))",
         "sessions_token_hash_shape :: CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))",
         "staff_actions_details_object :: CHECK ((jsonb_typeof(details) = 'object'::text))",
-        "staff_actions_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['grant'::character varying, 'change'::character varying, 'revoke'::character varying])::text[])))",
+        "staff_actions_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['grant'::character varying, 'change'::character varying, 'revoke'::character varying, 'note'::character varying])::text[])))",
         "staff_actions_person_named :: CHECK (((person_id IS NULL) OR (person_handle IS NOT NULL)))",
         "staff_actions_reason_length :: CHECK (((char_length(reason) >= 3) AND (char_length(reason) <= 500)))",
         "staff_actions_role_known :: CHECK (((staff_role)::text = ANY ((ARRAY['moderator'::character varying, 'admin'::character varying, 'owner'::character varying])::text[])))",

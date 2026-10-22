@@ -3,7 +3,7 @@ import { User } from './user.entity.ts';
 
 import type { ActionKind, StaffRole } from '../domains/admin/roles.ts';
 
-@Check('staff_actions_kind_known', `kind in ('grant', 'change', 'revoke')`)
+@Check('staff_actions_kind_known', `kind in ('grant', 'change', 'revoke', 'note')`)
 @Check('staff_actions_role_known', `staff_role in ('moderator', 'admin', 'owner')`)
 @Check('staff_actions_reason_length', `char_length(reason) between 3 and 500`)
 @Check('staff_actions_person_named', `(person_id is null) or (person_handle is not null)`)
