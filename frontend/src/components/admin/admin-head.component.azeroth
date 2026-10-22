@@ -1,0 +1,61 @@
+import { Link, type Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component AdminHead(props: {
+    title: string;
+    lead?: string;
+    how?: string;
+    actions?: Child;
+    back?: { to: string; label: string };
+})
+{
+    const locale = useLocale();
+
+    derived lead = props.lead;
+
+    derived how = props.how;
+
+    derived actions = props.actions;
+
+    derived back = props.back ?? null;
+
+    derived led = lead !== undefined;
+
+    derived explained = how !== undefined;
+
+    derived acting = actions !== undefined;
+
+    <header class="flex flex-col gap-3" data-admin-head>
+        <Show when={ back } let={ way }>
+            <Link to={ way.to } class="inline-flex min-h-11 items-center gap-1.5 self-start text-ui-sm font-semibold text-accent hover:underline md:min-h-0" data-back>
+                <Icon name="back" size={ 16 } class="icon-flip" />
+                <span>{ way.label }</span>
+            </Link>
+        </Show>
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <div class="flex min-w-0 flex-[1_1_20rem] flex-col gap-1">
+                <h1 class="title text-ui-2xl text-text">{ props.title }</h1>
+                <Show when={ led }>
+                    { () => <p class="max-w-[44rem] text-ui-base text-muted" data-lead>{ lead }</p> }
+                </Show>
+            </div>
+            <Show when={ acting }>
+                { () => <div class="flex flex-wrap items-center gap-2" data-actions>{ actions }</div> }
+            </Show>
+        </div>
+        <Show when={ explained }>
+            { () => (
+                <details class="group max-w-[44rem]" data-how>
+                    <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-ui-sm font-semibold text-accent hover:underline md:min-h-0 [&::-webkit-details-marker]:hidden">
+                        <Icon name="info" size={ 16 } />
+                        <span>{ locale.t('admin.how') }</span>
+                        <Icon name="chevron-down" size={ 14 } class="transition-transform duration-150 group-open:rotate-180" />
+                    </summary>
+                    <p class="mt-2 text-ui-sm text-muted">{ how }</p>
+                </details>
+            ) }
+        </Show>
+    </header>
+}

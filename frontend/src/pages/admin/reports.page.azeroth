@@ -4,7 +4,7 @@ import { REPORT_LISTS, type ReportList } from '../../../../backend/src/domains/a
 import type { AdminReports } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
 import ReportRow, { type AdminReportRow } from '../../components/admin/report-row.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
@@ -123,7 +123,7 @@ export default component ReportsPage()
     };
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.reports') } lead={ locale.t('admin.reports.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.reports') } lead={ locale.t('admin.reports.lead') } how={ locale.t('admin.reports.how') } />
 
         <FilterBar items={ lists } value={ list } label={ locale.t('admin.reports.lists') } onChange={ choose } />
 

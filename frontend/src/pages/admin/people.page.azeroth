@@ -4,7 +4,7 @@ import { PEOPLE_LISTS, type PeopleList } from '../../../../backend/src/domains/a
 import type { AdminPeople } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
 import PersonRow, { type AdminPersonRow } from '../../components/admin/person-row.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
@@ -144,7 +144,7 @@ export default component PeoplePage()
     };
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.people') } lead={ locale.t('admin.people.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.people') } lead={ locale.t('admin.people.lead') } />
 
         <div class="flex flex-col gap-4">
             <SearchInput

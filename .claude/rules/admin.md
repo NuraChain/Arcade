@@ -417,10 +417,28 @@ wire; `realtime-frames.spec.ts` and `realtime-hub.spec.ts` the pulse.
 
 ## The page
 
-**`/admin` is a layout of its own, outside the app shell** (`components/admin/admin-shell`): a
-header with the way back to the app and the reader's handle and role, then the sections the role
-opens, as a rail under the header on a phone and down the side from 64rem, each a lazy page under
-`pages/admin/`. `lib/admin-sections.ts` lists the sections in order, and a section IS an ability of
+**`/admin` is a layout of its own, outside the app shell** (`components/admin/admin-shell`), each
+section a lazy page under `pages/admin/`. Where the sections are drawn follows the screen, mobile
+first:
+
+- **A phone** (under 768px): a slim bar at the top (the way back to the app, "Admin", the reader's
+  handle and role) and a bar of tabs floating at the foot, the app's island: every section the role
+  opens when there are five or fewer (a moderator's four), otherwise Overview, People, Reports and
+  Play and a More that opens a sheet with the rest (`tabsFor`, `components/admin/admin-more`). More
+  is lit while the section open is one of those.
+- **A tablet** (768 to 1023): a rail of icons down the start side, each named under a pointer or a
+  held finger, the way back at its foot.
+- **A desktop** (1024 and up): the sections down the side in four groups (`groupsFor`): Now
+  (Overview, Online now), Moderation (People, Reports), Platform (Play, Announcement, Money) and
+  Team (Staff, Log); a group the role opens nothing of is not drawn. At the foot, the reader's
+  picture, handle and role, and the way back to the app.
+
+The content is at most 80rem wide, and the foot of a phone's page keeps the tab bar's room. Every
+section opens with `AdminHead`: the title (the page's only `h1`; "Admin" in the bars is not a
+heading), one sentence, and where a section has more to explain, "How this works" folded under it
+(a `details`), with the section's own actions at the end of the title's row.
+
+`lib/admin-sections.ts` lists the sections in order, and a section IS an ability of
 `roles.ts`, so one list (`sectionsFor(role)`) draws the nav, guards the layout (`requireStaff`: the
 role opens some section) and decides the shield in the profile's corner; each section keeps its own
 `requireAbility`. `/admin` itself goes to the first section the role opens (`firstSection`), and
@@ -429,8 +447,8 @@ the server answers them. The shell starts the toasts, the session, the signed-ou
 count of waiting reports, and holds the overlays and the toasts; it opens no socket. With no socket
 the count is read rather than rung (`stores/reports.store.ts`): when the admin opens, whenever the
 reader moves to another section, when the tab is seen again, and from every page of the queue, which
-carries it. Reports wears it as a badge in the rail and down the side ("3 reports waiting" to a
-screen reader).
+carries it. Reports wears it as a badge wherever it is drawn, the tab bar, the rail and the side
+("3 reports waiting" to a screen reader).
 
 **The admin's words are a catalogue of their own** (`locales/{en,fa}/admin.ts`, registered by
 `locales/admin-catalogue.ts`, which only the admin shell imports), so the app's catalogue carries

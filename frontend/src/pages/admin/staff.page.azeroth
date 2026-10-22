@@ -4,7 +4,7 @@ import { GRANTED_ROLES, outranks, type GrantedRole } from '../../../../backend/s
 import type { StaffList } from '../../../../backend/src/schemas.ts';
 import { client } from '../../api.ts';
 import StaffRow, { type StaffMember } from '../../components/admin/staff-row.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
@@ -179,7 +179,7 @@ export default component StaffPage()
     };
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.staff') } lead={ locale.t('admin.staff.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.staff') } lead={ locale.t('admin.staff.lead') } />
 
         <Show when={ waiting }>
             { () => <Skeleton lines={ 4 } avatar /> }

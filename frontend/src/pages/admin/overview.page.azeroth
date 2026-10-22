@@ -2,7 +2,7 @@ import { createResource, Link, untrack, useHead } from 'azerothjs';
 
 import { may } from '../../../../backend/src/domains/admin/roles.ts';
 import When from '../../components/admin/when.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import GameIcon from '../../components/games/game-icon.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
@@ -168,7 +168,7 @@ export default component OverviewPage()
     derived failing = failures.length > 0;
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.overview') } lead={ locale.t('admin.overview.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.overview') } lead={ locale.t('admin.overview.lead') } how={ locale.t('admin.overview.how') } />
 
         <div class="flex flex-wrap items-center gap-3">
             <Button variant="outline" size="sm" leading="refresh" onClick={ () => void view.refetch() }>{ locale.t('admin.overview.read') }</Button>

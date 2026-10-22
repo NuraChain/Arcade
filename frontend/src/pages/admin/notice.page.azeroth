@@ -6,7 +6,7 @@ import { client } from '../../api.ts';
 import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
 import When from '../../components/admin/when.component.azeroth';
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
@@ -223,7 +223,7 @@ export default component NoticePage()
     };
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.notice') } lead={ locale.t('admin.notice.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.notice') } lead={ locale.t('admin.notice.lead') } how={ locale.t('admin.notice.how') } />
 
         <Show when={ waiting }>
             { () => <Skeleton lines={ 3 } /> }

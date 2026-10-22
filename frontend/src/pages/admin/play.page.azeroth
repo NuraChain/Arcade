@@ -6,7 +6,7 @@ import GameSwitch from '../../components/admin/game-switch.component.azeroth';
 import PlayMatches from '../../components/admin/play-matches.component.azeroth';
 import PlayTables from '../../components/admin/play-tables.component.azeroth';
 import ReasonSheet from '../../components/admin/reason-sheet.component.azeroth';
-import PageHeader from '../../components/app/page-header.component.azeroth';
+import AdminHead from '../../components/admin/admin-head.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
@@ -118,7 +118,7 @@ export default component PlayPage()
     };
 
     <div class="flex flex-col gap-6">
-        <PageHeader title={ locale.t('admin.section.play') } lead={ locale.t('admin.play.lead') } flush />
+        <AdminHead title={ locale.t('admin.section.play') } lead={ locale.t('admin.play.lead') } how={ locale.t('admin.play.how') } />
 
         <FilterBar items={ views } value={ shown } label={ locale.t('admin.play.views') } onChange={ (id) => address.write({ view: id === 'games' ? '' : id }) } />
 

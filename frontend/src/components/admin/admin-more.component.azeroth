@@ -1,0 +1,43 @@
+import { Link } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/all.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+
+export interface MoreItem
+{
+    section: string;
+    to: string;
+    icon: IconName;
+    label: string;
+}
+
+export default component AdminMore(props: OverlayProps & { items: MoreItem[]; here: string })
+{
+    const locale = useLocale();
+
+    <div class="flex flex-col gap-2 p-4 pb-6" data-more>
+        <div class="flex items-center justify-between gap-2 ps-1">
+            <h2 class="title text-ui-lg text-text">{ locale.t('admin.more') }</h2>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" size="md" onClick={ () => props.close() } />
+        </div>
+        <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field">
+            <For each={ props.items } key={ (item) => item.section } let={ item }>
+                <li>
+                    <Link
+                        to={ item.to }
+                        aria-current={ props.here === item.section ? 'page' : undefined }
+                        onClick={ () => props.close() }
+                        class="flex min-h-13 items-center gap-3 px-4 text-ui-md font-semibold text-text transition-colors duration-150 hover:bg-raised aria-[current=page]:text-accent"
+                    >
+                        <Icon name={ item.icon } size={ 20 } />
+                        <span class="min-w-0 flex-1 truncate">{ item.label }</span>
+                        <Icon name="chevron-right" size={ 16 } class="icon-flip text-faint" />
+                    </Link>
+                </li>
+            </For>
+        </ul>
+    </div>
+}
