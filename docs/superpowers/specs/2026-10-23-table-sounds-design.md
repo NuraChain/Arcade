@@ -196,3 +196,28 @@ at 1280 in English and 390 in Persian with the sound on.
   went for each reader, the bed only on a table's page and dipped and paused as it should be, no
   pack fetched by a table that does not play it), the fit pass for the dock's new button, the full
   gates, the notes, the last walk.
+
+## As built
+
+Where the work departed from this design, and why:
+
+- **`common`'s ceiling is 64 KB**, not 48 (SD-2): the recorded turn, clock, refusal and end came
+  to 49 KB at the quality the rest are kept at.
+- **Music is MP3 at 96 kbps**, not 80: every piece is under its 1 MB ceiling at 96 (chess, the
+  longest at 82 s, is 960 KB). Rain and birds are 64.
+- **The pieces**: Bedazzled behind Ludo, Town 3 behind Hokm, the loop version of The Bard's Tale
+  behind backgammon, Just you and me behind poker, Calm Piano 1 (Vaporware) behind chess; the
+  birds are the calmest seventy seconds of Forest and Stream #1. Good Morning, the bossa and The
+  Old Tower Inn were measured to carry percussion (the struck share of their sound above 5 kHz)
+  and were passed over.
+- **A piece is cut where its last four seconds sound as its first four do**, chords, beat and
+  loudness frame by frame, because the bed hands its loop over during those four seconds. And the
+  two copies have to be in step: the hand-over waits for the copy going out to reach its point,
+  because a copy is heard a moment after its `play()` is answered (the first walk measured the
+  copies 252 ms apart), and the copy coming in is put where the other says it should be.
+- **A bed that is heard gives way to another over a second**, on a level of its own, when the
+  reader moves to another game's table or chooses another kind.
+- **The sound pass plays one thing a game over the api**, and the end at chess, rather than every
+  moment by the board: each board's own cues and their order are held by its specs on a manual
+  clock and were named one by one in the walks. It hears the packs, the beds, the end as it went
+  and the background's every rule in real browsers.
