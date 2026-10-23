@@ -113,14 +113,14 @@ describe('what a poker table sounds like', () =>
         expect(sounds.games.filter((game) => game !== 'none')).toEqual(['poker']);
     });
 
-    it('is heard in the order things happen: the fold, the pot leaving for its winner and landing, the shuffle, then the cards going out with a chip for each blind among them', async () =>
+    it('is heard in the order things happen: the fold, the bets swept in, the pot leaving for its winner and landing, the shuffle, then the cards going out with a chip for each blind among them', async () =>
     {
         const { read } = await seated(alone());
 
         await read(next(), won());
         await elapse(LONG);
 
-        expect(sounds.heard.slice(0, 4)).toEqual(['card-gather', 'hand-won', 'chips-stack', 'card-shuffle']);
+        expect(sounds.heard.slice(0, 5)).toEqual(['card-gather', 'chips-gather', 'hand-won', 'chips-stack', 'card-shuffle']);
         expect(dealt(), 'the cards waited for the blinds, or a blind for the cards').toEqual({ slides: 8, chips: 2, others: [], last: 'card-slide' });
         expect(sounds.felt).toEqual(['hand']);
     });
@@ -134,7 +134,7 @@ describe('what a poker table sounds like', () =>
         await read(next(), won());
         await elapse(LONG);
 
-        expect(sounds.heard.slice(0, 4)).toEqual(['card-gather', 'hand-won', 'chips-stack', 'card-shuffle']);
+        expect(sounds.heard.slice(0, 5)).toEqual(['card-gather', 'chips-gather', 'hand-won', 'chips-stack', 'card-shuffle']);
         expect(dealt()).toEqual({ slides: 8, chips: 2, others: [], last: 'card-slide' });
     });
 
@@ -146,7 +146,30 @@ describe('what a poker table sounds like', () =>
         await read(flop, heard(1, told(8, 4, { e: 'board', street: 'flop', cards: [5, 18, 31] })));
         await elapse(LONG);
 
-        expect(sounds.heard).toEqual(['card-slide', 'card-slide', 'card-slide', 'card-place', 'card-place', 'card-place']);
+        expect(sounds.heard).toEqual(['chips-gather', 'card-slide', 'card-slide', 'card-slide', 'card-place', 'card-place', 'card-place']);
+    });
+
+    it('sweeps the bets into the pot to the sound of chips gathered when a street closes, and in silence when nothing was bet', async () =>
+    {
+        const { read } = await seated(match({ turn: 4 }, { turn: 4 }));
+        const flop = match({ street: 'flop', board: [5, 18, 31], turn: 3, seats: rows({ 3: { stack: 1490 }, 4: { stack: 1480 } }) }, { rev: 8, turn: 3 });
+
+        await read(flop, heard(1, told(8, 4, { e: 'board', street: 'flop', cards: [5, 18, 31] })));
+        await elapse(LONG);
+
+        expect(sounds.heard.filter((cue) => cue === 'chips-gather')).toHaveLength(1);
+        expect(sounds.heard.indexOf('chips-gather'), 'the bets were swept after the flop was dealt').toBeLessThan(sounds.heard.indexOf('card-slide'));
+
+        cleanup();
+        sounds.heard.length = 0;
+
+        const checked = await seated(match({ street: 'flop', board: [5, 18, 31], turn: 4, seats: rows({ 3: { stack: 1490 }, 4: { stack: 1480 } }) }, { turn: 4 }));
+        const turned = match({ street: 'turn', board: [5, 18, 31, 44], turn: 3, seats: rows({ 3: { stack: 1490 }, 4: { stack: 1480 } }) }, { rev: 8, turn: 3 });
+
+        await checked.read(turned, heard(1, told(8, 4, { e: 'board', street: 'turn', cards: [44] })));
+        await elapse(LONG);
+
+        expect(sounds.heard, 'chips were heard swept off a felt with no bet on it').toEqual(['card-slide', 'card-place']);
     });
 
     it('plays the newest hand alone when two were dealt since it last looked: the one before is set down as it ended', async () =>
@@ -195,34 +218,34 @@ describe('what a poker table sounds like', () =>
 
         for (let waited = 0; waited < LONG && pot(container) !== 'Total pot 0'; waited += 10)
         {
-            expect(sounds.heard, 'the pot was heard before it left').toEqual(['card-gather']);
+            expect(sounds.heard, 'the pot was heard before it left').toEqual(['card-gather', 'chips-gather']);
             await elapse(10);
         }
 
         expect([pot(container), stack(container, 0)]).toEqual(['Total pot 0', '1,500']);
-        expect(sounds.heard, 'the reader was not told the pot was theirs as it left for them').toEqual(['card-gather', 'hand-won']);
+        expect(sounds.heard, 'the reader was not told the pot was theirs as it left for them').toEqual(['card-gather', 'chips-gather', 'hand-won']);
         expect(sounds.felt, 'the reader was buzzed before the chips reached them').toEqual([]);
 
         await elapse(POT_FLY + POT_GAP - 10);
 
-        expect([stack(container, 0), sounds.heard], 'the chips were counted, or heard, before they had landed').toEqual(['1,500', ['card-gather', 'hand-won']]);
+        expect([stack(container, 0), sounds.heard], 'the chips were counted, or heard, before they had landed').toEqual(['1,500', ['card-gather', 'chips-gather', 'hand-won']]);
 
         await elapse(10);
 
         expect(stack(container, 0)).toBe('1,530');
-        expect(sounds.heard, 'the chips landed in silence').toEqual(['card-gather', 'hand-won', 'chips-stack']);
+        expect(sounds.heard, 'the chips landed in silence').toEqual(['card-gather', 'chips-gather', 'hand-won', 'chips-stack']);
         expect(sounds.felt).toEqual(['hand']);
 
         await elapse(POT_SPAN - POT_FLY - POT_GAP - 10);
 
-        expect(sounds.heard, 'the next hand was shuffled on top of the chips').toEqual(['card-gather', 'hand-won', 'chips-stack']);
+        expect(sounds.heard, 'the next hand was shuffled on top of the chips').toEqual(['card-gather', 'chips-gather', 'hand-won', 'chips-stack']);
 
         await elapse(10);
 
         expect(sounds.heard.at(-1)).toBe('card-shuffle');
     });
 
-    it('is heard at a showdown as a fan for each hand that is turned over, after the chips of the call and before the chips of the pot', async () =>
+    it('is heard at a showdown as a fan for each hand that is turned over, after the chips of the call are swept in and before the chips of the pot', async () =>
     {
         const river = match(
             {
@@ -256,7 +279,7 @@ describe('what a poker table sounds like', () =>
         )));
         await elapse(LONG);
 
-        expect(sounds.heard.slice(0, 5)).toEqual(['chip-lay', 'card-fan', 'card-fan', 'chips-stack', 'card-shuffle']);
+        expect(sounds.heard.slice(0, 6)).toEqual(['chip-lay', 'chips-gather', 'card-fan', 'card-fan', 'chips-stack', 'card-shuffle']);
         expect(sounds.heard, 'somebody who was not in the hand was told they had won it').not.toContain('hand-won');
         expect(sounds.felt).toEqual([]);
     });
@@ -268,7 +291,7 @@ describe('what a poker table sounds like', () =>
         await read({ ...next(), mine: undefined }, won());
         await elapse(LONG);
 
-        expect(sounds.heard.slice(0, 2)).toEqual(['card-gather', 'chips-stack']);
+        expect(sounds.heard.slice(0, 3)).toEqual(['card-gather', 'chips-gather', 'chips-stack']);
         expect(sounds.heard).not.toContain('hand-won');
         expect(sounds.felt).toEqual([]);
     });
@@ -312,7 +335,35 @@ describe('what a poker table sounds like', () =>
         expect(await ended(1, false), 'the loser, before the result is in hand').toEqual({ heard: ['lose'], buzzed: false });
     });
 
-    it('knocks for a check, lays a chip for a call and stacks them for an all-in, each when it is seen', async () =>
+    it('rings the reader in when the chips of the call before have landed, not when the server says so', async () =>
+    {
+        const { read } = await seated(match({ turn: 5 }, { turn: 5 }));
+        const called = match({ turn: 0, pot: 50, pots: [{ amount: 50, eligible: EVERYBODY }], seats: rows({ ...BLINDS, 5: { stack: 1480, bet: 20 } }) }, { rev: 8, turn: 0 });
+
+        await read(called, heard(1, told(8, 5, { e: 'call', seat: 5, amount: 20 })));
+        await elapse(50);
+
+        expect(sounds.heard.filter((cue) => cue === 'turn'), 'the reader was rung in while the chips of the call were on their way').toEqual([]);
+
+        await elapse(LONG);
+
+        expect(sounds.heard.filter((cue) => cue === 'turn')).toHaveLength(1);
+        expect(sounds.heard.indexOf('chip-lay'), 'the reader was rung in before the chips of the call had landed').toBeLessThan(sounds.heard.indexOf('turn'));
+    });
+
+    it('rings the reader in as the server says it on a page nobody is looking at, which shows nothing until it is seen', async () =>
+    {
+        const { read } = await seated(match({ turn: 5 }, { turn: 5 }));
+        const called = match({ turn: 0, pot: 50, pots: [{ amount: 50, eligible: EVERYBODY }], seats: rows({ ...BLINDS, 5: { stack: 1480, bet: 20 } }) }, { rev: 8, turn: 0 });
+
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        await read(called, heard(1, told(8, 5, { e: 'call', seat: 5, amount: 20 })));
+        await elapse(50);
+
+        expect(sounds.heard).toEqual(['turn']);
+    });
+
+    it('knocks twice on the table for a check, lays a chip for a call and stacks them for an all-in, each when it is seen', async () =>
     {
         const { read } = await seated(match({ turn: 1 }));
         const after = match(
@@ -329,7 +380,7 @@ describe('what a poker table sounds like', () =>
         ));
         await elapse(LONG);
 
-        expect(sounds.heard).toEqual(['chip-lay', 'chips-stack', 'card-gather', 'tick']);
+        expect(sounds.heard).toEqual(['chip-lay', 'chips-stack', 'card-gather', 'knock']);
     });
 
     it('is not played hand after hand for a table that has fallen a long way behind: it is set down before the newest deal, and that one is dealt', async () =>

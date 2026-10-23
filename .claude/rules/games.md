@@ -4896,6 +4896,21 @@ the last game's banner; a hidden page rings it as the server says it. `backgammo
 (*the turn rung in at a backgammon table*) holds the moments, and `backgammon-table.spec.ts` the
 cube both ways and the last checker borne off heard before the game it wins is called.
 
+**A poker table sounds like clay chips and knuckles.** A bet landing is a short clatter of chips
+(BigSoundBank's "Poker Chips" #1, #3 and #4, CC0, and Kenney's `chip-lay-3`, which has the body of
+a chip on felt), a heavy bet or a pot landing a bigger pile (#2 and Kenney's handful of chips), and
+the bets swept into the pot when a street closes are heard as chips gathered (`chips-gather`, once a
+sweep and never off a felt with nothing bet), where the sweep was silent. Chips ring high, 5 to 7 kHz,
+so they are levelled on the whole band, about 1.5 dB under the click, where a phone's band puts them
+12 to 19 dB under it. A check is two knuckle knocks on the table 0.16 s apart (BigSoundBank's "Door
+Knock", its boom thinned and the knuckle brought forward, `KNUCKLE` in the builder), where it was the
+clock's tic, and it is a knock and not `deny`'s clack of wood. A fold is the cards pushed away (the
+cards pack's gathers). The turn is rung when the chips of the bet before it have landed and the
+table's own turn is the reader's (`felt.turn`), and as the server says it on a hidden page; and a turn
+the reader already holds is not rung again when a press of their own is refused and the table gives
+it back, at the same revision (`turnChime`'s key). `poker-cues.spec.ts` holds the knock, the gather,
+the sequences the gather joins, and the turn.
+
 **A Ludo table sounds like plastic on a printed board.** A pawn's step is a
 short light drop (Kenney Interface Sounds' `drop_002` and `drop_003`, about 780 Hz), where it was a
 knock of wood at 340 Hz; a capture is a bright clack (`impactPlate_light`, cut to 0.16 s, 1.2 kHz)

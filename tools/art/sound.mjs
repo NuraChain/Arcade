@@ -15,6 +15,11 @@ const CLOCK = 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg';
 
 const DICE = 'bigsoundbank-0581-two-dice-on-wooden-table.ogg';
 
+const KNOCKS = 'bigsoundbank-0095-door-knock.ogg';
+
+/** Knuckles on a table under felt: a door's boom thinned, and the knuckle brought forward to where a phone plays. */
+const KNUCKLE = 'highpass=f=180,equalizer=f=1000:t=q:w=1.2:g=8,lowpass=f=3500';
+
 /** A leather cup takes the top off the rattle of the dice inside it and rings a little low. */
 const CUP = 'lowpass=f=2400,lowpass=f=2400,equalizer=f=180:t=q:w=1:g=4';
 
@@ -90,9 +95,17 @@ export const SOUNDS = [
     ['backgammon', 'checker-off', 'impactPlank_medium_002.ogg', 0.3, { cuts: [[0, 0.3]], tail: 0.1, low: 100, gain: 4.5 }],
     ['backgammon', 'cube', 'impactWood_medium_000.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 100, gain: 6.5 }],
     ['backgammon', 'cube', 'impactWood_medium_004.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 100, gain: 5.4 }],
-    ['poker', 'chip-lay', 'chip-lay-1.ogg', 0.3],
-    ['poker', 'chip-lay', 'chip-lay-3.ogg', 0.3],
-    ['poker', 'chips-stack', 'chips-stack-2.ogg', 0.5],
+    ['poker', 'chip-lay', 'bigsoundbank-0942-poker-chips.ogg', 0.32, { cuts: [[0.075, 0.4]], tail: 0.08 }],
+    ['poker', 'chip-lay', 'bigsoundbank-0944-poker-chips-3.ogg', 0.33, { cuts: [[0.215, 0.55]], tail: 0.08, gain: 0.8 }],
+    ['poker', 'chip-lay', 'bigsoundbank-0945-poker-chips-4.ogg', 0.31, { cuts: [[0.11, 0.42]], tail: 0.08, gain: 0.4 }],
+    ['poker', 'chip-lay', 'chip-lay-3.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.08, gain: 2.5 }],
+    ['poker', 'chips-stack', 'bigsoundbank-0943-poker-chips-2.ogg', 0.3, { cuts: [[0.9, 1.2]], tail: 0.08 }],
+    ['poker', 'chips-stack', 'bigsoundbank-0943-poker-chips-2.ogg', 0.27, { cuts: [[0.37, 0.64]], tail: 0.08, gain: 4 }],
+    ['poker', 'chips-stack', 'chips-handle-5.ogg', 0.8, { cuts: [[0, 0.8]], tail: 0.15, gain: 0.9, kbps: 64 }],
+    ['poker', 'chips-gather', 'chips-handle-4.ogg', 0.36, { cuts: [[0, 0.36]], tail: 0.08, gain: 3 }],
+    ['poker', 'knock', KNOCKS, 0.3, { cuts: [[0.155, 0.255], [0.522, 0.622]], apart: 0.16, tail: 0.05, filter: KNUCKLE }],
+    ['poker', 'knock', KNOCKS, 0.3, { cuts: [[2.222, 2.322], [2.666, 2.766]], apart: 0.17, tail: 0.05, filter: KNUCKLE, gain: 1.1 }],
+    ['poker', 'knock', KNOCKS, 0.3, { cuts: [[7.636, 7.736], [7.952, 8.052]], apart: 0.16, tail: 0.05, filter: KNUCKLE, gain: -1 }],
     ['chess', 'piece-move', 'impactGeneric_light_000.ogg', 0.16],
     ['chess', 'piece-move', 'impactGeneric_light_003.ogg', 0.16],
     ['chess', 'piece-move', 'impactGeneric_light_004.ogg', 0.16],

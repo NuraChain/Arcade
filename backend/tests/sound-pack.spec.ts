@@ -50,7 +50,7 @@ describe('the sound packs the tables play from', () =>
         const elsewhere = readdirSync(sources).filter((name) => /^(bigsoundbank|commons)-/.test(name));
 
         expect(used.filter((name) => !existsSync(new URL(name, sources)))).toEqual([]);
-        expect(elsewhere.sort()).toEqual(['bigsoundbank-0581-two-dice-on-wooden-table.ogg', 'bigsoundbank-0610-horse-trotting.ogg', 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg', 'bigsoundbank-1541-horse-neighing-4.ogg', 'commons-elephant-voice-trumpeting.ogg']);
+        expect(elsewhere.sort()).toEqual(['bigsoundbank-0095-door-knock.ogg', 'bigsoundbank-0581-two-dice-on-wooden-table.ogg', 'bigsoundbank-0610-horse-trotting.ogg', 'bigsoundbank-0942-poker-chips.ogg', 'bigsoundbank-0943-poker-chips-2.ogg', 'bigsoundbank-0944-poker-chips-3.ogg', 'bigsoundbank-0945-poker-chips-4.ogg', 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg', 'bigsoundbank-1541-horse-neighing-4.ogg', 'commons-elephant-voice-trumpeting.ogg']);
         expect(elsewhere.filter((name) => !credits.includes(name))).toEqual([]);
         expect(credits).toContain('CC0 1.0 Universal');
     });

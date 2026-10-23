@@ -147,11 +147,14 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
 
     const chime = turnChime(() => sound);
 
+    // A hidden page plays nothing until it is seen, so there the turn is rung as the server says it.
     effect
     {
-        const yours = acting;
+        const told = acting && props.match.mine !== undefined;
+        const shown = told && felt.turn === mine;
+        const at = game.rev;
 
-        untrack(() => chime(yours && props.match.mine !== undefined));
+        untrack(() => chime(typeof document !== 'undefined' && document.visibilityState === 'hidden' ? told : shown, at));
     }
 
     let uncap: () => void = () => undefined;
@@ -581,6 +584,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             return;
         }
 
+        sound?.play('chips-gather');
         held = swept(held);
         show();
 
@@ -596,7 +600,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
     {
         const plate = plateOf(seat);
 
-        sound?.play('tick');
+        sound?.play('knock');
 
         if (plate !== null)
         {
