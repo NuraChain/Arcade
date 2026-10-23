@@ -104,6 +104,7 @@ export const me = {
     'settings.account': 'Account',
     'settings.safety': 'Privacy & safety',
     'settings.notifications': 'Notifications',
+    'settings.sound': 'Sound',
     'settings.appearance': 'Appearance',
 
     'settings.account.wallet': 'Signed in with {wallet}',
@@ -130,11 +131,12 @@ export const me = {
     'settings.notifications.messages': 'Messages',
     'settings.notifications.groups': 'Being added to a group',
     'settings.notifications.turns': 'Games: your turn, and a game starting',
-    'settings.notifications.sound': 'Sound at the table',
-    'settings.notifications.animals': 'Horse and elephant in chess',
-    'settings.notifications.animalsHint': 'A knight lands on its hooves and neighs when it takes a piece; a bishop, the elephant of Persian chess, treads heavily and trumpets.',
     'settings.notifications.haptics': 'Vibration',
     'settings.notifications.hapticsHint': 'A short buzz when a table is ready, a hand is won, or a gesture lands.',
+
+    'settings.sound.table': 'Sound at the table',
+    'settings.sound.animals': 'Horse and elephant in chess',
+    'settings.sound.animalsHint': 'A knight lands on its hooves and neighs when it takes a piece; a bishop, the elephant of Persian chess, treads heavily and trumpets.',
 
     'settings.appearance.language': 'Language',
     'settings.appearance.motion': 'Your device asks for less motion — we listen.',

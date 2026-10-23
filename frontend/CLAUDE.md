@@ -187,7 +187,7 @@ short of the edge on a desktop. `tools/qa` measures none of this, so it was meas
 route at 390 and 1280, the first content's inset and the title's box.
 
 **The settings page is one column of sections.** Account, Appearance, Privacy & safety,
-Notifications, Voice and Game helpers stand one under another, each as wide as the column, and
+Notifications, Sound, Voice and Game helpers stand one under another, each as wide as the column, and
 so do the rows inside them: one switch to a row, and the three safety lists one under another.
 It was a grid: two sections side by side from 72rem, the switches in two columns from 48rem,
 the lists in three. Sections of different heights left a hole beside the shorter one, a card
@@ -196,8 +196,9 @@ sections stays beside the column from 56rem: it is the way round the page and no
 it. A control that is not a row keeps a width of its own (`max-w-md` on the device pickers, the
 sliders and the choices of the voice panels), and a button in a stacked panel does not stretch (`self-start` on "Turn on
 for this device"); the account's two buttons stand at the end of its row from 42rem.
-`settings.spec.ts` (*the page of settings*) holds the six sections as the children of one
-column and no `grid-cols-` anywhere under it. The voice section is three panels, the microphone,
+`settings.spec.ts` (*the page of settings*) holds the seven sections as the children of one
+column and no `grid-cols-` anywhere under it. Sound is the table's own sound and the horse and the
+elephant of chess, which stood among the notification switches though neither tells anybody anything. The voice section is three panels, the microphone,
 what is heard and the table's own switches, drawn by `components/voice/` (*Settings › Voice* in
 `.claude/rules/games.md`), and the same spec holds each of them in it.
 

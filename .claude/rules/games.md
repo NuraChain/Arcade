@@ -721,7 +721,7 @@ Three defects on this path that every gate was green for, each now with a rule:
 **The dock under the board is the small things somebody reaches for mid-game.** Sound, the screen,
 the room's code and the chat, and every one of them was reachable before only by LEAVING the game -
 the table's own cues are `settings.sound`, whose single toggle lives on the settings page under
-notifications. Nothing in it is a control with nothing behind it: no music button because there is
+Sound. Nothing in it is a control with nothing behind it: no music button because there is
 no music, no settings gear because it would be a link out of the game wearing the clothes of a
 control in it, no overflow because there is nothing left to put in one. The code is there because it
 is how a table is reached when it is in no list, which is every table opened from a chat or a group.
@@ -4363,7 +4363,7 @@ calls as it takes a piece, over the knock of the piece it took (`horse-call`, a 
 included. The levels were measured beside the click as it sits in the pack: the hooves as loud, the
 tread 4 dB under it on a phone's speaker, the calls 6 dB under it, since a second of voice is heard
 as louder than a click at the same level. The renderer asks the device at each move (`animals`,
-from `settings.animalSounds`, on by default), so turning it off in Settings › Notifications, or from
+from `settings.animalSounds`, on by default), so turning it off in Settings › Sound, or from
 a chess table's menu, holds from the next move. Until the pack has loaded the two steps are
 synthesised as every cue is, and the two calls are silent: a synthesised neigh is worse than none.
 `chess-table.spec.ts` (*the knight and the bishop, heard as the horse and the elephant Persian names

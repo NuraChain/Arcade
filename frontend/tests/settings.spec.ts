@@ -166,17 +166,18 @@ describe('the notification switches', () =>
         expect(switchFor('Messages').querySelector('[aria-hidden]')?.className).toContain('bg-line');
     });
 
-    it('keep chess\'s horse and elephant on this device, under the sound at the table, in both languages', async () =>
+    it('keep chess\'s horse and elephant on this device, under the sound at the table in a section of their own, in both languages', async () =>
     {
         useSettings().reset();
         useSession().establish(establishAccount());
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
-        const switches = () => [...container.querySelectorAll<HTMLElement>('#settings-notifications [role="switch"]')];
+        const switches = (section = 'sound') => [...container.querySelectorAll<HTMLElement>(`#settings-${ section } [role="switch"]`)];
         const labelOf = (one: HTMLElement) => one.querySelector('span span')?.textContent ?? '';
         const at = (label: string) => switches().findIndex((one) => labelOf(one) === label);
         const animals = () => switches()[at('Horse and elephant in chess')];
 
-        expect(at('Horse and elephant in chess')).toBe(at('Sound at the table') + 1);
+        expect(switches().map(labelOf)).toEqual(['Sound at the table', 'Horse and elephant in chess']);
+        expect(switches('notifications').map(labelOf).filter((one) => /sound|horse/i.test(one)), 'a sound switch is still among the notifications').toEqual([]);
         expect(animals().getAttribute('aria-checked')).toBe('true');
         expect(animals().textContent).toContain('the elephant of Persian chess');
 
@@ -190,7 +191,7 @@ describe('the notification switches', () =>
         useLocale().setLocale('fa');
         await settle();
 
-        expect(at('صدای اسب و فیل توی شطرنج')).toBe(at('صدا سر میز') + 1);
+        expect(switches().map(labelOf)).toEqual(['صدا سر میز', 'صدای اسب و فیل توی شطرنج']);
     });
 });
 
@@ -234,7 +235,7 @@ describe('the page of settings', () =>
         const column = sections[0]?.parentElement ?? null;
         const classes = (column?.getAttribute('class') ?? '').split(' ');
 
-        expect(sections.map((one) => one.id)).toEqual(['settings-account', 'settings-appearance', 'settings-safety', 'settings-notifications', 'settings-voice', 'settings-helpers']);
+        expect(sections.map((one) => one.id)).toEqual(['settings-account', 'settings-appearance', 'settings-safety', 'settings-notifications', 'settings-sound', 'settings-voice', 'settings-helpers']);
         expect(sections.every((one) => one.parentElement === column), 'a section stands beside another inside a wrapper of its own').toBe(true);
         expect(classes).toEqual(expect.arrayContaining(['flex', 'flex-col']));
         expect(classes.filter((one) => /grid/.test(one)), 'the sections are laid out as a grid').toEqual([]);

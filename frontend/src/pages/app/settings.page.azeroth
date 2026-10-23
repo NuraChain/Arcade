@@ -43,6 +43,7 @@ const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
     { id: 'settings-appearance', icon: 'palette', key: 'settings.appearance' },
     { id: 'settings-safety', icon: 'shield', key: 'settings.safety' },
     { id: 'settings-notifications', icon: 'bell', key: 'settings.notifications' },
+    { id: 'settings-sound', icon: 'sound', key: 'settings.sound' },
     { id: 'settings-voice', icon: 'voice', key: 'voice.settings' },
     { id: 'settings-helpers', icon: 'idea', key: 'helpers.title' }
 ];
@@ -431,17 +432,6 @@ export default component SettingsPage()
                                         />
                                     </div>
                                 </For>
-                                <Toggle
-                                    checked={ current.sound }
-                                    label={ locale.t('settings.notifications.sound') }
-                                    onChange={ (checked) => settings.update({ sound: checked }) }
-                                />
-                                <Toggle
-                                    checked={ current.animalSounds }
-                                    label={ locale.t('settings.notifications.animals') }
-                                    description={ locale.t('settings.notifications.animalsHint') }
-                                    onChange={ (checked) => settings.update({ animalSounds: checked }) }
-                                />
                                 <Show when={ device.coarse() }>
                                     { () =>
                                         <Toggle
@@ -452,6 +442,25 @@ export default component SettingsPage()
                                         />
                                     }
                                 </Show>
+                            </div>
+                        </Panel>
+                    </section>
+
+                    <section id="settings-sound" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-sound-title">
+                        <SectionHeading id="settings-sound-title" title={ locale.t('settings.sound') } />
+                        <Panel>
+                            <div class="flex flex-col gap-1">
+                                <Toggle
+                                    checked={ current.sound }
+                                    label={ locale.t('settings.sound.table') }
+                                    onChange={ (checked) => settings.update({ sound: checked }) }
+                                />
+                                <Toggle
+                                    checked={ current.animalSounds }
+                                    label={ locale.t('settings.sound.animals') }
+                                    description={ locale.t('settings.sound.animalsHint') }
+                                    onChange={ (checked) => settings.update({ animalSounds: checked }) }
+                                />
                             </div>
                         </Panel>
                     </section>
