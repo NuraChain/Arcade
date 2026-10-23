@@ -1,4 +1,4 @@
-import { EMPTY, colourOf, fileOf, kindOf, opponent, pieceOf, rankOf, type Colour, type Kind, type Piece, type Position } from './board.ts';
+import { EMPTY, colourOf, fileOf, kindOf, opponent, pieceOf, rankOf, type Colour, type Piece, type Position, type Promotion } from './board.ts';
 
 export interface Move
 {
@@ -6,7 +6,7 @@ export interface Move
     to: number;
     piece: Piece;
     captured?: Piece;
-    promotion?: Kind;
+    promotion?: Promotion;
     castle?: 'k' | 'q';
     enPassant?: true;
 }
@@ -21,7 +21,7 @@ const ROOK: readonly Step[] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
 const BISHOP: readonly Step[] = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
 
-const PROMOTIONS: readonly Kind[] = ['q', 'r', 'b', 'n'];
+const PROMOTIONS: readonly Promotion[] = ['q', 'r', 'b', 'n'];
 
 /** Where a rook stands before it castles, and the right it takes away when it leaves or is taken there. */
 const ROOK_HOMES: Readonly<Record<number, string>> = { 0: 'Q', 7: 'K', 56: 'q', 63: 'k' };

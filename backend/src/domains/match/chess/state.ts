@@ -1,18 +1,9 @@
-import type { Colour, Kind, Position } from './board.ts';
+import type { Colour, Piece, Position, Promotion } from './board.ts';
 
-/** How a game ended. The first three name a winner; the last one nobody, and nobody is rated. */
-export type Reason =
-    | 'checkmate'
-    | 'resign'
-    | 'flag'
-    | 'forfeit'
-    | 'stalemate'
-    | 'repetition'
-    | 'fifty'
-    | 'material'
-    | 'agreement'
-    | 'flag-material'
-    | 'abort';
+/** How a game ended. The first four name a winner; the draws after them nobody; and an abort nobody, with nobody rated. */
+export const REASONS = ['checkmate', 'resign', 'flag', 'forfeit', 'stalemate', 'repetition', 'fifty', 'material', 'agreement', 'flag-material', 'abort'] as const;
+
+export type Reason = typeof REASONS[number];
 
 export const DRAWN: readonly Reason[] = ['stalemate', 'repetition', 'fifty', 'material', 'agreement', 'flag-material'];
 
@@ -54,7 +45,7 @@ export interface ChessState
 }
 
 export type ChessAction =
-    | { kind: 'move'; seat: number; from: number; to: number; promotion?: Kind }
+    | { kind: 'move'; seat: number; from: number; to: number; promotion?: Promotion }
     | { kind: 'offer'; seat: number }
     | { kind: 'accept'; seat: number }
     | { kind: 'decline'; seat: number }
@@ -69,9 +60,9 @@ export type ChessEvent =
         seat: number;
         from: number;
         to: number;
-        piece: string;
-        captured?: string;
-        promotion?: Kind;
+        piece: Piece;
+        captured?: Piece;
+        promotion?: Promotion;
         castle?: 'k' | 'q';
         enPassant?: true;
         check?: true;

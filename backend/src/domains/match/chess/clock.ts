@@ -24,8 +24,8 @@ export function bankOf(state: ChessState)
 
 /**
  * The clock once `seat` has moved, `left` being what it had when the move arrived. Its first move
- * costs nothing; after that the bank is what was left and the increment on top. With no `left` (a
- * replay, a spec) no time passed.
+ * costs nothing; after that the bank is what was left, to the whole millisecond, and the increment
+ * on top. With no `left` (a replay, a spec) no time passed.
  */
 export function charged(state: ChessState, seat: number, left: number | undefined): Clock | null
 {
@@ -36,7 +36,7 @@ export function charged(state: ChessState, seat: number, left: number | undefine
 
     const banks = [...state.clock.left];
 
-    banks[seat] = Math.max(0, left ?? banks[seat]) + state.clock.increment;
+    banks[seat] = Math.max(0, Math.round(left ?? banks[seat])) + state.clock.increment;
 
     return { ...state.clock, left: banks };
 }

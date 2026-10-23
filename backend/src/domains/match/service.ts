@@ -130,6 +130,11 @@ const SAYS: Record<RefusalWord, string> = {
     'cannot-raise': 'You cannot raise now.',
     'raise-too-small': 'That raise is below the minimum.',
     'raise-too-large': 'You do not have that many chips.',
+    'promotion-needed': 'Choose the piece the pawn becomes.',
+    'no-draw-offer': 'Nobody has offered a draw.',
+    'draw-offered': 'You have offered a draw already; make a move before offering again.',
+    'time-up': 'Your time ran out before that move arrived.',
+    'time-left': 'There is still time on that clock.',
     'unplayable': 'This game cannot go on from where it stands.'
 };
 

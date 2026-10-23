@@ -2,6 +2,9 @@ export type Colour = 'w' | 'b';
 
 export type Kind = 'k' | 'q' | 'r' | 'b' | 'n' | 'p';
 
+/** What a pawn on the last rank may become. */
+export type Promotion = 'q' | 'r' | 'b' | 'n';
+
 /** A piece is its letter, upper case for White and lower case for Black. */
 export type Piece = 'K' | 'Q' | 'R' | 'B' | 'N' | 'P' | Kind;
 
