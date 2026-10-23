@@ -373,6 +373,28 @@ took the hover and the press meant for the line. `context-menu.spec.ts`,
 `hover-bar.spec.ts`, `bubble.spec.ts` (*a right click on a line*), `chat-page.spec.ts` (*a right
 click, on a line and on a conversation*) and `table-chat.spec.ts` hold it.
 
+**The list says when as a messenger does, and what was left unsent.** A row said "37 seconds
+ago". It says the time of a line from today, the weekday of one from the six days before, and the
+date of anything older, with its year once it is a year old (`stampOf` in
+`components/chat/chat-time.ts`, the kinds in `lib/thread.ts`), in the reader's calendar and digits,
+against a minute's tick the list keeps (`now`), so a line from today turns into its weekday at
+midnight in the node it was. A room with words left in its composer says "Draft:" and the words in
+place of its last line (`chat.draft`, this tab's memory: written to storage it would be a sealed
+room's plaintext on disk), unless it is the room on screen, whose composer holds them, or somebody
+is typing there. `chat-page.spec.ts` (*a conversation in the list*) and `chat-time.spec.ts` hold it.
+
+**The head of a thread says when the other person was last seen.** With one other person in the
+room: typing, then Online or Away, then "Last seen 5 minutes ago" (just now, whole minutes, today or
+yesterday at a time, a date: `seenOf`), and the handle where the server does not say when, or
+where no snapshot of who is here is in hand (`presence.ready()`: with the socket down nobody can be
+said to have gone). When is the server's `lastSeenAt`, which it sends only to somebody who may see
+the person online, put on this device's clock (`toLocal`) and never ahead of it, and moved on by a
+minute's tick. A name never carries it and anything read earlier goes stale, so the page asks the
+server about the person again (`people.look`) whenever they are not among those here: as it opens,
+and the moment a snapshot says they left. A group counts who is here instead. `chat-page.spec.ts`
+(*the head of a thread*) holds it; the server's half is *When somebody was last seen* in
+`.claude/rules/chat-and-keys.md`.
+
 **One bubble, one grouping rule, two places.** `MessageBubble` draws the chat page AND the table's
 panel, and `lib/thread.ts` decides both: a run is one sender's `text` lines no more than five minutes
 apart on one day, a server line never joins a run, and a day divider leads the first line of every

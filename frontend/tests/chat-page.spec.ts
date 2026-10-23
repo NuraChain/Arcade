@@ -1198,3 +1198,258 @@ describe('a report of a line its author edited', () =>
         });
     });
 });
+
+describe('the head of a thread with one other person, and when they were last seen', () =>
+{
+    const MINUTE = 60_000;
+    const NOW = 400_000;
+    const TIME: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+
+    const direct = () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+
+        return { thread, other: thread.members.find((handle) => handle !== 'alex')! };
+    };
+
+    const line = (container: HTMLElement) => container.querySelector('header h1 + span')?.textContent ?? '';
+
+    const here = (...who: string[]) => socket.deliver({ v: 1, t: 'presence', n: 1, full: true, people: who.map((one) => ({ who: one, state: 'online' as const, since: 0 })) });
+
+    const looks = () => server.calls.filter((one) => one === 'social.person').length;
+
+    it('says how long ago somebody who is not here was last seen, asking the server about them once', async () =>
+    {
+        const { thread, other } = direct();
+
+        server.seen[other] = new Date(NOW - 5 * MINUTE).toISOString();
+        here();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe('Last seen 5 minutes ago'), { timeout: 4000 });
+        await settle();
+
+        expect(looks()).toBe(1);
+    });
+
+    it('asks again the moment they leave, and says when that was', async () =>
+    {
+        const { thread, other } = direct();
+
+        here(other);
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe(useLocale().t('common.online')), { timeout: 4000 });
+        await settle();
+
+        expect(looks(), 'nobody asks after somebody who is here').toBe(0);
+
+        server.seen[other] = new Date(NOW).toISOString();
+        socket.deliver({ v: 1, t: 'presence', n: 2, full: false, people: [], gone: [other] });
+
+        await vi.waitFor(() => expect(line(container), 'what the server said before they left is stale').toBe('Last seen just now'), { timeout: 4000 });
+        expect(looks()).toBe(1);
+    });
+
+    it('reads when on the server’s clock, whatever this device’s says', async () =>
+    {
+        const { thread, other } = direct();
+        const ahead = 2 * 3_600_000;
+
+        socket.deliver({ v: 1, t: 'hello', n: 1, rt: 'nura-rt/v1', self: 'alex', at: NOW + ahead });
+        server.seen[other] = new Date(NOW + ahead - 5 * MINUTE).toISOString();
+        here();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe('Last seen 5 minutes ago'), { timeout: 4000 });
+    });
+
+    it('says the handle while no snapshot of who is here is in hand, and asks nothing', async () =>
+    {
+        const { thread, other } = direct();
+
+        server.seen[other] = new Date(NOW - 5 * MINUTE).toISOString();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe(`@${ other }`), { timeout: 4000 });
+        await settle();
+
+        expect(looks()).toBe(0);
+    });
+
+    it('says the handle when the server does not let the reader know when', async () =>
+    {
+        const { thread, other } = direct();
+
+        here();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(looks()).toBe(1), { timeout: 4000 });
+        await settle();
+
+        expect(line(container)).toBe(`@${ other }`);
+    });
+
+    it('moves on as the minutes pass, to the time of day once it is an hour', async () =>
+    {
+        const clock = manualClock(NOW);
+
+        setRuntime({ clock, seed: 21 });
+
+        const { thread, other } = direct();
+        const left = NOW - 20_000;
+
+        server.seen[other] = new Date(left).toISOString();
+        here();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe('Last seen just now'), { timeout: 4000 });
+
+        clock.advance(MINUTE);
+        await vi.waitFor(() => expect(line(container)).toBe('Last seen 1 minute ago'), { timeout: 4000 });
+
+        clock.advance(59 * MINUTE);
+        await vi.waitFor(() => expect(line(container)).toBe(`Last seen today at ${ useLocale().date(left, TIME) }`), { timeout: 4000 });
+    });
+
+    it('says it in the reader’s own words', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { thread, other } = direct();
+
+        server.seen[other] = new Date(NOW - 5 * MINUTE).toISOString();
+        here();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toBe('۵ دقیقه پیش آنلاین بود'), { timeout: 4000 });
+    });
+
+    it('never says it of a group, which counts who is here instead', async () =>
+    {
+        const group = server.conversations.find((row) => row.kind === 'group')!;
+
+        for (const member of group.members)
+        {
+            server.seen[member] = new Date(NOW - 5 * MINUTE).toISOString();
+        }
+        here();
+
+        const container = opened(group.id, 'sidebar');
+
+        await vi.waitFor(() => expect(line(container)).toContain(useLocale().plural('chat.online', 0)), { timeout: 4000 });
+        await settle();
+
+        expect(line(container)).not.toContain('Last seen');
+        expect(looks()).toBe(0);
+    });
+});
+
+describe('a conversation in the list, by the time of its last line and what was left unsent', () =>
+{
+    const MINUTE = 60_000;
+    const TIME: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+
+    const row = (container: HTMLElement, id: string) => container.querySelector(`a[href="/app/chats/${ id }"]`);
+
+    it('says the time of a line from today, and its weekday once midnight has passed', async () =>
+    {
+        const spoken = server.conversations.find((one) => one.kind === 'direct' && one.last !== undefined && one.last.kind === 'text')!;
+        const at = Date.parse(spoken.last!.clientAt!);
+        const midnight = new Date(at);
+
+        midnight.setHours(24, 0, 0, 0);
+
+        const clock = manualClock(midnight.getTime() - 2 * MINUTE);
+
+        setRuntime({ clock, seed: 21 });
+
+        const open = server.conversations.find((one) => one.id !== spoken.id)!;
+        const container = opened(open.id, 'sidebar');
+        const time = () => row(container, spoken.id)?.querySelector('time') ?? null;
+
+        await vi.waitFor(() => expect(time()?.textContent).toBe(useLocale().date(at, TIME)), { timeout: 4000 });
+        expect(time()?.getAttribute('datetime')).toBe(new Date(at).toISOString());
+
+        const kept = time();
+
+        clock.advance(3 * MINUTE);
+
+        await vi.waitFor(() => expect(time()?.textContent).toBe(useLocale().date(at, { weekday: 'short' })), { timeout: 4000 });
+        expect(time(), 'the same node, told the new day').toBe(kept);
+    });
+
+    it('says what the reader left unsent in another room, ahead of its last line, and not in the room on screen', async () =>
+    {
+        const [open, left] = server.conversations.filter((one) => one.kind === 'direct');
+
+        useChat().setDraft(left.id, '  **see you** at nine  ');
+        useChat().setDraft(open.id, 'not shown here');
+
+        const container = opened(open.id, 'sidebar');
+
+        await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]')?.textContent).toBe('Draft:'), { timeout: 4000 });
+
+        expect(row(container, left.id)?.textContent).toContain('see you at nine');
+        expect(row(container, left.id)?.textContent, 'the formatting marks are not shown').not.toContain('**');
+        expect(row(container, open.id)?.querySelector('[data-draft]'), 'the room on screen keeps its draft in the composer').toBeNull();
+
+        useChat().setDraft(left.id, '   ');
+
+        await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]'), 'nothing but spaces is no draft').toBeNull(), { timeout: 4000 });
+    });
+
+    it('says somebody is typing there over the draft, and the draft again once they stop', async () =>
+    {
+        const [open, left] = server.conversations.filter((one) => one.kind === 'direct');
+        const other = left.members.find((handle) => handle !== 'alex')!;
+
+        // After every line the fixtures wrote, or the room's own last line would count as an answer to the notice.
+        const clock = manualClock(1_700_000_000_000);
+
+        setRuntime({ clock, seed: 21 });
+        useChat().setDraft(left.id, 'see you at nine');
+
+        const container = opened(open.id, 'sidebar');
+
+        await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]')).not.toBeNull(), { timeout: 4000 });
+
+        const stop = useChat().start();
+
+        try
+        {
+            socket.deliver({ v: 1, t: 'typing', n: 1, who: other, id: left.id });
+
+            await vi.waitFor(() => expect(row(container, left.id)?.textContent).toContain(useLocale().t('chats.typing')), { timeout: 4000 });
+            expect(row(container, left.id)?.querySelector('[data-draft]')).toBeNull();
+
+            clock.advance(5000);
+
+            await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]')).not.toBeNull(), { timeout: 4000 });
+        }
+        finally
+        {
+            stop();
+        }
+    });
+
+    it('says the draft in the reader’s own words', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const [open, left] = server.conversations.filter((one) => one.kind === 'direct');
+
+        useChat().setDraft(left.id, 'ساعت نه');
+
+        const container = opened(open.id, 'sidebar');
+
+        await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]')?.textContent).toBe('پیش‌نویس:'), { timeout: 4000 });
+    });
+});

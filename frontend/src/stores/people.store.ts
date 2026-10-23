@@ -29,6 +29,13 @@ export interface PeopleApi
      */
     want(handles: readonly string[]): Promise<unknown>;
 
+    /**
+     * Asks the server about one person again, however well they are known, and settles once it has
+     * answered or refused; it never rejects. It is for what a name never carries and goes stale:
+     * when they were last seen, which the server sends only to somebody who may see it.
+     */
+    look(handle: string): Promise<unknown>;
+
     reset(): void;
 }
 
@@ -58,6 +65,9 @@ export const usePeople = createStore((): PeopleApi =>
      * rather than once per render. A refused request forgets its handles: a refusal is not an answer.
      */
     const asked = new Map<string, Promise<void>>();
+
+    /** One look at a person at a time: a second asker while it is out waits on the same answer. */
+    const looking = new Map<string, Promise<unknown>>();
 
     const remember = (people: readonly PersonSummary[]) =>
     {
@@ -120,9 +130,35 @@ export const usePeople = createStore((): PeopleApi =>
             return Promise.all(handles.map((handle) => asked.get(handle)));
         },
 
+        look(handle)
+        {
+            const out = looking.get(handle);
+
+            if (out !== undefined)
+            {
+                return out;
+            }
+
+            const answered: Promise<unknown> = client.social.person({ params: { handle } })
+                .then((answer) => remember([answer.person]))
+                .catch(() => undefined)
+                .finally(() =>
+                {
+                    if (looking.get(handle) === answered)
+                    {
+                        looking.delete(handle);
+                    }
+                });
+
+            looking.set(handle, answered);
+
+            return answered;
+        },
+
         reset()
         {
             asked.clear();
+            looking.clear();
             setKnown(new Map());
         }
     };

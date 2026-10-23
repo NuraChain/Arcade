@@ -859,6 +859,9 @@ export const server =
     partyRung: [] as string[],
     refusals: {} as Record<string, 'blocked' | 'strangers-off' | 'minor-safety'>,
 
+    /** When each person was last seen, by handle, as the server would send it to the reader: absent where it would not. */
+    seen: {} as Record<string, string>,
+
     asked: [] as { game: string; seats: number; teams: boolean }[],
     sought: [] as (QuickAsk & { game: string; voice: VoiceScope; stake?: string; signature?: string })[],
 
@@ -919,6 +922,7 @@ export const server =
         server.parties = formParties();
         server.partyRung = [];
         server.refusals = {};
+        server.seen = {};
         server.asked = [];
         server.sought = [];
         server.searched = [];
@@ -1111,14 +1115,27 @@ const reachable = (handle: string) => !server.blocks.includes(handle) && handle 
 const personWire = (handle: string): PersonSummary =>
 {
     const person = PEOPLE_FIXTURES.find((one) => one.handle === handle);
+    const seen = server.seen[handle];
+
     return {
         id: handle,
         handle,
         displayName: person?.displayName ?? handle,
         bio: '',
         hue: person?.hue ?? 0,
-        isMinor: person?.isMinor ?? false
+        isMinor: person?.isMinor ?? false,
+        ...(seen === undefined ? {} : { lastSeenAt: seen })
     };
+};
+
+/** Somebody as `GET /social/names` describes them, as the real route does: never when they were last here. */
+const nameWire = (handle: string) =>
+{
+    const named = personWire(handle);
+
+    delete named.lastSeenAt;
+
+    return named;
 };
 
 loadFixtures();
@@ -3068,7 +3085,8 @@ export const client =
         {
             server.calls.push('social.names');
             const handles = query.handles.split(',').filter((handle) => reachable(handle) && PEOPLE_FIXTURES.some((one) => one.handle === handle));
-            return { people: handles.map((handle) => personWire(handle)) };
+
+            return { people: handles.map(nameWire) };
         },
 
         async people()

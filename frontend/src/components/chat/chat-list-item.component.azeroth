@@ -17,12 +17,16 @@ import Tooltip from '../ui/tooltip.component.azeroth';
 import type { MenuPoint } from './actions.ts';
 import ChatFace from './chat-face.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
+import { stampOf } from './chat-time.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { STATUS_ICON, STATUS_WORDS } from './status.ts';
 
 export default component ChatListItem(props: {
     conversation: Conversation;
     me: string;
+
+    /** The moment its time is said against, which the list moves on once a minute. */
+    now: number;
     active?: boolean;
     folded?: boolean;
     onHold?: () => void;
@@ -92,12 +96,23 @@ export default component ChatListItem(props: {
 
     derived status = last?.outgoing ?? (seen ? 'read' : 'sent');
 
+    derived stamp = last === undefined ? '' : stampOf(locale, last.at, props.now);
+
+    /** What the reader left unsent here, said in place of the last line while they are elsewhere. */
+    derived draft = props.active === true ? '' : chat.draft(props.conversation.id).trim();
+
+    derived drafted = draft !== '' && typing.length === 0;
+
     derived preview = (() =>
     {
         if (typing.length > 0)
         {
             const who = people.byHandle(typing[0]);
             return `${ who === null ? '' : `${ who.displayName.split(' ')[0] } ` }${ locale.t('chats.typing') }`;
+        }
+        if (drafted)
+        {
+            return plainOf(draft, locale.t('chat.spoilerPreview'));
         }
         if (last === undefined)
         {
@@ -149,7 +164,10 @@ export default component ChatListItem(props: {
                         { () => <Icon name="sound-off" size={ 12 } class="shrink-0 text-faint" /> }
                     </Show>
                 </span>
-                <span class={ () => [ 'truncate text-ui-sm', typing.length > 0 ? 'text-live' : (unread > 0 ? 'text-text' : 'text-muted') ].join(' ') }>
+                <span class={ () => [ 'truncate text-ui-sm', typing.length > 0 ? 'text-live' : (unread > 0 && !drafted ? 'text-text' : 'text-muted') ].join(' ') }>
+                    <Show when={ drafted }>
+                        { () => <span class="me-1 text-danger" data-draft>{ locale.t('chats.draft') }</span> }
+                    </Show>
                     <span dir="auto">{ preview }</span>
                 </span>
             </span>
@@ -165,7 +183,7 @@ export default component ChatListItem(props: {
                                 </span>
                             }
                         </Show>
-                        { locale.relative(spoken.at) }
+                        <time datetime={ new Date(spoken.at).toISOString() }>{ stamp }</time>
                     </span>
                 </Show>
                 <Show when={ unread > 0 }>

@@ -17,6 +17,7 @@ import { ASK_AGAIN_MAX_MS, ASK_AGAIN_MS, useSession } from '../src/stores/sessio
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
+import { usePresence } from '../src/stores/presence.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
 import { answeredUnauthorized, ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -708,6 +709,92 @@ describe('people nobody has described yet', () =>
 
         expect(people.byHandle('nobody.at.all')).toBeNull();
         expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+    });
+});
+
+describe('somebody looked at again', () =>
+{
+    it('is asked about however well known, and keeps what the server now says of when they were last seen', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        await people.want(['mina']);
+        server.calls = [];
+
+        expect(people.byHandle('mina')?.lastSeenAt, 'a name never says when').toBeUndefined();
+
+        server.seen.mina = '2026-10-20T08:00:00.000Z';
+        await people.look('mina');
+
+        expect(people.byHandle('mina')?.lastSeenAt).toBe('2026-10-20T08:00:00.000Z');
+
+        server.seen.mina = '2026-10-20T09:30:00.000Z';
+        await people.look('mina');
+
+        expect(people.byHandle('mina')?.lastSeenAt, 'a second look is not answered from memory').toBe('2026-10-20T09:30:00.000Z');
+        expect(server.calls.filter((call) => call === 'social.person')).toHaveLength(2);
+    });
+
+    it('forgets when they were last seen once the server stops saying it', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.seen.mina = '2026-10-20T08:00:00.000Z';
+        await people.look('mina');
+
+        delete server.seen.mina;
+        await people.look('mina');
+
+        expect(people.byHandle('mina')?.lastSeenAt).toBeUndefined();
+    });
+
+    it('is one request while it is out, and settles quietly when it is refused', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        const first = people.look('mina');
+        const second = people.look('mina');
+
+        expect(second, 'a second asker waits on the same answer').toBe(first);
+
+        await first;
+        expect(server.calls.filter((call) => call === 'social.person')).toHaveLength(1);
+
+        await expect(people.look('nobody.at.all'), 'a refusal is no answer, and no throw').resolves.toBeUndefined();
+        expect(people.byHandle('nobody.at.all')).toBeNull();
+    });
+});
+
+describe('who is here, as a snapshot', () =>
+{
+    it('is in hand only while the socket has said who is here', () =>
+    {
+        const presence = usePresence();
+        const live = useRealtime();
+
+        presence.reset();
+
+        const stop = live.start();
+
+        try
+        {
+            expect(presence.ready(), 'no socket yet').toBe(false);
+
+            socket.accept();
+            expect(presence.ready(), 'connected, and told nothing yet').toBe(false);
+
+            socket.deliver({ v: 1, t: 'presence', n: 1, full: true, people: [] });
+            expect(presence.ready(), 'an empty room is still a room').toBe(true);
+
+            socket.drop();
+            expect(presence.ready(), 'a dropped socket says nothing about who left').toBe(false);
+        }
+        finally
+        {
+            stop();
+        }
     });
 });
 

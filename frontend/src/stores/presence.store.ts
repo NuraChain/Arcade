@@ -20,6 +20,9 @@ export interface PresenceApi
 
     dot(id: string): PresenceState | null;
 
+    /** Whether a snapshot of who is here is in hand: without one, nobody can be said to have gone. */
+    ready(): boolean;
+
     isOnline(id: string): boolean;
     online(ids: readonly string[]): string[];
     refresh(): void;
@@ -58,6 +61,7 @@ export const usePresence = createStore((): PresenceApi =>
     return {
         of,
         dot: (id) => (of(id).known ? of(id).state : null),
+        ready: () => live.presence() !== null,
         isOnline: up,
         online: (ids) => ids.filter(up),
         refresh: () => live.sync(),

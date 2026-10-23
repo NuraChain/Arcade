@@ -12,6 +12,7 @@ import SearchInput from '../ui/search-input.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Tabs from '../ui/tabs.component.azeroth';
 import { flip, motion, type MotionKit } from '../../lib/motion.ts';
+import { runtime } from '../../lib/runtime.ts';
 import { fold } from '../../services/search.service.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -22,6 +23,8 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 
 const kept = { tab: 'all', scroll: 0 };
+
+const MINUTE_MS = 60_000;
 
 export default component ChatList(props: { active?: string; pane?: boolean; folded?: boolean; class?: string })
 {
@@ -45,6 +48,9 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
     state query = '';
     state menu = null as { id: string; at: MenuPoint } | null;
 
+    /** What a row's time is measured against: a line of today says its time until midnight, then its weekday. */
+    state now = runtime().clock.now();
+
     let scroller: HTMLElement | null = null;
 
     let rows: HTMLElement | null = null;
@@ -62,13 +68,19 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
     {
         void motion().then((loaded) => kit = loaded).catch(() => undefined);
 
+        const untick = runtime().clock.every(MINUTE_MS, () => now = runtime().clock.now());
+
         if (scroller === null)
         {
-            return;
+            return untick;
         }
         scroller.scrollTop = kept.scroll;
         scroller.addEventListener('scroll', hold, { passive: true });
-        return () => scroller?.removeEventListener('scroll', hold);
+        return () =>
+        {
+            untick();
+            scroller?.removeEventListener('scroll', hold);
+        };
     }
 
     const choose = (id: string) =>
@@ -179,6 +191,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
                                     <ChatListItem
                                         conversation={ conversation }
                                         me={ mine }
+                                        now={ now }
                                         active={ conversation.id === props.active }
                                         folded={ folded }
                                         onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }

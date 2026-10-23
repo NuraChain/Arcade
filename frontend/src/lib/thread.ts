@@ -56,3 +56,68 @@ export function dayKindOf(at: number, now: number): DayKind
 
     return dayKey(at) === dayKey(yesterday.getTime()) ? 'yesterday' : 'older';
 }
+
+const MINUTE_MS = 60_000;
+
+/** Whole days between the reader's day of `at` and of `now`: 0 is today and 1 yesterday, whatever the clocks changed by. */
+function daysBack(at: number, now: number)
+{
+    const day = (stamp: number) =>
+    {
+        const date = new Date(stamp);
+
+        return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / (24 * 60 * MINUTE_MS);
+    };
+
+    return day(now) - day(at);
+}
+
+export type StampKind = 'time' | 'weekday' | 'date' | 'year';
+
+/** How the list says when a room's last line was: its time today, its weekday this week, its date before that. */
+export function stampKindOf(at: number, now: number): StampKind
+{
+    const back = daysBack(at, now);
+
+    if (back <= 0)
+    {
+        return 'time';
+    }
+
+    if (back < 7)
+    {
+        return 'weekday';
+    }
+
+    return back < 365 ? 'date' : 'year';
+}
+
+export type SeenKind = 'now' | 'minutes' | 'today' | 'yesterday' | 'date' | 'year';
+
+/** How "last seen" is said: just now, so many minutes ago, today or yesterday at a time, or a date. */
+export function seenKindOf(at: number, now: number): SeenKind
+{
+    if (now - at < MINUTE_MS)
+    {
+        return 'now';
+    }
+
+    if (now - at < 60 * MINUTE_MS)
+    {
+        return 'minutes';
+    }
+
+    const back = daysBack(at, now);
+
+    if (back <= 0)
+    {
+        return 'today';
+    }
+
+    if (back === 1)
+    {
+        return 'yesterday';
+    }
+
+    return back < 365 ? 'date' : 'year';
+}

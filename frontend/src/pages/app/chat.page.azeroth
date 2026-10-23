@@ -3,6 +3,7 @@ import { Link, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } f
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
+import { seenOf } from '../../components/chat/chat-time.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { attachStick, isNearBottom } from '../../lib/stick.ts';
 import { runtime } from '../../lib/runtime.ts';
@@ -42,12 +43,15 @@ import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { leave, useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
 const CHATS = '/app/chats';
+
+const MINUTE_MS = 60_000;
 
 /** How many lines a thread reads back to reach its first unread one before it opens on what it has. */
 const REACH_BACK = 200;
@@ -64,6 +68,7 @@ export default component ChatPage()
     const people = usePeople();
     const groups = useGroups();
     const presence = usePresence();
+    const live = useRealtime();
     const catalogue = useCatalogue();
 
     const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
@@ -92,6 +97,9 @@ export default component ChatPage()
     state placed = false;
 
     state waiting = 0;
+
+    /** What "last seen" is said against, moved on once a minute. */
+    state minute = runtime().clock.now();
 
     /** Takes the scroller as it is drawn, which on a link opened cold is after the page mounted. */
     const hold = (element: HTMLElement) =>
@@ -187,6 +195,15 @@ export default component ChatPage()
 
     derived muted = social.isMuted('conversation', id);
 
+    /** The one other person here, when there is one and the room is not a group's. */
+    derived peer = group === null && others.length === 1 ? others[0] : null;
+
+    /** They are not among those here by a snapshot in hand: with no snapshot nobody can be said to have gone. */
+    derived absent = peer !== null && presence.ready() && !presence.of(peer.id).known;
+
+    /** When they were last seen, on this device's clock, whenever the server lets the reader know it. */
+    derived gone = absent && peer?.lastSeenAt !== undefined ? live.toLocal(Date.parse(peer.lastSeenAt)) : null;
+
     derived subtitle = ((): string =>
     {
         if (typing.length > 0)
@@ -205,10 +222,23 @@ export default component ChatPage()
         const state = presence.of(only.id);
         if (!state.known)
         {
-            return `@${ only.handle }`;
+            return gone === null ? `@${ only.handle }` : seenOf(locale, gone, minute);
         }
         return locale.t(state.state === 'away' ? 'common.away' : 'common.online');
     })();
+
+    /** Whom to ask the server about again: a name in hand goes stale where "last seen" is concerned. */
+    derived stale = absent && peer !== null ? peer.handle : '';
+
+    effect
+    {
+        const handle = stale;
+
+        if (handle !== '')
+        {
+            untrack(() => void people.look(handle));
+        }
+    }
 
     useHead({ title: () => title });
 
@@ -216,12 +246,14 @@ export default component ChatPage()
     {
         const release = shell.claimTitle(() => title);
         const look = () => looking = document.visibilityState !== 'hidden';
+        const untick = runtime().clock.every(MINUTE_MS, () => minute = runtime().clock.now());
 
         document.addEventListener('visibilitychange', look);
 
         return () =>
         {
             document.removeEventListener('visibilitychange', look);
+            untick();
             unstick?.();
             release();
 
