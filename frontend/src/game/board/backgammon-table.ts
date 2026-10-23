@@ -1280,7 +1280,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         {
             if (at.reader)
             {
-                options.sound()?.play('bonus');
+                options.sound()?.play('cube');
             }
 
             await moveCube(before.cube, shown.cube);

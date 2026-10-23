@@ -13,6 +13,11 @@ const HOOVES = 'bigsoundbank-0610-horse-trotting.ogg';
 
 const CLOCK = 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg';
 
+const DICE = 'bigsoundbank-0581-two-dice-on-wooden-table.ogg';
+
+/** A leather cup takes the top off the rattle of the dice inside it and rings a little low. */
+const CUP = 'lowpass=f=2400,lowpass=f=2400,equalizer=f=180:t=q:w=1:g=4';
+
 /**
  * A take is its pack, its cue, its source and the most of it kept, in seconds, taken from the source's first
  * sound. Each pack is written to a file of its own, which only the tables that play it fetch.
@@ -69,14 +74,22 @@ export const SOUNDS = [
     ['ludo', 'pawn-yard', 'drop_004.ogg', 0.26, { cuts: [[0, 0.24]], pitch: 0.82, tail: 0.08, gain: -3 }],
     ['ludo', 'six', 'jingles_HIT16.ogg', 0.29, { gain: 4, kbps: 64 }],
     ['ludo', 'home', 'jingles_HIT01.ogg', 0.5, { gain: 4, kbps: 64 }],
-    ['backgammon', 'dice-wood', 'die-throw-1.ogg', 0.35],
-    ['backgammon', 'dice-wood', 'die-throw-4.ogg', 0.35],
-    ['backgammon', 'cup-shake', 'dice-shake-1.ogg', 1.0],
-    ['backgammon', 'checker', 'impactWood_light_000.ogg', 0.15],
-    ['backgammon', 'checker', 'impactWood_light_002.ogg', 0.15],
-    ['backgammon', 'checker-hit', 'impactWood_heavy_001.ogg', 0.35],
-    ['backgammon', 'checker-bar', 'impactSoft_medium_001.ogg', 0.25],
-    ['backgammon', 'checker-off', 'impactSoft_medium_001.ogg', 0.25],
+    ['backgammon', 'dice-wood', DICE, 0.095, { cuts: [[0.096, 0.191]], tail: 0.04, gain: 4.1 }],
+    ['backgammon', 'dice-wood', DICE, 0.095, { cuts: [[7.288, 7.383]], tail: 0.04, gain: 6.6 }],
+    ['backgammon', 'dice-wood', DICE, 0.095, { cuts: [[15.25, 15.345]], tail: 0.04, gain: 4.6 }],
+    ['backgammon', 'dice-wood', DICE, 0.095, { cuts: [[24.142, 24.237]], tail: 0.04, gain: 6.1 }],
+    ['backgammon', 'cup-shake', 'dice-shake-2.ogg', 0.8, { cuts: [[0, 0.8]], tail: 0.12, filter: CUP, gain: 13.2, kbps: 64 }],
+    ['backgammon', 'cup-shake', 'dice-shake-3.ogg', 0.8, { cuts: [[0, 0.8]], tail: 0.12, filter: CUP, gain: 13.9, kbps: 64 }],
+    ['backgammon', 'checker', 'impactWood_light_000.ogg', 0.15, { cuts: [[0, 0.15]], tail: 0.05, gain: 0.7 }],
+    ['backgammon', 'checker', 'impactWood_light_002.ogg', 0.15, { cuts: [[0, 0.15]], tail: 0.05, gain: 1.2 }],
+    ['backgammon', 'checker', 'impactWood_light_004.ogg', 0.15, { cuts: [[0, 0.15]], tail: 0.05, gain: 3.2 }],
+    ['backgammon', 'checker-hit', 'impactWood_medium_002.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 120, gain: 6.5 }],
+    ['backgammon', 'checker-hit', 'impactWood_medium_003.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 120, gain: 8.1 }],
+    ['backgammon', 'checker-bar', 'impactPlank_medium_004.ogg', 0.3, { cuts: [[0, 0.3]], tail: 0.1, low: 100, gain: 2.8 }],
+    ['backgammon', 'checker-off', 'impactPlank_medium_001.ogg', 0.3, { cuts: [[0, 0.3]], tail: 0.1, low: 100, gain: 3.2 }],
+    ['backgammon', 'checker-off', 'impactPlank_medium_002.ogg', 0.3, { cuts: [[0, 0.3]], tail: 0.1, low: 100, gain: 4.5 }],
+    ['backgammon', 'cube', 'impactWood_medium_000.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 100, gain: 6.5 }],
+    ['backgammon', 'cube', 'impactWood_medium_004.ogg', 0.26, { cuts: [[0, 0.26]], tail: 0.05, low: 100, gain: 5.4 }],
     ['poker', 'chip-lay', 'chip-lay-1.ogg', 0.3],
     ['poker', 'chip-lay', 'chip-lay-3.ogg', 0.3],
     ['poker', 'chips-stack', 'chips-stack-2.ogg', 0.5],

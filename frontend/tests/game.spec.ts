@@ -667,7 +667,7 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('has a voice for every cue still synthesised and for Hokm\'s calls while their pack is on its way', async () =>
+    it('has a voice for every cue still synthesised and for the calls a game\'s own pack holds while it is on its way', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
@@ -675,7 +675,7 @@ describe('the sound layer', () =>
         await tap();
         await flush();
 
-        const silent = (['cube', 'bonus', 'check', 'promote', ...CUES.hokm] as const).filter((cue) =>
+        const silent = (['check', 'promote', ...CUES.hokm, 'cube'] as const).filter((cue) =>
         {
             const before = fake.oscillators();
 

@@ -6,7 +6,7 @@ export const CUES = {
     cards: ['card-slide', 'card-place', 'card-gather', 'card-shuffle', 'card-fan'],
     hokm: ['trump', 'trick'],
     ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard', 'six', 'home'],
-    backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off'],
+    backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off', 'cube'],
     poker: ['chip-lay', 'chips-stack'],
     chess: ['piece-move', 'piece-capture', 'horse-step', 'horse-call', 'elephant-step', 'elephant-call', 'king-fall']
 } as const;

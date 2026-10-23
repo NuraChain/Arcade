@@ -4881,6 +4881,21 @@ the server said it, it came while the table was still gathering up the last hand
 the reader had a card. `hokm-cues.spec.ts` holds the order, the moment, the side, the kot and the
 turn.
 
+**A backgammon table sounds like wood.** Each bounce of a die is one hit of two dice on a wooden
+table (BigSoundBank's 0581, CC0, cut at four first impacts with 100 ms clear after each), where it
+was a third of a plastic die's throw; the shake is a hand's shake with its top taken off and a low
+ring added (`CUP` in the builder), dice in a leather cup. A checker set down is light wood, the hit
+a heavier knock, the blot landing on the bar and a checker borne off into the tray hollow plank, and
+the cube is a wooden knock whether it is offered or taken (`cube`; it borrowed `trump` and `bonus`,
+and `bonus` is gone). The hit, the bar and the tray were Kenney's heavy wood and soft impact, their
+energy near 100 Hz and 15 to 19 dB under the click on a phone's speaker; each sits within 3.5 dB of
+it now. The turn is rung when the table shows it coming round (`onTurn`, in the game the table is
+showing, `sameGame`): when the other player's last checker has landed, and at a new game when it
+has been racked, where it rang as the server said it, under the other player's moving checkers or
+the last game's banner; a hidden page rings it as the server says it. `backgammon-board.spec.ts`
+(*the turn rung in at a backgammon table*) holds the moments, and `backgammon-table.spec.ts` the
+cube both ways and the last checker borne off heard before the game it wins is called.
+
 **A Ludo table sounds like plastic on a printed board.** A pawn's step is a
 short light drop (Kenney Interface Sounds' `drop_002` and `drop_003`, about 780 Hz), where it was a
 knock of wood at 340 Hz; a capture is a bright clack (`impactPlate_light`, cut to 0.16 s, 1.2 kHz)
@@ -5249,7 +5264,7 @@ switching tables never has to unlock audio again. The spec is
   `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
   among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
   is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
-  Backgammon's cube (`cube` and `bonus`), check and promote are still synthesised. A cue is never shared
+  Chess's check and promotion are still synthesised. A cue is never shared
   between two games, because the takes a page has fetched are kept for every handle on it: a backgammon
   table opened after a Hokm one would have offered its cube with Hokm's slap, so the cube is `cube` and
   no longer `trump`. A recording that failed to

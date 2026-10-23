@@ -186,6 +186,8 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     derived throwing = view !== null && !over && mine !== undefined && view.phase === 'opening' && !(view.opening ?? []).some((one) => one.seat === mine);
 
+    derived sameGame = view !== null && (facts?.round ?? view.round) === view.round;
+
     derived onTurn = view === null || over
         ? -1
         : (facts === null ? view.turn : (facts.turn === null ? -1 : (facts.turn === 'near' ? viewer : 1 - viewer)));
@@ -207,11 +209,13 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
 
     const chime = turnChime(() => sound);
 
+    // A hidden page plays nothing until it is seen, so there the turn is rung as the server says it.
     effect
     {
-        const yours = myTurn || throwing;
+        const told = (myTurn || throwing) && props.match.mine !== undefined;
+        const shown = told && sameGame && (onTurn === mine || throwing);
 
-        untrack(() => chime(yours && props.match.mine !== undefined));
+        untrack(() => chime(typeof document !== 'undefined' && document.visibilityState === 'hidden' ? told : shown));
     }
 
     derived wanted = view !== null && !over && view.dice.length > 0 ? seedOf(game.id, game.rev) : -1;

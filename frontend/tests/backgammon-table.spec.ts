@@ -601,6 +601,15 @@ describe('what happened, played on the table', () =>
         expect(cues).not.toContain('trump');
     });
 
+    it('lets a double taken be heard as the cube set down, as it was when offered', async () =>
+    {
+        table.reset(sight(felt({ cube: { on: true, value: 1, owner: null } })));
+        play([act(6, 1, [{ e: 'take', seat: 1, cube: 2 }])], sight(felt({ cube: { on: true, value: 2, owner: 'far' } }), 6));
+        await elapse(CUBE_MS + 400);
+
+        expect(cues).toEqual(['cube']);
+    });
+
     it('hands the cube to whoever took it before a die of the same action is on the table', async () =>
     {
         const before = felt({ cube: { on: true, value: 1, owner: null } });
@@ -1900,5 +1909,89 @@ describe('a checker carried by hand', () =>
         expect(felt_).toEqual(['capture']);
         expect(carried()).toHaveLength(1);
         expect(men().filter((man) => man.style.translate === placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE - BAR_GAP - RADIUS))).toHaveLength(1);
+    });
+});
+
+describe('a backgammon landing, with timers that fire one at a time as a browser\'s do', () =>
+{
+    const tasks = (start: number) =>
+    {
+        let now = start;
+        let made = 0;
+        let waiting: { at: number; order: number; run: () => void }[] = [];
+
+        return {
+            now: () => now,
+
+            after(ms: number, run: () => void)
+            {
+                made += 1;
+
+                const due = { at: now + Math.max(0, ms), order: made, run };
+
+                waiting.push(due);
+
+                return () =>
+                {
+                    waiting = waiting.filter((one) => one !== due);
+                };
+            },
+
+            async elapse(ms: number)
+            {
+                const until = now + ms;
+
+                for (;;)
+                {
+                    const next = waiting.filter((one) => one.at <= until).sort((one, other) => one.at - other.at || one.order - other.order)[0];
+
+                    if (next === undefined)
+                    {
+                        break;
+                    }
+
+                    waiting = waiting.filter((one) => one !== next);
+                    now = Math.max(now, next.at);
+                    next.run();
+                    await flush();
+                }
+
+                now = until;
+                await flush();
+            }
+        };
+    };
+
+    it('sounds the last checker borne off before the game it wins is called', async () =>
+    {
+        const timers = tasks(1000);
+        const heard: string[] = [];
+        const own = document.createElement('div');
+        const quiet: SoundHandle = {
+            play: (cue) =>
+            {
+                heard.push(cue);
+            },
+            setEnabled: () => undefined,
+            dispose: () => undefined
+        };
+        const ownStage = createStage({ clock: timers, quiet: () => false, report: (error) => broke.push(error) });
+        const ownDirector = createDirector(ownStage, timers, (error) => broke.push(error));
+        const board = createBackgammonTable({ host: own, stage: ownStage, sound: () => quiet, feel: () => undefined, say: String });
+
+        own.className = 'bg-layer';
+        document.body.append(own);
+        board.reset(sight(felt({ near: row({ 1: 1, 0: 14 }), far: row({ 20: 15 }), dice: [1, 4] })));
+        void ownDirector.enqueue((ctx) => board.play([act(6, 0, [
+            { e: 'move', seat: 0, from: 1, to: 0, die: 1, hit: false },
+            { e: 'game', seat: 0, how: 'gammon', points: 2, cube: 1 }
+        ])], sight(felt({ dice: [], opening: [0, 0], seed: seedOf('m', 6), score: { near: 2, far: 0 }, round: 2 }), 6), ctx), { estimate: 3000 });
+        await timers.elapse(6000);
+
+        expect(heard.filter((cue) => cue === 'checker-off' || cue === 'hand-won')).toEqual(['checker-off', 'hand-won']);
+
+        ownDirector.cancel();
+        board.dispose();
+        own.remove();
     });
 });

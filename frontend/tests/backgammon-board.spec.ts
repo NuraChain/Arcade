@@ -1268,6 +1268,70 @@ describe('a game that ends on the board', () =>
     });
 });
 
+describe('the turn rung in at a backgammon table', () =>
+{
+    const turns = () => sounds.heard.filter((cue) => cue === 'turn').length;
+
+    const moved = [...START];
+
+    moved[24] = 0;
+    moved[18] = 1;
+    moved[23] = 1;
+
+    const passed = (): [MatchView, MatchEvent[]] => [
+        match({ turn: 0, phase: 'roll', dice: [], seats: [{ seat: 0, checkers: [...START], pips: 167, score: 0 }, { seat: 1, checkers: moved, pips: 160, score: 0 }] }, 0, { rev: 5, turn: 0 }),
+        [happened(5, 1, [{ e: 'move', seat: 1, from: 24, to: 18, die: 6, hit: false }, { e: 'move', seat: 1, from: 24, to: 23, die: 1, hit: false }])]
+    ];
+
+    it('rings the reader in when the other player\'s last checker has landed, not when the server says so', async () =>
+    {
+        const table = await live(match({ turn: 1, dice: [6, 1] }, 0, { turn: 1 }));
+
+        await elapse(100);
+        sounds.heard.length = 0;
+        table.tell(...passed());
+        await elapse(50);
+
+        expect(turns(), 'the reader was rung in while the other player\'s checkers were on their way').toBe(0);
+
+        await elapse(4000);
+
+        expect(turns()).toBe(1);
+    });
+
+    it('rings the reader in as the server says it on a page nobody is looking at, which shows nothing until it is seen', async () =>
+    {
+        const table = await live(match({ turn: 1, dice: [6, 1] }, 0, { turn: 1 }));
+
+        await elapse(100);
+        sounds.heard.length = 0;
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        table.tell(...passed());
+        await elapse(50);
+
+        expect(turns()).toBe(1);
+    });
+
+    it('rings the reader in to throw when the next game has been racked, not under the banner of the last', async () =>
+    {
+        const table = await live(match({ turn: 1, dice: [1, 4], seats: position({ 6: 15 }, { 1: 1, 0: 14 }) }, 0, { turn: 1 }));
+
+        await elapse(100);
+        sounds.heard.length = 0;
+        table.tell(match({ phase: 'opening', opening: [], turn: 0, dice: [], round: 2, seats: [{ seat: 0, checkers: [...START], pips: 167, score: 0 }, { seat: 1, checkers: [...START], pips: 167, score: 1 }] }, 0, { rev: 5, turn: 0 }), [happened(5, 1, [
+            { e: 'move', seat: 1, from: 1, to: 0, die: 1, hit: false },
+            { e: 'game', seat: 1, how: 'single', points: 1, cube: 1 }
+        ])]);
+        await elapse(1500);
+
+        expect(turns(), 'the reader was rung in to throw while the last game was still being called').toBe(0);
+
+        await elapse(6000);
+
+        expect(turns()).toBe(1);
+    });
+});
+
 describe('a roll nobody could play', () =>
 {
     const said = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';

@@ -13,7 +13,6 @@ export type Tone =
     | 'tick-hi'
     | 'trump'
     | 'trick'
-    | 'bonus'
     | 'cube'
     | 'pass'
     | 'deny'
@@ -119,7 +118,6 @@ const TONES: Record<Tone, readonly Voice[]> = {
         { wave: 'triangle', from: 659, to: 659, hold: 0.08, gain: 0.12, delay: 0 },
         { wave: 'triangle', from: 988, to: 988, hold: 0.14, gain: 0.12, delay: 0.07 }
     ],
-    'bonus': [{ wave: 'triangle', from: 880, to: 1320, hold: 0.1, gain: 0.12, delay: 0 }],
     'chime': [{ wave: 'triangle', from: 880, to: 1320, hold: 0.1, gain: 0.12, delay: 0 }],
     'lose': [
         { wave: 'triangle', from: 523, to: 523, hold: 0.16, gain: 0.22, delay: 0 },
