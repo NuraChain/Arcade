@@ -28,6 +28,7 @@ import { partyRefused } from './domains/party/refusal.ts';
 import { createRegistry } from './domains/party/registry.ts';
 import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
 import { strikes } from './domains/table/sweep.ts';
+import { isClock } from './domains/table/clocks.ts';
 import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
@@ -596,6 +597,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             target: row.target,
             cube: row.cube,
             blinds: row.blinds,
+            ...(isClock(row.clock) ? { clock: row.clock } : {}),
             chat: row.chat,
             voice: row.voice,
             teams: row.teams,
@@ -2714,7 +2716,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 note?.('quick play', {
                     game: after.game,
                     who: me,
-                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams, stake: input.stake },
+                    asked: { seats: input.seats, mode: input.mode, target: input.target, blinds: input.blinds, cube: input.cube, teams: input.teams, clock: input.clock, stake: input.stake },
                     outcome,
                     table: after.id,
                     match: after.match_id,

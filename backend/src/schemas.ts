@@ -1453,6 +1453,9 @@ export const tableSummary = object({
     target: number(),
     cube: boolean(),
     blinds: string(),
+
+    /** The time control each side plays under (`table/clocks.ts`). Absent at a game with none and at a turn-based table. */
+    clock: enumOf(CLOCKS).optional(),
     chat: boolean(),
     voice: voiceScope,
     teams: boolean(),
@@ -1510,6 +1513,9 @@ export const tableCreateInput = object({
     target: number({ int: true, min: 0, max: 9999 }),
     cube: boolean(),
     blinds: tableBlinds,
+
+    /** Asked for, and normalized like the cube: a game with no controls, or a turn-based table, stores none. */
+    clock: enumOf(CLOCKS).optional(),
     chat: boolean(),
     voice: voiceScope,
     teams: boolean(),
@@ -1538,6 +1544,7 @@ export const tableQuickInput = object({
     blinds: tableBlinds.optional(),
     cube: boolean().optional(),
     teams: boolean().optional(),
+    clock: enumOf(CLOCKS).optional(),
     voice: voiceScope,
     stake: string({ max: 40 }).optional(),
     signature: string({ max: 4096 }).optional()

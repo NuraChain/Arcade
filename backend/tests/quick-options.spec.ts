@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { cubeLive } from '../src/domains/match/backgammon/cube.ts';
+import { CLOCK_DEFAULT, clockFor } from '../src/domains/table/clocks.ts';
 import { quickOf, seatsByDefault, type QuickAsk, type QuickFilter, type QuickMake, type QuickRules } from '../src/domains/table/quick.ts';
 import { teamsOf } from '../src/domains/table/teams.ts';
 import { tableQuickInput } from '../src/schemas.ts';
@@ -18,7 +19,13 @@ const RULES = { hokm: seeded('hokm'), poker: seeded('poker'), backgammon: seeded
 
 const CLOSED: QuickRules = { ...RULES.ludo, partners: 'none' };
 
-const ANY: QuickFilter = { seats: null, mode: 'live', target: null, blinds: null, cube: null, teams: null };
+/** A game played against a clock, live or a day a move, before chess is on the catalogue. */
+const TIMED: QuickRules = { ...RULES.backgammon, clocks: ['3+2', '10+0'] };
+
+/** One whose controls leave out the one a table opens with when nobody chose. */
+const UNUSUAL: QuickRules = { ...RULES.backgammon, clocks: ['15+10', '30+0'] };
+
+const ANY: QuickFilter = { seats: null, mode: 'live', target: null, blinds: null, cube: null, teams: null, clock: null };
 
 const sought = (rules: QuickRules, ask: QuickAsk) =>
 {
@@ -36,21 +43,56 @@ const refused = (rules: QuickRules, ask: QuickAsk) => !quickOf(rules, ask).ok;
 
 const finds = (filter: QuickFilter, table: QuickMake) =>
     filter.mode === table.mode
-    && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
+    && (['seats', 'target', 'blinds', 'cube', 'teams', 'clock'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
 
 const GRID: QuickAsk[] = [undefined, 2, 3, 4, 5, 6, 9].flatMap((seats) =>
     [undefined, 'live' as const, 'turns' as const].flatMap((mode) =>
         [undefined, 1, 3, 7, 13, 99].flatMap((target) =>
             [undefined, 'low' as const, 'high' as const].flatMap((blinds) =>
                 [undefined, true, false].flatMap((cube) =>
-                    [undefined, true, false].map((teams) => ({
-                        ...(seats === undefined ? {} : { seats }),
-                        ...(mode === undefined ? {} : { mode }),
-                        ...(target === undefined ? {} : { target }),
-                        ...(blinds === undefined ? {} : { blinds }),
-                        ...(cube === undefined ? {} : { cube }),
-                        ...(teams === undefined ? {} : { teams })
-                    })))))));
+                    [undefined, true, false].flatMap((teams) =>
+                        [undefined, '3+2' as const, '30+0' as const].map((clock) => ({
+                            ...(seats === undefined ? {} : { seats }),
+                            ...(mode === undefined ? {} : { mode }),
+                            ...(target === undefined ? {} : { target }),
+                            ...(blinds === undefined ? {} : { blinds }),
+                            ...(cube === undefined ? {} : { cube }),
+                            ...(teams === undefined ? {} : { teams }),
+                            ...(clock === undefined ? {} : { clock })
+                        }))))))));
+
+describe('a quick search for a time control', () =>
+{
+    it('looks for and opens exactly the control asked for, where the game offers it', () =>
+    {
+        const found = sought(TIMED, { clock: '3+2' });
+
+        expect(found.filter.clock).toBe('3+2');
+        expect(found.make.clock).toBe('3+2');
+    });
+
+    it('looks for any control when none is chosen, and opens the game\'s default', () =>
+    {
+        const found = sought(TIMED, {});
+
+        expect(found.filter.clock).toBeNull();
+        expect(found.make.clock).toBe(CLOCK_DEFAULT);
+    });
+
+    it('opens a day a move with no control, and refuses a control asked for one', () =>
+    {
+        expect(sought(TIMED, { mode: 'turns' }).make.clock).toBeNull();
+        expect(refused(TIMED, { mode: 'turns', clock: '3+2' })).toBe(true);
+    });
+
+    it('refuses a control the game does not offer, and any control at a game with none', () =>
+    {
+        expect(refused(TIMED, { clock: '30+0' })).toBe(true);
+        expect(refused(RULES.ludo, { clock: '10+0' })).toBe(true);
+        expect(sought(RULES.ludo, {}).make.clock).toBeNull();
+        expect(sought(UNUSUAL, {}).make.clock).toBe('15+10');
+    });
+});
 
 describe('the table the create form offers when nobody has said how many chairs', () =>
 {
@@ -77,10 +119,10 @@ describe('a quick search with nothing chosen', () =>
 
     it('opens the smallest table the game plays when there is nothing to join, so two people who leave it open are a game at once', () =>
     {
-        expect(sought(RULES.hokm, {}).make).toEqual({ seats: 2, mode: 'live', target: 7, blinds: 'low', cube: false, teams: false });
-        expect(sought(RULES.poker, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
-        expect(sought(RULES.backgammon, {}).make).toEqual({ seats: 2, mode: 'live', target: 1, blinds: 'low', cube: false, teams: false });
-        expect(sought(RULES.ludo, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false });
+        expect(sought(RULES.hokm, {}).make).toEqual({ seats: 2, mode: 'live', target: 7, blinds: 'low', cube: false, teams: false, clock: null });
+        expect(sought(RULES.poker, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false, clock: null });
+        expect(sought(RULES.backgammon, {}).make).toEqual({ seats: 2, mode: 'live', target: 1, blinds: 'low', cube: false, teams: false, clock: null });
+        expect(sought(RULES.ludo, {}).make).toEqual({ seats: 2, mode: 'live', target: 0, blinds: 'low', cube: false, teams: false, clock: null });
     });
 
     it('opens the smallest of what was asked when only part was chosen', () =>
@@ -115,7 +157,7 @@ describe('an option somebody chose', () =>
         expect(sought(RULES.ludo, { seats: 2 })).toMatchObject({ filter: { ...ANY, seats: 2 }, make: { seats: 2 } });
         expect(sought(RULES.hokm, { target: 13 })).toMatchObject({ filter: { ...ANY, target: 13 }, make: { target: 13 } });
         expect(sought(RULES.poker, { blinds: 'high' })).toMatchObject({ filter: { ...ANY, blinds: 'high' }, make: { blinds: 'high' } });
-        expect(sought(RULES.poker, { seats: 9, blinds: 'mid' }).make).toEqual({ seats: 9, mode: 'live', target: 0, blinds: 'mid', cube: false, teams: false });
+        expect(sought(RULES.poker, { seats: 9, blinds: 'mid' }).make).toEqual({ seats: 9, mode: 'live', target: 0, blinds: 'mid', cube: false, teams: false, clock: null });
     });
 
     it('is refused when the game makes no such table', () =>
@@ -194,7 +236,7 @@ describe('two against two in a quick search', () =>
 
 describe('whatever is asked', () =>
 {
-    const games: [string, QuickRules][] = [...Object.entries(RULES), ['a game of four with no partners', CLOSED]];
+    const games: [string, QuickRules][] = [...Object.entries(RULES), ['a game of four with no partners', CLOSED], ['a game played against a clock', TIMED], ['a game whose clocks leave out the default', UNUSUAL]];
 
     it('opens only a table the game makes, which opening it by hand would store unchanged', () =>
     {
@@ -220,7 +262,8 @@ describe('whatever is asked', () =>
                     && (make.target === 0 ? rules.targets.length === 0 : rules.targets.includes(make.target))
                     && (rules.hasBlinds || make.blinds === 'low')
                     && make.cube === cubeLive(make.target, rules.hasCube && make.cube)
-                    && make.teams === teamsOf(rules.partners, make.seats, make.teams);
+                    && make.teams === teamsOf(rules.partners, make.seats, make.teams)
+                    && make.clock === clockFor(rules.clocks, make.mode, make.clock);
 
                 if (!made)
                 {

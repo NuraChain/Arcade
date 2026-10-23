@@ -23,6 +23,7 @@ import { cubeLive } from '../match/backgammon/cube.ts';
 import type { EscrowState } from '../stake/policy.ts';
 import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
+import { clockFor, isClock } from './clocks.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
 import { scopeFor, type VoiceScope } from './voices.ts';
 
@@ -49,6 +50,7 @@ interface RulesRow
     partners: Partners;
     has_cube: boolean;
     has_blinds: boolean;
+    clocks: string[];
 }
 
 export interface SeatRow
@@ -87,6 +89,7 @@ export interface TableRow
     target: number;
     cube: boolean;
     blinds: string;
+    clock: string | null;
     chat: boolean;
     voice: VoiceScope;
     teams: boolean;
@@ -179,6 +182,7 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect('t.target', 'target')
     .addSelect('t.cube', 'cube')
     .addSelect('t.blinds', 'blinds')
+    .addSelect('t.clock', 'clock')
     .addSelect('t.chat', 'chat')
     .addSelect('t.voice', 'voice')
     .addSelect('t.teams', 'teams')
@@ -385,6 +389,7 @@ interface Opening
     target: number;
     cube: boolean;
     blinds: string;
+    clock: string | null;
     chat: boolean;
     voice: VoiceScope;
     teams: boolean;
@@ -447,6 +452,7 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
     .andWhere('(cast(:blinds as varchar) is null or t.blinds = :blinds)', { blinds: filter.blinds })
     .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
     .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
+    .andWhere('(cast(:clock as varchar) is null or t.clock = :clock)', { clock: filter.clock })
     .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
     .andWhere(
         `(case when cast(:stake as numeric) is null
@@ -605,6 +611,7 @@ export function createTableService(db: DataSource, social: SocialService)
             .addSelect('r.partners', 'partners')
             .addSelect('r.hasCube', 'has_cube')
             .addSelect('r.hasBlinds', 'has_blinds')
+            .addSelect('r.clocks', 'clocks')
             .where('r.game_id = :game', { game })
             .getRawOne<RulesRow>() ?? null;
 
@@ -676,7 +683,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw tableRefusal('quick-game', 'That game cannot be played right now.');
             }
 
-            const want = quickOf({ ...rules, hasCube: rules.has_cube, hasBlinds: rules.has_blinds }, ask);
+            const want = quickOf({ ...rules, hasCube: rules.has_cube, hasBlinds: rules.has_blinds, clocks: rules.clocks.filter(isClock) }, ask);
 
             if (!want.ok)
             {
@@ -931,6 +938,7 @@ export function createTableService(db: DataSource, social: SocialService)
             target: number;
             cube: boolean;
             blinds: string;
+            clock?: string | null;
             chat: boolean;
             voice: VoiceScope;
             teams: boolean;
@@ -1055,6 +1063,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             const cube = cubeLive(input.target, rules.has_cube && input.cube);
             const blinds = rules.has_blinds ? input.blinds : 'low';
+            const clock = clockFor(rules.clocks, input.mode, input.clock);
             const teams = teamsOf(rules.partners, input.seats, input.teams);
 
             if (input.voice === 'team' && !teams)
@@ -1093,6 +1102,7 @@ export function createTableService(db: DataSource, social: SocialService)
                             target: input.target,
                             cube,
                             blinds,
+                            clock,
                             chat: input.chat,
                             voice: input.voice,
                             teams,

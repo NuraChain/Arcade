@@ -104,6 +104,23 @@ left at "Any", the server opens the smallest table the game plays when there is 
 (*Matchmaking is one request*), and the create form starts from `seatsByDefault` through
 `catalogue.defaults`.
 
+**A table's time control is a fourth thing `create` normalizes, from the list its game offers.**
+`table/clocks.ts` imports nothing and both halves read it: `CLOCKS` (3+2, 5+0, 10+0, 15+10, 30+0, the
+minutes each side starts with and the seconds a move adds), `CLOCK_DEFAULT` (10+0), `clockOf` (what
+an engine plays, in milliseconds) and `clockFor(offered, mode, asked)`: no control at a turn-based
+table, whose limit is the day a move every turn-based table gives, and none for a game that offers
+none; otherwise what was asked when the game offers it and its default when not. `game_rules.clocks`
+is the list a game offers (an array like `targets`, empty for none), `tables.clock` the one a table
+is played under, nullable and kept off a turn-based table by `tables_clock_live`. `create` asks
+`clockFor` and stores its answer, so the form may send a control on every table, as it sends blinds;
+the summary says the control only where there is one. Quick play matches a control exactly when one
+was chosen and any control when not, refuses one at a turn-based search or one the game does not
+offer (`quick-options`), and opens what `clockFor` would: `quick.ts` restates the default so it
+stays free of imports, and `quick-options.spec.ts` asks the real `clockFor` about every table the
+grid makes, at a game whose controls leave the default out as well. `table-clocks.spec.ts` holds
+the list to both CHECKs and the wire, `table-clock.db.spec.ts` the stored control, the wire and the
+search against Postgres.
+
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
 structural half: a team table has four chairs. The other half - does this game have partners - is in

@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import '../src/entities/index.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { CLOCKS, CLOCK_DEFAULT, clockFor, clockOf, isClock } from '../src/domains/table/clocks.ts';
-import { tableRules } from '../src/schemas.ts';
+import type { QuickClock } from '../src/domains/table/quick.ts';
+import { tableCreateInput, tableQuickInput, tableRules, tableSummary } from '../src/schemas.ts';
 
 const expressionOf = (name: string) => getMetadataArgsStorage().checks.find((one) => one.name === name)?.expression ?? '';
 
@@ -25,6 +26,32 @@ describe('the time controls a table can be played under', () =>
         {
             expect(tableRules.safeParse({ ...rules, clocks: [control] }).ok, control).toBe(isClock(control));
         }
+    });
+
+    it('are asked for by name when a table is opened or looked for, and are on a table\'s summary only when it has one', () =>
+    {
+        const opened = { game: 'ludo', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: [] };
+        const summary = {
+            id: 't', code: 'c', game: 'ludo', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off',
+            teams: false, status: 'open', chairs: [], taken: 0, createdAt: '2026-10-23T00:00:00.000Z'
+        };
+
+        for (const control of [...CLOCKS, '1+0', 'blitz', ''])
+        {
+            expect(tableCreateInput.safeParse({ ...opened, clock: control }).ok, control).toBe(isClock(control));
+            expect(tableQuickInput.safeParse({ game: 'ludo', voice: 'off', clock: control }).ok, control).toBe(isClock(control));
+            expect(tableSummary.safeParse({ ...summary, clock: control }).ok, control).toBe(isClock(control));
+        }
+
+        expect(tableCreateInput.safeParse(opened).ok).toBe(true);
+        expect(tableSummary.safeParse(summary).ok).toBe(true);
+    });
+
+    it('are the same five where quick play restates them to import nothing', () =>
+    {
+        const restated: Record<QuickClock, true> = { '3+2': true, '5+0': true, '10+0': true, '15+10': true, '30+0': true };
+
+        expect(Object.keys(restated)).toEqual([...CLOCKS]);
     });
 
     it('are kept off a turn-based table, which gives a day a move', () =>

@@ -1,5 +1,6 @@
 import type { DataSource } from 'typeorm';
 import { RUNGS } from '../domains/achieve/families.ts';
+import type { ClockId } from '../domains/table/clocks.ts';
 import type { Partners } from '../domains/table/teams.ts';
 
 /**
@@ -33,7 +34,7 @@ interface GameSeed
     partners: Partners;
     hasCube: boolean;
     hasBlinds: boolean;
-    clocks: string[];
+    clocks: ClockId[];
 }
 
 /**

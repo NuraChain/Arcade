@@ -2,6 +2,9 @@ export type QuickMode = 'live' | 'turns';
 
 export type QuickBlinds = 'low' | 'mid' | 'high';
 
+/** `CLOCKS` in `clocks.ts`, restated so this module imports nothing; `table-clocks.spec.ts` holds the two to one set. */
+export type QuickClock = '3+2' | '5+0' | '10+0' | '15+10' | '30+0';
+
 export interface QuickRules
 {
     seats: readonly number[];
@@ -10,6 +13,7 @@ export interface QuickRules
     partners: 'none' | 'optional' | 'required';
     hasCube: boolean;
     hasBlinds: boolean;
+    clocks: readonly QuickClock[];
 }
 
 export interface QuickAsk
@@ -20,6 +24,7 @@ export interface QuickAsk
     blinds?: QuickBlinds;
     cube?: boolean;
     teams?: boolean;
+    clock?: QuickClock;
 }
 
 export interface QuickFilter
@@ -30,6 +35,7 @@ export interface QuickFilter
     blinds: QuickBlinds | null;
     cube: boolean | null;
     teams: boolean | null;
+    clock: QuickClock | null;
 }
 
 export interface QuickMake
@@ -40,6 +46,7 @@ export interface QuickMake
     blinds: QuickBlinds;
     cube: boolean;
     teams: boolean;
+    clock: QuickClock | null;
 }
 
 export type Quick = { ok: true; filter: QuickFilter; make: QuickMake } | { ok: false };
@@ -47,6 +54,9 @@ export type Quick = { ok: true; filter: QuickFilter; make: QuickMake } | { ok: f
 const SIDED = 4;
 
 const CUBED_FROM = 2;
+
+/** `CLOCK_DEFAULT` in `clocks.ts`, restated so this module imports nothing. */
+const CLOCK_DEFAULT: QuickClock = '10+0';
 
 export const seatsByDefault = (rules: Pick<QuickRules, 'seats'>) =>
     rules.seats.find((count) => count >= 4) ?? rules.seats[rules.seats.length - 1];
@@ -68,7 +78,8 @@ export function quickOf(rules: QuickRules, ask: QuickAsk): Quick
         && seated.length > 0
         && (targets.length > 0 || (ask.target === undefined && ask.cube !== true))
         && (ask.blinds === undefined || rules.hasBlinds)
-        && (ask.cube === undefined || rules.hasCube);
+        && (ask.cube === undefined || rules.hasCube)
+        && (ask.clock === undefined || (mode === 'live' && rules.clocks.includes(ask.clock)));
 
     if (!playable)
     {
@@ -77,6 +88,9 @@ export function quickOf(rules: QuickRules, ask: QuickAsk): Quick
 
     const seats = Math.min(...seated);
     const target = targets[0] ?? 0;
+    const clock = mode !== 'live' || rules.clocks.length === 0
+        ? null
+        : ask.clock ?? (rules.clocks.includes(CLOCK_DEFAULT) ? CLOCK_DEFAULT : rules.clocks[0]);
 
     return {
         ok: true,
@@ -86,7 +100,8 @@ export function quickOf(rules: QuickRules, ask: QuickAsk): Quick
             target: ask.target ?? null,
             blinds: ask.blinds ?? null,
             cube: ask.cube ?? null,
-            teams: ask.teams ?? (ask.seats !== undefined && forced(ask.seats) ? true : null)
+            teams: ask.teams ?? (ask.seats !== undefined && forced(ask.seats) ? true : null),
+            clock: ask.clock ?? null
         },
         make: {
             seats,
@@ -94,7 +109,8 @@ export function quickOf(rules: QuickRules, ask: QuickAsk): Quick
             target,
             blinds: ask.blinds ?? 'low',
             cube: (ask.cube ?? rules.hasCube) && target >= CUBED_FROM,
-            teams: ask.teams ?? forced(seats)
+            teams: ask.teams ?? forced(seats),
+            clock
         }
     };
 }

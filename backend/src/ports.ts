@@ -255,6 +255,7 @@ export interface TablePort
         target: number;
         cube: boolean;
         blinds: string;
+        clock?: string;
         chat: boolean;
         voice: VoiceScope;
         teams: boolean;
