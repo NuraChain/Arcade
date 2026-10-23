@@ -3,7 +3,7 @@ import { Conversation } from './conversation.entity.ts';
 import { Device } from './device.entity.ts';
 import { User } from './user.entity.ts';
 
-export type MessageKind = 'text' | 'reaction' | 'deleted' | 'system' | 'invite' | 'result';
+export type MessageKind = 'text' | 'reaction' | 'edit' | 'deleted' | 'system' | 'invite' | 'result';
 
 /**
  * One line in a conversation: words XOR a payload.
@@ -18,13 +18,16 @@ export type MessageKind = 'text' | 'reaction' | 'deleted' | 'system' | 'invite' 
  * already a column elsewhere, and a CHECK holds them to the kind: a sealed row has all of them, a
  * server-authored line has none. A line that could grow a signature would be a line claiming an
  * author it does not have.
+ *
+ * A reaction and an edit are sealed rows ABOUT another row, and `target_id` says which: the one
+ * column of theirs in the clear, so that a page of history can be handed what is about it.
  */
-@Check('messages_body_xor_payload', `(kind in ('text', 'reaction') and body is not null and payload is null) or (kind in ('system', 'invite', 'result') and payload is not null and body is null) or (kind = 'deleted' and body is null and payload is null)`)
-@Check('messages_kind_known', `kind in ('text', 'reaction', 'deleted', 'system', 'invite', 'result')`)
-@Check('messages_line_is_plain', `kind in ('text', 'reaction', 'deleted') or ( epoch is null and seq is null and iv is null and sender_device_id is null and signature is null and client_at is null and commitment is null and frank is null )`)
-@Check('messages_reaction_has_target', `(kind = 'reaction') = (target_id is not null)`)
-@Check('messages_text_has_sender', `kind not in ('text', 'reaction', 'deleted') or sender_id is not null`)
-@Check('messages_text_is_sealed', `kind not in ('text', 'reaction') or ( epoch is not null and seq is not null and iv is not null and sender_device_id is not null and signature is not null and client_at is not null and commitment is not null and frank is not null )`)
+@Check('messages_body_xor_payload', `(kind in ('text', 'reaction', 'edit') and body is not null and payload is null) or (kind in ('system', 'invite', 'result') and payload is not null and body is null) or (kind = 'deleted' and body is null and payload is null)`)
+@Check('messages_kind_known', `kind in ('text', 'reaction', 'edit', 'deleted', 'system', 'invite', 'result')`)
+@Check('messages_line_is_plain', `kind in ('text', 'reaction', 'edit', 'deleted') or ( epoch is null and seq is null and iv is null and sender_device_id is null and signature is null and client_at is null and commitment is null and frank is null )`)
+@Check('messages_about_has_target', `(kind in ('reaction', 'edit')) = (target_id is not null)`)
+@Check('messages_text_has_sender', `kind not in ('text', 'reaction', 'edit', 'deleted') or sender_id is not null`)
+@Check('messages_text_is_sealed', `kind not in ('text', 'reaction', 'edit') or ( epoch is not null and seq is not null and iv is not null and sender_device_id is not null and signature is not null and client_at is not null and commitment is not null and frank is not null )`)
 @Check('messages_tombstone_is_empty', `kind <> 'deleted' or ( iv is null and signature is null and commitment is null and frank is null )`)
 @Index('messages_expires_at', ['expiresAt'], { where: `expires_at is not null` })
 @Index('messages_sender_seq', ['conversationId', 'epoch', 'senderDeviceId', 'seq'], { unique: true, where: `seq is not null` })

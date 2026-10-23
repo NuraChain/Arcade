@@ -2274,7 +2274,7 @@ export type VoiceIce = Infer<typeof voiceIce>;
 
 /* -------------------------------------------------------------------------- chat */
 
-export const messageKind = enumOf(['text', 'reaction', 'deleted', 'system', 'invite', 'result']);
+export const messageKind = enumOf(['text', 'reaction', 'edit', 'deleted', 'system', 'invite', 'result']);
 
 /**
  * What a server-authored line may say ABOUT, as a closed set.
