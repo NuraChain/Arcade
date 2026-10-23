@@ -39,11 +39,11 @@ const SCOPES: readonly (string | null)[] = [null, ...Object.keys(GAME_FAMILIES)]
 
 const RECENT = 12;
 
-const COUNTED = `p.result in ('won', 'lost', 'abandoned')`;
+const COUNTED = `p.result in ('won', 'drawn', 'lost', 'abandoned')`;
 
 const FINISHED = `p.user_id = :userId and ${ COUNTED } and m.finished_at is not null`;
 
-const PLAYED_OUT = `m.outcome = 'won' and (select a.kind from match_actions a where a.match_id = m.id order by a.rev desc limit 1) is distinct from 'forfeit'`;
+const PLAYED_OUT = `m.outcome in ('won', 'drawn') and (select a.kind from match_actions a where a.match_id = m.id order by a.rev desc limit 1) is distinct from 'forfeit'`;
 
 const blank = (): LadderFacts => ({
     played: 0,
@@ -546,6 +546,7 @@ export function createAchieveService(db: DataSource)
                     peak: row.peakRating,
                     played: row.played,
                     won: row.won,
+                    drawn: row.drawn,
                     abandoned: row.abandoned,
                     streak: row.streak,
                     bestStreak: row.bestStreak,

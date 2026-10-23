@@ -104,6 +104,23 @@ left at "Any", the server opens the smallest table the game plays when there is 
 (*Matchmaking is one request*), and the create form starts from `seatsByDefault` through
 `catalogue.defaults`.
 
+**A table's time control is a fourth thing `create` normalizes, from the list its game offers.**
+`table/clocks.ts` imports nothing and both halves read it: `CLOCKS` (3+2, 5+0, 10+0, 15+10, 30+0, the
+minutes each side starts with and the seconds a move adds), `CLOCK_DEFAULT` (10+0), `clockOf` (what
+an engine plays, in milliseconds) and `clockFor(offered, mode, asked)`: no control at a turn-based
+table, whose limit is the day a move every turn-based table gives, and none for a game that offers
+none; otherwise what was asked when the game offers it and its default when not. `game_rules.clocks`
+is the list a game offers (an array like `targets`, empty for none), `tables.clock` the one a table
+is played under, nullable and kept off a turn-based table by `tables_clock_live`. `create` asks
+`clockFor` and stores its answer, so the form may send a control on every table, as it sends blinds;
+the summary says the control only where there is one. Quick play matches a control exactly when one
+was chosen and any control when not, refuses one at a turn-based search or one the game does not
+offer (`quick-options`), and opens what `clockFor` would: `quick.ts` restates the default so it
+stays free of imports, and `quick-options.spec.ts` asks the real `clockFor` about every table the
+grid makes, at a game whose controls leave the default out as well. `table-clocks.spec.ts` holds
+the list to both CHECKs and the wire, `table-clock.db.spec.ts` the stored control, the wire and the
+search against Postgres.
+
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
 structural half: a team table has four chairs. The other half - does this game have partners - is in
@@ -2573,11 +2590,11 @@ go stale the first time one of them forgot. Closing is NOT a third: `close` refu
 live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
 still closes it, since everybody has gone and each of them has already forfeited.
 
-**A match ends `won` or `abandoned`, and the database knows no third way.** `matches.outcome` allowed
+**A match ends `won`, `drawn` or `abandoned`, and the database knows no fourth way.** `matches.outcome` allowed
 `closed` as well: in the entity's type, in `matches_outcome_known` and on the wire, on a match view and
 on a history row. Nothing could write it. `close` refuses while a match is live, and the column has
-one writer, the recorder, which writes what the judge decided - `won` if any seat won, `abandoned` if
-none did. The only `closed` ever written was a line of test SQL. It is gone from all of them, and
+one writer, the recorder, which writes what the judge decided - `won` if any seat won, `drawn` if
+none did and a seat drew, `abandoned` if neither. The only `closed` ever written was a line of test SQL. It is gone from all of them, and
 `reference-parity.spec.ts` holds the judge's type, the entity's type, the CHECK and the wire enum to
 one set, so an ending cannot be declared again without something that produces it; `match.db.spec.ts`
 asks the constraint itself, with the row written by hand.
@@ -2676,6 +2693,34 @@ worked out when the response is composed, and `TurnClock` counts down from the i
 never `deadline - Date.now()` on the device, which is whatever the phone's clock says and was minutes
 out on real hardware. At zero it says the turn is being played for them rather than "0 s", because
 the sweep takes up to five seconds to arrive and a clock frozen at zero reads as a hung game.
+
+**A game played against a clock keeps a bank for each side, and the deadline is the bank.** Chess
+is the first game whose time is its own and not the table's turn. Three members of the seam are
+optional, so the four games before it are untouched:
+
+- **`bank(state)`** is what the side to move has left, in milliseconds, or null when the game keeps
+  no clock (a turn-based table). `limitOf` in `match/service.ts` arms the deadline from it, else
+  from `turnMs(mode)` as always: at the start (the insert's own `deadline_at`) and in `commit`
+  whenever the turn passes. An offer or anything else that keeps the turn leaves the deadline alone,
+  so the side to move's time keeps running. The sweep therefore comes for the side to move the moment
+  its own time runs out, and what it plays is the engine's `autoplay`.
+- **`moment`**, `apply`'s fourth argument, is handed only to an engine with a `bank`: how long the
+  side to move had left when the play arrived, read off the locked match row by
+  `clock_timestamp()` (`momentOf`), not by `now()`, which is when the transaction began, before
+  any wait for the row's lock. It is below nothing once the deadline has passed, and the engine
+  refuses such a move and spends the rest on its clock. One clock, Postgres's, wrote the deadline
+  and decides every flag.
+- **`concede(seat)`** is a resignation the game itself scores. The resign route (a `null` play)
+  sends it as a play, `{ verb: 'resign' }` on a `play` row, so the other side has WON the game: a
+  full win, a credited one, and a loss and not a walkout for whoever resigned. A game without it takes
+  a resignation as a forfeit, as before. Leaving the table is a walkout in every game.
+
+`TableConfig.clock` carries the table's control to `create` (`clockOf(table.clock)`, each side's bank
+and its increment), optional because no other game reads one. `match-clock.db.spec.ts` holds all of
+it on a fixture engine with a bank per side: the control handed over, the deadline at the start, at
+a turn-based table, when the turn passes and when it does not, the moment and its sign, no moment
+for an engine without a clock, the concession and the forfeit without one, and a deadline written by
+hand that the sweep meets.
 
 **A live game holds the screen awake.** `lib/wake-lock.ts` asks for a screen wake lock while a live
 match is on the page, asks again when the tab comes back (hiding a tab drops it), and treats a refusal
@@ -6788,8 +6833,24 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
   than its winner does.
 - **A seat with no counted pair is `void`**: no rating move, no XP, nothing written to
   `player_stats`, streak untouched, no achievements. A seat that beat every side it was counted
-  against is `won`, a quitter is `abandoned`, anybody else `lost`. The match is `won` if anybody won,
-  and `winner_seat` is the engine's first winner if they won, else the lowest seat that did.
+  against is `won`, one behind any of them `lost`, one level with the rest `drawn`, and a quitter
+  `abandoned`. The match is `won` if anybody won and `drawn` if nobody did and a seat drew, and
+  `winner_seat` is the engine's first winner if they won, else the lowest seat that did.
+
+**A draw is a result.** Chess is the first game that ends with nobody ahead, and a shared place used
+to record both seats `lost` and the match `abandoned`. It is `drawn` now, on the seat
+(`match_players_result_known`), on the match (`matches_outcome_known`) and on the wire, and it is
+what it is everywhere a result is read: rated as a draw (Elo's half point, which is how a shared place
+was always rated), a game played and a draw on the record (`player_stats.drawn`, held inside `played`
+by `player_stats_counts`), the finish and the game's own points and no win bonus, a win streak ended,
+the played rungs and the hosted one climbed and no won rung (`COUNTED` and `PLAYED_OUT` in
+`achieve/service.ts`), and the table's chat says "The game ended in a draw" (`chat.line.result.draw`).
+A table played for NURA names no winner and gives every stake back, as a game with no winner always
+did. The result card says "It's a draw." with an equals sign in gold, a plate and a history row say
+"Draw", Home says "You drew a game of Chess", and a record counts its draws beside its wins once it
+has one. `judge.spec.ts` (*two players who finished level*) and `record.db.spec.ts` (*a game that
+ended level*) hold the server, `match-result.spec.ts`, `bubble.spec.ts`, `table-plate.spec.ts`,
+`home.spec.ts` and `record.spec.ts` the browser.
 
 Being the last one left in an empty room is therefore no contest rather than a win, which is the
 rating farm `outcomeOf` used to close: three accounts sit down, two leave at once, and the third gets
@@ -6976,7 +7037,7 @@ this month", because it has no dates in it. The per-seat column does, through `m
 and it is written on every finish rather than only when a rating moved — the two shared a branch for
 one commit and every abandoned match recorded nothing, which made the windowed board quietly blind to
 a whole class of game. A `void` row is written too (xp 0, no rating pair) and counted by NOTHING:
-`FINISHED` in `achieve/service.ts` and the windowed board both read `result in ('won', 'lost',
+`FINISHED` in `achieve/service.ts` and the windowed board both read `result in ('won', 'drawn', 'lost',
 'abandoned')`, so a game that did not count for somebody is neither a game played nor a game won.
 
 **An account's XP is the SUM of its per-game rows and is never stored.** A stored account total is a
@@ -7040,7 +7101,8 @@ its own (`endingOf` in `match/declare.ts`) because a game ends three ways - some
 move or gives up, the sweep forfeits the last player holding a turn, or somebody walks out - and all
 three have to say it identically. A fourth says something else: a game the staff ended as no
 contest (`voided` in its state, `.claude/rules/admin.md`, *Play*) says so
-(`chat.line.result.void`) and names nobody, whatever its seats or its escrow say. A game somebody won names them; a game nobody won
+(`chat.line.result.void`) and names nobody, whatever its seats or its escrow say. A game that ended
+level says it was a draw (`chat.line.result.draw`) and names nobody either. A game somebody won names them; a game nobody won
 (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and must not, because the engine
 calls the last player standing a winner so the board can stop. A table played for NURA is the one
 exception, and only once its stakes are being paid: the line names whoever they were paid to, read

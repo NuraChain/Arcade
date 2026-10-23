@@ -98,7 +98,7 @@ describe('games: the server and the landing agree', () =>
         expect(quickOf(seed, {})).toMatchObject({ ok: true, make: { seats: 2, teams: false } });
     });
 
-    it('offers a cube and blinds exactly where the create form does', () =>
+    it('offers a cube, blinds and time controls exactly where the create form does', () =>
     {
         expect(GAME_SEEDS.filter((game) => game.hasCube).map((game) => game.id)).toEqual(['backgammon']);
         expect(GAME_SEEDS.filter((game) => game.hasBlinds).map((game) => game.id)).toEqual(['poker']);
@@ -109,6 +109,7 @@ describe('games: the server and the landing agree', () =>
 
             expect(rules.hasCube, `${ seed.id } cube`).toBe(seed.hasCube);
             expect(rules.hasBlinds, `${ seed.id } blinds`).toBe(seed.hasBlinds);
+            expect([...rules.clocks], `${ seed.id } clocks`).toEqual(seed.clocks);
         }
     });
 
@@ -209,12 +210,12 @@ describe('match results: the database and the wire name the same ones', () =>
 
     it('keeps a seat the match never judged as void', () =>
     {
-        expect([...known].sort()).toEqual(['abandoned', 'lost', 'void', 'won']);
+        expect([...known].sort()).toEqual(['abandoned', 'drawn', 'lost', 'void', 'won']);
     });
 
     it('carries exactly the results the CHECK accepts, in a history row and on a seat', () =>
     {
-        const candidates = new Set([...known, 'won', 'lost', 'abandoned', 'void', 'closed', 'draw', 'left', 'resign', 'timeout', 'Void', '']);
+        const candidates = new Set([...known, 'won', 'drawn', 'lost', 'abandoned', 'void', 'closed', 'draw', 'tie', 'left', 'resign', 'timeout', 'Void', '']);
 
         for (const result of candidates)
         {
@@ -233,7 +234,7 @@ describe('match results: the database and the wire name the same ones', () =>
 
 describe('match outcomes: the judge, the database and the wire name the same ones', () =>
 {
-    const judged: Record<Plan['outcome'], true> = { abandoned: true, won: true };
+    const judged: Record<Plan['outcome'], true> = { abandoned: true, drawn: true, won: true };
     const stored: Record<MatchOutcome, true> = judged;
 
     const known = [...(getMetadataArgsStorage().checks.find((one) => one.name === 'matches_outcome_known')?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
@@ -258,7 +259,7 @@ describe('match outcomes: the judge, the database and the wire name the same one
 
     it('carries exactly the outcomes the CHECK accepts on a finished match', () =>
     {
-        const candidates = new Set([...known, 'won', 'abandoned', 'closed', 'lost', 'void', 'draw', 'Won', '']);
+        const candidates = new Set([...known, 'won', 'drawn', 'abandoned', 'closed', 'lost', 'void', 'draw', 'tie', 'Won', '']);
 
         for (const outcome of candidates)
         {

@@ -4,6 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource, type EntityManager } from 'typeorm';
 
 import { Match, entities } from '../src/entities/index.ts';
+import { endingOf } from '../src/domains/match/declare.ts';
+import { XP_FINISH } from '../src/domains/match/levels.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
@@ -64,6 +66,8 @@ const EMPTIED = () => board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0
 const FOUR = () => board([HOME, [12, YARD, YARD, YARD], [30, 5, YARD, YARD], [8, YARD, YARD, YARD]], 0);
 
 const PAIRS = () => board([HOME, [12, YARD, YARD, YARD], HOME, [8, YARD, YARD, YARD]], 0, [], [0, 1, 0, 1]);
+
+const LEVEL = () => board([[12, YARD, YARD, YARD], [12, YARD, YARD, YARD]], null);
 
 interface Ledger
 {
@@ -160,6 +164,7 @@ interface Stats
     peak_rating: number;
     played: number;
     won: number;
+    drawn: number;
     abandoned: number;
     streak: number;
     best_streak: number;
@@ -169,7 +174,7 @@ interface Stats
 
 const statsOf = async (userId: string, game = 'ludo'): Promise<Stats | undefined> =>
     rowsOf<Stats>(await db.query(
-        `select rating, peak_rating, played, won, abandoned, streak, best_streak, tallies, xp
+        `select rating, peak_rating, played, won, drawn, abandoned, streak, best_streak, tallies, xp
            from player_stats where user_id = $1 and game = $2`,
         [userId, game]
     ))[0];
@@ -258,6 +263,82 @@ describe.skipIf(!active)('a record, against a real database', () =>
     {
         await db.transaction(async (tx) => recorder().finish(tx, await rowOf(tx, matchId), ludoEngine, state, ludoEngine.finish(state)!));
     };
+
+    describe('a game that ended level', () =>
+    {
+        const level = async (matchId: string, state: LudoState) =>
+        {
+            await db.transaction(async (tx) => recorder().finish(tx, await rowOf(tx, matchId), ludoEngine, state, { winners: [], unsettled: [], trailing: [] }));
+        };
+
+        it('records a draw on both seats and on the match, and names nobody its winner', async () =>
+        {
+            const state = LEVEL();
+            const { matchId } = await played(state);
+
+            await level(matchId, state);
+
+            expect(await matchOf(matchId)).toEqual({ outcome: 'drawn', winner_seat: null, finished: true, deadline_at: null });
+            expect((await seatOf(matchId, 0)).result).toBe('drawn');
+            expect((await seatOf(matchId, 1)).result).toBe('drawn');
+        });
+
+        it('counts a game played and a draw, and neither a win nor a walkout, and pays the finish', async () =>
+        {
+            const state = LEVEL();
+            const { matchId, players } = await played(state);
+
+            await level(matchId, state);
+
+            for (const player of players)
+            {
+                expect(await statsOf(player)).toMatchObject({ played: 1, won: 0, drawn: 1, abandoned: 0, rating: 1200, xp: XP_FINISH });
+            }
+        });
+
+        it('moves a stronger player down and a weaker one up, and ends a run of wins', async () =>
+        {
+            const state = LEVEL();
+            const strong = await makeUser();
+            const weak = await makeUser();
+
+            await seedStats(strong, { rating: 1300, played: 6, won: 6, streak: 6 });
+            await seedStats(weak, { rating: 1100, played: 6, won: 0, streak: 0 });
+
+            const { matchId } = await played(state, { players: [strong, weak] });
+
+            await level(matchId, state);
+
+            expect(await statsOf(strong)).toMatchObject({ rating: 1292, streak: 0, best_streak: 6, played: 7, won: 6, drawn: 1 });
+            expect(await statsOf(weak)).toMatchObject({ rating: 1108, played: 7, won: 0, drawn: 1 });
+        });
+
+        it('counts the game played for the achievements, and the table hosted to its end, and no win', async () =>
+        {
+            const state = LEVEL();
+            const { matchId, players } = await played(state);
+
+            await level(matchId, state);
+
+            const held = await heldBy(players[0]);
+
+            expect(held).toEqual(expect.arrayContaining(['ludo-played-1', 'all-played-1', 'all-hosted-1', 'ludo-days-1', 'ludo-played-2-1', 'ludo-played-live-1']));
+            expect(held).not.toContain('ludo-won-1');
+            expect(held).not.toContain('all-won-1');
+        });
+
+        it('tells the table it was a draw, naming nobody', async () =>
+        {
+            const state = LEVEL();
+            const { matchId } = await played(state);
+            const table = rowsOf<{ table_id: string }>(await db.query('select table_id from matches where id = $1', [matchId]))[0].table_id;
+
+            await db.query(`insert into conversations (kind, table_id) values ('game', $1)`, [table]);
+            await level(matchId, state);
+
+            expect(await endingOf(db, matchId)).toMatchObject({ key: 'chat.line.result.draw', params: { game: 'ludo' } });
+        });
+    });
 
     describe('a game somebody won', () =>
     {

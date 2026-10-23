@@ -1,6 +1,6 @@
 import { START, rateField, unitPlace } from './rating.ts';
 
-export type Result = 'won' | 'lost' | 'abandoned' | 'void';
+export type Result = 'won' | 'drawn' | 'lost' | 'abandoned' | 'void';
 
 export type Pay = 'full' | 'finish' | 'none';
 
@@ -36,7 +36,7 @@ export interface Verdict
 export interface Plan
 {
     verdicts: Verdict[];
-    outcome: 'won' | 'abandoned';
+    outcome: 'won' | 'drawn' | 'abandoned';
     winnerSeat: number | null;
 }
 
@@ -73,7 +73,8 @@ function counts(mine: SeatFacts, own: readonly SeatFacts[], theirs: readonly Sea
     return true;
 }
 
-function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: number) => boolean): Result
+/** Ahead of every side a seat was counted against, it won; behind any of them, it lost; level with the rest, it drew. */
+function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: number) => boolean, behind: (side: number) => boolean): Result
 {
     if (mine.quitter !== null)
     {
@@ -85,10 +86,15 @@ function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: numb
         return 'void';
     }
 
-    return counted.every(beat) ? 'won' : 'lost';
+    if (counted.every(beat))
+    {
+        return 'won';
+    }
+
+    return counted.some(behind) ? 'lost' : 'drawn';
 }
 
-const STREAK = { won: 'add', lost: 'reset', abandoned: 'reset', void: 'keep' } as const satisfies Record<Result, Verdict['streak']>;
+const STREAK = { won: 'add', drawn: 'reset', lost: 'reset', abandoned: 'reset', void: 'keep' } as const satisfies Record<Result, Verdict['streak']>;
 
 function payOf(mine: SeatFacts, result: Result, after: number, forfeited: boolean): Pay
 {
@@ -109,7 +115,8 @@ export function planOf(input: { seats: readonly SeatFacts[]; after: number; winn
     const verdicts = seats.map((mine): Verdict =>
     {
         const counted = sides.filter((side) => side !== mine.side && counts(mine, membersOf(mine.side), membersOf(side), input.after));
-        const result = resultOf(mine, counted, (side) => unitPlace(seats, mine.side) < unitPlace(seats, side));
+        const place = unitPlace(seats, mine.side);
+        const result = resultOf(mine, counted, (side) => place < unitPlace(seats, side), (side) => place > unitPlace(seats, side));
         const credit = result === 'won' && !input.forfeited;
 
         return {
@@ -125,11 +132,12 @@ export function planOf(input: { seats: readonly SeatFacts[]; after: number; winn
     });
 
     const won = verdicts.filter((one) => one.result === 'won').map((one) => one.seat);
+    const drawn = verdicts.some((one) => one.result === 'drawn');
     const named = input.winners[0];
 
     return {
         verdicts,
-        outcome: won.length > 0 ? 'won' : 'abandoned',
+        outcome: won.length > 0 ? 'won' : (drawn ? 'drawn' : 'abandoned'),
         winnerSeat: named !== undefined && won.includes(named) ? named : (won.length > 0 ? Math.min(...won) : null)
     };
 }

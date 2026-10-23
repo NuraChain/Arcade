@@ -4,6 +4,8 @@ import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
 import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy.ts';
+import { REASONS } from './domains/match/chess/state.ts';
+import { CLOCKS } from './domains/table/clocks.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
@@ -53,7 +55,10 @@ export const tableRules = object({
     stakes: enumOf(['none', 'play-money']),
     partners: enumOf(PARTNERS),
     hasCube: boolean(),
-    hasBlinds: boolean()
+    hasBlinds: boolean(),
+
+    /** The time controls a live table is offered (`table/clocks.ts`). Empty means the game has none. */
+    clocks: array(enumOf(CLOCKS))
 });
 
 /**
@@ -118,6 +123,7 @@ export const playerRecord = object({
     peak: number(),
     played: number(),
     won: number(),
+    drawn: number(),
     abandoned: number(),
     streak: number(),
     bestStreak: number(),
@@ -225,7 +231,7 @@ export const matchHistoryEntry = object({
     id: string(),
     game: string(),
     finishedAt: string(),
-    result: enumOf(['won', 'lost', 'abandoned', 'void']),
+    result: enumOf(['won', 'drawn', 'lost', 'abandoned', 'void']),
     ratingBefore: number().optional(),
     ratingAfter: number().optional(),
 
@@ -1448,6 +1454,9 @@ export const tableSummary = object({
     target: number(),
     cube: boolean(),
     blinds: string(),
+
+    /** The time control each side plays under (`table/clocks.ts`). Absent at a game with none and at a turn-based table. */
+    clock: enumOf(CLOCKS).optional(),
     chat: boolean(),
     voice: voiceScope,
     teams: boolean(),
@@ -1505,6 +1514,9 @@ export const tableCreateInput = object({
     target: number({ int: true, min: 0, max: 9999 }),
     cube: boolean(),
     blinds: tableBlinds,
+
+    /** Asked for, and normalized like the cube: a game with no controls, or a turn-based table, stores none. */
+    clock: enumOf(CLOCKS).optional(),
     chat: boolean(),
     voice: voiceScope,
     teams: boolean(),
@@ -1533,6 +1545,7 @@ export const tableQuickInput = object({
     blinds: tableBlinds.optional(),
     cube: boolean().optional(),
     teams: boolean().optional(),
+    clock: enumOf(CLOCKS).optional(),
     voice: voiceScope,
     stake: string({ max: 40 }).optional(),
     signature: string({ max: 4096 }).optional()
@@ -1637,7 +1650,7 @@ export const matchPlayer = object({
      */
     timeouts: number().optional(),
 
-    result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
+    result: enumOf(['won', 'drawn', 'lost', 'abandoned', 'void']).optional(),
 
     exit: enumOf(['resign', 'left', 'timeout']).optional(),
 
@@ -1837,7 +1850,45 @@ export const pokerBoard = object({
     winner: pokerSeat.optional()
 });
 
-export const matchBoard = union([ludoBoard, hokmBoard, backgammonBoard, pokerBoard]);
+const chessSeat = number({ int: true, min: 0, max: 1 });
+
+const chessSquare = number({ int: true, min: 0, max: 63 });
+
+const chessPiece = enumOf(['P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k']);
+
+const chessPromotion = enumOf(['q', 'r', 'b', 'n']);
+
+const chessBank = number({ int: true, min: 0, max: 86_400_000 });
+
+/**
+ * A chess board, which is the same for every reader: nothing is hidden. The position itself
+ * travels (the 64 squares from a1, the side to move, the castling rights and the en passant square)
+ * so the browser works out what may be played with the server's own move generator, as a
+ * backgammon board does with its `stage`.
+ */
+export const chessBoard = object({
+    kind: literal('chess'),
+    white: chessSeat,
+    board: string({ min: 64, max: 64, pattern: /^[.PNBRQKpnbrqk]{64}$/ }),
+    turn: enumOf(['w', 'b']),
+    castling: string({ max: 4, pattern: /^K?Q?k?q?$/ }),
+    ep: chessSquare.optional(),
+    halfmove: number({ int: true, min: 0, max: 9999 }),
+    fullmove: number({ int: true, min: 1, max: 9999 }),
+    ply: number({ int: true, min: 0, max: 99_999 }),
+    last: object({ from: chessSquare, to: chessSquare }).optional(),
+    clock: object({
+        base: chessBank,
+        increment: number({ int: true, min: 0, max: 600_000 }),
+        left: array(chessBank, { min: 2, max: 2 })
+    }).optional(),
+    moved: array(boolean(), { min: 2, max: 2 }),
+    offer: chessSeat.optional(),
+    offered: array(number({ int: true, min: -1, max: 9999 }), { min: 2, max: 2 }),
+    over: object({ reason: enumOf(REASONS), winner: chessSeat.optional() }).optional()
+});
+
+export const matchBoard = union([ludoBoard, hokmBoard, backgammonBoard, pokerBoard, chessBoard]);
 
 export type MatchBoard = Infer<typeof matchBoard>;
 
@@ -1860,7 +1911,7 @@ export const matchView = object({
 
     remainingMs: number({ int: true, min: 0 }).optional(),
     winner: number().optional(),
-    outcome: enumOf(['won', 'abandoned']).optional(),
+    outcome: enumOf(['won', 'drawn', 'abandoned']).optional(),
     voided: literal(true).optional(),
     startedAt: string(),
     finishedAt: string().optional()
@@ -1981,7 +2032,30 @@ export const pokerLog = object({
     moves: array(pokerMove)
 });
 
-export const matchLog = union([ludoLog, hokmLog, backgammonLog, pokerLog]);
+export const chessMove = object({
+    e: enumOf(['colours', 'move', 'offer', 'accept', 'decline', 'resign', 'flag', 'forfeit', 'finish']),
+    seat: chessSeat.optional(),
+    white: chessSeat.optional(),
+    from: chessSquare.optional(),
+    to: chessSquare.optional(),
+    piece: chessPiece.optional(),
+    captured: chessPiece.optional(),
+    promotion: chessPromotion.optional(),
+    castle: enumOf(['k', 'q']).optional(),
+    enPassant: boolean().optional(),
+    check: boolean().optional(),
+    mate: boolean().optional(),
+    san: string({ max: 12 }).optional(),
+    reason: string({ max: 16 }).optional(),
+    winner: chessSeat.optional()
+});
+
+export const chessLog = object({
+    kind: literal('chess'),
+    moves: array(chessMove)
+});
+
+export const matchLog = union([ludoLog, hokmLog, backgammonLog, pokerLog, chessLog]);
 
 export type MatchLog = Infer<typeof matchLog>;
 
@@ -2078,7 +2152,16 @@ export const pokerPlay = object({
     amount: number({ int: true, min: 0, max: 1_000_000 }).optional()
 });
 
-export const matchPlay = union([ludoPlay, hokmPlay, backgammonPlay, pokerPlay]);
+/** A move names its squares and, reaching the last rank, its piece; an offer, an answer to one and a claim of a fallen flag name nothing. Resigning is the platform's own verb. */
+export const chessPlay = object({
+    kind: literal('chess'),
+    verb: enumOf(['move', 'offer', 'accept', 'decline', 'flag']),
+    from: chessSquare.optional(),
+    to: chessSquare.optional(),
+    promotion: chessPromotion.optional()
+});
+
+export const matchPlay = union([ludoPlay, hokmPlay, backgammonPlay, pokerPlay, chessPlay]);
 
 export type MatchPlay = Infer<typeof matchPlay>;
 

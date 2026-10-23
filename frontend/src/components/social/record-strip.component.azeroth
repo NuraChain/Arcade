@@ -39,6 +39,10 @@ export default component RecordStrip(props: { record: PlayerRecord })
 
     derived game = catalogue.byId(props.record.game as never);
 
+    derived drew = props.record.drawn > 0;
+
+    derived draws = locale.n(props.record.drawn);
+
     derived rate = props.record.played < WIN_RATE_NEEDS
         ? null
         : Math.round((props.record.won / props.record.played) * 100);
@@ -70,6 +74,14 @@ export default component RecordStrip(props: { record: PlayerRecord })
                 <dt class="text-ui-2xs text-faint">{ locale.t('record.won') }</dt>
                 <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.won) }</dd>
             </div>
+            <Show when={ drew }>
+                { () =>
+                    <div class="min-w-0">
+                        <dt class="text-ui-2xs text-faint">{ locale.t('record.drawn') }</dt>
+                        <dd class="tally text-ui-md font-semibold text-text">{ draws }</dd>
+                    </div>
+                }
+            </Show>
             <Show when={ rate !== null }>
                 { () =>
                     <div class="min-w-0">

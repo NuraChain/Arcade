@@ -21,6 +21,11 @@ export const REFUSALS = {
     'cannot-raise': 'conflict',
     'raise-too-small': 'conflict',
     'raise-too-large': 'conflict',
+    'promotion-needed': 'conflict',
+    'no-draw-offer': 'conflict',
+    'draw-offered': 'conflict',
+    'time-up': 'conflict',
+    'time-left': 'conflict',
     'unplayable': 'conflict'
 } as const satisfies Record<string, 'forbidden' | 'conflict'>;
 

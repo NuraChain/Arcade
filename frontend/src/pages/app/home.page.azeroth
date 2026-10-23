@@ -28,6 +28,7 @@ import { useSocial } from '../../stores/social.store.ts';
 
 const RESULT_ICON: Record<MatchHistoryEntry['result'], IconName> = {
     won: 'trophy',
+    drawn: 'equal',
     lost: 'dice',
     abandoned: 'sign-out',
     void: 'undo'
@@ -35,6 +36,7 @@ const RESULT_ICON: Record<MatchHistoryEntry['result'], IconName> = {
 
 const RESULT_TINT: Record<MatchHistoryEntry['result'], string> = {
     won: 'bg-win/15 text-win',
+    drawn: 'bg-gold/12 text-gold',
     lost: 'bg-accent/12 text-accent',
     abandoned: 'bg-danger/12 text-danger',
     void: 'bg-raised text-muted'

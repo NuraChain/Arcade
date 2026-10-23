@@ -3,6 +3,7 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import PersonRecord from '../src/components/social/person-record.component.azeroth';
+import RecordStrip from '../src/components/social/record-strip.component.azeroth';
 import AchievementLadderSheet from '../src/components/social/achievement-ladder-sheet.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -12,7 +13,7 @@ import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
-import type { AchievementFamily, MatchHistoryEntry } from '../src/api.ts';
+import type { AchievementFamily, MatchHistoryEntry, PlayerRecord } from '../src/api.ts';
 import { client, establishAccount, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -213,6 +214,48 @@ describe('achievements on a record', () =>
     });
 });
 
+describe('a record at one game', () =>
+{
+    const at = (drawn: number): PlayerRecord => ({
+        game: 'backgammon',
+        rating: 1240,
+        peak: 1260,
+        played: 9,
+        won: 4,
+        drawn,
+        abandoned: 1,
+        streak: 0,
+        bestStreak: 3,
+        tallies: {},
+        xp: 120
+    });
+
+    const cells = (container: HTMLElement) =>
+        [...container.querySelectorAll('dl > div')].map((cell) => [cell.querySelector('dt')?.textContent, cell.querySelector('dd')?.textContent]);
+
+    it('counts the draws beside the wins once there is one, and says nothing of draws before', () =>
+    {
+        const drew = renderTest(() => RecordStrip({ record: at(3) }) as Rendered).container;
+
+        expect(cells(drew)).toContainEqual(['Drawn', '3']);
+        expect(cells(drew).findIndex(([label]) => label === 'Drawn')).toBe(cells(drew).findIndex(([label]) => label === 'Won') + 1);
+
+        cleanup();
+
+        const never = renderTest(() => RecordStrip({ record: at(0) }) as Rendered).container;
+
+        expect(cells(never).map(([label]) => label)).not.toContain('Drawn');
+    });
+
+    it('says it in Persian, in Persian digits', () =>
+    {
+        useLocale().setLocale('fa');
+        const container = renderTest(() => RecordStrip({ record: at(3) }) as Rendered).container;
+
+        expect(cells(container)).toContainEqual(['مساوی‌ها', '۳']);
+    });
+});
+
 describe('the games somebody has finished', () =>
 {
     const played = (id: string, result: MatchHistoryEntry['result']): MatchHistoryEntry =>
@@ -311,6 +354,25 @@ describe('the games somebody has finished', () =>
 
             expect(rowsOf(container)[0]).toBe(first);
             expect(container.textContent).not.toContain(useLocale().t('record.moreFailed'));
+        }
+        finally
+        {
+            asked.mockRestore();
+        }
+    });
+
+    it('marks a game that ended level as a draw, in gold', async () =>
+    {
+        const asked = vi.spyOn(client.matches, 'history').mockImplementation(async () => ({ matches: [played('m-1', 'drawn'), played('m-2', 'won')] }));
+
+        try
+        {
+            const container = await listed();
+            const [drew, won] = rowsOf(container).map((row) => row.querySelector('span'));
+
+            expect(drew?.textContent).toBe('Draw');
+            expect(drew?.className).toContain('bg-gold/15');
+            expect(won?.className).not.toContain('bg-gold/15');
         }
         finally
         {

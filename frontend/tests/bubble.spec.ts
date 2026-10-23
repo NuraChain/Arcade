@@ -3,6 +3,8 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, createSignal } from 'azerothjs';
 
 import MessageBubble from '../src/components/chat/message-bubble.component.azeroth';
+import Icon from '../src/icons/icon.component.azeroth';
+import '../src/icons/all.ts';
 import type { Message } from '../src/data/chat.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -201,6 +203,33 @@ describe('a message bubble', () =>
         expect(said).toBe('The game ended with nobody winning');
         expect(card.className).not.toContain('border-win/40');
         expect(card.querySelector('.text-win'), 'a game nobody won was given a trophy').toBeNull();
+    });
+
+    it('says a game that ended level was a draw, with an equals sign and no trophy, in both languages', () =>
+    {
+        const level = () => text('m-draw', '', {
+            kind: 'result',
+            ref: { game: 'backgammon', winners: [] },
+            line: { key: 'chat.line.result.draw', params: { game: 'backgammon' } }
+        });
+        const card = show(level()).querySelector('.rounded-panel')!;
+        const [title, said] = [...card.querySelectorAll('.truncate')].map((one) => one.textContent?.trim());
+
+        expect([title, said]).toEqual(['Backgammon', 'The game ended in a draw']);
+        expect(card.className).toContain('border-gold/40');
+        expect(card.querySelector('.text-win'), 'a draw was given a trophy').toBeNull();
+        expect(card.querySelector('.text-gold'), 'a draw is drawn in gold').not.toBeNull();
+        const equal = renderTest(() => Icon({ name: 'equal' }) as unknown as HTMLElement).container.querySelector('svg')!.innerHTML;
+
+        expect(equal, 'the equals sign drew nothing to compare with').toContain('<line');
+        expect(card.querySelector('.text-gold svg')?.innerHTML, 'the draw is not marked with an equals sign').toBe(equal);
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = show(level()).querySelector('.rounded-panel')!;
+
+        expect([...persian.querySelectorAll('.truncate')].map((one) => one.textContent?.trim())).toEqual(['تخته‌نرد', 'بازی مساوی تموم شد']);
     });
 
     it('says a game Nura\'s team ended, with no trophy, in the room\'s own words', () =>

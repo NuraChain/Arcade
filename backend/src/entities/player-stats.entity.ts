@@ -16,7 +16,7 @@ import { User } from './user.entity.ts';
  *
  * One row per person per game, so a profile is one query rather than a fold over a history.
  */
-@Check('player_stats_counts', `played >= 0 and won >= 0 and abandoned >= 0 and won + abandoned <= played`)
+@Check('player_stats_counts', `played >= 0 and won >= 0 and drawn >= 0 and abandoned >= 0 and won + drawn + abandoned <= played`)
 @Check('player_stats_range', `rating between 100 and 4000 and peak_rating between 100 and 4000`)
 @Check('player_stats_peak_reached', `peak_rating >= rating or played = 0`)
 @Check('player_stats_streaks', `streak >= 0 and best_streak >= streak`)
@@ -57,6 +57,10 @@ export class PlayerStats
 
     @Column({ type: 'integer', default: 0 })
     won!: number;
+
+    /** Games that ended level with every side this person was counted against: played, and neither won nor lost. */
+    @Column({ type: 'integer', default: 0 })
+    drawn!: number;
 
     /** Games this person walked out of or was forfeited from. Never somebody else's walkout. */
     @Column({ type: 'integer', default: 0 })

@@ -86,6 +86,13 @@ export function scoreOf(match: Pick<MatchView, 'view'>, seat: number)
         return match.view.seats.find((row) => row.seat === seat)?.stack ?? 0;
     }
 
+    if (match.view.kind === 'chess')
+    {
+        const over = match.view.over;
+
+        return over === undefined || over.reason === 'abort' ? 0 : (over.winner === undefined ? 0.5 : Number(over.winner === seat));
+    }
+
     const side = match.view.seats.find((row) => row.seat === seat)?.side;
 
     return side === undefined ? 0 : (match.view.points[side] ?? 0);
@@ -123,7 +130,7 @@ export function chairsOf(match: Pick<MatchView, 'players' | 'view'>): LudoChair[
  */
 export function playersOf(match: Pick<MatchView, 'players' | 'view'>)
 {
-    const seats = new Set(match.view.seats.map((row) => row.seat));
+    const seats = match.view.kind === 'chess' ? new Set([0, 1]) : new Set(match.view.seats.map((row) => row.seat));
 
     return match.players.filter((player) => seats.has(player.seat));
 }

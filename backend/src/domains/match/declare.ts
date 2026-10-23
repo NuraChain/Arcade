@@ -21,7 +21,7 @@ import { Conversation, Match } from '../../entities/index.ts';
 interface Ending
 {
     conversationId: string;
-    key: 'chat.line.result' | 'chat.line.result.none' | 'chat.line.result.void';
+    key: 'chat.line.result' | 'chat.line.result.none' | 'chat.line.result.void' | 'chat.line.result.draw';
     params: { game: string; winners?: string[] };
 }
 
@@ -45,6 +45,7 @@ export async function endingOf(db: DataSource, matchId: string): Promise<Ending 
         .select('c.id', 'conversation_id')
         .addSelect('m.game', 'game')
         .addSelect(`coalesce((m.state ->> 'voided') = 'true', false)`, 'voided')
+        .addSelect(`m.outcome = 'drawn'`, 'drawn')
         .addSelect(
             `(select array_agg(u.handle::text order by p.seat) from match_players p
                 join users u on u.id = p.user_id
@@ -59,7 +60,7 @@ export async function endingOf(db: DataSource, matchId: string): Promise<Ending 
             'paid'
         )
         .where('m.id = :matchId and m.finished_at is not null', { matchId })
-        .getRawOne<{ conversation_id: string; game: string; voided: boolean; winners: string[] | null; paid: string[] | null }>();
+        .getRawOne<{ conversation_id: string; game: string; voided: boolean; drawn: boolean; winners: string[] | null; paid: string[] | null }>();
 
     if (row === undefined)
     {
@@ -69,6 +70,11 @@ export async function endingOf(db: DataSource, matchId: string): Promise<Ending 
     if (row.voided)
     {
         return { conversationId: row.conversation_id, key: 'chat.line.result.void', params: { game: row.game } };
+    }
+
+    if (row.drawn)
+    {
+        return { conversationId: row.conversation_id, key: 'chat.line.result.draw', params: { game: row.game } };
     }
 
     /**

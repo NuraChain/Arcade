@@ -18,6 +18,7 @@ export type Stakes = 'none' | 'play-money';
  * Every list is a Postgres array rather than a join table: they are short, fixed, read whole,
  * and never queried across. A `game_seat_options` table would be four rows of ceremony.
  */
+@Check('game_rules_clocks_known', `clocks <@ array['3+2', '5+0', '10+0', '15+10', '30+0']::varchar[]`)
 @Check('game_rules_modes_present', `array_length(modes, 1) >= 1`)
 @Check('game_rules_partners_known', `partners in ('none', 'optional', 'required')`)
 @Check('game_rules_seats_present', `array_length(seats, 1) >= 1`)
@@ -61,4 +62,8 @@ export class GameRule
     /** Whether blind levels are offered. Poker only. */
     @Column({ name: 'has_blinds', type: 'boolean', default: false })
     hasBlinds!: boolean;
+
+    /** The time controls a live table of this game is offered. Empty, as for `targets`, means it has none. */
+    @Column({ type: 'varchar', length: 8, array: true, default: () => `'{}'` })
+    clocks!: string[];
 }

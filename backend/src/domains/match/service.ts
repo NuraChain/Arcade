@@ -11,6 +11,7 @@ import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { TableStake } from '../../entities/table-stake.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import { maskOf } from '../stake/policy.ts';
+import { clockOf } from '../table/clocks.ts';
 import { gameOff, gameOn, lockTable, stillLocking, tableRefusal } from '../table/service.ts';
 import { hmacSha256, keccak, pickBelow } from '../../lib/crypto.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
@@ -29,7 +30,7 @@ import { nextMissForfeits, turnMs } from './turns.ts';
 import { boardShown } from './watch.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
-import type { Draws, Engine, ForfeitReason, TableConfig } from './engine.ts';
+import type { Draws, Engine, ForfeitReason, Moment, TableConfig } from './engine.ts';
 import type { MatchPlay } from '../../schemas.ts';
 
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
@@ -129,6 +130,11 @@ const SAYS: Record<RefusalWord, string> = {
     'cannot-raise': 'You cannot raise now.',
     'raise-too-small': 'That raise is below the minimum.',
     'raise-too-large': 'You do not have that many chips.',
+    'promotion-needed': 'Choose the piece the pawn becomes.',
+    'no-draw-offer': 'Nobody has offered a draw.',
+    'draw-offered': 'You have offered a draw already; make a move before offering again.',
+    'time-up': 'Your time ran out before that move arrived.',
+    'time-left': 'There is still time on that clock.',
     'unplayable': 'This game cannot go on from where it stands.'
 };
 
@@ -243,7 +249,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         }
 
         const seats = chairs.map((chair) => chair.seat);
-        const { state, events } = engine.create(seats, dice, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'], variant });
+        const { state, events } = engine.create(seats, dice, {
+            target: table.target,
+            cube: table.cube,
+            blinds: table.blinds as TableConfig['blinds'],
+            variant,
+            clock: clockOf(table.clock)
+        });
 
         const inserted = firstRow<{ id: string }>(await tx.query(
             `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
@@ -252,7 +264,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                 and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
              returning id`,
-            [table.id, table.game, table.seats, JSON.stringify(state), turnMs(table.mode), table.seats, revOf(state), variant]
+            [table.id, table.game, table.seats, JSON.stringify(state), limitOf(engine, state, table.mode), table.seats, revOf(state), variant]
         ));
 
         if (inserted === null)
@@ -390,12 +402,29 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         return mine;
     };
 
-    const deadlineFrom = (mode: string): () => string =>
-        () => `now() + make_interval(secs => ${ turnMs(mode) / 1000 })`;
+    const deadlineFrom = (ms: number): () => string =>
+        () => `now() + make_interval(secs => ${ ms / 1000 })`;
+
+    const limitOf = (engine: Engine, state: unknown, mode: string) => engine.bank?.(state) ?? turnMs(mode);
+
+    /**
+     * What the side to move has left at this instant, by `clock_timestamp()` and not by `now()`,
+     * which is when the transaction began: a play can have waited for the row's lock.
+     */
+    const momentOf = async (tx: EntityManager, matchId: string): Promise<Moment> =>
+    {
+        const row = await tx.getRepository(Match)
+            .createQueryBuilder('m')
+            .select('(extract(epoch from (m.deadline_at - clock_timestamp())) * 1000)::float8', 'left')
+            .where('m.id = :matchId', { matchId })
+            .getRawOne<{ left: number | null }>();
+
+        return { left: row?.left ?? 0 };
+    };
 
     const postpone = async (tx: EntityManager, matchId: string, mode: string) =>
     {
-        await tx.getRepository(Match).update({ id: matchId, finishedAt: IsNull() }, { deadlineAt: deadlineFrom(mode) });
+        await tx.getRepository(Match).update({ id: matchId, finishedAt: IsNull() }, { deadlineAt: deadlineFrom(turnMs(mode)) });
     };
 
     const modeOf = async (tx: EntityManager, tableId: string): Promise<string> =>
@@ -419,7 +448,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             {
                 state: next as Record<string, unknown>,
                 rev: revOf(next),
-                ...(rearm ? { deadlineAt: deadlineFrom(mode) } : {})
+                ...(rearm ? { deadlineAt: deadlineFrom(limitOf(engine, next, mode)) } : {})
             }
         );
 
@@ -769,10 +798,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 /**
                  * `null` is resigning, which is the platform's verb rather than a game's: every
                  * engine has it and none of them spells it its own way, so it never crosses the
-                 * wire as a play.
+                 * wire as a play. A game that scores a resignation itself concedes it as one of
+                 * its own plays; every other game takes it as a forfeit.
                  */
+                const conceded = want.play === null ? engine.concede?.(seat.seat) ?? null : null;
                 const action = want.play === null
-                    ? engine.forfeit(seat.seat, 'resign')
+                    ? conceded ?? engine.forfeit(seat.seat, 'resign')
                     : engine.parse(want.play, seat.seat);
 
                 if (action === null)
@@ -780,7 +811,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     throw new ValidationError({ play: 'Not a play this game knows.' }, 'That is not a move in this game.');
                 }
 
-                const outcome = engine.apply(stateOf(match), action, drawsAt(await seedOfMatch(tx, match.id), match.rev + 1));
+                const moment = engine.bank === undefined ? undefined : await momentOf(tx, match.id);
+                const outcome = engine.apply(stateOf(match), action, drawsAt(await seedOfMatch(tx, match.id), match.rev + 1), moment);
 
                 if (!outcome.ok)
                 {
@@ -798,7 +830,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 await commit(tx, match, engine, outcome.state, outcome.events, {
                     seat: seat.seat,
                     userId: me,
-                    kind: want.play === null ? 'forfeit' : 'play',
+                    kind: want.play === null && conceded === null ? 'forfeit' : 'play',
                     payload: want.play === null ? { verb: 'resign' } : { ...want.play },
                     key: want.key
                 }, await modeOf(tx, match.tableId));

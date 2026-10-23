@@ -33,6 +33,11 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
         return { text: locale.t('card.won'), tone: 'live' };
     }
 
+    if (player.result === 'drawn')
+    {
+        return { text: locale.t('card.drawn'), tone: 'neutral' };
+    }
+
     if (player.result === 'abandoned')
     {
         return { text: locale.t(goneKey(player.exit)), tone: 'neutral' };

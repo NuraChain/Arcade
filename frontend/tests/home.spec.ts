@@ -166,6 +166,19 @@ describe('the home page', () =>
         expect(container.textContent).toContain('یه بازی منچ حساب نشد');
     });
 
+    it('says a game that ended level was drawn, in both languages', async () =>
+    {
+        server.history = [{ ...voided, id: 'match-drawn', result: 'drawn' }];
+
+        expect((await show()).textContent).toContain('You drew a game of Ludo');
+
+        cleanup();
+        useLocale().setLocale('fa');
+        server.history = [{ ...voided, id: 'match-drawn', result: 'drawn' }];
+
+        expect((await show()).textContent).toContain('توی منچ مساوی کردی');
+    });
+
     it('offers every game as a tile that opens its page', async () =>
     {
         const container = await show();

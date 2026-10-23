@@ -92,6 +92,19 @@ export interface TableConfig
     cube: boolean;
     blinds: 'low' | 'mid' | 'high';
     variant: Variant;
+
+    /** What each side starts with and what a move adds, in milliseconds (`table/clocks.ts`). Null or absent: no clock of the game's own. */
+    clock?: { base: number; increment: number } | null;
+}
+
+/**
+ * When a play arrived: how long the side to move had left before its deadline, in milliseconds,
+ * below nothing once that has passed. It is read off the match row the play holds locked, by the
+ * database's clock, so a flag is decided by the clock that wrote the deadline and by no other.
+ */
+export interface Moment
+{
+    left: number;
 }
 
 export interface Opened<S>
@@ -134,7 +147,22 @@ export interface Engine<S = unknown, A = unknown>
      * The engine takes it from `draws` at the moment it applies, which is what makes "the client
      * cannot choose a die" a property of the shape rather than of a review.
      */
-    apply(state: S, action: A, draws: Draws): Applied<S, unknown>;
+    apply(state: S, action: A, draws: Draws, moment?: Moment): Applied<S, unknown>;
+
+    /**
+     * What the side to move has left on a clock of the game's own, in milliseconds, or null when it
+     * keeps none and the table's turn is the limit. The service arms the deadline from it when the
+     * game starts and whenever the turn passes, and hands an engine that has one the `moment` a
+     * play arrived, so the sweep comes for the side to move as its own time runs out.
+     */
+    bank?(state: S): number | null;
+
+    /**
+     * Giving up as a result the game itself scores, sent as a play when somebody resigns: the other
+     * side has then won the game rather than been left it. A game without one takes a resignation as
+     * a forfeit, as every game before chess did, and leaving the table is a walkout either way.
+     */
+    concede?(seat: number): A;
 
     /**
      * What this seat may do right now, in the engine's own vocabulary.
