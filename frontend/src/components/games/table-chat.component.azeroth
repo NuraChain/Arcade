@@ -480,6 +480,7 @@ export default component TableChat(props: {
                                     onJump={ jump }
                                     replying={ replying?.id === row.message.id }
                                     menued={ menu?.message.id === row.message.id }
+                                    above={ row.above }
                                 />
                             </li>
                         </For>

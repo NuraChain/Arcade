@@ -65,6 +65,9 @@ export default component MessageBubble(props: {
 
     /** Its menu is open, and the bar beside it steps aside so that the two do not stand on each other. */
     menued?: boolean;
+
+    /** Whose line stands just above, or null for a heading or a notice across the middle: the bar over a wide line keeps clear of it. */
+    above?: string | null;
 })
 {
     const locale = useLocale();
@@ -163,7 +166,12 @@ export default component MessageBubble(props: {
             boxOf(row),
             boxOf(column),
             { width: bar.offsetWidth, height: bar.offsetHeight },
-            { mine, rtl: locale.dir() === 'rtl', top: pane === null ? 0 : pane.getBoundingClientRect().top }
+            {
+                mine,
+                rtl: locale.dir() === 'rtl',
+                top: pane === null ? 0 : pane.getBoundingClientRect().top,
+                ...(props.above === undefined ? {} : { above: props.above === null ? 'middle' : (props.above === props.me ? 'mine' : 'theirs') })
+            }
         );
 
         bar.style.left = `${ Math.round(place.x) }px`;

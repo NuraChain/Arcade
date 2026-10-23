@@ -733,6 +733,35 @@ describe('a right click on a line at a table', () =>
     });
 });
 
+describe('the bar a pointer finds beside a line at a table', () =>
+{
+    it('stands over a line too wide on the side away from the line above it, the reader’s', async () =>
+    {
+        const lines = server.messages.filter((one) => one.conversationId === 'c-nima' && one.kind === 'text');
+        const answer = lines.at(-1)!;
+        const container = shown('c-nima');
+        const row = () => container.querySelector<HTMLElement>(`[data-message="${ answer.id }"]`);
+        const boxed = (element: Element, left: number, top: number, width: number, height: number) => Object.defineProperty(element, 'getBoundingClientRect', {
+            configurable: true,
+            value: () => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top })
+        });
+
+        await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
+
+        expect([lines.at(-2)?.from, answer.from], 'a line of theirs under one of the reader’s').toEqual(['alex', 'nima.f']);
+
+        const held = [...row()!.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+
+        Object.defineProperty(held, 'offsetWidth', { configurable: true, value: 120 });
+        Object.defineProperty(held, 'offsetHeight', { configurable: true, value: 36 });
+        boxed(row()!, 0, 100, 800, 60);
+        boxed(held.parentElement!, 40, 110, 700, 40);
+        row()!.dispatchEvent(new Event('pointerenter'));
+
+        expect([held.style.left, held.style.top], 'from the left, clear of the reader’s line on the right').toEqual(['0px', '-40px']);
+    });
+});
+
 describe('a line a reply leads back to, at a table', () =>
 {
     it('takes the chat to it, and nothing that changes the chat on the way pulls it back to its end', async () =>

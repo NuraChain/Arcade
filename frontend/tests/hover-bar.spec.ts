@@ -48,6 +48,26 @@ describe('where a line’s hover bar goes', () =>
         expect(fitBar(row, bubble, bar, { mine: true, rtl: true, top: 0 }), 'the reader’s in Persian, from the right').toEqual({ x: 580, y: -40 });
     });
 
+    it('stands over the top edge on the side away from the line above it, whoever wrote that one', () =>
+    {
+        const bubble = { x: 40, y: 110, width: 700, height: 40 };
+
+        expect(fitBar(row, bubble, bar, { mine: false, rtl: false, top: 0, above: 'mine' }), 'theirs under the reader’s, from the left').toEqual({ x: 0, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: false, rtl: false, top: 0, above: 'theirs' }), 'theirs under theirs, from the right').toEqual({ x: 580, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: true, rtl: false, top: 0, above: 'theirs' }), 'the reader’s under theirs, from the right').toEqual({ x: 580, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: true, rtl: true, top: 0, above: 'theirs' }), 'the reader’s under theirs in Persian, from the left').toEqual({ x: 0, y: -40 });
+    });
+
+    it('stands over the top edge at the line’s own outer edge under a heading or a notice across the middle', () =>
+    {
+        const bubble = { x: 40, y: 110, width: 700, height: 40 };
+
+        expect(fitBar(row, bubble, bar, { mine: false, rtl: false, top: 0, above: 'middle' }), 'theirs, from the left').toEqual({ x: 0, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: true, rtl: false, top: 0, above: 'middle' }), 'the reader’s, from the right').toEqual({ x: 580, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: false, rtl: true, top: 0, above: 'middle' }), 'theirs in Persian, from the right').toEqual({ x: 580, y: -40 });
+        expect(fitBar(row, bubble, bar, { mine: true, rtl: true, top: 0, above: 'middle' }), 'the reader’s in Persian, from the left').toEqual({ x: 0, y: -40 });
+    });
+
     it('goes under the line when the top of the thread would cut it off over it', () =>
     {
         const bubble = { x: 40, y: 110, width: 700, height: 40 };

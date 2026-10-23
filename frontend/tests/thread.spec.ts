@@ -50,6 +50,21 @@ describe('a thread in groups', () =>
         expect(rows[1].first).toBe(true);
     });
 
+    it('says whose line stands above, a card included, and nobody under a day’s heading or a notice', () =>
+    {
+        const rows = threadRows([
+            line('a', 'omid', NOON - 24 * 3600 * 1000),
+            line('b', 'omid', NOON),
+            line('c', 'dana', NOON + 1000),
+            line('d', 'dana', NOON + 2000, 'invite'),
+            line('e', 'omid', NOON + 3000),
+            line('f', 'omid', NOON + 4000, 'system'),
+            line('g', 'dana', NOON + 5000)
+        ]);
+
+        expect(rows.map((row) => row.above)).toEqual([null, null, 'omid', 'dana', 'dana', 'omid', null]);
+    });
+
     it('names today and yesterday, and leaves anything older to the calendar', () =>
     {
         expect(dayKindOf(NOON - 3600 * 1000, NOON)).toBe('today');

@@ -459,7 +459,7 @@ describe('a line of the reader’s on its way', () =>
 
 describe('a right click on a line, and the bar a pointer finds beside it', () =>
 {
-    const menued = (message: Message) =>
+    const menued = (message: Message, above?: string | null) =>
     {
         const asked: Array<{ id: string; at: { x: number; y: number }; anchor: HTMLElement }> = [];
         const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
@@ -468,6 +468,7 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
             children: () => MessageBubble({
                 message,
                 me: 'alex',
+                ...(above === undefined ? {} : { above }),
                 onActions: () => undefined,
                 onReply: () => undefined,
                 onReact: () => undefined,
@@ -641,6 +642,33 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
         bar.querySelector('button')!.dispatchEvent(new Event('focusin', { bubbles: true }));
 
         expect([bar.style.left, bar.style.top], 'over the far end of a line too wide, found by the keyboard as well').toEqual(['580px', '-40px']);
+    });
+
+    it('stands over a line too wide on the side away from what stands above it', () =>
+    {
+        const bars = (above?: string | null) =>
+        {
+            const { container } = menued(text('m-1', 'Up for a game?'), above);
+            const row = container.querySelector<HTMLElement>('[data-message]')!;
+            const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+
+            Object.defineProperty(bar, 'offsetWidth', { configurable: true, value: 120 });
+            Object.defineProperty(bar, 'offsetHeight', { configurable: true, value: 36 });
+            boxed(row, 0, 100, 800, 60);
+            boxed(bar.parentElement!, 40, 110, 700, 40);
+            row.dispatchEvent(new Event('pointerenter'));
+
+            const left = bar.style.left;
+
+            cleanup();
+
+            return left;
+        };
+
+        expect(bars(), 'with nothing said above it, away from its own sender').toBe('580px');
+        expect(bars('sara.k'), 'under a line of theirs, as before').toBe('580px');
+        expect(bars('alex'), 'under a line of the reader’s, from the other side').toBe('0px');
+        expect(bars(null), 'under a heading across the middle, from its own outer edge').toBe('0px');
     });
 });
 

@@ -360,10 +360,18 @@ The hover bar a pointer finds beside a line stood at the line's far edge whateve
 beside a wide line it ran out of the pane (at 1280 a 518px line left Reply and More outside it).
 `fitBar` (`lib/hover-bar.ts`) places it each time it is about to show, as a pointer enters the row
 or the keyboard reaches it: beside the line on the side with more room when that side holds the
-bar and a gap, otherwise over the line's top edge from the side away from its sender (a run of one
-sender's lines is drawn along that sender's side, so the far side is where the lines above leave
-room: from the sender's own side it lay over the short line above), under it where the thread's
-top would cut it, and always inside the row. While a line's menu is open its bar steps aside
+bar and a gap, otherwise over the line's top edge, under it where the thread's top would cut it,
+and always inside the row. Over the edge it keeps clear of what stands above the line: a thread
+is drawn in three lanes, the reader's lines along one side, everybody else's along the other and
+headings and notices across the middle, so the bar stands away from a line drawn above it (the
+rows say whose, `above` in `threadRows`, an invite or a result card included) and at the line's
+own outer edge under a day's heading, a notice or "Unread messages" (`null` in the rows, which the
+chat page says of the first line not read). It stood away from the line's own sender, which is
+right only in a run of one sender's lines, until the second audit showed the bar of a long line of
+theirs over the reader's own line above it. A spec of the lanes keeps the two lines it weighs
+minutes apart: a fixture is a fixed moment, and the first spec of the unread line sat under a line
+2 h 50 min older, which a day's heading parts from it in Tehran's time, so it passed with the
+page's rule taken out. While a line's menu is open its bar steps aside
 (`menued`), and a conversation whose menu is open is marked in the list. The measures are physical, so it
 is placed with `left` and `top` whichever way the page reads. It takes the pointer only while its
 line is hovered or holds the keyboard (`pointer-events-none` otherwise), with a bridge of 8px round

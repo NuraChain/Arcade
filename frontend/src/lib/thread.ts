@@ -8,6 +8,8 @@ export interface ThreadRow
     first: boolean;
     last: boolean;
     day: boolean;
+    /** Whose line stands just above, drawn along that person's side; null where a day's heading or a notice across the middle does. */
+    above: string | null;
 }
 
 export type DayKind = 'today' | 'yesterday' | 'older';
@@ -35,12 +37,14 @@ export function threadRows(messages: readonly Message[]): ThreadRow[]
     return messages.map((message, index) =>
     {
         const before = messages[index - 1];
+        const day = before === undefined || dayKey(before.at) !== dayKey(message.at);
 
         return {
             message,
-            day: before === undefined || dayKey(before.at) !== dayKey(message.at),
+            day,
             first: !joins(before, message),
-            last: !joins(message, messages[index + 1])
+            last: !joins(message, messages[index + 1]),
+            above: before === undefined || day || before.kind === 'system' ? null : before.from
         };
     });
 }
