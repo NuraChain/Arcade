@@ -481,7 +481,12 @@ It reads `silent` and `lost` now, and `play.spec.ts` (*the messenger*) reads a t
 wants every line to be the node it was. The table's panel lists its lines with no branch above
 them and needed only the bubble. `tools/qa/chat-pass.mjs` holds it in two real browsers: a second
 message arrives, an observer counts the lines that left the document, and the first line has to
-open its actions under a held finger and start a reply under a swipe.
+open its actions under a held finger and start a reply under a swipe. It goes on to what makes the
+chat a messenger, each in the browser where it happens: a line drawn at the press whose mark goes
+from waiting to stored to read, a right click on the newest line as the pointer arrives (the
+thread's reach unchanged, the menu open), an edit the other browser reads, the list's time and
+"Draft:", the line "Unread messages", the thread's own search, and "Last seen just now" once the
+other browser has gone, which waits out the server's linger and its sweep.
 
 ## What was deleted because nothing produced it
 

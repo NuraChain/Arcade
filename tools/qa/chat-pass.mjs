@@ -28,6 +28,13 @@
  * nodes, were gone from every line on screen the moment anybody wrote. So the watcher's first line is
  * marked, a second one arrives, and the marked line has to be the node it was, still open its
  * actions under a held finger and still answer a swipe.
+ *
+ * Then what makes the chat feel like a messenger, each in the browser where it happens: a line drawn
+ * at the press with its mark going from waiting to stored to read, the right click's menu on the
+ * newest line as the pointer arrives (it found the bar beside that line moving the thread's end, and
+ * the menu closing on the clamp), an edit the other browser reads, the list's time and "Draft:", the
+ * line "Unread messages", the thread's own search, and "last seen" once the other browser has gone,
+ * which waits out the server's linger and its sweep.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -539,13 +546,228 @@ try
     // ---------------------------------------------------------------- 6. a handle nobody has
     console.log('\n[6] a handle nobody has');
 
+    const quiet = watcher.errors.length;
+
     await nobody.click();
     await watcher.page.waitForURL('**/app/people/nobody.here.9', { timeout: 8000 }).catch(() => undefined);
     await watcher.page.waitForTimeout(SETTLE_MS);
 
     record('opens the page that says there is no such person, without loading the page', /No such person/.test(await watcher.page.locator('main').innerText()) && loads === 0);
 
+    // The browser logs the 404 of a person who is not there, which is the answer this asked for.
+    const missing = watcher.errors.splice(quiet);
+
+    record('and logs nothing but the not-found answers for them', missing.every((line) => line.includes('status of 404')), missing.slice(0, 2).join(' | '));
+
     watcher.page.off('load', counted);
+
+    await watcher.page.goBack();
+    await watcher.page.waitForURL(`**${ thread }`, { timeout: 8000 }).catch(() => undefined);
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    // ---------------------------------------------------------------- 7. a line at the press
+    console.log('\n[7] a line is in the thread at the press, and says when it was stored and read');
+
+    await sender.page.evaluate(() =>
+    {
+        window.__press = { pressed: 0, shown: 0 };
+
+        const field = document.querySelector('main textarea');
+
+        field?.addEventListener('keydown', (event) =>
+        {
+            if (event.key === 'Enter' && !event.shiftKey && window.__press.pressed === 0)
+            {
+                window.__press.pressed = performance.now();
+            }
+        }, { capture: true });
+
+        new MutationObserver(() =>
+        {
+            const there = [...document.querySelectorAll('main [data-message]')].some((row) => row.textContent?.includes('at the press'));
+
+            if (there && window.__press.shown === 0)
+            {
+                window.__press.shown = performance.now();
+            }
+        }).observe(document.querySelector('main'), { childList: true, subtree: true, characterData: true });
+    });
+
+    await composer.fill('chat pass, at the press');
+    await composer.press('Enter');
+
+    const pressed = await sender.page.evaluate(() => window.__press);
+    const after = Math.round(pressed.shown - pressed.pressed);
+
+    record('the line is drawn within a frame or two of the press, before the server has it', pressed.shown > 0 && after < 100, `${ after } ms`);
+
+    const statusOf = () => sender.page.evaluate(() =>
+    {
+        const row = [...document.querySelectorAll('main [data-message]')].find((one) => one.textContent?.includes('at the press'));
+
+        return row?.querySelector('[data-status]')?.getAttribute('data-status') ?? null;
+    });
+
+    let status = await statusOf();
+    const marks = [status];
+    const waitedFor = Date.now();
+
+    while (status !== 'read' && Date.now() - waitedFor < SETTLE_MS * 3)
+    {
+        await sender.page.waitForTimeout(100);
+        status = await statusOf();
+
+        if (marks.at(-1) !== status)
+        {
+            marks.push(status);
+        }
+    }
+
+    record('its mark goes from waiting to stored to read, the other browser being on the thread', status === 'read' && !marks.includes('failed'), marks.join(' > '));
+
+    // ---------------------------------------------------------------- 8. a right click
+    console.log('\n[8] a right click on the reader\'s own line opens its menu at the pointer');
+
+    const pressLine = sender.page.locator('main [data-message]').filter({ hasText: 'at the press' }).last().locator('.bubble');
+    const box = await pressLine.boundingBox();
+    const reach = () => sender.page.evaluate(() =>
+    {
+        const list = document.querySelector('#chat-thread .overflow-y-auto');
+
+        return list === null ? null : list.scrollHeight - list.clientHeight;
+    });
+    const reaching = await reach();
+
+    // The pointer arrives with the click, as a quick hand's does: the line's bar is laid in that moment.
+    await sender.page.mouse.click(Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2), { button: 'right' });
+    await sender.page.waitForTimeout(400);
+
+    const menu = await sender.page.evaluate(() => [...document.querySelectorAll('[role="menu"] [data-item]')].map((one) => one.textContent?.trim()));
+    const reached = await reach();
+
+    record('the thread reaches exactly as far once the pointer has found its newest line', reaching !== null && reaching === reached, `${ reaching }px, then ${ reached }px`);
+    record('the menu offers what the line\'s sheet offers, Edit among it', menu.includes('Reply') && menu.includes('Edit') && menu.includes('Delete message'), JSON.stringify(menu));
+
+    // ---------------------------------------------------------------- 9. an edit
+    console.log('\n[9] the line is edited from its menu, and the other browser reads the new words');
+
+    await sender.page.locator('[role="menu"] [data-item]').filter({ hasText: /^Edit$/ }).first().click();
+    await sender.page.waitForTimeout(300);
+
+    const editing = await sender.page.evaluate(() => document.querySelector('main [data-editing]') !== null);
+
+    record('the composer says what is being edited', editing);
+
+    await composer.fill('chat pass, at the press, and then some');
+    await composer.press('Enter');
+    await sender.page.waitForTimeout(SETTLE_MS);
+
+    const edited = await watcher.page.evaluate(() => [...document.querySelectorAll('main [data-message]')].map((row) => row.textContent ?? '').find((text) => text.includes('and then some')) ?? '');
+
+    record('the other browser reads the new words, said to be edited', edited.includes('and then some') && edited.includes('edited'), edited.replace(/\s+/g, ' ').slice(0, 80));
+
+    // ---------------------------------------------------------------- 10. the list
+    console.log('\n[10] the list says when a room was spoken in, and what was left unsent');
+
+    const roomRow = (who) => who.page.locator(`a[href="/app/chats/${ direct.id }"]`).first();
+    const when = await roomRow(watcher).locator('time').first().textContent().catch(() => null);
+
+    record('a room spoken in today says the time, not how long ago', /^\d{1,2}:\d{2}\s?(AM|PM)$/.test((when ?? '').trim()), String(when));
+
+    const away = (await watcher.page.locator('a[href^="/app/chats/"]').evaluateAll((links, room) => links.map((one) => one.getAttribute('href')).filter((href) => href !== `/app/chats/${ room }`), direct.id))[0];
+
+    record('the other browser has another room to go to', away !== undefined, String(away));
+
+    const watcherField = watcher.page.locator('main textarea');
+
+    await watcherField.fill('a draft left here');
+    await watcher.page.locator(`a[href="${ away }"]`).first().click();
+    await watcher.page.waitForTimeout(1200);
+
+    const drafted = await roomRow(watcher).evaluate((link) => ({
+        label: link.querySelector('[data-draft]')?.textContent ?? null,
+        text: link.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+    }));
+
+    record('the room left with words in its composer says "Draft:" and the words', drafted.label === 'Draft:' && drafted.text.includes('a draft left here'), drafted.text.slice(0, 80));
+
+    // ---------------------------------------------------------------- 11. unread
+    console.log('\n[11] a thread opens on its first unread line');
+
+    await composer.fill('chat pass, unread one');
+    await composer.press('Enter');
+    await sender.page.waitForTimeout(400);
+    await composer.fill('chat pass, unread two');
+    await composer.press('Enter');
+    await sender.page.waitForTimeout(SETTLE_MS);
+
+    await roomRow(watcher).click();
+    await watcher.page.waitForTimeout(SETTLE_MS);
+
+    const opened = await watcher.page.evaluate(() =>
+    {
+        const line = document.querySelector('main [data-unread]');
+        const first = line === null ? null : document.querySelector(`main [data-message="${ line.getAttribute('data-unread') }"]`);
+        const field = document.querySelector('main textarea');
+
+        return {
+            line: line !== null,
+            after: first?.textContent?.includes('unread one') === true,
+            field: field?.value ?? null
+        };
+    });
+
+    record('the line "Unread messages" stands over the first line the reader has not read', opened.line && opened.after, JSON.stringify(opened));
+    record('and the draft left there is still in its composer', opened.field === 'a draft left here', String(opened.field));
+
+    await watcherField.fill('');
+
+    // ---------------------------------------------------------------- 12. search
+    console.log('\n[12] the thread is searched for its words');
+
+    await sender.page.keyboard.press('Control+f');
+    await sender.page.waitForTimeout(300);
+    await sender.page.keyboard.type('holding');
+    await sender.page.waitForTimeout(1200);
+
+    const searched = await sender.page.evaluate(() => ({
+        count: document.querySelector('[data-found-count]')?.textContent ?? null,
+        found: document.querySelector('main [data-found]')?.textContent?.includes('holding still') === true
+    }));
+
+    record('Ctrl+F opens the thread\'s own search, which finds the line and counts it', searched.count === '1 of 1' && searched.found, JSON.stringify(searched));
+
+    await sender.page.keyboard.press('Escape');
+    await sender.page.keyboard.press('Escape');
+    await sender.page.waitForTimeout(300);
+
+    record('Escape clears the words, then closes it', await sender.page.evaluate(() => document.querySelector('[data-thread-search]') === null));
+
+    // ---------------------------------------------------------------- 13. last seen
+    console.log('\n[13] the other person leaves, and the head says when they were last seen');
+
+    const headOf = () => sender.page.evaluate(() => document.querySelector('main header h1 + span')?.textContent?.trim() ?? null);
+
+    record('while they are here the head says so', (await headOf()) === 'Online', String(await headOf()));
+    record('nothing was logged in the other browser since', watcher.errors.length === 0, watcher.errors.slice(0, 2).join(' | '));
+
+    await watcher.context.close();
+    watcher = null;
+
+    const left = Date.now();
+    let head = await headOf();
+
+    while (!(head ?? '').startsWith('Last seen') && Date.now() - left < 75_000)
+    {
+        await sender.page.waitForTimeout(1000);
+        head = await headOf();
+    }
+
+    record('once their last tab has gone the head says when they were last seen', head === 'Last seen just now', `${ head } after ${ Math.round((Date.now() - left) / 1000) } s`);
+
+    // ---------------------------------------------------------------- 14. the console
+    console.log('\n[14] the console, once more');
+    record('nothing was logged since', sender.errors.length === 0, sender.errors.slice(0, 2).join(' | '));
 }
 finally
 {
