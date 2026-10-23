@@ -2677,6 +2677,34 @@ never `deadline - Date.now()` on the device, which is whatever the phone's clock
 out on real hardware. At zero it says the turn is being played for them rather than "0 s", because
 the sweep takes up to five seconds to arrive and a clock frozen at zero reads as a hung game.
 
+**A game played against a clock keeps a bank for each side, and the deadline is the bank.** Chess
+is the first game whose time is its own and not the table's turn. Three members of the seam are
+optional, so the four games before it are untouched:
+
+- **`bank(state)`** is what the side to move has left, in milliseconds, or null when the game keeps
+  no clock (a turn-based table). `limitOf` in `match/service.ts` arms the deadline from it, else
+  from `turnMs(mode)` as always: at the start (the insert's own `deadline_at`) and in `commit`
+  whenever the turn passes. An offer or anything else that keeps the turn leaves the deadline alone,
+  so the side to move's time keeps running. The sweep therefore comes for the side to move the moment
+  its own time runs out, and what it plays is the engine's `autoplay`.
+- **`moment`**, `apply`'s fourth argument, is handed only to an engine with a `bank`: how long the
+  side to move had left when the play arrived, read off the locked match row by
+  `clock_timestamp()` (`momentOf`), not by `now()`, which is when the transaction began, before
+  any wait for the row's lock. It is below nothing once the deadline has passed, and the engine
+  refuses such a move and spends the rest on its clock. One clock, Postgres's, wrote the deadline
+  and decides every flag.
+- **`concede(seat)`** is a resignation the game itself scores. The resign route (a `null` play)
+  sends it as a play, `{ verb: 'resign' }` on a `play` row, so the other side has WON the game: a
+  full win, a credited one, and a loss and not a walkout for whoever resigned. A game without it takes
+  a resignation as a forfeit, as before. Leaving the table is a walkout in every game.
+
+`TableConfig.clock` carries the table's control to `create` (`clockOf(table.clock)`, each side's bank
+and its increment), optional because no other game reads one. `match-clock.db.spec.ts` holds all of
+it on a fixture engine with a bank per side: the control handed over, the deadline at the start, at
+a turn-based table, when the turn passes and when it does not, the moment and its sign, no moment
+for an engine without a clock, the concession and the forfeit without one, and a deadline written by
+hand that the sweep meets.
+
 **A live game holds the screen awake.** `lib/wake-lock.ts` asks for a screen wake lock while a live
 match is on the page, asks again when the tab comes back (hiding a tab drops it), and treats a refusal
 as ordinary - battery saver refuses it. A phone that dims and locks mid-hand has made its owner miss
