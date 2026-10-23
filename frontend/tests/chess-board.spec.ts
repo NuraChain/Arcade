@@ -740,6 +740,37 @@ describe('the chime when the turn comes round', () =>
     });
 });
 
+describe('the horse and the elephant, as the reader\'s device has them', () =>
+{
+    const answered = async () =>
+    {
+        const table = await live(match({ ...fen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'), ply: 1 }, 0, { rev: 5 }));
+
+        table.tell(match({ ...fen('rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2'), ply: 2, last: { from: sq('g8'), to: sq('f6') } }, 0, { rev: 6 }), [
+            happened(6, 1, [{ e: 'move', seat: 1, from: sq('g8'), to: sq('f6'), piece: 'n', san: 'Nf6' }])
+        ]);
+        await elapse(GLIDE_MOST + 100);
+    };
+
+    it('hears the other side\'s knight land on its hooves', async () =>
+    {
+        await answered();
+
+        expect(told.heard).toContain('horse-step');
+        expect(told.heard).not.toContain('piece-move');
+    });
+
+    it('hears the click instead once the device has turned the animals off', async () =>
+    {
+        useSettings().update({ animalSounds: false });
+
+        await answered();
+
+        expect(told.heard).toContain('piece-move');
+        expect(told.heard).not.toContain('horse-step');
+    });
+});
+
 describe('the rules coach at a chess table', () =>
 {
     const lamp = (container: HTMLElement) => container.querySelector('.chess-rail[data-me] .coach-line[data-lamp]');

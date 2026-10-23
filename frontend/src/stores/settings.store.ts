@@ -5,6 +5,7 @@ import { forget, recallJson, rememberJson } from '../lib/storage.ts';
 export interface Settings
 {
     sound: boolean;
+    animalSounds: boolean;
     haptics: boolean;
     railOpen: boolean;
     sidebarOpen: boolean;
@@ -47,6 +48,7 @@ export function defaultSettings(): Settings
 {
     return {
         sound: true,
+        animalSounds: true,
         haptics: true,
         railOpen: false,
         sidebarOpen: true,

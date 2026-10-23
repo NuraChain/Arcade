@@ -15,6 +15,8 @@ export type Tone =
     | 'token-capture'
     | 'piece-move'
     | 'piece-capture'
+    | 'horse-step'
+    | 'elephant-step'
     | 'check'
     | 'promote'
     | 'win';
@@ -112,6 +114,14 @@ const TONES: Record<Tone, readonly Voice[]> = {
     'piece-capture': [
         { wave: 'triangle', from: 520, to: 240, hold: 0.09, gain: 0.2, delay: 0 },
         { wave: 'sine', from: 1100, to: 800, hold: 0.04, gain: 0.08, delay: 0 }
+    ],
+    'horse-step': [
+        { wave: 'triangle', from: 900, to: 720, hold: 0.03, gain: 0.12, delay: 0 },
+        { wave: 'triangle', from: 780, to: 620, hold: 0.035, gain: 0.1, delay: 0.11 }
+    ],
+    'elephant-step': [
+        { wave: 'sine', from: 150, to: 60, hold: 0.18, gain: 0.32, delay: 0 },
+        { wave: 'triangle', from: 340, to: 180, hold: 0.06, gain: 0.08, delay: 0 }
     ],
     'check': [
         { wave: 'triangle', from: 988, to: 988, hold: 0.07, gain: 0.13, delay: 0 },

@@ -391,6 +391,7 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
                 host: layer,
                 stage: rig,
                 sound: () => sound,
+                animals: () => untrack(() => settings.settings().animalSounds),
                 feel: (kind) =>
                 {
                     if (untrack(() => mine) !== undefined)

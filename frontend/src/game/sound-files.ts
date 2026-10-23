@@ -14,6 +14,10 @@ export type Sampled =
     | 'chips-stack'
     | 'piece-move'
     | 'piece-capture'
+    | 'horse-step'
+    | 'horse-call'
+    | 'elephant-step'
+    | 'elephant-call'
     | 'win';
 
 export const SAMPLED: readonly Sampled[] = [
@@ -32,6 +36,10 @@ export const SAMPLED: readonly Sampled[] = [
     'chips-stack',
     'piece-move',
     'piece-capture',
+    'horse-step',
+    'horse-call',
+    'elephant-step',
+    'elephant-call',
     'win'
 ];
 

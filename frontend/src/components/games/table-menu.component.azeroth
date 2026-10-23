@@ -19,6 +19,7 @@ interface Entry
 export default component TableMenu(props: OverlayProps & {
     code: string;
     full: boolean;
+    animals?: boolean;
     voice?: boolean;
     onVoice?: () => void;
     team?: boolean;
@@ -52,6 +53,14 @@ export default component TableMenu(props: OverlayProps & {
                 label: locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn'),
                 run: () => settings.update({ sound: !sound })
             },
+            ...(props.animals === true
+                ? [{
+                    id: 'animals',
+                    icon: 'knight' as const,
+                    label: locale.t(current.animalSounds ? 'chess.animals.off' : 'chess.animals.on'),
+                    run: () => settings.update({ animalSounds: !current.animalSounds })
+                }]
+                : []),
             {
                 id: 'hint-moves',
                 icon: 'idea',

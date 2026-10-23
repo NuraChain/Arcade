@@ -527,6 +527,8 @@ export const play = {
     'chess.moves.none': 'No moves yet.',
     'chess.moves.copy': 'Copy PGN',
     'chess.moves.copied': 'The game is copied as PGN.',
+    'chess.animals.on': 'Turn horse and elephant sounds on',
+    'chess.animals.off': 'Turn horse and elephant sounds off',
     'poker.table': 'Poker table',
     'poker.board': 'Cards on the table',
     'poker.pot': 'Total pot {chips}',

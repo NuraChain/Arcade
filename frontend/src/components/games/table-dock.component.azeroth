@@ -19,6 +19,7 @@ const lockUpright = (): Promise<void> =>
 
 export default component TableDock(props: {
     code?: string;
+    animals?: boolean;
     target?: HTMLElement | null;
     onChat?: () => void;
     onResign?: () => void;
@@ -78,6 +79,7 @@ export default component TableDock(props: {
             {
                 code: props.code ?? '',
                 full,
+                ...(props.animals === true ? { animals: true } : {}),
                 ...(props.hostVoice === undefined || props.onHostVoice === undefined ? {} : { voice: props.hostVoice, onVoice: props.onHostVoice }),
                 ...(props.hostScope === undefined || props.onHostScope === undefined ? {} : { team: props.hostScope, onTeam: props.onHostScope }),
                 ...(props.voice !== undefined && voice.table() === props.voice ? { deaf: voice.deaf(), onDeafen: () => voice.toggleDeafen() } : {}),

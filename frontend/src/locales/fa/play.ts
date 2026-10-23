@@ -509,6 +509,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'chess.moves.none': 'هنوز حرکتی نشده.',
     'chess.moves.copy': 'کپی PGN',
     'chess.moves.copied': 'بازی به شکل PGN کپی شد.',
+    'chess.animals.on': 'روشن کردن صدای اسب و فیل',
+    'chess.animals.off': 'خاموش کردن صدای اسب و فیل',
     'poker.table': 'میز پوکر',
     'poker.board': 'کارت‌های وسط میز',
     'poker.pot': 'کل پات {chips}',

@@ -436,6 +436,12 @@ export default component SettingsPage()
                                     label={ locale.t('settings.notifications.sound') }
                                     onChange={ (checked) => settings.update({ sound: checked }) }
                                 />
+                                <Toggle
+                                    checked={ current.animalSounds }
+                                    label={ locale.t('settings.notifications.animals') }
+                                    description={ locale.t('settings.notifications.animalsHint') }
+                                    onChange={ (checked) => settings.update({ animalSounds: checked }) }
+                                />
                                 <Show when={ device.coarse() }>
                                     { () =>
                                         <Toggle

@@ -134,6 +134,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.notifications.groups': 'اضافه شدن به گروه',
     'settings.notifications.turns': 'بازی‌ها: نوبتت و شروع بازی',
     'settings.notifications.sound': 'صدا سر میز',
+    'settings.notifications.animals': 'صدای اسب و فیل توی شطرنج',
+    'settings.notifications.animalsHint': 'اسب که حرکت می‌کنه صدای نعلش میاد و وقتی مهره می‌زنه شیهه می‌کشه؛ فیل سنگین قدم برمی‌داره و موقع زدن مهره نعره می‌کشه.',
     'settings.notifications.haptics': 'لرزش',
     'settings.notifications.hapticsHint': 'یه لرزش کوتاه وقتی میز آماده می‌شه، یه دست رو می‌بری یا یه حرکت می‌شینه.',
 

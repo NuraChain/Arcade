@@ -4347,6 +4347,25 @@ noise. A hidden page hears no click (a hidden tab plays only what is urgent), so
 asks `turnChime` with `when` (`table-cues.ts`) for the urgent chime from the view's own turn.
 `chess-board.spec.ts` (*the chime when the turn comes round*) holds both pages.
 
+**The knight is a horse and the bishop an elephant, and they sound like them.** The owner: "is it
+funny for hourse or elephent add real sound of it". In Persian the knight is اسب, a horse, and the
+bishop فیل, an elephant, so a knight is set down on two hooves (`horse-step`: two takes, each two
+hits of a trot cut from one recording and laid 110 to 125 ms apart), a bishop with a heavy tread
+(`elephant-step`: Kenney's deepest soft impact pitched down under a grass footstep, because a
+phone's speaker plays nothing at the impact's 100 Hz and would hear no foot at all), and either one
+calls as it takes a piece, over the knock of the piece it took (`horse-call`, a neigh;
+`elephant-call`, a trumpet). Every other piece keeps its click, a pawn that becomes a knight
+included. The levels were measured beside the click as it sits in the pack: the hooves as loud, the
+tread 4 dB under it on a phone's speaker, the calls 6 dB under it, since a second of voice is heard
+as louder than a click at the same level. The renderer asks the device at each move (`animals`,
+from `settings.animalSounds`, on by default), so turning it off in Settings › Notifications, or from
+a chess table's menu, holds from the next move. Until the pack has loaded the two steps are
+synthesised as every cue is, and the two calls are silent: a synthesised neigh is worse than none.
+`chess-table.spec.ts` (*the knight and the bishop, heard as the horse and the elephant Persian names
+them*), `chess-board.spec.ts`, `settings.spec.ts`, `play.spec.ts` (the menu and the dock) and
+`sound-pack.spec.ts` (the pack holds exactly the cues the tables play, and every source that is not
+Kenney's is credited by name) hold it.
+
 **The rules coach is a lamp in the reader's own rail** (`coachOf` in `game/helpers/chess.ts`, the
 server's own move generator asked about the position; *Helpers at the table*). It says, in this
 order: that a side's clock waits for its first move and the thirty seconds it has (to the side that
@@ -5136,10 +5155,12 @@ switching tables never has to unlock audio again. The spec is
   `statechange` listener puts the tap listeners back, and a context still not running 300ms after a tap
   is rebuilt, because WebKit's can get stuck there.
 - **Recorded foley, synthesised interface.** Cards, dice, wood and the two jingles are CC0 recordings
-  from Kenney (`tools/art/sound-src/`, with their licence), trimmed and encoded to 96 kbps mono MP3 by
-  `npm run sound` and packed into ONE file, `game/sound/table.cues` - an `NCUE` header, a JSON index
+  from Kenney, and chess's horse and elephant CC0 recordings from BigSoundBank and Wikimedia Commons
+  (`tools/art/sound-src/`, every source credited in its `LICENSE.txt`), trimmed, or cut and mixed
+  (a take with a `shape` in `tools/art/sound.mjs`), and encoded to mono MP3 (96 kbps, a long voice
+  56) by `npm run sound` and packed into ONE file, `game/sound/table.cues` - an `NCUE` header, a JSON index
   and the takes back to back - imported through `new URL(..., import.meta.url)` so it lands hashed in
-  `/assets/` and is cached as immutable. One file is one request instead of seventeen, and the neutral
+  `/assets/` and is cached as immutable. One file is one request instead of thirty, and the neutral
   extension is load-bearing: a download manager (IDM and its kind, common among Persian users)
   intercepts any `.mp3` a page fetches and hands the page an empty 204, which is how the first build of
   this was silent on the owner's own machine while curl got a perfect 200. The turn, the ticks,
@@ -5166,7 +5187,9 @@ switching tables never has to unlock audio again. The spec is
   Sounds cues, `piece-move` (three takes of a short bright click, a piece set down) and
   `piece-capture` (two takes of a heavier wooden knock), measured before they were chosen: the
   clicks about 60 ms long with their energy near 1.1 kHz, the knocks 100 ms near 270 Hz, the way a
-  chess app's move and capture differ. That is why the pack is 25 takes of 16 cues, 132 KB.
+  chess app's move and capture differ. The knight and the bishop have four more cues of their own
+  (*The knight is a horse and the bishop an elephant*, under *Chess*), which is why the pack is 30
+  takes of 20 cues, 156 KB.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
 

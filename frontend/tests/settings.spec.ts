@@ -10,6 +10,7 @@ import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { establishAccount, server } from './fake-api.ts';
 
@@ -163,6 +164,33 @@ describe('the notification switches', () =>
         expect(server.mutes).toContainEqual({ kind: 'notice', id: 'messages' });
         expect(switchFor('Messages').getAttribute('aria-checked')).toBe('false');
         expect(switchFor('Messages').querySelector('[aria-hidden]')?.className).toContain('bg-line');
+    });
+
+    it('keep chess\'s horse and elephant on this device, under the sound at the table, in both languages', async () =>
+    {
+        useSettings().reset();
+        useSession().establish(establishAccount());
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const switches = () => [...container.querySelectorAll<HTMLElement>('#settings-notifications [role="switch"]')];
+        const labelOf = (one: HTMLElement) => one.querySelector('span span')?.textContent ?? '';
+        const at = (label: string) => switches().findIndex((one) => labelOf(one) === label);
+        const animals = () => switches()[at('Horse and elephant in chess')];
+
+        expect(at('Horse and elephant in chess')).toBe(at('Sound at the table') + 1);
+        expect(animals().getAttribute('aria-checked')).toBe('true');
+        expect(animals().textContent).toContain('the elephant of Persian chess');
+
+        animals().click();
+        await settle();
+
+        expect(useSettings().settings().animalSounds).toBe(false);
+        expect(animals().getAttribute('aria-checked')).toBe('false');
+        expect(server.calls).not.toContain('social.mute');
+
+        useLocale().setLocale('fa');
+        await settle();
+
+        expect(at('صدای اسب و فیل توی شطرنج')).toBe(at('صدا سر میز') + 1);
     });
 });
 

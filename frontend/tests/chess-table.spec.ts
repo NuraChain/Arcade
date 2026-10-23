@@ -63,6 +63,7 @@ let cues: Cue[];
 let felt: Haptic[];
 let drawn: Drawn[];
 let still: boolean;
+let animals: boolean;
 let broke: unknown[];
 let facts: ChessFacts[];
 
@@ -106,6 +107,7 @@ beforeEach(() =>
     broke = [];
     facts = [];
     still = false;
+    animals = true;
     host = document.createElement('div');
     host.className = 'chess-layer';
     document.body.append(host);
@@ -119,7 +121,7 @@ beforeEach(() =>
 
     stage = createStage({ clock, quiet: () => still, report: (error) => broke.push(error) });
     director = createDirector(stage, clock, (error) => broke.push(error));
-    table = createChessTable({ host, stage, sound: () => sound, feel: (kind) => felt.push(kind), onFacts: (now) => facts.push(now) });
+    table = createChessTable({ host, stage, sound: () => sound, animals: () => animals, feel: (kind) => felt.push(kind), onFacts: (now) => facts.push(now) });
 });
 
 afterEach(() =>
@@ -426,6 +428,84 @@ describe('a chess move, played', () =>
         expect(costOf({ e: 'finish', reason: 'checkmate', winner: 1 })).toBe(TIP_MS);
         expect(costOf({ e: 'offer', seat: 0 })).toBe(0);
         expect(HISTORY).toBeGreaterThan(GLIDE_MOST * 4);
+    });
+});
+
+describe('the knight and the bishop, heard as the horse and the elephant Persian names them', () =>
+{
+    it('sets a knight down on two hooves and a bishop down with an elephant\'s tread', async () =>
+    {
+        table.reset(sight(lay('4k3/8/8/8/8/8/8/1N2K3 w - - 0 1')));
+        play([act(6, 0, [move('b1', 'c3', 'N')])], sight(lay('4k3/8/8/8/8/2N5/8/4K3 b - - 1 1'), 6));
+        await elapse(KNIGHT_MS + 40);
+
+        expect(cues).toEqual(['horse-step']);
+
+        cues = [];
+        table.reset(sight(lay('7k/8/8/8/8/8/8/4KB2 w - - 0 1')));
+        play([act(6, 0, [move('f1', 'b5', 'B')])], sight(lay('7k/8/8/1B6/8/8/8/4K3 b - - 1 1'), 6));
+        await elapse(GLIDE_MOST + 40);
+
+        expect(cues).toEqual(['elephant-step']);
+    });
+
+    it('neighs as a knight takes a piece, beside the knock of the piece it took', async () =>
+    {
+        table.reset(sight(lay('4k3/8/8/8/8/2p5/8/1N2K3 w - - 0 1')));
+
+        const victim = on(sq('c3'))[0];
+
+        play([act(6, 0, [move('b1', 'c3', 'N', { captured: 'p' })])], sight(lay('4k3/8/8/8/8/2N5/8/4K3 b - - 0 1'), 6));
+        await flush();
+        await elapse(Number(of(victim)[0].options.delay) + 5);
+
+        expect(cues).toEqual(['piece-capture', 'horse-call']);
+
+        await elapse(KNIGHT_MS + TAKE_MS + 40);
+
+        expect(cues).toEqual(['piece-capture', 'horse-call', 'horse-step']);
+        expect(felt).toEqual(['capture']);
+    });
+
+    it('trumpets as a bishop takes a piece', async () =>
+    {
+        table.reset(sight(lay('7k/8/8/1p6/8/8/8/4KB2 w - - 0 1')));
+        play([act(6, 0, [move('f1', 'b5', 'B', { captured: 'p' })])], sight(lay('7k/8/8/1B6/8/8/8/4K3 b - - 0 1'), 6));
+        await elapse(GLIDE_MOST + TAKE_MS + 40);
+
+        expect(cues).toEqual(['piece-capture', 'elephant-call', 'elephant-step']);
+    });
+
+    it('keeps the click for every other piece, and for a pawn that becomes a knight', async () =>
+    {
+        table.reset(sight(lay('4k3/8/8/8/8/8/8/R3K3 w Q - 0 1')));
+        play([act(6, 0, [move('a1', 'a5', 'R')])], sight(lay('4k3/8/8/R7/8/8/8/4K3 b - - 1 1'), 6));
+        await elapse(GLIDE_MOST + 40);
+
+        expect(cues).toEqual(['piece-move']);
+
+        cues = [];
+        table.reset(sight(lay('8/4P2k/8/8/8/8/8/4K3 w - - 0 1')));
+        play([act(6, 0, [move('e7', 'e8', 'P', { promotion: 'n' })])], sight(lay('4N3/7k/8/8/8/8/8/4K3 b - - 0 1'), 6));
+        await elapse(GLIDE_MOST + PROMOTE_MS + 40);
+
+        expect(cues).toEqual(['piece-move', 'promote']);
+    });
+
+    it('is the click and the knock again for somebody who turned the animals off, asked at each move', async () =>
+    {
+        animals = false;
+        table.reset(sight(lay('4k3/8/8/8/8/2p5/8/1N2K3 w - - 0 1')));
+        play([act(6, 0, [move('b1', 'c3', 'N', { captured: 'p' })])], sight(lay('4k3/8/8/8/8/2N5/8/4K3 b - - 0 1'), 6));
+        await elapse(KNIGHT_MS + TAKE_MS + 40);
+
+        expect(cues).toEqual(['piece-capture', 'piece-move']);
+
+        animals = true;
+        play([act(7, 1, [move('e8', 'd8', 'k', { seat: 1 })]), act(8, 0, [move('c3', 'e4', 'N')])], sight(lay('3k4/8/8/8/4N3/8/8/4K3 b - - 2 2'), 8));
+        await elapse(GLIDE_MOST + KNIGHT_MS + 80);
+
+        expect(cues).toEqual(['piece-capture', 'piece-move', 'piece-move', 'horse-step']);
     });
 });
 

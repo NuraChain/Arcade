@@ -4030,6 +4030,42 @@ describe('the table’s chat and its controls', () =>
         expect(resign).toHaveBeenCalledTimes(1);
     });
 
+    it('offers the horse and the elephant in the sheet at a chess table only, after the sound, and turns them off and on', () =>
+    {
+        useSettings().reset();
+        const close = vi.fn();
+        const labels = (container: HTMLElement) => [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim());
+        const chess = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, animals: true }) as Rendered).container;
+
+        expect(labels(chess).slice(0, 2)).toEqual(['Turn sound off', 'Turn horse and elephant sounds off']);
+
+        fire([...chess.querySelectorAll('ul button')][1] as HTMLElement, 'click');
+
+        expect(useSettings().settings().animalSounds).toBe(false);
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(labels(chess)[1]).toBe('Turn horse and elephant sounds on');
+
+        const other = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false }) as Rendered).container;
+
+        expect(labels(other).join(' | ')).not.toContain('horse');
+    });
+
+    it('hands the sheet the horse and the elephant from a chess table\'s dock, and from no other', () =>
+    {
+        const open = (container: HTMLElement) => fire([...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === 'This table')!, 'click');
+
+        open(renderTest(() => TableDock({ animals: true }) as Rendered).container);
+
+        expect(useOverlay().top()!.props.animals).toBe(true);
+
+        useOverlay().reset();
+        open(renderTest(() => TableDock({}) as Rendered).container);
+
+        expect(useOverlay().top()!.props.animals).toBeUndefined();
+
+        useOverlay().reset();
+    });
+
     it('offers no giving up in the sheet when there is no game', () =>
     {
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;

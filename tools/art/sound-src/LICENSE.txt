@@ -1,10 +1,24 @@
 Sound sources
 
-Every file here is from Kenney (kenney.nl) and released under CC0 1.0 Universal:
+Every file here is released under CC0 1.0 Universal:
 https://creativecommons.org/publicdomain/zero/1.0/
+
+From Kenney (kenney.nl):
 
 - Casino Audio 1.1: https://kenney.nl/assets/casino-audio
 - Impact Sounds 1.0: https://kenney.nl/assets/impact-sounds
 - Music Jingles 1.0: https://kenney.nl/assets/music-jingles
+
+From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
+
+- bigsoundbank-0610-horse-trotting.ogg, "Horse Trotting":
+  https://bigsoundbank.com/horse-trotting-s0610.html
+- bigsoundbank-1541-horse-neighing-4.ogg, "Horse neighing #4":
+  https://bigsoundbank.com/horse-neighing-4-s1541.html
+
+From Wikimedia Commons, recorded by தகவலுழவன் (own work, 2011):
+
+- commons-elephant-voice-trumpeting.ogg, "Elephant voice - trumpeting":
+  https://commons.wikimedia.org/wiki/File:Elephant_voice_-_trumpeting.ogg
 
 Credit is not required by the licence and is given anyway.

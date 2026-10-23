@@ -982,6 +982,7 @@ export default component PlayPage()
                             <span class="flex items-center gap-2">
                                 <TableDock
                                     code={ shown.code }
+                                    animals={ playing === 'chess' }
                                     target={ arena }
                                     upright={ playing === 'ludo' }
                                     onChat={ floating ? undefined : openChat }

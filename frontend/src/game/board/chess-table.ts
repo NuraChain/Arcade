@@ -1,12 +1,12 @@
 import { SIZE, SQUARE, coordinatesOf, spotOf, type Foot } from '../chess-layout.ts';
 import { boardOf, checkOf, passedOf, rookOf, step, type Felt, type Man, type Told } from '../chess-felt.ts';
-import { colourOf, kindOf, pieceOf, type Colour, type Piece } from '../../../../backend/src/domains/match/chess/board.ts';
+import { colourOf, kindOf, pieceOf, type Colour, type Kind, type Piece } from '../../../../backend/src/domains/match/chess/board.ts';
 import { clamp } from '../stage/curves.ts';
 import { LAYER, layered } from '../stage/layers.ts';
 import type { Table } from '../stage/presenter.ts';
 import { arc, type Point } from '../stage/route.ts';
 import type { Run, Stage } from '../stage/stage.ts';
-import type { SoundHandle } from '../sound.ts';
+import type { Cue, SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
 /** What the table is told to show: the felt, whose colour stands at the foot, and a king mated on it. */
@@ -30,6 +30,7 @@ export interface ChessOptions
     host: HTMLElement;
     stage: Stage;
     sound: () => SoundHandle | null;
+    animals: () => boolean;
     feel: (kind: Haptic) => void;
     onFacts?: (facts: ChessFacts) => void;
 }
@@ -77,6 +78,12 @@ const ROOK_ARCH = 0.45;
 const ROOK_LAG = 0.4;
 
 const CONTACT = 0.82;
+
+/** The two pieces Persian names for animals, the knight a horse (اسب) and the bishop an elephant (فیل): each is set down as one, and calls as it takes. */
+const ANIMALS: Partial<Record<Kind, { step: Cue; call: Cue }>> = {
+    n: { step: 'horse-step', call: 'horse-call' },
+    b: { step: 'elephant-step', call: 'elephant-call' }
+};
 
 const DROP_BASE = 70;
 
@@ -494,6 +501,7 @@ export function createChessTable(options: ChessOptions): ChessTable
         const arrived = next.men.find((man) => man.key === mover.key) ?? mover;
         const landing = spot(move.to);
         const promoted = move.promotion !== undefined;
+        const animal = options.animals() ? ANIMALS[kindOf(mover.piece)] : undefined;
 
         shown = { ...shown, men: next.men, last: next.last, turn: next.turn };
         held = null;
@@ -521,6 +529,12 @@ export function createChessTable(options: ChessOptions): ChessTable
             stage.after(contact, () =>
             {
                 options.sound()?.play('piece-capture', { pan: pan(landing) });
+
+                if (animal !== undefined)
+                {
+                    options.sound()?.play(animal.call, { pan: pan(landing) });
+                }
+
                 options.feel(colour === shown.foot ? 'capture' : 'hit');
             });
         }
@@ -538,7 +552,7 @@ export function createChessTable(options: ChessOptions): ChessTable
             stage.after(rookRun.length, () => options.sound()?.play('piece-move', { pan: pan(spot(rook.to)), rate: 0.92 }));
         }
 
-        stage.after(run.length, () => options.sound()?.play('piece-move', { pan: pan(landing), rate: victim === undefined ? 1 : 0.9 }));
+        stage.after(run.length, () => options.sound()?.play(animal?.step ?? 'piece-move', { pan: pan(landing), rate: victim === undefined || animal !== undefined ? 1 : 0.9 }));
 
         await run.done;
         flying.delete(mover.key);

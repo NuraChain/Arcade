@@ -613,9 +613,10 @@ describe('settings', () =>
         expect(stored).not.toContain('showOnline');
     });
 
-    it('starts with sound on and the table chat tucked into its pill', () =>
+    it('starts with sound on, the horse and the elephant heard at chess, and the table chat tucked into its pill', () =>
     {
         expect(defaultSettings().sound).toBe(true);
+        expect(defaultSettings().animalSounds).toBe(true);
         expect(defaultSettings().railOpen).toBe(false);
     });
 });
