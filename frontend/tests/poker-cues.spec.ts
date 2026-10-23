@@ -11,7 +11,7 @@ import { useSettings } from '../src/stores/settings.store.ts';
 import { POT_FLY, POT_GAP, POT_SPAN } from '../src/game/poker-beats.ts';
 import { BLINDS, EVERYBODY, elapse, heard, match, places, pot, rows, seated, stack, told } from './poker-mounted.ts';
 
-const sounds = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[] }));
+const sounds = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[], games: [] as string[] }));
 
 vi.mock('../src/game/sound.ts', async (original) =>
 {
@@ -19,14 +19,19 @@ vi.mock('../src/game/sound.ts', async (original) =>
 
     return {
         ...real,
-        createSound: () => ({
-            play: (cue: string) =>
-            {
-                sounds.heard.push(cue);
-            },
-            setEnabled: () => undefined,
-            dispose: () => undefined
-        })
+        createSound: (_on: boolean, game?: string) =>
+        {
+            sounds.games.push(game ?? 'none');
+
+            return {
+                play: (cue: string) =>
+                {
+                    sounds.heard.push(cue);
+                },
+                setEnabled: () => undefined,
+                dispose: () => undefined
+            };
+        }
     };
 });
 
@@ -88,6 +93,7 @@ beforeEach(() =>
     useSettings().reset();
     sounds.heard.length = 0;
     sounds.felt.length = 0;
+    sounds.games.length = 0;
     places();
 });
 
@@ -99,6 +105,13 @@ afterEach(() =>
 
 describe('what a poker table sounds like', () =>
 {
+    it('plays from the card table\'s sounds and poker\'s own', async () =>
+    {
+        await seated(alone());
+
+        expect(sounds.games.filter((game) => game !== 'none')).toEqual(['poker']);
+    });
+
     it('is heard in the order things happen: the fold, the pot leaving for its winner and landing, the shuffle, then the cards going out with a chip for each blind among them', async () =>
     {
         const { read } = await seated(alone());

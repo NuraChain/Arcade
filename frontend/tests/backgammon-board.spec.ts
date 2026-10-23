@@ -37,6 +37,32 @@ import { useSettings } from '../src/stores/settings.store.ts';
 import type { Watched } from '../src/stores/watch.store.ts';
 import type { MatchView } from '../src/api.ts';
 
+const sounds = vi.hoisted(() => ({ games: [] as string[], heard: [] as string[] }));
+
+vi.mock('../src/game/sound.ts', async (original) =>
+{
+    const real = await original<typeof import('../src/game/sound.ts')>();
+
+    return {
+        ...real,
+        createSound: (on: boolean, game?: Parameters<typeof real.createSound>[1]) =>
+        {
+            const handle = real.createSound(on, game);
+
+            sounds.games.push(game ?? 'none');
+
+            return {
+                ...handle,
+                play: (...asked: Parameters<typeof handle.play>) =>
+                {
+                    sounds.heard.push(asked[0]);
+                    handle.play(...asked);
+                }
+            };
+        }
+    };
+});
+
 type Rendered = HTMLElement;
 
 type Backgammon = Extract<MatchView['view'], { kind: 'backgammon' }>;
@@ -187,6 +213,8 @@ beforeEach(() =>
     setRuntime({ clock: manualClock(400_000), seed: 3 });
     useLocale().setLocale('en');
     useSettings().reset();
+    sounds.games.length = 0;
+    sounds.heard.length = 0;
 });
 
 afterEach(() =>
@@ -2091,6 +2119,8 @@ describe('moves made on the table itself', () =>
 
         expect(play.mock.calls.map((call) => call[0])).toEqual([{ kind: 'backgammon', verb: 'roll' }]);
         expect(zone(container).hasAttribute('data-shake')).toBe(true);
+        expect(sounds.heard, 'the dice rattled in backgammon\'s own cup').toEqual(['cup-shake']);
+        expect(sounds.games.filter((game) => game !== 'none'), 'the board plays from backgammon\'s own sounds').toEqual(['backgammon']);
 
         answer('failed');
         await flush();

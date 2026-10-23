@@ -30,6 +30,23 @@ import { client } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import { watchedBoxes } from './fake-boxes.ts';
 
+const sounds = vi.hoisted(() => ({ games: [] as string[] }));
+
+vi.mock('../src/game/sound.ts', async (original) =>
+{
+    const real = await original<typeof import('../src/game/sound.ts')>();
+
+    return {
+        ...real,
+        createSound: (on: boolean, game?: Parameters<typeof real.createSound>[1]) =>
+        {
+            sounds.games.push(game ?? 'none');
+
+            return real.createSound(on, game);
+        }
+    };
+});
+
 type Rendered = HTMLElement;
 
 type Ludo = Extract<MatchView['view'], { kind: 'ludo' }>;
@@ -123,6 +140,14 @@ afterEach(() =>
 
 describe('the ludo table', () =>
 {
+    it('plays from Ludo\'s own sounds', async () =>
+    {
+        sounds.games.length = 0;
+        await show(ludo({}));
+
+        expect(sounds.games.filter((game) => game !== 'none')).toEqual(['ludo']);
+    });
+
     it('seats each player inside their own yard, and marks the one whose turn it is', async () =>
     {
         const container = await show(ludo({}));

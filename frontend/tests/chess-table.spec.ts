@@ -398,6 +398,7 @@ describe('a chess move, played', () =>
 
         expect(king.hasAttribute('data-tipped')).toBe(true);
         expect(of(king).at(-1)?.frames.at(-1)?.rotate).toBe('-76deg');
+        expect(cues.at(-1), 'the king is heard falling, from chess\'s own pack').toBe('king-fall');
         expect(table.same(sight(lay('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3', { mated: 'w', last: { from: sq('d8'), to: sq('h4') } })))).toBe(true);
     });
 

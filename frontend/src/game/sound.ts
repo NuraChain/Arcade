@@ -1,4 +1,5 @@
-import { PACK, SAMPLED, unpack, type Sampled } from './sound-files.ts';
+import type { GameId } from '../data/games.ts';
+import { CUES, PACKS, SAMPLED, TABLE_PACKS, unpack, type Pack, type Sampled } from './sound-files.ts';
 
 export type Tone =
     | 'turn'
@@ -11,8 +12,11 @@ export type Tone =
     | 'deny'
     | 'home'
     | 'die-land'
-    | 'token-step'
-    | 'token-capture'
+    | 'dice-wood'
+    | 'pawn-step'
+    | 'pawn-hit'
+    | 'checker'
+    | 'checker-hit'
     | 'piece-move'
     | 'piece-capture'
     | 'horse-step'
@@ -63,7 +67,8 @@ interface Engine
     context: AudioContext | null;
     buses: Record<Bus, GainNode> | null;
     takes: Map<Sampled, Take[]>;
-    loading: boolean;
+    fetched: Set<Pack>;
+    wanted: Map<Pack, number>;
     handles: number;
     listening: number;
     resuming: boolean;
@@ -74,6 +79,19 @@ interface Engine
     turn: Map<Cue, number>;
     voices: Map<Cue, { active: number; last: number }>;
 }
+
+const LANDING: readonly Voice[] = [
+    { wave: 'triangle', from: 220, to: 140, hold: 0.09, gain: 0.3, delay: 0 },
+    { wave: 'triangle', from: 300, to: 190, hold: 0.07, gain: 0.22, delay: 0.05 },
+    { wave: 'sine', from: 180, to: 120, hold: 0.12, gain: 0.26, delay: 0.11 }
+];
+
+const STEP: readonly Voice[] = [{ wave: 'sine', from: 760, to: 700, hold: 0.05, gain: 0.14, delay: 0 }];
+
+const KNOCK: readonly Voice[] = [
+    { wave: 'sawtooth', from: 420, to: 90, hold: 0.24, gain: 0.26, delay: 0 },
+    { wave: 'square', from: 210, to: 70, hold: 0.18, gain: 0.12, delay: 0.02 }
+];
 
 const TONES: Record<Tone, readonly Voice[]> = {
     'turn': [
@@ -100,16 +118,12 @@ const TONES: Record<Tone, readonly Voice[]> = {
         { wave: 'sine', from: 520, to: 780, hold: 0.14, gain: 0.24, delay: 0 },
         { wave: 'sine', from: 780, to: 1040, hold: 0.2, gain: 0.18, delay: 0.1 }
     ],
-    'die-land': [
-        { wave: 'triangle', from: 220, to: 140, hold: 0.09, gain: 0.3, delay: 0 },
-        { wave: 'triangle', from: 300, to: 190, hold: 0.07, gain: 0.22, delay: 0.05 },
-        { wave: 'sine', from: 180, to: 120, hold: 0.12, gain: 0.26, delay: 0.11 }
-    ],
-    'token-step': [{ wave: 'sine', from: 760, to: 700, hold: 0.05, gain: 0.14, delay: 0 }],
-    'token-capture': [
-        { wave: 'sawtooth', from: 420, to: 90, hold: 0.24, gain: 0.26, delay: 0 },
-        { wave: 'square', from: 210, to: 70, hold: 0.18, gain: 0.12, delay: 0.02 }
-    ],
+    'die-land': LANDING,
+    'dice-wood': LANDING,
+    'pawn-step': STEP,
+    'pawn-hit': KNOCK,
+    'checker': STEP,
+    'checker-hit': KNOCK,
     'piece-move': [{ wave: 'triangle', from: 1180, to: 900, hold: 0.04, gain: 0.12, delay: 0 }],
     'piece-capture': [
         { wave: 'triangle', from: 520, to: 240, hold: 0.09, gain: 0.2, delay: 0 },
@@ -166,7 +180,8 @@ const fresh = (): Engine => ({
     context: null,
     buses: null,
     takes: new Map(),
-    loading: false,
+    fetched: new Set(),
+    wanted: new Map(),
     handles: 0,
     listening: 0,
     resuming: false,
@@ -436,31 +451,45 @@ function unlock()
     load();
 }
 
+/** Fetches every pack a table that is listening plays from and nobody has fetched yet. */
 function load()
 {
     const context = engine.context;
 
-    if (context === null || engine.loading || engine.listening === 0 || typeof fetch !== 'function')
+    if (context === null || typeof fetch !== 'function')
     {
         return;
     }
 
-    engine.loading = true;
+    for (const [pack, wanting] of engine.wanted)
+    {
+        if (wanting > 0 && !engine.fetched.has(pack))
+        {
+            fetchPack(context, pack);
+        }
+    }
+}
 
-    void fetch(PACK)
+function fetchPack(context: AudioContext, pack: Pack)
+{
+    const at = engine;
+
+    at.fetched.add(pack);
+
+    void fetch(PACKS[pack])
         .then((response) => response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status))))
         .then((bytes) =>
         {
-            for (const [cue, takes] of unpack(bytes))
+            for (const [cue, takes] of unpack(bytes, CUES[pack]))
             {
                 for (const take of takes)
                 {
                     void context.decodeAudioData(take)
                         .then((buffer) =>
                         {
-                            const held = engine.takes.get(cue) ?? [];
+                            const held = at.takes.get(cue) ?? [];
                             held.push({ buffer, offset: offsetOf(buffer.getChannelData(0), buffer.sampleRate) });
-                            engine.takes.set(cue, held);
+                            at.takes.set(cue, held);
                         })
                         .catch(() => undefined);
                 }
@@ -468,7 +497,7 @@ function load()
         })
         .catch(() =>
         {
-            engine.loading = false;
+            at.fetched.delete(pack);
         });
 }
 
@@ -620,16 +649,29 @@ function play(cue: Cue, options: PlayOptions)
     }
 }
 
-export function createSound(enabled: boolean): SoundHandle
+const ALONE: readonly Pack[] = ['common'];
+
+/** A handle for one table (its game's packs) or for anything else (the shared pack alone). */
+export function createSound(enabled: boolean, game?: GameId): SoundHandle
 {
+    const packs = game === undefined ? ALONE : TABLE_PACKS[game];
     let on = enabled;
     let live = true;
+
+    const want = (by: number) =>
+    {
+        for (const pack of packs)
+        {
+            engine.wanted.set(pack, Math.max(0, (engine.wanted.get(pack) ?? 0) + by));
+        }
+    };
 
     engine.handles += 1;
 
     if (on)
     {
         engine.listening += 1;
+        want(1);
     }
 
     const context = engine.context;
@@ -650,6 +692,11 @@ export function createSound(enabled: boolean): SoundHandle
         void context.resume?.().catch(() => undefined);
     }
 
+    if (context !== null && on)
+    {
+        load();
+    }
+
     return {
         play: (cue, options = {}) =>
         {
@@ -668,6 +715,7 @@ export function createSound(enabled: boolean): SoundHandle
 
             on = next;
             engine.listening += next ? 1 : -1;
+            want(next ? 1 : -1);
 
             if (next)
             {
@@ -688,6 +736,7 @@ export function createSound(enabled: boolean): SoundHandle
             if (on)
             {
                 engine.listening -= 1;
+                want(-1);
             }
 
             if (engine.handles > 0)

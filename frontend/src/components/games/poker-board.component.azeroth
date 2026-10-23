@@ -1160,7 +1160,7 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         const cloth = feltNode();
         const clock = runtime().clock;
         const report = (error: unknown) => console.error(error);
-        sound = createSound(untrack(() => settings.settings().sound));
+        sound = createSound(untrack(() => settings.settings().sound), 'poker');
 
         const made = createPresenter<Felt, Told>({
             stage: createStage({ clock, quiet: () => device.reducedMotion(), report }),

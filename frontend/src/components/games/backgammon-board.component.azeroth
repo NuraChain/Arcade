@@ -624,7 +624,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     {
         let unwatch: () => void = () => undefined;
 
-        sound = createSound(untrack(() => settings.settings().sound));
+        sound = createSound(untrack(() => settings.settings().sound), 'backgammon');
 
         if (layer !== null)
         {
@@ -1025,7 +1025,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
     const roll = async () =>
     {
         haptic('select');
-        sound?.play('die-shake', { gain: 0.8 });
+        sound?.play('cup-shake', { gain: 0.8 });
         men?.rattle(true);
         await board.play({ kind: 'backgammon', verb: 'roll' });
         men?.rattle(false);

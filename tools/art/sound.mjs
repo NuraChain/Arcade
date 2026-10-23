@@ -12,7 +12,8 @@ const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 const HOOVES = 'bigsoundbank-0610-horse-trotting.ogg';
 
 /**
- * A take is its cue, its source and the most of it kept, in seconds, taken from the source's first sound.
+ * A take is its pack, its cue, its source and the most of it kept, in seconds, taken from the source's first
+ * sound. Each pack is written to a file of its own, which only the tables that play it fetch.
  * A take with a shape is made rather than cut: `cuts` are the stretches of the source it keeps, each `apart`
  * seconds after the one before (two hooves of a trot), each faded out over `tail`; `layer` is a second source
  * mixed under them at a level in decibels; `pitch` plays the whole slower and lower; `filter` is an ffmpeg
@@ -21,36 +22,45 @@ const HOOVES = 'bigsoundbank-0610-horse-trotting.ogg';
  * chess click: a hoof as loud as the click, a step 4 dB under it on a phone's speaker, a call 6 dB under it.
  */
 export const SOUNDS = [
-    ['card-slide', 'card-slide-1.ogg', 0.4],
-    ['card-slide', 'card-slide-5.ogg', 0.4],
-    ['card-slide', 'card-slide-7.ogg', 0.4],
-    ['card-place', 'card-place-1.ogg', 0.35],
-    ['card-place', 'card-place-4.ogg', 0.35],
-    ['card-gather', 'card-shove-2.ogg', 0.5],
-    ['card-shuffle', 'card-shuffle.ogg', 1.2],
-    ['card-fan', 'card-fan-1.ogg', 0.5],
-    ['die-land', 'die-throw-1.ogg', 0.35],
-    ['die-land', 'die-throw-4.ogg', 0.35],
-    ['die-shake', 'dice-shake-1.ogg', 1.0],
-    ['token-step', 'impactWood_light_000.ogg', 0.15],
-    ['token-step', 'impactWood_light_002.ogg', 0.15],
-    ['token-capture', 'impactWood_heavy_001.ogg', 0.35],
-    ['token-yard', 'impactSoft_medium_001.ogg', 0.25],
-    ['win', 'jingles_PIZZI01.ogg', 1.0],
-    ['hand-won', 'jingles_PIZZI16.ogg', 0.46],
-    ['chip-lay', 'chip-lay-1.ogg', 0.3],
-    ['chip-lay', 'chip-lay-3.ogg', 0.3],
-    ['chips-stack', 'chips-stack-2.ogg', 0.5],
-    ['piece-move', 'impactGeneric_light_000.ogg', 0.16],
-    ['piece-move', 'impactGeneric_light_003.ogg', 0.16],
-    ['piece-move', 'impactGeneric_light_004.ogg', 0.16],
-    ['piece-capture', 'impactWood_medium_002.ogg', 0.24],
-    ['piece-capture', 'impactWood_medium_003.ogg', 0.24],
-    ['horse-step', HOOVES, 0.21, { cuts: [[1.252, 1.330], [0.508, 0.575]], apart: 0.11, low: 90, gain: 10 }],
-    ['horse-step', HOOVES, 0.22, { cuts: [[2.000, 2.075], [0.893, 0.960]], apart: 0.125, low: 90, gain: 10 }],
-    ['horse-call', 'bigsoundbank-1541-horse-neighing-4.ogg', 0.95, { cuts: [[0.09, 1.04]], tail: 0.14, low: 120, gain: -10.5, kbps: 56 }],
-    ['elephant-step', 'impactSoft_heavy_000.ogg', 0.42, { cuts: [[0, 0.4]], layer: ['footstep_grass_001.ogg', 12], pitch: 0.85, filter: 'equalizer=f=190:t=q:w=1:g=8', low: 40, gain: -16, kbps: 64 }],
-    ['elephant-call', 'commons-elephant-voice-trumpeting.ogg', 0.98, { cuts: [[0.14, 1.12]], tail: 0.14, low: 150, gain: 0, kbps: 56 }]
+    ['common', 'win', 'jingles_PIZZI01.ogg', 1.0],
+    ['common', 'hand-won', 'jingles_PIZZI16.ogg', 0.46],
+    ['cards', 'card-slide', 'card-slide-1.ogg', 0.4],
+    ['cards', 'card-slide', 'card-slide-5.ogg', 0.4],
+    ['cards', 'card-slide', 'card-slide-7.ogg', 0.4],
+    ['cards', 'card-place', 'card-place-1.ogg', 0.35],
+    ['cards', 'card-place', 'card-place-4.ogg', 0.35],
+    ['cards', 'card-gather', 'card-shove-2.ogg', 0.5],
+    ['cards', 'card-shuffle', 'card-shuffle.ogg', 1.2],
+    ['cards', 'card-fan', 'card-fan-1.ogg', 0.5],
+    ['ludo', 'die-land', 'die-throw-1.ogg', 0.35],
+    ['ludo', 'die-land', 'die-throw-4.ogg', 0.35],
+    ['ludo', 'die-shake', 'dice-shake-1.ogg', 1.0],
+    ['ludo', 'pawn-step', 'impactWood_light_000.ogg', 0.15],
+    ['ludo', 'pawn-step', 'impactWood_light_002.ogg', 0.15],
+    ['ludo', 'pawn-hit', 'impactWood_heavy_001.ogg', 0.35],
+    ['ludo', 'pawn-yard', 'impactSoft_medium_001.ogg', 0.25],
+    ['backgammon', 'dice-wood', 'die-throw-1.ogg', 0.35],
+    ['backgammon', 'dice-wood', 'die-throw-4.ogg', 0.35],
+    ['backgammon', 'cup-shake', 'dice-shake-1.ogg', 1.0],
+    ['backgammon', 'checker', 'impactWood_light_000.ogg', 0.15],
+    ['backgammon', 'checker', 'impactWood_light_002.ogg', 0.15],
+    ['backgammon', 'checker-hit', 'impactWood_heavy_001.ogg', 0.35],
+    ['backgammon', 'checker-bar', 'impactSoft_medium_001.ogg', 0.25],
+    ['backgammon', 'checker-off', 'impactSoft_medium_001.ogg', 0.25],
+    ['poker', 'chip-lay', 'chip-lay-1.ogg', 0.3],
+    ['poker', 'chip-lay', 'chip-lay-3.ogg', 0.3],
+    ['poker', 'chips-stack', 'chips-stack-2.ogg', 0.5],
+    ['chess', 'piece-move', 'impactGeneric_light_000.ogg', 0.16],
+    ['chess', 'piece-move', 'impactGeneric_light_003.ogg', 0.16],
+    ['chess', 'piece-move', 'impactGeneric_light_004.ogg', 0.16],
+    ['chess', 'piece-capture', 'impactWood_medium_002.ogg', 0.24],
+    ['chess', 'piece-capture', 'impactWood_medium_003.ogg', 0.24],
+    ['chess', 'horse-step', HOOVES, 0.21, { cuts: [[1.252, 1.330], [0.508, 0.575]], apart: 0.11, low: 90, gain: 10 }],
+    ['chess', 'horse-step', HOOVES, 0.22, { cuts: [[2.000, 2.075], [0.893, 0.960]], apart: 0.125, low: 90, gain: 10 }],
+    ['chess', 'horse-call', 'bigsoundbank-1541-horse-neighing-4.ogg', 0.95, { cuts: [[0.09, 1.04]], tail: 0.14, low: 120, gain: -10.5, kbps: 56 }],
+    ['chess', 'elephant-step', 'impactSoft_heavy_000.ogg', 0.42, { cuts: [[0, 0.4]], layer: ['footstep_grass_001.ogg', 12], pitch: 0.85, filter: 'equalizer=f=190:t=q:w=1:g=8', low: 40, gain: -16, kbps: 64 }],
+    ['chess', 'elephant-call', 'commons-elephant-voice-trumpeting.ogg', 0.98, { cuts: [[0.14, 1.12]], tail: 0.14, low: 150, gain: 0, kbps: 56 }],
+    ['chess', 'king-fall', 'impactSoft_medium_001.ogg', 0.25]
 ];
 
 const fixed = (value) => Number(value.toFixed(3));
@@ -87,13 +97,14 @@ function plain(source, most)
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'nura-sound-'));
-const index = {};
-const bodies = [];
-let offset = 0;
+const packs = new Map();
+let made = 0;
 
-for (const [cue, source, most, shape] of SOUNDS)
+for (const [pack, cue, source, most, shape] of SOUNDS)
 {
-    const target = join(scratch, `${ bodies.length }.mp3`);
+    const target = join(scratch, `${ made }.mp3`);
+
+    made += 1;
 
     execFileSync(FFMPEG, [
         '-y', '-v', 'error',
@@ -104,21 +115,25 @@ for (const [cue, source, most, shape] of SOUNDS)
     ]);
 
     const body = readFileSync(target);
+    const held = packs.get(pack) ?? { index: {}, bodies: [], offset: 0 };
 
-    index[cue] = [...(index[cue] ?? []), [offset, body.length]];
-    bodies.push(body);
-    offset += body.length;
+    held.index[cue] = [...(held.index[cue] ?? []), [held.offset, body.length]];
+    held.bodies.push(body);
+    held.offset += body.length;
+    packs.set(pack, held);
 }
 
 rmSync(scratch, { recursive: true, force: true });
-
-const header = Buffer.from(JSON.stringify(index), 'utf8');
-const lead = Buffer.alloc(8);
-
-lead.write('NCUE', 0, 'ascii');
-lead.writeUInt32LE(header.length, 4);
-
 mkdirSync(OUT, { recursive: true });
-writeFileSync(join(OUT, 'table.cues'), Buffer.concat([lead, header, ...bodies]));
 
-console.log(`sound table.cues ${ 8 + header.length + offset } bytes, ${ bodies.length } takes of ${ Object.keys(index).length } cues`);
+for (const [pack, { index, bodies, offset }] of packs)
+{
+    const header = Buffer.from(JSON.stringify(index), 'utf8');
+    const lead = Buffer.alloc(8);
+
+    lead.write('NCUE', 0, 'ascii');
+    lead.writeUInt32LE(header.length, 4);
+    writeFileSync(join(OUT, `${ pack }.cues`), Buffer.concat([lead, header, ...bodies]));
+
+    console.log(`sound ${ pack }.cues ${ 8 + header.length + offset } bytes, ${ bodies.length } takes of ${ Object.keys(index).length } cues`);
+}

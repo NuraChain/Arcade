@@ -12,7 +12,7 @@ import { useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { act, card, elapse, mounted, type Hokm } from './hokm-mounted.ts';
 
-const told = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[] }));
+const told = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[], games: [] as string[] }));
 
 vi.mock('../src/game/sound.ts', async (original) =>
 {
@@ -20,14 +20,19 @@ vi.mock('../src/game/sound.ts', async (original) =>
 
     return {
         ...real,
-        createSound: () => ({
-            play: (cue: string) =>
-            {
-                told.heard.push(cue);
-            },
-            setEnabled: () => undefined,
-            dispose: () => undefined
-        })
+        createSound: (_on: boolean, game?: string) =>
+        {
+            told.games.push(game ?? 'none');
+
+            return {
+                play: (cue: string) =>
+                {
+                    told.heard.push(cue);
+                },
+                setEnabled: () => undefined,
+                dispose: () => undefined
+            };
+        }
     };
 });
 
@@ -119,6 +124,7 @@ beforeEach(() =>
     useLocale().setLocale('en');
     told.heard.length = 0;
     told.felt.length = 0;
+    told.games.length = 0;
 });
 
 afterEach(() =>
@@ -130,6 +136,13 @@ afterEach(() =>
 
 describe('what a hokm table is heard to do', () =>
 {
+    it('plays from the card table\'s sounds and Hokm\'s own', async () =>
+    {
+        await mounted(match({}));
+
+        expect(told.games.filter((game) => game !== 'none')).toEqual(['hokm']);
+    });
+
     it('lets every card be heard leaving and landing, then the trick taken and gathered, each once and in that order', async () =>
     {
         const { send } = await mounted(match({}));

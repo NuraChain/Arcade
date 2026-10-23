@@ -720,7 +720,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             const flight = arc(start, end, { duration: ENTER_MS, arch: 1 });
             const run = stage.animate(piece.root, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: at(one), scale: String(scale + (1 - scale) * one.progress) })), {
                 duration: ENTER_MS,
-                landed: () => sound()?.play('token-step', { pan: pan(end.x) })
+                landed: () => sound()?.play('pawn-step', { pan: pan(end.x) })
             });
 
             stage.animate(piece.lift, flight.map((one) => ({ offset: Math.min(1, one.at / ENTER_MS), translate: `0 ${ cq(-0.9 * C * one.lift) }` })), { duration: ENTER_MS, quiet: 'skip' });
@@ -740,7 +740,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             scale: String(scale + (1 - scale) * Math.min(1, one.at / first))
         })), {
             duration: walked.length,
-            landed: () => sound()?.play('token-step', hopping ? { pan: pan(end.x), rate: 0.92 + last * 0.03 } : { pan: pan(end.x) })
+            landed: () => sound()?.play('pawn-step', hopping ? { pan: pan(end.x), rate: 0.92 + last * 0.03 } : { pan: pan(end.x) })
         });
 
         stage.animate(piece.lift, walked.steps.map((one) => ({ offset: Math.min(1, one.at / walked.length), translate: `0 ${ cq(-0.22 * C * one.lift) }` })), { duration: walked.length, quiet: 'skip' });
@@ -750,7 +750,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         {
             for (const [leg, landed] of walked.lands.slice(0, last).entries())
             {
-                stage.after(landed, () => sound()?.play('token-step', { pan: pan(stops[leg].x), rate: 0.92 + leg * 0.03 }));
+                stage.after(landed, () => sound()?.play('pawn-step', { pan: pan(stops[leg].x), rate: 0.92 + leg * 0.03 }));
             }
         }
 
@@ -1117,7 +1117,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
         if (beat.victims.length > 0)
         {
-            options.sound()?.play('token-capture', { pan: pan(piece.at.x) });
+            options.sound()?.play('pawn-hit', { pan: pan(piece.at.x) });
 
             if (reader)
             {
@@ -1149,7 +1149,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
             if (moment.ctx.live())
             {
-                options.sound()?.play('token-yard', { pan: pan(pieces.get(beat.victims[0])?.at.x ?? 50) });
+                options.sound()?.play('pawn-yard', { pan: pan(pieces.get(beat.victims[0])?.at.x ?? 50) });
             }
         }
     };

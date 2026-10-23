@@ -315,7 +315,7 @@ describe('what happened, played on the table', () =>
 
         await elapse(1400);
 
-        const landings = cues.filter((cue) => cue === 'die-land').length;
+        const landings = cues.filter((cue) => cue === 'dice-wood').length;
 
         expect(landings).toBeGreaterThanOrEqual(6);
         expect(landings).toBeLessThanOrEqual(8);
@@ -448,7 +448,7 @@ describe('what happened, played on the table', () =>
 
         await elapse(Number(walk.options.duration));
 
-        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(1);
+        expect(cues.filter((cue) => cue === 'checker')).toHaveLength(1);
         expect(Number(mover.style.zIndex)).toBeLessThan(LAYER.count);
     });
 
@@ -507,7 +507,7 @@ describe('what happened, played on the table', () =>
 
         await elapse(WALK_MOST + KNOCK_MS);
 
-        expect(cues.slice(0, 3)).toEqual(['token-capture', 'token-step', 'token-yard']);
+        expect(cues.slice(0, 3)).toEqual(['checker-hit', 'checker', 'checker-bar']);
         expect(felt_).toEqual(['capture']);
     });
 
@@ -584,7 +584,7 @@ describe('what happened, played on the table', () =>
         play([act(6, 0, [{ e: 'move', seat: 0, from: 3, to: 0, die: 3, hit: false }, { e: 'roll', seat: 1, dice: [3, 1] }])], after);
         await elapse(WALK_MOST);
 
-        expect(cues).toContain('token-yard');
+        expect(cues).toContain('checker-off');
         expect(host.querySelectorAll('.man[data-off]')).toHaveLength(14);
     });
 
@@ -989,7 +989,7 @@ describe('what happened, played on the table', () =>
         play([act(6, 0, [{ e: 'roll', seat: 0, dice: [6, 6] }, { e: 'pass', seat: 0 }])], after);
         await elapse(1300 + PASS_MS + PICK_MS + 100);
 
-        expect(cues).toContain('die-land');
+        expect(cues).toContain('dice-wood');
         expect(cues).not.toContain('pass');
     });
 
@@ -1051,8 +1051,8 @@ describe('the table, for somebody who asked for less motion', () =>
 
         await elapse(3000);
 
-        expect(cues.filter((cue) => cue !== 'die-land')).toEqual(moving.filter((cue) => cue !== 'die-land'));
-        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(2);
+        expect(cues.filter((cue) => cue !== 'dice-wood')).toEqual(moving.filter((cue) => cue !== 'dice-wood'));
+        expect(cues.filter((cue) => cue === 'dice-wood')).toHaveLength(2);
         expect(felt_).toEqual(felt);
         expect(table.same(after)).toBe(true);
     });
@@ -1087,7 +1087,7 @@ describe('the table, for somebody who asked for less motion', () =>
 
         await elapse(TIMING.FADE + 20);
 
-        expect(cues.filter((cue) => cue === 'die-land')).toHaveLength(2);
+        expect(cues.filter((cue) => cue === 'dice-wood')).toHaveLength(2);
         expect(dice().map((die) => die.dataset.face)).toEqual(['5', '2']);
     });
 
@@ -1101,10 +1101,10 @@ describe('the table, for somebody who asked for less motion', () =>
         ])], sight(felt({ near: row({ 5: 2, 6: 4, 8: 2, 13: 5, 24: 2 }) }), 6));
 
         await elapse(TIMING.FADE);
-        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(1);
+        expect(cues.filter((cue) => cue === 'checker')).toHaveLength(1);
 
         await elapse(TIMING.FADE);
-        expect(cues.filter((cue) => cue === 'token-step')).toHaveLength(2);
+        expect(cues.filter((cue) => cue === 'checker')).toHaveLength(2);
     });
 });
 
@@ -1729,7 +1729,7 @@ describe('a checker carried by hand', () =>
         await elapse(DROP_MOST + 200);
 
         expect(el.style.translate).toBe(on7);
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['checker']);
         expect(table.grab(7)).toBe(true);
     });
 
@@ -1747,7 +1747,7 @@ describe('a checker carried by hand', () =>
         await elapse(DROP_MOST + KNOCK_MS + 200);
 
         expect(felt_).toEqual(['capture']);
-        expect(cues).toContain('token-capture');
+        expect(cues).toContain('checker-hit');
         expect(men().filter((man) => man.style.translate === placed(BAR_LEFT + BAR_WIDTH / 2, MIDDLE - BAR_GAP - RADIUS))).toHaveLength(1);
     });
 
@@ -1805,7 +1805,7 @@ describe('a checker carried by hand', () =>
 
         await elapse(400);
 
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['checker']);
     });
     it('stays in the hand over the first of two hops, and is set down by the second', async () =>
     {
@@ -1836,7 +1836,7 @@ describe('a checker carried by hand', () =>
         await elapse(DROP_MOST + 200);
 
         expect(carried()).toEqual([]);
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['checker']);
         expect(el.style.translate).toBe(on6);
     });
 

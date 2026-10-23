@@ -348,7 +348,7 @@ describe('a ludo move, played', () =>
 
         await elapse(700);
 
-        expect(cues).toEqual(['token-step', 'token-step', 'token-step', 'token-step']);
+        expect(cues).toEqual(['pawn-step', 'pawn-step', 'pawn-step', 'pawn-step']);
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 14));
         expect(pawn('0-0').hasAttribute('data-moving')).toBe(false);
         expect(felt).toEqual(['tick']);
@@ -376,7 +376,7 @@ describe('a ludo move, played', () =>
 
         await elapse(ENTER_MS + 40);
 
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['pawn-step']);
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 0));
         expect(pawn('0-1').style.translate).toBe(inNest('red', 1));
     });
@@ -396,18 +396,18 @@ describe('a ludo move, played', () =>
 
         expect(routed(pawn('1-0'))).toHaveLength(0);
         expect(pawn('1-0').style.translate).toBe(onSquare('yellow', 38));
-        expect(cues).not.toContain('token-capture');
+        expect(cues).not.toContain('pawn-hit');
 
         await elapse(140);
 
-        expect(cues).toEqual(['token-step', 'token-step', 'token-capture']);
+        expect(cues).toEqual(['pawn-step', 'pawn-step', 'pawn-hit']);
         expect(routed(pawn('1-0'))).toHaveLength(1);
         expect(routed(pawn('1-0'))[0].frames.some((frame) => String(frame.rotate ?? '0deg') !== '0deg' && frame.rotate !== '0.0deg')).toBe(true);
         expect(felt).toEqual(['tick', 'capture']);
 
         await elapse(KNOCK_MS + 40);
 
-        expect(cues).toEqual(['token-step', 'token-step', 'token-capture', 'token-yard']);
+        expect(cues).toEqual(['pawn-step', 'pawn-step', 'pawn-hit', 'pawn-yard']);
         expect(pawn('1-0').style.translate).toBe(inNest('yellow', 0));
         expect(table.same(sight(state))).toBe(true);
 
@@ -443,11 +443,11 @@ describe('a ludo move, played', () =>
 
         expect(routed(pawn('1-0'))).toHaveLength(1);
         expect(routed(pawn('2-0'))).toHaveLength(1);
-        expect(cues.filter((cue) => cue === 'token-capture')).toHaveLength(1);
+        expect(cues.filter((cue) => cue === 'pawn-hit')).toHaveLength(1);
 
         await elapse(KNOCK_MS + 40);
 
-        expect(cues.filter((cue) => cue === 'token-yard')).toHaveLength(1);
+        expect(cues.filter((cue) => cue === 'pawn-yard')).toHaveLength(1);
         expect(pawn('1-0').style.translate).toBe(inNest('green', 0));
         expect(pawn('2-0').style.translate).toBe(inNest('yellow', 0));
         expect(pawn('1-1').style.translate).toBe(onSquare('green', 5));
@@ -700,21 +700,21 @@ describe('a ludo landing, with timers that fire one at a time as a browser\'s do
 
         board.reset(sight(taking));
 
-        expect(await shown([took.act], sight(took.state))).toEqual(['token-step', 'token-step', 'token-capture', 'token-yard']);
+        expect(await shown([took.act], sight(took.state))).toEqual(['pawn-step', 'pawn-step', 'pawn-hit', 'pawn-yard']);
 
         const homing = standing([[53, YARD, YARD, YARD], EMPTY], 3);
         const homed = stepped(homing, { kind: 'move', seat: 0, piece: 0 });
 
         board.reset(sight(homing, 0, 'n'));
 
-        expect(await shown([homed.act], sight(homed.state, 0, 'n'))).toEqual(['token-step', 'token-step', 'home']);
+        expect(await shown([homed.act], sight(homed.state, 0, 'n'))).toEqual(['pawn-step', 'pawn-step', 'home']);
 
         const crowded = standing([EMPTY, [39, 5, YARD, YARD], [26, YARD, YARD, YARD]], 6);
         const came = stepped(crowded, { kind: 'move', seat: 0, piece: 0 });
 
         board.reset(sight(crowded, 0, 'o'));
 
-        expect(await shown([came.act], sight(came.state, 0, 'o'))).toEqual(['token-step', 'token-capture', 'token-yard']);
+        expect(await shown([came.act], sight(came.state, 0, 'o'))).toEqual(['pawn-step', 'pawn-hit', 'pawn-yard']);
 
         ownDirector.cancel();
         board.dispose();
@@ -1428,7 +1428,7 @@ describe('the ludo board, when it is asked for less motion', () =>
         await elapse(900);
 
         expect(drawn.filter((one) => one.frames.some((frame) => 'translate' in frame || 'rotate' in frame))).toHaveLength(0);
-        expect(cues).toEqual(['token-step', 'token-capture', 'token-yard']);
+        expect(cues).toEqual(['pawn-step', 'pawn-hit', 'pawn-yard']);
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 12));
         expect(pawn('1-0').style.translate).toBe(inNest('yellow', 0));
         expect(felt).toEqual(['tick', 'capture']);
@@ -1546,14 +1546,14 @@ describe('the reader\'s own pawn', () =>
 
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 12));
         expect(pawn('1-0').style.translate).toBe(onSquare('yellow', 38));
-        expect(cues).toEqual(['token-step', 'token-step']);
+        expect(cues).toEqual(['pawn-step', 'pawn-step']);
         expect(table.same(sight(before))).toBe(false);
 
         play([act], sight(state));
         await flush();
 
         expect(routed(pawn('0-0'))).toHaveLength(1);
-        expect(cues).toEqual(['token-step', 'token-step', 'token-capture']);
+        expect(cues).toEqual(['pawn-step', 'pawn-step', 'pawn-hit']);
         expect(routed(pawn('1-0'))).toHaveLength(1);
 
         await elapse(KNOCK_MS + 40);
@@ -1782,7 +1782,7 @@ describe('a ludo turn the server played all at once', () =>
 
         expect(resets).toHaveBeenCalledTimes(1);
         expect(cues.filter((cue) => cue === 'die-land')).toHaveLength([...acts, after.act].filter((one) => one.moves[0].e === 'roll').reduce((sum, one) => sum + thrown(one).impacts.length, 0));
-        expect(cues.filter((cue) => cue === 'token-step').length).toBeGreaterThanOrEqual(1 + 6 + 2);
+        expect(cues.filter((cue) => cue === 'pawn-step').length).toBeGreaterThanOrEqual(1 + 6 + 2);
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 8));
         expect(lastFacts().die).toEqual({ roller: 1, face: 4, fate: 'pending' });
         expect(presenter.presenting()).toBe(false);

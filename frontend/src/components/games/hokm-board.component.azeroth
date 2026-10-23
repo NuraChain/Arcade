@@ -2270,7 +2270,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     {
         let unwatch: () => void = () => undefined;
 
-        sound = createSound(untrack(() => settings.settings().sound));
+        sound = createSound(untrack(() => settings.settings().sound), 'hokm');
 
         if (layer !== null)
         {

@@ -3474,7 +3474,7 @@ below). What it does with each beat:
   it wears the ring from the moment it lands on the bar and not before: the first renderer put the
   ring on it while the hitter was still on its way, took it off in the air and never put it back.
 - **Bearing off** ends as a slab in the tray, with the sound of a checker put down off the field
-  (`token-yard`, which a blot reaching the bar makes too).
+  (`checker-off`; a blot reaching the bar lands with `checker-bar`).
 - **The dice dim as they are used.** For the reader they follow the hops staged so far; for
   anybody else, each `move` event's own `die`. What the board says about a roll outlives the scene
   that threw it: a hop staged while the dice were still in the air dimmed its die, and the scene
@@ -4745,7 +4745,7 @@ arrive.
   queue, came down over it in the frame it was thrown. Nothing is thrown and nothing is held for
   somebody who asked for less motion, and a finished game opened again throws nothing.
 - **Less motion keeps every cue.** The stage turns each run into a short fade where the thing
-  ends up, and a walk plays one `token-step` at its end in place of one a square.
+  ends up, and a walk plays one `pawn-step` at its end in place of one a square.
 - **A resignation is explained to the board like any other move.** `POST /matches/:id/resign`
   answers the match and no events. The store then reads `since` from the revision it held, in
   the time a gap is given (`MEND_MS`), and hands the board the forfeit and the finish. When that
@@ -5189,16 +5189,31 @@ switching tables never has to unlock audio again. The spec is
   from Kenney, and chess's horse and elephant CC0 recordings from BigSoundBank and Wikimedia Commons
   (`tools/art/sound-src/`, every source credited in its `LICENSE.txt`), trimmed, or cut and mixed
   (a take with a `shape` in `tools/art/sound.mjs`), and encoded to mono MP3 (96 kbps, a long voice
-  56) by `npm run sound` and packed into ONE file, `game/sound/table.cues` - an `NCUE` header, a JSON index
-  and the takes back to back - imported through `new URL(..., import.meta.url)` so it lands hashed in
-  `/assets/` and is cached as immutable. One file is one request instead of thirty, and the neutral
-  extension is load-bearing: a download manager (IDM and its kind, common among Persian users)
-  intercepts any `.mp3` a page fetches and hands the page an empty 204, which is how the first build of
-  this was silent on the owner's own machine while curl got a perfect 200. The turn, the ticks,
-  trump, trick, bonus, pass and deny are synthesised. A recording that failed to load falls back to its
-  synthesised voice or to silence and never throws, which keeps "nothing can 404 halfway through a game"
-  true in behaviour. `assetsInlineLimit` refuses to inline the pack, and `tools/budgets.mjs` requires
-  exactly one pack in `.dist-frontend/assets`, at most 160 KB, and no file there with a media extension at all.
+  56) by `npm run sound` into packs - each an `NCUE` header, a JSON index and the takes back to back -
+  imported through `new URL(..., import.meta.url)` so each lands hashed in `/assets/` and is cached as
+  immutable. **A pack belongs to the tables that play it**: `common` (the jingles every table ends
+  with), `cards` (Hokm and poker), `ludo`, `backgammon`, `poker` and `chess`, each cue in exactly one
+  (`CUES` in `game/sound-files.ts`). A board's handle names its game (`createSound(on, game)`) and
+  fetches `common` and that game's packs (`TABLE_PACKS`), each once whatever else is open, and only
+  while some handle that wants it has its sound on; a clock, a chess clock and the cues store fetch
+  `common` alone; a pack that did not arrive is asked for again by the next handle that wants it.
+  It was one pack of every game's takes, so a Hokm table fetched the horse's neigh: a Ludo table
+  now fetches 54 KB where it fetched 156. So Ludo's pawns and backgammon's checkers no longer share
+  cues: Ludo has `pawn-step`, `pawn-hit` and `pawn-yard`, backgammon `checker`, `checker-hit`,
+  `checker-bar`, `checker-off`, `cup-shake` and `dice-wood`, and chess's mated king falls with
+  `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
+  among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
+  is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
+  The turn, the ticks, trump, trick, bonus, pass and deny are synthesised. A recording that failed to
+  load falls back to its synthesised voice or to silence and never throws, which keeps "nothing can
+  404 halfway through a game" true in behaviour. `assetsInlineLimit` refuses to inline a pack, and
+  `tools/budgets.mjs` requires every pack in `frontend/src/game/sound` once in `.dist-frontend/assets`
+  and nothing else there, each under its ceiling (`common` 48 KB, `cards` 64, every other 96), and no
+  file there with a media extension at all. `tools/art/sound-levels.mjs` measures every take of every
+  pack (its length, its peak, its loudness in the band a phone's speaker plays against the chess
+  click, where its energy sits and how fast its onsets come), which is how a take is chosen and
+  levelled with nobody listening. `game.spec.ts` (*the sound layer*) holds what each table fetches,
+  `sound-pack.spec.ts` each pack's contents, and each board's spec the game its handle names.
 - **Mixed like a game, not like a web page.** Three buses (foley 0.9, interface 0.45, jingles 0.6) into
   a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
   through the takes, is panned by where it happens, and the same cue is not started more than three
@@ -5219,8 +5234,7 @@ switching tables never has to unlock audio again. The spec is
   `piece-capture` (two takes of a heavier wooden knock), measured before they were chosen: the
   clicks about 60 ms long with their energy near 1.1 kHz, the knocks 100 ms near 270 Hz, the way a
   chess app's move and capture differ. The knight and the bishop have four more cues of their own
-  (*The knight is a horse and the bishop an elephant*, under *Chess*), which is why the pack is 30
-  takes of 20 cues, 156 KB.
+  (*The knight is a horse and the bishop an elephant*, under *Chess*), in chess's own pack.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
 
@@ -5455,8 +5469,8 @@ run comes to its end by itself, inside the end and before `done` resolves. A run
 or cleared calls nothing. It is there because a cue scheduled with `stage.after` for the moment a
 run ends is a second timer due at the same instant, and a browser runs promises between two
 timers. The run's timer is made first, so whoever awaited the run went first, and a ludo pawn's
-last step was heard AFTER the capture or the home chime it had set off: `token-step,
-token-capture, token-step, token-yard`. A manual clock fires every timer that is due in one go and
+last step was heard AFTER the capture or the home chime it had set off: `pawn-step,
+pawn-hit, pawn-step, pawn-yard`. A manual clock fires every timer that is due in one go and
 runs the promises afterwards, so every spec heard the right order while the browser played the
 wrong one. The ludo lab found it, in a real browser (`tools/qa/CLAUDE.md`). A pawn's last step and
 an entry's one step are told by `landed` now; the steps before the last are still timers, which

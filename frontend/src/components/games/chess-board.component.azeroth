@@ -407,7 +407,7 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
     {
         let unwatch: () => void = () => undefined;
 
-        sound = createSound(untrack(() => settings.settings().sound));
+        sound = createSound(untrack(() => settings.settings().sound), 'chess');
 
         if (layer !== null)
         {

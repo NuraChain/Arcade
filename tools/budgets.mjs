@@ -47,7 +47,12 @@ const SHELL_BUDGET = 12 * KB;
 /** Any one route's own chunk. */
 const ROUTE_BUDGET = 15 * KB;
 
-const SOUND_BUDGET = 160 * KB;
+/** Each sound pack's ceiling: the shared one is fetched by every table and every toast, so it is kept smallest. */
+const PACK_BUDGETS = { common: 48 * KB, cards: 64 * KB };
+
+const PACK_BUDGET = 96 * KB;
+
+const PACK_SOURCES = join(ROOT, 'frontend', 'src', 'game', 'sound');
 
 /**
  * Modules that must NOT be in the landing page's initial set, and why.
@@ -473,22 +478,33 @@ else
     }
 }
 
-const sounds = readdirSync(ASSETS).filter((name) => /^table-.*.cues$/.test(name));
+const packNames = readdirSync(PACK_SOURCES).filter((name) => name.endsWith('.cues')).map((name) => name.slice(0, -'.cues'.length));
+const sounds = readdirSync(ASSETS).filter((name) => name.endsWith('.cues'));
 const soundTotal = sounds.reduce((sum, name) => sum + statSync(join(ASSETS, name)).size, 0);
 
-if (sounds.length !== 1)
+for (const pack of packNames)
 {
-    problems.push(`${ sounds.length } table sound packs reached dist/assets, expected exactly one`);
+    const built = sounds.filter((name) => new RegExp(`^${ pack }-[\\w-]+\\.cues$`).test(name));
+    const ceiling = PACK_BUDGETS[pack] ?? PACK_BUDGET;
+
+    if (built.length !== 1)
+    {
+        problems.push(`${ built.length } copies of the ${ pack } sound pack reached dist/assets, expected exactly one`);
+    }
+    else if (statSync(join(ASSETS, built[0])).size > ceiling)
+    {
+        problems.push(`the ${ pack } sound pack is ${ size(statSync(join(ASSETS, built[0])).size) }, over ${ size(ceiling) }`);
+    }
+}
+
+if (sounds.some((name) => !packNames.some((pack) => new RegExp(`^${ pack }-[\\w-]+\\.cues$`).test(name))))
+{
+    problems.push('a sound pack reached dist/assets that frontend/src/game/sound does not hold');
 }
 
 if (readdirSync(ASSETS).some((name) => /.(mp3|ogg|wav|m4a)$/.test(name)))
 {
     problems.push('an audio file with a media extension reached dist/assets - a download manager grabs those and hands the page an empty 204');
-}
-
-if (soundTotal > SOUND_BUDGET)
-{
-    problems.push(`the table sounds are ${ size(soundTotal) }, over ${ size(SOUND_BUDGET) }`);
 }
 
 const world = all.find((name) => /^world-/.test(name));
@@ -545,7 +561,7 @@ console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0
 console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
 console.log(`  tables       ${ tableBytes.length } chunks, largest ${ size(Math.max(0, ...tableBytes)) } / ${ size(TABLE_BUDGET) }`);
 console.log(`  stage        ${ stageBytes === null ? 'absent' : size(stageBytes) } / ${ size(STAGE_BUDGET) }`);
-console.log(`  sounds       ${ sounds.length } pack, ${ size(soundTotal) } / ${ size(SOUND_BUDGET) }`);
+console.log(`  sounds       ${ sounds.length } packs, ${ size(soundTotal) } in all, none over its ceiling`);
 console.log(`  world        ${ size(worldBytes) } / ${ size(WORLD_BUDGET) }`);
 console.log(`  posters      ${ posterBytes.map(size).join(', ') }`);
 console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);

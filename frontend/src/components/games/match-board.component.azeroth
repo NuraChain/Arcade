@@ -394,7 +394,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     mount
     {
-        sound = createSound(untrack(() => help.sound));
+        sound = createSound(untrack(() => help.sound), 'ludo');
         presenter.frame(root);
 
         return () =>

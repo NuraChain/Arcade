@@ -16,7 +16,7 @@ import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { parseFen, squareNamed } from '../../backend/src/domains/match/chess/board.ts';
 
-const told = vi.hoisted(() => ({ heard: [] as string[] }));
+const told = vi.hoisted(() => ({ heard: [] as string[], games: [] as string[] }));
 
 vi.mock('../src/game/sound.ts', async (original) =>
 {
@@ -24,14 +24,19 @@ vi.mock('../src/game/sound.ts', async (original) =>
 
     return {
         ...real,
-        createSound: () => ({
-            play: (cue: string) =>
-            {
-                told.heard.push(cue);
-            },
-            setEnabled: () => undefined,
-            dispose: () => undefined
-        })
+        createSound: (_on: boolean, game?: string) =>
+        {
+            told.games.push(game ?? 'none');
+
+            return {
+                play: (cue: string) =>
+                {
+                    told.heard.push(cue);
+                },
+                setEnabled: () => undefined,
+                dispose: () => undefined
+            };
+        }
     };
 });
 
@@ -199,6 +204,7 @@ beforeEach(() =>
     useLocale().setLocale('en');
     useSettings().reset();
     told.heard = [];
+    told.games = [];
 });
 
 afterEach(() =>
@@ -209,6 +215,14 @@ afterEach(() =>
 
 describe('a chess board, drawn', () =>
 {
+    it('plays from chess\'s own sounds, and its clocks from the shared ones', async () =>
+    {
+        await live(match());
+
+        expect(told.games).toContain('chess');
+        expect(told.games.filter((game) => game !== 'none')).toEqual(['chess']);
+    });
+
     it('stands the pieces where the board says, with the reader\'s colour at the foot', async () =>
     {
         const white = await live(match());

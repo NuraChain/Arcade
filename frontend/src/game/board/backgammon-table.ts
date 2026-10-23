@@ -675,7 +675,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         if (swing !== null)
         {
             rest(mover, target, stage.quiet());
-            stage.after(length, () => options.sound()?.play(to.off ? 'token-yard' : 'token-step', { pan: pan(to.x), rate: 0.96 + (pips % 3) * 0.04 }));
+            stage.after(length, () => options.sound()?.play(to.off ? 'checker-off' : 'checker', { pan: pan(to.x), rate: 0.96 + (pips % 3) * 0.04 }));
         }
 
         tally(target);
@@ -700,12 +700,12 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             {
                 stage.after(impact, () =>
                 {
-                    options.sound()?.play('token-capture', { pan: pan(hurtFrom.x) });
+                    options.sound()?.play('checker-hit', { pan: pan(hurtFrom.x) });
                     options.feel(move.side === 'near' ? 'capture' : 'hit');
                 });
             }
 
-            stage.after(thrown, () => options.sound()?.play(reverse ? 'token-step' : 'token-yard', { pan: pan(hurtTo.x) }));
+            stage.after(thrown, () => options.sound()?.play(reverse ? 'checker' : 'checker-bar', { pan: pan(hurtTo.x) }));
         }
 
         if (swing !== null)
@@ -1066,7 +1066,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
             const from = { x: (near ? 1 : -1) * (0.6 + random() * 2.4), y: (near ? 1 : -1) * (far + random() * 1.1) };
 
             return die.toss(stage, seed + index * 977, faces[index], from, {
-                impact: (power) => options.sound()?.play('die-land', { gain: 0.35 + 0.65 * power, pan: pan(DICE_X + spot.x * 24) })
+                impact: (power) => options.sound()?.play('dice-wood', { gain: 0.35 + 0.65 * power, pan: pan(DICE_X + spot.x * 24) })
             }).done;
         }));
 
@@ -1097,7 +1097,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         live();
 
         await die.toss(stage, seed, face, from, {
-            impact: (power) => options.sound()?.play('die-land', { gain: 0.35 + 0.65 * power, pan: pan(DICE_X) })
+            impact: (power) => options.sound()?.play('dice-wood', { gain: 0.35 + 0.65 * power, pan: pan(DICE_X) })
         }).done;
 
         options.onRoll?.(seed, [face], true);

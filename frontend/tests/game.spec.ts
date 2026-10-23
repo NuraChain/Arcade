@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BLOCK, CELL, GOAL_REACH, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, aimNear, centreOf, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
-import { unpack } from '../src/game/sound-files.ts';
+import { CUES, PACKS, SAMPLED, TABLE_PACKS, unpack, type Pack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../backend/src/domains/match/ludo/board.ts';
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
 import { seatsFor } from '../src/components/games/seats.ts';
@@ -309,14 +309,25 @@ describe('the sound layer', () =>
         return out.buffer;
     };
 
-    it('reads every take out of the one pack, and nothing out of a pack that is not one', () =>
+    it('reads every take of the cues it is asked for out of a pack, and nothing out of a pack that is not one', () =>
     {
-        const found = unpack(pack({ 'die-land': [[1, 2], [3, 4, 5]], 'win': [[9]], 'bogus': [[7]] }));
+        const bytes = pack({ 'die-land': [[1, 2], [3, 4, 5]], 'win': [[9]], 'bogus': [[7]] });
+        const found = unpack(bytes, ['die-land', 'win']);
 
         expect([...found.keys()].sort()).toEqual(['die-land', 'win']);
         expect(found.get('die-land')!.map((take) => [...new Uint8Array(take)])).toEqual([[1, 2], [3, 4, 5]]);
-        expect(unpack(new ArrayBuffer(4)).size).toBe(0);
-        expect(unpack(new TextEncoder().encode('RIFF0000').buffer).size).toBe(0);
+        expect([...unpack(bytes, ['win']).keys()], 'a cue it was not asked for').toEqual(['win']);
+        expect(unpack(new ArrayBuffer(4), SAMPLED).size).toBe(0);
+        expect(unpack(new TextEncoder().encode('RIFF0000').buffer, SAMPLED).size).toBe(0);
+    });
+
+    it('puts every cue in exactly one pack, and every pack in some table', () =>
+    {
+        const packs = Object.keys(CUES) as Pack[];
+
+        expect(new Set(SAMPLED).size, 'a cue in two packs').toBe(SAMPLED.length);
+        expect(packs.filter((one) => !Object.values(TABLE_PACKS).some((played) => played.includes(one))), 'a pack no table plays').toEqual([]);
+        expect(Object.values(TABLE_PACKS).every((played) => played[0] === 'common')).toBe(true);
     });
 
     const tap = async (name = 'pointerup') =>
@@ -498,7 +509,7 @@ describe('the sound layer', () =>
     {
         vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'card-slide': [[1, 2, 3]] })) }));
         const fake = stub();
-        const sound = createSound(true);
+        const sound = createSound(true, 'hokm');
 
         await tap();
         await flush();
@@ -509,6 +520,119 @@ describe('the sound layer', () =>
         expect(fake.buffers()).toBe(1);
 
         sound.dispose();
+    });
+
+    /** Answers every pack asked for with an empty one (or refuses those `fail` names) and keeps the addresses asked. */
+    const fetching = (fail: (url: string) => boolean = () => false) =>
+    {
+        const asked: string[] = [];
+
+        vi.stubGlobal('fetch', (url: string) =>
+        {
+            asked.push(url);
+
+            return fail(url) ? Promise.reject(new Error('offline')) : Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({})) });
+        });
+
+        return asked;
+    };
+
+    const named = (asked: string[]) => asked.map((url) => (Object.keys(PACKS) as Pack[]).find((one) => PACKS[one] === url) ?? url).sort();
+
+    it('fetches the packs its table plays and the shared one, and for a clock or a toast the shared one alone', async () =>
+    {
+        stub();
+        const asked = fetching();
+        const ludo = createSound(true, 'ludo');
+
+        await tap();
+        await flush();
+
+        expect(named(asked)).toEqual(['common', 'ludo']);
+
+        ludo.dispose();
+        resetSound();
+        asked.length = 0;
+        stub();
+
+        const clock = createSound(true);
+
+        await tap();
+        await flush();
+
+        expect(named(asked)).toEqual(['common']);
+
+        clock.dispose();
+    });
+
+    it('fetches for a second table only what the first did not, and nothing for a quiet table until it is turned on', async () =>
+    {
+        stub();
+        const asked = fetching();
+        const hokm = createSound(true, 'hokm');
+
+        await tap();
+        await flush();
+
+        const poker = createSound(true, 'poker');
+
+        await flush();
+
+        expect(named(asked)).toEqual(['cards', 'common', 'poker']);
+
+        const chess = createSound(false, 'chess');
+
+        await flush();
+
+        expect(named(asked), 'a table with its sound off fetched its pack').not.toContain('chess');
+
+        chess.setEnabled(true);
+        await flush();
+
+        expect(named(asked)).toEqual(['cards', 'chess', 'common', 'poker']);
+
+        [hokm, poker, chess].forEach((one) => one.dispose());
+    });
+
+    it('asks again for a pack that did not arrive, and not for one that did', async () =>
+    {
+        stub();
+        let refused = true;
+        const asked = fetching((url) => url === PACKS.backgammon && refused);
+        const first = createSound(true, 'backgammon');
+
+        await tap();
+        await flush();
+
+        refused = false;
+
+        const second = createSound(true, 'backgammon');
+
+        await flush();
+
+        expect(named(asked).filter((one) => one === 'backgammon')).toHaveLength(2);
+        expect(named(asked).filter((one) => one === 'common')).toHaveLength(1);
+
+        first.dispose();
+        second.dispose();
+    });
+
+    it('fetches nothing for a table that went before any sound could be made', async () =>
+    {
+        stub();
+        const asked = fetching();
+        const gone = createSound(true, 'chess');
+
+        gone.dispose();
+
+        const ludo = createSound(true, 'ludo');
+
+        await tap();
+        await flush();
+
+        expect(named(asked)).toEqual(['common', 'ludo']);
+
+        ludo.dispose();
     });
 
     it('starts a recording at its first loud sample', () =>
@@ -528,7 +652,7 @@ describe('the sound layer', () =>
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
         const before = fake.oscillators();
 
-        sound.play('token-step');
+        sound.play('pawn-step');
 
         expect(fake.oscillators()).toBe(before);
 
@@ -592,7 +716,7 @@ describe('the sound layer', () =>
 
         await tap();
 
-        expect(() => bare.play('token-capture')).not.toThrow();
+        expect(() => bare.play('pawn-hit')).not.toThrow();
 
         bare.dispose();
     });
