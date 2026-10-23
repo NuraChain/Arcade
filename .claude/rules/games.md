@@ -5375,7 +5375,9 @@ switching tables never has to unlock audio again. The spec is
   neutral `.bed` (96 kbps for music, 64 for rain and birds), and `tools/budgets.mjs` holds each to
   its ceiling (640 KB for rain or birds, 1 MB for a piece of music). `bed.spec.ts`,
   `bed-store.spec.ts`, `game.spec.ts` (the context handed over and the dip), `settings.spec.ts`,
-  `play.spec.ts` and `bed-pack.spec.ts` hold it.
+  `play.spec.ts` and `bed-pack.spec.ts` hold it, and `tools/qa/sound-pass.mjs` hears it in real
+  browsers on the built server with every table's packs and cues and the end as it went
+  (`tools/qa/CLAUDE.md`, *The sound pass*).
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
 - **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);

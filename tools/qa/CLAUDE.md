@@ -594,6 +594,51 @@ game's thirty-two pieces; and neither console says anything. Proved red against 
 with its compiled engine writing no notation: 3 failures, the notation on the board, the Moves tab
 and the stepping that could not begin.
 
+## The sound pass
+
+`tools/qa/sound-pass.mjs` holds what a table sounds like, in real browsers on the built server:
+`QA_BASE=http://localhost:5300 node tools/qa/sound-pass.mjs`, about two minutes, 50 checks.
+`dana.w` is a desk in English and `mina` a phone in Persian, in a Chromium with a fake microphone.
+Every page carries a probe that names each recording it starts by its decoded samples, against the
+takes of the packs that page fetched (`ludo:die-land`), calls a synthesised voice `tone` and a
+recording no pack holds `unknown`, and logs the media elements a bed plays on.
+
+- **At a table of each of the five games**: the waiting room plays that game's own music once the
+  page may play sound and fetches no other bed; the game, once started, fetches `common` and the
+  game's own packs (`TABLE_PACKS`) and no other; one thing done over the api by whoever is on turn
+  (a roll, the trump, a die on wood, a call, a move) is heard in that game's own recording; and in
+  the whole visit nothing is heard from another game's pack, synthesised or unknown. The deal at
+  Hokm and poker is heard in cards.
+- **The end as it went**: a chess game in both browsers, a move each, then one gives up. The winner
+  hears the win, and the other the loss and not the win.
+- **The background following the reader**: a hidden tab holds the bed, every copy stopped, and it
+  comes back when the tab is seen; the play header's link to another table changes the music and
+  the music that was heard is let go about a second later, after its fade; leaving the tables lets
+  it go, and a page that is no table fetches no bed; a call at the table, joined by itself as a
+  reader's would be, brings the bed under it, and leaving the call brings it back up; birds and rain
+  chosen in Settings are what the next table plays.
+- Both consoles say nothing.
+
+Three things worth knowing before changing it:
+
+- **A press that lets a page play sound is a click dispatched inside `page.evaluate`**, which
+  Chromium takes as the reader's gesture. A real click anywhere in a waiting room may press
+  something.
+- **A bed's two copies are told apart by their object URL**, never by the order the probe met them:
+  the next bed's first copy is played before the last bed's second copy is first touched.
+- **A bed's let-go comes a second after the next one starts**, so the pass waits for it. Its first
+  run read the log the moment the next bed was playing and found nothing let go.
+
+**Proved red.** Against a production build broken six ways (Ludo fetching the backgammon pack,
+every table playing Ludo's music whatever was chosen, a loss heard as a win, a hidden tab not held,
+a call not bringing the bed down, a bed that is heard cut where it should fade) it failed 12 of 50,
+a line for each fault but the last, which the second hid: with one bed at every table there was no
+change of bed to fade. A second build broken three ways (that cut alone, Ludo's die played as
+backgammon's, a loader that never lets go of its bed) failed 4: the die heard as a synthesised
+tone, because a Ludo table holds no backgammon pack, the bed that was heard let go after 37 ms,
+and a copy still playing after the tables were left. The sources were put back from saved copies,
+never from git.
+
 ## The notifications pass
 
 `tools/qa/notify-pass.mjs` (built server, limiter raised, about a minute, 35 checks) holds what

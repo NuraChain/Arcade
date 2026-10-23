@@ -38,11 +38,11 @@ function cachedChromium()
     return undefined;
 }
 
-export async function launch()
+export async function launch(args = [])
 {
     const executablePath = cachedChromium();
 
-    return await chromium.launch(executablePath === undefined ? {} : { executablePath });
+    return await chromium.launch({ ...(executablePath === undefined ? {} : { executablePath }), args });
 }
 
 export function recorder(name)
