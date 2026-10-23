@@ -141,7 +141,13 @@ export default component MessageBubble(props: {
         pop.toggle({ anchor, pick: (emoji) => props.onReact?.(props.message, emoji), side: 'top', align: mine ? 'end' : 'start', keep: false });
     };
 
-    /** Lays the hover bar where the thread has room for it, measured each time it is about to show. */
+    /**
+     * Lays the hover bar where the thread has room for it, measured each time it is about to show.
+     * Until then it rests just inside the foot of its line, and its bridge spans only the gaps
+     * `fitBar` leaves, so wherever it is laid the thread can scroll no further than before: a bar
+     * hanging below the newest line made the thread's reach shrink at the first hover, and the
+     * browser's clamp of that scroll closed a menu opened on the line.
+     */
     const fit = () =>
     {
         const bar = toolbar;
@@ -162,6 +168,7 @@ export default component MessageBubble(props: {
 
         bar.style.left = `${ Math.round(place.x) }px`;
         bar.style.top = `${ Math.round(place.y) }px`;
+        bar.style.bottom = 'auto';
     };
 
     /** A right click opens the line's menu at the pointer, except on a link or a selection, which the browser's own menu serves. */
@@ -470,7 +477,7 @@ export default component MessageBubble(props: {
                             <div
                                 ref={ (element) => toolbar = element }
                                 class={ () => [
-                                    'pointer-events-none absolute left-0 top-0 z-10 hidden w-max items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 before:absolute before:-inset-2 before:-z-10 group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none',
+                                    'pointer-events-none absolute bottom-1 left-0 z-10 hidden w-max items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 before:absolute before:-inset-x-2 before:-inset-y-1 before:-z-10 group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none',
                                     pop.current()?.anchor === toolbar && toolbar !== null ? 'pointer-events-auto opacity-100' : '',
                                     props.menued === true ? 'invisible' : ''
                                 ].filter(Boolean).join(' ') }

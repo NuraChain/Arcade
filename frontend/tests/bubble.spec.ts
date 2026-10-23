@@ -561,7 +561,27 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
 
         expect(classes, 'a bar nobody can see covers no line').toContain('pointer-events-none');
         expect(classes, 'and takes the pointer while its own line is hovered or holds the keyboard').toEqual(expect.arrayContaining(['group-hover/row:pointer-events-auto', 'focus-within:pointer-events-auto']));
-        expect(classes, 'a bridge over the gap between the line and the bar').toEqual(expect.arrayContaining(['before:absolute', 'before:-inset-2', 'before:-z-10']));
+        expect(classes, 'a bridge over the gaps fitBar leaves between the line and the bar, 8px across and 4px up and down').toEqual(expect.arrayContaining(['before:absolute', 'before:-inset-x-2', 'before:-inset-y-1', 'before:-z-10']));
+        expect(classes, 'and no deeper, or it would reach past the end of the thread').not.toContain('before:-inset-2');
+    });
+
+    it('rests just inside the foot of its line until it is laid, and once laid is held by its top alone', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+        const row = container.querySelector<HTMLElement>('[data-message]')!;
+        const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const classes = bar.className.split(/\s+/);
+
+        expect(classes, 'inside the foot of the newest line, where the thread already reaches').toContain('bottom-1');
+        expect(classes, 'not hanging from the top of a line shorter than itself').not.toContain('top-0');
+
+        Object.defineProperty(bar, 'offsetWidth', { configurable: true, value: 120 });
+        Object.defineProperty(bar, 'offsetHeight', { configurable: true, value: 36 });
+        boxed(row, 0, 100, 800, 60);
+        boxed(bar.parentElement!, 40, 110, 300, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect([bar.style.top, bar.style.bottom], 'laid by its top, the foot let go').toEqual(['2px', 'auto']);
     });
 
     it('steps its bar aside while its menu is open, and keeps it', async () =>

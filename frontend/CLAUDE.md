@@ -369,7 +369,14 @@ is placed with `left` and `top` whichever way the page reads. It takes the point
 line is hovered or holds the keyboard (`pointer-events-none` otherwise), with a bridge of 8px round
 it so the pointer can cross the gap to it without leaving the line: a bar nobody can see still took
 the pointer, and the walk found one lying over its own line before it was first placed, where it
-took the hover and the press meant for the line. `context-menu.spec.ts`,
+took the hover and the press meant for the line. **Wherever the bar is laid, the thread can scroll
+no further than before.** Until it is first laid it rests just inside the foot of its line
+(`bottom-1`), and its bridge reaches only the gaps `fitBar` leaves, 8px across and 4px up and down.
+It hung from the top of its line with an 8px bridge all round, so the bar of the newest line, being
+taller than a line of one row, reached past the thread's end; at the first hover it was laid higher,
+the thread's reach shrank by two or three pixels, the browser clamped the scroll (a small jump of
+every line), and a menu opened on that line in the same moment took the clamp for a scroll and
+closed. The chat pass found it by right-clicking as the pointer arrived. `context-menu.spec.ts`,
 `hover-bar.spec.ts`, `bubble.spec.ts` (*a right click on a line*), `chat-page.spec.ts` (*a right
 click, on a line and on a conversation*) and `table-chat.spec.ts` hold it.
 
