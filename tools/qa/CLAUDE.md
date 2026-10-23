@@ -538,6 +538,51 @@ Not in a pass yet, each with the commit that makes it true: the chat opened, the
 and full screen entered in the middle of a flight (P6); a frame check under a throttled
 processor.
 
+## The chess pass
+
+**`tools/qa/chess-pass.mjs` plays whole games of chess over the api of the built server**:
+`QA_BASE=http://localhost:5300 node tools/qa/chess-pass.mjs`, under a minute, 77 checks, every
+player a wallet made for the run. A move is named by its SAN and found among the legal moves of the
+position the server holds, through the server's own move generator, so the pass cannot send a move
+the rules would not allow, and says which SAN was not legal where it stopped.
+
+- A mate in seven at a live table, and what it refuses on the way: somebody not playing (404),
+  Black moving first (`not-your-turn`), a move the rules do not allow (`illegal-move`), a flag
+  claimed with time left (`time-left`) and a move after the end (`game-over`). The result, both
+  players' results, the notation with its check and mate marks, the same board read by both
+  players after every move, the game in the history.
+- Castling both ways at a game a move a day, the rights gone after each, then a resignation.
+- A pawn taken in passing; a draw offered, declined by a move, refused again before the offerer
+  has moved, then offered and accepted, both players drawn.
+- All four promotions, and a pawn on the last rank with no piece named (`promotion-needed`).
+- Loyd's stalemate in ten, three repetitions, and a game called off before both have moved, with
+  nobody's result a win or a loss.
+
+What it does not hold, and where it is held: a flag and a first move that never comes need the
+clock to run out, and `match-clock.db.spec.ts` writes the deadline by hand; too little material and
+the fifty-move rule take too long to play into, and the engine's specs hold them.
+
+**Proved red** against the built server with its compiled engine broken four ways at once (a
+stalemate called too little material, a fourth repetition needed for a draw, a pawn taken in
+passing left standing, no notation written): 68 of 77, at least one line for each. The files were
+put back from saved copies and the pass was 77 of 77 again.
+
+**`tools/qa/chess-play-pass.mjs` is the same game in two real browsers**:
+`QA_BASE=http://localhost:5300 node tools/qa/chess-play-pass.mjs`, about a minute and a half, 54
+checks. `dana.w` is a desk in English and `mina` a phone in Persian, at a live table at ten minutes
+a side; the server draws who is White, and each browser stands its own colour at the foot. The mate
+in seven is made on the board: White's first move by the keyboard alone (into the board's cursor,
+along it to the pawn, Enter, along it to the square, Enter), Black's first carried with the
+pointer, every other move tapped and tapped. Each move has to reach the server and land in the
+other browser with no reload, read from where the pieces stand on the page. A plate is pressed in
+the desk (in English, which `platesPressed` reads). Then the mated king lies down in both, the
+winner is told so in their own words and the other is not; the desk opens the Moves tab, steps one
+move back (the knight on c3 again, nothing over the board) and on to the end (the mate again), and
+the phone reads the same thirteen moves left to right; both ask to play again and are shown the new
+game's thirty-two pieces; and neither console says anything. Proved red against the built server
+with its compiled engine writing no notation: 3 failures, the notation on the board, the Moves tab
+and the stepping that could not begin.
+
 ## The notifications pass
 
 `tools/qa/notify-pass.mjs` (built server, limiter raised, about a minute, 35 checks) holds what
