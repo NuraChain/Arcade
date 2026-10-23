@@ -62,6 +62,12 @@ export default component TableMenu(props: OverlayProps & {
                 }]
                 : []),
             {
+                id: 'background',
+                icon: current.background ? 'background-off' : 'background',
+                label: locale.t(current.background ? 'play.dock.backgroundOff' : 'play.dock.backgroundOn'),
+                run: () => settings.update({ background: !current.background })
+            },
+            {
                 id: 'hint-moves',
                 icon: 'idea',
                 label: locale.t(current.hintMoves ? 'helpers.moves.hide' : 'helpers.moves.show'),

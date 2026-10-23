@@ -68,10 +68,15 @@ interface Take
     offset: number;
 }
 
+/** Whoever plays the background, told each time the page's context runs, with the bus it plays into. */
+export type BedListener = (context: AudioContext, into: AudioNode) => void;
+
 interface Engine
 {
     context: AudioContext | null;
     buses: Record<Bus, GainNode> | null;
+    bed: GainNode | null;
+    beds: Set<BedListener>;
     takes: Map<Sampled, Take[]>;
     fetched: Set<Pack>;
     wanted: Map<Pack, number>;
@@ -175,6 +180,11 @@ const TONES: Record<Tone, readonly Voice[]> = {
 
 const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won', 'six', 'home', 'promote']);
 
+/** The end of a game, which the background sits 6 dB under for as long as it sounds. */
+const STINGS: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw']);
+
+const UNDER_STING = 0.5;
+
 /** What the table says rather than what is on it: as quiet as these were while they were synthesised. */
 const INTERFACE: ReadonlySet<Cue> = new Set<Cue>(['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime', 'check']);
 
@@ -204,6 +214,8 @@ type ContextMaker = typeof AudioContext;
 const fresh = (): Engine => ({
     context: null,
     buses: null,
+    bed: null,
+    beds: new Set(),
     takes: new Map(),
     fetched: new Set(),
     wanted: new Map(),
@@ -339,6 +351,7 @@ function build(): AudioContext | null
         };
 
         engine.buses = { foley: bus(LEVELS.foley), ui: bus(LEVELS.ui), jingle: bus(LEVELS.jingle) };
+        engine.bed = bus(1);
         context.addEventListener?.('statechange', () => settle(context));
 
         return context;
@@ -346,8 +359,63 @@ function build(): AudioContext | null
     catch
     {
         engine.buses = null;
+        engine.bed = null;
         return null;
     }
+}
+
+/** Hands whoever plays the background the page's context once it runs, and the bus that is theirs. */
+function ran(context: AudioContext | null)
+{
+    const into = engine.bed;
+
+    if (context === null || context !== engine.context || context.state !== 'running' || into === null)
+    {
+        return;
+    }
+
+    for (const listener of engine.beds)
+    {
+        listener(context, into);
+    }
+}
+
+/** Tells `listener` each time the page's context runs, at once if it already does; answers how to stop. */
+export function onBed(listener: BedListener)
+{
+    const at = engine;
+
+    at.beds.add(listener);
+
+    if (at.context !== null && at.context.state === 'running' && at.bed !== null)
+    {
+        listener(at.context, at.bed);
+    }
+
+    return () =>
+    {
+        at.beds.delete(listener);
+    };
+}
+
+/** Sits the background 6 dB under the end of a game for as long as it sounds. */
+function dip(context: AudioContext, seconds: number)
+{
+    const gain = engine.bed?.gain;
+
+    if (gain === undefined || !Number.isFinite(seconds))
+    {
+        return;
+    }
+
+    const at = context.currentTime;
+    const until = at + Math.max(0.15, seconds);
+
+    gain.cancelScheduledValues(at);
+    gain.setValueAtTime(gain.value, at);
+    gain.linearRampToValueAtTime(UNDER_STING, at + 0.15);
+    gain.setValueAtTime(UNDER_STING, until);
+    gain.linearRampToValueAtTime(1, until + 0.6);
 }
 
 function settle(context: AudioContext)
@@ -361,6 +429,7 @@ function settle(context: AudioContext)
     {
         engine.resuming = false;
         disarm();
+        ran(context);
         return;
     }
 
@@ -413,6 +482,7 @@ function warm()
     if (engine.context?.state === 'running')
     {
         disarm();
+        ran(engine.context);
     }
 
     const at = engine;
@@ -491,6 +561,7 @@ function unlock()
     if (context.state === 'running')
     {
         disarm();
+        ran(context);
     }
     else
     {
@@ -592,6 +663,8 @@ function sample(context: AudioContext, cue: Sampled, takes: Take[], into: AudioN
     level.connect(route(context, into, options.pan));
     source.onended = done;
     source.start(context.currentTime, take.offset);
+
+    return (take.buffer.duration - take.offset) / source.playbackRate.value;
 }
 
 function synth(context: AudioContext, voices: readonly Voice[], into: AudioNode, options: PlayOptions, done: () => void)
@@ -633,10 +706,12 @@ function synth(context: AudioContext, voices: readonly Voice[], into: AudioNode,
     if (last === null)
     {
         done();
-        return;
+        return 0;
     }
 
     last.onended = done;
+
+    return end - at;
 }
 
 function play(cue: Cue, options: PlayOptions)
@@ -696,21 +771,27 @@ function play(cue: Cue, options: PlayOptions)
 
     try
     {
+        const voices = TONES[cue as Tone];
+        let seconds: number;
+
         if (takes !== undefined && takes.length > 0)
         {
-            sample(context, cue as Sampled, takes, into, options, done);
-            return;
+            seconds = sample(context, cue as Sampled, takes, into, options, done);
         }
-
-        const voices = TONES[cue as Tone];
-
-        if (voices === undefined)
+        else if (voices !== undefined)
+        {
+            seconds = synth(context, voices, into, options, done);
+        }
+        else
         {
             done();
             return;
         }
 
-        synth(context, voices, into, options, done);
+        if (STINGS.has(cue))
+        {
+            dip(context, seconds);
+        }
     }
     catch
     {

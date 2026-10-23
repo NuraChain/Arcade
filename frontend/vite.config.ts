@@ -106,7 +106,7 @@ export default defineConfig(({ isSsrBuild }) =>
             outDir: '../.dist-frontend',
             emptyOutDir: true,
 
-            assetsInlineLimit: (file: string) => file.endsWith('.cues') ? false : undefined,
+            assetsInlineLimit: (file: string) => file.endsWith('.cues') || file.endsWith('.bed') ? false : undefined,
 
             rolldownOptions: isSsrBuild === true ? {} : {
                 output: {

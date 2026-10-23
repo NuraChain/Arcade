@@ -19,6 +19,8 @@ import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { startBed } from '../../stores/bed-loader.ts';
+import type { BedState } from '../../game/bed.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useWatch, type Watched as WatchedGame } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -326,6 +328,24 @@ export default component PlayPage()
         if (awake)
         {
             onCleanup(holdScreen());
+        }
+    }
+
+    state bed: BedState = 'off';
+
+    derived audible = table !== null && table.id === mine && table.status !== 'closed';
+
+    effect
+    {
+        if (audible)
+        {
+            const quiet = startBed(mine, (state) => bed = state);
+
+            onCleanup(() =>
+            {
+                quiet();
+                bed = 'off';
+            });
         }
     }
 
@@ -970,6 +990,7 @@ export default component PlayPage()
                     ref={ (element) => arena = element }
                     data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
                     data-beside={ besideSheet ? (chatWide ? 'wide' : 'narrow') : undefined }
+                    data-bed={ bed === 'off' ? undefined : bed }
                     class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                 >
                     <PlayHeader

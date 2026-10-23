@@ -3725,6 +3725,24 @@ describe('the table’s chat and its controls', () =>
 
     const pill = (container: HTMLElement): HTMLElement | null => container.querySelector('.table-pill');
 
+    it('plays the background behind the table\'s page and says on the arena what it is doing, until it is switched off', async () =>
+    {
+        useSettings().update({ background: true });
+
+        const container = await open('sidebar');
+        const said = () => container.querySelector('[data-bed]')?.getAttribute('data-bed') ?? null;
+
+        await vi.waitFor(() => expect(said(), 'the bed is not waiting for the page to be let play').toBe('waiting'), { timeout: 4000 });
+
+        useSettings().update({ background: false });
+        await settle();
+
+        expect(said(), 'the arena says a bed is on that was switched off').toBeNull();
+
+        useSettings().update({ background: true });
+        await vi.waitFor(() => expect(said()).toBe('waiting'), { timeout: 4000 });
+    });
+
     it('floats the chat as a card on a wide screen, tucks it into a pill, and brings it back', async () =>
     {
         useSettings().update({ railOpen: false });
@@ -4003,7 +4021,7 @@ describe('the table’s chat and its controls', () =>
 
     it('gathers the table’s tools into one sheet on a phone, and gives up only after it has closed', () =>
     {
-        useSettings().update({ sound: false });
+        useSettings().update({ sound: false, background: true });
         const close = vi.fn();
         const resign = vi.fn();
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onResign: resign }) as Rendered).container;
@@ -4011,6 +4029,7 @@ describe('the table’s chat and its controls', () =>
 
         expect(labels).toEqual([
             'Turn sound on',
+            'Turn the background sound off',
             'Hide what I can play',
             'Stop saying what a move does',
             'Turn the rules coach off',
@@ -4018,13 +4037,13 @@ describe('the table’s chat and its controls', () =>
             'Give up'
         ]);
 
-        fire([...container.querySelectorAll('ul button')][3] as HTMLElement, 'click');
+        fire([...container.querySelectorAll('ul button')][4] as HTMLElement, 'click');
 
         expect(useSettings().settings().hintRules).toBe(false);
         expect(close).toHaveBeenCalledTimes(1);
         expect(resign).not.toHaveBeenCalled();
 
-        fire([...container.querySelectorAll('ul button')][5] as HTMLElement, 'click');
+        fire([...container.querySelectorAll('ul button')][6] as HTMLElement, 'click');
 
         expect(close).toHaveBeenCalledTimes(2);
         expect(resign).toHaveBeenCalledTimes(1);
@@ -4048,6 +4067,33 @@ describe('the table’s chat and its controls', () =>
         const other = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false }) as Rendered).container;
 
         expect(labels(other).join(' | ')).not.toContain('horse');
+    });
+
+    it('switches the background off and on from the sheet, after the horse and the elephant, and from the dock', () =>
+    {
+        useSettings().reset();
+        const close = vi.fn();
+        const labels = (container: HTMLElement) => [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim());
+        const chess = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, animals: true }) as Rendered).container;
+
+        expect(labels(chess).slice(0, 3)).toEqual(['Turn sound off', 'Turn horse and elephant sounds off', 'Turn the background sound off']);
+
+        fire([...chess.querySelectorAll('ul button')][2] as HTMLElement, 'click');
+
+        expect(useSettings().settings().background).toBe(false);
+        expect(labels(chess)[2]).toBe('Turn the background sound on');
+
+        const dock = renderTest(() => TableDock({}) as Rendered).container;
+        const button = () => [...dock.querySelectorAll('button')].find((one) => /background sound/.test(one.getAttribute('aria-label') ?? ''))!;
+
+        expect(button().getAttribute('aria-label')).toBe('Turn the background sound on');
+        expect(button().getAttribute('aria-pressed')).toBe('false');
+
+        fire(button(), 'click');
+
+        expect(useSettings().settings().background).toBe(true);
+        expect(button().getAttribute('aria-label')).toBe('Turn the background sound off');
+        expect(button().getAttribute('aria-pressed')).toBe('true');
     });
 
     it('hands the sheet the horse and the elephant from a chess table\'s dock, and from no other', () =>

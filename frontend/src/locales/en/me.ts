@@ -137,6 +137,9 @@ export const me = {
     'settings.sound.table': 'Sound at the table',
     'settings.sound.animals': 'Horse and elephant in chess',
     'settings.sound.animalsHint': 'A knight lands on its hooves and neighs when it takes a piece; a bishop, the elephant of Persian chess, treads heavily and trumpets.',
+    'settings.sound.background': 'Background sound',
+    'settings.sound.backgroundHint': 'Gentle rain behind a table while you play, wait or watch, a little quieter while a call is on.',
+    'settings.sound.volume': 'Background volume',
 
     'settings.appearance.language': 'Language',
     'settings.appearance.motion': 'Your device asks for less motion — we listen.',

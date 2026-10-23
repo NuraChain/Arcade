@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BLOCK, CELL, GOAL_REACH, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, aimNear, centreOf, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
-import { createSound, endCue, offsetOf, resetSound } from '../src/game/sound.ts';
+import { createSound, endCue, offsetOf, onBed, resetSound } from '../src/game/sound.ts';
 import { CUES, PACKS, SAMPLED, TABLE_PACKS, unpack, type Pack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../backend/src/domains/match/ludo/board.ts';
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
@@ -176,7 +176,20 @@ describe('the sound layer', () =>
         listeners: (() => void)[];
     }
 
-    const param = (): Record<string, unknown> => ({ value: 0, setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined });
+    /** A param that keeps what it was asked to do: a `set`, a `ramp` or a `cancel`, each with its value and time. */
+    const param = (): Record<string, unknown> =>
+    {
+        const steps: unknown[][] = [];
+
+        return {
+            value: 0,
+            steps,
+            setValueAtTime: (value: number, at: number) => steps.push(['set', value, at]),
+            exponentialRampToValueAtTime: () => undefined,
+            linearRampToValueAtTime: (value: number, at: number) => steps.push(['ramp', value, at]),
+            cancelScheduledValues: (at: number) => steps.push(['cancel', at])
+        };
+    };
 
     const stub = (start = 'suspended'): Fake =>
     {
@@ -745,6 +758,65 @@ describe('the sound layer', () =>
         expect(fake.levels()).toEqual([0.45, 0.6, 0.9, 0.9]);
         expect(fake.oscillators(), 'a chess cue was synthesised though its recording had arrived').toBe(0);
 
+        sound.dispose();
+    });
+
+    it('tells whoever plays the background when the page\'s context runs, with the bus that is theirs, and at once when it already runs', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+        const heard: unknown[][] = [];
+        const stop = onBed((context, into) => heard.push([context, into]));
+
+        await flush();
+
+        expect(heard, 'it was told before the context ran').toEqual([]);
+
+        await tap();
+        await flush();
+
+        expect(heard).toHaveLength(1);
+        expect(heard[0][0]).toBe(fake.last());
+
+        const late: unknown[] = [];
+        const alsoStop = onBed((context) => late.push(context));
+
+        expect(late, 'a listener that came once the context ran was not told').toEqual([fake.last()]);
+
+        stop();
+        alsoStop();
+        sound.dispose();
+    });
+
+    it('sits the background 6 dB under the end of a game for as long as it sounds, and under nothing else', async () =>
+    {
+        stub();
+        const sound = createSound(true);
+        let bus: { gain: { steps: unknown[][] } } | null = null;
+        const stop = onBed((_context, into) =>
+        {
+            bus = into as unknown as { gain: { steps: unknown[][] } };
+        });
+
+        await tap();
+        await flush();
+
+        sound.play('turn');
+
+        expect(bus!.gain.steps, 'the background went under the turn').toEqual([]);
+
+        sound.play('win');
+
+        const steps = bus!.gain.steps;
+        const lasts = 0.39 + 0.42 + 0.02;
+
+        expect(steps.find((step) => step[0] === 'ramp' && step[1] === 0.5)?.[2]).toBeCloseTo(1.15, 6);
+        expect(steps.find((step) => step[0] === 'set' && step[1] === 0.5)?.[2]).toBeCloseTo(1 + lasts, 6);
+        expect(steps.at(-1)?.[0]).toBe('ramp');
+        expect(steps.at(-1)?.[1]).toBe(1);
+        expect(steps.at(-1)?.[2]).toBeCloseTo(1 + lasts + 0.6, 6);
+
+        stop();
         sound.dispose();
     });
 

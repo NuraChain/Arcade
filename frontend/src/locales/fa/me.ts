@@ -140,6 +140,9 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.sound.table': 'صدا سر میز',
     'settings.sound.animals': 'صدای اسب و فیل توی شطرنج',
     'settings.sound.animalsHint': 'اسب که حرکت می‌کنه صدای نعلش میاد و وقتی مهره می‌زنه شیهه می‌کشه؛ فیل سنگین قدم برمی‌داره و موقع زدن مهره نعره می‌کشه.',
+    'settings.sound.background': 'صدای پس‌زمینه',
+    'settings.sound.backgroundHint': 'صدای بارون آروم پشت میز، وقتی بازی می‌کنی، منتظری یا تماشا می‌کنی؛ وقتی تماس صوتی وصله یه کم آروم‌تر می‌شه.',
+    'settings.sound.volume': 'بلندی صدای پس‌زمینه',
 
     'settings.appearance.language': 'زبان',
     'settings.appearance.motion': 'دستگاهت خواسته حرکت‌ها کمتر باشه؛ ما هم همین کار رو می‌کنیم.',

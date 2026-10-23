@@ -718,13 +718,14 @@ Three defects on this path that every gate was green for, each now with a rule:
   literal backspace, and it passed against the exact bug it was written for until it was proved to
   fail first. Worth knowing before writing another one.
 
-**The dock under the board is the small things somebody reaches for mid-game.** Sound, the screen,
-the room's code and the chat, and every one of them was reachable before only by LEAVING the game -
-the table's own cues are `settings.sound`, whose single toggle lives on the settings page under
-Sound. Nothing in it is a control with nothing behind it: no music button because there is
-no music, no settings gear because it would be a link out of the game wearing the clothes of a
-control in it, no overflow because there is nothing left to put in one. The code is there because it
-is how a table is reached when it is in no list, which is every table opened from a chat or a group.
+**The dock under the board is the small things somebody reaches for mid-game.** Sound, the
+background behind the table, the screen, the room's code and the chat, and every one of them was
+reachable before only by LEAVING the game - the table's own cues are `settings.sound` and the
+background is `settings.background`, whose toggles live on the settings page under Sound. Nothing
+in it is a control with nothing behind it: no settings gear because it would be a link out of the
+game wearing the clothes of a control in it, no overflow because there is nothing left to put in
+one. The code is there because it is how a table is reached when it is in no list, which is every
+table opened from a chat or a group.
 
 **Matchmaking is one request.** `POST /tables/quick` takes the game and who the call is for, finds the
 searcher a chair or opens a table to wait at, and answers with that table. Nobody is invented to
@@ -5333,6 +5334,27 @@ switching tables never has to unlock audio again. The spec is
   board's spec what a winner, a loser and a watcher hear.
 - **A hidden tab hears only what is urgent** - the turn and the ticks - and the iOS audio session is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
+- **A bed plays behind a table's page** (`game/bed.ts`, decided by `stores/bed.store.ts`, a chunk
+  of its own that `stores/bed-loader.ts` fetches, so the play route carries none of it): rain
+  (`game/bed-files.ts`, BigSoundBank's "Summer Rain on Terrace", CC0), in the waiting room, at a
+  game and when watching, and on no other page. It is on by default at 40%, and off by default on
+  a device that asked to save data (`background`, `backgroundVolume`, in Settings › Sound, and its
+  switch in the dock and the table's sheet). It plays on the page's own context: two media elements
+  from one object URL, each through a gain of its own into a level that is the reader's volume, on
+  the engine's `bed` bus, so the loop is handed from one copy to the other over four seconds with
+  their power kept and nothing decoded held in memory. It is fetched only once the page may play
+  sound (`onBed`, which the engine calls each time its context runs), comes in over two seconds,
+  and goes over one when the page does. It sits 9 dB under a call at that table, 6 dB under a
+  game's end for as long as the end sounds (the engine dips its own `bed` bus, `dip`), and is held
+  while the tab is hidden, coming back in where it stopped. A browser that will not let it play is
+  asked again inside the reader's next press. A later page's hold takes over from the page that is
+  leaving, whose late release stops nothing. The arena says what it is doing (`data-bed`:
+  `waiting`, `playing`, `ducked`, `paused`). `tools/art/beds.mjs` builds each bed from the stretch
+  kept in `tools/art/bed-src/` to -24 LUFS by a gain, its peaks held a decibel under full scale,
+  MP3 under a neutral `.bed`, and `tools/budgets.mjs` holds each to its ceiling (640 KB for rain
+  or birds, 1 MB for a piece of music). `bed.spec.ts`, `bed-store.spec.ts`, `game.spec.ts` (the
+  context handed over and the dip), `settings.spec.ts`, `play.spec.ts` and `bed-pack.spec.ts`
+  hold it.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
 - **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);

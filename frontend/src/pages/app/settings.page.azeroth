@@ -9,6 +9,7 @@ import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import Rail from '../../components/ui/rail.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import type { Person } from '../../data/person.ts';
@@ -76,6 +77,8 @@ export default component SettingsPage()
     };
 
     derived current = settings.settings();
+
+    derived background = current.background;
 
     derived vaulted = vaults.open();
 
@@ -461,6 +464,24 @@ export default component SettingsPage()
                                     description={ locale.t('settings.sound.animalsHint') }
                                     onChange={ (checked) => settings.update({ animalSounds: checked }) }
                                 />
+                                <Toggle
+                                    checked={ current.background }
+                                    label={ locale.t('settings.sound.background') }
+                                    description={ locale.t('settings.sound.backgroundHint') }
+                                    onChange={ (checked) => settings.update({ background: checked }) }
+                                />
+                                <Show when={ background }>
+                                    <Slider
+                                        value={ current.backgroundVolume }
+                                        min={ 0 }
+                                        max={ 1 }
+                                        step={ 0.05 }
+                                        label={ locale.t('settings.sound.volume') }
+                                        valueText={ locale.n(current.backgroundVolume, { style: 'percent' }) }
+                                        class="max-w-md px-1 py-2"
+                                        onChange={ (value) => settings.update({ backgroundVolume: value }) }
+                                    />
+                                </Show>
                             </div>
                         </Panel>
                     </section>

@@ -284,6 +284,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.link.offline': 'آفلاینی. ساعت نوبت داره می‌گذره.',
     'play.dock.soundOn': 'روشن کردن صدا',
     'play.dock.soundOff': 'خاموش کردن صدا',
+    'play.dock.backgroundOn': 'روشن کردن صدای پس‌زمینه',
+    'play.dock.backgroundOff': 'خاموش کردن صدای پس‌زمینه',
     'play.dock.fullscreen': 'تمام‌صفحه',
     'play.dock.windowed': 'خروج از تمام‌صفحه',
     'play.table.chatShow': 'نشون دادن چت',

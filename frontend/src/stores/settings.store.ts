@@ -6,6 +6,8 @@ export interface Settings
 {
     sound: boolean;
     animalSounds: boolean;
+    background: boolean;
+    backgroundVolume: number;
     haptics: boolean;
     railOpen: boolean;
     sidebarOpen: boolean;
@@ -44,11 +46,17 @@ export type VoiceQuality = 'standard' | 'high' | 'best';
 
 const STORAGE_KEY = 'baziche.settings';
 
+/** A device that asked to save data starts with no background: a bed is half a megabyte nobody asked for. */
+const savingData = () =>
+    typeof navigator !== 'undefined' && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+
 export function defaultSettings(): Settings
 {
     return {
         sound: true,
         animalSounds: true,
+        background: !savingData(),
+        backgroundVolume: 0.4,
         haptics: true,
         railOpen: false,
         sidebarOpen: true,

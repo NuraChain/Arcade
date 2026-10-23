@@ -302,6 +302,8 @@ export const play = {
     'play.link.offline': 'Offline. The turn clock keeps running.',
     'play.dock.soundOn': 'Turn sound on',
     'play.dock.soundOff': 'Turn sound off',
+    'play.dock.backgroundOn': 'Turn the background sound on',
+    'play.dock.backgroundOff': 'Turn the background sound off',
     'play.dock.fullscreen': 'Fill the screen',
     'play.dock.windowed': 'Leave full screen',
     'play.table.chatShow': 'Show chat',

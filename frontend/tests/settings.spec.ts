@@ -10,7 +10,7 @@ import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
-import { useSettings } from '../src/stores/settings.store.ts';
+import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { establishAccount, server } from './fake-api.ts';
 
@@ -176,7 +176,7 @@ describe('the notification switches', () =>
         const at = (label: string) => switches().findIndex((one) => labelOf(one) === label);
         const animals = () => switches()[at('Horse and elephant in chess')];
 
-        expect(switches().map(labelOf)).toEqual(['Sound at the table', 'Horse and elephant in chess']);
+        expect(switches().map(labelOf)).toEqual(['Sound at the table', 'Horse and elephant in chess', 'Background sound']);
         expect(switches('notifications').map(labelOf).filter((one) => /sound|horse/i.test(one)), 'a sound switch is still among the notifications').toEqual([]);
         expect(animals().getAttribute('aria-checked')).toBe('true');
         expect(animals().textContent).toContain('the elephant of Persian chess');
@@ -191,7 +191,50 @@ describe('the notification switches', () =>
         useLocale().setLocale('fa');
         await settle();
 
-        expect(switches().map(labelOf)).toEqual(['صدا سر میز', 'صدای اسب و فیل توی شطرنج']);
+        expect(switches().map(labelOf)).toEqual(['صدا سر میز', 'صدای اسب و فیل توی شطرنج', 'صدای پس‌زمینه']);
+    });
+
+    it('play a background behind a table, on by default, with its volume drawn only while it is on, in both languages', async () =>
+    {
+        useSettings().reset();
+        useSession().establish(establishAccount());
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const section = () => container.querySelector('#settings-sound')!;
+        const background = () => [...section().querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.textContent?.includes(useLocale().t('settings.sound.background')))!;
+        const volume = () => section().querySelector<HTMLElement>(`[role="slider"][aria-label="${ useLocale().t('settings.sound.volume') }"]`);
+
+        expect(background().getAttribute('aria-checked')).toBe('true');
+        expect(background().textContent).toContain('Gentle rain behind a table');
+        expect(volume()?.getAttribute('aria-valuenow')).toBe('0.4');
+        expect(volume()?.getAttribute('aria-valuetext')).toBe('40%');
+
+        volume()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        await settle();
+
+        expect(useSettings().settings().backgroundVolume).toBeCloseTo(0.45, 6);
+
+        background().click();
+        await settle();
+
+        expect(useSettings().settings().background).toBe(false);
+        expect(volume(), 'a volume nobody can hear is drawn').toBeNull();
+
+        useLocale().setLocale('fa');
+        background().click();
+        await settle();
+
+        expect(volume()?.getAttribute('aria-label')).toBe('بلندی صدای پس‌زمینه');
+    });
+
+    it('start the background off on a device that asked to save data', () =>
+    {
+        Object.defineProperty(navigator, 'connection', { value: { saveData: true }, configurable: true });
+
+        expect(defaultSettings().background).toBe(false);
+
+        Object.defineProperty(navigator, 'connection', { value: undefined, configurable: true });
+
+        expect(defaultSettings().background).toBe(true);
     });
 });
 

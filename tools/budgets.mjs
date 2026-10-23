@@ -54,6 +54,13 @@ const PACK_BUDGET = 96 * KB;
 
 const PACK_SOURCES = join(ROOT, 'frontend', 'src', 'game', 'sound');
 
+/** Each bed's ceiling: a piece of music keeps more than rain or birds, which have no melody to keep whole. */
+const BED_BUDGETS = { rain: 640 * KB, birds: 640 * KB };
+
+const BED_BUDGET = 1024 * KB;
+
+const BED_SOURCES = join(PACK_SOURCES, 'beds');
+
 /**
  * Modules that must NOT be in the landing page's initial set, and why.
  *
@@ -502,6 +509,30 @@ if (sounds.some((name) => !packNames.some((pack) => new RegExp(`^${ pack }-[\\w-
     problems.push('a sound pack reached dist/assets that frontend/src/game/sound does not hold');
 }
 
+const bedNames = readdirSync(BED_SOURCES).filter((name) => name.endsWith('.bed')).map((name) => name.slice(0, -'.bed'.length));
+const beds = readdirSync(ASSETS).filter((name) => name.endsWith('.bed'));
+const bedTotal = beds.reduce((sum, name) => sum + statSync(join(ASSETS, name)).size, 0);
+
+for (const bed of bedNames)
+{
+    const built = beds.filter((name) => new RegExp(`^${ bed }-[\\w-]+\\.bed$`).test(name));
+    const ceiling = BED_BUDGETS[bed] ?? BED_BUDGET;
+
+    if (built.length !== 1)
+    {
+        problems.push(`${ built.length } copies of the ${ bed } bed reached dist/assets, expected exactly one`);
+    }
+    else if (statSync(join(ASSETS, built[0])).size > ceiling)
+    {
+        problems.push(`the ${ bed } bed is ${ size(statSync(join(ASSETS, built[0])).size) }, over ${ size(ceiling) }`);
+    }
+}
+
+if (beds.some((name) => !bedNames.some((bed) => new RegExp(`^${ bed }-[\\w-]+\\.bed$`).test(name))))
+{
+    problems.push('a bed reached dist/assets that frontend/src/game/sound/beds does not hold');
+}
+
 if (readdirSync(ASSETS).some((name) => /.(mp3|ogg|wav|m4a)$/.test(name)))
 {
     problems.push('an audio file with a media extension reached dist/assets - a download manager grabs those and hands the page an empty 204');
@@ -562,6 +593,7 @@ console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardC
 console.log(`  tables       ${ tableBytes.length } chunks, largest ${ size(Math.max(0, ...tableBytes)) } / ${ size(TABLE_BUDGET) }`);
 console.log(`  stage        ${ stageBytes === null ? 'absent' : size(stageBytes) } / ${ size(STAGE_BUDGET) }`);
 console.log(`  sounds       ${ sounds.length } packs, ${ size(soundTotal) } in all, none over its ceiling`);
+console.log(`  beds         ${ beds.length } ${ beds.length === 1 ? 'bed' : 'beds' }, ${ size(bedTotal) } in all, none over its ceiling`);
 console.log(`  world        ${ size(worldBytes) } / ${ size(WORLD_BUDGET) }`);
 console.log(`  posters      ${ posterBytes.map(size).join(', ') }`);
 console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);

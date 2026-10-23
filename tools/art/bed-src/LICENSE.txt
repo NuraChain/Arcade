@@ -1,0 +1,13 @@
+Bed sources
+
+Every file here is released under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Each is the stretch of the original recording that its bed plays, kept so the bed can be built again,
+re-encoded as Ogg Vorbis.
+
+From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
+
+- bigsoundbank-1019-summer-rain-on-terrace.ogg, "Summer Rain on Terrace",
+  the stretch from 93 seconds to the end of it:
+  https://bigsoundbank.com/summer-rain-on-terrace-s1019.html
