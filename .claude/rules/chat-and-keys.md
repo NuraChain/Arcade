@@ -1418,6 +1418,17 @@ Removing them leaves them UNKNOWN rather than offline, which is the honest answe
 `Presence.known` exists: somebody who left and somebody who turned presence off are the same thing
 from outside, and `presence.dot()` draws nothing for either.
 
+**When somebody was last seen is when their last tab let go.** `users.last_seen_at` was written
+only when somebody's first socket connected (`touchSeen`, which the domain keeps to once a minute),
+so a "last seen" read from it said when they had come, hours before they went. The hub now tells
+the domain the moment an account's last socket closes (`leaving`, `social.lastSeen`, never
+coalesced: it comes once a visit, and a reload writing it again a second later is still true),
+everybody it holds as it goes down (`closeAll`), and everybody still connected at each of its
+sweeps (`touchSeen`), so a server that dies leaves "last seen" at most a minute short. It reaches a
+reader where it always did: on a person, only for a viewer who may see them online (`seenBy`), and
+on no name (`GET /social/names`). `realtime-hub.spec.ts` (*leaving*, *shutting down*) and
+`last-seen.db.spec.ts` hold it; the head of a thread that says it is `frontend/CLAUDE.md`'s.
+
 **The typing indicator is new server-visible metadata.** The server learns that somebody is typing,
 in which conversation, and when — that is on the same list as who talked to whom and how large it
 was, and it belongs in the privacy copy alongside them. A notice carries its own 4s expiry because

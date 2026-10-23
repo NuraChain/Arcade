@@ -46,6 +46,9 @@ export interface HubDeps
     /** Coalesced `last_seen_at` write. Called with ids, flushed by the domain at its own rate. */
     touchSeen(userIds: readonly string[]): void;
 
+    /** Their last socket has closed, so they were last seen now: written at once, never coalesced. */
+    leaving(userIds: readonly string[]): void;
+
     report(error: unknown, where: string): void;
 
     voiceCall(userId: string, tableId: string): Promise<string | null>;
@@ -850,6 +853,11 @@ export function createHub(deps: HubDeps): Hub
 
             byUser.delete(socket.userId);
 
+            // When they were last seen is when their last tab let go, not when they first came:
+            // the write at a first socket is all `last_seen_at` ever had, so "last seen" said when
+            // somebody arrived. A reload writes it again a second later, which is still true.
+            deps.leaving([socket.userId]);
+
             // Lingering, not gone. A reload or a navigation closes and reopens within a second,
             // and flapping every watching friend list for that is worse than being a few seconds
             // out of date.
@@ -1155,6 +1163,10 @@ export function createHub(deps: HubDeps): Hub
             if (byUser.size > 0)
             {
                 feel();
+
+                // A server that dies cannot say whom it was holding, so whoever is here is written
+                // down as they stay, no more than a minute behind (the domain coalesces it).
+                deps.touchSeen([...byUser.keys()]);
             }
 
             for (const [userId, last] of [...sighted])
@@ -1273,6 +1285,11 @@ export function createHub(deps: HubDeps): Hub
 
             pulseDue = false;
             told = null;
+
+            if (byUser.size > 0)
+            {
+                deps.leaving([...byUser.keys()]);
+            }
 
             let sent = 0;
             for (const sockets of [...byUser.values()])

@@ -375,6 +375,23 @@ export function createSocialService(db: DataSource)
             return affectedBy(result);
         },
 
+        /**
+         * Records that these people have just left: their last socket closed, or the server is
+         * going down under them. Not coalesced as `touchSeen` is, because this is the moment
+         * anybody told when they were last seen is told about, and it comes once a visit.
+         */
+        async lastSeen(userIds: readonly string[])
+        {
+            if (userIds.length === 0)
+            {
+                return 0;
+            }
+
+            const result = await db.getRepository(User).update({ id: In([...userIds]) }, { lastSeenAt: () => 'now()' });
+
+            return result.affected ?? 0;
+        },
+
         /** uuid to handle, for the several places a row names somebody the wire must not. */
         async handlesOf(ids: readonly string[]): Promise<Map<string, string>>
         {

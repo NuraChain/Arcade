@@ -71,6 +71,7 @@ interface World
     recipients: Map<string, string[]>;
     alive: Set<string>;
     touched: string[];
+    left: string[];
     errors: string[];
     seq: number;
     seated: Set<string>;
@@ -93,6 +94,7 @@ function build()
         recipients: new Map(),
         alive: new Set(),
         touched: [],
+        left: [],
         errors: [],
         seq: 0,
         seated: new Set(),
@@ -121,6 +123,7 @@ function build()
         recipientsOf: async (conversationId) => state.recipients.get(conversationId) ?? [],
         aliveSessions: async (ids) => new Set(ids.filter((id) => state.alive.has(id))),
         touchSeen: (ids) => state.touched.push(...ids),
+        leaving: (ids) => state.left.push(...ids),
         report: (_error, where) => state.errors.push(where),
         voiceCall: async (userId, tableId) =>
         {
@@ -700,6 +703,56 @@ describe('leaving', () =>
 
         expect(world.hub.presenceOf('sara.k').map((entry) => entry.who)).toContain('alex');
     });
+
+    it('writes down when somebody was last seen as their last tab lets go, and not before', async () =>
+    {
+        const first = await connect('alex');
+        const second = await connect('alex');
+
+        world.hub.release(first.connection);
+        expect(world.left, 'another tab of theirs is still open').toEqual([]);
+
+        world.hub.release(second.connection);
+        expect(world.left).toEqual(['alex']);
+
+        world.hub.release(second.connection);
+        expect(world.left, 'a socket released twice is one departure').toEqual(['alex']);
+    });
+
+    it('keeps when everybody here was last seen up to date at every sweep', async () =>
+    {
+        await connect('alex');
+        await connect('sara.k');
+        world.touched = [];
+
+        await world.hub.sweep();
+
+        expect([...world.touched].sort()).toEqual(['alex', 'sara.k']);
+    });
+
+    it('touches nobody at a sweep once they have left, while they linger and somebody else is here', async () =>
+    {
+        const alex = await connect('alex');
+        await connect('sara.k');
+
+        world.hub.release(alex.connection);
+        world.touched = [];
+        await world.hub.sweep();
+
+        expect(world.touched, 'their last tab let go, and that moment was written down').toEqual(['sara.k']);
+        expect(world.hub.presenceOf('sara.k').map((entry) => entry.who), 'still lingering').toContain('alex');
+    });
+
+    it('touches nobody at a sweep with nobody here', async () =>
+    {
+        const alex = await connect('alex');
+
+        world.hub.release(alex.connection);
+        world.touched = [];
+        await world.hub.sweep();
+
+        expect(world.touched).toEqual([]);
+    });
 });
 
 describe('who is here', () =>
@@ -904,6 +957,19 @@ describe('shutting down', () =>
         // nobody connected does not pause for the drain.
         expect(saidGoodbye).toBe(2);
         expect(world.hub.closeAll(1001, 'Server restarting')).toBe(0);
+    });
+
+    it('writes down that everybody still here was last seen as it goes, once each', async () =>
+    {
+        await connect('alex');
+        await connect('alex');
+        await connect('sara.k');
+
+        world.hub.closeAll(1001, 'Server restarting');
+        expect([...world.left].sort()).toEqual(['alex', 'sara.k']);
+
+        world.hub.closeAll(1001, 'Server restarting');
+        expect([...world.left].sort(), 'nobody is left to write down').toEqual(['alex', 'sara.k']);
     });
 });
 

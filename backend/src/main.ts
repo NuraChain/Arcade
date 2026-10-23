@@ -120,6 +120,11 @@ const hub = createHub({
         void social.touchSeen(ids).catch((error) => log.debug('last-seen touch failed', { error }));
     },
 
+    leaving: (ids) =>
+    {
+        void social.lastSeen(ids).catch((error) => log.debug('last-seen write failed', { error }));
+    },
+
     report: (error, where) => log.error('realtime failure', { where, error }),
 
     voiceCall: (userId, tableId) => voiceCall(dataSource, userId, tableId),
