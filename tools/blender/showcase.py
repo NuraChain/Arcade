@@ -10,12 +10,13 @@ from lib import kit
 from lib import settle
 from lib import studio
 from vignettes import backgammon
+from vignettes import chess
 from vignettes import hokm
 from vignettes import ludo
 from vignettes import poker
 
-GAMES = ['hokm', 'poker', 'backgammon', 'ludo']
-BUILDERS = {'hokm': hokm.build, 'poker': poker.build, 'backgammon': backgammon.build, 'ludo': ludo.build}
+GAMES = ['hokm', 'poker', 'backgammon', 'ludo', 'chess']
+BUILDERS = {'hokm': hokm.build, 'poker': poker.build, 'backgammon': backgammon.build, 'ludo': ludo.build, 'chess': chess.build}
 ONLY = [game for game in os.environ.get('NURA_ONLY', '').split(',') if game] or [game for game in GAMES if game in BUILDERS]
 PREVIEW = os.environ.get('NURA_PREVIEW') == '1'
 PREVIEWS = os.path.join(HERE, 'out')
@@ -128,9 +129,9 @@ if ONLY == GAMES:
         if picture is not None and picture.size[0] > 512:
             picture.scale(512, 512)
     for picture in bpy.data.images:
-        if picture.name.endswith('-plinth.png') or picture.name.endswith('-surface.png') or picture.name.endswith('-floor.png'):
-            if picture.size[0] > 512:
-                picture.scale(512, 512)
+        limit = 384 if picture.name.endswith('-surface.png') else 512
+        if picture.name.endswith(('-plinth.png', '-surface.png', '-floor.png')) and picture.size[0] > limit:
+            picture.scale(limit, limit)
     kit.export(kit.output_path('showcase-phone'), exported, quality=82)
     settle.retarget(kit.output_path('showcase-phone'))
     print('EXPORTED', len(exported), 'objects')

@@ -7,8 +7,16 @@
 `showcase-desktop.glb` and `showcase-phone.glb` into `frontend/public/world/`. **The GLBs are
 committed**, so `npm run build` and CI never need Blender.
 
-- Four vignettes (`vignettes/{hokm,poker,backgammon,ludo}.py`), each built at the origin on a plinth
+- Five vignettes (`vignettes/{hokm,poker,backgammon,ludo,chess}.py`), each built at the origin on a plinth
   under an empty named by its game id; the runtime places each root at its anchor. Real-world metres.
+- **The five plinths are one mesh.** `studio.plinth` builds the lathe once (`plinth`, 2,304 triangles) and
+  every later vignette's plinth is a node of its own over the same mesh: four copies were 6,900 of the
+  unique-triangle budget the chess set needed. A mesh with more than one user is kept out of `merge()`.
+- The chess set is 1.e4 e5 with White's knight settling onto f3: a walnut frame wearing the shared wood,
+  a field of maple and walnut squares 1.2 mm proud with the grain turned square by square, a brass inlay,
+  and lathed Staunton pieces at 16 sides (half a pixel off round at the landing's size), the bishop's slit
+  cut by a boolean and the knight's head an extruded profile thinned toward the snout. The set's pieces
+  face the camera's side so a knight shows its profile.
 - glTF PBR as authored - sheen on felt and baize, clearcoat on lacquer, chips, pawns and card stock -
   from `lib/looks.py`; the loader keeps every material except the decals.
 - Shadows are BAKED, three decals per game: a floor pool graded to exactly `#0B1220` at its edge, and
@@ -20,8 +28,12 @@ committed**, so `npm run build` and CI never need Blender.
   contact decal sat at the lowest cards' height and drew black squares over them. Decals sit 0.1 mm
   above their surface and everything standing on it sits higher.
 - `merge()` joins static meshes by material set and repeated pieces are `EXT_mesh_gpu_instancing`:
-  63 draw calls. `inspect.mjs` gates each GLB - 2.5 MiB / 1.0 MiB, 40k unique and 120k drawn triangles,
+  83 draw calls. `inspect.mjs` gates each GLB - 2.5 MiB / 1.0 MiB, 40k unique and 120k drawn triangles,
   90 draw calls, the extension allow-list, root names equal to the `GAMES` ids, three decals per game.
+  With five sets it reads 38,360 unique and 108,096 drawn triangles. The phone's playing-surface
+  shadows are 384 px (512 the rest of its bakes): the fifth set put the phone cut 54 KB over its
+  1.0 MiB, the surface decals were its largest images, and a soft contact shadow at 384 px still
+  resolves a piece's footprint to about 27 px.
 - Every vignette renders a Cycles preview into `tools/blender/out/` (git-ignored) with `NURA_PREVIEW=1`,
   because modelling from a script means never seeing the model otherwise. Judge the runtime, though:
   materials were tuned in the browser against `NeutralToneMapping` and written back into `looks.py`.
@@ -36,7 +48,8 @@ committed**, so `npm run build` and CI never need Blender.
   the board would show its shadow with nothing standing in it. Each one resting on the playing surface
   bakes a small footprint of its own (`decal-footprint-<piece>`, feathered at the edge) that scales in over
   the last three frames of the fall, so the shadow arrives with the piece. The poker chip lands on a stack
-  rather than on the felt and has none.
+  rather than on the felt and has none. The chess knight is set down as a hand sets it: a little tilted
+  and turning in the air, level when it lands.
 - **Blender's glTF exporter points animation channels at the wrong nodes when
   `EXT_mesh_gpu_instancing` is on**: each channel's node index is off by the number of nodes the
   instancing collapsed, so the first build animated three unrelated props and dropped the poker clip

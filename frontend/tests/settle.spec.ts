@@ -54,7 +54,7 @@ describe('pieces that settle when their game arrives', () =>
         const { root, die, face, clip } = scene();
         const settling = createSettling(root, [clip]);
 
-        expect(settling.reach('together')).toBe(true);
+        expect(settling.reach('ludo')).toBe(true);
         expect(die.visible).toBe(true);
 
         expect(settling.update(0.1)).toBe(true);
@@ -70,7 +70,7 @@ describe('pieces that settle when their game arrives', () =>
         const { root, face, clip } = scene();
         const settling = createSettling(root, [clip]);
 
-        settling.reach('together');
+        settling.reach('ludo');
 
         expect(settling.update(1)).toBe(true);
         expect(heightOf(face)).toBeGreaterThan(0.1);
@@ -81,20 +81,20 @@ describe('pieces that settle when their game arrives', () =>
         const { root, clip } = scene();
         const settling = createSettling(root, [clip]);
 
-        expect(settling.reach('together')).toBe(true);
+        expect(settling.reach('ludo')).toBe(true);
         finish(settling);
 
-        expect(settling.reach('together')).toBe(false);
+        expect(settling.reach('ludo')).toBe(false);
         expect(settling.update(0.016)).toBe(false);
     });
 
-    it('does nothing for a beat with no piece of its own, like the arrival the poster shows', () =>
+    it('does nothing for a game with no piece of its own, like the Hokm table the poster shows', () =>
     {
         const { root, clip } = scene();
         const settling = createSettling(root, [clip]);
 
-        expect(settling.reach('arrival')).toBe(false);
-        expect(settling.reach('games')).toBe(false);
+        expect(settling.reach('hokm')).toBe(false);
+        expect(settling.reach('chess'), 'a game whose clip the scene does not carry').toBe(false);
     });
 
     it('drops a piece once the camera itself has come to its game, not when the scroll points there', () =>
@@ -116,6 +116,25 @@ describe('pieces that settle when their game arrives', () =>
 
         expect(settling.look(new Vector3(...FOCUS.ludo.position))).toBe(true);
         expect(die.visible).toBe(true);
+    });
+
+    it('drops the dice of a game no beat frames when its card flies to its close-up', () =>
+    {
+        const root = new Group();
+        const dice = new Group();
+        dice.name = 'backgammon-die-0';
+        root.add(dice);
+        const clip = new AnimationClip('settle-backgammon-a', 0.7, [
+            new VectorKeyframeTrack('backgammon-die-0.position', [0, 0.7], [0, 0.5, 0, 0, 0, 0])
+        ]);
+        const settling = createSettling(root, [clip]);
+
+        expect(Object.values(SHOTS).some((shot) => shot === FOCUS.backgammon), 'a beat frames backgammon after all').toBe(false);
+        expect(settling.look(new Vector3(...SHOTS.compete.position))).toBe(false);
+        expect(dice.visible).toBe(false);
+
+        expect(settling.look(new Vector3(...FOCUS.backgammon.position))).toBe(true);
+        expect(dice.visible).toBe(true);
     });
 
     it('keeps the drop for later when a fling only carries the camera partway', () =>

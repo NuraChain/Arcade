@@ -1,11 +1,13 @@
 import { AnimationMixer, LoopOnce, type AnimationAction, type AnimationClip, type Object3D } from 'three';
 
-import { SHOTS } from './camera/shots.ts';
+import { FOCUS } from './camera/shots.ts';
+import { GAMES, type GameId } from '../data/games.ts';
 
-export const SETTLES: Readonly<Record<string, string>> = {
-    together: 'settle-ludo',
-    compete: 'settle-backgammon',
-    finale: 'settle-poker'
+export const SETTLES: Readonly<Partial<Record<GameId, string>>> = {
+    ludo: 'settle-ludo',
+    backgammon: 'settle-backgammon',
+    poker: 'settle-poker',
+    chess: 'settle-chess'
 };
 
 export const REACH = 0.35;
@@ -14,7 +16,7 @@ export const LONGEST_STEP = 0.05;
 
 export interface Settling
 {
-    reach(beat: string): boolean;
+    reach(game: GameId): boolean;
     look(camera: { x: number; y: number; z: number }): boolean;
     update(seconds: number): boolean;
     dispose(): void;
@@ -29,11 +31,18 @@ interface Waiting
 export function createSettling(root: Object3D, clips: readonly AnimationClip[])
 {
     const mixer = new AnimationMixer(root);
-    const waiting = new Map<string, Waiting>();
+    const waiting = new Map<GameId, Waiting>();
     const playing = new Set<Waiting>();
 
-    for (const [beat, prefix] of Object.entries(SETTLES))
+    for (const { id: game } of GAMES)
     {
+        const prefix = SETTLES[game];
+
+        if (prefix === undefined)
+        {
+            continue;
+        }
+
         const own = clips.filter((clip) => clip.name.startsWith(prefix));
         const nodes = [...new Set(own.flatMap((clip) => clip.tracks.map((track) => track.name.split('.')[0])))]
             .map((name) => root.getObjectByName(name))
@@ -51,7 +60,7 @@ export function createSettling(root: Object3D, clips: readonly AnimationClip[])
             node.traverse((part) => part.matrixWorldAutoUpdate = true);
         }
 
-        waiting.set(beat, {
+        waiting.set(game, {
             nodes,
             actions: own.map((clip) =>
             {
@@ -64,16 +73,16 @@ export function createSettling(root: Object3D, clips: readonly AnimationClip[])
     }
 
     const settling: Settling = {
-        reach(beat)
+        reach(game)
         {
-            const entry = waiting.get(beat);
+            const entry = waiting.get(game);
 
             if (entry === undefined)
             {
                 return false;
             }
 
-            waiting.delete(beat);
+            waiting.delete(game);
 
             for (const node of entry.nodes)
             {
@@ -92,13 +101,13 @@ export function createSettling(root: Object3D, clips: readonly AnimationClip[])
         {
             let started = false;
 
-            for (const beat of [...waiting.keys()])
+            for (const game of [...waiting.keys()])
             {
-                const [x, y, z] = SHOTS[beat]?.position ?? [Infinity, Infinity, Infinity];
+                const [x, y, z] = FOCUS[game].position;
 
                 if (Math.hypot(camera.x - x, camera.y - y, camera.z - z) <= REACH)
                 {
-                    started = settling.reach(beat) || started;
+                    started = settling.reach(game) || started;
                 }
             }
 

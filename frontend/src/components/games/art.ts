@@ -4,7 +4,8 @@ export const GAME_HUE: Record<GameId, number> = {
     hokm: 350,
     poker: 150,
     backgammon: 28,
-    ludo: 265
+    ludo: 265,
+    chess: 40
 };
 
 export function gameArt(game: GameId)

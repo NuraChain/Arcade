@@ -29,6 +29,7 @@ export function fitted(held: Record<string, unknown>, rules: TableRules): QuickA
     const mode = rules.modes.find((one) => one === held.mode);
     const target = rules.targets.find((one) => one === held.target);
     const blinds = rules.hasBlinds ? BLINDS.find((one) => one === held.blinds) : undefined;
+    const clock = (mode ?? 'live') === 'live' ? rules.clocks.find((one) => one === held.clock) : undefined;
     const aimed = target === undefined ? {} : { target };
 
     return {
@@ -36,7 +37,8 @@ export function fitted(held: Record<string, unknown>, rules: TableRules): QuickA
         ...(mode === undefined ? {} : { mode }),
         ...aimed,
         ...(typeof held.cube === 'boolean' && cubeAsked(aimed, rules) ? { cube: held.cube } : {}),
-        ...(blinds === undefined ? {} : { blinds })
+        ...(blinds === undefined ? {} : { blinds }),
+        ...(clock === undefined ? {} : { clock })
     };
 }
 

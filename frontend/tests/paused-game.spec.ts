@@ -41,7 +41,7 @@ const summary = (id: string, status: Status): unknown => ({
     minPlayers: 2,
     maxPlayers: 4,
     status,
-    rules: { seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners: 'none', hasCube: false, hasBlinds: false }
+    rules: { seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners: 'none', hasCube: false, hasBlinds: false, clocks: [] }
 });
 
 const catalogue = async (statuses: Partial<Record<GameId, Status>>) =>
@@ -150,7 +150,7 @@ describe('a game the staff paused, as a player sees it', () =>
 
         const container = await routed('/app/leaderboard', [{ path: '/app/leaderboard', component: () => LeaderboardPage({}) as unknown as HTMLElement }]);
 
-        expect([...container.querySelectorAll('[aria-label="Choose a game"] button')].map((one) => one.textContent?.trim())).toEqual(['Hokm', 'Backgammon', 'Ludo']);
+        expect([...container.querySelectorAll('[aria-label="Choose a game"] button')].map((one) => one.textContent?.trim())).toEqual(['Hokm', 'Backgammon', 'Ludo', 'Chess']);
     });
 
     it('says it in Persian', async () =>

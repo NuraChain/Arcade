@@ -60,7 +60,8 @@ describe('whether a table is two against two', () =>
             hokm: 'required',
             poker: 'none',
             backgammon: 'none',
-            ludo: 'optional'
+            ludo: 'optional',
+            chess: 'none'
         });
 
         for (const seed of GAME_SEEDS)

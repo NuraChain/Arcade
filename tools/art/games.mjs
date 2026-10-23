@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { pieceDefs, pieceLit, pieceShapes } from './chess-set.mjs';
 import { SUIT_DEFS } from './suits.mjs';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'art', 'games');
@@ -384,7 +385,58 @@ ${ card({ x: 280, y: 232, rotate: 10, rank: 'K', suit: 'heart', w: 78, h: 110 })
 </g>`);
 }
 
-const SCENES = { ludo, hokm, backgammon, poker };
+function chess()
+{
+    const view = { cx: 240, cy: 176, angle: -14, squash: 0.6 };
+    const square = 35;
+    const half = square * 4;
+    const transform = `translate(${ view.cx } ${ view.cy }) scale(1 ${ view.squash }) rotate(${ view.angle })`;
+    const edge = `translate(${ view.cx } ${ view.cy + 12 }) scale(1 ${ view.squash }) rotate(${ view.angle })`;
+    const board = [
+        `<rect x="${ -half - 16 }" y="${ -half - 16 }" width="${ half * 2 + 32 }" height="${ half * 2 + 32 }" rx="12" fill="url(#frame)"/>`,
+        `<rect x="${ -half - 9 }" y="${ -half - 9 }" width="${ half * 2 + 18 }" height="${ half * 2 + 18 }" rx="6" fill="none" stroke="#C9A25A" stroke-width="1.6" opacity="0.85"/>`,
+        `<rect x="${ -half - 3 }" y="${ -half - 3 }" width="${ half * 2 + 6 }" height="${ half * 2 + 6 }" fill="#2A170B"/>`,
+        `<rect x="${ -half }" y="${ -half }" width="${ half * 2 }" height="${ half * 2 }" fill="url(#squares)"/>`
+    ];
+    const squares = `<pattern id="squares" x="${ -half }" y="${ -half }" width="${ square * 2 }" height="${ square * 2 }" patternUnits="userSpaceOnUse">`
+        + `<rect width="${ square }" height="${ square }" fill="url(#maple)"/><rect x="${ square }" width="${ square }" height="${ square }" fill="url(#walnut)"/>`
+        + `<rect y="${ square }" width="${ square }" height="${ square }" fill="url(#walnut)"/><rect x="${ square }" y="${ square }" width="${ square }" height="${ square }" fill="url(#maple)"/></pattern>`;
+
+    const at = (name) => ({ file: 'abcdefgh'.indexOf(name[0]), rank: Number(name[1]) - 1 });
+    const kinds = new Set();
+    const pieceAt = (name, piece, scale = 1) =>
+    {
+        const { file, rank } = at(name);
+        const [x, y] = project(-half + (file + 0.5) * square, half - (rank + 0.5) * square, view);
+        const colour = piece === piece.toUpperCase() ? 'w' : 'b';
+        const size = square * 1.5 * scale;
+
+        kinds.add(`${ colour }${ piece.toLowerCase() }`);
+
+        return { y, markup: `<ellipse cx="${ x + 2 }" cy="${ y + 1 }" rx="${ round(size * 0.3) }" ry="${ round(size * 0.1) }" fill="#000000" opacity="0.5" filter="url(#softer)"/>
+<use href="#piece-${ colour }${ piece.toLowerCase() }" x="${ round(x - size / 2) }" y="${ round(y - size * 0.9) }" width="${ round(size) }" height="${ round(size) }"/>` };
+    };
+    const pieces = [
+        pieceAt('g8', 'k'), pieceAt('d8', 'q'), pieceAt('f8', 'r'), pieceAt('c6', 'n'), pieceAt('c5', 'b'),
+        pieceAt('e5', 'p'), pieceAt('d6', 'p'), pieceAt('f7', 'p'), pieceAt('g7', 'p'), pieceAt('h7', 'p'),
+        pieceAt('g1', 'K'), pieceAt('e2', 'Q'), pieceAt('f1', 'R'), pieceAt('c4', 'B'), pieceAt('e4', 'P'),
+        pieceAt('d3', 'P'), pieceAt('f2', 'P'), pieceAt('g2', 'P'), pieceAt('h2', 'P'), pieceAt('f3', 'N', 1.08)
+    ].sort((a, b) => a.y - b.y).map((one) => one.markup).join('\n');
+    const shapes = [...new Set([...kinds].map((kind) => kind[1]))].map((kind) => `<g id="shape-${ kind }">${ pieceShapes(kind) }</g>`).join('');
+    const symbols = shapes + [...kinds].map((kind) => `<symbol id="piece-${ kind }" viewBox="0 0 100 100" overflow="visible">${ pieceLit(kind[0], kind[1], `c${ kind[0] }`, `shape-${ kind[1] }`) }</symbol>`).join('');
+    const defs = table('#3E2717', '#0D0805') + pieceDefs('w', 'cw') + pieceDefs('b', 'cb') + symbols + squares
+        + '<linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7A4B28"/><stop offset="0.5" stop-color="#4A2C18"/><stop offset="1" stop-color="#2E1A0D"/></linearGradient>'
+        + '<linearGradient id="maple" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F3E2C0"/><stop offset="1" stop-color="#E0C594"/></linearGradient>'
+        + '<linearGradient id="walnut" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A9764B"/><stop offset="1" stop-color="#875833"/></linearGradient>';
+
+    return svg(defs, `${ surface() }
+<g transform="translate(0 18)" opacity="0.6" filter="url(#soft)"><g transform="${ transform }"><rect x="${ -half - 16 }" y="${ -half - 16 }" width="${ half * 2 + 32 }" height="${ half * 2 + 32 }" rx="12" fill="#000000"/></g></g>
+<g transform="${ edge }"><rect x="${ -half - 16 }" y="${ -half - 16 }" width="${ half * 2 + 32 }" height="${ half * 2 + 32 }" rx="12" fill="#22130A"/></g>
+<g transform="${ transform }">${ board.join('') }</g>
+${ pieces }`);
+}
+
+const SCENES = { ludo, hokm, backgammon, poker, chess };
 for (const [name, build] of Object.entries(SCENES))
 {
     writeFileSync(join(OUT, `${ name }.svg`), build());

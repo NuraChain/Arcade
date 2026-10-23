@@ -59,11 +59,20 @@ describe('the table a waiting room is drawn as', () =>
 
     it('gives a Ludo board on a wide table the height, with the chairs in the corners beside it, after the rule it has to beat', () =>
     {
-        const narrow = sheet.indexOf('\n.lobby-table:is([data-game=\'ludo\'], [data-game=\'backgammon\']) .lobby-top\n{');
+        const narrow = sheet.indexOf('\n.lobby-table:is([data-game=\'ludo\'], [data-game=\'backgammon\'], [data-game=\'chess\']) .lobby-top\n{');
         const wide = sheet.indexOf('\n    .lobby-table[data-game=\'ludo\'] .lobby-top\n    {\n        inset: 0.75rem calc(var(--chair-w) + 0.75rem);');
 
         expect(narrow).toBeGreaterThan(-1);
         expect(wide, 'a wide Ludo table keeps its board between two rows of chairs').toBeGreaterThan(narrow);
+    });
+
+    it('lays a chess board between the two chairs, drawn from the board the table is played on', () =>
+    {
+        const board = ruleOf('.lobby-board[data-board=\'chess\']');
+
+        expect(board).toContain('\n    background-image: url(\'/board/chess/board.svg\');');
+        expect(board, 'the corner is the drawing\'s own').toContain('\n    border-radius: 2.2%;');
+        expect(sheet.indexOf('\n.lobby-board[data-board=\'chess\']'), 'after the Ludo board it takes the place of').toBeGreaterThan(sheet.indexOf('\n.lobby-board\n{'));
     });
 
     it('rings a chair in its side\'s colour on a table two sides play at, as a plate is marked', () =>

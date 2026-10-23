@@ -138,7 +138,7 @@ describe('the home page', () =>
         const container = await show();
         const names = [...container.querySelectorAll('section[aria-labelledby="home-games"] li a > span:first-of-type')];
 
-        expect(names.length).toBe(4);
+        expect(names.length).toBe(5);
         expect(names.every((one) => one.classList.contains('hyphens-auto') && one.classList.contains('wrap-break-word') && !one.classList.contains('truncate')), '"Backgammon" is cut to "Backgam…" on a phone').toBe(true);
     });
 

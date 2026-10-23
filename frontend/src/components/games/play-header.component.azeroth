@@ -12,6 +12,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import type { TableSummary } from '../../api.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { leave, useShell } from '../../stores/shell.store.ts';
+import { faceOf } from '../../lib/clocks.ts';
 import { nuraOf } from '../../lib/nura.ts';
 
 export default component PlayHeader(props: { table: TableSummary; others: TableSummary[]; tools?: Child; compact?: boolean; bare?: boolean; class?: string })
@@ -43,6 +44,10 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
     derived voiced = props.table.voice !== 'off';
 
     derived paid = props.table.stake !== undefined;
+
+    derived clocked = props.table.clock !== undefined;
+
+    derived clockFace = props.table.clock === undefined ? '' : faceOf(locale, props.table.clock);
 
     derived stakeFigure = locale.n(nuraOf(props.table.stake ?? '0'), { maximumFractionDigits: 4 });
 
@@ -76,6 +81,9 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                     <span class="shrink-0">{ props.table.teams ? locale.t('create.format.teams') : locale.plural('common.players', props.table.seats) }</span>
                                     <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
                                     <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
+                                    <Show when={ clocked }>
+                                        <span class="tally shrink-0" data-clock><span class="sr-only">{ locale.t('create.clock') } </span>{ clockFace }</span>
+                                    </Show>
                                     <Show when={ paid }>
                                         <span class="shrink-0 rounded-full bg-madder px-1.5 text-ui-2xs font-semibold text-bright-ink" data-stake><span class="sr-only">{ locale.t('create.stake') } </span><span class="tally">{ stakeFigure }</span> NURA</span>
                                     </Show>

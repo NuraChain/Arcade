@@ -29,13 +29,14 @@ export const FOCUS: Record<GameId, Frame> = {
     hokm: around('hokm', -30, 32, 1.55, 30),
     poker: around('poker', 32, 30, 1.55, 30),
     backgammon: around('backgammon', -26, 34, 1.6, 30),
-    ludo: around('ludo', 30, 34, 1.55, 30)
+    ludo: around('ludo', 30, 34, 1.55, 30),
+    chess: around('chess', -28, 34, 1.55, 30)
 };
 
 export const SHOTS: Record<string, Frame> = {
     arrival: FOCUS.hokm,
-    games: { position: [10.4, 4.0, 10.4], target: [-0.6, 0.1, 0], fov: 20 },
+    games: { position: [13.3, 5.1, 13.3], target: [-0.77, 0.1, 0], fov: 20 },
     together: FOCUS.ludo,
-    compete: FOCUS.backgammon,
+    compete: FOCUS.chess,
     finale: FOCUS.poker
 };

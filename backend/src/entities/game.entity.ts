@@ -33,7 +33,7 @@ export type GameStatus = 'available' | 'coming-soon' | 'disabled';
 @Entity('games')
 export class Game
 {
-    /** The stable identity the whole product keys on: 'hokm', 'poker', 'backgammon', 'ludo'. */
+    /** The stable identity the whole product keys on: 'hokm', 'poker', 'backgammon', 'ludo', 'chess'. */
     @PrimaryColumn({ type: 'varchar', length: 32 })
     id!: string;
 

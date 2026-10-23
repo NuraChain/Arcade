@@ -6,6 +6,7 @@ import Segmented from '../ui/segmented.component.azeroth';
 import SheetHeader from '../ui/sheet-header.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import { formatsOf, type TableMode } from '../../data/tables.ts';
+import { faceOf, paceOf } from '../../lib/clocks.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import { openTable } from '../../lib/open-table.ts';
 import { cubeAsked, fitted, recallAsk, rememberAsk } from '../../lib/quick-asks.ts';
@@ -49,6 +50,8 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
     derived cubed = cubeAsked(ask, rules);
 
     derived staked = rules.hasBlinds;
+
+    derived clocked = rules.clocks.length > 0 && (ask.mode ?? 'live') === 'live';
 
     derived mode = ask.mode ?? 'live';
 
@@ -186,6 +189,26 @@ export default component QuickFinder(props: OverlayProps & { game: GameId })
                         onChange={ (id) => choose({ ...ask, mode: id as TableMode }) }
                 />
                     <p class="text-ui-xs text-faint">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</p>
+                </fieldset>
+            </Show>
+
+            <Show when={ clocked }>
+                <fieldset class="flex flex-col gap-2">
+                    <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.clock') }</legend>
+                    <ul class="flex flex-wrap gap-2">
+                        <li>
+                            <Chip selected={ ask.clock === undefined } onClick={ () => choose({ ...ask, clock: undefined }) }>
+                                <span>{ locale.t('quickMatch.any') }</span>
+                            </Chip>
+                        </li>
+                        <For each={ [...rules.clocks] } key={ (id) => id } let={ id }>
+                            <li>
+                                <Chip icon="timer" selected={ ask.clock === id } onClick={ () => choose({ ...ask, clock: id }) }>
+                                    <span><span class="tally">{ faceOf(locale, id) }</span> { locale.t(`clock.${ paceOf(id) }`) }</span>
+                                </Chip>
+                            </li>
+                        </For>
+                    </ul>
                 </fieldset>
             </Show>
 

@@ -1,6 +1,6 @@
 import type { MessageKey } from '../locales/en.ts';
 
-export type GameId = 'hokm' | 'poker' | 'backgammon' | 'ludo';
+export type GameId = 'hokm' | 'poker' | 'backgammon' | 'ludo' | 'chess';
 
 export type GameCategory = 'cards' | 'board';
 
@@ -31,7 +31,7 @@ export const GAMES: Game[] = [
         category: 'cards',
         minPlayers: 2,
         maxPlayers: 4,
-        anchor: [-2.4, 0, 0]
+        anchor: [-3.2, 0, 0]
     },
     {
         id: 'poker',
@@ -42,7 +42,7 @@ export const GAMES: Game[] = [
         category: 'cards',
         minPlayers: 2,
         maxPlayers: 9,
-        anchor: [-0.8, 0, 0]
+        anchor: [-1.6, 0, 0]
     },
     {
         id: 'backgammon',
@@ -53,7 +53,7 @@ export const GAMES: Game[] = [
         category: 'board',
         minPlayers: 2,
         maxPlayers: 2,
-        anchor: [0.8, 0, 0]
+        anchor: [0, 0, 0]
     },
     {
         id: 'ludo',
@@ -64,7 +64,18 @@ export const GAMES: Game[] = [
         category: 'board',
         minPlayers: 2,
         maxPlayers: 4,
-        anchor: [2.4, 0, 0]
+        anchor: [1.6, 0, 0]
+    },
+    {
+        id: 'chess',
+        slug: 'chess',
+        nameKey: 'games.chess.name',
+        blurbKey: 'games.chess.blurb',
+        categoryKey: 'games.category.board',
+        category: 'board',
+        minPlayers: 2,
+        maxPlayers: 2,
+        anchor: [3.2, 0, 0]
     }
 ];
 

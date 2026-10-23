@@ -3,6 +3,7 @@ import { Link } from 'azerothjs';
 import type { TableSummary } from '../../api.ts';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { faceOf } from '../../lib/clocks.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -30,6 +31,10 @@ export default component TableRow(props: { table: TableSummary })
 
     derived paid = props.table.stake !== undefined;
 
+    derived clocked = props.table.clock !== undefined;
+
+    derived clockFace = props.table.clock === undefined ? '' : faceOf(locale, props.table.clock);
+
     derived stakeFigure = locale.n(nuraOf(props.table.stake ?? '0'), { maximumFractionDigits: 4 });
 
     <Link
@@ -47,6 +52,9 @@ export default component TableRow(props: { table: TableSummary })
                 </Show>
                 <Show when={ paired }>
                     <span class="shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-format="teams">{ locale.t('create.format.teams') }</span>
+                </Show>
+                <Show when={ clocked }>
+                    <span class="tally shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-clock><span class="sr-only">{ locale.t('create.clock') } </span>{ clockFace }</span>
                 </Show>
                 <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
             </span>

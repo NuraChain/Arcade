@@ -81,42 +81,42 @@ describe('the games page', () =>
     it.each(['en', 'fa'] as const)('says nothing of games still being built while none is, in %s', async (language) =>
     {
         useLocale().setLocale(language);
-        server.games = ['hokm', 'poker', 'backgammon', 'ludo'].map((id) => summary(id, 'available'));
+        server.games = ['hokm', 'poker', 'backgammon', 'ludo', 'chess'].map((id) => summary(id, 'available'));
         useCatalogue().reset();
 
         const container = await show();
 
         await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
 
-        expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+        expect(container.querySelectorAll('ul li article')).toHaveLength(5);
 
         expect(lead(container)).toBe(useLocale().t('games.lead'));
     });
 
     it('says so on the page once one of them is', async () =>
     {
-        server.games = ['hokm', 'poker', 'backgammon', 'ludo'].map((id) => summary(id, id === 'poker' ? 'coming-soon' : 'available'));
+        server.games = ['hokm', 'poker', 'backgammon', 'ludo', 'chess'].map((id) => summary(id, id === 'poker' ? 'coming-soon' : 'available'));
         useCatalogue().reset();
 
         const container = await show();
 
         await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
 
-        expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+        expect(container.querySelectorAll('ul li article')).toHaveLength(5);
 
         await vi.waitFor(() => expect(lead(container), 'a game still being built goes unsaid').toBe(`${ useLocale().t('games.lead') } ${ useLocale().t('games.leadSoon') }`), { timeout: 4000 });
     });
 
     it('lays two cards to a row at a phone\'s width and keeps a game\'s words for a card wide enough to read them', async () =>
     {
-        server.games = ['hokm', 'poker', 'backgammon', 'ludo'].map((id) => summary(id, 'available'));
+        server.games = ['hokm', 'poker', 'backgammon', 'ludo', 'chess'].map((id) => summary(id, 'available'));
         useCatalogue().reset();
 
         const container = await show();
 
         await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
 
-        expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+        expect(container.querySelectorAll('ul li article')).toHaveLength(5);
 
         const grid = container.querySelector('ul li article')!.closest('ul')!;
         const words = container.querySelector('ul li article p');
@@ -128,7 +128,7 @@ describe('the games page', () =>
 
     describe('the kind of game chosen', () =>
     {
-        const games = () => ['hokm', 'poker', 'backgammon', 'ludo'].map((id) => Object.assign({}, summary(id, 'available'), { category: id === 'hokm' || id === 'poker' ? 'cards' : 'board' }));
+        const games = () => ['hokm', 'poker', 'backgammon', 'ludo', 'chess'].map((id) => Object.assign({}, summary(id, 'available'), { category: id === 'hokm' || id === 'poker' ? 'cards' : 'board' }));
 
         const chip = (container: HTMLElement, key: 'games.filter.all' | 'games.category.cards' | 'games.category.board') =>
             [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((one) => one.textContent?.includes(useLocale().t(key)))!;
@@ -142,7 +142,7 @@ describe('the games page', () =>
 
             await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
 
-            expect(container.querySelectorAll('ul li article')).toHaveLength(2);
+            expect(container.querySelectorAll('ul li article')).toHaveLength(3);
             expect(chip(container, 'games.category.board').getAttribute('aria-pressed')).toBe('true');
             expect(chip(container, 'games.filter.all').getAttribute('aria-pressed')).toBe('false');
         });
@@ -167,7 +167,7 @@ describe('the games page', () =>
             await settle();
 
             expect(router.location().fullPath).toBe('/app/games');
-            expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+            expect(container.querySelectorAll('ul li article')).toHaveLength(5);
         });
 
         it('shows every game for a kind it does not have', async () =>
@@ -179,7 +179,7 @@ describe('the games page', () =>
 
             await vi.waitFor(() => expect(useCatalogue().loading()).toBe(false), { timeout: 4000 });
 
-            expect(container.querySelectorAll('ul li article')).toHaveLength(4);
+            expect(container.querySelectorAll('ul li article')).toHaveLength(5);
             expect(chip(container, 'games.filter.all').getAttribute('aria-pressed')).toBe('true');
         });
     });

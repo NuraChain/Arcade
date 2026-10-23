@@ -93,21 +93,44 @@ export function pieceDefs(colour, id)
     ].join('');
 }
 
+const bodiesOf = (kind) => [...BASE, ...PIECES[kind]].filter((shape) => shape.kind !== 'line' && shape.kind !== 'dot');
+
+const outlineOf = (colour) => `stroke="${ SHADES[colour].line }" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+
+const detailsOf = (colour, kind) => PIECES[kind]
+    .filter((shape) => shape.kind === 'line' || shape.kind === 'dot')
+    .map((shape) => (shape.kind === 'dot'
+        ? shapeOf(shape, `fill="${ SHADES[colour].line }"`)
+        : shapeOf(shape, `fill="none" stroke="${ colour === 'w' ? SHADES[colour].line : SHADES[colour].detail }" stroke-width="2" stroke-linecap="round" stroke-opacity="${ colour === 'w' ? 0.75 : 0.6 }"`)));
+
 /** One piece in its 100-unit box: every body filled under the light and outlined, then its ink details, then the gloss. */
 export function pieceBody(colour, kind, id)
 {
-    const shade = SHADES[colour];
-    const bodies = [...BASE, ...PIECES[kind]].filter((shape) => shape.kind !== 'line' && shape.kind !== 'dot');
-    const details = PIECES[kind].filter((shape) => shape.kind === 'line' || shape.kind === 'dot');
-    const outline = `stroke="${ shade.line }" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+    const bodies = bodiesOf(kind);
 
     return [
         '<g transform="translate(50 52) scale(1.08) translate(-50 -52)">',
-        ...bodies.map((shape) => shapeOf(shape, `fill="url(#${ id }-body)" ${ outline }`)),
-        ...details.map((shape) => (shape.kind === 'dot'
-            ? shapeOf(shape, `fill="${ shade.line }"`)
-            : shapeOf(shape, `fill="none" stroke="${ colour === 'w' ? shade.line : shade.detail }" stroke-width="2" stroke-linecap="round" stroke-opacity="${ colour === 'w' ? 0.75 : 0.6 }"`))),
+        ...bodies.map((shape) => shapeOf(shape, `fill="url(#${ id }-body)" ${ outlineOf(colour) }`)),
+        ...detailsOf(colour, kind),
         ...bodies.map((shape) => shapeOf(shape, `fill="url(#${ id }-gloss)"`)),
+        '</g>'
+    ].join('');
+}
+
+/** A piece's bodies with no paint of their own, kept once for a drawing that stands many pieces. */
+export function pieceShapes(kind)
+{
+    return bodiesOf(kind).map((shape) => shapeOf(shape, '')).join('');
+}
+
+/** `pieceBody`'s drawing, its bodies taken twice from the shapes kept under `shapes`: lit and outlined, then glossed. */
+export function pieceLit(colour, kind, id, shapes)
+{
+    return [
+        '<g transform="translate(50 52) scale(1.08) translate(-50 -52)">',
+        `<use href="#${ shapes }" fill="url(#${ id }-body)" ${ outlineOf(colour) }/>`,
+        ...detailsOf(colour, kind),
+        `<use href="#${ shapes }" fill="url(#${ id }-gloss)"/>`,
         '</g>'
     ].join('');
 }

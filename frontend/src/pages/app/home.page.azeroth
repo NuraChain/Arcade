@@ -137,7 +137,7 @@ export default component HomePage()
                             </p>
                         </div>
                     </div>
-                    <ul class="hidden w-[27rem] grid-cols-4 gap-2.5 @3xl:grid" aria-label={ locale.t('app.nav.games') }>
+                    <ul class="hidden w-[27rem] grid-cols-5 gap-2.5 @3xl:grid" aria-label={ locale.t('app.nav.games') }>
                         <For each={ games } key={ (game) => game.id } let={ game }>
                             <li class="min-w-0"><GameTile game={ game } /></li>
                         </For>
@@ -158,7 +158,7 @@ export default component HomePage()
 
             <section class="@3xl:hidden" aria-labelledby="home-games">
                 <SectionHeading id="home-games" title={ locale.t('app.nav.games') } more={ locale.t('common.seeAll') } to="/app/games" />
-                <ul class="grid grid-cols-4 gap-2">
+                <ul class="grid grid-cols-5 gap-1.5">
                     <For each={ games } key={ (game) => game.id } let={ game }>
                         <li class="min-w-0"><GameTile game={ game } /></li>
                     </For>

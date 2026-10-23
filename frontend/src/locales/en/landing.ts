@@ -13,12 +13,12 @@ export const landing = {
     'landing.arrival.eyebrow': 'Play. Connect. Compete.',
     'landing.arrival.lead': 'Classic games,',
     'landing.arrival.accent': 'played together.',
-    'landing.arrival.body': 'Hokm, Poker, Backgammon and Ludo, with friends or new faces. Sit down at an open table or set up your own.',
+    'landing.arrival.body': 'Chess, Hokm, Poker, Backgammon and Ludo, with friends or new faces. Sit down at an open table or set up your own.',
     'landing.cta.start': 'Start playing',
     'landing.cta.back': 'Back to your tables',
     'landing.cta.games': 'See the games',
 
-    'landing.games.title': 'Four games, all live',
+    'landing.games.title': 'Five games, all live',
     'landing.games.lead': 'Take turns at your own pace, or play in real time at the table. Poker is real time only.',
     'landing.games.live': 'Live',
     'landing.games.play': 'Play now',
@@ -34,6 +34,8 @@ export const landing = {
     'games.backgammon.blurb': 'The oldest argument still running. Doubling cube on the table where everyone can see it.',
     'games.ludo.name': 'Ludo',
     'games.ludo.blurb': 'Four colours, one board, and a dice roll somebody will bring up again next week.',
+    'games.chess.name': 'Chess',
+    'games.chess.blurb': 'The oldest thinking game there is, with a clock beside the board and not a grain of luck.',
     'games.category.cards': 'Cards',
     'games.category.board': 'Board',
 
@@ -57,7 +59,7 @@ export const landing = {
     'landing.compete.rating.title': 'A rating that moves',
     'landing.compete.rating.body': 'Every game played to the end moves it, and beating a strong table counts for more.',
     'landing.compete.medals.title': 'Medals worth collecting',
-    'landing.compete.medals.body': '5,000 achievements in ladders from bronze to diamond, for every game and across all of them.',
+    'landing.compete.medals.body': '6,000 achievements in ladders from bronze to diamond, for every game and across all of them.',
     'landing.compete.levels.title': 'Levels',
     'landing.compete.levels.body': 'Playing earns XP and your level shows it. It is a trophy; nothing is locked behind it.',
 

@@ -74,7 +74,7 @@ export const social = {
     'report.status.actioned': 'Action taken',
     'report.empty': 'You haven’t reported anyone.',
 
-    'discover.lead': 'New tables, new people, same four games.',
+    'discover.lead': 'New tables, new people, the same five games.',
     'discover.people': 'People you may know',
     'discover.rooms': 'Groups worth joining',
     'discover.trending': 'Where people are playing',

@@ -181,6 +181,29 @@ const POKER: Family[] = [
         { en: 'Knock {n} players out of Poker games.', fa: 'توی پوکر {n} بازیکن رو حذف کن.' }, 'Knock a player out of a Poker game.')
 ];
 
+const CHESS_NAME: Name = { en: 'Chess', fa: 'شطرنج' };
+
+const CHESS: Family[] = [
+    ...core(CHESS_NAME, { played: 80, won: 80, xp: 70, rating: 60, streak: 40, days: 60 }),
+    ...byPace(CHESS_NAME, 50, 40),
+    tally('moves', 'moves', 'play', dense(80, 10), { en: 'Mover', fa: 'حرکت‌به‌حرکت' },
+        { en: 'Make {n} moves in Chess.', fa: 'توی شطرنج {n} حرکت بزن.' }),
+    tally('captures', 'captures', 'target', dense(80, 2), { en: 'Collector', fa: 'مهره‌جمع‌کن' },
+        { en: 'Capture {n} pieces in Chess.', fa: 'توی شطرنج {n} مهره بزن.' }),
+    tally('checks', 'checks', 'zap', dense(60, 2), { en: 'Check!', fa: 'کیش!' },
+        { en: 'Give check {n} times in Chess.', fa: 'توی شطرنج {n} بار کیش بده.' }),
+    tally('checkmates', 'checkmates', 'crest-crown', dense(70), { en: 'Checkmate', fa: 'مات' },
+        { en: 'Checkmate {n} times in Chess.', fa: 'توی شطرنج {n} بار مات کن.' }, 'Checkmate somebody in Chess.'),
+    tally('castles', 'castles', 'crest-castle', dense(50), { en: 'Castle keeper', fa: 'قلعه‌نشین' },
+        { en: 'Castle {n} times in Chess.', fa: 'توی شطرنج {n} بار قلعه برو.' }, 'Castle in Chess.'),
+    tally('promotions', 'promotions', 'sparkles', dense(50), { en: 'Crowned', fa: 'تاج‌گذاری' },
+        { en: 'Promote {n} pawns in Chess.', fa: 'توی شطرنج {n} تا سرباز رو تبدیل کن.' }, 'Promote a pawn in Chess.'),
+    tally('en-passant', 'enPassants', 'forward', dense(20), { en: 'In passing', fa: 'آن‌پاسان' },
+        { en: 'Take {n} pawns en passant in Chess.', fa: 'توی شطرنج {n} بار آن‌پاسان بزن.' }, 'Take a pawn en passant in Chess.'),
+    tally('draws', 'draws', 'equal', dense(20), { en: 'Even match', fa: 'هم‌آورد' },
+        { en: 'Draw {n} games of Chess.', fa: '{n} بازی شطرنج رو مساوی کن.' }, 'Draw a game of Chess.')
+];
+
 const GLOBAL: Family[] = [
     {
         id: 'played', metric: { of: 'global', name: 'played' }, icon: 'games', steps: dense(100),
@@ -262,7 +285,8 @@ export const GAME_FAMILIES: Readonly<Record<string, readonly Family[]>> = {
     ludo: LUDO,
     hokm: HOKM,
     backgammon: BACKGAMMON,
-    poker: POKER
+    poker: POKER,
+    chess: CHESS
 };
 
 export const GLOBAL_FAMILIES: readonly Family[] = GLOBAL;

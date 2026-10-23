@@ -26,7 +26,7 @@ describe('games catalogue', () =>
         }
     });
 
-    it('stands the four games in one row, in catalogue order, a plinth apart', () =>
+    it('stands the games in one row, in catalogue order, a plinth apart', () =>
     {
         const xs = GAMES.map((game) => game.anchor[0]);
         expect(GAMES.every((game) => game.anchor[1] === 0 && game.anchor[2] === 0)).toBe(true);
@@ -52,9 +52,9 @@ describe('games catalogue', () =>
         expect(gameBySlug('roulette')).toBeUndefined();
     });
 
-    it('carries exactly the four games the product supports', () =>
+    it('carries exactly the five games the product supports', () =>
     {
-        expect(GAMES.map((game) => game.id)).toEqual(['hokm', 'poker', 'backgammon', 'ludo']);
+        expect(GAMES.map((game) => game.id)).toEqual(['hokm', 'poker', 'backgammon', 'ludo', 'chess']);
     });
 });
 

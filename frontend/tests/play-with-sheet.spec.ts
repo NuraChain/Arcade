@@ -152,7 +152,8 @@ describe('playing with somebody', () =>
             Hokm: ['Team up', 'Private table'],
             Ludo: ['Team up', 'Private table'],
             Poker: ['Private table'],
-            Backgammon: ['Private table']
+            Backgammon: ['Private table'],
+            Chess: ['Private table']
         });
         expect(panelIn(container)).toBeNull();
         expect(server.calls, 'opening the sheet asked for a team or a table').not.toEqual(expect.arrayContaining(['parties.invite']));
@@ -163,7 +164,7 @@ describe('playing with somebody', () =>
     {
         const { container } = await opened('sara.k', false);
 
-        expect(offers(container)).toEqual({ Hokm: ['Private table'], Poker: ['Private table'], Backgammon: ['Private table'], Ludo: ['Private table'] });
+        expect(offers(container)).toEqual({ Hokm: ['Private table'], Poker: ['Private table'], Backgammon: ['Private table'], Ludo: ['Private table'], Chess: ['Private table'] });
         expect(container.textContent).not.toContain('Team up');
     });
 
@@ -188,7 +189,7 @@ describe('playing with somebody', () =>
 
         const { container } = await opened('sara.k');
 
-        expect(Object.keys(offers(container))).toEqual(['Hokm', 'Poker', 'Backgammon']);
+        expect(Object.keys(offers(container))).toEqual(['Hokm', 'Poker', 'Backgammon', 'Chess']);
     });
 
     it('names somebody it has only a handle for by the handle', async () =>
@@ -252,7 +253,7 @@ describe('teaming up from the sheet', () =>
 
         expect(panelIn(container)).toBeNull();
         expect(button(rowOf(container, 'Hokm'), 'Team up')?.getAttribute('aria-busy')).not.toBe('true');
-        expect(Object.keys(offers(container))).toHaveLength(4);
+        expect(Object.keys(offers(container))).toHaveLength(5);
     });
 
     it('is a yes to somebody who has already asked for that game: one team, theirs, and no second one beside it', async () =>
@@ -379,7 +380,7 @@ describe('the team in the sheet', () =>
         await settle();
 
         expect(server.calls.filter((call) => call === 'parties.leave')).toHaveLength(1);
-        expect(Object.keys(offers(container))).toHaveLength(4);
+        expect(Object.keys(offers(container))).toHaveLength(5);
         expect(told()).toEqual([]);
     });
 
@@ -414,7 +415,7 @@ describe('the team in the sheet', () =>
 
         expect(panelIn(container)).toBeNull();
         expect(told()).toEqual([['warning', 'Sara Kamali can’t play right now']]);
-        expect(Object.keys(offers(container))).toHaveLength(4);
+        expect(Object.keys(offers(container))).toHaveLength(5);
     });
 
     it('is shown beside somebody else’s games, with the way out of it, and a second team is refused in words', async () =>
@@ -453,7 +454,7 @@ describe('a team that could not be read', () =>
 
             expect(container.querySelector('[role="alert"]')?.textContent?.trim()).toBe('Your team could not be read just now.');
             expect(panelIn(container)).toBeNull();
-            expect(Object.keys(offers(container)), 'the games were taken away with the team').toHaveLength(4);
+            expect(Object.keys(offers(container)), 'the games were taken away with the team').toHaveLength(5);
         });
 
         fire(button(container, 'Try again')!, 'click');
@@ -485,7 +486,7 @@ describe('a team that could not be read', () =>
 
             expect(useParty().known()).toBe(false);
             expect(container.querySelector('[role="alert"]'), 'a read that is out was called a read that failed').toBeNull();
-            expect(Object.keys(offers(container))).toHaveLength(4);
+            expect(Object.keys(offers(container))).toHaveLength(5);
 
             answers.forEach((answer) => answer());
             await settle();

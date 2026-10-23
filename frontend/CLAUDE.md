@@ -42,14 +42,15 @@ expects zero. Two consequences are worth knowing: a resize has to render synchro
 the canvas size clears it and nothing else would draw the next frame; and the governor's patience
 restarts with every burst, or three seconds of reading would count as three seconds of slow frames.
 
-**Three pieces land when their game arrives, once.** The ludo die, the backgammon pair and the top
-chip of a poker stack are hidden until the CAMERA itself comes within 0.35 m of their beat's shot
-(`world/settle.ts`), then drop onto the table from a clip the GLB carries and stay where they fell, however
-often the reader scrolls back. It is the camera and not the scroll because the scroll is where the camera is
-GOING: a fling from the line-up to the finale passes through two beats in half a second, and a drop keyed
-to the scroll was spent on a close-up the camera never reached. It is a distance rather than a beat because a
-hovered game card flies to the same close-up without scrolling anywhere, and the die has to be on the board
-when it gets there. The loop keeps drawing only while a clip plays; counted on the built
+**Four pieces land when their game arrives, once.** The ludo die, the backgammon pair, the top chip
+of a poker stack and the knight White has just played to f3 are hidden until the CAMERA itself comes
+within 0.35 m of their game's close-up (`FOCUS`, `world/settle.ts`), then drop onto the table from a clip
+the GLB carries and stay where they fell, however often the reader scrolls back. It is the camera and not
+the scroll because the scroll is where the camera is GOING: a fling from the line-up to the finale passes
+through two beats in half a second, and a drop keyed to the scroll was spent on a close-up the camera never
+reached. It is the game's close-up rather than a beat's because a hovered game card flies to the same
+close-up without scrolling anywhere, and the die has to be on the board when it gets there; and since the
+fifth game, backgammon has no beat of its own, so its card is the only way its dice ever fall. The loop keeps drawing only while a clip plays; counted on the built
 server, the hero draws no frames and neither does a beat once its piece has landed. The arrival has no
 piece, so the poster is still the renderer's first frame and still matches it to under one level.
 
@@ -82,8 +83,10 @@ the anchors. After touching any of them: build, restart the server on 5300, `npm
 
 `pages/landing.page.azeroth` is a sticky 100lvh stage and five sections laid over it with a -100lvh
 margin. Each section carries a `data-beat` - `arrival`, `games`, `together`, `compete`, `finale` -
-and `SHOTS` in `world/camera/shots.ts` has a frame for each: Hokm, the four in a row, Ludo,
-Backgammon, Poker. The component measures where every beat ARRIVES - the scroll at which its section
+and `SHOTS` in `world/camera/shots.ts` has a frame for each: Hokm, the five in a row, Ludo, Chess
+(the beat about ratings and medals), Poker. Backgammon stands in the row and has a close-up its card
+flies to, but no beat: five sections and five games leave one game without a solo frame, and chess
+is the game the competing section is about. The component measures where every beat ARRIVES - the scroll at which its section
 is centred in the stage - on mount, on resize and when the fonts land, and `progressAt` turns the
 scroll into a position between beats, eased so the camera rests while a section is read and travels
 between them. The path between two beats is a straight line: Catmull-Rom tangents through the far
@@ -93,15 +96,17 @@ A game card focused by the keyboard or entered by a MOUSE writes `useFocus`, and
 that game's close-up, pushed a further 7% from the copy by the lens. A finger does not: a tap is a
 tap on the button.
 
-**Every claim on the page is one the product backs.** No counts, no waits, no seasons, no fairness,
-no chess. Voice goes "straight between players whenever it can" and is "encrypted on its way", never end-to-end; poker is live only; a level unlocks
-nothing. `reference-parity.spec.ts` pins every game seed `available` because `/` prints "Live" on all
-four without asking the server. The components on `/` are built only from pieces with no path to
+**Every claim on the page is one the product backs.** No counts, no waits, no seasons, no fairness.
+Voice goes "straight between players whenever it can" and is "encrypted on its way", never end-to-end; poker is live only; a level unlocks
+nothing; chess has "not a grain of luck" because its engine draws nothing. `reference-parity.spec.ts`
+pins every game seed `available` because `/` prints "Live" on all five without asking the server. The components on `/` are built only from pieces with no path to
 `api.ts` - `GameCard` and `GameTile` reach `catalogue.store` and are not allowed there.
 
 **Mobile first.** The unprefixed layout is the phone's: the scene in the top of the stage, the copy on
 a void `copy-plate` below it, the game cards a scroll-snap row of cards most of the screen wide. From
-40rem the cards are a 2x2 grid; from 64rem, and on a phone turned sideways, the copy takes the start
+40rem the cards are two to a row with the fifth centred under them, and three then two once the
+column itself is 42rem wide (a container query, because a phone turned sideways is `beside` too and
+its column is a third of that); from 64rem, and on a phone turned sideways, the copy takes the start
 side, the scrim follows it from the same side, and the games column alone widens to min(52rem, 50vw).
 Reveals are scroll-driven CSS (the `scroll-driven:` variant) inside `prefers-reduced-motion: no-preference` and
 `@supports (animation-timeline: view())`, so a browser without them shows everything, and a reveal
@@ -268,7 +273,7 @@ and a small one on the accent tile - with flat fills and no gradient ids, becaus
 gradient inside a copy of the logo that is `display: none` (the sidebar on a phone) stops painting
 in every other copy on the page. `public/favicon.svg` is the same drawing, and `tools/art/raster.mjs`
 renders it to the PNG sizes, draws `share.jpg` (the 1200x630 link preview) from the logo and the
-four game scenes, and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
+five game scenes (two to a row, chess centred under them), and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
 the matrix does. `og:image` is written absolute by the build against `PUBLIC_ORIGIN` from the root
 `.env`, because a link preview needs one; with none it stays relative, which is right for
 localhost and wrong for a share.

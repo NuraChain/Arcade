@@ -4309,6 +4309,92 @@ a table page that toast is held at the top, over the seat across, and a run on 2
 `en-430l-play-backgammon` because a probe of the opponent's plate landed on it. The page was
 right and so was the toast; the matrix had a game going that nobody was watching.
 
+## Chess
+
+The fifth engine, and the first whose time is its own (*A game played against a clock keeps a
+bank for each side*, under *Playing a game*). The rules are FIDE's, written out in
+`docs/games/05-chess.md`; the design and its decisions (CS-D1 to CS-D15) are
+`docs/superpowers/specs/2026-10-23-chess-design.md`. `domains/match/chess/` imports nothing, is held
+by perft to the published counts, and draws nothing: there is no die and no deal, which is what lets
+the landing say it has "not a grain of luck". A game ends by mate, a flag, a resignation, an abort
+before both have moved, or a draw the engine sees for itself (stalemate, three repetitions, fifty
+moves, too little to mate, a flag against a side that cannot mate) or that the two agree.
+
+**The board is the stage's, and every piece is keyed for its life.** `game/chess-felt.ts` is the
+model: a piece is `{ key, square, piece }`, keyed `R1`, `p3` by its letter and how many of it came
+before on the board it was first read from, and a move is that piece travelling. `step` applies one
+logged move: the taken piece leaves, a castling rook goes with its king, a pawn taken in passing
+leaves the square behind the one moved to, and a promoted pawn keeps its key and changes its
+letter. `chess-felt.spec.ts` plays whole games through the real engine for both seats and a watcher
+and wants the model to be the engine's own board at every revision. `matched` is how a board read
+cold or put right finds its pieces: what stands where it stood keeps its key, a piece that moved is
+the nearest of its kind, and only what cannot be explained comes or goes.
+
+**`game/board/chess-table.ts` plays each move as a hand makes it.** A piece glides for as long as it
+is far (170 to 380 ms); a knight hops an arc (300 ms); a capture happens at contact, 82% into the
+run, where the taken piece fades on its square (170 ms) and `token-capture` sounds; castling moves
+the king and then the rook, 40% behind it, with a step for each; a pawn that promotes arrives as a
+pawn and becomes its piece with a pop and a sparkle (`promote`, 280 ms); and once the move has
+landed, check rings the king's square with its chime (`check`) and mate tips the king over
+(560 ms). The turn passes when the piece is down, not when it sets off. Less motion is the stage's
+fades with every cue kept. `chess-table.spec.ts` holds each on a manual clock.
+
+**The board is turned for Black and never mirrored.** The reader's colour stands at the foot, a
+watcher sees White's, and the board is `direction: ltr` in Persian as every printed board is. The art
+(`tools/art/chess.mjs`, the board and twelve Staunton pieces of our own) carries no letters: which
+file stands at the foot depends on who looks, so the page writes the coordinates over the frame.
+
+**A move is made on the table** (D10, D12), and nowhere else:
+
+- **Tap a piece, then a square**, or tap a marked square of the piece already chosen; or **carry it**
+  (a slip of 10px under a finger, 4px with a mouse, the piece held above the finger as it moves) and
+  let go on a square it may reach. While the move hint is on, the squares it may reach are marked and
+  a capture is ringed; with it off a tap still moves, as everywhere.
+- **The press is shown at once** (D41): the presenter's prediction carries the move, the server's
+  echo of it is dropped from the batch, and a refusal carries the piece back with `deny`.
+- **A promotion is chosen at the square**: the four pieces in a column from the promotion square
+  toward the middle of the board, over a veil; Escape or a press elsewhere puts the pawn back.
+- **A draw is offered from the reader's rail** (the equals button), only once the reader has moved
+  since their last offer (CS-D10), and **answered on the board**: "Accept the draw" or "Play on". A
+  move made instead declines it.
+- **The keyboard walks the board by a cursor** (D14, as backgammon's does): one stop in the order of
+  the Tab key, the arrows walking the pieces that may move and then the squares the chosen one may
+  reach, each stop named for what Enter does there ("e2, the pawn. Pick it up.", "d5, a knight. Take
+  it with the pawn.", `chess.stop.*`); Escape puts the piece back, and a key held down acts once.
+  A live region says each move when it lands ("Mina: knight from g1 to f3.", "Check.", `chess.said.*`).
+
+**Each side has a rail of the board's walnut** (`chess-rail`): `TablePlate` with the side's king as
+its marker, what that side has taken grouped by kind, how far ahead in material it is ("+3", said in
+words to a screen reader), the draw offer on the reader's own, and the side's clock.
+
+**The clock counts the side to move down from the server's own number** (`chess-clock`): the
+`remainingMs` the answer carried, from the moment it arrived, never `deadline - Date.now()`; the side
+waiting shows its bank from the board. Under twenty seconds it shows tenths and under ten it is red,
+and the reader's own buzzes at ten seconds and ticks through its last five. Before a side has made its first move the brief
+first-move clock (30 s) stands in its place (CS-D6).
+
+**The side that is waiting claims a flag the clock has let fall** (`chess-board`, `claim`): when the
+other side's bank reaches nought, 150 ms later, the board sends the `flag` verb quietly
+(`board.play(play, true)`: a refusal is nobody's to read, so it toasts nothing) and tries again once
+a second, four times at most. The server decides with its own clock (`time-left` while there is
+some), and the sweep plays the same flag at the deadline whether or not anybody is watching.
+
+**The result says how it ended.** `MatchResult` puts the reason under the headline for a chess game
+("By checkmate", "On time", "By agreement", `chess.reason.*`), and a draw is the draw every game
+reads (*A draw is a result*, under *What a game leaves behind*).
+
+**The waiting room is the board between two chairs** (`.lobby-board[data-board='chess']`, the
+board's own drawing), as backgammon's is.
+
+**On the landing it is the beat about results.** The chess set (`tools/blender/vignettes/chess.py`)
+stands last in the row, the `compete` beat frames it, and White's knight is set down on f3 as the
+camera arrives (`settle-chess`, *Four pieces land when their game arrives* in `frontend/CLAUDE.md`).
+
+`chess-felt.spec.ts`, `chess-table.spec.ts` and `chess-board.spec.ts` hold the board (fifty-three
+faults put in one at a time, every one caught but a guard the board already applies, which went),
+`backend/tests/chess-table-art.spec.ts` its sheet, `lobby-table-art.spec.ts` the waiting room, and
+`engine-contract.spec.ts` and `ladders.spec.ts` the engine among the others.
+
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
@@ -6354,7 +6440,7 @@ the moment anything a player needs is below the fold.
 - No table keeps a bar of words or a column for one now: the grids are the board alone, or the
   table and the hand. Backgammon's grid is its fit, and inside the fit the board stands with a
   seat over and under it, or beside it where the stage is wide for its height.
-- `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
+- `TablePlate` is the one seat plate for every game: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
   slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` and the miss rule is
@@ -6789,7 +6875,7 @@ disagreeing about the same game.
 The table was called `game_ratings` while `rating` was the only thing in it. Played, won, captures
 and a streak are not ratings.
 
-**One forfeit and rating rule for all four games, in one pure file.** Each engine used to decide for
+**One forfeit and rating rule for every game, in one pure file.** Each engine used to decide for
 itself whether a forfeit was rated - backgammon and heads-up poker after two actions each (counting
 the turns the SWEEP played for an absent seat), poker at three seats whenever anybody resigned, hokm
 and ludo never - so the same walkout cost a different amount at every table, a trailing player could

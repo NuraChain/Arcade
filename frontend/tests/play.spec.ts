@@ -644,7 +644,7 @@ describe('PlayPage', () =>
         matches.view = async () => ({
             id: 'match-2',
             tableId: id,
-            game: 'chess',
+            game: 'go',
             rev: 1,
             seats: 2,
             players: [],
@@ -689,7 +689,7 @@ describe('PlayPage', () =>
         const game = (tableId: string) => ({
             id: 'match-21',
             tableId,
-            game: 'chess',
+            game: 'go',
             rev: 1,
             seats: 2,
             players: [],
@@ -1982,7 +1982,7 @@ describe('PlayPage', () =>
             matches.view = async () => ({
                 id: 'match-11',
                 tableId: id,
-                game: 'chess',
+                game: 'go',
                 rev: 1,
                 seats: 4,
                 players: [],
@@ -3427,11 +3427,11 @@ describe('PlayPage', () =>
             live: true
         } as Watched);
 
-        const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
+        const { container } = renderTest(() => WatchBoard({ watch: watching('go'), events: NO_EVENTS }) as Rendered);
 
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
-        expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo', 'poker']);
+        expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'chess', 'hokm', 'ludo', 'poker']);
     });
 
     describe('a watched game whose page cannot draw it', () =>
@@ -3464,7 +3464,7 @@ describe('PlayPage', () =>
 
         it('loads the page again from its Reload, which is what fetches a copy that can', async () =>
         {
-            const { container } = renderTest(() => WatchBoard({ watch: watching('chess'), events: NO_EVENTS }) as Rendered);
+            const { container } = renderTest(() => WatchBoard({ watch: watching('go'), events: NO_EVENTS }) as Rendered);
             const reload = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('match.cannotDrawAction'))!;
 
             fire(reload, 'click');

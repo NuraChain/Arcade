@@ -16,12 +16,12 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.arrival.eyebrow': 'بازی کن. دوست پیدا کن. رقابت کن.',
     'landing.arrival.lead': 'همون بازی‌های همیشگی،',
     'landing.arrival.accent': 'این بار با هم.',
-    'landing.arrival.body': 'حکم، پوکر، تخته‌نرد و منچ؛ با دوستات یا با آدمای جدید. پشت یه میز باز بشین یا میز خودت رو بچین.',
+    'landing.arrival.body': 'شطرنج، حکم، پوکر، تخته‌نرد و منچ؛ با دوستات یا با آدمای جدید. پشت یه میز باز بشین یا میز خودت رو بچین.',
     'landing.cta.start': 'شروع بازی',
     'landing.cta.back': 'برگرد سر میزهات',
     'landing.cta.games': 'بازی‌ها رو ببین',
 
-    'landing.games.title': 'چهار تا بازی، همه فعال',
+    'landing.games.title': 'پنج تا بازی، همه فعال',
     'landing.games.lead': 'نوبتی و سر فرصت بازی کن، یا هم‌زمان سر میز. پوکر فقط هم‌زمانه.',
     'landing.games.live': 'فعال',
     'landing.games.play': 'بازی کن',
@@ -37,6 +37,8 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'games.backgammon.blurb': 'قدیمی‌ترین دعوایی که هنوز تموم نشده. مکعب دوبل روی میزه، جلوی چشم همه.',
     'games.ludo.name': 'منچ',
     'games.ludo.blurb': 'چهار تا رنگ، یه صفحه، و تاسی که یکی تا هفته‌ی بعد هم به روت میاره.',
+    'games.chess.name': 'شطرنج',
+    'games.chess.blurb': 'قدیمی‌ترین بازی فکری، با یه ساعت کنار صفحه و بدون ذره‌ای شانس.',
     'games.category.cards': 'ورق',
     'games.category.board': 'تخته',
 
@@ -60,7 +62,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.compete.rating.title': 'ریتینگی که تکون می‌خوره',
     'landing.compete.rating.body': 'هر بازی‌ای که تا آخر بره جابه‌جاش می‌کنه، و بردن از یه میز قوی بیشتر می‌ارزه.',
     'landing.compete.medals.title': 'مدال‌هایی که ارزش جمع کردن دارن',
-    'landing.compete.medals.body': '۵٬۰۰۰ دستاورد توی نردبون‌هایی از برنز تا الماس، واسه هر بازی و واسه همه‌ی بازی‌ها با هم.',
+    'landing.compete.medals.body': '۶٬۰۰۰ دستاورد توی نردبون‌هایی از برنز تا الماس، واسه هر بازی و واسه همه‌ی بازی‌ها با هم.',
     'landing.compete.levels.title': 'سطح‌ها',
     'landing.compete.levels.body': 'بازی کردن امتیاز تجربه میاره و سطحت اینو نشون می‌ده. یه افتخاره؛ هیچی پشتش قفل نیست.',
 

@@ -23,7 +23,8 @@ const RULE_CARDS: Record<GameId, MessageKey[]> = {
     hokm: ['game.rules.hokm.1', 'game.rules.hokm.2', 'game.rules.hokm.3'],
     poker: ['game.rules.poker.1', 'game.rules.poker.2', 'game.rules.poker.3'],
     backgammon: ['game.rules.backgammon.1', 'game.rules.backgammon.2', 'game.rules.backgammon.3'],
-    ludo: ['game.rules.ludo.1', 'game.rules.ludo.2', 'game.rules.ludo.3', 'game.rules.ludo.4']
+    ludo: ['game.rules.ludo.1', 'game.rules.ludo.2', 'game.rules.ludo.3', 'game.rules.ludo.4'],
+    chess: ['game.rules.chess.1', 'game.rules.chess.2', 'game.rules.chess.3']
 };
 
 export default component GamePage()

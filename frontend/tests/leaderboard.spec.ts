@@ -57,7 +57,7 @@ beforeEach(async () =>
     setRuntime({ clock: manualClock(5000), seed: 4 });
     useLocale().setLocale('en');
     server.reset();
-    server.games = [summary('hokm', 'available'), summary('poker', 'coming-soon'), summary('backgammon', 'coming-soon'), summary('ludo', 'available')];
+    server.games = [summary('hokm', 'available'), summary('poker', 'coming-soon'), summary('backgammon', 'coming-soon'), summary('ludo', 'available'), summary('chess', 'coming-soon')];
     useCatalogue().reset();
     useSession().establish(establishAccount());
 });

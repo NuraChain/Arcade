@@ -77,7 +77,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'report.status.actioned': 'اقدام شد',
     'report.empty': 'هنوز کسی رو گزارش نکردی.',
 
-    'discover.lead': 'میزهای جدید، آدمای جدید، همون چهار تا بازی.',
+    'discover.lead': 'میزهای جدید، آدمای جدید، همون پنج تا بازی.',
     'discover.people': 'شاید بشناسیشون',
     'discover.rooms': 'گروه‌هایی که ارزش عضو شدن دارن',
     'discover.trending': 'جایی که الان آدما بازی می‌کنن',

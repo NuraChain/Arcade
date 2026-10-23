@@ -104,6 +104,8 @@ export default component LobbyPanel(props: {
 
     derived nard = props.table.game === 'backgammon';
 
+    derived chess = props.table.game === 'chess';
+
     derived status = !seated
         ? locale.t(props.removed === true ? 'play.table.removed' : 'play.table.watching')
         : (paused
@@ -284,6 +286,9 @@ export default component LobbyPanel(props: {
             <div class={ () => (props.table.game === 'poker' ? 'lobby-top poker-table' : (props.table.game === 'hokm' ? 'lobby-top hokm-table' : 'lobby-top')) } aria-hidden="true">
                 <Show when={ ludo }>
                     { () => <span class="lobby-board"></span> }
+                </Show>
+                <Show when={ chess }>
+                    { () => <span class="lobby-board" data-board="chess"></span> }
                 </Show>
                 <Show when={ nard }>
                     { () =>

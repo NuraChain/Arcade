@@ -335,7 +335,7 @@ describe('the waiting room of a table, fetched when it is wanted', () =>
             hand({
                 id: 'match-7',
                 tableId: id,
-                game: 'chess',
+                game: 'go',
                 rev: 1,
                 seats: 2,
                 players: [],
@@ -368,7 +368,7 @@ describe('the waiting room of a table, fetched when it is wanted', () =>
         matches.view = async () => ({
             id: 'match-7',
             tableId: id,
-            game: 'chess',
+            game: 'go',
             rev: 1,
             seats: 2,
             players: [],

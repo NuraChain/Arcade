@@ -6,6 +6,7 @@ import { ENGINES, FOLD_MAX, sameTurn } from '../src/domains/match/service.ts';
 import { partnerOf, sideOf, variantOf, type Format, type Variant } from '../src/domains/match/sides.ts';
 import type { RefusalWord } from '../src/domains/match/refusals.ts';
 import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
+import type { ChessRefusal } from '../src/domains/match/chess/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
 import type { PokerRefusal } from '../src/domains/match/poker/state.ts';
 import type { RefusalReason } from '../src/domains/match/ludo/state.ts';
@@ -23,7 +24,8 @@ const BOUND: Readonly<Record<string, Readonly<Partial<Record<Variant, number>>>>
     ludo: { standard: 6000, teams: 12_000 },
     hokm: { standard: 4000, teams: 4000 },
     backgammon: { standard: 3000 },
-    poker: { standard: 20_000 }
+    poker: { standard: 20_000 },
+    chess: { standard: 12_000 }
 };
 
 const boundOf = (engine: Engine, format: Format) => BOUND[engine.id]?.[format.variant] ?? UNBOUND;
@@ -119,7 +121,7 @@ function foldFrom(engine: Engine, state: unknown, draws: Draws)
  * of them told a card player their TOKEN could not move there. Checked by the compiler, because the
  * reasons are type unions and nothing about them exists at runtime to iterate.
  */
-type Unworded = Exclude<RefusalReason | HokmRefusal | BackgammonRefusal | PokerRefusal, RefusalWord>;
+type Unworded = Exclude<RefusalReason | HokmRefusal | BackgammonRefusal | PokerRefusal | ChessRefusal, RefusalWord>;
 
 describe('the refusals', () =>
 {
@@ -278,7 +280,13 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
 
                     expect(legal.length, `legal moves at action ${ actions }`).toBeGreaterThan(0);
                     expect(auto, `autoplay at action ${ actions }`).not.toBeNull();
-                    expect(legal).toContainEqual(auto);
+
+                    if (!legal.some((one) => JSON.stringify(one) === JSON.stringify(auto)))
+                    {
+                        const swept = engine.apply(state, auto, draws);
+
+                        expect(swept.ok && engine.finish(swept.state) !== null, `autoplay at action ${ actions } is neither a move the seat may make nor the end of the game`).toBe(true);
+                    }
 
                     const quitting = next() < 0.02;
                     const playing = quitting ? seats.filter((seat) => engine.apply(state, engine.forfeit(seat, 'resign'), PROBE).ok) : [];

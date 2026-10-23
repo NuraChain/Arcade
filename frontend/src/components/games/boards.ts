@@ -74,7 +74,8 @@ export const BOARDS: Readonly<Record<string, () => Promise<{ default: BoardCompo
     ludo: chunk(() => import('./match-board.component.azeroth')),
     hokm: chunk(() => import('./hokm-board.component.azeroth')),
     backgammon: chunk(() => import('./backgammon-board.component.azeroth')),
-    poker: chunk(() => import('./poker-board.component.azeroth'))
+    poker: chunk(() => import('./poker-board.component.azeroth')),
+    chess: chunk(() => import('./chess-board.component.azeroth'))
 };
 
 export const drawable = (game: string) => Object.hasOwn(BOARDS, game);

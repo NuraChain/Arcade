@@ -458,6 +458,21 @@ describe('a seat the match never judged', () =>
         expect(container.textContent).not.toContain('no rating moved');
     });
 
+    it('blames nobody for a game nobody left: a chess game that ended before both players had moved', () =>
+    {
+        const aborted = {
+            ...voided,
+            game: 'chess',
+            players: voided.players.map((one) => ({ seat: one.seat, who: one.who, timeouts: 0, result: 'void' as const })),
+            view: { kind: 'chess', over: { reason: 'abort' } }
+        } as unknown as MatchView;
+        const container = renderTest(() => MatchResult({ match: aborted, mine: 0 }) as Rendered).container;
+
+        expect(container.textContent).toContain('Ended too early to count.');
+        expect(container.textContent).toContain(useLocale().t('chess.reason.abort'));
+        expect(container.textContent, 'nobody stopped playing').not.toContain(useLocale().t('match.over.voidLead'));
+    });
+
     it('says the same in Persian', () =>
     {
         useLocale().setLocale('fa');

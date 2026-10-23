@@ -21,6 +21,7 @@ import { createRecorder } from './record.ts';
 import { envelopeOf } from './envelope.ts';
 import { OPENING, drawsOf, seedOf } from './fair.ts';
 import { backgammonEngine } from './engines/backgammon.ts';
+import { chessEngine } from './engines/chess.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
@@ -169,7 +170,7 @@ function stateOf(match: Match)
     return match.state;
 }
 
-export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine, pokerEngine];
+export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine, pokerEngine, chessEngine];
 
 export const FOLD_MAX = 8;
 

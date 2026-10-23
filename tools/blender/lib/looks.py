@@ -80,6 +80,23 @@ def ivory():
     return kit.material('ivory', base='#F4EEDD', roughness=0.3, coat=0.6, coat_roughness=0.08)
 
 
+def ebony():
+    return kit.material('ebony', base='#1E1611', roughness=0.32, coat=0.75, coat_roughness=0.07)
+
+
+def chess_square(name, base):
+    return kit.material(
+        'chess-' + name,
+        base=base,
+        roughness=0.44,
+        coat=0.6,
+        coat_roughness=0.1,
+        normal_image=kit.texture('dark_wood', 'nor_gl'),
+        normal_strength=0.25,
+        uv_scale=2.2
+    )
+
+
 def sticker():
     return kit.material('sticker', base='#FFFFFF', roughness=0.36, coat=0.4, coat_roughness=0.1)
 

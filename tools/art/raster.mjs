@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public');
 const ICON = readFileSync(join(PUBLIC, 'favicon.svg'), 'utf8');
-const ART = ['hokm', 'ludo', 'backgammon', 'poker'].map((game) => readFileSync(join(PUBLIC, 'art', 'games', `${ game }.svg`), 'utf8'));
+const ART = ['hokm', 'ludo', 'backgammon', 'poker', 'chess'].map((game) => readFileSync(join(PUBLIC, 'art', 'games', `${ game }.svg`), 'utf8'));
 
 const dataUrl = (svg) => `data:image/svg+xml;base64,${ Buffer.from(svg).toString('base64') }`;
 
@@ -18,9 +18,9 @@ const SHARE = `<!doctype html><html><body style="margin:0">
         <span style="font-size:58px;font-weight:800;letter-spacing:-1.5px;color:#F8FAFC">Baziche</span>
     </div>
     <p style="position:absolute;left:72px;top:210px;margin:0;width:520px;font-size:34px;line-height:1.25;font-weight:700;color:#F8FAFC">Sit down with the people you actually want to play with.</p>
-    <p style="position:absolute;left:72px;top:340px;margin:0;width:500px;font-size:22px;line-height:1.45;color:#94A3B8">Hokm and Ludo at real tables, with friends, groups and chat that only the table can read.</p>
-    <div style="position:absolute;right:56px;top:70px;display:grid;grid-template-columns:repeat(2,250px);gap:18px">
-        ${ ART.map((svg) => `<div style="width:250px;height:167px;border-radius:18px;overflow:hidden;border:1px solid #1F2937;box-shadow:0 18px 40px -18px rgba(0,0,0,0.8)"><img src="${ dataUrl(svg) }" style="width:100%;height:100%;object-fit:cover"></div>`).join('') }
+    <p style="position:absolute;left:72px;top:340px;margin:0;width:500px;font-size:22px;line-height:1.45;color:#94A3B8">Chess, Hokm, Poker, Backgammon and Ludo at real tables, with friends, groups, chat and voice.</p>
+    <div style="position:absolute;right:56px;top:46px;width:518px;display:flex;flex-wrap:wrap;justify-content:center;gap:18px">
+        ${ ART.map((svg) => `<div style="box-sizing:border-box;width:250px;height:167px;border-radius:18px;overflow:hidden;border:1px solid #1F2937;box-shadow:0 18px 40px -18px rgba(0,0,0,0.8)"><img src="${ dataUrl(svg) }" style="width:100%;height:100%;object-fit:cover"></div>`).join('') }
     </div>
     <div style="position:absolute;left:72px;bottom:64px;display:flex;align-items:center;gap:12px;color:#94A3B8;font-size:20px">
         <span style="width:10px;height:10px;border-radius:50%;background:#22C55E;box-shadow:0 0 12px #22C55E"></span>

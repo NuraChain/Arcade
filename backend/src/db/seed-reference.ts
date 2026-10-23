@@ -38,7 +38,7 @@ interface GameSeed
 }
 
 /**
- * All four ship `available`, and the word is doing precise work.
+ * Every game ships `available`, and the word is doing precise work.
  *
  * `status` answers "can a table of this game be opened?", and the answer is yes: the lobby, the
  * seats, the invites and the chat all work. What does not exist is a RULES ENGINE - nothing deals
@@ -126,6 +126,22 @@ export const GAME_SEEDS: GameSeed[] = [
         hasCube: false,
         hasBlinds: false,
         clocks: []
+    },
+    {
+        id: 'chess',
+        slug: 'chess',
+        category: 'board',
+        minPlayers: 2,
+        maxPlayers: 2,
+        status: 'available',
+        seats: [2],
+        modes: ['live', 'turns'],
+        targets: [],
+        stakes: 'none',
+        partners: 'none',
+        hasCube: false,
+        hasBlinds: false,
+        clocks: ['3+2', '5+0', '10+0', '15+10', '30+0']
     }
 ];
 

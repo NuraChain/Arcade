@@ -130,7 +130,7 @@ export default component ChessClock(props: { ms: number; running: boolean; yours
 
     const two = (value: number) => locale.n(value, { minimumIntegerDigits: 2, useGrouping: false });
 
-    derived face = ((): string =>
+    derived face = (() =>
     {
         const total = left;
 
@@ -151,7 +151,7 @@ export default component ChessClock(props: { ms: number; running: boolean; yours
             : `${ locale.n(minutes) }:${ two(rest) }`;
     })();
 
-    derived said = ((): string =>
+    derived said = (() =>
     {
         const seconds = Math.ceil(left / 1000);
 

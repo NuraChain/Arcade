@@ -73,7 +73,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived staffed = props.match.voided === true;
 
-    derived tooEarly = voided && !staffed;
+    derived tooEarly = voided && !staffed && props.match.players.some((player) => player.result === 'abandoned');
 
     derived uncounted = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'void');
 

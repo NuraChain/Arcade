@@ -9,6 +9,7 @@ import { teamsOf } from '../../../../backend/src/domains/table/teams.ts';
 import { cutOf, potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import { TEAMS_HINT, formatsOf, isValidTable, type Blinds, type TableConfig, type TableFormat, type TableMode, type TablePrivacy } from '../../data/tables.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { faceOf, paceOf } from '../../lib/clocks.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -49,6 +50,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     state target = defaults.target;
     state cube = defaults.cube;
     state blinds = defaults.blinds as Blinds;
+    state clock = defaults.clock;
     state chat = defaults.chat;
     state voice = defaults.voice;
     state invitees = [] as string[];
@@ -59,6 +61,8 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     derived hasCube = rules.hasCube;
 
     derived hasBlinds = rules.hasBlinds;
+
+    derived clocked = rules.clocks.length > 0 && mode === 'live';
 
     derived cubeOffered = cubeLive(target, true);
 
@@ -110,7 +114,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived pointed = short || barred;
 
-    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams, ...(wager === null ? {} : { stake: wager }) } satisfies TableConfig;
+    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams, ...(wager === null ? {} : { stake: wager }), ...(clocked && clock !== undefined ? { clock } : {}) } satisfies TableConfig;
 
     derived tooMany = invitees.length > seats - 1;
 
@@ -208,6 +212,22 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     onChange={ (id) => mode = id as TableMode }
                 />
                 <p class="text-ui-xs text-faint">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</p>
+            </fieldset>
+        </Show>
+
+        <Show when={ clocked }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.clock') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <For each={ [...rules.clocks] } key={ (id) => id } let={ id }>
+                        <li>
+                            <Chip icon="timer" selected={ clock === id } onClick={ () => clock = id }>
+                                <span><span class="tally">{ faceOf(locale, id) }</span> { locale.t(`clock.${ paceOf(id) }`) }</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+                <p class="text-ui-xs text-faint">{ locale.t('create.clockHint') }</p>
             </fieldset>
         </Show>
 

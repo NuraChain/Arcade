@@ -326,7 +326,7 @@ describe('the create form', () =>
             minPlayers: 2,
             maxPlayers: 4,
             status: 'available',
-            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false, clocks: [] }
         }];
         useCatalogue().reset();
         await settle();
@@ -356,7 +356,7 @@ describe('the create form', () =>
             minPlayers: 2,
             maxPlayers: 4,
             status: 'available',
-            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false, clocks: [] }
         }];
         useCatalogue().reset();
         await settle();
@@ -415,7 +415,7 @@ describe('a game that is played in pairs', () =>
             minPlayers: 2,
             maxPlayers: 4,
             status: 'available',
-            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false, clocks: [] }
         }];
         useCatalogue().reset();
         await settle();
@@ -438,7 +438,7 @@ describe('a game that is played in pairs', () =>
             minPlayers: 2,
             maxPlayers: 4,
             status: 'available',
-            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false }
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false, clocks: [] }
         }];
         useCatalogue().reset();
         await settle();

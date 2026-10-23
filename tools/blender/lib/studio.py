@@ -73,6 +73,11 @@ def panels():
 
 
 def plinth(name):
+    shared = bpy.data.meshes.get('plinth')
+    if shared is not None:
+        obj = bpy.data.objects.new(name, shared)
+        bpy.context.collection.objects.link(obj)
+        return obj
     r = PLINTH_RADIUS
     h = PLINTH_HEIGHT
     profile = [
@@ -92,6 +97,7 @@ def plinth(name):
     kit.assign(obj, looks.plinth(), looks.plinth_band())
     kit.slot(obj, 1, lambda centre, normal: centre.z < 0.018)
     kit.smooth(obj, 30.0)
+    obj.data.name = 'plinth'
     return obj
 
 

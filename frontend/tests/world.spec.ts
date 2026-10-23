@@ -32,10 +32,13 @@ describe('the shot list', () =>
         }
     });
 
-    it('gives each game a solo beat', () =>
+    it('gives each solo beat a game of its own, and the beat about results to chess', () =>
     {
         const solos = ['arrival', 'together', 'compete', 'finale'].map((name) => SHOTS[name]);
-        expect(new Set(solos.map((shot) => shot.target[0])).size).toBe(GAMES.length);
+        const framed = GAMES.filter((game) => solos.includes(FOCUS[game.id]));
+
+        expect(framed, 'a solo beat that is no game\'s close-up').toHaveLength(solos.length);
+        expect(SHOTS.compete).toBe(FOCUS.chess);
     });
 
     it('lets two neighbouring floor pools meet without overlapping', () =>

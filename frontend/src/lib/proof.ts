@@ -1,4 +1,5 @@
 import { backgammonEngine } from '../../../backend/src/domains/match/engines/backgammon.ts';
+import { chessEngine } from '../../../backend/src/domains/match/engines/chess.ts';
 import { hokmEngine } from '../../../backend/src/domains/match/engines/hokm.ts';
 import { ludoEngine } from '../../../backend/src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../../../backend/src/domains/match/engines/poker.ts';
@@ -34,7 +35,7 @@ export interface Checked
     wrong: Wrong | null;
 }
 
-const ENGINES = new Map<string, Engine>([ludoEngine, hokmEngine, backgammonEngine, pokerEngine].map((engine) => [engine.id, engine as Engine]));
+const ENGINES = new Map<string, Engine>([ludoEngine, hokmEngine, backgammonEngine, pokerEngine, chessEngine].map((engine) => [engine.id, engine as Engine]));
 
 const STAKE = 'Stake(address player,string game,uint256 amount,uint16 feeBps,bytes32 commit,bytes32 nonce,uint64 deadline)';
 

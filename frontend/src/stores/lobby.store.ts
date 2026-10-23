@@ -331,7 +331,8 @@ export const useLobby = createStore((): LobbyApi =>
             teams,
             invitees: [...invitees],
             ...(config.roomId === undefined ? {} : { roomId: config.roomId }),
-            ...(config.stake === undefined ? {} : { stake: config.stake })
+            ...(config.stake === undefined ? {} : { stake: config.stake }),
+            ...(config.clock === undefined ? {} : { clock: config.clock })
         };
     };
 
