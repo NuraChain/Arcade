@@ -107,9 +107,24 @@ describe('the sides of a chess table', () =>
 
     it('stand beside the board, one over the other, where the stage is wide for its height', () =>
     {
-        expect(beside).toContain('--board-w: min(100cqw - var(--side) - 0.75rem, 100cqh);');
+        expect(beside).toContain('\n    .chess-stage :is(.table-fit, .table-result-tab)\n    {\n        --side: clamp(11rem, 26cqw, 17rem);');
+        expect(beside).toContain('--room: calc(100cqw - var(--beside, 0px));');
+        expect(beside).toContain('--board-w: min(var(--room) - var(--side) - 0.75rem, 100cqh);');
         expect(beside).toContain("grid-template-areas: 'board them' 'board me';");
         expect(beside).toContain('justify-content: center;');
+        expect(beside).toMatch(/\n    \.chess-stage \.table-fit > \.table-surface\n    \{[^}]*\n        inline-size: 100%;/);
+    });
+
+    it('give a chat beside a sideways phone its room, so both clocks stay out from under it', () =>
+    {
+        expect(ruleOf('[data-beside] .chess-stage .table-fit')).toContain('\n    padding-inline-end: var(--beside);');
+        expect(beside).toContain('\n    [data-beside] .chess-stage :is(.table-fit, .table-result-tab)\n    {\n        --side: 8.5rem;');
+        expect(ruleOf('[data-beside] .chess-tray,\n[data-beside] .chess-offer,\n[data-beside] .chess-rail .coach-line')).toContain('display: none;');
+    });
+
+    it('fold the result into a tab between the two rails, never over the board', () =>
+    {
+        expect(beside).toMatch(/\n    \.chess-stage > \.table-result-tab\n    \{[^}]*\n        inset-inline-end: calc\(var\(--beside, 0px\) \+ \(var\(--room\) - var\(--board-w\) - 0\.75rem - var\(--side\)\) \/ 2\);[^}]*\n        inline-size: var\(--side\);[^}]*\n        translate: 0 -50%;/);
     });
 
     it('share one row over the board while the chat is open beside it', () =>

@@ -4390,6 +4390,26 @@ file stands at the foot depends on who looks, so the page writes the coordinates
 its marker, what that side has taken grouped by kind, how far ahead in material it is ("+3", said in
 words to a screen reader), the draw offer on the reader's own, and the side's clock.
 
+**The rails stand over and under the board, or beside it where the stage is wide for its height**
+(`@container stage (min-aspect-ratio: 4 / 3)`), and the arithmetic of the wide one is said once, on
+the fit cell and on the result's tab alike (`.chess-stage :is(.table-fit, .table-result-tab)`):
+`--side` for the rails' column, `--room` (the stage less whatever the chat takes beside it) and
+`--board-w`. The board fills its column (`inline-size: 100%`) rather than measuring itself again.
+
+- **A chat beside a sideways phone takes its room from the table, never from the clocks.** The
+  sheet lay over the rails' column, so at 844x390 both clocks were under the chat. Beside a chat
+  (`[data-beside]`) the fit cell gives up the sheet's width (`padding-inline-end: var(--beside)`),
+  the rails' column is 8.5rem, and a rail keeps its face, its name and its clock (the trays, the
+  draw offer and the lamp go, as under a half sheet). Measured at 844x390: a board of 296px and
+  both clocks clear of the chat, which begins 9px after the rails end.
+- **The result folded away waits between the two rails.** "Show the result" stood at the foot of
+  the stage, which beside the board is the board's own last rank and coordinates. In the wide
+  layout it is the width of the rails' column and in the middle of its height, between the two
+  rails, in both directions.
+
+`chess-table-art.spec.ts` (*the sides of a chess table*) holds both, and the walk measured them at
+844x390, 1280x800 and 1920x1080 in English and Persian.
+
 **The clock counts the side to move down from the server's own number** (`chess-clock`): the
 `remainingMs` the answer carried, from the moment it arrived, never `deadline - Date.now()`; the side
 waiting shows its bank from the board. Under twenty seconds it shows tenths and under ten it is red,

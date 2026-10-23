@@ -5587,10 +5587,20 @@ svg.lobby-board
 
 @container stage (min-aspect-ratio: 4 / 3)
 {
-    .chess-stage .table-fit
+    .chess-stage :is(.table-fit, .table-result-tab)
     {
         --side: clamp(11rem, 26cqw, 17rem);
-        --board-w: min(100cqw - var(--side) - 0.75rem, 100cqh);
+        --room: calc(100cqw - var(--beside, 0px));
+        --board-w: min(var(--room) - var(--side) - 0.75rem, 100cqh);
+    }
+
+    [data-beside] .chess-stage :is(.table-fit, .table-result-tab)
+    {
+        --side: 8.5rem;
+    }
+
+    .chess-stage .table-fit
+    {
         --rail: clamp(4.5rem, 14cqh, 5.5rem);
 
         display: grid;
@@ -5606,6 +5616,19 @@ svg.lobby-board
     {
         grid-area: board;
         align-self: center;
+        inline-size: 100%;
+    }
+
+    .chess-stage > .table-result-tab
+    {
+        top: 50%;
+        bottom: auto;
+        left: auto;
+        inset-inline-end: calc(var(--beside, 0px) + (var(--room) - var(--board-w) - 0.75rem - var(--side)) / 2);
+        display: flex;
+        inline-size: var(--side);
+        justify-content: center;
+        translate: 0 -50%;
     }
 
     .chess-rail
@@ -5641,6 +5664,18 @@ svg.lobby-board
     {
         flex: 1 1 auto;
     }
+}
+
+[data-beside] .chess-stage .table-fit
+{
+    padding-inline-end: var(--beside);
+}
+
+[data-beside] .chess-tray,
+[data-beside] .chess-offer,
+[data-beside] .chess-rail .coach-line
+{
+    display: none;
 }
 
 [data-sheet] .chess-stage .table-fit
