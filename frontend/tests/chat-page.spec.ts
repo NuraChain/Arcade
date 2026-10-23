@@ -862,11 +862,16 @@ describe('where a thread opens, and the way back to its end', () =>
 
             expect(risen(), 'nothing rises as older lines are read in above').toEqual([]);
 
-            void useChat().send(thread.id, 'just now');
+            const sending = useChat().send(thread.id, 'just now');
 
             await vi.waitFor(() => expect(risen()).toHaveLength(1));
 
             expect(risen()[0].querySelector('[data-message]')?.textContent).toContain('just now');
+
+            await sending;
+            await settle();
+
+            expect(risen(), 'once, and not again when the server hands it back').toHaveLength(1);
         }
         finally
         {
@@ -899,9 +904,10 @@ describe('where a thread opens, and the way back to its end', () =>
             await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
             await settle();
 
-            void useChat().send(thread.id, 'quietly');
+            const sending = useChat().send(thread.id, 'quietly');
 
             await vi.waitFor(() => expect(container.querySelector('#chat-thread')?.textContent).toContain('quietly'));
+            await sending;
             await settle();
 
             expect(risen()).toEqual([]);
