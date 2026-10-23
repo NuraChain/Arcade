@@ -459,7 +459,7 @@ describe('a line of the reader’s on its way', () =>
 
 describe('a right click on a line, and the bar a pointer finds beside it', () =>
 {
-    const menued = (message: Message, above?: string | null) =>
+    const menued = (message: Message) =>
     {
         const asked: Array<{ id: string; at: { x: number; y: number }; anchor: HTMLElement }> = [];
         const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
@@ -468,7 +468,6 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
             children: () => MessageBubble({
                 message,
                 me: 'alex',
-                ...(above === undefined ? {} : { above }),
                 onActions: () => undefined,
                 onReply: () => undefined,
                 onReact: () => undefined,
@@ -554,7 +553,7 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
         expect([...going.asked, ...shut.asked, ...written.asked]).toEqual([]);
     });
 
-    it('lets its bar take the pointer only while its line is hovered or holds the keyboard, with room round it to cross to it', () =>
+    it('lets its bar take the pointer only while its line is hovered or holds the keyboard', () =>
     {
         const { container } = menued(text('m-1', 'Up for a game?'));
         const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
@@ -562,8 +561,8 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
 
         expect(classes, 'a bar nobody can see covers no line').toContain('pointer-events-none');
         expect(classes, 'and takes the pointer while its own line is hovered or holds the keyboard').toEqual(expect.arrayContaining(['group-hover/row:pointer-events-auto', 'focus-within:pointer-events-auto']));
-        expect(classes, 'a bridge over the gaps fitBar leaves between the line and the bar, 8px across and 4px up and down').toEqual(expect.arrayContaining(['before:absolute', 'before:-inset-x-2', 'before:-inset-y-1', 'before:-z-10']));
-        expect(classes, 'and no deeper, or it would reach past the end of the thread').not.toContain('before:-inset-2');
+        expect(classes.filter((one) => one.startsWith('before:')), 'and needs no bridge: beside its line, the row itself is under the pointer on the way to it').toEqual([]);
+        expect(classes.filter((one) => /^p[xy]?-/.test(one)), 'nor padding: as tall as its buttons and border, beside a line of one row it stays in the gap between lines').toEqual([]);
     });
 
     it('rests just inside the foot of its line until it is laid, and once laid is held by its top alone', () =>
@@ -621,7 +620,7 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
         expect(bar(), 'the same bar throughout').toBe(drawn);
     });
 
-    it('lays its bar beside a line that leaves it room, and over one that does not', () =>
+    it('lays its bar beside its line, found by the keyboard as well', () =>
     {
         const { container } = menued(text('m-1', 'Up for a game?'));
         const row = container.querySelector<HTMLElement>('[data-message]')!;
@@ -636,39 +635,95 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
 
         row.dispatchEvent(new Event('pointerenter'));
 
-        expect([bar.style.left, bar.style.top], 'beside the line').toEqual(['308px', '2px']);
+        expect([bar.style.left, bar.style.top], 'after a line at the row’s start').toEqual(['308px', '2px']);
 
-        boxed(bar.parentElement!, 40, 110, 700, 40);
+        boxed(bar.parentElement!, 460, 110, 300, 40);
         bar.querySelector('button')!.dispatchEvent(new Event('focusin', { bubbles: true }));
 
-        expect([bar.style.left, bar.style.top], 'over the far end of a line too wide, found by the keyboard as well').toEqual(['580px', '-40px']);
+        expect([bar.style.left, bar.style.top], 'before a line at the row’s end, found by the keyboard as well').toEqual(['-128px', '2px']);
     });
 
-    it('stands over a line too wide on the side away from what stands above it', () =>
+    /** Makes a bar as wide as the parts of it that are drawn: the quick reactions 104 pixels, every other part 34, and its border 2. */
+    const sized = (bar: HTMLElement) =>
     {
-        const bars = (above?: string | null) =>
-        {
-            const { container } = menued(text('m-1', 'Up for a game?'), above);
-            const row = container.querySelector<HTMLElement>('[data-message]')!;
-            const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const parts = [...bar.querySelectorAll<HTMLElement>(':scope > *')];
 
-            Object.defineProperty(bar, 'offsetWidth', { configurable: true, value: 120 });
-            Object.defineProperty(bar, 'offsetHeight', { configurable: true, value: 36 });
-            boxed(row, 0, 100, 800, 60);
-            boxed(bar.parentElement!, 40, 110, 700, 40);
-            row.dispatchEvent(new Event('pointerenter'));
+        Object.defineProperty(bar, 'offsetWidth', {
+            configurable: true,
+            get: () => 2 + parts.filter((part) => part.style.display !== 'none').reduce((width, part) => width + (part === parts[0] ? 104 : 34), 0)
+        });
+        Object.defineProperty(bar, 'offsetHeight', { configurable: true, value: 34 });
 
-            const left = bar.style.left;
+        return parts;
+    };
 
-            cleanup();
+    const drawn = (parts: HTMLElement[]) => parts.map((part) => part.style.display !== 'none');
 
-            return left;
-        };
+    it('gives up its quick reactions, then the picker, then Reply, to stand beside a line too wide for the whole bar, and keeps More', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+        const row = container.querySelector<HTMLElement>('[data-message]')!;
+        const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const parts = sized(bar);
+        const t = useLocale().t;
 
-        expect(bars(), 'with nothing said above it, away from its own sender').toBe('580px');
-        expect(bars('sara.k'), 'under a line of theirs, as before').toBe('580px');
-        expect(bars('alex'), 'under a line of the reader’s, from the other side').toBe('0px');
-        expect(bars(null), 'under a heading across the middle, from its own outer edge').toBe('0px');
+        expect(parts[0].querySelectorAll('button'), 'the quick reactions first').toHaveLength(3);
+        expect(parts.slice(1).map((part) => part.querySelector('button')?.getAttribute('aria-label')), 'then the picker, Reply and More').toEqual([t('chat.react'), t('chat.reply'), t('chat.more')]);
+
+        boxed(row, 0, 100, 800, 60);
+        boxed(bar.parentElement!, 40, 110, 600, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect(drawn(parts), '152 pixels beside the line: no quick reactions').toEqual([false, true, true, true]);
+        expect([bar.style.left, bar.style.top], 'beside it').toEqual(['608px', '3px']);
+
+        boxed(bar.parentElement!, 40, 110, 682, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect(drawn(parts), '70 pixels, just room for Reply and More').toEqual([false, false, true, true]);
+
+        boxed(bar.parentElement!, 40, 110, 700, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect(drawn(parts), '52 pixels: More alone').toEqual([false, false, false, true]);
+        expect([bar.style.left, bar.style.top], 'and still beside it').toEqual(['708px', '3px']);
+
+        boxed(bar.parentElement!, 40, 110, 720, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect(drawn(parts), '32 pixels, too little even for More: More stays').toEqual([false, false, false, true]);
+
+        boxed(bar.parentElement!, 40, 110, 300, 40);
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect(drawn(parts), 'all of it again beside a line that leaves it room').toEqual([true, true, true, true]);
+    });
+
+    it('keeps every part that holds the keyboard, though the line leaves it too little room', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+        const row = container.querySelector<HTMLElement>('[data-message]')!;
+        const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const parts = sized(bar);
+
+        boxed(row, 0, 100, 800, 60);
+        boxed(bar.parentElement!, 40, 110, 700, 40);
+        parts[0].querySelector('button')!.focus();
+
+        expect(document.activeElement, 'a quick reaction holds the keyboard').toBe(parts[0].querySelector('button'));
+        expect(drawn(parts), 'and nothing is taken from under it').toEqual([true, true, true, true]);
+        expect(bar.style.left, 'the whole bar kept inside the row').toBe('552px');
+
+        parts[2].querySelector('button')!.focus();
+
+        expect(drawn(parts), 'Reply holds it now, and what comes before it may go').toEqual([false, false, true, true]);
+    });
+
+    it('leaves room beside a line on a fine pointer for the least of the bar', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+
+        expect([...container.querySelector('.bubble')!.parentElement!.classList], 'More and its gap, and a face before a line of theirs').toContain('pointer-fine:max-w-[min(36rem,80%,calc(100%_-_5.5rem))]');
     });
 });
 

@@ -974,7 +974,6 @@ export default component ChatPage()
                                                             replying={ chat.replyTo(id)?.id === row.message.id }
                                                             found={ row.message.id === target }
                                                             menued={ menu?.message.id === row.message.id }
-                                                            above={ row.message.id === firstUnread ? null : row.above }
                                                         />
                                                     </div>
                                                 </For>

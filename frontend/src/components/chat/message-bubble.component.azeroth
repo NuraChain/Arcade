@@ -8,7 +8,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
 import { boxOf } from '../../lib/anchor.ts';
-import { fitBar } from '../../lib/hover-bar.ts';
+import { fitBar, roomBeside } from '../../lib/hover-bar.ts';
 import { aboutPerson } from '../../lib/person-menu.ts';
 import { attachSwipeReply } from '../../lib/swipe-reply.ts';
 import { QUICK_REACTIONS } from '../../data/emoji.ts';
@@ -65,9 +65,6 @@ export default component MessageBubble(props: {
 
     /** Its menu is open, and the bar beside it steps aside so that the two do not stand on each other. */
     menued?: boolean;
-
-    /** Whose line stands just above, or null for a heading or a notice across the middle: the bar over a wide line keeps clear of it. */
-    above?: string | null;
 })
 {
     const locale = useLocale();
@@ -145,11 +142,13 @@ export default component MessageBubble(props: {
     };
 
     /**
-     * Lays the hover bar where the thread has room for it, measured each time it is about to show.
-     * Until then it rests just inside the foot of its line, and its bridge spans only the gaps
-     * `fitBar` leaves, so wherever it is laid the thread can scroll no further than before: a bar
-     * hanging below the newest line made the thread's reach shrink at the first hover, and the
-     * browser's clamp of that scroll closed a menu opened on the line.
+     * Lays the hover bar beside its line, measured each time it is about to show. A line too wide to
+     * leave the whole bar room beside it gets less of the bar: the quick reactions go first, then the
+     * picker, then Reply, and More always stays, as does every part that holds the keyboard. Until
+     * it is first laid the bar rests just inside the foot of its line, so wherever it is laid the
+     * thread can scroll no further than before: a bar hanging below the newest line made the
+     * thread's reach shrink at the first hover, and the browser's clamp of that scroll closed a menu
+     * opened on the line.
      */
     const fit = () =>
     {
@@ -161,18 +160,25 @@ export default component MessageBubble(props: {
             return;
         }
 
-        const pane = row.closest('.overflow-y-auto');
-        const place = fitBar(
-            boxOf(row),
-            boxOf(column),
-            { width: bar.offsetWidth, height: bar.offsetHeight },
+        const room = roomBeside(boxOf(row), boxOf(column));
+        const parts = [...bar.querySelectorAll<HTMLElement>(':scope > *')].slice(0, -1);
+
+        for (const part of parts)
+        {
+            part.style.display = '';
+        }
+
+        for (const part of parts)
+        {
+            if (bar.offsetWidth <= room || part.contains(document.activeElement))
             {
-                mine,
-                rtl: locale.dir() === 'rtl',
-                top: pane === null ? 0 : pane.getBoundingClientRect().top,
-                ...(props.above === undefined ? {} : { above: props.above === null ? 'middle' : (props.above === props.me ? 'mine' : 'theirs') })
+                break;
             }
-        );
+
+            part.style.display = 'none';
+        }
+
+        const place = fitBar(boxOf(row), boxOf(column), { width: bar.offsetWidth, height: bar.offsetHeight });
 
         bar.style.left = `${ Math.round(place.x) }px`;
         bar.style.top = `${ Math.round(place.y) }px`;
@@ -400,7 +406,7 @@ export default component MessageBubble(props: {
                         </span>
                     }
                 </Show>
-                <div class={ () => [ 'relative flex min-w-0 max-w-[min(36rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
+                <div class={ () => [ 'relative flex min-w-0 max-w-[min(36rem,80%)] flex-col pointer-fine:max-w-[min(36rem,80%,calc(100%_-_5.5rem))]', mine ? 'items-end' : 'items-start' ].join(' ') }>
                     <Show when={ crowd && first }>
                         { () =>
                             <span class="mb-1 px-3 text-ui-2xs font-semibold" style={ `color: hsl(${ person?.hue ?? 210 } 72% 72%)` } dir="auto">{ firstName }</span>
@@ -485,7 +491,7 @@ export default component MessageBubble(props: {
                             <div
                                 ref={ (element) => toolbar = element }
                                 class={ () => [
-                                    'pointer-events-none absolute bottom-1 left-0 z-10 hidden w-max items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 before:absolute before:-inset-x-2 before:-inset-y-1 before:-z-10 group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none',
+                                    'pointer-events-none absolute bottom-1 left-0 z-10 hidden w-max items-center gap-0.5 rounded-full border border-line-strong bg-lifted shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none',
                                     pop.current()?.anchor === toolbar && toolbar !== null ? 'pointer-events-auto opacity-100' : '',
                                     props.menued === true ? 'invisible' : ''
                                 ].filter(Boolean).join(' ') }

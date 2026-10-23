@@ -926,23 +926,6 @@ describe('a right click, on a line and on a conversation', () =>
 
     const bar = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-message="${ id }"] div`)].find((one) => one.className.includes('pointer-fine:flex'));
 
-    const boxed = (element: Element, left: number, top: number, width: number, height: number) => Object.defineProperty(element, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top })
-    });
-
-    /** Hovers a line 700px wide in a row of 800, with no room for its 120px bar beside it, and says where the bar was laid. */
-    const laid = (row: HTMLElement, held: HTMLElement) =>
-    {
-        Object.defineProperty(held, 'offsetWidth', { configurable: true, value: 120 });
-        Object.defineProperty(held, 'offsetHeight', { configurable: true, value: 36 });
-        boxed(row, 0, 100, 800, 60);
-        boxed(held.parentElement!, 40, 110, 700, 40);
-        row.dispatchEvent(new Event('pointerenter'));
-
-        return [held.style.left, held.style.top];
-    };
-
     const right = (target: Element) =>
     {
         const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 });
@@ -988,39 +971,6 @@ describe('a right click, on a line and on a conversation', () =>
 
         expect(useChat().replyTo(thread.id)?.id).toBe(line.id);
         await vi.waitFor(() => expect(bar(line.id)?.classList.contains('invisible'), 'and is back once it is shut').toBe(false), { timeout: 4000 });
-    });
-
-    it('lays a line’s bar over its top edge on the side away from the line above it, the reader’s', async () =>
-    {
-        const lines = server.messages.filter((one) => one.conversationId === 'c-nima' && one.kind === 'text');
-        const answer = lines.at(-1)!;
-        const container = opened('c-nima', 'sidebar');
-        const row = () => container.querySelector<HTMLElement>(`[data-message="${ answer.id }"]`);
-
-        await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
-
-        expect([lines.at(-2)?.from, answer.from], 'a line of theirs under one of the reader’s').toEqual(['alex', 'nima.f']);
-        expect(laid(row()!, bar(answer.id)!), 'from the left, clear of the reader’s line on the right').toEqual(['0px', '-40px']);
-    });
-
-    it('lays the bar of the first line not read from its own outer edge, clear of "Unread messages" across the middle', async () =>
-    {
-        const thread = server.conversations.find((row) => row.id === 'c-friday')!;
-        const lines = server.messages.filter((one) => one.conversationId === thread.id);
-        const over = lines.at(-2)!;
-        const first = lines.at(-1)!;
-
-        thread.unread = 1;
-        await useChat().refresh();
-
-        const container = opened(thread.id, 'sidebar');
-        const row = () => container.querySelector<HTMLElement>(`[data-message="${ first.id }"]`);
-
-        await vi.waitFor(() => expect(container.querySelector('[data-unread]')?.getAttribute('data-unread')).toBe(first.id), { timeout: 4000 });
-
-        expect([over.kind, over.from, first.from], 'a card of theirs over it, drawn on their side, which would send the bar to the right').toEqual(['invite', 'sara.k', 'babak.r']);
-        expect(new Date(over.at).toDateString(), 'with no day’s heading between them').toBe(new Date(first.at).toDateString());
-        expect(laid(row()!, bar(first.id)!), 'from the left, where nothing across the middle reaches').toEqual(['0px', '-40px']);
     });
 
     it('offers to delete a line of the reader’s own, and asks first', async () =>

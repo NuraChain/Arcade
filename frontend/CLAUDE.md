@@ -301,8 +301,9 @@ not a container query: `Page` owns the scroll, and a list pane has to own its ow
 "it can have full width instead of half when i'm trying to write something". The lines and the
 composer were held to 48rem in the middle of the pane, so at 1920 the composer was 742px of 1328.
 Nothing between a line and its pane caps it now: theirs run along the start edge and the reader's
-along the end, a bubble is at most 36rem (or 80% of a narrow pane) so a line still reads, and
-notices keep their own measure. `ChatPane` is the list beside a thread on both routes; its head folds
+along the end, a bubble is at most 36rem (or 80% of a narrow pane, and on a fine pointer the pane
+less 5.5rem, the room the hover bar needs beside it) so a line still reads, and notices keep their
+own measure. `ChatPane` is the list beside a thread on both routes; its head folds
 it to a column of faces (`settings.chatListOpen`, kept on the device), each the conversation's link
 with its name under a pointer and its unread count on the face, and the heading stays in the page
 for a screen reader. **The folded list is the same row restyled, not a second row.** A row of a
@@ -359,34 +360,33 @@ on its way, one this browser could not open or one the server wrote.
 The hover bar a pointer finds beside a line stood at the line's far edge whatever its width, so
 beside a wide line it ran out of the pane (at 1280 a 518px line left Reply and More outside it).
 `fitBar` (`lib/hover-bar.ts`) places it each time it is about to show, as a pointer enters the row
-or the keyboard reaches it: beside the line on the side with more room when that side holds the
-bar and a gap, otherwise over the line's top edge, under it where the thread's top would cut it,
-and always inside the row. Over the edge it keeps clear of what stands above the line: a thread
-is drawn in three lanes, the reader's lines along one side, everybody else's along the other and
-headings and notices across the middle, so the bar stands away from a line drawn above it (the
-rows say whose, `above` in `threadRows`, an invite or a result card included) and at the line's
-own outer edge under a day's heading, a notice or "Unread messages" (`null` in the rows, which the
-chat page says of the first line not read). It stood away from the line's own sender, which is
-right only in a run of one sender's lines, until the second audit showed the bar of a long line of
-theirs over the reader's own line above it. A spec of the lanes keeps the two lines it weighs
-minutes apart: a fixture is a fixed moment, and the first spec of the unread line sat under a line
-2 h 50 min older, which a day's heading parts from it in Tehran's time, so it passed with the
-page's rule taken out. While a line's menu is open its bar steps aside
-(`menued`), and a conversation whose menu is open is marked in the list. The measures are physical, so it
-is placed with `left` and `top` whichever way the page reads. It takes the pointer only while its
-line is hovered or holds the keyboard (`pointer-events-none` otherwise), with a bridge of 8px round
-it so the pointer can cross the gap to it without leaving the line: a bar nobody can see still took
-the pointer, and the walk found one lying over its own line before it was first placed, where it
-took the hover and the press meant for the line. **Wherever the bar is laid, the thread can scroll
-no further than before.** Until it is first laid it rests just inside the foot of its line
-(`bottom-1`), and its bridge reaches only the gaps `fitBar` leaves, 8px across and 4px up and down.
-It hung from the top of its line with an 8px bridge all round, so the bar of the newest line, being
-taller than a line of one row, reached past the thread's end; at the first hover it was laid higher,
-the thread's reach shrank by two or three pixels, the browser clamped the scroll (a small jump of
-every line), and a menu opened on that line in the same moment took the clamp for a scroll and
-closed. The chat pass found it by right-clicking as the pointer arrived. `context-menu.spec.ts`,
-`hover-bar.spec.ts`, `bubble.spec.ts` (*a right click on a line*), `chat-page.spec.ts` (*a right
-click, on a line and on a conversation*) and `table-chat.spec.ts` hold it.
+or the keyboard reaches it. **It stands beside its line, always, and gives up what does not fit
+there**: on the side with more room, in the middle of the line's height, inside the row. Where a
+line leaves too little room beside it for the whole bar (`roomBeside`), the bubble gives up the
+quick reactions, then the picker, then Reply, and keeps More, which offers all of it as a right
+click does; it never gives up a part that holds the keyboard. On a fine pointer a line leaves room
+for More and its gap (its column is at most the row less 5.5rem, a face before a line of theirs
+included), and the bar has no padding, so beside a line of one row it keeps inside the 2px between
+lines. It used to stand over the top edge of a line too wide to stand beside, from the side away
+from the line above, and a probe that hovered every line at four widths in both languages found
+it 38px deep on the line above wherever one person had written two long lines in a row: no side
+of a line's top edge is clear of a line as wide as itself. While a line's menu is open its bar
+steps aside (`menued`), and a conversation whose menu is open is marked in the list. The measures
+are physical, so it is placed with `left` and `top` whichever way the page reads. It takes the
+pointer only while its line is hovered or holds the keyboard (`pointer-events-none` otherwise): a
+bar nobody can see still took the pointer, and the walk found one lying over its own line before it
+was first placed, where it took the hover and the press meant for the line. Beside its line it
+needs no bridge, since the row is under the pointer all the way across to it. **Wherever the bar
+is laid, the thread can scroll no further than before.** Until it is first laid it rests just inside
+the foot of its line (`bottom-1`), and laid beside a line of one row it reaches a pixel into the gap
+under it, inside the 12px a thread keeps below its newest line. It hung from the top of its line
+with an 8px bridge all round, so the bar of the newest line, being taller than a line of one row,
+reached past the thread's end; at the first hover it was laid higher, the thread's reach shrank by
+two or three pixels, the browser clamped the scroll (a small jump of every line), and a menu opened
+on that line in the same moment took the clamp for a scroll and closed. The chat pass found it by
+right-clicking as the pointer arrived. `context-menu.spec.ts`, `hover-bar.spec.ts`,
+`bubble.spec.ts` (*a right click on a line*), `chat-page.spec.ts` (*a right click, on a line and on
+a conversation*) and `table-chat.spec.ts` hold it.
 
 **The list says when as a messenger does, and what was left unsent.** A row said "37 seconds
 ago". It says the time of a line from today, the weekday of one from the six days before, and the
