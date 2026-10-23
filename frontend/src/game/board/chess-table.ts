@@ -520,7 +520,7 @@ export function createChessTable(options: ChessOptions): ChessTable
             take(victim, contact);
             stage.after(contact, () =>
             {
-                options.sound()?.play('token-capture', { pan: pan(landing), gain: 0.85 });
+                options.sound()?.play('piece-capture', { pan: pan(landing) });
                 options.feel(colour === shown.foot ? 'capture' : 'hit');
             });
         }
@@ -535,10 +535,10 @@ export function createChessTable(options: ChessOptions): ChessTable
             flying.add(rookMan.key);
             rookRun = hop(rookEl, spot(rook.from), spot(rook.to), run.length * ROOK_LAG);
             rookEl.style.translate = at(spot(rook.to));
-            stage.after(rookRun.length, () => options.sound()?.play('token-step', { pan: pan(spot(rook.to)), rate: 0.92 }));
+            stage.after(rookRun.length, () => options.sound()?.play('piece-move', { pan: pan(spot(rook.to)), rate: 0.92 }));
         }
 
-        stage.after(run.length, () => options.sound()?.play('token-step', { pan: pan(landing), rate: victim === undefined ? 1 : 0.9 }));
+        stage.after(run.length, () => options.sound()?.play('piece-move', { pan: pan(landing), rate: victim === undefined ? 1 : 0.9 }));
 
         await run.done;
         flying.delete(mover.key);

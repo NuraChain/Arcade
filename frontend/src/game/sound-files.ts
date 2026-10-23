@@ -12,6 +12,8 @@ export type Sampled =
     | 'token-yard'
     | 'chip-lay'
     | 'chips-stack'
+    | 'piece-move'
+    | 'piece-capture'
     | 'win';
 
 export const SAMPLED: readonly Sampled[] = [
@@ -28,6 +30,8 @@ export const SAMPLED: readonly Sampled[] = [
     'token-yard',
     'chip-lay',
     'chips-stack',
+    'piece-move',
+    'piece-capture',
     'win'
 ];
 

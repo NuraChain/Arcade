@@ -229,7 +229,7 @@ describe('a chess move, played', () =>
 
         await elapse(GLIDE_MOST + 40);
 
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['piece-move']);
         expect(pawn.style.zIndex).toBe(String(LAYER.piece));
         expect(facts.at(-1)?.turn).toBe('b');
         expect(facts.at(-1)?.played?.to).toBe(sq('e4'));
@@ -281,12 +281,12 @@ describe('a chess move, played', () =>
 
         await elapse(Number(fade.options.delay) + 5);
 
-        expect(cues).toEqual(['token-capture']);
+        expect(cues).toEqual(['piece-capture']);
         expect(felt).toEqual(['capture']);
 
         await elapse(GLIDE_MOST + TAKE_MS + 40);
 
-        expect(cues).toEqual(['token-capture', 'token-step']);
+        expect(cues).toEqual(['piece-capture', 'piece-move']);
         expect(victim.isConnected).toBe(false);
         expect(pieces()).toHaveLength(3);
         expect(facts.at(-1)?.men).toHaveLength(3);
@@ -337,7 +337,7 @@ describe('a chess move, played', () =>
 
         await elapse(GLIDE_MOST + ROOK_MS + 40);
 
-        expect(cues).toEqual(['token-step', 'token-step']);
+        expect(cues).toEqual(['piece-move', 'piece-move']);
         expect(on(sq('g1'))).toEqual([king]);
         expect(on(sq('f1'))).toEqual([rook]);
     });
@@ -357,13 +357,13 @@ describe('a chess move, played', () =>
         await elapse(Number(of(pawn)[0].options.duration) + 5);
 
         expect(pawn.dataset.piece).toBe('wp');
-        expect(cues).toEqual(['token-step']);
+        expect(cues).toEqual(['piece-move']);
 
         await elapse(PROMOTE_MS + 40);
 
         expect(pawn.dataset.piece).toBe('wq');
         expect(pawn.dataset.key).toBe(key);
-        expect(cues).toEqual(['token-step', 'promote']);
+        expect(cues).toEqual(['piece-move', 'promote']);
     });
 
     it('lights the king that a move puts in check, with a chime', async () =>
@@ -377,7 +377,7 @@ describe('a chess move, played', () =>
         await elapse(GLIDE_MOST + 40);
 
         expect(marks('check').map((mark) => mark.style.translate)).toEqual([at(sq('e8'))]);
-        expect(cues).toEqual(['token-step', 'check']);
+        expect(cues).toEqual(['piece-move', 'check']);
         expect(facts.at(-1)?.check).toBe(sq('e8'));
     });
 
@@ -413,7 +413,7 @@ describe('a chess move, played', () =>
 
         await elapse(400);
 
-        expect(cues).toEqual(['token-capture', 'token-step']);
+        expect(cues).toEqual(['piece-capture', 'piece-move']);
         expect(on(sq('d5'))).toEqual([taker]);
     });
 

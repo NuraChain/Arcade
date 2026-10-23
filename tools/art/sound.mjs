@@ -29,7 +29,12 @@ export const SOUNDS = [
     ['hand-won', 'jingles_PIZZI16.ogg', 0.46],
     ['chip-lay', 'chip-lay-1.ogg', 0.3],
     ['chip-lay', 'chip-lay-3.ogg', 0.3],
-    ['chips-stack', 'chips-stack-2.ogg', 0.5]
+    ['chips-stack', 'chips-stack-2.ogg', 0.5],
+    ['piece-move', 'impactGeneric_light_000.ogg', 0.16],
+    ['piece-move', 'impactGeneric_light_003.ogg', 0.16],
+    ['piece-move', 'impactGeneric_light_004.ogg', 0.16],
+    ['piece-capture', 'impactWood_medium_002.ogg', 0.24],
+    ['piece-capture', 'impactWood_medium_003.ogg', 0.24]
 ];
 
 const scratch = mkdtempSync(join(tmpdir(), 'nura-sound-'));

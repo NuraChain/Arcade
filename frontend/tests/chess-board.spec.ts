@@ -15,6 +15,25 @@ import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { parseFen, squareNamed } from '../../backend/src/domains/match/chess/board.ts';
 
+const told = vi.hoisted(() => ({ heard: [] as string[] }));
+
+vi.mock('../src/game/sound.ts', async (original) =>
+{
+    const real = await original<typeof import('../src/game/sound.ts')>();
+
+    return {
+        ...real,
+        createSound: () => ({
+            play: (cue: string) =>
+            {
+                told.heard.push(cue);
+            },
+            setEnabled: () => undefined,
+            dispose: () => undefined
+        })
+    };
+});
+
 type Rendered = HTMLElement;
 
 type Chess = Extract<MatchView['view'], { kind: 'chess' }>;
@@ -177,6 +196,7 @@ beforeEach(() =>
     setRuntime({ clock: manualClock(400_000), seed: 3 });
     useLocale().setLocale('en');
     useSettings().reset();
+    told.heard = [];
 });
 
 afterEach(() =>
@@ -682,5 +702,39 @@ describe('how a chess game ended, under its result', () =>
 
         expect(container.textContent).toContain('It’s a draw.');
         expect(container.textContent).toContain('By agreement.');
+    });
+});
+
+describe('the chime when the turn comes round', () =>
+{
+    const theirs = () => match({ ...fen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'), ply: 1 }, 0, { rev: 4 });
+
+    const mine = () => match({ ...fen('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2'), ply: 2 }, 0, { rev: 5 });
+
+    afterEach(() =>
+    {
+        Reflect.deleteProperty(document, 'visibilityState');
+    });
+
+    it('rings when the turn comes round while nobody is looking at the page', async () =>
+    {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+
+        const table = await live(theirs());
+
+        table.move(mine());
+        await flush();
+
+        expect(told.heard).toContain('turn');
+    });
+
+    it('lets the move itself be heard on a page that is looked at, and rings nothing more', async () =>
+    {
+        const table = await live(theirs());
+
+        table.move(mine());
+        await flush();
+
+        expect(told.heard).not.toContain('turn');
     });
 });

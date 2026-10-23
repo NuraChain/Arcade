@@ -4332,12 +4332,20 @@ the nearest of its kind, and only what cannot be explained comes or goes.
 
 **`game/board/chess-table.ts` plays each move as a hand makes it.** A piece glides for as long as it
 is far (170 to 380 ms); a knight hops an arc (300 ms); a capture happens at contact, 82% into the
-run, where the taken piece fades on its square (170 ms) and `token-capture` sounds; castling moves
-the king and then the rook, 40% behind it, with a step for each; a pawn that promotes arrives as a
-pawn and becomes its piece with a pop and a sparkle (`promote`, 280 ms); and once the move has
-landed, check rings the king's square with its chime (`check`) and mate tips the king over
-(560 ms). The turn passes when the piece is down, not when it sets off. Less motion is the stage's
-fades with every cue kept. `chess-table.spec.ts` holds each on a manual clock.
+run, where the taken piece fades on its square (170 ms) and a heavier knock of wood sounds
+(`piece-capture`); a piece set down clicks (`piece-move`); castling moves the king and then the
+rook, 40% behind it, with a click for each; a pawn that promotes arrives as a pawn and becomes its
+piece with a pop and a sparkle (`promote`, 280 ms); and once the move has landed, check rings the
+king's square with its chime (`check`) and mate tips the king over (560 ms). The turn passes when
+the piece is down, not when it sets off. Less motion is the stage's fades with every cue kept.
+`chess-table.spec.ts` holds each on a manual clock.
+
+**A chess move is its own sound, so the turn rings only for a page nobody is looking at.** Every
+other board rings the turn chime when the turn comes to the reader; at chess the click of the other
+side's piece is that signal, as in every chess app, and a chime on top of it forty times a game is
+noise. A hidden page hears no click (a hidden tab plays only what is urgent), so there the board
+asks `turnChime` with `when` (`table-cues.ts`) for the urgent chime from the view's own turn.
+`chess-board.spec.ts` (*the chime when the turn comes round*) holds both pages.
 
 **The board is turned for Black and never mirrored.** The reader's colour stands at the foot, a
 watcher sees White's, and the board is `direction: ltr` in Persian as every printed board is. The art
@@ -5103,7 +5111,11 @@ switching tables never has to unlock audio again. The spec is
   the felt, until its chips flew. The chime for a turn that becomes the reader's is `turnChime`
   in `components/games/table-cues.ts`, handed whichever sound handle the board holds, so a
   board has one handle. Poker's chips are two more Kenney recordings,
-  `chip-lay` for a bet and `chips-stack` for a pot, which is why the pack is 20 takes of 14 cues.
+  `chip-lay` for a bet and `chips-stack` for a pot. Chess's pieces are two more Kenney Impact
+  Sounds cues, `piece-move` (three takes of a short bright click, a piece set down) and
+  `piece-capture` (two takes of a heavier wooden knock), measured before they were chosen: the
+  clicks about 60 ms long with their energy near 1.1 kHz, the knocks 100 ms near 270 Hz, the way a
+  chess app's move and capture differ. That is why the pack is 25 takes of 16 cues, 132 KB.
   `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
   every game, with one `warn` buzz at five.
 

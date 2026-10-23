@@ -3,6 +3,7 @@ import { onCleanup, untrack } from 'azerothjs';
 import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
 import ChessRail, { type TrayGroup } from './chess-rail.component.azeroth';
 import { missesOf, plateTag, withMisses } from './plate-tag.ts';
+import { turnChime } from './table-cues.ts';
 import Button from '../ui/button.component.azeroth';
 import { chessOf } from '../../data/match.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
@@ -271,6 +272,8 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
     let byKey = false;
     let stopClaim: () => void = () => undefined;
 
+    const chime = turnChime(() => sound, () => document.visibilityState === 'hidden');
+
     const caughtUp = () =>
     {
         if (presenter?.presenting() !== true)
@@ -291,6 +294,13 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
             presenter?.see(batch);
             caughtUp();
         });
+    }
+
+    effect
+    {
+        const yours = myTurn;
+
+        untrack(() => chime(yours));
     }
 
     effect
