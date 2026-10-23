@@ -130,7 +130,7 @@ Point it at whichever half is running: `npm run dev` (vite on 3100, the default)
 server (`QA_BASE=http://localhost:<port>`). The server run is the stronger one — it exercises
 `mountPages`, the prerendered landing page and the real asset headers, which vite does not.
 
-**Give the built server its own port rather than 3200.** 3200 is the development api's, and other
+**Give the built server its own port rather than 4900.** 4900 is the development api's, and other
 projects on this machine reach for it too, so `npm start` there fails with `EADDRINUSE` — or worse,
 answers 200 from something that is not this product at all, which reads as a passing gate until
 somebody looks at the title. `PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 …` and the matching

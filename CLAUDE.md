@@ -32,7 +32,7 @@ because two files truncating the same tables deadlock. Every claim about the DAT
 ## Running it
 
 **Development is two processes.** vite on `127.0.0.1:3100` owns the browser and proxies `/api`,
-`/ws` and `/avatars` to the api on `127.0.0.1:3200`, which answers no pages. Open
+`/ws` and `/avatars` to the api on `127.0.0.1:4900`, which answers no pages. Open
 `http://localhost:3100`.
 
 **Production is one process.** `npm run build` then `npm start`: the api in `.dist-backend/`, the client
@@ -95,7 +95,7 @@ the third so nobody re-investigates it.
   paid tables, the admin) are off while their names are left out or empty. Everything else has a value in the
   code: what differs between development and production follows from the mode, the paths of the
   build follow from where the server lives, the socket limits are constants (`realtime/limits.ts`),
-  and `PORT` (3200), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
+  and `PORT` (4900), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
   write to change. NuraChain's public facts for the browser are constants in `data/chain.ts`. A
   secret never has a value in code. Do not add a name for something the code can work out.
 - `.env.example` is committed: every variable the server reads, with a placeholder and a sentence,

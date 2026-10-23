@@ -26,7 +26,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sql } from './db.mjs';
 import { chainUnreached } from './unreached.mjs';
 
-const BASE = process.env.QA_BASE ?? 'http://localhost:3200';
+const BASE = process.env.QA_BASE ?? 'http://localhost:4900';
 
 /**
  * Two accounts the seed does NOT make friends, which is what leaves a friend request testable.

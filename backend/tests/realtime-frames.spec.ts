@@ -57,7 +57,7 @@ describe('same origin', () =>
 
     it('refuses a different port, host or missing host', () =>
     {
-        expect(isSameOrigin('http://example.com:3100', 'example.com:3200')).toBe(false);
+        expect(isSameOrigin('http://example.com:3100', 'example.com:4900')).toBe(false);
         expect(isSameOrigin('http://evil.example', 'example.com')).toBe(false);
         expect(isSameOrigin('http://example.com', undefined)).toBe(false);
     });
@@ -69,8 +69,8 @@ describe('same origin', () =>
 
     it('keeps an IPv6 literal and an explicit port meaningful', () =>
     {
-        expect(isSameOrigin('http://[::1]:3200', '[::1]:3200')).toBe(true);
-        expect(isSameOrigin('http://[::1]:3200', '[::1]:3100')).toBe(false);
+        expect(isSameOrigin('http://[::1]:4900', '[::1]:4900')).toBe(true);
+        expect(isSameOrigin('http://[::1]:4900', '[::1]:3100')).toBe(false);
     });
 
     it('never throws on rubbish', () =>
@@ -89,20 +89,20 @@ describe('the handshake gate', () =>
             limit: createHandshakeLimit({ max: 100 }),
             trustProxy: false
         })(origin, request({
-            host: options.host ?? 'localhost:3200',
+            host: options.host ?? 'localhost:4900',
             ...(options.cookie === undefined ? {} : { cookie: options.cookie })
         }));
 
-    it('admits the vite development case: the browser is on 3100, the api on 3200', () =>
+    it('admits the vite development case: the browser is on 3100, the api on 4900', () =>
     {
-        expect(gate('http://localhost:3100', { host: 'localhost:3200', cookie: COOKIE })).toBe(true);
+        expect(gate('http://localhost:3100', { host: 'localhost:4900', cookie: COOKIE })).toBe(true);
     });
 
     it('admits the built-server case, where the browser and the server share a port', () =>
     {
         // This is `npm run qa` against the built server, and it is the case a `config.origin`
         // comparison alone refuses - six hundred times, on the gate that must be 600/600.
-        expect(gate('http://localhost:3200', { host: 'localhost:3200', cookie: COOKIE })).toBe(true);
+        expect(gate('http://localhost:4900', { host: 'localhost:4900', cookie: COOKIE })).toBe(true);
     });
 
     it('refuses a foreign origin however it arrives', () =>
@@ -113,7 +113,7 @@ describe('the handshake gate', () =>
 
     it('refuses a handshake with no session cookie at all', () =>
     {
-        expect(gate('http://localhost:3200', { host: 'localhost:3200' })).toBe(false);
+        expect(gate('http://localhost:4900', { host: 'localhost:4900' })).toBe(false);
     });
 
     it('reads the cookie through the http half rather than parsing one of its own', () =>
@@ -142,15 +142,15 @@ describe('the handshake gate', () =>
             limit: createHandshakeLimit({ max: 2 }),
             trustProxy: false
         });
-        const one = request({ host: 'localhost:3200', cookie: COOKIE }, '9.9.9.9');
-        const two = request({ host: 'localhost:3200', cookie: COOKIE }, '8.8.8.8');
+        const one = request({ host: 'localhost:4900', cookie: COOKIE }, '9.9.9.9');
+        const two = request({ host: 'localhost:4900', cookie: COOKIE }, '8.8.8.8');
 
-        expect(gated('http://localhost:3200', one)).toBe(true);
-        expect(gated('http://localhost:3200', one)).toBe(true);
-        expect(gated('http://localhost:3200', one)).toBe(false);
+        expect(gated('http://localhost:4900', one)).toBe(true);
+        expect(gated('http://localhost:4900', one)).toBe(true);
+        expect(gated('http://localhost:4900', one)).toBe(false);
 
         // A different address has its own budget, which is the point of keying on one.
-        expect(gated('http://localhost:3200', two)).toBe(true);
+        expect(gated('http://localhost:4900', two)).toBe(true);
     });
 });
 
@@ -202,10 +202,10 @@ describe('the handshake budget', () =>
             limit: createHandshakeLimit({ max: 1 }),
             trustProxy: true
         });
-        const forged = (lie: string) => request({ host: 'localhost:3200', cookie: COOKIE, 'x-forwarded-for': `${ lie }, 7.7.7.7` }, '10.0.0.1');
+        const forged = (lie: string) => request({ host: 'localhost:4900', cookie: COOKIE, 'x-forwarded-for': `${ lie }, 7.7.7.7` }, '10.0.0.1');
 
-        expect(gated('http://localhost:3200', forged('1.1.1.1'))).toBe(true);
-        expect(gated('http://localhost:3200', forged('2.2.2.2'))).toBe(false);
+        expect(gated('http://localhost:4900', forged('1.1.1.1'))).toBe(true);
+        expect(gated('http://localhost:4900', forged('2.2.2.2'))).toBe(false);
     });
 });
 

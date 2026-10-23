@@ -131,9 +131,9 @@ export default defineConfig(({ isSsrBuild }) =>
             // proxied by prefix guesswork. `ws: true` is what carries the realtime upgrade.
             proxy:
             {
-                '/api': { target: 'http://127.0.0.1:3200', changeOrigin: false },
-                '/ws': { target: 'ws://127.0.0.1:3200', ws: true },
-                '/avatars': { target: 'http://127.0.0.1:3200', changeOrigin: false }
+                '/api': { target: 'http://127.0.0.1:4900', changeOrigin: false },
+                '/ws': { target: 'ws://127.0.0.1:4900', ws: true },
+                '/avatars': { target: 'http://127.0.0.1:4900', changeOrigin: false }
             },
             fs:
             {

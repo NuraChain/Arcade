@@ -5,7 +5,7 @@ const optional = (name: string, options: { secret?: boolean } = {}): ConfigVar<s
 
 export const SECRET_LEAST = 32;
 
-export const PORT = 3200;
+export const PORT = 4900;
 
 export const API_RATE = 600;
 
