@@ -31,6 +31,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'nfts.off': 'این سرور NFTها رو از بلاکچین نمی‌خونه.',
     'nfts.unreached': 'الان به {chain} دسترسی نداشتیم. یه کم دیگه دوباره امتحان کن.',
     'record.won': 'بردها',
+    'record.drawn': 'مساوی‌ها',
     'record.winRate': 'درصد برد',
     'record.percent': '٪{value}',
     'record.streak': 'برد پشت سر هم',

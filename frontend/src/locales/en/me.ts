@@ -28,6 +28,7 @@ export const me = {
     'nfts.off': 'This server does not read NFTs from the chain.',
     'nfts.unreached': '{chain} could not be reached just now. Try again in a moment.',
     'record.won': 'Won',
+    'record.drawn': 'Drawn',
     'record.winRate': 'Win rate',
     'record.percent': '{value}%',
     'record.streak': 'Streak',

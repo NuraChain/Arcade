@@ -342,6 +342,8 @@ describe('the seat plate every table draws', () =>
         expect(plateTag(locale, player(0, 'won'), true)).toEqual({ text: locale.t('card.won'), tone: 'live' });
         expect(plateTag(locale, player(0, 'void'), true)).toEqual({ text: locale.t('card.void'), tone: 'neutral' });
         expect(locale.t('card.void')).not.toBe('card.void');
+        expect(plateTag(locale, player(0, 'drawn'), true)).toEqual({ text: locale.t('card.drawn'), tone: 'neutral' });
+        expect(locale.t('card.drawn')).toBe('Draw');
         expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), true)).toBeNull();
     });
 

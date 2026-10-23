@@ -3,6 +3,8 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
 import MatchResult from '../src/components/games/match-result.component.azeroth';
+import Icon from '../src/icons/icon.component.azeroth';
+import '../src/icons/all.ts';
 import TableResult, { RESULT_OUT, RESULT_WAIT } from '../src/components/games/table-result.component.azeroth';
 import { rematchOf, type Rematch } from '../src/components/games/boards.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -353,6 +355,56 @@ describe('a Sit & Go, read by place', () =>
 
         expect(rows.map((row) => row.textContent?.match(/p\d/)?.[0])).toEqual(['p1', 'p3', 'p0', 'p5', 'p4', 'p2']);
         expect(rows.map((row) => row.querySelector('[data-place]')?.textContent?.trim())).toEqual(['1st', '2nd', '3rd', '4th', '5th', '6th']);
+    });
+});
+
+describe('a game that ended level', () =>
+{
+    const drawn = {
+        ...finished,
+        outcome: 'drawn',
+        winner: undefined,
+        players: [
+            { seat: 0, who: 'alex', timeouts: 0, result: 'drawn', place: 1, ratingBefore: 1300, ratingAfter: 1292 },
+            { seat: 1, who: 'omid.k', timeouts: 0, result: 'drawn', place: 1, ratingBefore: 1100, ratingAfter: 1108 }
+        ]
+    } as MatchView;
+
+    it('says it is a draw, with an equals sign and no trophy, and calls nothing too early or nobody\'s', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: drawn, mine: 0 }) as Rendered).container;
+
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('It’s a draw.');
+        expect(container.textContent).not.toContain(useLocale().t('match.over.void'));
+        expect(container.textContent).not.toContain(useLocale().t('match.over.voidLead'));
+        expect(container.textContent).not.toContain(useLocale().t('match.over.nobody'));
+        expect(container.querySelector('[class*="bg-gold/15"]'), 'the draw is drawn in gold').not.toBeNull();
+        expect(container.querySelector('[class*="bg-win/15"]'), 'a draw was given the winner\'s trophy').toBeNull();
+
+        const equal = renderTest(() => Icon({ name: 'equal' }) as unknown as Rendered).container.querySelector('svg')!.innerHTML;
+
+        expect(equal, 'the equals sign drew nothing to compare with').toContain('<line');
+        expect(container.querySelector('[class*="bg-gold/15"] svg')?.innerHTML, 'the draw is not marked with an equals sign').toBe(equal);
+    });
+
+    it('reads Draw on both rows, each with what the draw did to its rating', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: drawn, mine: 0 }) as Rendered).container;
+        const rows = [...container.querySelectorAll('li')].map((one) => one.textContent ?? '');
+
+        expect(rows).toHaveLength(2);
+        expect(rows.every((row) => row.includes('Draw'))).toBe(true);
+        expect(rows.some((row) => row.includes('−8') && row.includes('1,292'))).toBe(true);
+        expect(rows.some((row) => row.includes('+8') && row.includes('1,108'))).toBe(true);
+    });
+
+    it('says it in Persian', () =>
+    {
+        useLocale().setLocale('fa');
+        const container = renderTest(() => MatchResult({ match: drawn, mine: 0 }) as Rendered).container;
+
+        expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('مساوی شد.');
+        expect([...container.querySelectorAll('li')].every((row) => row.textContent?.includes('مساوی'))).toBe(true);
     });
 });
 

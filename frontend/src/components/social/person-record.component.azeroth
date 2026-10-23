@@ -213,7 +213,8 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                                             class={ () => [
                                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold',
                                                 row.result === 'won' ? 'bg-win/15 text-win'
-                                                    : (row.result === 'abandoned' ? 'bg-danger/15 text-danger' : 'bg-raised text-muted')
+                                                    : (row.result === 'drawn' ? 'bg-gold/15 text-gold'
+                                                        : (row.result === 'abandoned' ? 'bg-danger/15 text-danger' : 'bg-raised text-muted'))
                                             ].join(' ') }
                                         >
                                             { locale.t(`history.result.${ row.result }`) }

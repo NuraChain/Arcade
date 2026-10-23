@@ -67,7 +67,9 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived awaiting = money === undefined && props.stake?.money?.state === 'open';
 
-    derived voided = props.match.outcome !== 'won' && payees.length === 0 && !awaiting;
+    derived drawn = props.match.outcome === 'drawn';
+
+    derived voided = props.match.outcome !== 'won' && !drawn && payees.length === 0 && !awaiting;
 
     derived staffed = props.match.voided === true;
 
@@ -102,6 +104,11 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         if (voided)
         {
             return locale.t('match.over.void');
+        }
+
+        if (drawn)
+        {
+            return locale.t('match.over.drawn');
         }
 
         if (mineWon)
@@ -184,11 +191,11 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             <span
                 class={ () => [
                     'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-                    voided ? 'bg-raised text-muted' : 'bg-win/15 text-win'
+                    voided ? 'bg-raised text-muted' : (drawn ? 'bg-gold/15 text-gold' : 'bg-win/15 text-win')
                 ].join(' ') }
                 aria-hidden="true"
             >
-                <Icon name={ voided ? 'clock' : 'trophy' } size={ 22 } />
+                <Icon name={ voided ? 'clock' : (drawn ? 'equal' : 'trophy') } size={ 22 } />
             </span>
             <p class="min-w-0 flex-1 text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
         </div>

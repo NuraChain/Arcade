@@ -52,6 +52,76 @@ describe('two players who played it out', () =>
     });
 });
 
+describe('two players who finished level', () =>
+{
+    const plan = planOf({ seats: [seat({ seat: 0, place: 1 }), seat({ seat: 1, place: 1 })], after: 4, winners: [], forfeited: false });
+
+    it('is a draw for both, and the match is drawn with nobody named as its winner', () =>
+    {
+        expect(resultsOf(plan)).toEqual(['drawn', 'drawn']);
+        expect(plan.outcome).toBe('drawn');
+        expect(plan.winnerSeat).toBeNull();
+    });
+
+    it('rates it as a draw: level players stay where they were, and the weaker gains what the stronger gives', () =>
+    {
+        expect(movesOf(plan, evenly(2))).toEqual([{ seat: 0, before: 1200, after: 1200 }, { seat: 1, before: 1200, after: 1200 }]);
+        expect(movesOf(plan, new Map([[0, 1300], [1, 1100]]))).toEqual([{ seat: 0, before: 1300, after: 1292 }, { seat: 1, before: 1100, after: 1108 }]);
+    });
+
+    it('breaks a win streak, pays the finish in full, and credits nobody with a win', () =>
+    {
+        expect(plan.verdicts.map((one) => one.streak)).toEqual(['reset', 'reset']);
+        expect(plan.verdicts.map((one) => one.paid)).toEqual(['full', 'full']);
+        expect(plan.verdicts.map((one) => one.credit)).toEqual([false, false]);
+    });
+
+    it('draws two sides of partners as two sides, every partner moving as one', () =>
+    {
+        const teams = planOf({
+            seats: [
+                seat({ seat: 0, side: 0, place: 1 }),
+                seat({ seat: 1, side: 1, place: 1 }),
+                seat({ seat: 2, side: 0, place: 1 }),
+                seat({ seat: 3, side: 1, place: 1 })
+            ],
+            after: 4,
+            winners: [],
+            forfeited: false
+        });
+
+        expect(resultsOf(teams)).toEqual(['drawn', 'drawn', 'drawn', 'drawn']);
+        expect(teams.outcome).toBe('drawn');
+        expect(swings(teams, new Map([[0, 1300], [1, 1100], [2, 1300], [3, 1100]]))).toEqual(new Map([[0, -8], [1, 8], [2, -8], [3, 8]]));
+    });
+
+    it('is a loss, not a draw, for a seat level with one side and behind another', () =>
+    {
+        const field = planOf({ seats: [seat({ seat: 0, place: 1 }), seat({ seat: 1, place: 2 }), seat({ seat: 2, place: 2 })], after: 4, winners: [0], forfeited: false });
+
+        expect(resultsOf(field)).toEqual(['won', 'lost', 'lost']);
+        expect(field.outcome).toBe('won');
+    });
+
+    it('is a draw for two who shared the top of a field, and a loss for the one behind them both', () =>
+    {
+        const field = planOf({ seats: [seat({ seat: 0, place: 1 }), seat({ seat: 1, place: 1 }), seat({ seat: 2, place: 3 })], after: 4, winners: [], forfeited: false });
+
+        expect(resultsOf(field)).toEqual(['drawn', 'drawn', 'lost']);
+        expect(field.outcome).toBe('drawn');
+        expect(field.winnerSeat).toBeNull();
+    });
+
+    it('is no contest, not a draw, for a game nobody settled', () =>
+    {
+        const aborted = planOf({ seats: [seat({ seat: 0, place: 1, unsettled: true }), seat({ seat: 1, place: 1, unsettled: true })], after: 4, winners: [], forfeited: false });
+
+        expect(resultsOf(aborted)).toEqual(['void', 'void']);
+        expect(aborted.outcome).toBe('abandoned');
+        expect(movesOf(aborted, evenly(2))).toEqual([]);
+    });
+});
+
 describe('two players, one of whom stopped', () =>
 {
     it('is a rated loss for a quitter who had hardly played, and no contest for the other', () =>
