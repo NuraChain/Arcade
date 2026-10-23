@@ -139,6 +139,8 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.sending': 'داره فرستاده می‌شه',
     'chat.sent': 'فرستاده شد',
     'chat.unsent': 'فرستاده نشد',
+    'chat.unreadLine': 'پیام‌های خوانده‌نشده',
+    'chat.toLatest': 'برو به آخرین پیام',
     'chat.read': 'خونده شد',
     'chat.gameMenu': 'شروع یه بازی',
     'chat.invite.title': '{name} یه میز {game} باز کرد',

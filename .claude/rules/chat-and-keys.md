@@ -40,7 +40,9 @@ the thread opened, so a reply that arrived while the reader was looking at it st
 and the Chats tab said 1 for as long as the thread stayed open. The clean production run found it
 between two brand-new wallets. The page marks the thread again whenever the newest line from
 somebody else changes, while the page is seen (`visibilityState`) and scrolled to its newest line
-(`near`), and only once the thread has answered, so opening one is still one read. `markRead` holds
+(`near`), and only once the thread has answered and been placed (on its first unread line, or
+where the reader left it: `frontend/CLAUDE.md`, *A thread opens where the reader belongs*), so
+opening one is still one read and a reader put far above the end reads nothing below it. `markRead` holds
 nothing back: it dropped any mark within a second of the last, which is exactly when a quick reply
 comes. `chat-page.spec.ts` (*a line that arrives in the thread on screen*) holds it.
 

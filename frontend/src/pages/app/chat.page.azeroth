@@ -4,7 +4,7 @@ import { Link, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } f
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
-import { attachStick } from '../../lib/stick.ts';
+import { attachStick, isNearBottom } from '../../lib/stick.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { threadRows } from '../../lib/thread.ts';
@@ -24,6 +24,8 @@ import { plainOf } from '../../lib/markdown.ts';
 import { attempt } from '../../lib/attempt.ts';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
@@ -44,6 +46,18 @@ import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
 const CHATS = '/app/chats';
+
+/** How many lines a thread reads back to reach its first unread one before it opens on what it has. */
+const REACH_BACK = 200;
+
+/** How far below the thread's top its first unread line is put: clear of the day's pill that floats there. */
+const UNREAD_AT = 56;
+
+/**
+ * Where the reader left each thread they left above its end, as the distance from the end, for as
+ * long as the tab lives. A place and never what was said there.
+ */
+const places = new Map<string, number>();
 
 
 export default component ChatPage()
@@ -69,13 +83,70 @@ export default component ChatPage()
 
     let list: HTMLElement | null = null;
 
+    let unstick: (() => void) | null = null;
+
+    let placing = false;
+
+    let captured = false;
+
+    let asked = -1;
+
+    state listed = false;
+
+    state placed = false;
+
+    state waiting = 0;
+
+    /** Takes the scroller as it is drawn, which on a link opened cold is after the page mounted. */
+    const hold = (element: HTMLElement) =>
+    {
+        unstick?.();
+        list = element;
+
+        const keep = () => remember(element);
+        const off = attachStick(element, (value) => near = value);
+
+        element.addEventListener('scroll', keep, { passive: true });
+        unstick = () =>
+        {
+            off();
+            element.removeEventListener('scroll', keep);
+        };
+        listed = true;
+    };
+
+    /**
+     * Keeps where the reader is in this thread once it has been placed: how far above its end, or
+     * nothing at its end. Kept as they scroll rather than when the page goes, so whatever the page
+     * holds while it is torn down never decides it.
+     */
+    const remember = (element: HTMLElement) =>
+    {
+        if (!untrack(() => placed))
+        {
+            return;
+        }
+
+        if (isNearBottom(element))
+        {
+            places.delete(id);
+        }
+        else
+        {
+            places.set(id, element.scrollHeight - element.scrollTop);
+        }
+    };
+
     state near = true;
 
     state looking = typeof document === 'undefined' || document.visibilityState !== 'hidden';
 
-    derived id = params().id ?? '';
-
-    const opened = untrack(() => params().id ?? '');
+    /**
+     * The conversation this page was built for, and never the address after it. The router builds a
+     * page for each conversation; one that followed the address turned "not found" while it was
+     * being left, and drew its thread again when the reader came straight back to it.
+     */
+    const id = untrack(() => params().id ?? '');
 
     derived conversation = chat.conversation(id) ?? null;
 
@@ -155,7 +226,6 @@ export default component ChatPage()
     mount
     {
         const release = shell.claimTitle(() => title);
-        const unstick = list === null ? null : attachStick(list, (value) => near = value);
         const look = () => looking = document.visibilityState !== 'hidden';
 
         document.addEventListener('visibilitychange', look);
@@ -166,7 +236,7 @@ export default component ChatPage()
             unstick?.();
             release();
 
-            if (untrack(chat.openId) === opened)
+            if (untrack(chat.openId) === id)
             {
                 chat.closeThread();
             }
@@ -183,6 +253,134 @@ export default component ChatPage()
             list.scrollTop = list.scrollHeight;
         }
     }
+
+    effect
+    {
+        if (!captured && conversation !== null)
+        {
+            captured = true;
+            waiting = untrack(() => chat.unread(id));
+        }
+    }
+
+    /** How many of the lines held are somebody else's, which is what the server counts as unread. */
+    derived theirs = messages.filter((message) => message.from !== me).length;
+
+    /**
+     * The first line the reader had not read when the thread opened, counted back from the end the
+     * way the server counts what is unread; the first line held when there are fewer than that.
+     */
+    derived firstUnread = ((): string | null =>
+    {
+        if (waiting <= 0)
+        {
+            return null;
+        }
+
+        let count = 0;
+
+        for (let index = messages.length - 1; index >= 0; index -= 1)
+        {
+            if (messages[index].from !== me)
+            {
+                count += 1;
+
+                if (count === waiting)
+                {
+                    return messages[index].id;
+                }
+            }
+        }
+
+        return messages[0]?.id ?? null;
+    })();
+
+    /**
+     * Puts the thread where the reader belongs once its lines are drawn: on the first unread line,
+     * read back for as far as `REACH_BACK`, or where they left it, or at the end. Nothing is marked
+     * read until then.
+     */
+    effect
+    {
+        const count = messages.length;
+        const short = waiting > theirs;
+        const busy = chat.threadLoading() || chat.earlierLoading();
+        const more = chat.hasEarlier();
+        const ready = listed;
+
+        if (placing || !ready || list === null || count === 0 || busy)
+        {
+            return;
+        }
+
+        if (short && more && count < REACH_BACK)
+        {
+            if (asked !== count)
+            {
+                asked = count;
+                chat.earlier();
+            }
+            return;
+        }
+
+        placing = true;
+
+        requestAnimationFrame(() =>
+        {
+            const target = list;
+
+            if (target === null)
+            {
+                return;
+            }
+
+            const line = target.querySelector<HTMLElement>('[data-unread]');
+            const kept = places.get(id);
+
+            if (line !== null)
+            {
+                target.scrollTop += line.getBoundingClientRect().top - target.getBoundingClientRect().top - UNREAD_AT;
+            }
+            else
+            {
+                target.scrollTop = kept === undefined ? target.scrollHeight : target.scrollHeight - kept;
+            }
+
+            near = isNearBottom(target);
+            placed = true;
+            remember(target);
+        });
+    }
+
+    derived away = placed && !near;
+
+    derived below = chat.unread(id);
+
+    derived toLatest = below > 0 ? `${ locale.t('chat.toLatest') } (${ locale.plural('common.unread', below) })` : locale.t('chat.toLatest');
+
+    const toEnd = () =>
+    {
+        list?.scrollTo({ top: list.scrollHeight, behavior: untrack(device.reducedMotion) ? 'auto' : 'smooth' });
+    };
+
+    /** A line drawn at the end once the thread is placed rises into it; one read in above does not. */
+    const arrive = (element: HTMLElement, lineId: string) =>
+    {
+        if (!untrack(() => placed) || untrack(device.reducedMotion) || typeof element.animate !== 'function')
+        {
+            return;
+        }
+
+        if (untrack(() => messages[messages.length - 1]?.id) !== lineId)
+        {
+            return;
+        }
+
+        element.animate(
+            [{ opacity: 0, transform: 'translateY(0.5rem)' }, { opacity: 1, transform: 'none' }],
+            { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+        );
+    };
 
     effect
     {
@@ -260,7 +458,7 @@ export default component ChatPage()
 
     effect
     {
-        if (readable !== '' && !chat.threadLoading() && looking && near && heard !== marked)
+        if (readable !== '' && placed && !chat.threadLoading() && looking && near && heard !== marked)
         {
             marked = heard;
             chat.markRead(readable);
@@ -500,105 +698,131 @@ export default component ChatPage()
                                 </Show>
                             </header>
 
-                            <div ref={ (element) => list = element } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
-                                <div class="mt-auto flex w-full flex-col pb-3 pt-4">
-                                    <Show when={ !chat.hasEarlier() && stop === null && !seal.loading() && messages.length > 0 }>
-                                        { () =>
-                                            <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
-                                                <SealNotice stop={ null } />
-                                            </div>
-                                        }
-                                    </Show>
+                            <div class="relative flex min-h-0 flex-1 flex-col">
+                                <div ref={ hold } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
+                                    <div class="mt-auto flex w-full flex-col pb-3 pt-4">
+                                        <Show when={ !chat.hasEarlier() && stop === null && !seal.loading() && messages.length > 0 }>
+                                            { () =>
+                                                <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
+                                                    <SealNotice stop={ null } />
+                                                </div>
+                                            }
+                                        </Show>
 
-                                    <Show when={ chat.hasEarlier() }>
-                                        { () => <LoadMore label={ locale.t('chat.earlier') } icon="history" loading={ chat.earlierLoading() } class="pb-2" onMore={ showEarlier } /> }
-                                    </Show>
+                                        <Show when={ chat.hasEarlier() }>
+                                            { () => <LoadMore label={ locale.t('chat.earlier') } icon="history" loading={ chat.earlierLoading() } class="pb-2" onMore={ showEarlier } /> }
+                                        </Show>
 
-                                    <Switch
-                                        fallback={
-                                            <For each={ rows } key={ (row) => row.message.id } let={ row }>
-                                                <div class={ () => row.first ? 'pt-3' : 'pt-0.5' }>
-                                                    <Show when={ row.day ? row.message.at : null } let={ at }>
-                                                        <DayDivider at={ at } />
-                                                    </Show>
-                                                    <MessageBubble
-                                                        message={ row.message }
-                                                        me={ me }
-                                                        first={ row.first }
-                                                        last={ row.last }
-                                                        avatar={ crowd }
-                                                        onActions={ actions }
-                                                        onReply={ quiet ? undefined : reply }
-                                                        onReact={ quiet ? undefined : react }
-                                                        onRetry={ retry }
-                                                        onDiscard={ discard }
-                                                        quoteOf={ quoteOf }
-                                                        onJump={ jump }
-                                                        replying={ chat.replyTo(id)?.id === row.message.id }
-                                                    />
-                                                </div>
-                                            </For>
-                                        }
-                                    >
-                                        <Match when={ loading }>
-                                            <div class="flex w-full flex-col gap-4 py-4" aria-hidden="true">
-                                                <div class="flex animate-pulse flex-col items-start gap-1.5 motion-reduce:animate-none">
-                                                    <span class="block h-10 w-44 rounded-[1.125rem] bg-field"></span>
-                                                    <span class="block h-10 w-28 rounded-[1.125rem] bg-field"></span>
-                                                </div>
-                                                <div class="flex animate-pulse flex-col items-end gap-1.5 motion-reduce:animate-none">
-                                                    <span class="block h-10 w-52 rounded-[1.125rem] bg-accent-fill/25"></span>
-                                                    <span class="block h-10 w-24 rounded-[1.125rem] bg-accent-fill/25"></span>
-                                                </div>
-                                            </div>
-                                        </Match>
-                                        <Match when={ lost }>
-                                            <div class="flex flex-col items-center gap-3 py-16 text-center">
-                                                <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
-                                                <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
-                                                    { locale.t('common.retry') }
-                                                </Button>
-                                            </div>
-                                        </Match>
-                                        <Match when={ silent }>
-                                            <div class="flex flex-col items-center gap-3 py-16 text-center">
-                                                <Show
-                                                    when={ group }
-                                                    let={ crew }
-                                                    fallback={
-                                                        <Show when={ other } let={ peer } fallback={ <AvatarGroup people={ others } size="md" max={ 3 } /> }>
-                                                            <Avatar person={ peer } size="xl" />
+                                        <Switch
+                                            fallback={
+                                                <For each={ rows } key={ (row) => row.message.id } let={ row }>
+                                                    <div ref={ (element) => arrive(element, row.message.id) } class={ () => row.first ? 'pt-3' : 'pt-0.5' }>
+                                                        <Show when={ row.day ? row.message.at : null } let={ at }>
+                                                            <DayDivider at={ at } />
                                                         </Show>
-                                                    }
-                                                >
-                                                    <GroupCrest crest={ crew.crest } hue={ crew.hue } size="lg" />
-                                                </Show>
-                                                <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
-                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : (stop === null ? 'chat.empty' : 'chat.emptyShut')) }</p>
-                                                <Show when={ stop === null && !seal.loading() }>
-                                                    { () =>
-                                                        <div class="mt-1 max-w-md rounded-tile border border-line bg-field/80 text-start">
-                                                            <SealNotice stop={ null } />
-                                                        </div>
-                                                    }
-                                                </Show>
-                                            </div>
-                                        </Match>
-                                    </Switch>
+                                                        <Show when={ row.message.id === firstUnread ? firstUnread : null } let={ unreadAt }>
+                                                            <div class="my-2 flex items-center gap-3" role="separator" aria-label={ locale.t('chat.unreadLine') } data-unread={ unreadAt }>
+                                                                <span class="h-px flex-1 bg-accent/40" aria-hidden="true"></span>
+                                                                <span class="rounded-full bg-accent/15 px-3 py-1 text-ui-2xs font-semibold text-accent" aria-hidden="true">{ locale.t('chat.unreadLine') }</span>
+                                                                <span class="h-px flex-1 bg-accent/40" aria-hidden="true"></span>
+                                                            </div>
+                                                        </Show>
+                                                        <MessageBubble
+                                                            message={ row.message }
+                                                            me={ me }
+                                                            first={ row.first }
+                                                            last={ row.last }
+                                                            avatar={ crowd }
+                                                            onActions={ actions }
+                                                            onReply={ quiet ? undefined : reply }
+                                                            onReact={ quiet ? undefined : react }
+                                                            onRetry={ retry }
+                                                            onDiscard={ discard }
+                                                            quoteOf={ quoteOf }
+                                                            onJump={ jump }
+                                                            replying={ chat.replyTo(id)?.id === row.message.id }
+                                                        />
+                                                    </div>
+                                                </For>
+                                            }
+                                        >
+                                            <Match when={ loading }>
+                                                <div class="flex w-full flex-col gap-4 py-4" aria-hidden="true">
+                                                    <div class="flex animate-pulse flex-col items-start gap-1.5 motion-reduce:animate-none">
+                                                        <span class="block h-10 w-44 rounded-[1.125rem] bg-field"></span>
+                                                        <span class="block h-10 w-28 rounded-[1.125rem] bg-field"></span>
+                                                    </div>
+                                                    <div class="flex animate-pulse flex-col items-end gap-1.5 motion-reduce:animate-none">
+                                                        <span class="block h-10 w-52 rounded-[1.125rem] bg-accent-fill/25"></span>
+                                                        <span class="block h-10 w-24 rounded-[1.125rem] bg-accent-fill/25"></span>
+                                                    </div>
+                                                </div>
+                                            </Match>
+                                            <Match when={ lost }>
+                                                <div class="flex flex-col items-center gap-3 py-16 text-center">
+                                                    <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
+                                                    <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
+                                                        { locale.t('common.retry') }
+                                                    </Button>
+                                                </div>
+                                            </Match>
+                                            <Match when={ silent }>
+                                                <div class="flex flex-col items-center gap-3 py-16 text-center">
+                                                    <Show
+                                                        when={ group }
+                                                        let={ crew }
+                                                        fallback={
+                                                            <Show when={ other } let={ peer } fallback={ <AvatarGroup people={ others } size="md" max={ 3 } /> }>
+                                                                <Avatar person={ peer } size="xl" />
+                                                            </Show>
+                                                        }
+                                                    >
+                                                        <GroupCrest crest={ crew.crest } hue={ crew.hue } size="lg" />
+                                                    </Show>
+                                                    <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
+                                                    <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : (stop === null ? 'chat.empty' : 'chat.emptyShut')) }</p>
+                                                    <Show when={ stop === null && !seal.loading() }>
+                                                        { () =>
+                                                            <div class="mt-1 max-w-md rounded-tile border border-line bg-field/80 text-start">
+                                                                <SealNotice stop={ null } />
+                                                            </div>
+                                                        }
+                                                    </Show>
+                                                </div>
+                                            </Match>
+                                        </Switch>
 
-                                    <Show when={ typing.length > 0 }>
-                                        { () =>
-                                            <div class="flex items-end gap-2 pt-3">
-                                                <span class="flex items-center gap-1 rounded-[1.125rem] rounded-es-[0.3rem] border border-line bg-field px-3.5 py-3" aria-hidden="true">
-                                                    <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
-                                                    <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_0.15s_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
-                                                    <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_0.3s_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
-                                                </span>
-                                                <span class="sr-only">{ locale.text(people.byHandle(typing[0])?.displayName ?? { en: typing[0], fa: typing[0] }) } { locale.t('chats.typing') }</span>
-                                            </div>
-                                        }
-                                    </Show>
+                                        <Show when={ typing.length > 0 }>
+                                            { () =>
+                                                <div class="flex items-end gap-2 pt-3">
+                                                    <span class="flex items-center gap-1 rounded-[1.125rem] rounded-es-[0.3rem] border border-line bg-field px-3.5 py-3" aria-hidden="true">
+                                                        <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
+                                                        <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_0.15s_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
+                                                        <span class="inline-1.5 block-1.5 rounded-[9999px] bg-muted animate-[typing-bob_1.2s_var(--ease-ui)_0.3s_infinite] motion-reduce:animate-none motion-reduce:opacity-70"></span>
+                                                    </span>
+                                                    <span class="sr-only">{ locale.text(people.byHandle(typing[0])?.displayName ?? { en: typing[0], fa: typing[0] }) } { locale.t('chats.typing') }</span>
+                                                </div>
+                                            }
+                                        </Show>
+                                    </div>
                                 </div>
+
+                                <Show when={ away }>
+                                    { () =>
+                                        <button
+                                            type="button"
+                                            class="absolute bottom-3 end-3 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-lifted text-text shadow-lg shadow-black/30 transition-colors hover:bg-raised sm:end-5"
+                                            aria-label={ toLatest }
+                                            data-jump
+                                            onClick={ toEnd }
+                                        >
+                                            <Icon name="chevron-down" size={ 20 } />
+                                            <span class="absolute -end-1 -top-1.5">
+                                                <Badge count={ below } tone="accent" />
+                                            </span>
+                                        </button>
+                                    }
+                                </Show>
                             </div>
 
                             <Show when={ quiet }>

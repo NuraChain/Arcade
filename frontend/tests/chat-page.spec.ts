@@ -459,3 +459,451 @@ describe('the toasts beside a thread', () =>
         expect(Number.isFinite(toast.duration), 'it leaves by itself').toBe(true);
     });
 });
+
+describe('where a thread opens, and the way back to its end', () =>
+{
+    const scrollerOf = (container: HTMLElement) => container.querySelector<HTMLElement>('#chat-thread .overflow-y-auto')!;
+
+    const quietThread = () => server.conversations.find((row) => row.unread === 0 && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text'))!;
+
+    /** Lays `name` over `HTMLElement.prototype` and answers what puts back whatever was there. */
+    const over = (name: string, descriptor: PropertyDescriptor) =>
+    {
+        const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
+
+        Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor });
+
+        return () =>
+        {
+            if (own === undefined)
+            {
+                Reflect.deleteProperty(HTMLElement.prototype, name);
+            }
+            else
+            {
+                Object.defineProperty(HTMLElement.prototype, name, own);
+            }
+        };
+    };
+
+    /**
+     * Gives the thread's scroller a browser's layout, which happy-dom has none of: as tall as its
+     * view until its lines are drawn, and a scroll event whenever its position is moved.
+     */
+    const laidOut = (height = 3000, view = 600) =>
+    {
+        const tall = (element: HTMLElement) => element.classList.contains('overflow-y-auto');
+        const tops = new WeakMap<HTMLElement, number>();
+        const undo = [
+            over('scrollHeight', {
+                get(this: HTMLElement)
+                {
+                    if (!tall(this))
+                    {
+                        return 0;
+                    }
+
+                    return this.querySelector('[data-message]') === null ? view : height;
+                }
+            }),
+            over('clientHeight', {
+                get(this: HTMLElement)
+                {
+                    return tall(this) ? view : 0;
+                }
+            }),
+            over('scrollTop', {
+                get(this: HTMLElement)
+                {
+                    return tops.get(this) ?? 0;
+                },
+                set(this: HTMLElement, value: number)
+                {
+                    const moved = (tops.get(this) ?? 0) !== value;
+
+                    tops.set(this, value);
+
+                    if (moved && tall(this))
+                    {
+                        queueMicrotask(() => this.dispatchEvent(new Event('scroll')));
+                    }
+                }
+            })
+        ];
+
+        return () => undo.forEach((one) => one());
+    };
+
+    const scrolledTo = (scroller: HTMLElement, top: number) =>
+    {
+        scroller.scrollTop = top;
+        scroller.dispatchEvent(new Event('scroll'));
+    };
+
+    /** Puts the "Unread messages" line `offset` down the thread's content, as the screen sees it scrolled. */
+    const unreadAt = (offset: number) => over('getBoundingClientRect', {
+        writable: true,
+        value(this: HTMLElement)
+        {
+            const top = this.hasAttribute('data-unread') ? offset - (this.closest<HTMLElement>('.overflow-y-auto')?.scrollTop ?? 0) : 0;
+
+            return { top, bottom: top + 20, left: 0, right: 0, width: 0, height: 20, x: 0, y: top } as DOMRect;
+        }
+    });
+
+    it('draws "Unread messages" over the first line the reader had not read, and keeps it there', async () =>
+    {
+        const thread = server.conversations.find((row) => row.unread > 1)!;
+        const others = server.messages.filter((one) => one.conversationId === thread.id && one.from !== 'alex');
+        const first = others[others.length - thread.unread];
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-unread]')).not.toBeNull(), { timeout: 4000 });
+
+        const line = container.querySelector('[data-unread]')!;
+
+        expect(line.getAttribute('aria-label')).toBe(useLocale().t('chat.unreadLine'));
+        expect(line.getAttribute('data-unread'), 'over the first unread line').toBe(first.id);
+        expect(line.parentElement?.querySelector('[data-message]')?.getAttribute('data-message'), 'in that line\'s row').toBe(first.id);
+        expect(container.querySelectorAll('[data-unread]')).toHaveLength(1);
+
+        await useChat().refresh();
+        await settle();
+
+        expect(container.querySelector('[data-unread]'), 'the same line once the thread is read again').toBe(line);
+    });
+
+    it('draws no such line in a thread with nothing unread', async () =>
+    {
+        const container = opened(quietThread().id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        expect(container.querySelector('[data-unread]')).toBeNull();
+    });
+
+    it('reads back to reach a first unread line older than one page', async () =>
+    {
+        const thread = server.conversations.find((row) => row.id === 'c-reza')!;
+        const template = server.messages.find((one) => one.conversationId === thread.id && one.from !== 'alex')!;
+
+        server.messages.unshift(...Array.from({ length: 60 }, (_, index) => ({ ...template, id: `older-${ index }` })));
+
+        const theirs = server.messages.filter((one) => one.conversationId === thread.id && one.from !== 'alex');
+
+        thread.unread = theirs.length - 5;
+        await useChat().refresh();
+
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-unread]')?.getAttribute('data-unread')).toBe(theirs[5].id), { timeout: 4000 });
+
+        expect(server.calls.filter((one) => one === 'chat.messages').length, 'read back past the first page').toBeGreaterThan(1);
+    });
+
+    it('offers the way back to the end once the reader has left it, wearing what waits there', async () =>
+    {
+        const thread = quietThread();
+        const restore = laidOut();
+
+        try
+        {
+            const container = opened(thread.id, 'sidebar');
+            const jump = () => container.querySelector<HTMLButtonElement>('[data-jump]');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            expect(jump(), 'at the end there is nothing to go back to').toBeNull();
+
+            const scroller = scrollerOf(container);
+
+            scrolledTo(scroller, 400);
+
+            await vi.waitFor(() => expect(jump()).not.toBeNull());
+
+            expect(jump()!.getAttribute('aria-label')).toBe(useLocale().t('chat.toLatest'));
+
+            thread.unread = 3;
+            await useChat().refresh();
+            await settle();
+
+            await vi.waitFor(() => expect(jump()?.textContent).toContain('3'));
+            expect(jump()!.getAttribute('aria-label')).toBe(`${ useLocale().t('chat.toLatest') } (${ useLocale().plural('common.unread', 3) })`);
+
+            const went: unknown[] = [];
+
+            scroller.scrollTo = ((options: ScrollToOptions) => went.push(options)) as typeof scroller.scrollTo;
+            fire(jump()!, 'click');
+
+            expect(went).toEqual([expect.objectContaining({ top: 3000 })]);
+
+            scrolledTo(scroller, 2400);
+
+            await vi.waitFor(() => expect(jump(), 'gone once the reader is at the end').toBeNull());
+        }
+        finally
+        {
+            restore();
+        }
+    });
+
+    it('keeps the place the reader left a thread at, and opens it there again', async () =>
+    {
+        const thread = quietThread();
+        const restore = laidOut();
+
+        try
+        {
+            let container = opened(thread.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            scrolledTo(scrollerOf(container), 1000);
+            await settle();
+            cleanup();
+
+            container = opened(thread.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await vi.waitFor(() => expect(scrollerOf(container).scrollTop, 'where it was left, 2000 from the end').toBe(1000), { timeout: 4000 });
+
+            scrolledTo(scrollerOf(container), 2400);
+            await settle();
+            cleanup();
+
+            container = opened(thread.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await vi.waitFor(() => expect(scrollerOf(container).scrollTop, 'left at its end, it opens at its end').toBe(3000), { timeout: 4000 });
+        }
+        finally
+        {
+            restore();
+        }
+    });
+
+    it('keeps its thread while it is being left, and its place for a reader who comes straight back', async () =>
+    {
+        const thread = quietThread();
+        const restore = laidOut();
+        const table: Route[] = [
+            { path: '/app/chats', component: (): HTMLElement => document.createElement('div') },
+            { path: '/app/chats/:id', component: (): HTMLElement => ChatPage() as HTMLElement }
+        ];
+
+        useDevice().override('phone');
+
+        const router = createRouter({ routes: table, history: createMemoryHistory(`/app/chats/${ thread.id }`), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({ transition: () => 'page-forward', transitionDuration: 400 }) }) as Rendered);
+        const latest = () => [...container.querySelectorAll<HTMLElement>('#chat-thread .overflow-y-auto')].at(-1)!;
+
+        try
+        {
+            await vi.waitFor(() => expect(container.querySelector('#chat-thread [data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            scrolledTo(latest(), 1000);
+            await settle();
+
+            router.navigate('/app/chats');
+            await settle();
+
+            expect(container.textContent, 'the thread being left is never called missing').not.toContain(useLocale().t('chat.notFound'));
+
+            router.navigate(`/app/chats/${ thread.id }`);
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            await settle();
+
+            await vi.waitFor(() => expect(latest().scrollTop, 'where it was left, 2000 from the end').toBe(1000), { timeout: 4000 });
+        }
+        finally
+        {
+            restore();
+        }
+    });
+
+    it('opens on a line that came after the reader left it, not where they left it', async () =>
+    {
+        const row = server.conversations.find((one) => one.last !== undefined && one.last.kind === 'text' && one.last.from !== 'alex')!;
+        const line = server.messages.find((one) => one.id === row.last!.id)!;
+
+        server.messages = server.messages.filter((one) => one.id !== line.id);
+        row.last = server.messages.filter((one) => one.conversationId === row.id).at(-1);
+        row.unread = 0;
+        await useChat().refresh();
+
+        const undo = [laidOut(), unreadAt(500)];
+
+        try
+        {
+            let container = opened(row.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            scrolledTo(scrollerOf(container), 1000);
+            await settle();
+            cleanup();
+
+            server.messages.push(line);
+            row.last = line;
+            row.unread = 1;
+            await useChat().refresh();
+
+            container = opened(row.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unread]')).not.toBeNull(), { timeout: 4000 });
+            await vi.waitFor(() => expect(scrollerOf(container).scrollTop, 'on the line that came, clear of the day\'s pill at the top').toBe(444), { timeout: 4000 });
+
+            scrolledTo(scrollerOf(container), 2400);
+            await settle();
+        }
+        finally
+        {
+            undo.forEach((one) => one());
+        }
+    });
+
+    it('marks nothing read while the reader is placed on an unread line far above the end', async () =>
+    {
+        const thread = server.conversations.find((row) => row.unread > 1)!;
+        const reads = () => server.calls.filter((one) => one === 'chat.read').length;
+        const undo = [
+            over('scrollHeight', {
+                get(this: HTMLElement)
+                {
+                    if (!this.classList.contains('overflow-y-auto'))
+                    {
+                        return 0;
+                    }
+
+                    return this.querySelector('[data-message]') === null ? 600 : 3000;
+                }
+            }),
+            over('clientHeight', {
+                get(this: HTMLElement)
+                {
+                    return this.classList.contains('overflow-y-auto') ? 600 : 0;
+                }
+            }),
+            unreadAt(1500)
+        ];
+
+        try
+        {
+            const container = opened(thread.id, 'sidebar');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-unread]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+            await new Promise((resolve) => setTimeout(resolve, 40));
+
+            expect(reads(), 'nothing below the line has been seen').toBe(0);
+            expect(container.querySelector('[data-jump]'), 'and the way down to it is offered').not.toBeNull();
+
+            scrolledTo(scrollerOf(container), 2400);
+
+            await vi.waitFor(() => expect(reads(), 'read once the reader reaches the end').toBe(1));
+        }
+        finally
+        {
+            undo.forEach((one) => one());
+        }
+    });
+
+    /** Counts the animations started on the thread's own elements, and answers what puts `animate` back. */
+    const watchRising = () =>
+    {
+        const raised: Element[] = [];
+        const restore = over('animate', {
+            writable: true,
+            value(this: HTMLElement)
+            {
+                raised.push(this);
+                return { cancel: () => undefined, finished: Promise.resolve() } as unknown as Animation;
+            }
+        });
+
+        return { risen: () => raised.filter((one) => one.closest('#chat-thread') !== null), restore };
+    };
+
+    it('raises a line that arrives at the end, and none it opened with or read in above', async () =>
+    {
+        const thread = quietThread();
+        const template = server.messages.find((one) => one.conversationId === thread.id && one.kind === 'text')!;
+        const { risen, restore } = watchRising();
+
+        server.messages.unshift(...Array.from({ length: 50 }, (_, index) => ({ ...template, id: `older-${ index }` })));
+
+        try
+        {
+            const container = opened(thread.id, 'phone');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+            await new Promise((resolve) => setTimeout(resolve, 40));
+
+            expect(risen(), 'nothing rises as the thread opens').toEqual([]);
+
+            useChat().earlier();
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message="older-0"]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            expect(risen(), 'nothing rises as older lines are read in above').toEqual([]);
+
+            void useChat().send(thread.id, 'just now');
+
+            await vi.waitFor(() => expect(risen()).toHaveLength(1));
+
+            expect(risen()[0].querySelector('[data-message]')?.textContent).toContain('just now');
+        }
+        finally
+        {
+            restore();
+        }
+    });
+
+    it('raises nothing for a reader who asked for less motion', async () =>
+    {
+        const thread = quietThread();
+        const { risen, restore } = watchRising();
+        const heard = new Set<(event: MediaQueryListEvent) => void>();
+        const real = window.matchMedia.bind(window);
+        const motion = {
+            matches: false,
+            media: '(prefers-reduced-motion: reduce)',
+            addEventListener: (_: string, listener: (event: MediaQueryListEvent) => void) => heard.add(listener),
+            removeEventListener: (_: string, listener: (event: MediaQueryListEvent) => void) => heard.delete(listener)
+        } as unknown as MediaQueryList;
+        const asked = (still: boolean) => heard.forEach((listener) => listener({ matches: still } as MediaQueryListEvent));
+        const media = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => (query.includes('reduced-motion') ? motion : real(query)));
+        const stop = useDevice().start();
+
+        try
+        {
+            asked(true);
+
+            const container = opened(thread.id, 'phone');
+
+            await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            void useChat().send(thread.id, 'quietly');
+
+            await vi.waitFor(() => expect(container.querySelector('#chat-thread')?.textContent).toContain('quietly'));
+            await settle();
+
+            expect(risen()).toEqual([]);
+        }
+        finally
+        {
+            asked(false);
+            stop();
+            media.mockRestore();
+            restore();
+        }
+    });
+});

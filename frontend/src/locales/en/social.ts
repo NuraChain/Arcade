@@ -136,6 +136,8 @@ export const social = {
     'chat.sending': 'Sending',
     'chat.sent': 'Sent',
     'chat.unsent': 'Not sent',
+    'chat.unreadLine': 'Unread messages',
+    'chat.toLatest': 'Go to the latest message',
     'chat.read': 'Read',
     'chat.gameMenu': 'Start a game',
     'chat.invite.title': '{name} opened a {game} table',

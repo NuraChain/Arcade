@@ -312,6 +312,28 @@ list; the same `Link` at the top of the row's markup was not. So `ChatListItem` 
 changes its classes, and the tooltip goes round the face inside it. `chat-page.spec.ts` (*on a
 desktop, the thread takes its pane*) holds the widths, the fold, the device's memory and the heading.
 
+**A thread opens where the reader belongs, and shows the way back to its end.** It always opened
+at its end, so somebody with twelve unread lines was shown the last of them and none of the first.
+It opens on its first unread line now, under "Unread messages", counted back from the end the way
+the server counts unread (every line that is not the reader's own) and reading back up to two
+hundred lines to reach it (`REACH_BACK`) and putting it 56px down, clear of the day's pill that
+floats at the top (`UNREAD_AT`); otherwise where the reader last left it, for as long as the tab
+lives (`places`: a distance from the end, never what was said there, kept as the reader scrolls once
+the thread is placed); otherwise at its end.
+Nothing is marked read until the thread is placed, so a reader put far above the end has read
+nothing below it. Scrolled up, a round button at the foot goes to the end and wears how many unread
+lines wait there. A line that arrives at the end rises into place (180 ms, opacity and a small
+lift), and none the thread opened with or read in above; nothing moves for somebody who asked for
+less motion. The scroller is taken as it is drawn (`hold`), because it is drawn only once the
+conversation is known: on a link opened cold that is after `mount`, and the old `attachStick` there
+attached to nothing, so the page believed the reader was at the end for as long as it stayed open.
+And the page is about the conversation it was built for, never the address after it (`id` is read
+once): a page that is being left still follows the address until it is gone, and this one, reading
+`params()` as it went, turned "No such conversation." while it faded out and, when the reader came
+straight back, drew its thread again, read the empty box as its end and lost the place. The walk
+found that; the spec plays the app's own kind of leave. `chat-page.spec.ts` (*where a thread opens,
+and the way back to its end*) holds all of it, with a browser's layout laid over happy-dom's.
+
 A route with a new parameter is a NEW page here - `chats/:id` remounts on every switch - so the pane
 is rebuilt each time somebody opens a conversation. The desktop has no transition, so nothing flashes;
 what would be lost is the reader's place, and the pane keeps its tab and its scroll position in module
