@@ -1,0 +1,1066 @@
+import { onCleanup, untrack } from 'azerothjs';
+
+import TableResult, { RESULT_OUT, RESULT_WAIT } from './table-result.component.azeroth';
+import ChessRail, { type TrayGroup } from './chess-rail.component.azeroth';
+import { missesOf, plateTag, withMisses } from './plate-tag.ts';
+import Button from '../ui/button.component.azeroth';
+import { chessOf } from '../../data/match.ts';
+import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { legalMoves, type Move } from '../../../../backend/src/domains/match/chess/moves.ts';
+import { EMPTY, kindOf, nameOf as squareName, type Colour, type Kind, type Position, type Promotion } from '../../../../backend/src/domains/match/chess/board.ts';
+import { sanOf } from '../../../../backend/src/domains/match/chess/san.ts';
+import { feltOf, leadOf, step, takenBy, type Felt, type Told } from '../../game/chess-felt.ts';
+import { costOf, createChessTable, type ChessFacts, type ChessTable, type Lay } from '../../game/board/chess-table.ts';
+import { SIZE, boxOf, cellOf, placeOf, squareAt, type Foot } from '../../game/chess-layout.ts';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import type { Ctx } from '../../game/stage/director.ts';
+import { createPresenter, type Presenter, type Sight } from '../../game/stage/presenter.ts';
+import { createStage } from '../../game/stage/stage.ts';
+import type { MatchView } from '../../api.ts';
+import type { Rematch, Staked } from './boards.ts';
+
+interface Picked
+{
+    at: string;
+    square: number;
+}
+
+interface Asking
+{
+    at: string;
+    from: number;
+    to: number;
+}
+
+interface Pressed
+{
+    at: string;
+    told: Told;
+}
+
+interface Drag
+{
+    id: number;
+    square: number;
+    x: number;
+    y: number;
+    carried: boolean;
+    was: boolean;
+}
+
+interface Stop
+{
+    key: string;
+    says: string;
+    place: string;
+}
+
+const NOWHERE: ReadonlyMap<number, boolean> = new Map();
+
+const NO_STOPS: Stop[] = [];
+
+const PROMOTIONS: readonly Promotion[] = ['q', 'r', 'b', 'n'];
+
+const TRAY_ORDER: readonly Kind[] = ['q', 'r', 'b', 'n', 'p'];
+
+const WALKS: Record<string, number | undefined> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+const SLOP = 10;
+
+const MOUSE_SLOP = 4;
+
+const FINGER = 60;
+
+const CLAIM_SLACK = 150;
+
+const CLAIM_AGAIN = 1000;
+
+const CLAIMS_MOST = 4;
+
+/** How many of the answer's moves the reader's own move already showed: a decline it made, and the move itself. */
+const covered = (moves: readonly Told[], mine: Told) =>
+{
+    const first = moves[0]?.e === 'decline' ? 1 : 0;
+    const move = moves[first];
+
+    return move?.e === 'move' && move.from === mine.from && move.to === mine.to && move.promotion === mine.promotion ? first + 1 : null;
+};
+
+const toldOf = (move: Move, seat: number, legal: readonly Move[]): Told => ({
+    e: 'move',
+    seat,
+    from: move.from,
+    to: move.to,
+    piece: move.piece,
+    ...(move.captured === undefined ? {} : { captured: move.captured }),
+    ...(move.promotion === undefined ? {} : { promotion: move.promotion }),
+    ...(move.castle === undefined ? {} : { castle: move.castle }),
+    ...(move.enPassant === undefined ? {} : { enPassant: true }),
+    san: sanOf(move, legal)
+});
+
+const clampTo = (point: { x: number; y: number }) => ({ x: Math.min(Math.max(point.x, 0), SIZE - 1), y: Math.min(Math.max(point.y, 0), SIZE - 1) });
+
+export default component ChessBoard(props: { match: MatchView; events: EventBatch; starting?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; speech?: Record<string, string>; turnMs?: number; onPresenting?: (busy: boolean) => void })
+{
+    const locale = useLocale();
+    const board = useBoard();
+    const device = useDevice();
+    const people = usePeople();
+    const settings = useSettings();
+
+    state picked: Picked | null = null;
+
+    state asking: Asking | null = null;
+
+    state pressed: Pressed | null = null;
+
+    state facts: ChessFacts | null = null;
+
+    state presenting = false;
+
+    state says = '';
+
+    state rover = '';
+
+    state carrying = false;
+
+    state missed = untrack(() => missesOf(props.match.players));
+
+    derived game = props.match;
+
+    derived at = `${ game.id }:${ game.rev }`;
+
+    derived view = chessOf(game);
+
+    derived over = game.finishedAt !== undefined;
+
+    derived mine = game.mine;
+
+    derived whiteSeat = view?.white ?? 0;
+
+    derived colour: Colour | null = mine === undefined ? null : (mine === whiteSeat ? 'w' : 'b');
+
+    derived foot: Foot = colour ?? 'w';
+
+    derived viewer = mine ?? whiteSeat;
+
+    derived live = view !== null && !over && view.over === undefined;
+
+    derived position: Position | null = view === null
+        ? null
+        : { board: view.board, turn: view.turn, castling: view.castling, ep: view.ep ?? null, halfmove: view.halfmove, fullmove: view.fullmove };
+
+    derived myTurn = live && colour !== null && view !== null && view.turn === colour;
+
+    derived waiting = pressed !== null && pressed.at === at;
+
+    derived legal = myTurn && !waiting && position !== null ? legalMoves(position) : [];
+
+    derived movable = new Set(legal.map((move) => move.from));
+
+    derived chosen = picked !== null && picked.at === at && movable.has(picked.square) ? picked.square : null;
+
+    derived reach = ((): ReadonlyMap<number, boolean> =>
+    {
+        if (chosen === null)
+        {
+            return NOWHERE;
+        }
+
+        const out = new Map<number, boolean>();
+
+        for (const move of legal)
+        {
+            if (move.from === chosen)
+            {
+                out.set(move.to, move.captured !== undefined);
+            }
+        }
+
+        return out;
+    })();
+
+    derived hints = settings.settings().hintMoves;
+
+    derived aimed = hints ? reach : NOWHERE;
+
+    derived promoting = asking !== null && asking.at === at ? asking : null;
+
+    derived chooser = promoting !== null;
+
+    derived offer = view?.offer ?? null;
+
+    derived ply = view?.ply ?? 0;
+
+    derived clocked = view?.clock !== undefined;
+
+    derived shownMen = facts?.men ?? (view === null ? [] : feltOf(view).men);
+
+    derived shownTurn: Colour | null = live && view !== null ? (facts?.turn ?? view.turn) : null;
+
+    derived inCheck = facts?.check !== null && facts?.check !== undefined;
+
+    derived result = over && !presenting;
+
+    derived barOpen = view !== null && !result;
+
+    derived ready = view !== null;
+
+    derived lead = leadOf(shownMen);
+
+    derived seats = [1 - viewer, viewer];
+
+    const colourAt = (seat: number): Colour => (seat === whiteSeat ? 'w' : 'b');
+
+    const movesBy = (seat: number) => (colourAt(seat) === 'w' ? Math.ceil(ply / 2) : Math.floor(ply / 2));
+
+    derived answering = live && mine !== undefined && offer !== null && offer !== mine && !waiting;
+
+    derived offerable = live && mine !== undefined && offer === null && view !== null && movesBy(mine) > 0 && (view.offered[mine] ?? -1) < movesBy(mine);
+
+    derived whoAt = (seat: number) => game.players.find((one) => one.seat === seat)?.who ?? '';
+
+    derived nameOf = (seat: number) =>
+    {
+        if (seat === mine)
+        {
+            return locale.t('match.you');
+        }
+
+        const who = whoAt(seat);
+        const person = people.byHandle(who);
+
+        return person === null ? who : locale.text(person.displayName);
+    };
+
+    const pieceName = (piece: string) => locale.t(`chess.piece.${ kindOf(piece) }` as never);
+
+    const sightNow = (): Sight<Lay> | null =>
+    {
+        if (view === null)
+        {
+            return null;
+        }
+
+        const felt: Felt = feltOf(view);
+        const ahead = pressed !== null && pressed.at === at ? step(felt, pressed.told) : felt;
+
+        return {
+            id: game.id,
+            rev: game.rev,
+            seat: mine ?? null,
+            view: { ...ahead, foot, mated: view.over?.reason === 'checkmate' ? view.turn : null }
+        };
+    };
+
+    let root: HTMLElement | null = null;
+    let layer: HTMLElement | null = null;
+    let cursor: HTMLElement | null = null;
+    let table: ChessTable | null = null;
+    let presenter: Presenter<Told> | null = null;
+    let resultStands = false;
+    let sound: SoundHandle | null = null;
+    let drag: Drag | null = null;
+    let byKey = false;
+    let stopClaim: () => void = () => undefined;
+
+    const caughtUp = () =>
+    {
+        if (presenter?.presenting() !== true)
+        {
+            missed = missesOf(untrack(() => game.players));
+        }
+    };
+
+    effect
+    {
+        const batch = props.events;
+
+        void game.id;
+        void game.rev;
+
+        untrack(() =>
+        {
+            presenter?.see(batch);
+            caughtUp();
+        });
+    }
+
+    effect
+    {
+        const spot = chosen;
+
+        untrack(() => table?.hold(spot));
+    }
+
+    effect
+    {
+        const targets = aimed;
+
+        untrack(() => table?.aim(targets));
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => sound?.setEnabled(on));
+    }
+
+    const sayMove = (move: Told, check: boolean) =>
+    {
+        if (move.e !== 'move' || move.from === undefined || move.to === undefined || move.piece === undefined || move.seat === undefined)
+        {
+            return '';
+        }
+
+        const name = nameOf(move.seat);
+        const from = squareName(move.from);
+        const to = squareName(move.to);
+        let line: string;
+
+        if (move.castle !== undefined)
+        {
+            line = locale.t(move.castle === 'k' ? 'chess.said.castle.k' : 'chess.said.castle.q', { name });
+        }
+        else if (move.promotion !== undefined)
+        {
+            line = locale.t('chess.said.promote', { name, to, piece: locale.t(`chess.piece.${ move.promotion }` as never) });
+        }
+        else
+        {
+            line = locale.t(move.captured === undefined ? 'chess.said.move' : 'chess.said.take', { name, piece: pieceName(move.piece), from, to });
+        }
+
+        if (move.mate === true)
+        {
+            return `${ line } ${ locale.t('chess.said.mate') }`;
+        }
+
+        return check ? `${ line } ${ locale.t('chess.said.check') }` : line;
+    };
+
+    effect
+    {
+        const now = facts;
+
+        if (now?.played !== null && now?.played !== undefined)
+        {
+            const line = sayMove(now.played, now.check !== null);
+
+            untrack(() =>
+            {
+                says = line;
+            });
+        }
+    }
+
+    mount
+    {
+        let unwatch: () => void = () => undefined;
+
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        if (layer !== null)
+        {
+            const clock = runtime().clock;
+            const report = (error: unknown) => console.error(error);
+            const rig = createStage({ clock, quiet: () => device.reducedMotion(), report });
+
+            table = createChessTable({
+                host: layer,
+                stage: rig,
+                sound: () => sound,
+                feel: (kind) =>
+                {
+                    if (untrack(() => mine) !== undefined)
+                    {
+                        haptic(kind);
+                    }
+                },
+                onFacts: (now) =>
+                {
+                    facts = now;
+                }
+            });
+            presenter = createPresenter<Lay, Told>({ stage: rig, clock, table, sight: () => untrack(sightNow), report, lead: () => (resultStands ? RESULT_OUT : 0), due: () => (untrack(() => over) ? RESULT_WAIT : null) });
+            presenter.frame(root);
+            unwatch = presenter.watch((busy) =>
+            {
+                presenting = busy;
+                props.onPresenting?.(busy);
+
+                if (!busy)
+                {
+                    caughtUp();
+                }
+            });
+
+            untrack(() =>
+            {
+                presenter!.see(props.events);
+                table!.hold(chosen);
+                table!.aim(aimed);
+            });
+        }
+
+        return () =>
+        {
+            unwatch();
+            props.onPresenting?.(false);
+            presenter?.dispose();
+            table?.dispose();
+            presenter = null;
+            table = null;
+            sound?.dispose();
+            sound = null;
+        };
+    }
+
+    const claim = (key: string, tries: number) =>
+    {
+        if (untrack(() => at) !== key || !untrack(() => live))
+        {
+            return;
+        }
+
+        void board.play({ kind: 'chess', verb: 'flag' }, true).then((outcome) =>
+        {
+            if (outcome === 'failed' && tries + 1 < CLAIMS_MOST)
+            {
+                stopClaim = runtime().clock.after(CLAIM_AGAIN, () => claim(key, tries + 1));
+            }
+        });
+    };
+
+    effect
+    {
+        const due = live && clocked && colour !== null && !myTurn && game.remainingMs !== undefined ? game.remainingMs : null;
+        const key = at;
+
+        untrack(() =>
+        {
+            stopClaim();
+            stopClaim = due === null ? () => undefined : runtime().clock.after(due + CLAIM_SLACK, () => claim(key, 0));
+        });
+    }
+
+    onCleanup(() => stopClaim());
+
+    const mend = async (ctx: Ctx) =>
+    {
+        const sight = untrack(sightNow);
+
+        if (table !== null && sight !== null)
+        {
+            await table.settle(sight, ctx);
+        }
+    };
+
+    const send = async (move: Move) =>
+    {
+        const seat = untrack(() => mine);
+        const rev = untrack(() => game.rev);
+        const key = untrack(() => at);
+
+        if (seat === undefined || untrack(board.busy))
+        {
+            return;
+        }
+
+        const told = toldOf(move, seat, untrack(() => legal));
+
+        picked = null;
+        asking = null;
+        pressed = { at: key, told };
+        haptic('tick');
+        presenter?.predict({ rev, covers: (moves) => covered(moves, told) });
+        presenter?.act(async (ctx) =>
+        {
+            if (table !== null && !(await table.advance(told)))
+            {
+                await mend(ctx);
+            }
+        }, costOf(told));
+
+        const outcome = await board.play({ kind: 'chess', verb: 'move', from: move.from, to: move.to, ...(move.promotion === undefined ? {} : { promotion: move.promotion }) });
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            pressed = null;
+            sound?.play('deny', { gain: 0.5 });
+            haptic('deny');
+            presenter?.predict(null);
+            presenter?.act((ctx) => mend(ctx));
+        }
+    };
+
+    const go = (from: number, to: number) =>
+    {
+        const ways = untrack(() => legal).filter((move) => move.from === from && move.to === to);
+
+        if (ways.length === 0)
+        {
+            return false;
+        }
+
+        if (ways.length > 1)
+        {
+            asking = { at: untrack(() => at), from, to };
+            haptic('tick');
+
+            return true;
+        }
+
+        void send(ways[0]);
+
+        return true;
+    };
+
+    const promote = (promotion: Promotion) =>
+    {
+        const open = untrack(() => promoting);
+        const move = open === null ? undefined : untrack(() => legal).find((one) => one.from === open.from && one.to === open.to && one.promotion === promotion);
+
+        if (move !== undefined)
+        {
+            void send(move);
+        }
+    };
+
+    const cancelPromotion = () =>
+    {
+        asking = null;
+        picked = null;
+    };
+
+    const choose = (square: number | null) =>
+    {
+        if (square === null || untrack(board.busy))
+        {
+            picked = null;
+
+            return;
+        }
+
+        const current = untrack(() => chosen);
+
+        if (current !== null && current !== square && go(current, square))
+        {
+            return;
+        }
+
+        if (untrack(() => movable).has(square))
+        {
+            picked = { at: untrack(() => at), square };
+            haptic('select');
+
+            return;
+        }
+
+        picked = null;
+    };
+
+    const boardAt = (event: PointerEvent) =>
+    {
+        const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+
+        return { x: (event.clientX - box.left) / box.width * SIZE, y: (event.clientY - box.top) / box.height * SIZE };
+    };
+
+    const handAt = (event: PointerEvent) =>
+    {
+        const point = boardAt(event);
+
+        return event.pointerType === 'touch' ? { x: point.x, y: point.y - FINGER } : point;
+    };
+
+    const squareOf = (point: { x: number; y: number }) => squareAt(point.x, point.y, untrack(() => foot));
+
+    const press = (event: PointerEvent) =>
+    {
+        byKey = false;
+
+        if (event.button > 0 || (drag !== null && !event.isPrimary) || untrack(() => chooser))
+        {
+            return;
+        }
+
+        drag = null;
+        carrying = false;
+
+        const square = squareOf(boardAt(event));
+
+        if (square === null || untrack(board.busy) || !untrack(() => movable).has(square))
+        {
+            return;
+        }
+
+        const was = untrack(() => chosen) === square;
+
+        picked = { at: untrack(() => at), square };
+        drag = { id: event.pointerId, square, x: event.clientX, y: event.clientY, carried: false, was };
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    };
+
+    const carry = (event: PointerEvent) =>
+    {
+        if (drag === null || drag.id !== event.pointerId)
+        {
+            return;
+        }
+
+        if (!drag.carried)
+        {
+            const slop = event.pointerType === 'mouse' ? MOUSE_SLOP : SLOP;
+
+            if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < slop || table?.grab(drag.square) !== true)
+            {
+                return;
+            }
+
+            drag.carried = true;
+            carrying = true;
+            haptic('tick');
+        }
+
+        const hand = handAt(event);
+
+        table?.drag(hand.x, hand.y);
+        table?.hover(squareOf(clampTo(hand)));
+    };
+
+    const lift = (event: PointerEvent) =>
+    {
+        const held = drag;
+
+        if (event.button > 0 || (held !== null && held.id !== event.pointerId))
+        {
+            return;
+        }
+
+        drag = null;
+        carrying = false;
+
+        if (held === null)
+        {
+            choose(squareOf(boardAt(event)));
+
+            return;
+        }
+
+        if (!held.carried)
+        {
+            if (held.was && squareOf(boardAt(event)) === held.square)
+            {
+                picked = null;
+            }
+
+            return;
+        }
+
+        const square = squareOf(clampTo(handAt(event)));
+        const reached = square !== null && square !== held.square && untrack(() => reach).has(square);
+
+        if (!reached)
+        {
+            table?.release(square !== null && square !== held.square);
+
+            return;
+        }
+
+        const ways = untrack(() => legal).filter((move) => move.from === held.square && move.to === square);
+
+        if (ways.length > 1)
+        {
+            table?.release(false);
+            asking = { at: untrack(() => at), from: held.square, to: square };
+
+            return;
+        }
+
+        void send(ways[0]);
+    };
+
+    const quit = (event: PointerEvent) =>
+    {
+        if (drag !== null && drag.id === event.pointerId)
+        {
+            if (drag.carried)
+            {
+                table?.release(false);
+            }
+
+            drag = null;
+            carrying = false;
+        }
+    };
+
+    const answer = async (verb: 'accept' | 'decline') =>
+    {
+        haptic('select');
+        await board.play({ kind: 'chess', verb });
+    };
+
+    const offerDraw = async () =>
+    {
+        haptic('select');
+
+        if (await board.play({ kind: 'chess', verb: 'offer' }) === 'now')
+        {
+            says = locale.t('chess.offer.sent');
+        }
+    };
+
+    derived stops = ((): Stop[] =>
+    {
+        if (!myTurn || waiting || chooser || view === null)
+        {
+            return NO_STOPS;
+        }
+
+        const order = (one: number, two: number) =>
+        {
+            const a = cellOf(one, foot);
+            const b = cellOf(two, foot);
+
+            return a.row - b.row || a.col - b.col;
+        };
+
+        if (chosen === null)
+        {
+            return [...movable].sort(order).map((square) => ({
+                key: `at-${ square }`,
+                says: locale.t('chess.stop.lift', { piece: pieceName(view.board[square]), square: squareName(square) }),
+                place: placeOf(square, foot)
+            }));
+        }
+
+        const piece = pieceName(view.board[chosen]);
+        const lifted = chosen;
+
+        return [...new Set([...reach.keys(), lifted])].sort(order).map((square) =>
+        {
+            const victim = view.board[square];
+            const takes = reach.get(square) === true;
+            const says = square === lifted
+                ? locale.t('chess.stop.back', { piece, square: squareName(square) })
+                : (takes && victim !== EMPTY
+                    ? locale.t('chess.stop.take', { piece, square: squareName(square), victim: pieceName(victim) })
+                    : locale.t(takes ? 'chess.stop.passing' : 'chess.stop.move', { piece, square: squareName(square) }));
+
+            return { key: `at-${ square }`, says, place: placeOf(square, foot) };
+        });
+    })();
+
+    derived roving = stops.some((stop) => stop.key === rover) ? rover : (stops[0]?.key ?? '');
+
+    derived bound = chosen === null ? roving : (stops.find((stop) => stop.key !== `at-${ chosen }`)?.key ?? roving);
+
+    const stopAt = (key: string) => cursor?.querySelector<HTMLElement>(`[data-stop="${ key }"]`) ?? null;
+
+    const stopOf = (target: EventTarget | null) => (target instanceof HTMLElement ? target.closest<HTMLElement>('.chess-stop')?.dataset.stop ?? null : null);
+
+    const refocus = () =>
+    {
+        const held = document.activeElement;
+        const free = held === null || held === document.body || cursor?.contains(held) === true;
+        const question = root?.querySelector<HTMLElement>('.chess-promote, .chess-ask') ?? null;
+
+        if (question !== null)
+        {
+            if (free)
+            {
+                (question.querySelector<HTMLElement>('.chess-promote-piece, button') ?? question).focus({ preventScroll: true });
+            }
+
+            return;
+        }
+
+        if (free)
+        {
+            stopAt(untrack(() => bound))?.focus({ preventScroll: true });
+        }
+    };
+
+    const use = (key: string) =>
+    {
+        const square = Number(key.slice(3));
+
+        byKey = true;
+
+        if (untrack(() => chosen) === square)
+        {
+            picked = null;
+        }
+        else
+        {
+            choose(square);
+        }
+    };
+
+    const onKey = (event: KeyboardEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key === null)
+        {
+            return;
+        }
+
+        if (event.repeat && (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape'))
+        {
+            event.preventDefault();
+
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ')
+        {
+            event.preventDefault();
+            use(key);
+
+            return;
+        }
+
+        if (event.key === 'Escape' && untrack(() => chosen) !== null)
+        {
+            event.preventDefault();
+            byKey = true;
+            picked = null;
+
+            return;
+        }
+
+        const keys = untrack(() => stops).map((stop) => stop.key);
+        const walk = WALKS[event.key];
+        const ends = event.key === 'Home' ? keys[0] : (event.key === 'End' ? keys[keys.length - 1] : undefined);
+        const next = ends ?? (walk === undefined ? undefined : keys[(keys.indexOf(key) + walk + keys.length) % keys.length]);
+
+        if (next !== undefined)
+        {
+            event.preventDefault();
+            stopAt(next)?.focus({ preventScroll: true });
+        }
+    };
+
+    const onFocus = (event: FocusEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null)
+        {
+            rover = key;
+        }
+    };
+
+    const onClick = (event: MouseEvent) =>
+    {
+        const key = stopOf(event.target);
+
+        if (key !== null && event.detail === 0)
+        {
+            use(key);
+        }
+    };
+
+    const onAskKey = (event: KeyboardEvent) =>
+    {
+        byKey = true;
+
+        if (event.key === 'Escape' && untrack(() => chooser))
+        {
+            event.preventDefault();
+            cancelPromotion();
+        }
+    };
+
+    effect
+    {
+        void stops;
+        void chooser;
+        void answering;
+
+        untrack(() =>
+        {
+            if (byKey)
+            {
+                queueMicrotask(refocus);
+            }
+        });
+    }
+
+    const tagOf = (seat: number) =>
+    {
+        const seated = game.players.find((one) => one.seat === seat);
+        const player = seated === undefined ? undefined : withMisses(seated, missed);
+
+        if (player !== undefined && (!over || result))
+        {
+            const tag = plateTag(locale, player, over);
+
+            if (tag !== null)
+            {
+                return tag;
+            }
+        }
+
+        return live && offer === seat ? { text: locale.t('chess.offered'), tone: 'gold' as const } : null;
+    };
+
+    const trayOf = (side: Colour) =>
+    {
+        const taken = takenBy(shownMen, side);
+        const theirs = side === 'w' ? 'b' : 'w';
+
+        return TRAY_ORDER
+            .map((kind) => ({ key: kind, name: `${ theirs }${ kind }`, count: taken.filter((piece) => kindOf(piece) === kind).length }))
+            .filter((group) => group.count > 0)
+            .map((group): TrayGroup => ({ key: group.key, name: group.name, nth: Array.from({ length: group.count }, (_, index) => index) }));
+    };
+
+    const aheadOf = (seat: number) =>
+    {
+        const by = colourAt(seat) === 'w' ? lead : -lead;
+
+        return by > 0 ? by : 0;
+    };
+
+    const runningAt = (seat: number) => live && view !== null && view.turn === colourAt(seat);
+
+    const firstAt = (seat: number) => runningAt(seat) && view?.moved[seat] !== true;
+
+    const msAt = (seat: number) => (runningAt(seat) && !firstAt(seat) && game.remainingMs !== undefined ? game.remainingMs : (view?.clock?.left[seat] ?? 0));
+
+    derived promotions = promoting === null
+        ? []
+        : PROMOTIONS.map((promotion, index) =>
+        {
+            const { col, row } = cellOf(promoting.to, foot);
+            const toward = row < 4 ? 1 : -1;
+
+            return { promotion, name: `${ colour ?? 'w' }${ promotion }`, place: boxOf(col, row + toward * index) };
+        });
+
+    derived turnSaid = ((): string =>
+    {
+        if (view === null || !live)
+        {
+            return '';
+        }
+
+        if (myTurn)
+        {
+            return locale.t(inCheck ? 'chess.check.you' : 'chess.turn.you');
+        }
+
+        return locale.t('match.turn.theirs', { name: nameOf(view.turn === 'w' ? whiteSeat : 1 - whiteSeat) });
+    })();
+
+    <div data-rev={ props.match.rev } data-presenting={ presenting ? 'true' : undefined } class="table-stage chess-stage" ref={ (element) => root = element }>
+        <div class="table-grid chess-grid">
+            <Show when={ ready }>
+                { () =>
+                    <span class="contents">
+                        <div class="table-fit">
+                            <div class="table-surface chess-board">
+                                <div
+                                    class={ () => [ 'chess-wood', carrying ? 'cursor-grabbing' : (myTurn ? 'cursor-pointer' : ''), myTurn ? 'touch-none' : 'touch-manipulation' ].filter(Boolean).join(' ') }
+                                    data-drags={ myTurn ? 'true' : undefined }
+                                    onPointerDown={ press }
+                                    onPointerMove={ carry }
+                                    onPointerUp={ lift }
+                                    onPointerCancel={ quit }
+                                >
+                                    <div class="chess-layer" aria-hidden="true" ref={ (element) => layer = element }></div>
+                                </div>
+
+                                <Show when={ mine !== undefined }>
+                                    { () =>
+                                        <div class="chess-cursor" role="group" aria-label={ locale.t('chess.board') } ref={ (element) => cursor = element } onKeyDown={ onKey } onFocusIn={ onFocus } onClick={ onClick }>
+                                            <For each={ stops } key={ (stop) => stop.key } let={ stop }>
+                                                <span class="chess-stop" role="button" tabindex={ stop.key === roving ? 0 : -1 } aria-label={ stop.says } data-stop={ stop.key } style={ stop.place }></span>
+                                            </For>
+                                        </div>
+                                    }
+                                </Show>
+
+                                <Show when={ chooser }>
+                                    { () =>
+                                        <div class="chess-promote" role="group" aria-label={ locale.t('chess.promote.title') } onKeyDown={ onAskKey }>
+                                            <button type="button" class="chess-promote-veil" tabindex="-1" aria-label={ locale.t('common.cancel') } onClick={ cancelPromotion }></button>
+                                            <For each={ promotions } key={ (one) => one.promotion } let={ one }>
+                                                <button type="button" class="chess-promote-piece" data-piece={ one.name } style={ one.place } aria-label={ locale.t(`chess.promote.${ one.promotion }` as never) } onClick={ () => promote(one.promotion) }></button>
+                                            </For>
+                                        </div>
+                                    }
+                                </Show>
+
+                                <Show when={ answering }>
+                                    { () =>
+                                        <div class="chess-ask" dir={ locale.dir() } role="group" aria-labelledby="chess-ask-title" tabindex="-1" onKeyDown={ onAskKey }>
+                                            <p class="chess-ask-title" id="chess-ask-title">{ locale.t('chess.offer.ask', { name: nameOf(1 - viewer) }) }</p>
+                                            <div class="flex flex-wrap justify-center gap-2">
+                                                <Button variant="primary" size="md" loading={ board.busy() } onClick={ () => void answer('accept') }>
+                                                    { locale.t('chess.offer.accept') }
+                                                </Button>
+                                                <Button variant="secondary" size="md" disabled={ board.busy() } onClick={ () => void answer('decline') }>
+                                                    { locale.t('chess.offer.decline') }
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    }
+                                </Show>
+                            </div>
+
+                            <For each={ seats } key={ (seat) => seat } let={ seat }>
+                                <div class="contents">
+                                    <ChessRail
+                                        who={ whoAt(seat) }
+                                        name={ nameOf(seat) }
+                                        side={ colourAt(seat) }
+                                        me={ seat === viewer }
+                                        turn={ shownTurn === colourAt(seat) }
+                                        tag={ tagOf(seat)?.text }
+                                        tone={ tagOf(seat)?.tone }
+                                        bubble={ props.speech?.[whoAt(seat)] }
+                                        tray={ trayOf(colourAt(seat)) }
+                                        ahead={ aheadOf(seat) }
+                                        offerable={ seat === mine && offerable }
+                                        busy={ board.busy() }
+                                        onOffer={ () => void offerDraw() }
+                                        clocked={ clocked }
+                                        running={ runningAt(seat) }
+                                        first={ firstAt(seat) }
+                                        ms={ msAt(seat) }
+                                        remainingMs={ game.remainingMs }
+                                        over={ over }
+                                        yours={ seat === mine }
+                                    />
+                                </div>
+                            </For>
+                        </div>
+                    </span>
+                }
+            </Show>
+
+            <Show when={ barOpen }>
+                { () =>
+                    <section class="table-bar chess-bar">
+                        <p class="sr-only" aria-live="polite">{ says }</p>
+                        <p class="sr-only">{ turnSaid }</p>
+                    </section>
+                }
+            </Show>
+        </div>
+
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
+    </div>
+}

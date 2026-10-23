@@ -151,6 +151,11 @@
     --nard-dark: #2A1D17;
     --nard-dark-rim: #7A5A45;
 
+    --chess-frame: #4A2C18;
+    --chess-inlay: #C9A25A;
+    --chess-light: #F6EEDC;
+    --chess-ink: #1A120B;
+
     --poker-felt: #1F6B52;
     --poker-rail: #3A2416;
 }

@@ -26,6 +26,8 @@ export type BackgammonBoard = Extract<MatchView['view'], { kind: 'backgammon' }>
 
 export type PokerBoard = Extract<MatchView['view'], { kind: 'poker' }>;
 
+export type ChessBoard = Extract<MatchView['view'], { kind: 'chess' }>;
+
 export type LudoSeat = LudoBoard['seats'][number];
 
 /** One chair, with both halves of it: who is sitting there and what their colour is doing. */
@@ -53,6 +55,11 @@ export function backgammonOf(match: Pick<MatchView, 'view'>)
 export function pokerOf(match: Pick<MatchView, 'view'>)
 {
     return match.view.kind === 'poker' ? match.view : null;
+}
+
+export function chessOf(match: Pick<MatchView, 'view'>)
+{
+    return match.view.kind === 'chess' ? match.view : null;
 }
 
 export function inPlay(match: Pick<MatchView, 'finishedAt' | 'mine' | 'players' | 'view'>)

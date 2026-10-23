@@ -1,0 +1,166 @@
+import { onCleanup, untrack } from 'azerothjs';
+
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+
+export const TENTHS_UNDER = 20_000;
+
+export const LOW_UNDER = 10_000;
+
+const TICK_FROM = 5;
+
+const HIGH_FROM = 2;
+
+const WARN_AT = 10;
+
+/**
+ * One side's bank, as a chess clock shows it. The side to move counts down from what the server
+ * said it had when the answer arrived, on the product clock, never the device's; the other side's
+ * bank stands still. Tenths show under twenty seconds, and the face turns red under ten.
+ */
+export default component ChessClock(props: { ms: number; running: boolean; yours?: boolean; onOut?: () => void })
+{
+    const locale = useLocale();
+    const settings = useSettings();
+
+    let sound: SoundHandle | null = null;
+
+    let told: number | null = null;
+
+    let out = false;
+
+    let stop: () => void = () => undefined;
+
+    state now = runtime().clock.now();
+
+    state from = runtime().clock.now();
+
+    effect
+    {
+        void props.ms;
+        void props.running;
+
+        const at = runtime().clock.now();
+
+        untrack(() =>
+        {
+            from = at;
+            now = at;
+            out = false;
+        });
+    }
+
+    derived left = props.running ? Math.max(0, props.ms - (now - from)) : Math.max(0, props.ms);
+
+    derived fine = props.running && left < TENTHS_UNDER;
+
+    mount
+    {
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        return () =>
+        {
+            sound?.dispose();
+            sound = null;
+        };
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => sound?.setEnabled(on));
+    }
+
+    effect
+    {
+        const running = props.running;
+        const every = fine ? 100 : 1000;
+
+        untrack(() =>
+        {
+            stop();
+            stop = running ? runtime().clock.every(every, () => now = runtime().clock.now()) : () => undefined;
+        });
+    }
+
+    onCleanup(() => stop());
+
+    effect
+    {
+        const ms = left;
+        const yours = props.yours === true && props.running;
+
+        untrack(() =>
+        {
+            if (props.running && ms <= 0 && !out)
+            {
+                out = true;
+                props.onOut?.();
+            }
+
+            const seconds = Math.ceil(ms / 1000);
+
+            if (!yours || seconds > WARN_AT || seconds === told)
+            {
+                if (!yours)
+                {
+                    told = null;
+                }
+
+                return;
+            }
+
+            told = seconds;
+
+            if (seconds === WARN_AT)
+            {
+                sound?.play('tick', { urgent: true });
+                haptic('warn');
+            }
+            else if (seconds <= TICK_FROM && seconds >= 1)
+            {
+                sound?.play(seconds <= HIGH_FROM ? 'tick-hi' : 'tick', { urgent: true });
+            }
+        });
+    }
+
+    const two = (value: number) => locale.n(value, { minimumIntegerDigits: 2, useGrouping: false });
+
+    derived face = ((): string =>
+    {
+        const total = left;
+
+        if (fine)
+        {
+            const tenths = Math.floor(total / 100);
+
+            return `${ locale.n(0) }:${ two(Math.floor(tenths / 10)) }.${ locale.n(tenths % 10) }`;
+        }
+
+        const seconds = Math.ceil(total / 1000);
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const rest = seconds % 60;
+
+        return hours > 0
+            ? `${ locale.n(hours) }:${ two(minutes) }:${ two(rest) }`
+            : `${ locale.n(minutes) }:${ two(rest) }`;
+    })();
+
+    derived said = ((): string =>
+    {
+        const seconds = Math.ceil(left / 1000);
+
+        return locale.t('chess.clock', { minutes: locale.n(Math.floor(seconds / 60)), seconds: locale.n(seconds % 60) });
+    })();
+
+    derived low = left < LOW_UNDER;
+
+    <span class="chess-clock" role="timer" aria-label={ said } data-running={ props.running ? 'true' : undefined } data-low={ low ? 'true' : undefined }>
+        <span class="chess-clock-face" aria-hidden="true">{ face }</span>
+    </span>
+}

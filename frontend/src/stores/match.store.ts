@@ -87,9 +87,10 @@ export interface BoardApi
      *
      * `roll` and `move` above are ludo's, spelled here because ludo's board is the one that calls
      * them; a second game's board composes its own play and hands it over rather than growing two
-     * more methods on a store every game shares.
+     * more methods on a store every game shares. A play the board sends by itself (a flag claimed
+     * when the other side's clock reaches nought) is `quiet`: a refusal of it is nobody's to read.
      */
-    play(what: MatchPlay): Promise<Outcome>;
+    play(what: MatchPlay, quiet?: boolean): Promise<Outcome>;
 
     resign(): Promise<Outcome>;
 
@@ -446,7 +447,7 @@ export const useBoard = createStore((): BoardApi =>
         }
     };
 
-    const act = async (play: MatchPlay | null): Promise<Outcome> =>
+    const act = async (play: MatchPlay | null, quiet = false): Promise<Outcome> =>
     {
         const current = untrack(board);
 
@@ -478,6 +479,11 @@ export const useBoard = createStore((): BoardApi =>
         catch (error)
         {
             await revalidate().catch(() => undefined);
+
+            if (quiet)
+            {
+                return 'failed';
+            }
 
             const word = refusalOf(error);
 
@@ -556,7 +562,7 @@ export const useBoard = createStore((): BoardApi =>
 
         move: async (piece) => await act({ kind: 'ludo', verb: 'move', piece }),
 
-        play: async (what) => await act(what),
+        play: async (what, quiet) => await act(what, quiet),
 
         resign: async () => await act(null),
 

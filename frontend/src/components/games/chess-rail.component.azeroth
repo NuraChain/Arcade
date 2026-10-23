@@ -1,0 +1,99 @@
+import ChessClock from './chess-clock.component.azeroth';
+import TablePlate from './table-plate.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { Colour } from '../../../../backend/src/domains/match/chess/board.ts';
+import type { PlateTone } from './plate-tag.ts';
+
+export interface TrayGroup
+{
+    key: string;
+    name: string;
+    nth: number[];
+}
+
+/**
+ * One side of a chess table: the player, what they have taken and how far ahead that leaves them,
+ * and their clock. It is the walnut rail the board stands between, as a backgammon table's seat is.
+ */
+export default component ChessRail(props: {
+    who: string;
+    name: string;
+    side: Colour;
+    me: boolean;
+    turn: boolean;
+    tag?: string;
+    tone?: PlateTone;
+    bubble?: string;
+    tray: TrayGroup[];
+    ahead: number;
+    offerable: boolean;
+    busy: boolean;
+    onOffer: () => void;
+    clocked: boolean;
+    running: boolean;
+    first: boolean;
+    ms: number;
+    remainingMs?: number;
+    over: boolean;
+    yours: boolean;
+})
+{
+    const locale = useLocale();
+
+    derived leads = props.ahead > 0;
+
+    derived lead = `+${ locale.n(props.ahead) }`;
+
+    derived leadSaid = props.ahead > 0 ? locale.t('chess.lead', { count: locale.n(props.ahead) }) : '';
+
+    derived offering = props.offerable;
+
+    derived clocked = props.clocked;
+
+    derived firstClock = (props.first || (!props.clocked && props.running)) && !props.over;
+
+    derived counting = props.running && !props.first && props.remainingMs !== undefined;
+
+    derived ms = props.ms;
+
+    derived sideSaid = locale.t(props.side === 'w' ? 'chess.colour.w' : 'chess.colour.b');
+
+    <div class="chess-rail" data-me={ props.me ? 'true' : undefined }>
+        <TablePlate
+            who={ props.who }
+            name={ props.name }
+            turn={ props.turn }
+            tag={ props.tag }
+            tone={ props.tone }
+            bubble={ props.bubble }
+            below={ !props.me }
+            anchor={ props.me ? 'end' : 'start' }
+            marker={ <span class="chess-side" data-side={ props.side } aria-hidden="true"></span> }
+            facts={
+                <span class="chess-tray" aria-hidden="true">
+                    <For each={ props.tray } key={ (group) => group.key } let={ group }>
+                        <span class="chess-taken">
+                            <For each={ group.nth } key={ (nth) => nth } let={ nth }>
+                                <i data-piece={ group.name } data-nth={ nth }></i>
+                            </For>
+                        </span>
+                    </For>
+                    <b class="chess-lead" data-shown={ leads ? 'true' : undefined }>{ lead }</b>
+                </span>
+            }
+        />
+        <span class="sr-only">{ sideSaid }</span>
+        <span class="sr-only">{ leadSaid }</span>
+        <Show when={ offering }>
+            { () => <IconButton icon="equal" label={ locale.t('chess.offer') } variant="ghost" class="chess-offer" disabled={ props.busy } onClick={ () => props.onOffer() } /> }
+        </Show>
+        <Show when={ firstClock }>
+            { () => <TurnClock remainingMs={ props.remainingMs } over={ props.over } yours={ props.yours } brief class="chess-first" /> }
+        </Show>
+        <Show when={ clocked }>
+            { () => <ChessClock ms={ ms } running={ counting } yours={ props.yours } /> }
+        </Show>
+    </div>
+}

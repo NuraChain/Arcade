@@ -13,6 +13,8 @@ export type Tone =
     | 'die-land'
     | 'token-step'
     | 'token-capture'
+    | 'check'
+    | 'promote'
     | 'win';
 
 export type Cue = Tone | Sampled;
@@ -103,6 +105,15 @@ const TONES: Record<Tone, readonly Voice[]> = {
     'token-capture': [
         { wave: 'sawtooth', from: 420, to: 90, hold: 0.24, gain: 0.26, delay: 0 },
         { wave: 'square', from: 210, to: 70, hold: 0.18, gain: 0.12, delay: 0.02 }
+    ],
+    'check': [
+        { wave: 'triangle', from: 988, to: 988, hold: 0.07, gain: 0.13, delay: 0 },
+        { wave: 'triangle', from: 1319, to: 1319, hold: 0.13, gain: 0.11, delay: 0.07 }
+    ],
+    'promote': [
+        { wave: 'sine', from: 660, to: 1320, hold: 0.18, gain: 0.14, delay: 0 },
+        { wave: 'triangle', from: 1760, to: 1760, hold: 0.12, gain: 0.08, delay: 0.12 },
+        { wave: 'sine', from: 2093, to: 2093, hold: 0.16, gain: 0.06, delay: 0.2 }
     ],
     'win': [
         { wave: 'triangle', from: 392, to: 392, hold: 0.16, gain: 0.26, delay: 0 },

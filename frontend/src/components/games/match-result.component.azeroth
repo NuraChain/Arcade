@@ -124,6 +124,12 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         return locale.plural('match.won.them', winners.length, { names: locale.list(winners.map((player) => nameOf(player.who))) });
     })();
 
+    derived ending = props.match.view.kind === 'chess' ? props.match.view.over?.reason ?? null : null;
+
+    derived reason = ending === null ? '' : locale.t(`chess.reason.${ ending }`);
+
+    derived reasoned = reason !== '';
+
     derived asking = props.onAgain !== undefined && props.rematch !== undefined;
 
     derived ready = props.rematch?.ready === true;
@@ -197,7 +203,12 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             >
                 <Icon name={ voided ? 'clock' : (drawn ? 'equal' : 'trophy') } size={ 22 } />
             </span>
-            <p class="min-w-0 flex-1 text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
+            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <p class="text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
+                <Show when={ reasoned }>
+                    { () => <p class="text-ui-sm text-muted">{ reason }</p> }
+                </Show>
+            </div>
         </div>
 
         <For each={ groups } key={ (group) => group.key } let={ group }>
