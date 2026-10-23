@@ -1,0 +1,14 @@
+**/node_modules
+.dist-backend
+.dist-frontend
+.dist-server
+.logs
+.git
+**/.env*
+!.env.example
+.claude
+.playwright-mcp
+docs
+tools/blender
+tools/qa/out
+coverage
