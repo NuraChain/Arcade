@@ -5587,6 +5587,17 @@ svg.lobby-board
     font-weight: 600;
 }
 
+button.chess-san
+{
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+button.chess-san:hover
+{
+    background: var(--color-raised);
+}
+
 .chess-san[data-last]
 {
     background: color-mix(in srgb, var(--accent) 18%, transparent);

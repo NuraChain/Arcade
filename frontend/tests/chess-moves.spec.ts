@@ -7,6 +7,7 @@ import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useReview } from '../src/stores/review.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import type { MatchView } from '../src/api.ts';
 
@@ -197,5 +198,146 @@ describe('the moves of a chess game', () =>
         expect(String(writeText.mock.calls[0]?.[0] ?? '')).toContain('[Result "*"]');
 
         Reflect.deleteProperty(navigator, 'clipboard');
+    });
+});
+
+describe('a finished game stepped through from its moves', () =>
+{
+    const finished = () => match({ over: { reason: 'checkmate', winner: 0 } }, { finishedAt: new Date(Date.UTC(2026, 9, 23, 12, 9)).toISOString() });
+
+    const press = (container: HTMLElement, label: string) => fire([...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.getAttribute('aria-label') === label)!, 'click');
+
+    const control = (container: HTMLElement, label: string) => [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.getAttribute('aria-label') === label);
+
+    const key = (container: HTMLElement, name: string) => container.querySelector('section')!.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+
+    const line = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent ?? '';
+
+    beforeEach(() =>
+    {
+        useReview().end();
+    });
+
+    it('makes every move a button that shows the board after it, and marks the move it shows', async () =>
+    {
+        const { container } = renderTest(() => ChessMoves({ match: finished() }) as Rendered);
+
+        await flush();
+
+        expect(cells(container).every((one) => one.tagName === 'BUTTON')).toBe(true);
+        expect(cells(container).at(-1)?.getAttribute('aria-current')).toBe('step');
+        expect(line(container)).toBe('');
+
+        fire(cells(container)[2], 'click');
+        await flush();
+
+        expect(useReview().looking()).toEqual({ match: 'match-chess', ply: 3 });
+        expect(cells(container).filter((one) => one.hasAttribute('data-last'))).toEqual([cells(container)[2]]);
+        expect(cells(container)[2].getAttribute('aria-current')).toBe('step');
+        expect(line(container)).toBe('The board after 2. Nf3');
+
+        fire(cells(container).at(-1)!, 'click');
+        await flush();
+
+        expect(useReview().looking()).toBeNull();
+    });
+
+    it('steps back and on, to the start and to the end, by its buttons and its keys, and stops at each end', async () =>
+    {
+        const { container } = renderTest(() => ChessMoves({ match: finished() }) as Rendered);
+
+        await flush();
+
+        expect(control(container, 'One move on')?.disabled).toBe(true);
+        expect(control(container, 'To the end')?.disabled).toBe(true);
+
+        press(container, 'One move back');
+        await flush();
+
+        expect(useReview().looking()?.ply).toBe(12);
+
+        key(container, 'ArrowLeft');
+        await flush();
+
+        expect(useReview().looking()?.ply).toBe(11);
+        expect(line(container)).toBe('The board after 6. Bxf7+');
+
+        key(container, 'Home');
+        await flush();
+
+        expect(useReview().looking()?.ply).toBe(0);
+        expect(cells(container).some((one) => one.hasAttribute('data-last'))).toBe(false);
+        expect(line(container)).toBe('The board before the first move');
+        expect(control(container, 'To the start')?.disabled).toBe(true);
+        expect(control(container, 'One move back')?.disabled).toBe(true);
+
+        press(container, 'One move back');
+        key(container, 'ArrowRight');
+        await flush();
+
+        expect(useReview().looking()?.ply).toBe(1);
+
+        press(container, 'To the end');
+        await flush();
+
+        expect(useReview().looking()).toBeNull();
+        expect(line(container)).toBe('');
+
+        key(container, 'ArrowRight');
+        await flush();
+
+        expect(useReview().looking()).toBeNull();
+
+        key(container, 'ArrowLeft');
+        key(container, 'End');
+        await flush();
+
+        expect(useReview().looking()).toBeNull();
+    });
+
+    it('minds no other game that is being stepped through', async () =>
+    {
+        useReview().show('another-match', 2);
+
+        const { container } = renderTest(() => ChessMoves({ match: finished() }) as Rendered);
+
+        await flush();
+
+        expect(cells(container).filter((one) => one.hasAttribute('data-last'))).toEqual([cells(container).at(-1)]);
+        expect(line(container)).toBe('');
+        expect(control(container, 'One move on')?.disabled).toBe(true);
+    });
+
+    it('offers no stepping while the game goes on, and says nothing about another game being stepped through', async () =>
+    {
+        useReview().show('another-match', 2);
+
+        const { container } = renderTest(() => ChessMoves({ match: match() }) as Rendered);
+
+        await flush();
+
+        expect(cells(container).every((one) => one.tagName === 'SPAN')).toBe(true);
+        expect(control(container, 'To the start')).toBeUndefined();
+        expect(cells(container).at(-1)?.hasAttribute('data-last')).toBe(true);
+
+        key(container, 'Home');
+        await flush();
+
+        expect(useReview().looking()).toEqual({ match: 'another-match', ply: 2 });
+    });
+
+    it('steps in Persian with the same keys, the moves still read left to right', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = renderTest(() => ChessMoves({ match: finished() }) as Rendered);
+
+        await flush();
+        key(container, 'ArrowLeft');
+        await flush();
+
+        expect(useReview().looking()?.ply).toBe(12);
+        expect(line(container)).toBe('صفحه بعد از ۶... Ke7');
+        expect(container.querySelector('[role="group"]')?.getAttribute('dir')).toBe('ltr');
     });
 });

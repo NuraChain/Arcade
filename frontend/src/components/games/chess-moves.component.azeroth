@@ -1,10 +1,13 @@
 import { untrack } from 'azerothjs';
 
+import ChessSan from './chess-san.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
 import { copyText } from '../../lib/clipboard.ts';
 import { pgnOf, type PgnGame } from '../../lib/pgn.ts';
 import { chessOf } from '../../data/match.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useReview } from '../../stores/review.store.ts';
 import type { MatchView } from '../../api.ts';
 
 const PIECE = /^[KQRBN]/;
@@ -12,6 +15,14 @@ const PIECE = /^[KQRBN]/;
 const PROMOTED = /=([QRBN])/;
 
 const NEAR_END = 24;
+
+/** Where a key takes a finished game being stepped through, from how many of its moves are shown. */
+const STEPS: Record<string, ((at: number, count: number) => number) | undefined> = {
+    ArrowLeft: (at) => at - 1,
+    ArrowRight: (at) => at + 1,
+    Home: () => 0,
+    End: (_, count) => count
+};
 
 /**
  * A move as a score sheet in figurine notation draws it: the piece that moved, the squares, the piece
@@ -50,6 +61,7 @@ const resultOf = (match: MatchView): PgnGame['result'] =>
 export default component ChessMoves(props: { match: MatchView })
 {
     const locale = useLocale();
+    const review = useReview();
 
     derived view = chessOf(props.match);
 
@@ -59,7 +71,32 @@ export default component ChessMoves(props: { match: MatchView })
 
     derived played = notation.length > 0;
 
-    derived last = notation.length - 1;
+    derived finished = played && props.match.finishedAt !== undefined;
+
+    derived shown = (() =>
+    {
+        const now = review.looking();
+
+        return finished && now !== null && now.match === props.match.id && now.ply < notation.length ? now.ply : notation.length;
+    })();
+
+    derived stepping = shown < notation.length;
+
+    derived last = shown - 1;
+
+    derived said = (() =>
+    {
+        if (!stepping)
+        {
+            return '';
+        }
+
+        const move = plies[shown - 1];
+
+        return move === undefined
+            ? locale.t('chess.review.atStart')
+            : locale.t('chess.review.at', { move: `${ locale.n(move.n) }${ move.white ? '.' : '...' } ${ move.san }` });
+    })();
 
     let list: HTMLElement | null = null;
     let near = true;
@@ -70,12 +107,54 @@ export default component ChessMoves(props: { match: MatchView })
 
         untrack(() =>
         {
-            if (list !== null && near)
+            if (list !== null && near && !stepping)
             {
                 list.scrollTop = list.scrollHeight;
             }
         });
     }
+
+    effect
+    {
+        const at = last;
+
+        untrack(() =>
+        {
+            if (stepping)
+            {
+                list?.querySelector<HTMLElement>(`[data-ply="${ at }"]`)?.scrollIntoView?.({ block: 'nearest' });
+            }
+        });
+    }
+
+    /** Shows the board after `ply` of the moves; all of them leave the game as it ended. */
+    const go = (ply: number) =>
+    {
+        const count = untrack(() => notation.length);
+        const to = Math.min(Math.max(ply, 0), count);
+
+        if (to === count)
+        {
+            review.end();
+
+            return;
+        }
+
+        review.show(untrack(() => props.match.id), to);
+    };
+
+    const step = (event: KeyboardEvent) =>
+    {
+        const move = STEPS[event.key];
+
+        if (move === undefined || !untrack(() => finished))
+        {
+            return;
+        }
+
+        event.preventDefault();
+        go(move(untrack(() => shown), untrack(() => notation.length)));
+    };
 
     const whoAt = (seat: number) => props.match.players.find((one) => one.seat === seat)?.who ?? '';
 
@@ -100,7 +179,7 @@ export default component ChessMoves(props: { match: MatchView })
         }), 'chess.moves.copied', { dedupe: 'pgn' });
     };
 
-    <section class="flex min-h-0 flex-1 flex-col" aria-label={ locale.t('chess.moves.title') }>
+    <section class="flex min-h-0 flex-1 flex-col" aria-label={ locale.t('chess.moves.title') } onKeyDown={ step }>
         <Show when={ played } fallback={ <p class="m-auto px-4 py-8 text-center text-ui-sm text-muted">{ locale.t('chess.moves.none') }</p> }>
             { () =>
                 <ol
@@ -116,22 +195,45 @@ export default component ChessMoves(props: { match: MatchView })
                     <For each={ plies } key={ (one) => one.ply } let={ one }>
                         <li class="contents" role="listitem">
                             <span class="chess-moves-n" data-black={ one.white ? undefined : 'true' } aria-hidden="true">{ `${ locale.n(one.n) }.` }</span>
-                            <span class="chess-san" data-last={ one.ply === last ? 'true' : undefined }>
-                                <span class="flex items-center" aria-hidden="true">
-                                    <i class="chess-figure" data-piece={ one.lead }></i>
-                                    <span>{ one.head }</span>
-                                    <i class="chess-figure" data-piece={ one.promo }></i>
-                                    <span>{ one.tail }</span>
-                                </span>
-                                <span class="sr-only">{ `${ locale.n(one.n) }${ one.white ? '.' : '...' } ${ one.san }` }</span>
-                            </span>
+                            <Show
+                                when={ finished }
+                                fallback={
+                                    <span class="chess-san" data-ply={ one.ply } data-last={ one.ply === last ? 'true' : undefined }>
+                                        <ChessSan lead={ one.lead } head={ one.head } promo={ one.promo } tail={ one.tail } n={ one.n } white={ one.white } san={ one.san } />
+                                    </span>
+                                }
+                            >
+                                { () =>
+                                    <button
+                                        type="button"
+                                        class="chess-san"
+                                        data-ply={ one.ply }
+                                        data-last={ one.ply === last ? 'true' : undefined }
+                                        aria-current={ one.ply === last ? 'step' : undefined }
+                                        onClick={ () => go(one.ply + 1) }
+                                    >
+                                        <ChessSan lead={ one.lead } head={ one.head } promo={ one.promo } tail={ one.tail } n={ one.n } white={ one.white } san={ one.san } />
+                                    </button>
+                                }
+                            </Show>
                         </li>
                     </For>
                 </ol>
             }
         </Show>
-        <footer class="flex shrink-0 justify-end border-t border-line px-3 py-2">
-            <Button variant="secondary" size="sm" leading="copy" disabled={ !played } onClick={ copy }>{ locale.t('chess.moves.copy') }</Button>
+        <p class="sr-only" aria-live="polite">{ said }</p>
+        <footer class="flex shrink-0 items-center gap-2 border-t border-line px-3 py-2">
+            <Show when={ finished }>
+                { () =>
+                    <div class="flex items-center gap-0.5" dir="ltr" role="group" aria-label={ locale.t('chess.review.title') }>
+                        <IconButton icon="chevron-first" label={ locale.t('chess.review.start') } variant="ghost" size="sm" disabled={ shown === 0 } onClick={ () => go(0) } />
+                        <IconButton icon="chevron-left" label={ locale.t('chess.review.back') } variant="ghost" size="sm" disabled={ shown === 0 } onClick={ () => go(untrack(() => shown) - 1) } />
+                        <IconButton icon="chevron-right" label={ locale.t('chess.review.forward') } variant="ghost" size="sm" disabled={ !stepping } onClick={ () => go(untrack(() => shown) + 1) } />
+                        <IconButton icon="chevron-last" label={ locale.t('chess.review.end') } variant="ghost" size="sm" disabled={ !stepping } onClick={ () => go(untrack(() => notation.length)) } />
+                    </div>
+                }
+            </Show>
+            <Button variant="secondary" size="sm" leading="copy" class="ms-auto" disabled={ !played } onClick={ copy }>{ locale.t('chess.moves.copy') }</Button>
         </footer>
     </section>
 }

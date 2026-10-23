@@ -11,7 +11,7 @@ export const RESULT_OUT = 240;
 
 export const RESULT_WAIT = 12_000;
 
-export default component TableResult(props: { match: MatchView; shown: boolean; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; onStand?: (stands: boolean) => void })
+export default component TableResult(props: { match: MatchView; shown: boolean; mine?: number; busy?: boolean; fold?: boolean; onAgain?: () => void; rematch?: Rematch; stake?: Staked; onStand?: (stands: boolean) => void })
 {
     const locale = useLocale();
 
@@ -20,6 +20,8 @@ export default component TableResult(props: { match: MatchView; shown: boolean; 
     state last = untrack(() => ({ match: props.match, mine: props.mine, rematch: props.rematch, stake: props.stake, busy: props.busy === true }));
 
     state standing = false;
+
+    derived drawn = standing && props.fold !== true;
 
     state leaving = false;
 
@@ -62,6 +64,19 @@ export default component TableResult(props: { match: MatchView; shown: boolean; 
 
     effect
     {
+        const fold = props.fold === true;
+
+        untrack(() =>
+        {
+            if (fold)
+            {
+                folded = true;
+            }
+        });
+    }
+
+    effect
+    {
         const stands = standing;
 
         untrack(() => props.onStand?.(stands));
@@ -69,7 +84,7 @@ export default component TableResult(props: { match: MatchView; shown: boolean; 
 
     onCleanup(() => stop());
 
-    <Show when={ standing }>
+    <Show when={ drawn }>
         { () =>
             <Show
                 when={ !folded }

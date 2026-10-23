@@ -4465,6 +4465,26 @@ the next), and the result, `*` for a game still going or one called off. `chess-
 `pgn.spec.ts`, `table-chat.spec.ts` (*the moves beside a chess table's chat*) and `chess-seam.spec.ts`
 hold it.
 
+**A finished game is stepped through from its moves** (CS-D12). Once the game is over each move in
+the Moves tab is a button that shows the board after it, and four more stand beside Copy PGN: to
+the start, one back, one on, to the end, with the arrows, Home and End doing the same (the bar and
+the list run left to right in Persian too, as the moves do). Where the board is goes in
+`stores/review.store.ts` (the game and how many of its moves are shown), which the Moves tab writes
+and the board reads; showing all of them ends it. The board reads the game back from its notation
+(`replayOf` in `game/chess-replay.ts`: each move the legal one of the position before it whose SAN
+it is, through the server's own move generator) and draws that position. One step on plays the
+move as it was played, glide, sound and all, a horse and an elephant included; anything else
+slides there quietly; stepping into the last move lays the mated king down again. While the reader
+steps, the result card and its "Show the result" tab both stand aside (`fold` on `TableResult`): on
+a phone with the chat's half sheet open the tab lay over the board's last rank, which is the rank a
+reader looking back wants to see. The card keeps standing between the steps (`stepped`, so a
+step's motion does not take it down and bring it back open) and is there again, folded, at the
+end. The Moves tab says where the board is ("The board after 2. Nf3", "The board before the first
+move"). The review belongs to one game: another game, or the board going,
+ends it. `chess-replay.spec.ts`, `chess-moves.spec.ts` (*a finished game stepped through from its
+moves*), `chess-board.spec.ts` (*a finished game stepped through on the board*) and
+`match-result.spec.ts` hold it.
+
 **The waiting room is the board between two chairs** (`.lobby-board[data-board='chess']`, the
 board's own drawing), as backgammon's is.
 

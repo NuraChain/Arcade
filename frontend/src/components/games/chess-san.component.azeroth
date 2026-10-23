@@ -1,0 +1,17 @@
+import { useLocale } from '../../stores/locale.store.ts';
+
+/** One move as a score sheet in figurine notation writes it, and as a screen reader says it whole ("7. Nd5#"). */
+export default component ChessSan(props: { lead?: string; head: string; promo?: string; tail: string; n: number; white: boolean; san: string })
+{
+    const locale = useLocale();
+
+    <span class="contents">
+        <span class="flex items-center" aria-hidden="true">
+            <i class="chess-figure" data-piece={ props.lead }></i>
+            <span>{ props.head }</span>
+            <i class="chess-figure" data-piece={ props.promo }></i>
+            <span>{ props.tail }</span>
+        </span>
+        <span class="sr-only">{ `${ locale.n(props.n) }${ props.white ? '.' : '...' } ${ props.san }` }</span>
+    </span>
+}

@@ -9,15 +9,17 @@ import { chessOf } from '../../data/match.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
 import { coachOf } from '../../game/helpers/chess.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { useReview } from '../../stores/review.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { legalMoves, type Move } from '../../../../backend/src/domains/match/chess/moves.ts';
-import { EMPTY, kindOf, nameOf as squareName, type Colour, type Kind, type Position, type Promotion } from '../../../../backend/src/domains/match/chess/board.ts';
+import { EMPTY, colourOf, kindOf, nameOf as squareName, type Colour, type Kind, type Position, type Promotion } from '../../../../backend/src/domains/match/chess/board.ts';
 import { sanOf } from '../../../../backend/src/domains/match/chess/san.ts';
 import { feltOf, leadOf, step, takenBy, type Felt, type Told } from '../../game/chess-felt.ts';
+import { replayOf, type Replayed } from '../../game/chess-replay.ts';
 import { costOf, createChessTable, type ChessFacts, type ChessTable, type Lay } from '../../game/board/chess-table.ts';
 import { SIZE, boxOf, cellOf, placeOf, squareAt, type Foot } from '../../game/chess-layout.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
@@ -66,6 +68,8 @@ interface Stop
 const NOWHERE: ReadonlyMap<number, boolean> = new Map();
 
 const NO_STOPS: Stop[] = [];
+
+const NO_REPLAY: readonly Replayed[] = [];
 
 const PROMOTIONS: readonly Promotion[] = ['q', 'r', 'b', 'n'];
 
@@ -116,6 +120,7 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
     const device = useDevice();
     const people = usePeople();
     const settings = useSettings();
+    const review = useReview();
 
     state picked: Picked | null = null;
 
@@ -142,6 +147,8 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
     derived view = chessOf(game);
 
     derived over = game.finishedAt !== undefined;
+
+    derived gameId = game.id;
 
     derived mine = game.mine;
 
@@ -211,7 +218,19 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
 
     derived tip = live && view !== null && shownTurn === view.turn ? coachOf(view, mine, clocked && myTurn ? game.remainingMs ?? null : null) : null;
 
-    derived result = over && !presenting;
+    state stepped = false;
+
+    derived replay = over && view !== null ? replayOf(view.notation) : NO_REPLAY;
+
+    /** How many moves of a finished game the reader has stepped back to, or nothing for the game as it ended. */
+    derived looked = (() =>
+    {
+        const now = review.looking();
+
+        return now !== null && now.match === game.id && now.ply < replay.length - 1 ? now.ply : null;
+    })();
+
+    derived result = over && (!presenting || stepped);
 
     derived barOpen = view !== null && !result;
 
@@ -251,6 +270,15 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
         if (view === null)
         {
             return null;
+        }
+
+        const back = looked === null ? undefined : replay[looked];
+
+        if (back !== undefined)
+        {
+            const moved = back.move === null ? {} : { last: { from: back.move.from, to: back.move.to } };
+
+            return { id: game.id, rev: game.rev, seat: mine ?? null, view: { ...feltOf({ board: back.position.board, turn: back.position.turn, ...moved }), foot, mated: null } };
         }
 
         const felt: Felt = feltOf(view);
@@ -477,6 +505,75 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
             await table.settle(sight, ctx);
         }
     };
+
+    let lookedAt: number | null = null;
+
+    effect
+    {
+        const now = looked;
+
+        untrack(() =>
+        {
+            const before = lookedAt;
+
+            lookedAt = now;
+
+            if (now !== null)
+            {
+                stepped = true;
+            }
+
+            if (presenter === null || now === before)
+            {
+                return;
+            }
+
+            const end = replay.length - 1;
+            const next = replay[now ?? end];
+            const move = next?.move ?? null;
+
+            if (move === null || (now ?? end) !== (before ?? end) + 1)
+            {
+                presenter.act((ctx) => mend(ctx));
+
+                return;
+            }
+
+            const told = toldOf(move, colourOf(move.piece) === 'w' ? whiteSeat : 1 - whiteSeat, next.legal);
+
+            presenter.act(async (ctx) =>
+            {
+                if (table === null || !(await table.advance(told)) || now === null)
+                {
+                    await mend(ctx);
+                }
+            }, costOf(told));
+        });
+    }
+
+    effect
+    {
+        const id = gameId;
+
+        untrack(() =>
+        {
+            stepped = false;
+            lookedAt = null;
+
+            if (review.looking() !== null && review.looking()?.match !== id)
+            {
+                review.end();
+            }
+        });
+    }
+
+    onCleanup(() =>
+    {
+        if (untrack(review.looking)?.match === untrack(() => gameId))
+        {
+            review.end();
+        }
+    });
 
     const send = async (move: Move) =>
     {
@@ -1076,6 +1173,6 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
             </Show>
         </div>
 
-        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
+        <TableResult match={ game } shown={ result } mine={ mine } busy={ props.starting === true } fold={ looked !== null } onAgain={ props.onAgain } rematch={ props.rematch } stake={ props.stake } onStand={ (stands) => resultStands = stands } />
     </div>
 }

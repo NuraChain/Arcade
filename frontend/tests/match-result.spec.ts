@@ -646,6 +646,28 @@ describe('the result, laid over a board', () =>
         expect(container.querySelector('.table-result .table-result-card')!.textContent).toContain('You won.');
         expect(container.querySelector('.table-result-tab')).toBeNull();
     });
+
+    it('steps aside, the way back to it too, while the board is told to fold it, and comes back folded', () =>
+    {
+        const [fold, setFold] = createSignal(false);
+        const container = renderTest(() => TableResult({ match: finished, shown: true, mine: 0, get fold() { return fold(); } }) as Rendered).container;
+
+        expect(container.querySelector('.table-result')).not.toBeNull();
+
+        setFold(true);
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(container.querySelector('.table-result-tab')).toBeNull();
+
+        setFold(false);
+
+        expect(container.querySelector('.table-result')).toBeNull();
+        expect(buttons(container)).toEqual(['Show the result']);
+
+        fire(button(container, 'Show the result')!, 'click');
+
+        expect(container.querySelector('.table-result .table-result-card')).not.toBeNull();
+    });
 });
 
 describe('how long a table may keep a result waiting', () =>

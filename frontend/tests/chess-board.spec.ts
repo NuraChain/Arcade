@@ -11,6 +11,7 @@ import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NO_EVENTS, useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
+import { useReview } from '../src/stores/review.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 import { parseFen, squareNamed } from '../../backend/src/domains/match/chess/board.ts';
@@ -737,6 +738,114 @@ describe('the chime when the turn comes round', () =>
         await flush();
 
         expect(told.heard).not.toContain('turn');
+    });
+});
+
+describe('a finished game stepped through on the board', () =>
+{
+    const LEGAL = ['e4', 'e5', 'Nf3', 'd6', 'Bc4', 'Bg4', 'Nc3', 'g6', 'Nxe5', 'Bxd1', 'Bxf7+', 'Ke7', 'Nd5#'];
+
+    const mated = () => match({ ...fen('rn1q1bnr/ppp1kB1p/3p2p1/3NN3/4P3/8/PPPP1PPP/R1BbK2R b KQ - 2 7'), ply: 13, notation: LEGAL, last: { from: sq('c3'), to: sq('d5') }, over: { reason: 'checkmate', winner: 0 } }, 0, {
+        rev: 20,
+        finishedAt: new Date(500_000).toISOString(),
+        outcome: 'won',
+        players: [{ seat: 0, who: 'dana.w', timeouts: 0, result: 'won' }, { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost' }] as MatchView['players']
+    });
+
+    const pieceAt = (container: HTMLElement, name: string) => pieceOn(container, name)?.dataset.piece ?? null;
+
+    beforeEach(() =>
+    {
+        useReview().end();
+    });
+
+    it('shows the board after the move stepped back to, quietly, with the result folded away', async () =>
+    {
+        const table = await live(mated());
+
+        await elapse(400);
+
+        expect(table.container.querySelector('.table-result')).not.toBeNull();
+
+        told.heard = [];
+        useReview().show('match-chess', 2);
+        await elapse(GLIDE_MOST + 400);
+
+        expect(pieceAt(table.container, 'e4')).toBe('wp');
+        expect(pieceAt(table.container, 'e5')).toBe('bp');
+        expect(pieceAt(table.container, 'g1')).toBe('wn');
+        expect(pieceAt(table.container, 'd5')).toBeNull();
+        expect(pieceAt(table.container, 'e8')).toBe('bk');
+        expect(table.container.querySelector('.table-result')).toBeNull();
+        expect(table.container.querySelector('.table-result-tab')).toBeNull();
+        expect(told.heard).toEqual([]);
+    });
+
+    it('plays a step forward as the move it was, heard as that piece, and comes back to the end with the king down', async () =>
+    {
+        const table = await live(mated());
+
+        await elapse(400);
+        useReview().show('match-chess', 2);
+        await elapse(GLIDE_MOST + 400);
+        told.heard = [];
+
+        useReview().show('match-chess', 3);
+        await elapse(GLIDE_MOST + 400);
+
+        expect(pieceAt(table.container, 'f3')).toBe('wn');
+        expect(pieceAt(table.container, 'g1')).toBeNull();
+        expect(told.heard).toEqual(['horse-step']);
+
+        useReview().end();
+        await elapse(GLIDE_MOST + 400);
+
+        expect(pieceAt(table.container, 'd5')).toBe('wn');
+        expect(pieceOn(table.container, 'e7')?.hasAttribute('data-tipped')).toBe(true);
+        expect(table.container.querySelector('.table-result-tab')).not.toBeNull();
+    });
+
+    it('steps into the end as the mating move itself, and lays the king down after it', async () =>
+    {
+        const table = await live(mated());
+
+        await elapse(400);
+        useReview().show('match-chess', 12);
+        await elapse(GLIDE_MOST + 400);
+
+        expect(pieceAt(table.container, 'c3')).toBe('wn');
+        expect(pieceOn(table.container, 'e7')?.hasAttribute('data-tipped')).toBe(false);
+
+        told.heard = [];
+        useReview().end();
+        await elapse(GLIDE_MOST + 800);
+
+        expect(told.heard[0]).toBe('horse-step');
+        expect(pieceAt(table.container, 'd5')).toBe('wn');
+        expect(pieceOn(table.container, 'e7')?.hasAttribute('data-tipped')).toBe(true);
+    });
+
+    it('lets go of the game it was stepping through once the board goes, and minds no other game', async () =>
+    {
+        useReview().show('another-match', 4);
+
+        const table = await live(mated());
+
+        await elapse(400);
+
+        expect(useReview().looking()).toBeNull();
+        expect(pieceAt(table.container, 'd5')).toBe('wn');
+
+        useReview().show('another-match', 4);
+        await elapse(GLIDE_MOST + 400);
+
+        expect(pieceAt(table.container, 'd5')).toBe('wn');
+        expect(pieceAt(table.container, 'g1')).toBeNull();
+
+        useReview().show('match-chess', 4);
+        table.unmount();
+
+        expect(useReview().looking()).toBeNull();
     });
 });
 
