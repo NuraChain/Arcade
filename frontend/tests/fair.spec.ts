@@ -188,7 +188,7 @@ describe('checking a game played for NURA', () =>
     it('answers a game it does not know with nothing played', async () =>
     {
         const proof = await proofOf('ludo', { steps: 3 });
-        const checked = check({ ...proof, game: 'chess' });
+        const checked = check({ ...proof, game: 'no-such-game' });
 
         expect(checked.moves).toBe(0);
         expect(checked.wrong?.rev).toBe(OPENING);

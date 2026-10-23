@@ -1431,7 +1431,7 @@ describe.skipIf(!active)('quick play, against a real database', () =>
         {
             const me = await makeUser();
 
-            expect(await sent(search(me, { game: 'chess' }))).toEqual(NO_GAME);
+            expect(await sent(search(me, { game: 'no-such-game' }))).toEqual(NO_GAME);
 
             await db.getRepository(Game).update({ id: 'quick-fixture' }, { status: 'coming-soon' });
 

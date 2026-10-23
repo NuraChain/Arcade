@@ -457,7 +457,8 @@ describe.skipIf(!active)('a record, against a real database', () =>
                 { game: 'ludo', earned: held.filter((id) => id.startsWith('ludo-')).length, total: 1000 },
                 { game: 'hokm', earned: 0, total: 1000 },
                 { game: 'backgammon', earned: 0, total: 1000 },
-                { game: 'poker', earned: 0, total: 1000 }
+                { game: 'poker', earned: 0, total: 1000 },
+                { game: 'chess', earned: 0, total: 1000 }
             ]);
             expect(record?.achievements.recent).toHaveLength(12);
             expect(record?.achievements.recent.every((one) => held.includes(one.id))).toBe(true);
@@ -474,7 +475,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             expect(ladder?.rungs[1].earnedAt).toBeUndefined();
             expect(ladder?.rungs.at(-1)?.tier).toBe('diamond');
             expect(await achieve.ladderOf(handle, 'ludo', 'friends')).toBeNull();
-            expect(await achieve.ladderOf(handle, 'chess', 'won')).toBeNull();
+            expect(await achieve.ladderOf(handle, 'no-such-game', 'won')).toBeNull();
             expect(await achieve.ladderOf('nobody-here', null, 'won')).toBeNull();
         });
     });

@@ -465,7 +465,7 @@ describe.skipIf(!active)('turning a game on and off, against a real database', (
             expect(await ports.admin.waitingTables(who.id, {})).toBeNull();
         }
 
-        expect(await ports.admin.switchGame(owner.id, 'chess', off)).toBeNull();
+        expect(await ports.admin.switchGame(owner.id, 'no-such-game', off)).toBeNull();
         expect(await ports.admin.switchGame(owner.id, 'backgammon', { on: true, reason: 'Open it early' })).toBeNull();
         expect(await ports.admin.switchGame(owner.id, 'backgammon', off)).toBeNull();
         expect((await ports.admin.play(owner.id))?.games.filter((one) => PLAYED.includes(one.game)).map((one) => [one.game, one.status])).toEqual([
