@@ -395,6 +395,46 @@ and the moment a snapshot says they left. A group counts who is here instead. `c
 (*the head of a thread*) holds it; the server's half is *When somebody was last seen* in
 `.claude/rules/chat-and-keys.md`.
 
+**A thread can be searched, through what this browser has opened of it.** The head's search
+button, or Ctrl/Cmd+F in place of the browser's own find (which finds only the lines drawn), opens a
+bar under the head: the words, how many lines were found and which is shown ("2 of 7"), and the way
+to the older and the newer one (Enter and the up arrow older, Shift+Enter and the down arrow newer,
+and the buttons beside them, a button at its end handing the keyboard back to the field). Escape
+clears the words, then closes and gives the keyboard back to the button. It looks through the lines
+of this room this browser has opened (`chat.archive()` beside the lines on screen: a sealed room has
+no index anywhere else), folded as every search here folds and never inside a spoiler, which finding
+would give away (`searchLines` in `components/chat/search-lines.ts`), the newest first. The line
+shown wears a gold ring (the reply's ring is accent, and wins) and is brought on screen once,
+reading back a page at a time while it is older than what is drawn; a letter more that still finds
+it, or a line arriving, brings nothing. The words live in the page and nowhere else. **A handler
+that writes two signals one effect reads writes them in one `batch`**: an effect runs at each
+write, so it ran between the words and the next write and brought the line on screen twice, which
+only a spec that counted the scrolls could see. `chat-page.spec.ts` (*a thread searched for its
+words*), `search-lines.spec.ts` and `bubble.spec.ts` hold it.
+
+**A jump to a line owns the scroll until it gets there.** The search and a reply's quote take the
+thread to a line with `centreOn` (`lib/stick.ts`): the line in the middle, or as near it as the ends
+allow, smooth unless the reader asked for less motion. The page is told at once whether the reader
+will be near the end THERE, and the stick says nothing about the scroll on the way until it arrives,
+the browser says it ended (`scrollend`), the reader takes it with a wheel or a finger, or a second
+and a half have gone (`JOURNEY_MS`). The first frames of a smooth scroll are still at the end, and
+taken for the reader's place they let any change to the thread (the page read back to reach the
+line, a reaction, a line arriving) set the scroll to the end, which in a browser cancels the scroll
+in flight: the way to a match a page back ended at the end every time, the line found and marked
+off screen. The walk found it at 1280, and a probe that logged every write to the list's scroll saw
+the stick write twice in the 11 ms after the jump began. A table's chat goes to a quote the same
+way. `stick.spec.ts`, `chat-page.spec.ts` (*a thread searched for its words*) and
+`table-chat.spec.ts` (*a line a reply leads back to*) hold it.
+
+**A narrow head keeps what a phone reaches for.** With the search beside them, four buttons left a
+phone's title 78px ("Omid Kari…" at 390). Under a medium head the mute folds away (`hidden
+@md:contents` on a wrapper), as a messenger keeps it out of a phone's chat header: it is in the
+conversation's own sheet, a held row in the list. The game stays, because the composer's own game
+button is disabled where the room cannot be sealed and a game is still open to anybody there. Its
+`hidden @md:inline-flex` never hid it: `hidden` and the button's own `inline-flex` sat on one element,
+where the stylesheet's order and not the class list decides. A display that changes with the head
+is put on a wrapper, never on a component that sets a display of its own.
+
 **One bubble, one grouping rule, two places.** `MessageBubble` draws the chat page AND the table's
 panel, and `lib/thread.ts` decides both: a run is one sender's `text` lines no more than five minutes
 apart on one day, a server line never joins a run, and a day divider leads the first line of every

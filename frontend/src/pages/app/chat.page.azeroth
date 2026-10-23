@@ -1,11 +1,13 @@
 import type { GameId } from '../../data/games.ts';
-import { Link, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
+import { batch, Link, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { seenOf } from '../../components/chat/chat-time.ts';
+import { searchedWords, searchLines } from '../../components/chat/search-lines.ts';
+import ThreadSearch from '../../components/chat/thread-search.component.azeroth';
 import { sendBlockOf } from '../../lib/seal-state.ts';
-import { attachStick, isNearBottom } from '../../lib/stick.ts';
+import { attachStick, centreOn, isNearBottom } from '../../lib/stick.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { threadRows } from '../../lib/thread.ts';
@@ -100,6 +102,39 @@ export default component ChatPage()
 
     /** What "last seen" is said against, moved on once a minute. */
     state minute = runtime().clock.now();
+
+    /** The thread's own search: whether it is open, what is typed, and which line found is shown, the newest being 0. */
+    state searching = false;
+
+    state sought = '';
+
+    state at = 0;
+
+    /** The line the search last brought on screen, so a line arriving meanwhile does not bring it again. */
+    let shownFor = '';
+
+    let finder: HTMLElement | null = null;
+
+    let opener: HTMLElement | null = null;
+
+    /** Each line's words as the search reads them, kept while the words are the same: folding a long thread at every key is the cost this saves. */
+    const words = new Map<string, { text: string; value: string }>();
+
+    const wordsOf = (message: Message) =>
+    {
+        const held = words.get(message.id);
+
+        if (held !== undefined && held.text === message.text)
+        {
+            return held.value;
+        }
+
+        const value = searchedWords(message);
+
+        words.set(message.id, { text: message.text, value });
+
+        return value;
+    };
 
     /** Takes the scroller as it is drawn, which on a link opened cold is after the page mounted. */
     const hold = (element: HTMLElement) =>
@@ -240,6 +275,91 @@ export default component ChatPage()
         }
     }
 
+    /** What the search found: the lines on screen first, then every other line of this room this browser has opened. */
+    derived found = searching ? searchLines([...messages, ...chat.archive()], id, sought, wordsOf) : [];
+
+    derived shown = found.length === 0 ? -1 : Math.min(at, found.length - 1);
+
+    derived target = shown === -1 ? '' : found[shown].id;
+
+    derived said = sought.trim() === ''
+        ? ''
+        : (shown === -1 ? locale.t('chat.search.none') : locale.t('chat.search.count', { at: shown + 1, count: found.length }));
+
+    const openSearch = () =>
+    {
+        if (searching)
+        {
+            finder?.querySelector<HTMLInputElement>('input')?.focus();
+            return;
+        }
+
+        searching = true;
+    };
+
+    const closeSearch = () =>
+    {
+        batch(() =>
+        {
+            shownFor = '';
+            at = 0;
+            sought = '';
+            searching = false;
+        });
+
+        queueMicrotask(() => opener?.querySelector('button')?.focus());
+    };
+
+    /**
+     * New words start from the newest line again, in one write, or the effect below runs between
+     * the two and brings the old words' line on screen. The line already shown is not brought again
+     * for a letter more that still finds it.
+     */
+    const seek = (value: string) =>
+    {
+        batch(() =>
+        {
+            at = 0;
+            sought = value;
+        });
+    };
+
+    /** Brings the line found on screen, reading back a page at a time while it is older than what is drawn. */
+    effect
+    {
+        const wanted = target;
+        const drawn = messages.some((message) => message.id === wanted);
+
+        if (wanted === '' || wanted === shownFor)
+        {
+            return;
+        }
+
+        if (!drawn)
+        {
+            untrack(() =>
+            {
+                if (chat.hasEarlier() && !chat.earlierLoading())
+                {
+                    chat.earlier();
+                }
+            });
+            return;
+        }
+
+        shownFor = wanted;
+
+        requestAnimationFrame(() =>
+        {
+            const row = list?.querySelector(`[data-message="${ wanted }"]`);
+
+            if (row !== null && row !== undefined)
+            {
+                flash(row);
+            }
+        });
+    }
+
     useHead({ title: () => title });
 
     mount
@@ -248,11 +368,23 @@ export default component ChatPage()
         const look = () => looking = document.visibilityState !== 'hidden';
         const untick = runtime().clock.every(MINUTE_MS, () => minute = runtime().clock.now());
 
+        // A messenger's own search, in place of the browser's: the browser finds only the lines drawn.
+        const find = (event: KeyboardEvent) =>
+        {
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === 'KeyF')
+            {
+                event.preventDefault();
+                openSearch();
+            }
+        };
+
         document.addEventListener('visibilitychange', look);
+        document.addEventListener('keydown', find);
 
         return () =>
         {
             document.removeEventListener('visibilitychange', look);
+            document.removeEventListener('keydown', find);
             untick();
             unstick?.();
             release();
@@ -586,7 +718,10 @@ export default component ChatPage()
         const bubble = target.querySelector('.bubble');
         const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+        if (list !== null)
+        {
+            near = centreOn(list, target, !still);
+        }
         bubble?.animate(
             [{ boxShadow: '0 0 0 3px var(--color-accent)' }, { boxShadow: '0 0 0 3px transparent' }],
             { duration: still ? 1 : 1400, easing: 'ease-out' }
@@ -747,14 +882,25 @@ export default component ChatPage()
                                     <h1 class="truncate text-ui-md font-semibold text-text" dir="auto">{ title }</h1>
                                     <span class={ () => [ 'truncate text-ui-xs', typing.length > 0 ? 'text-live' : 'text-muted' ].join(' ') } dir="auto">{ subtitle }</span>
                                 </span>
-                                <IconButton icon="dice" label={ locale.t('chat.gameMenu') } variant="ghost" onClick={ startGame } class="hidden @md:inline-flex" />
-                                <IconButton
-                                    icon={ muted ? 'sound-off' : 'sound' }
-                                    label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
-                                    variant="ghost"
-                                    pressed={ muted }
-                                    onClick={ () => void attempt(social.toggleMute('conversation', id), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') }) }
-                                />
+                                <span ref={ (element) => opener = element } class="contents">
+                                    <IconButton
+                                        icon="search"
+                                        label={ locale.t('chat.search.label') }
+                                        variant="ghost"
+                                        pressed={ searching }
+                                        onClick={ () => (searching ? closeSearch() : openSearch()) }
+                                    />
+                                </span>
+                                <IconButton icon="dice" label={ locale.t('chat.gameMenu') } variant="ghost" onClick={ startGame } />
+                                <span class="hidden @md:contents" data-head-mute>
+                                    <IconButton
+                                        icon={ muted ? 'sound-off' : 'sound' }
+                                        label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
+                                        variant="ghost"
+                                        pressed={ muted }
+                                        onClick={ () => void attempt(social.toggleMute('conversation', id), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') }) }
+                                    />
+                                </span>
                                 <Show when={ other } let={ peer }>
                                     <IconButton
                                         icon="more"
@@ -764,6 +910,23 @@ export default component ChatPage()
                                     />
                                 </Show>
                             </header>
+
+                            <Show when={ searching }>
+                                { () =>
+                                    <div ref={ (element) => finder = element } class="flex items-center border-b border-line bg-void/90 px-2 py-1.5 sm:px-3">
+                                        <ThreadSearch
+                                            value={ sought }
+                                            said={ said }
+                                            older={ shown !== -1 && shown < found.length - 1 }
+                                            newer={ shown > 0 }
+                                            onInput={ seek }
+                                            onOlder={ () => at = Math.min(shown + 1, found.length - 1) }
+                                            onNewer={ () => at = Math.max(shown - 1, 0) }
+                                            onClose={ closeSearch }
+                                        />
+                                    </div>
+                                }
+                            </Show>
 
                             <div class="relative flex min-h-0 flex-1 flex-col">
                                 <div ref={ hold } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
@@ -809,6 +972,7 @@ export default component ChatPage()
                                                             quoteOf={ quoteOf }
                                                             onJump={ jump }
                                                             replying={ chat.replyTo(id)?.id === row.message.id }
+                                                            found={ row.message.id === target }
                                                             menued={ menu?.message.id === row.message.id }
                                                         />
                                                     </div>

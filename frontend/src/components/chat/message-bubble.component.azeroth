@@ -60,6 +60,9 @@ export default component MessageBubble(props: {
     onJump?: (id: string) => void;
     replying?: boolean;
 
+    /** The line the thread's search has brought the reader to. */
+    found?: boolean;
+
     /** Its menu is open, and the bar beside it steps aside so that the two do not stand on each other. */
     menued?: boolean;
 })
@@ -415,9 +418,10 @@ export default component MessageBubble(props: {
                             <span
                                 ref={ holds }
                                 dir="auto"
+                                data-found={ props.found === true ? '' : undefined }
                                 class={ () => [
                                     'bubble relative flex max-w-full flex-col rounded-[1.125rem] px-3 pb-1.5 pt-1.5 text-ui-base leading-snug transition-shadow duration-150',
-                                    props.replying === true ? 'ring-2 ring-accent ring-offset-2 ring-offset-void' : '',
+                                    props.replying === true ? 'ring-2 ring-accent ring-offset-2 ring-offset-void' : (props.found === true ? 'ring-2 ring-gold ring-offset-2 ring-offset-void' : ''),
                                     props.onActions === undefined ? '' : 'holdable',
                                     jumbo ? 'bg-transparent text-text' : (mine ? 'bg-accent-fill text-accent-ink' : 'border border-line bg-field text-text'),
                                     corners

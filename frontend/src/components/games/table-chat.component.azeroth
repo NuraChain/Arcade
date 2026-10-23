@@ -1,6 +1,6 @@
 import { untrack } from 'azerothjs';
 import Rail from '../ui/rail.component.azeroth';
-import { attachStick } from '../../lib/stick.ts';
+import { attachStick, centreOn } from '../../lib/stick.ts';
 import { threadRows } from '../../lib/thread.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -297,7 +297,11 @@ export default component TableChat(props: {
         }
 
         const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+
+        if (list !== null)
+        {
+            near = centreOn(list, target, !still);
+        }
         target.querySelector('.bubble')?.animate(
             [{ boxShadow: '0 0 0 3px var(--color-accent)' }, { boxShadow: '0 0 0 3px transparent' }],
             { duration: still ? 1 : 1400, easing: 'ease-out' }

@@ -669,3 +669,64 @@ describe('a line its author edited', () =>
         expect(container.querySelector('[data-message]'), 'the same line').toBe(row);
     });
 });
+
+describe('a line the thread’s search brought the reader to', () =>
+{
+    const drawn = (found: () => boolean, replying: () => boolean) =>
+    {
+        const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
+
+        return renderTest(() => RouterProvider({
+            router,
+            children: () => MessageBubble({
+                message: text('m-found', 'never'),
+                me: 'alex',
+                onActions: () => undefined,
+                get found()
+                {
+                    return found();
+                },
+                get replying()
+                {
+                    return replying();
+                }
+            })
+        }) as Rendered).container;
+    };
+
+    it('wears a gold ring of its own while it is the one found, in the bubble it was', async () =>
+    {
+        const [found, setFound] = createSignal(true);
+        const [replying] = createSignal(false);
+        const container = drawn(found, replying);
+        const bubble = () => container.querySelector<HTMLElement>('.bubble')!;
+
+        await settle();
+
+        const kept = bubble();
+
+        expect(kept.hasAttribute('data-found')).toBe(true);
+        expect(kept.className).toContain('ring-gold');
+
+        setFound(false);
+        await settle();
+
+        expect(bubble(), 'the same bubble').toBe(kept);
+        expect(kept.hasAttribute('data-found')).toBe(false);
+        expect(kept.className).not.toContain('ring-gold');
+    });
+
+    it('wears the reply’s ring instead while it is being answered, so the two are never one ring', async () =>
+    {
+        const [found] = createSignal(true);
+        const [replying] = createSignal(true);
+        const container = drawn(found, replying);
+
+        await settle();
+
+        const bubble = container.querySelector<HTMLElement>('.bubble')!;
+
+        expect(bubble.className).toContain('ring-accent');
+        expect(bubble.className).not.toContain('ring-gold');
+    });
+});

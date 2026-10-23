@@ -733,6 +733,68 @@ describe('a right click on a line at a table', () =>
     });
 });
 
+describe('a line a reply leads back to, at a table', () =>
+{
+    it('takes the chat to it, and nothing that changes the chat on the way pulls it back to its end', async () =>
+    {
+        const room = server.conversations.find((row) =>
+            server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from === 'alex')
+            && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from !== 'alex'))!;
+        const theirs = server.messages.filter((one) => one.conversationId === room.id && one.kind === 'text' && one.from !== 'alex').at(-1)!;
+        const container = shown(room.id);
+        const quote = () => container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('chat.jumpToQuote') }"]`);
+
+        await vi.waitFor(() => expect(useChat().messages().some((one) => one.id === theirs.id)).toBe(true), { timeout: 4000 });
+
+        useChat().setReplyTo(room.id, useChat().messages().find((one) => one.id === theirs.id)!);
+        await useChat().send(room.id, 'about that');
+        await vi.waitFor(() => expect(quote()).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        const list = container.querySelector<HTMLElement>('ul[aria-live="polite"]')!;
+        const line = container.querySelector<HTMLElement>(`[data-message="${ theirs.id }"]`)!;
+        const put: number[] = [];
+        const asked: ScrollToOptions[] = [];
+        let top = 2400;
+        let from = -1;
+
+        Object.defineProperty(list, 'scrollHeight', { value: 3000, configurable: true });
+        Object.defineProperty(list, 'clientHeight', { value: 600, configurable: true });
+        Object.defineProperty(list, 'scrollTop', {
+            configurable: true,
+            get: () => top,
+            set: (value: number) =>
+            {
+                top = value;
+                put.push(value);
+            }
+        });
+        list.getBoundingClientRect = () => ({ top: 0, bottom: 600, left: 0, right: 0, width: 0, height: 600, x: 0, y: 0, toJSON: () => null });
+        line.getBoundingClientRect = () => ({ top: 100 - top, bottom: 140 - top, left: 0, right: 0, width: 0, height: 40, x: 0, y: 100 - top, toJSON: () => null });
+        list.dispatchEvent(new Event('scroll'));
+
+        // A browser's own way there: its first frame is still at the end, and the chat changes before it arrives.
+        list.scrollTo = ((options: ScrollToOptions) =>
+        {
+            asked.push(options);
+            from = put.length;
+            queueMicrotask(() =>
+            {
+                top = 2390;
+                list.dispatchEvent(new Event('scroll'));
+                void useChat().react(useChat().messages().find((one) => one.id === theirs.id)!, '👍').catch(() => undefined);
+            });
+        }) as typeof list.scrollTo;
+
+        fire(quote()!, 'click');
+
+        await vi.waitFor(() => expect(asked, 'taken to the line it answers').toEqual([{ top: 0, behavior: 'smooth' }]), { timeout: 4000 });
+        await settle();
+
+        expect(put.slice(from), 'nothing pulled the chat back to its end on the way').not.toContain(3000);
+    });
+});
+
 describe('a line the reader edits at a table', () =>
 {
     it('takes Edit from the line’s menu into the composer, and saves the new words to the line', async () =>

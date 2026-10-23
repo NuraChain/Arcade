@@ -1,0 +1,81 @@
+import IconButton from '../ui/icon-button.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+/**
+ * The thread's own search: a field, how many lines were found and which is shown, and the way to
+ * the older and newer ones. Enter and the up arrow go older, Shift+Enter and the down arrow newer;
+ * Escape clears the words, then closes.
+ */
+export default component ThreadSearch(props: {
+    value: string;
+
+    /** "2 of 7", "No results", or nothing while nothing is typed. */
+    said: string;
+    older: boolean;
+    newer: boolean;
+    onInput: (value: string) => void;
+    onOlder: () => void;
+    onNewer: () => void;
+    onClose: () => void;
+})
+{
+    const locale = useLocale();
+
+    let root: HTMLElement | null = null;
+
+    const field = () => root?.querySelector<HTMLInputElement>('input') ?? null;
+
+    mount
+    {
+        field()?.focus();
+    }
+
+    /** A button that has just reached its end is disabled under the keyboard, which would drop it: it goes back to the field. */
+    const pressed = (move: () => void, more: () => boolean) =>
+    {
+        move();
+
+        if (!more())
+        {
+            field()?.focus();
+        }
+    };
+
+    const keys = (event: KeyboardEvent) =>
+    {
+        if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown')
+        {
+            event.preventDefault();
+
+            if (event.key === 'ArrowDown' || (event.key === 'Enter' && event.shiftKey))
+            {
+                props.onNewer();
+                return;
+            }
+
+            props.onOlder();
+            return;
+        }
+
+        if (event.key === 'Escape')
+        {
+            event.preventDefault();
+            props.onClose();
+        }
+    };
+
+    <div ref={ (element) => root = element } class="flex min-w-0 flex-1 items-center gap-1" onKeyDown={ keys } data-thread-search>
+        <SearchInput
+            value={ props.value }
+            onInput={ props.onInput }
+            placeholder={ locale.t('chat.search.label') }
+            label={ locale.t('chat.search.label') }
+            class="min-w-0 flex-1"
+        />
+        <span class="shrink-0 px-1 text-ui-xs text-muted" role="status" aria-live="polite" data-found-count>{ props.said }</span>
+        <IconButton icon="chevron-up" label={ locale.t('chat.search.older') } variant="ghost" disabled={ !props.older } onClick={ () => pressed(props.onOlder, () => props.older) } />
+        <IconButton icon="chevron-down" label={ locale.t('chat.search.newer') } variant="ghost" disabled={ !props.newer } onClick={ () => pressed(props.onNewer, () => props.newer) } />
+        <IconButton icon="close" label={ locale.t('chat.search.close') } variant="ghost" onClick={ props.onClose } />
+    </div>
+}

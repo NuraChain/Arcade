@@ -52,6 +52,88 @@ const said = (node: Element) => `<${ node.tagName.toLowerCase() } class="${ (nod
 
 const lost = (container: HTMLElement, drawn: Element[]) => drawn.filter((node) => !container.contains(node)).map(said);
 
+const scrollerOf = (container: HTMLElement) => container.querySelector<HTMLElement>('#chat-thread .overflow-y-auto')!;
+
+/** Lays `name` over `HTMLElement.prototype` and answers what puts back whatever was there. */
+const over = (name: string, descriptor: PropertyDescriptor) =>
+{
+    const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
+
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor });
+
+    return () =>
+    {
+        if (own === undefined)
+        {
+            Reflect.deleteProperty(HTMLElement.prototype, name);
+        }
+        else
+        {
+            Object.defineProperty(HTMLElement.prototype, name, own);
+        }
+    };
+};
+
+/**
+ * Gives the thread's scroller a browser's layout, which happy-dom has none of: as tall as its
+ * view until its lines are drawn, and a scroll event whenever its position is moved. `seen` is
+ * told every place the scroller is put.
+ */
+const laidOut = (height = 3000, view = 600, seen?: (top: number) => void) =>
+{
+    const tall = (element: HTMLElement) => element.classList.contains('overflow-y-auto');
+    const tops = new WeakMap<HTMLElement, number>();
+    const undo = [
+        over('scrollHeight', {
+            get(this: HTMLElement)
+            {
+                if (!tall(this))
+                {
+                    return 0;
+                }
+
+                return this.querySelector('[data-message]') === null ? view : height;
+            }
+        }),
+        over('clientHeight', {
+            get(this: HTMLElement)
+            {
+                return tall(this) ? view : 0;
+            }
+        }),
+        over('scrollTop', {
+            get(this: HTMLElement)
+            {
+                return tops.get(this) ?? 0;
+            },
+            set(this: HTMLElement, value: number)
+            {
+                const moved = (tops.get(this) ?? 0) !== value;
+
+                tops.set(this, value);
+
+                if (tall(this))
+                {
+                    seen?.(value);
+                }
+
+                if (moved && tall(this))
+                {
+                    queueMicrotask(() => this.dispatchEvent(new Event('scroll')));
+                }
+            }
+        })
+    ];
+
+    return () => undo.forEach((one) => one());
+};
+
+const scrolledTo = (scroller: HTMLElement, top: number) =>
+{
+    scroller.scrollTop = top;
+    scroller.dispatchEvent(new Event('scroll'));
+};
+
 beforeEach(() =>
 {
     cleanup();
@@ -464,83 +546,7 @@ describe('the toasts beside a thread', () =>
 
 describe('where a thread opens, and the way back to its end', () =>
 {
-    const scrollerOf = (container: HTMLElement) => container.querySelector<HTMLElement>('#chat-thread .overflow-y-auto')!;
-
     const quietThread = () => server.conversations.find((row) => row.unread === 0 && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text'))!;
-
-    /** Lays `name` over `HTMLElement.prototype` and answers what puts back whatever was there. */
-    const over = (name: string, descriptor: PropertyDescriptor) =>
-    {
-        const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
-
-        Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor });
-
-        return () =>
-        {
-            if (own === undefined)
-            {
-                Reflect.deleteProperty(HTMLElement.prototype, name);
-            }
-            else
-            {
-                Object.defineProperty(HTMLElement.prototype, name, own);
-            }
-        };
-    };
-
-    /**
-     * Gives the thread's scroller a browser's layout, which happy-dom has none of: as tall as its
-     * view until its lines are drawn, and a scroll event whenever its position is moved.
-     */
-    const laidOut = (height = 3000, view = 600) =>
-    {
-        const tall = (element: HTMLElement) => element.classList.contains('overflow-y-auto');
-        const tops = new WeakMap<HTMLElement, number>();
-        const undo = [
-            over('scrollHeight', {
-                get(this: HTMLElement)
-                {
-                    if (!tall(this))
-                    {
-                        return 0;
-                    }
-
-                    return this.querySelector('[data-message]') === null ? view : height;
-                }
-            }),
-            over('clientHeight', {
-                get(this: HTMLElement)
-                {
-                    return tall(this) ? view : 0;
-                }
-            }),
-            over('scrollTop', {
-                get(this: HTMLElement)
-                {
-                    return tops.get(this) ?? 0;
-                },
-                set(this: HTMLElement, value: number)
-                {
-                    const moved = (tops.get(this) ?? 0) !== value;
-
-                    tops.set(this, value);
-
-                    if (moved && tall(this))
-                    {
-                        queueMicrotask(() => this.dispatchEvent(new Event('scroll')));
-                    }
-                }
-            })
-        ];
-
-        return () => undo.forEach((one) => one());
-    };
-
-    const scrolledTo = (scroller: HTMLElement, top: number) =>
-    {
-        scroller.scrollTop = top;
-        scroller.dispatchEvent(new Event('scroll'));
-    };
 
     /** Puts the "Unread messages" line `offset` down the thread's content, as the screen sees it scrolled. */
     const unreadAt = (offset: number) => over('getBoundingClientRect', {
@@ -1451,5 +1457,374 @@ describe('a conversation in the list, by the time of its last line and what was 
         const container = opened(open.id, 'sidebar');
 
         await vi.waitFor(() => expect(row(container, left.id)?.querySelector('[data-draft]')?.textContent).toBe('پیش‌نویس:'), { timeout: 4000 });
+    });
+});
+
+describe('a thread searched for its words', () =>
+{
+    /** c-parisa's three lines, oldest first: "Good game. You never resign, do you.", "Never.", and an invitation. */
+    const parisa = () =>
+    {
+        const thread = server.conversations.find((row) => row.id === 'c-parisa')!;
+        const lines = server.messages.filter((one) => one.conversationId === thread.id);
+
+        return { thread, resign: lines[0], never: lines[1] };
+    };
+
+    const button = (container: HTMLElement) => container.querySelector<HTMLButtonElement>(`header button[aria-label="${ useLocale().t('chat.search.label') }"]`);
+
+    const bar = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-thread-search]');
+
+    const field = (container: HTMLElement) => bar(container)?.querySelector<HTMLInputElement>('input') ?? null;
+
+    const count = (container: HTMLElement) => bar(container)?.querySelector('[data-found-count]')?.textContent ?? null;
+
+    const marked = (container: HTMLElement) => [...container.querySelectorAll('[data-found]')].map((one) => one.closest('[data-message]')?.getAttribute('data-message'));
+
+    const type = (container: HTMLElement, words: string) =>
+    {
+        const input = field(container)!;
+
+        input.value = words;
+        fire(input, 'input');
+    };
+
+    const key = (container: HTMLElement, name: string, extra: KeyboardEventInit = {}) =>
+    {
+        const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...extra });
+
+        field(container)!.dispatchEvent(event);
+
+        return event;
+    };
+
+    const drawn = async (container: HTMLElement) =>
+    {
+        await vi.waitFor(() => expect(container.querySelector('[data-message]')).not.toBeNull(), { timeout: 4000 });
+        await settle();
+    };
+
+    it('opens from its button in the head, with the keyboard in it, and finds the newest line with the words first', async () =>
+    {
+        const { thread, never } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+
+        expect(bar(container), 'nothing searches until asked').toBeNull();
+
+        fire(button(container)!, 'click');
+
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+        await vi.waitFor(() => expect(document.activeElement).toBe(field(container)));
+        expect(button(container)!.getAttribute('aria-pressed')).toBe('true');
+
+        type(container, 'NEVER');
+
+        await vi.waitFor(() => expect(count(container)).toBe('1 of 2'));
+        await vi.waitFor(() => expect(marked(container)).toEqual([never.id]));
+    });
+
+    it('walks to the older and the newer with the keys and the buttons, and stops at each end', async () =>
+    {
+        const { thread, resign, never } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+        fire(button(container)!, 'click');
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+        type(container, 'never');
+        await vi.waitFor(() => expect(count(container)).toBe('1 of 2'));
+
+        const older = () => bar(container)!.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('chat.search.older') }"]`)!;
+        const newer = () => bar(container)!.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('chat.search.newer') }"]`)!;
+
+        expect(newer().disabled, 'nothing is newer than the newest').toBe(true);
+
+        expect(key(container, 'Enter').defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(count(container)).toBe('2 of 2'));
+        await vi.waitFor(() => expect(marked(container)).toEqual([resign.id]));
+        expect(older().disabled, 'nothing is older than the oldest').toBe(true);
+
+        key(container, 'Enter');
+        await settle();
+        expect(count(container), 'the oldest is as far as it goes').toBe('2 of 2');
+
+        key(container, 'Enter', { shiftKey: true });
+        await vi.waitFor(() => expect(count(container)).toBe('1 of 2'));
+
+        key(container, 'ArrowUp');
+        await vi.waitFor(() => expect(count(container)).toBe('2 of 2'));
+
+        key(container, 'ArrowDown');
+        await vi.waitFor(() => expect(count(container)).toBe('1 of 2'));
+
+        older().focus();
+        expect(document.activeElement).toBe(older());
+
+        fire(older(), 'click');
+        await vi.waitFor(() => expect(count(container)).toBe('2 of 2'));
+        expect(document.activeElement, 'a button that reached its end hands the keyboard back to the field').toBe(field(container));
+
+        fire(newer(), 'click');
+        await vi.waitFor(() => expect(marked(container)).toEqual([never.id]));
+
+        key(container, 'Enter');
+        await vi.waitFor(() => expect(count(container)).toBe('2 of 2'));
+
+        type(container, 'neve');
+        await vi.waitFor(() => expect(count(container), 'new words start from the newest again').toBe('1 of 2'));
+    });
+
+    it('does not move the reader back to what it found when a line arrives meanwhile', async () =>
+    {
+        const { thread, never } = parisa();
+        const container = opened(thread.id, 'sidebar');
+        const flashed: string[] = [];
+        const original = Element.prototype.animate;
+
+        Element.prototype.animate = function (this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions)
+        {
+            if (Array.isArray(keyframes) && keyframes.some((frame) => 'boxShadow' in frame))
+            {
+                flashed.push(this.closest('[data-message]')?.getAttribute('data-message') ?? '');
+            }
+
+            return original.call(this, keyframes, options);
+        };
+
+        try
+        {
+            await drawn(container);
+            fire(button(container)!, 'click');
+            await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+            type(container, 'never');
+
+            const rowsBrought = () => [...flashed];
+
+            await vi.waitFor(() => expect(rowsBrought()).toEqual([never.id]));
+
+            const template = server.messages.find((one) => one.id === never.id)!;
+
+            server.messages.push({ ...template, id: 'arrived-meanwhile' });
+            await useChat().refresh();
+            await vi.waitFor(() => expect(container.querySelector('[data-message="arrived-meanwhile"]')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            expect(rowsBrought(), 'brought on screen once').toEqual([never.id]);
+
+            type(container, 'neve');
+            await settle();
+
+            expect(rowsBrought(), 'a letter less that still finds it brings nothing').toEqual([never.id]);
+
+            key(container, 'Enter');
+
+            await vi.waitFor(() => expect(rowsBrought()).toEqual([never.id, parisa().resign.id]));
+        }
+        finally
+        {
+            Element.prototype.animate = original;
+        }
+    });
+
+    it('says when nothing is found, and nothing while nothing is typed', async () =>
+    {
+        const { thread } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+        fire(button(container)!, 'click');
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+
+        expect(count(container)).toBe('');
+
+        type(container, 'zebra');
+        await vi.waitFor(() => expect(count(container)).toBe(useLocale().t('chat.search.none')));
+        expect(marked(container)).toEqual([]);
+
+        type(container, '');
+        await vi.waitFor(() => expect(count(container)).toBe(''));
+    });
+
+    it('clears its words at Escape, then closes, giving the keyboard back to its button', async () =>
+    {
+        const { thread } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+        fire(button(container)!, 'click');
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+        type(container, 'never');
+        await vi.waitFor(() => expect(marked(container)).toHaveLength(1));
+
+        key(container, 'Escape');
+        await vi.waitFor(() => expect(field(container)?.value).toBe(''));
+        expect(bar(container), 'the first Escape only clears').not.toBeNull();
+        expect(marked(container)).toEqual([]);
+
+        key(container, 'Escape');
+        await vi.waitFor(() => expect(bar(container)).toBeNull());
+        await vi.waitFor(() => expect(document.activeElement).toBe(button(container)));
+        expect(button(container)!.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('opens at Ctrl+F or Cmd+F, in place of the browser’s own find, and finds the field again when it is open', async () =>
+    {
+        const { thread } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+
+        const find = (extra: KeyboardEventInit) =>
+        {
+            const event = new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', bubbles: true, cancelable: true, ...extra });
+
+            document.body.dispatchEvent(event);
+
+            return event;
+        };
+
+        expect(find({ ctrlKey: true }).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+
+        (document.activeElement as HTMLElement | null)?.blur();
+        expect(find({ metaKey: true }).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(document.activeElement).toBe(field(container)));
+
+        expect(find({ ctrlKey: true, shiftKey: true }).defaultPrevented, 'another chord is the browser’s').toBe(false);
+    });
+
+    it('reads back a page at a time to bring a line older than the screen on to it', async () =>
+    {
+        const { thread, never } = parisa();
+        const template = server.messages.find((one) => one.id === never.id)!;
+
+        server.messages.push(...Array.from({ length: 45 }, (_, index) => ({ ...template, id: `newer-${ index }` })));
+
+        let container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+
+        while (useChat().hasEarlier())
+        {
+            useChat().earlier();
+            await vi.waitFor(() => expect(useChat().earlierLoading()).toBe(false), { timeout: 4000 });
+            await settle();
+        }
+
+        expect(container.querySelector(`[data-message="${ never.id }"]`), 'this browser opened the line once').not.toBeNull();
+
+        cleanup();
+        useChat().closeThread();
+
+        container = opened(thread.id, 'sidebar');
+        await drawn(container);
+
+        expect(container.querySelector(`[data-message="${ never.id }"]`), 'opened again, the line is a page back').toBeNull();
+
+        const reads = server.calls.filter((one) => one === 'chat.messages').length;
+
+        fire(button(container)!, 'click');
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+        type(container, 'never');
+
+        await vi.waitFor(() => expect(marked(container)).toEqual([never.id]), { timeout: 4000 });
+        expect(server.calls.filter((one) => one === 'chat.messages').length, 'read back to reach it').toBeGreaterThan(reads);
+        expect(count(container)).toBe('1 of 2');
+    });
+
+    it('takes the thread to a line it read back for, and nothing that changes the thread on the way pulls it back to its end', async () =>
+    {
+        const { thread, never } = parisa();
+        const template = server.messages.find((one) => one.id === never.id)!;
+
+        server.messages.push(...Array.from({ length: 45 }, (_, index) => ({ ...template, id: `newer-${ index }` })));
+
+        let container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+
+        while (useChat().hasEarlier())
+        {
+            useChat().earlier();
+            await vi.waitFor(() => expect(useChat().earlierLoading()).toBe(false), { timeout: 4000 });
+            await settle();
+        }
+
+        cleanup();
+        useChat().closeThread();
+
+        const put: number[] = [];
+        const undo = [
+            laidOut(3000, 600, (top) => put.push(top)),
+            over('getBoundingClientRect', {
+                writable: true,
+                value(this: HTMLElement)
+                {
+                    const top = this.getAttribute('data-message') === never.id ? 100 - (this.closest<HTMLElement>('.overflow-y-auto')?.scrollTop ?? 0) : 0;
+
+                    return { top, bottom: top + 40, left: 0, right: 0, width: 0, height: 40, x: 0, y: top } as DOMRect;
+                }
+            })
+        ];
+
+        try
+        {
+            container = opened(thread.id, 'sidebar');
+            await drawn(container);
+            await vi.waitFor(() => expect(scrollerOf(container).scrollTop, 'opened at its end').toBe(3000), { timeout: 4000 });
+
+            const scroller = scrollerOf(container);
+            const asked: unknown[] = [];
+            let from = -1;
+
+            // A browser's own way there: its first frame is still at the end, and the thread changes before it arrives.
+            scroller.scrollTo = function (this: HTMLElement, options?: ScrollToOptions | number)
+            {
+                asked.push(options);
+                from = put.length;
+                (HTMLElement.prototype.scrollTo as (this: HTMLElement, options?: ScrollToOptions) => void).call(this, options as ScrollToOptions);
+                queueMicrotask(() =>
+                {
+                    scrolledTo(this, 2990);
+
+                    const line = useChat().messages().find((one) => one.id === never.id)!;
+
+                    void useChat().react(line, QUICK_REACTIONS[0]).catch(() => undefined);
+                });
+            } as typeof scroller.scrollTo;
+
+            fire(button(container)!, 'click');
+            await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+            type(container, 'never');
+
+            await vi.waitFor(() => expect(marked(container)).toEqual([never.id]), { timeout: 4000 });
+            await vi.waitFor(() => expect(asked, 'taken to the line it found').toEqual([expect.objectContaining({ top: 0 })]), { timeout: 4000 });
+            await settle();
+
+            expect(put.slice(from), 'nothing pulled the thread back to its end on the way').not.toContain(3000);
+            expect(scroller.scrollTop, 'where the line is').toBe(0);
+            await vi.waitFor(() => expect(container.querySelector('[data-jump]'), 'and the way back to the end is offered').not.toBeNull());
+        }
+        finally
+        {
+            undo.forEach((one) => one());
+        }
+    });
+
+    it('says how many it found in the reader’s own words and digits', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { thread } = parisa();
+        const container = opened(thread.id, 'sidebar');
+
+        await drawn(container);
+        fire(button(container)!, 'click');
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull());
+        type(container, 'never');
+
+        await vi.waitFor(() => expect(count(container)).toBe('۱ از ۲'));
     });
 });
